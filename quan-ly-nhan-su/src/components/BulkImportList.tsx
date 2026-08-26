@@ -8,7 +8,6 @@ import {
 } from "@/data/historicalWelds";
 import {
   historicalProjectSummary,
-  projectSummaryColumns,
   weldCategoryLabel,
   type HistoricalProjectSummary,
 } from "@/data/historicalProjectSummary";
@@ -201,7 +200,7 @@ function SummaryImportTable() {
     <>
       <div className="mb-4 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 text-[13px] text-[#1e40af]">
         <strong>Mẫu 2 – Tổng hợp theo dự án:</strong> nhập theo năm, loại mối (PD = Phát triển, SX
-        = Sản xuất), công nghệ FBW/ATW và số lượng mối thực hiện.
+        = Sản xuất), công nghệ FBW/ATW, cột <strong>Thành phẩm</strong> và <strong>Hàng lỗi</strong>.
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[#475569]">
@@ -210,8 +209,8 @@ function SummaryImportTable() {
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#0f172a]">{totalWelds.toLocaleString("vi-VN")}</strong> mối hàn ·{" "}
-          {totalErrors} lỗi
+          <strong className="text-[#0f172a]">{totalWelds.toLocaleString("vi-VN")}</strong> thành phẩm ·{" "}
+          {totalErrors} hàng lỗi
         </span>
       </div>
 
@@ -252,18 +251,45 @@ function SummaryImportTable() {
           <table className="w-full min-w-[1200px] border-collapse text-left text-[13px]">
             <thead>
               <tr className="border-b border-[#1e3a8a] bg-[#1e40af] text-[11px] font-bold uppercase tracking-[0.04em] text-white">
-                {projectSummaryColumns.map((col) => (
-                  <th key={col.key} className="px-3 py-2.5">
-                    {col.label}
-                  </th>
-                ))}
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5 text-center">
+                  TT
+                </th>
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5">
+                  Dự án
+                </th>
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5">
+                  Ngày thực hiện
+                </th>
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5">
+                  Loại mối hàn
+                </th>
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5">
+                  Công nghệ hàn
+                </th>
+                <th colSpan={2} className="border-r border-[#2563eb] px-3 py-2.5 text-center">
+                  Số lượng mối hàn
+                </th>
+                <th rowSpan={2} className="border-r border-[#2563eb] px-3 py-2.5">
+                  Tên thợ hàn
+                </th>
+                <th rowSpan={2} className="px-3 py-2.5">
+                  Nguyên nhân lỗi
+                </th>
+              </tr>
+              <tr className="border-b border-[#2563eb] bg-[#2563eb] text-[10.5px] font-semibold uppercase text-white">
+                <th className="border-r border-[#3b82f6] px-3 py-2 text-center">Thành phẩm</th>
+                <th className="border-r border-[#3b82f6] px-3 py-2 text-center">Hàng lỗi</th>
               </tr>
               <tr className="border-b border-[#e8eef8] bg-[#f8fafc] text-[10.5px] italic text-[#64748b]">
-                {projectSummaryColumns.map((col) => (
-                  <th key={col.key} className="px-3 py-2 font-normal">
-                    {col.hint}
-                  </th>
-                ))}
+                <th className="px-3 py-2 font-normal" />
+                <th className="px-3 py-2 font-normal">Nhập tên Dự án</th>
+                <th className="px-3 py-2 font-normal">Nhập năm thực hiện</th>
+                <th className="px-3 py-2 font-normal">Nhập &quot;PD&quot; or &quot;SX&quot;</th>
+                <th className="px-3 py-2 font-normal">Nhập FBW or ATW</th>
+                <th className="px-3 py-2 font-normal">Nhập số mối thành phẩm</th>
+                <th className="px-3 py-2 font-normal">Nhập số mối bị lỗi</th>
+                <th className="px-3 py-2 font-normal">Nhập tên thợ hàn</th>
+                <th className="px-3 py-2 font-normal">Nhập nguyên nhân lỗi</th>
               </tr>
             </thead>
             <tbody>
@@ -311,7 +337,8 @@ function VolumeImportTable() {
     <>
       <div className="mb-4 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 text-[13px] text-[#1e40af]">
         <strong>Mẫu 3 – Tổng hợp khối lượng theo năm:</strong> nhập số mối hàn FBW/ATW cho từng
-        nhóm (Thử nghiệm–Đào tạo, Sản xuất, Lỗi). Cột Tổng = FBW + ATW.
+        nhóm (Thử nghiệm–Đào tạo, Thành phẩm, Hàng lỗi). Cột Tổng = FBW + ATW. Dòng 1–2 (2017–2018)
+        để trống cột Thành phẩm và Hàng lỗi theo mẫu Excel.
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[#475569]">
@@ -344,10 +371,10 @@ function VolumeImportTable() {
                   Mối hàn thử nghiệm – đào tạo
                 </th>
                 <th colSpan={3} className="border-r border-[#2563eb] px-3 py-2.5 text-center">
-                  Mối hàn sản xuất
+                  Thành phẩm
                 </th>
                 <th colSpan={3} className="border-r border-[#2563eb] px-3 py-2.5 text-center">
-                  Mối hàn lỗi
+                  Hàng lỗi
                 </th>
                 <th rowSpan={2} className="min-w-[180px] px-3 py-2.5 text-center">
                   Nguyên nhân lỗi

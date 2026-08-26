@@ -20,8 +20,8 @@ export const projectSummaryColumns = [
   { key: "year", label: "Ngày thực hiện", hint: "Nhập năm thực hiện" },
   { key: "weldCategory", label: "Loại mối hàn", hint: 'Nhập "PD" or "SX"' },
   { key: "technology", label: "Công nghệ hàn", hint: "Nhập FBW or ATW" },
-  { key: "weldCount", label: "Số lượng mối hàn thực hiện", hint: "Nhập số mối thực hiện trong năm" },
-  { key: "errorCount", label: "Lỗi", hint: "Nhập số mối bị lỗi" },
+  { key: "weldCount", label: "Thành phẩm", hint: "Nhập số mối thành phẩm / thực hiện" },
+  { key: "errorCount", label: "Hàng lỗi", hint: "Nhập số mối bị lỗi" },
   { key: "welderName", label: "Tên thợ hàn", hint: "Nhập tên thợ hàn" },
   { key: "errorReason", label: "Nguyên nhân lỗi", hint: "Nhập nguyên nhân lỗi" },
 ] as const;

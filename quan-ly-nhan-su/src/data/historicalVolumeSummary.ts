@@ -18,7 +18,7 @@ export const volumeSummaryTitle = "TỔNG HỢP KHỐI LƯỢNG MỐI HÀN RAY �
 /** Mẫu 3 – tổng hợp khối lượng theo năm (2017–2026). Ô trống = null. */
 export const historicalVolumeSummary: HistoricalVolumeSummary[] = [
   { id: "1", no: 1, year: 2017, trialTraining: { fbw: null, atw: null }, production: { fbw: null, atw: null }, defective: { fbw: null, atw: null }, errorReason: "" },
-  { id: "2", no: 2, year: 2018, trialTraining: { fbw: 12, atw: 4 }, production: { fbw: 180, atw: 35 }, defective: { fbw: 1, atw: 0 }, errorReason: "Lệch tim ray" },
+  { id: "2", no: 2, year: 2018, trialTraining: { fbw: 12, atw: 4 }, production: { fbw: null, atw: null }, defective: { fbw: null, atw: null }, errorReason: "" },
   { id: "3", no: 3, year: 2019, trialTraining: { fbw: 18, atw: 8 }, production: { fbw: 320, atw: 52 }, defective: { fbw: 2, atw: 1 }, errorReason: "Lệch tim ray; Khuyết khí trong mối hàn" },
   { id: "4", no: 4, year: 2020, trialTraining: { fbw: 30, atw: 6 }, production: { fbw: 2020, atw: 88 }, defective: { fbw: 3, atw: 0 }, errorReason: "Lệch tim ray; Lệch mép ray sau hàn" },
   { id: "5", no: 5, year: 2021, trialTraining: { fbw: 45, atw: 20 }, production: { fbw: 1000, atw: 205 }, defective: { fbw: 1, atw: 0 }, errorReason: "Lệch mép ray sau hàn" },
