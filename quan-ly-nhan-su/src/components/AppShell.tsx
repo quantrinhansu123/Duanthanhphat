@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
@@ -50,6 +50,31 @@ type AppShellProps = {
   tab?: string;
 };
 
+function useClientClock() {
+  const [clock, setClock] = useState<{ time: string; date: string } | null>(null);
+
+  useEffect(() => {
+    function tick() {
+      const now = new Date();
+      setClock({
+        time: now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        date: now.toLocaleDateString("vi-VN", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }),
+      });
+    }
+
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return clock;
+}
+
 export default function AppShell({ tab }: AppShellProps) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -58,15 +83,7 @@ export default function AppShell({ tab }: AppShellProps) {
   const crumb = findNavMeta(current);
   const htmlReport = isHtmlReportTab(current);
   const reportTab = isReportTab(current);
-
-  const now = new Date();
-  const time = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const clock = useClientClock();
 
   const group = navigation.find((g) => g.children.some((c) => c.id === current));
   const content = htmlReport ? <HtmlReportView tabId={current} /> : views[current];
@@ -100,8 +117,8 @@ export default function AppShell({ tab }: AppShellProps) {
 
           <div className="flex flex-none items-center gap-4 text-[13px]">
             <div className="text-right leading-tight">
-              <div className="font-semibold text-[#0f172a]">{time}</div>
-              <div className="capitalize text-[#64748b]">{date}</div>
+              <div className="font-semibold text-[#0f172a]">{clock?.time ?? "--:--"}</div>
+              <div className="capitalize text-[#64748b]">{clock?.date ?? "Đang tải..."}</div>
             </div>
             <button
               className="relative rounded-full p-2 text-[#64748b] hover:bg-[#eef3fb]"
