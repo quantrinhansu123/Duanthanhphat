@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --prefix quan-ly-nhan-su",
+  "buildCommand": "npm run build --prefix quan-ly-nhan-su",
+  "devCommand": "npm run dev --prefix quan-ly-nhan-su"
+}
