@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<script src="./image-slot.js"></script>
+<style>
+  html,body{margin:0;padding:0;background:#f5f7fa;}
+  *{box-sizing:border-box;}
+  a{color:#1a73e8;text-decoration:none;}
+  a:hover{color:#1257b8;}
+</style>
+</helmet>
+<div style="display:flex;width:1568px;min-height:1080px;background:#f5f7fa;font-family:-apple-system,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;font-size:14px;-webkit-font-smoothing:antialiased;">
+
+  <div style="width:250px;flex:0 0 250px;background:#0d1b2e;display:flex;flex-direction:column;padding-bottom:18px;">
+    <div style="display:flex;align-items:center;gap:12px;padding:22px 18px 26px 20px;">
+      <img src="assets/tcw-emblem.png" alt="TCW" style="width:46px;height:46px;flex:0 0 46px;display:block;">
+      <div style="line-height:1.25;color:#ffffff;font-size:12.5px;font-weight:700;letter-spacing:0.4px;">RAIL WELDING<br><span style="color:#cfd8e3;font-weight:500;">MANAGEMENT</span><br><span style="color:#8fa3ba;font-weight:500;font-size:10.5px;letter-spacing:0.6px;">THÀNH PHÁT · TCW</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;padding:0 12px;">
+      <a href="index.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-house" style="font-size:19px;"></i><span>Trang chủ</span></a>
+      <a href="Rail Welding Dashboard.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-squares-four" style="font-size:19px;"></i><span>Tổng quan</span></a>
+      <a href="Bao cao Chat luong.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-check-circle" style="font-size:19px;"></i><span>Chất lượng</span></a>
+      <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;background:#1565d8;color:#ffffff;font-weight:600;font-size:14.5px;box-shadow:0 2px 8px rgba(21,101,216,0.45);"><i class="ph-fill ph-gear-six" style="font-size:19px;"></i><span>Máy móc</span></div>
+      <a href="Bao cao Nhan su.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-users" style="font-size:19px;"></i><span>Nhân sự</span></a>
+    </div>
+    <div style="flex:1 1 auto;"></div>
+    <div style="margin:0 12px 12px 12px;padding:12px 14px;border-radius:12px;background:#16273d;display:flex;align-items:center;gap:12px;">
+      <div style="width:42px;height:42px;border-radius:50%;overflow:hidden;flex:0 0 42px;background:#41576f;display:flex;align-items:flex-end;justify-content:center;"><i class="ph-fill ph-user" style="font-size:34px;color:#c9d4e2;"></i></div>
+      <div style="flex:1 1 auto;line-height:1.35;">
+        <div style="color:#ffffff;font-size:14.5px;font-weight:600;">Nguyễn Văn A</div>
+        <div style="color:#93a3b8;font-size:12.5px;">Quản trị viên</div>
+      </div>
+      <i class="ph ph-caret-down" style="font-size:15px;color:#93a3b8;"></i>
+    </div>
+    <div style="margin:0 12px;padding:14px;border-radius:12px;background:#16273d;display:flex;align-items:center;gap:12px;">
+      <i class="ph ph-moon" style="font-size:20px;color:#cfd8e3;"></i>
+      <div style="flex:1 1 auto;color:#e6ecf3;font-size:14.5px;font-weight:500;">Chế độ tối</div>
+      <div style="width:44px;height:24px;border-radius:12px;background:#ffffff;display:flex;align-items:center;padding:3px;"><div style="width:18px;height:18px;border-radius:50%;background:#b9c4d2;"></div></div>
+    </div>
+  </div>
+
+  <div style="flex:1 1 auto;padding:20px 23px 26px 24px;display:flex;flex-direction:column;gap:16px;min-width:0;">
+
+    <div style="display:flex;align-items:flex-end;gap:12px;">
+      <div style="flex:1 1 auto;">
+        <div style="font-size:22px;font-weight:700;letter-spacing:-0.3px;color:#16233a;">Báo cáo máy móc</div>
+        <div style="margin-top:5px;font-size:13px;color:#8b95a5;">Kỳ 01/05/2024 – 31/05/2024 · 12 máy hàn · 2 nhà máy</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;background:#1a73e8;color:#ffffff;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">
+        <i class="ph-fill ph-download-simple" style="font-size:16px;"></i><span>Xuất báo cáo</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;">
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="width:50px;height:50px;flex:0 0 50px;border-radius:50%;background:#1a63e0;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-gear-six" style="font-size:25px;color:#ffffff;"></i></div>
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:13px;color:#5d6b7d;">Số máy đang vận hành</div>
+          <div style="font-size:27px;font-weight:700;color:#16233a;letter-spacing:-0.5px;margin-top:2px;">12</div>
+          <div style="font-size:12px;color:#1a9e4b;margin-top:4px;">↑ 8,3% <span style="color:#8b95a5;">so với tuần trước</span></div>
+        </div>
+      </div>
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="width:50px;height:50px;flex:0 0 50px;border-radius:50%;background:#14b8a6;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-activity" style="font-size:25px;color:#ffffff;"></i></div>
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:13px;color:#5d6b7d;">Tỷ lệ khả dụng bình quân</div>
+          <div style="font-size:27px;font-weight:700;color:#16233a;letter-spacing:-0.5px;margin-top:2px;">92,3%</div>
+          <div style="font-size:12px;color:#1a9e4b;margin-top:4px;">↑ 1,4% <span style="color:#8b95a5;">so với kỳ trước</span></div>
+        </div>
+      </div>
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="width:50px;height:50px;flex:0 0 50px;border-radius:50%;background:#f5a623;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-wrench" style="font-size:25px;color:#ffffff;"></i></div>
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:13px;color:#5d6b7d;">Máy đến hạn bảo trì</div>
+          <div style="font-size:27px;font-weight:700;color:#16233a;letter-spacing:-0.5px;margin-top:2px;">3</div>
+          <div style="margin-top:6px;"><span style="background:#fff4dd;color:#b26a00;font-size:11px;font-weight:700;padding:3px 10px;border-radius:11px;">1 ưu tiên cao</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start;">
+
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0;">
+
+        <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px 18px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="flex:1 1 auto;font-size:15px;font-weight:700;color:#16233a;">Máy được đề xuất bảo trì</div>
+            <a href="#" style="font-size:12.5px;">Xem tất cả →</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;flex:1 1 auto;min-width:0;">
+              <div style="border:1px solid #e8ebf0;border-radius:10px;overflow:hidden;">
+                <div style="position:relative;height:140px;">
+                  <image-slot id="mm-machine-1" shape="rect" placeholder="Ảnh máy hàn K922-1"></image-slot>
+                  <div style="position:absolute;top:8px;left:8px;background:#fdeaea;color:#c62828;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:4px;pointer-events:none;">Ưu tiên cao</div>
+                </div>
+                <div style="padding:11px 12px 12px 12px;">
+                  <div style="font-size:13.5px;font-weight:700;color:#16233a;">Máy hàn K922-1</div>
+                  <div style="font-size:11.5px;color:#8b95a5;margin-top:3px;line-height:1.5;">Nhà máy Cổ Loa · 8.520 mối<br>Giờ chạy từ lần bảo trì: 412 h</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+                    <div style="flex:1 1 auto;height:6px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:48%;height:100%;background:#f0b323;"></div></div>
+                    <span style="font-size:11.5px;color:#5d6b7d;font-weight:600;">48%</span>
+                  </div>
+                  <div style="margin-top:9px;font-size:12.5px;color:#3d4a5c;">Dự toán <span style="font-weight:700;color:#16233a;">6.500.000đ</span></div>
+                  <div style="margin-top:10px;text-align:center;background:#1a73e8;color:#ffffff;border-radius:6px;padding:8px 0;font-size:12px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">Lên lịch bảo trì</div>
+                </div>
+              </div>
+              <div style="border:1px solid #e8ebf0;border-radius:10px;overflow:hidden;">
+                <div style="position:relative;height:140px;">
+                  <image-slot id="mm-machine-2" shape="rect" placeholder="Ảnh máy hàn K922-2"></image-slot>
+                  <div style="position:absolute;top:8px;left:8px;background:#fff4dd;color:#b26a00;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:4px;pointer-events:none;">Theo dõi</div>
+                </div>
+                <div style="padding:11px 12px 12px 12px;">
+                  <div style="font-size:13.5px;font-weight:700;color:#16233a;">Máy hàn K922-2</div>
+                  <div style="font-size:11.5px;color:#8b95a5;margin-top:3px;line-height:1.5;">Hạ Long Xanh · 7.840 mối<br>Giờ chạy từ lần bảo trì: 355 h</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+                    <div style="flex:1 1 auto;height:6px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:35%;height:100%;background:#f0b323;"></div></div>
+                    <span style="font-size:11.5px;color:#5d6b7d;font-weight:600;">35%</span>
+                  </div>
+                  <div style="margin-top:9px;font-size:12.5px;color:#3d4a5c;">Dự toán <span style="font-weight:700;color:#16233a;">7.800.000đ</span></div>
+                  <div style="margin-top:10px;text-align:center;background:#1a73e8;color:#ffffff;border-radius:6px;padding:8px 0;font-size:12px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">Lên lịch bảo trì</div>
+                </div>
+              </div>
+              <div style="border:1px solid #e8ebf0;border-radius:10px;overflow:hidden;">
+                <div style="position:relative;height:140px;">
+                  <image-slot id="mm-machine-3" shape="rect" placeholder="Ảnh máy hàn K920"></image-slot>
+                  <div style="position:absolute;top:8px;left:8px;background:#e7f7ed;color:#15803d;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:4px;pointer-events:none;">Định kỳ</div>
+                </div>
+                <div style="padding:11px 12px 12px 12px;">
+                  <div style="font-size:13.5px;font-weight:700;color:#16233a;">Máy hàn K920</div>
+                  <div style="font-size:11.5px;color:#8b95a5;margin-top:3px;line-height:1.5;">Nhà máy Cổ Loa · 2.160 mối<br>Giờ chạy từ lần bảo trì: 190 h</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+                    <div style="flex:1 1 auto;height:6px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:60%;height:100%;background:#22a94f;"></div></div>
+                    <span style="font-size:11.5px;color:#5d6b7d;font-weight:600;">60%</span>
+                  </div>
+                  <div style="margin-top:9px;font-size:12.5px;color:#3d4a5c;">Dự toán <span style="font-weight:700;color:#16233a;">5.000.000đ</span></div>
+                  <div style="margin-top:10px;text-align:center;background:#1a73e8;color:#ffffff;border-radius:6px;padding:8px 0;font-size:12px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">Lên lịch bảo trì</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:0 0 28px;">
+              <div style="width:28px;height:28px;border-radius:50%;border:1px solid #dfe4ea;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;"><i class="ph ph-caret-left" style="font-size:14px;color:#5d6b7d;"></i></div>
+              <div style="width:28px;height:28px;border-radius:50%;border:1px solid #dfe4ea;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;"><i class="ph ph-caret-right" style="font-size:14px;color:#5d6b7d;"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px 14px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+          <div style="font-size:15px;font-weight:700;color:#16233a;">Hiệu suất theo máy</div>
+          <div style="display:grid;grid-template-columns:1.1fr 1.1fr 0.9fr 0.8fr 0.9fr 1.1fr;gap:0 8px;margin-top:14px;font-size:12px;color:#8b95a5;padding-bottom:9px;border-bottom:1px solid #eef1f5;">
+            <div>Máy</div><div>Nhà máy</div><div>Mối hàn</div><div>Hôm nay</div><div>Tỷ lệ lỗi</div><div style="text-align:right;">Khả dụng</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.1fr 1.1fr 0.9fr 0.8fr 0.9fr 1.1fr;gap:0 8px;align-items:center;padding:11px 0;border-bottom:1px solid #f2f4f7;font-size:13px;color:#3d4a5c;">
+            <div style="font-weight:600;color:#16233a;">K922-1</div><div>Cổ Loa</div><div>8.520</div><div>62</div><div>0,18%</div>
+            <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+              <div style="width:62px;height:7px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:96%;height:100%;background:#22a94f;"></div></div><span style="font-size:12.5px;width:30px;text-align:right;">96%</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.1fr 1.1fr 0.9fr 0.8fr 0.9fr 1.1fr;gap:0 8px;align-items:center;padding:11px 0;border-bottom:1px solid #f2f4f7;font-size:13px;color:#3d4a5c;">
+            <div style="font-weight:600;color:#16233a;">K922-2</div><div>Hạ Long Xanh</div><div>7.840</div><div>51</div><div>0,25%</div>
+            <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+              <div style="width:62px;height:7px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:93%;height:100%;background:#22a94f;"></div></div><span style="font-size:12.5px;width:30px;text-align:right;">93%</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.1fr 1.1fr 0.9fr 0.8fr 0.9fr 1.1fr;gap:0 8px;align-items:center;padding:11px 0;font-size:13px;color:#3d4a5c;">
+            <div style="font-weight:600;color:#16233a;">K920</div><div>Cổ Loa</div><div>2.160</div><div>13</div><div>0,31%</div>
+            <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+              <div style="width:62px;height:7px;border-radius:4px;background:#eef1f5;overflow:hidden;"><div style="width:88%;height:100%;background:#f0b323;"></div></div><span style="font-size:12.5px;width:30px;text-align:right;">88%</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;padding-top:14px;padding-bottom:4px;">
+            <a href="#" style="flex:1 1 auto;font-size:13px;">Xem toàn bộ máy</a>
+            <i class="ph ph-arrow-right" style="font-size:16px;color:#5d6b7d;"></i>
+          </div>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px 18px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="flex:1 1 auto;font-size:15px;font-weight:700;color:#16233a;">Biên bản hiệu chuẩn &amp; kiểm định</div>
+            <a href="#" style="font-size:12.5px;">Xem tất cả →</a>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:14px;">
+            <div style="border:1px solid #e8ebf0;border-radius:10px;padding:12px;text-align:center;">
+              <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-seal-check" style="font-size:30px;color:#9aa6b6;"></i></div>
+              <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Hiệu chuẩn<br>máy K922-1</div>
+              <div style="display:flex;gap:7px;margin-top:10px;">
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
+              </div>
+            </div>
+            <div style="border:1px solid #e8ebf0;border-radius:10px;padding:12px;text-align:center;">
+              <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-wrench" style="font-size:30px;color:#9aa6b6;"></i></div>
+              <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Nhật ký bảo trì<br>tháng 05/2024</div>
+              <div style="display:flex;gap:7px;margin-top:10px;">
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
+              </div>
+            </div>
+            <div style="border:1px solid #e8ebf0;border-radius:10px;padding:12px;text-align:center;">
+              <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-gauge" style="font-size:30px;color:#9aa6b6;"></i></div>
+              <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Kiểm định áp lực<br>đầu kẹp</div>
+              <div style="display:flex;gap:7px;margin-top:10px;">
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
+              </div>
+            </div>
+            <div style="border:1px solid #e8ebf0;border-radius:10px;padding:12px;text-align:center;">
+              <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-file-text" style="font-size:30px;color:#9aa6b6;"></i></div>
+              <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Biên bản thay<br>vật tư tiêu hao</div>
+              <div style="display:flex;gap:7px;margin-top:10px;">
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <div style="background:#123f8f;border-radius:12px;padding:18px;color:#ffffff;">
+          <div style="display:flex;align-items:center;gap:9px;font-size:15px;font-weight:700;"><i class="ph-fill ph-gear-six" style="font-size:18px;color:#ffffff;"></i><span>Tình trạng thiết bị</span></div>
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:15px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:38px;height:38px;flex:0 0 38px;border-radius:50%;background:#1c56b5;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-clock" style="font-size:19px;color:#ffffff;"></i></div>
+              <div>
+                <div style="font-size:12px;color:#b9cdf0;">Tổng giờ vận hành tháng này</div>
+                <div style="font-size:19px;font-weight:700;margin-top:2px;">1.284 giờ</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:38px;height:38px;flex:0 0 38px;border-radius:50%;background:#1c56b5;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-warning" style="font-size:19px;color:#ffffff;"></i></div>
+              <div>
+                <div style="font-size:12px;color:#b9cdf0;">Số lần dừng máy</div>
+                <div style="font-size:19px;font-weight:700;margin-top:2px;">6 lần</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:38px;height:38px;flex:0 0 38px;border-radius:50%;background:#1c56b5;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-wrench" style="font-size:19px;color:#ffffff;"></i></div>
+              <div>
+                <div style="font-size:12px;color:#b9cdf0;">Sắp đến hạn bảo trì</div>
+                <div style="font-size:19px;font-weight:700;margin-top:2px;">3 máy</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:18px;text-align:center;background:#f5a623;color:#3d2600;border-radius:8px;padding:11px 0;font-size:13.5px;font-weight:700;cursor:pointer;" style-hover="background:#e0940f;">Tạo lệnh bảo trì</div>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px 18px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+          <div style="font-size:15px;font-weight:700;color:#16233a;">Lịch bảo trì sắp tới</div>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:13px;">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="flex:1 1 auto;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:#1257b8;">Máy K922-1</div>
+                <div style="font-size:11.5px;color:#8b95a5;margin-top:2px;">Nhà máy Cổ Loa</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:12px;color:#3d4a5c;">15/07/2024</div>
+                <div style="font-size:11.5px;color:#dc2626;margin-top:2px;">Còn 10 ngày</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="flex:1 1 auto;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:#1257b8;">Máy K922-2</div>
+                <div style="font-size:11.5px;color:#8b95a5;margin-top:2px;">Hạ Long Xanh</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:12px;color:#3d4a5c;">20/07/2024</div>
+                <div style="font-size:11.5px;color:#dc2626;margin-top:2px;">Còn 15 ngày</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="flex:1 1 auto;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:#1257b8;">Hiệu chuẩn máy UT</div>
+                <div style="font-size:11.5px;color:#8b95a5;margin-top:2px;">Tổ kiểm tra chất lượng</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:12px;color:#3d4a5c;">05/08/2024</div>
+                <div style="font-size:11.5px;color:#b26a00;margin-top:2px;">Còn 31 ngày</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:12px;padding:16px 18px 18px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+          <div style="font-size:15px;font-weight:700;color:#16233a;">Ngân sách bảo trì định kỳ</div>
+          <div style="margin-top:12px;font-size:12px;color:#8b95a5;">Hạn mức tháng</div>
+          <div style="font-size:21px;font-weight:700;color:#16233a;margin-top:2px;">20.000.000đ <span style="font-size:12.5px;font-weight:500;color:#8b95a5;">/ tháng</span></div>
+          <div style="margin-top:12px;font-size:12px;color:#5d6b7d;line-height:1.7;">
+            Tự động giải ngân theo lịch bảo trì<br>
+            Ngày thanh toán: 05 hằng tháng<br>
+            Nguồn chi: Vietcombank **** 1234
+          </div>
+          <div style="display:flex;gap:7px;margin-top:14px;">
+            <div style="flex:1 1 0;text-align:center;border:1px solid #dfe4ea;border-radius:6px;padding:8px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tạm dừng</div>
+            <div style="flex:1 1 0;text-align:center;border:1px solid #dfe4ea;border-radius:6px;padding:8px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Hủy</div>
+            <div style="flex:1 1 0;text-align:center;background:#1a73e8;color:#ffffff;border-radius:6px;padding:8px 0;font-size:11.5px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">Điều chỉnh</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1568,&quot;height&quot;:1080}}"></script>
+</body>
+</html>

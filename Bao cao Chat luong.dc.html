@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  html,body{margin:0;padding:0;background:#f5f7fa;}
+  *{box-sizing:border-box;}
+  a{color:#1a73e8;text-decoration:none;}
+  a:hover{color:#1257b8;}
+</style>
+</helmet>
+<div style="display:flex;width:1568px;min-height:900px;background:#f5f7fa;font-family:-apple-system,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;font-size:14px;-webkit-font-smoothing:antialiased;">
+
+  <div style="width:250px;flex:0 0 250px;background:#0d1b2e;display:flex;flex-direction:column;padding-bottom:18px;">
+    <div style="display:flex;align-items:center;gap:12px;padding:22px 18px 26px 20px;">
+      <img src="assets/tcw-emblem.png" alt="TCW" style="width:46px;height:46px;flex:0 0 46px;display:block;">
+      <div style="line-height:1.25;color:#ffffff;font-size:12.5px;font-weight:700;letter-spacing:0.4px;">RAIL WELDING<br><span style="color:#cfd8e3;font-weight:500;">MANAGEMENT</span><br><span style="color:#8fa3ba;font-weight:500;font-size:10.5px;letter-spacing:0.6px;">THÀNH PHÁT · TCW</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;padding:0 12px;">
+      <a href="index.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-house" style="font-size:19px;"></i><span>Trang chủ</span></a>
+      <a href="Rail Welding Dashboard.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-squares-four" style="font-size:19px;"></i><span>Tổng quan</span></a>
+      <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;background:#1565d8;color:#ffffff;font-weight:600;font-size:14.5px;box-shadow:0 2px 8px rgba(21,101,216,0.45);"><i class="ph-fill ph-check-circle" style="font-size:19px;"></i><span>Chất lượng</span></div>
+      <a href="Bao cao May moc.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-gear-six" style="font-size:19px;"></i><span>Máy móc</span></a>
+      <a href="Bao cao Nhan su.dc.html" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:9px;color:#c6d1e0;font-size:14.5px;text-decoration:none;" style-hover="background:#16273d;color:#ffffff;"><i class="ph ph-users" style="font-size:19px;"></i><span>Nhân sự</span></a>
+    </div>
+    <div style="flex:1 1 auto;"></div>
+    <div style="margin:0 12px 12px 12px;padding:12px 14px;border-radius:12px;background:#16273d;display:flex;align-items:center;gap:12px;">
+      <div style="width:42px;height:42px;border-radius:50%;overflow:hidden;flex:0 0 42px;background:#41576f;display:flex;align-items:flex-end;justify-content:center;"><i class="ph-fill ph-user" style="font-size:34px;color:#c9d4e2;"></i></div>
+      <div style="flex:1 1 auto;line-height:1.35;">
+        <div style="color:#ffffff;font-size:14.5px;font-weight:600;">Nguyễn Văn A</div>
+        <div style="color:#93a3b8;font-size:12.5px;">Quản trị viên</div>
+      </div>
+      <i class="ph ph-caret-down" style="font-size:15px;color:#93a3b8;"></i>
+    </div>
+    <div style="margin:0 12px;padding:14px;border-radius:12px;background:#16273d;display:flex;align-items:center;gap:12px;">
+      <i class="ph ph-moon" style="font-size:20px;color:#cfd8e3;"></i>
+      <div style="flex:1 1 auto;color:#e6ecf3;font-size:14.5px;font-weight:500;">Chế độ tối</div>
+      <div style="width:44px;height:24px;border-radius:12px;background:#ffffff;display:flex;align-items:center;padding:3px;"><div style="width:18px;height:18px;border-radius:50%;background:#b9c4d2;"></div></div>
+    </div>
+  </div>
+
+  <div style="flex:1 1 auto;padding:20px 23px 26px 24px;display:flex;flex-direction:column;gap:16px;min-width:0;">
+
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:#e8f1fe;color:#1257b8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">3</div>
+      <div style="flex:1 1 auto;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;letter-spacing:0.4px;color:#16233a;"><i class="ph-fill ph-shield-check" style="font-size:17px;color:#1a73e8;"></i><span>CHẤT LƯỢNG</span></div>
+        <div style="margin-top:4px;font-size:12.5px;color:#8b95a5;">Kết quả nghiệm thu, tỷ lệ đạt và cơ cấu khuyết tật · kỳ 01/05/2024 – 31/05/2024</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;background:#1a73e8;color:#ffffff;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#1257b8;">
+        <i class="ph-fill ph-download-simple" style="font-size:16px;"></i><span>Xuất báo cáo</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;">
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:15px 17px 16px 17px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:0.7px;color:#0d9488;">MỐI HÀN ĐẠT CHUẨN</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:12px;">
+            <div style="font-size:29px;font-weight:700;letter-spacing:-0.5px;color:#16233a;">28.210</div>
+            <div style="font-size:12.5px;color:#8b95a5;">mối</div>
+          </div>
+        </div>
+        <div style="width:58px;height:58px;flex:0 0 58px;border-radius:50%;background:#14b8a6;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-check-circle" style="font-size:31px;color:#ffffff;"></i></div>
+      </div>
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:15px 17px 16px 17px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:0.7px;color:#dc2626;">MỐI HÀN KHÔNG ĐẠT</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:12px;">
+            <div style="font-size:29px;font-weight:700;letter-spacing:-0.5px;color:#16233a;">76</div>
+            <div style="font-size:12.5px;color:#8b95a5;">mối</div>
+          </div>
+        </div>
+        <div style="width:58px;height:58px;flex:0 0 58px;border-radius:50%;background:#ef4444;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-x-circle" style="font-size:31px;color:#ffffff;"></i></div>
+      </div>
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:15px 17px 16px 17px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:0.7px;color:#3b62b5;">TỶ LỆ ĐẠT CHUẨN</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:12px;">
+            <div style="font-size:29px;font-weight:700;letter-spacing:-0.5px;color:#16233a;">98,5%</div>
+          </div>
+        </div>
+        <div style="width:58px;height:58px;flex:0 0 58px;border-radius:50%;background:#2f80ed;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-percent" style="font-size:29px;color:#ffffff;"></i></div>
+      </div>
+      <div style="flex:1 1 0;background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:15px 17px 16px 17px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:0.7px;color:#b26a00;">SỬA / HÀN LẠI</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:12px;">
+            <div style="font-size:29px;font-weight:700;letter-spacing:-0.5px;color:#16233a;">54</div>
+            <div style="font-size:12.5px;color:#8b95a5;">mối</div>
+          </div>
+        </div>
+        <div style="width:58px;height:58px;flex:0 0 58px;border-radius:50%;background:#f0b323;display:flex;align-items:center;justify-content:center;"><i class="ph-fill ph-arrow-counter-clockwise" style="font-size:29px;color:#ffffff;"></i></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:395px minmax(0,1fr);gap:16px;align-items:start;">
+
+      <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:16px 18px 18px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);">
+        <div style="font-size:14.5px;font-weight:700;letter-spacing:0.3px;color:#243447;">CƠ CẤU KẾT QUẢ KIỂM ĐỊNH</div>
+        <div style="margin-top:4px;font-size:12px;color:#8b95a5;">Đạt chuẩn, không đạt và phải xử lý lại</div>
+        <div style="display:flex;justify-content:center;margin-top:16px;">
+          <svg viewBox="0 0 140 140" style="width:150px;height:150px;">
+            <circle cx="70" cy="70" r="52" fill="none" stroke="#22a94f" stroke-width="21"></circle>
+            <circle cx="70" cy="70" r="52" fill="none" stroke="#ef4444" stroke-width="21" stroke-dasharray="0.9 325.8" transform="rotate(-90 70 70)"></circle>
+            <circle cx="70" cy="70" r="52" fill="none" stroke="#f0b323" stroke-width="21" stroke-dasharray="0.6 326.1" transform="rotate(-89 70 70)"></circle>
+            <text x="70" y="70" text-anchor="middle" font-family="-apple-system,'Segoe UI',Arial" font-size="21" font-weight="700" fill="#16233a">98,5%</text>
+            <text x="70" y="86" text-anchor="middle" font-family="-apple-system,'Segoe UI',Arial" font-size="10" fill="#8b95a5" letter-spacing="0.5">ĐẠT CHUẨN</text>
+          </svg>
+        </div>
+        <div style="margin-top:18px;display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;padding:9px 0;border-bottom:1px solid #f2f4f7;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#22a94f;flex:0 0 9px;"></span>
+            <span style="flex:1 1 auto;color:#3d4a5c;">Đạt chuẩn</span>
+            <span style="color:#16233a;font-weight:600;">28.210 mối</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;padding:9px 0;border-bottom:1px solid #f2f4f7;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#ef4444;flex:0 0 9px;"></span>
+            <span style="flex:1 1 auto;color:#3d4a5c;">Không đạt</span>
+            <span style="color:#16233a;font-weight:600;">76 mối</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;padding:9px 0;">
+            <span style="width:9px;height:9px;border-radius:50%;background:#f0b323;flex:0 0 9px;"></span>
+            <span style="flex:1 1 auto;color:#3d4a5c;">Sửa / hàn lại</span>
+            <span style="color:#16233a;font-weight:600;">54 mối</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #e8ebf0;border-radius:10px;padding:16px 18px 14px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.04);min-width:0;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="flex:1 1 auto;">
+            <div style="display:flex;align-items:center;gap:7px;font-size:14.5px;font-weight:700;letter-spacing:0.3px;color:#243447;"><i class="ph-fill ph-warning" style="font-size:16px;color:#ef4444;"></i><span>PHÂN LOẠI LỖI</span></div>
+            <div style="margin-top:4px;font-size:12px;color:#8b95a5;">Khuyết tật phát hiện qua NDT/UT và ngoại quan</div>
+          </div>
+          <span style="background:#fdeaea;color:#c62828;font-size:11px;font-weight:700;padding:4px 10px;border-radius:11px;">76 lỗi</span>
+        </div>
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Lỗi bề mặt</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:74%;height:13px;background:#ef4444;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">22 (28,9%)</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Nứt bề mặt</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:61%;height:13px;background:#ef4444;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">18 (23,7%)</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Rỗ khí</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:44%;height:13px;background:#f0b323;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">13 (17,1%)</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Cháy cạnh</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:31%;height:13px;background:#4f9df7;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">9 (11,8%)</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Biến dạng nhiệt</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:27%;height:13px;background:#4f9df7;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">8 (10,5%)</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+            <div style="width:150px;flex:0 0 150px;color:#3d4a5c;">Khác</div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;">
+              <div style="width:20%;height:13px;background:#a855f7;border-radius:2px;"></div>
+              <span style="color:#4b5563;font-size:12.5px;white-space:nowrap;">6 (7,9%)</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;padding-top:18px;padding-bottom:4px;">
+          <a href="#" style="flex:1 1 auto;font-size:13px;">Xem tất cả lỗi</a>
+          <i class="ph ph-arrow-right" style="font-size:16px;color:#5d6b7d;"></i>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1568,&quot;height&quot;:900}}"></script>
+</body>
+</html>
