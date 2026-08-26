@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef2f8"/>
+      <stop offset="100%" stop-color="#dbe4f3"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="270" fill="url(#bg)"/>
+  <rect x="0" y="210" width="480" height="8" fill="#64748b"/>
+  <rect x="0" y="228" width="480" height="8" fill="#64748b"/>
+  <!-- GEO positioning welder -->
+  <rect x="80" y="115" width="320" height="92" rx="6" fill="#0f766e" stroke="#115e59" stroke-width="2"/>
+  <rect x="100" y="90" width="140" height="30" rx="3" fill="#1e293b"/>
+  <text x="170" y="110" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#5eead4" font-weight="700">GEO Pro</text>
+  <rect x="260" y="125" width="120" height="70" rx="3" fill="#134e4a"/>
+  <path d="M120 160 L200 160 L240 130 L320 130" fill="none" stroke="#99f6e4" stroke-width="3"/>
+  <circle cx="240" cy="130" r="12" fill="#14b8a6" stroke="#fff" stroke-width="2"/>
+  <rect x="110" y="140" width="90" height="50" rx="3" fill="#115e59"/>
+  <rect x="120" y="150" width="30" height="30" rx="2" fill="#2dd4bf" opacity="0.6"/>
+  <circle cx="130" cy="208" r="18" fill="#1e293b" stroke="#475569" stroke-width="4"/>
+  <circle cx="350" cy="208" r="18" fill="#1e293b" stroke="#475569" stroke-width="4"/>
+  <text x="240" y="42" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#0047AB" font-weight="700">MÁY ÊNH VÊ &amp; HÀN GEO</text>
+</svg>

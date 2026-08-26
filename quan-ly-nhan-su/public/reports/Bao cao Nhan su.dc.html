@@ -106,7 +106,7 @@
               <img src="https://randomuser.me/api/portraits/women/65.jpg" alt="Lê Thị Kim Anh" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex:0 0 40px;border:2px solid #22a94f;">
               <div style="flex:1 1 auto;min-width:0;">
                 <div style="font-size:13.5px;font-weight:700;color:#16233a;">Lê Thị Kim Anh</div>
-                <div style="font-size:11px;color:#8b95a5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">K920 · Nhà máy Hà Nội · Tổ hàn số 1</div>
+                <div style="font-size:11px;color:#8b95a5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">K920 · Hà Nội · Tổ 1</div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto;">
                 <span style="background:#e8f1fe;color:#1257b8;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;">Đang trực</span>
@@ -199,7 +199,7 @@
               <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-certificate" style="font-size:30px;color:#9aa6b6;"></i></div>
               <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Chứng chỉ thợ hàn<br>EN ISO 9606-1</div>
               <div style="display:flex;gap:7px;margin-top:10px;">
-                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div class="cert-btn-view" style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;" onclick="openCertModal('iso9606')">Xem</div>
                 <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
               </div>
             </div>
@@ -207,7 +207,7 @@
               <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-shield-check" style="font-size:30px;color:#9aa6b6;"></i></div>
               <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Huấn luyện<br>an toàn lao động</div>
               <div style="display:flex;gap:7px;margin-top:10px;">
-                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div class="cert-btn-view" style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;" onclick="openCertModal('an-toan')">Xem</div>
                 <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
               </div>
             </div>
@@ -215,7 +215,7 @@
               <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-magnifying-glass" style="font-size:30px;color:#9aa6b6;"></i></div>
               <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Kiểm định viên<br>UT cấp 2</div>
               <div style="display:flex;gap:7px;margin-top:10px;">
-                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div class="cert-btn-view" style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;" onclick="openCertModal('ut2')">Xem</div>
                 <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
               </div>
             </div>
@@ -223,7 +223,7 @@
               <div style="height:74px;border:1px dashed #dfe4ea;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ph ph-clipboard-text" style="font-size:30px;color:#9aa6b6;"></i></div>
               <div style="margin-top:10px;font-size:12px;color:#3d4a5c;line-height:1.4;">Đánh giá tay nghề<br>quý II/2024</div>
               <div style="display:flex;gap:7px;margin-top:10px;">
-                <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Xem</div>
+                <div class="cert-btn-view" style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;" onclick="openCertModal('tay-nghe')">Xem</div>
                 <div style="flex:1 1 0;border:1px solid #dfe4ea;border-radius:6px;padding:6px 0;font-size:11.5px;color:#3d4a5c;cursor:pointer;" style-hover="background:#f5f9ff;border-color:#c9dcf8;">Tải PDF</div>
               </div>
             </div>
@@ -337,6 +337,139 @@
   </div>
 </div>
 </x-dc>
+
+<div id="cert-modal-overlay" class="cert-modal-overlay" onclick="if(event.target===this)closeCertModal()">
+  <div class="cert-modal" role="dialog" aria-modal="true">
+    <div class="cert-modal-head">
+      <h3 id="cert-modal-title">Chứng chỉ</h3>
+      <button type="button" class="cert-modal-close" onclick="closeCertModal()" aria-label="Đóng">&times;</button>
+    </div>
+    <div class="cert-tabs">
+      <button type="button" class="cert-tab active" data-tab="info" onclick="switchCertTab('info')">Thông tin</button>
+      <button type="button" class="cert-tab" data-tab="holders" onclick="switchCertTab('holders')">Danh sách người được cấp và còn hạn</button>
+    </div>
+    <div class="cert-modal-body">
+      <div id="cert-panel-info" class="cert-panel active"></div>
+      <div id="cert-panel-holders" class="cert-panel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var CERT_DATA = {
+  "iso9606": {
+    title: "Chứng chỉ thợ hàn EN ISO 9606-1",
+    info: [
+      ["Mã chứng chỉ", "CC-ISO9606-01"],
+      ["Tiêu chuẩn", "EN ISO 9606-1"],
+      ["Loại ray", "UIC60, P50, P43"],
+      ["Thời hạn", "3 năm"],
+      ["Đơn vị cấp", "Công ty CP Thành Phát"],
+      ["Yêu cầu", "Hoàn thành khóa đào tạo + thi thực hành"],
+      ["Mô tả", "Chứng nhận năng lực hàn ray aluminothermic theo tiêu chuẩn quốc tế."]
+    ],
+    holders: [
+      { name: "Lê Thị Kim Anh", photo: "women/65", issued: "15/06/2024", expires: "15/06/2027" },
+      { name: "Phạm Văn Minh", photo: "men/52", issued: "01/03/2025", expires: "01/03/2028" },
+      { name: "Trần Quốc Bảo", photo: "men/22", issued: "20/11/2023", expires: "20/11/2026" },
+      { name: "Đỗ Thị Lan", photo: "women/48", issued: "12/01/2022", expires: "12/01/2025" }
+    ]
+  },
+  "an-toan": {
+    title: "Huấn luyện an toàn lao động",
+    info: [
+      ["Mã khóa", "HL-ATLD-03"],
+      ["Nội dung", "An toàn lao động & PCCC công trường hàn ray"],
+      ["Thời lượng", "4 giờ"],
+      ["Thời hạn chứng nhận", "2 năm"],
+      ["Đơn vị đào tạo", "Công ty CP Thành Phát"],
+      ["Đối tượng", "Toàn bộ thợ hàn và nhân sự hiện trường"],
+      ["Mô tả", "Huấn luyện định kỳ về an toàn, sơ cứu và phòng cháy trên công trường."]
+    ],
+    holders: [
+      { name: "Nguyễn Văn Hùng", photo: "men/36", issued: "08/09/2024", expires: "08/09/2026" },
+      { name: "Vũ Thị Thảo", photo: "women/44", issued: "10/01/2026", expires: "10/01/2028" },
+      { name: "Đặng Ngọc Tiếp", photo: "men/32", issued: "12/03/2026", expires: "12/03/2028" },
+      { name: "Phạm Văn Minh", photo: "men/52", issued: "12/03/2026", expires: "12/03/2028" }
+    ]
+  },
+  "ut2": {
+    title: "Kiểm định viên UT cấp 2",
+    info: [
+      ["Mã chứng chỉ", "CC-NDT-UT2"],
+      ["Tiêu chuẩn", "ISO 9712 Level 2"],
+      ["Phương pháp", "Siêu âm (UT)"],
+      ["Thời hạn", "5 năm"],
+      ["Đơn vị cấp", "Trung tâm Kiểm định VL TCVN"],
+      ["Yêu cầu", "Tốt nghiệp khóa NDT + 500 giờ thực hành"],
+      ["Mô tả", "Chứng chỉ kiểm định viên siêu âm mối hàn ray cấp 2."]
+    ],
+    holders: [
+      { name: "Trần Quốc Bảo", photo: "men/22", issued: "20/11/2023", expires: "20/11/2026" },
+      { name: "Lê Thị Kim Anh", photo: "women/65", issued: "15/02/2025", expires: "15/02/2030" }
+    ]
+  },
+  "tay-nghe": {
+    title: "Đánh giá tay nghề quý II/2024",
+    info: [
+      ["Mã đánh giá", "DG-TN-Q2-2024"],
+      ["Kỳ đánh giá", "Quý II / 2024"],
+      ["Hạng mục", "Kỹ năng hàn, an toàn, năng suất"],
+      ["Thời hạn", "1 năm"],
+      ["Hội đồng", "Ban Kỹ thuật – Công ty CP Thành Phát"],
+      ["Tiêu chí", "Đạt ≥ 85 điểm / 100"],
+      ["Mô tả", "Đánh giá định kỳ tay nghề thợ hàn theo quý."]
+    ],
+    holders: [
+      { name: "Lê Thị Kim Anh", photo: "women/65", issued: "01/07/2024", expires: "01/07/2025" },
+      { name: "Phạm Văn Minh", photo: "men/52", issued: "01/07/2024", expires: "01/07/2025" },
+      { name: "Nguyễn Văn Hùng", photo: "men/36", issued: "01/07/2024", expires: "01/07/2025" }
+    ]
+  }
+};
+
+function openCertModal(id) {
+  var data = CERT_DATA[id];
+  if (!data) return;
+  document.getElementById("cert-modal-title").textContent = data.title;
+  var infoHtml = data.info.map(function(row) {
+    return '<div class="cert-info-row"><span>' + row[0] + '</span><span>' + row[1] + '</span></div>';
+  }).join("");
+  document.getElementById("cert-panel-info").innerHTML = infoHtml;
+  var holdersHtml = data.holders.map(function(h) {
+    return '<div class="cert-holder">' +
+      '<img src="https://randomuser.me/api/portraits/' + h.photo + '.jpg" alt="' + h.name + '">' +
+      '<div style="flex:1 1 auto;min-width:0;">' +
+        '<div class="cert-holder-name">' + h.name + '</div>' +
+        '<div class="cert-holder-meta">Cấp ' + h.issued + ' · Hết hạn ' + h.expires + '</div>' +
+      '</div>' +
+      '<span class="cert-badge-valid">Còn hạn</span>' +
+    '</div>';
+  }).join("");
+  document.getElementById("cert-panel-holders").innerHTML = holdersHtml || '<div style="color:#64748b;font-size:13px;">Không có dữ liệu.</div>';
+  switchCertTab("info");
+  document.getElementById("cert-modal-overlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeCertModal() {
+  document.getElementById("cert-modal-overlay").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function switchCertTab(tab) {
+  document.querySelectorAll(".cert-tab").forEach(function(btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+  });
+  document.getElementById("cert-panel-info").classList.toggle("active", tab === "info");
+  document.getElementById("cert-panel-holders").classList.toggle("active", tab === "holders");
+}
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") closeCertModal();
+});
+</script>
+
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1568,&quot;height&quot;:1080}}"></script>
 </body>
 </html>

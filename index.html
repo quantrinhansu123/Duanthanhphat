@@ -22,10 +22,8 @@
     display: flex; flex-direction: column; padding-bottom: 18px;
   }
   .brand { display: flex; align-items: center; gap: 12px; padding: 22px 18px 26px 20px; }
-  .brand img { width: 46px; height: 46px; flex: 0 0 46px; display: block; }
-  .brand-text { line-height: 1.25; color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 0.4px; }
-  .brand-text .sub { color: #cfd8e3; font-weight: 500; }
-  .brand-text .org { color: #8fa3ba; font-weight: 500; font-size: 10.5px; letter-spacing: 0.6px; }
+  .brand img { width: 46px; height: 46px; flex: 0 0 46px; display: block; border-radius: 50%; object-fit: cover; background: #fff; }
+  .brand-text { line-height: 1.15; color: #fff; font-size: 16px; font-weight: 800; letter-spacing: 0.6px; white-space: nowrap; }
   .nav { display: flex; flex-direction: column; gap: 4px; padding: 0 12px; }
   .nav a, .nav .item {
     display: flex; align-items: center; gap: 14px;
@@ -91,15 +89,15 @@
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <img src="assets/tcw-emblem.png" alt="TCW">
-      <div class="brand-text">RAIL WELDING<br><span class="sub">MANAGEMENT</span><br><span class="org">THÀNH PHÁT · TCW</span></div>
+      <img src="logo.png" alt="Thành Phát">
+      <div class="brand-text">THÀNH PHÁT</div>
     </div>
     <nav class="nav">
       <a class="active" href="index.html"><i class="ph-fill ph-house"></i><span>Trang chủ</span></a>
       <a href="Rail Welding Dashboard.dc.html"><i class="ph ph-squares-four"></i><span>Tổng quan</span></a>
       <a href="Bao cao Chat luong.dc.html"><i class="ph ph-check-circle"></i><span>Chất lượng</span></a>
       <a href="Bao cao May moc.dc.html"><i class="ph ph-gear-six"></i><span>Máy móc</span></a>
-      <a href="Bao cao Nhan su.dc.html"><i class="ph ph-users"></i><span>Nhân sự</span></a>
+      <a href="http://localhost:3010/ho-so-nhan-su"><i class="ph ph-users"></i><span>Nhân sự</span></a>
     </nav>
     <div class="spacer"></div>
     <div class="user-card">
@@ -168,19 +166,19 @@
         <div class="go">Mở báo cáo <i class="ph ph-arrow-right"></i></div>
       </a>
 
-      <a class="card" href="Bao cao Nhan su.dc.html">
+      <a class="card" href="http://localhost:3010/ho-so-nhan-su">
         <div class="card-top">
           <div class="icon" style="background:#f5a623;"><i class="ph-fill ph-users-three"></i></div>
           <div>
             <h2>Nhân sự</h2>
-            <p class="desc">Thợ hàn trực ca, an toàn tổ đội và phân bổ nhân lực.</p>
+            <p class="desc">Hồ sơ nhân sự, thợ hàn, đào tạo và chứng chỉ.</p>
           </div>
         </div>
         <div class="stats">
           <div class="stat"><div class="val">7 / 24</div><div class="lbl">Thợ hàn đang trực</div></div>
           <div class="stat"><div class="val">Vàng</div><div class="lbl">Hạng an toàn</div></div>
         </div>
-        <div class="go">Mở báo cáo <i class="ph ph-arrow-right"></i></div>
+        <div class="go">Quản lý nhân sự <i class="ph ph-arrow-right"></i></div>
       </a>
     </div>
   </main>
