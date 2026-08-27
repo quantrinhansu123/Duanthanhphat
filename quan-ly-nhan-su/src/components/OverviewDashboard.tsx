@@ -528,7 +528,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Projects dropdown */}
-            <div className="relative min-w-0 sm:w-[152px]">
+            <div className="relative min-w-0 sm:w-[195px]">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Theo dự án
               </span>
@@ -549,19 +549,19 @@ export default function OverviewDashboard() {
                 </span>
               </button>
               {projectFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
                   {PROJECTS.map((opt) => (
                     <label
                       key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={projects.includes(opt)}
                         onChange={() => toggleList("projects", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
                       />
-                      <span>{opt}</span>
+                      <span className="truncate">{opt}</span>
                     </label>
                   ))}
                 </div>
@@ -569,7 +569,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Personnel dropdown */}
-            <div className="relative min-w-0 sm:w-[152px]">
+            <div className="relative min-w-0 sm:w-[220px]">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Theo nhân sự
               </span>
@@ -590,19 +590,19 @@ export default function OverviewDashboard() {
                 </span>
               </button>
               {personnelFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
                   {PERSONNEL.map((opt) => (
                     <label
                       key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={personnel.includes(opt)}
                         onChange={() => toggleList("personnel", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
                       />
-                      <span>{opt}</span>
+                      <span className="truncate">{opt}</span>
                     </label>
                   ))}
                 </div>
@@ -610,7 +610,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Plants dropdown */}
-            <div className="relative col-span-2 sm:col-span-1 min-w-0 sm:w-[152px]">
+            <div className="relative col-span-2 sm:col-span-1 min-w-0 sm:w-[195px]">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Theo nhà máy
               </span>
@@ -631,19 +631,19 @@ export default function OverviewDashboard() {
                 </span>
               </button>
               {plantFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
                   {PLANTS.map((opt) => (
                     <label
                       key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={plants.includes(opt)}
                         onChange={() => toggleList("plants", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
                       />
-                      <span>{opt}</span>
+                      <span className="truncate">{opt}</span>
                     </label>
                   ))}
                 </div>

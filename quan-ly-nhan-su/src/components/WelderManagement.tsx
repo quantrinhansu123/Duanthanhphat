@@ -53,11 +53,13 @@ function MultiSelectCombobox({
   options,
   selected,
   onChange,
+  minWidth = "min-w-[140px]",
 }: {
   title: string;
   options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  minWidth?: string;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -83,39 +85,41 @@ function MultiSelectCombobox({
   }
 
   return (
-    <div ref={dropdownRef} className="relative">
+    <div ref={dropdownRef} className={`relative ${minWidth}`}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`h-10 rounded-lg border px-3 text-xs sm:text-sm font-medium shadow-2xs outline-hidden hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+        className={`h-10 w-full rounded-lg border px-3 text-xs sm:text-sm font-medium shadow-2xs outline-hidden hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer flex items-center justify-between gap-1.5 whitespace-nowrap ${
           count > 0
             ? "border-[#0047AB]/50 bg-blue-50/50 text-[#0047AB] font-semibold"
             : "border-slate-300 bg-white text-slate-700"
         } ${open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : ""}`}
       >
         <span className="truncate">{displayLabel}</span>
-        {count > 0 && (
-          <span className="inline-flex items-center justify-center rounded-full bg-[#0047AB] px-1.5 py-0.2 text-[10px] font-bold text-white font-mono">
-            {count}
-          </span>
-        )}
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className={`shrink-0 text-slate-400 transition-transform duration-150 ${open ? "rotate-180 text-[#0047AB]" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <div className="flex items-center gap-1 shrink-0">
+          {count > 0 && (
+            <span className="inline-flex items-center justify-center rounded-full bg-[#0047AB] px-1.5 py-0.2 text-[10px] font-bold text-white font-mono">
+              {count}
+            </span>
+          )}
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`shrink-0 text-slate-400 transition-transform duration-150 ${open ? "rotate-180 text-[#0047AB]" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
       </button>
 
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-64 min-w-[200px] w-full sm:w-auto flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-64 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
           <div className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100">
-            <span>{title}</span>
+            <span className="truncate">{title}</span>
             {count > 0 && (
               <button
                 type="button"
@@ -123,7 +127,7 @@ function MultiSelectCombobox({
                   e.stopPropagation();
                   onChange([]);
                 }}
-                className="text-[#0047AB] hover:underline font-semibold cursor-pointer lowercase"
+                className="text-[#0047AB] hover:underline font-semibold cursor-pointer lowercase shrink-0 ml-1"
               >
                 Bỏ chọn
               </button>
@@ -342,24 +346,28 @@ export default function WelderManagement() {
           options={rankOptions}
           selected={ranksSel}
           onChange={setRanksSel}
+          minWidth="min-w-[130px]"
         />
         <MultiSelectCombobox
           title="Loại ray"
           options={railOptions}
           selected={railsSel}
           onChange={setRailsSel}
+          minWidth="min-w-[145px]"
         />
         <MultiSelectCombobox
           title="Máy đã đào tạo"
           options={machineOptions}
           selected={machinesSel}
           onChange={setMachinesSel}
+          minWidth="min-w-[185px]"
         />
         <MultiSelectCombobox
           title="Trạng thái"
           options={statusOptions}
           selected={statusesSel}
           onChange={setStatusesSel}
+          minWidth="min-w-[140px]"
         />
 
         {hasFilter && (
