@@ -21,6 +21,8 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 function TrayDetailModal({ tray, onClose }: { tray: WeldingTray; onClose: () => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -50,16 +52,39 @@ function TrayDetailModal({ tray, onClose }: { tray: WeldingTray; onClose: () => 
               {tray.name}
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
-            aria-label="Đóng"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+                aria-label="Tùy chọn"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="12" r="1.5" />
+                  <circle cx="12" cy="12" r="1.5" />
+                  <circle cx="19" cy="12" r="1.5" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
+                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Chỉnh sửa</div>
+                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Gán máy</div>
+                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Lên lịch bảo trì</div>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+              aria-label="Đóng"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
@@ -110,7 +135,6 @@ export default function WeldingTrayList() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<WeldingTray | null>(null);
 
   const filtered = useMemo(() => {
@@ -129,7 +153,6 @@ export default function WeldingTrayList() {
 
   function openDetail(t: WeldingTray) {
     setActiveId(t.id);
-    setMenuOpen(null);
     setDetail(t);
   }
 
@@ -222,46 +245,6 @@ export default function WeldingTrayList() {
                         {t.status}
                       </span>
                     </div>
-                  </div>
-
-                  <div
-                    className="relative flex-none"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setMenuOpen(menuOpen === t.id ? null : t.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          setMenuOpen(menuOpen === t.id ? null : t.id);
-                        }
-                      }}
-                      className={`rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer ${
-                        selected || menuOpen === t.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      }`}
-                      aria-label="Tùy chọn"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="12" cy="5" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="12" cy="19" r="1.5" />
-                      </svg>
-                    </span>
-                    {menuOpen === t.id && (
-                      <div className="absolute right-0 top-8 z-30 w-40 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100">
-                        <button
-                          type="button"
-                          className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
-                          onClick={() => openDetail(t)}
-                        >
-                          Xem chi tiết
-                        </button>
-                        <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">Gán máy</div>
-                        <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors">Bảo trì</div>
-                      </div>
-                    )}
                   </div>
                 </button>
               </li>
