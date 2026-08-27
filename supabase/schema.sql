@@ -158,6 +158,31 @@ create index if not exists idx_dao_tao_ngay
   on public.dao_tao (ngay);
 
 -- ------------------------------------------------------------
+-- 8. TOẠ ĐỘ (điểm khảo sát trên bản đồ)
+-- ------------------------------------------------------------
+create table if not exists public.toa_do (
+  id          uuid primary key default gen_random_uuid(),
+  ma_diem     text not null,
+  kinh_do     double precision not null,
+  vi_do       double precision not null,
+  ly_trinh    text,
+  ghi_chu     text,
+  thu_tu      integer not null default 0,
+  du_an_id    uuid references public.du_an (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  constraint toa_do_ma_diem_unique unique (ma_diem),
+  constraint toa_do_kinh_do_check check (kinh_do between -180 and 180),
+  constraint toa_do_vi_do_check check (vi_do between -90 and 90)
+);
+
+comment on table public.toa_do is 'Điểm toạ độ / lý trình khảo sát trên bản đồ';
+
+create index if not exists idx_toa_do_thu_tu on public.toa_do (thu_tu);
+create index if not exists idx_toa_do_du_an on public.toa_do (du_an_id);
+create index if not exists idx_toa_do_coords on public.toa_do (vi_do, kinh_do);
+
+-- ------------------------------------------------------------
 -- Trigger cập nhật updated_at
 -- ------------------------------------------------------------
 create or replace function public.set_updated_at()
@@ -205,6 +230,11 @@ create trigger trg_chung_chi_updated_at
   before update on public.chung_chi
   for each row execute function public.set_updated_at();
 
+drop trigger if exists trg_toa_do_updated_at on public.toa_do;
+create trigger trg_toa_do_updated_at
+  before update on public.toa_do
+  for each row execute function public.set_updated_at();
+
 -- ------------------------------------------------------------
 -- RLS (Row Level Security) — bật sẵn, policy mở cho authenticated
 -- Chỉnh lại theo nhu cầu bảo mật thực tế
@@ -217,6 +247,7 @@ alter table public.thong_so_moi_han enable row level security;
 alter table public.dao_tao enable row level security;
 alter table public.chung_chi enable row level security;
 alter table public.nhan_su_du_an enable row level security;
+alter table public.toa_do enable row level security;
 
 create policy "authenticated_all_nhan_su"
   on public.nhan_su for all to authenticated
@@ -248,6 +279,10 @@ create policy "authenticated_all_chung_chi"
 
 create policy "authenticated_all_nhan_su_du_an"
   on public.nhan_su_du_an for all to authenticated
+  using (true) with check (true);
+
+create policy "authenticated_all_toa_do"
+  on public.toa_do for all to authenticated
   using (true) with check (true);
 
 -- ------------------------------------------------------------

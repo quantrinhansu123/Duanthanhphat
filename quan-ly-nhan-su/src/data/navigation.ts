@@ -116,6 +116,11 @@ export const navigation: NavItem[] = [
         label: "Quản lý mối hàn",
         description: "Danh sách mối hàn theo khay hàn và chứng chỉ liên quan",
       },
+      {
+        id: "ban-do",
+        label: "Bản đồ Việt Nam",
+        description: "Bản đồ có đánh dấu điểm tọa độ / lý trình Km (mở thêm trên Google Maps)",
+      },
     ],
   },
   {

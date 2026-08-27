@@ -40,3 +40,8 @@ drop policy if exists "anon_all_nhan_su_du_an" on public.nhan_su_du_an;
 create policy "anon_all_nhan_su_du_an"
   on public.nhan_su_du_an for all to anon
   using (true) with check (true);
+
+drop policy if exists "anon_all_toa_do" on public.toa_do;
+create policy "anon_all_toa_do"
+  on public.toa_do for all to anon
+  using (true) with check (true);

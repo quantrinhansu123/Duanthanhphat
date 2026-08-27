@@ -13,6 +13,7 @@ import HtmlReportView, { isHtmlReportTab } from "@/components/HtmlReportView";
 import MachineAssignmentList from "@/components/MachineAssignmentList";
 import MachineList from "@/components/MachineList";
 import MaintenanceCalendar from "@/components/MaintenanceCalendar";
+import MapView from "@/components/MapView";
 import ProjectManagement from "@/components/ProjectManagement";
 import QualityReportDashboard from "@/components/QualityReportDashboard";
 import ReportTabBar from "@/components/ReportTabBar";
@@ -41,6 +42,7 @@ const views: Record<string, React.ReactNode> = {
   "bc-chat-luong": <QualityReportDashboard />,
   "quan-ly-du-an": <ProjectManagement />,
   "quan-ly-moi-han": <WeldJointManagement />,
+  "ban-do": <MapView />,
   "trien-khai": <DeploymentHandoverList />,
   "nhap-hang-loat": <BulkImportList />,
   "cau-hinh": <SystemConfiguration />,
