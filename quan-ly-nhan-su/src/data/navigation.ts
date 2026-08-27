@@ -135,11 +135,6 @@ export const navigation: NavItem[] = [
         description: "Tổng mối hàn, hôm nay, tháng này, tỷ lệ đạt, máy & thợ đang hoạt động",
       },
       {
-        id: "bc-san-luong",
-        label: "Báo cáo sản lượng",
-        description: "Theo ngày / tuần / tháng, dự án, khu vực, máy, tổ đội, thợ hàn",
-      },
-      {
         id: "bc-chat-luong",
         label: "Báo cáo chất lượng",
         description: "Tổng mối hàn, Đạt, Không đạt, Sửa chữa, Hàn lại, tỷ lệ đạt, phân loại lỗi",
@@ -199,7 +194,8 @@ export function isValidTab(id: string) {
   return allTabIds().includes(id);
 }
 
-export function findNavMeta(activeId: string) {
+export function findNavMeta(activeId?: string) {
+  if (!activeId) return null;
   for (const group of navigation) {
     const child = group.children.find((c) => c.id === activeId);
     if (child) {
@@ -212,12 +208,5 @@ export function findNavMeta(activeId: string) {
       };
     }
   }
-  const first = navigation[0].children[0];
-  return {
-    parent: navigation[0].label,
-    parentEn: navigation[0].labelEn,
-    code: navigation[0].code,
-    title: first.label,
-    description: first.description ?? "",
-  };
+  return null;
 }

@@ -102,71 +102,88 @@ export default function MaintenanceFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-[#0f172a]/45" aria-label="Đóng" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <button
+        type="button"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
+        aria-label="Đóng"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-[520px] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
-        <div className="border-b border-[#e8eef8] px-5 py-4">
-          <h2 id={titleId} className="text-[18px] font-bold text-[#0f172a]">
-            Thêm lịch bảo trì
-          </h2>
-          <p className="mt-0.5 text-[13px] text-[#64748b]">Tạo công việc bảo dưỡng / sửa chữa mới</p>
+        <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
+          <div>
+            <h2 id={titleId} className="text-base sm:text-lg font-bold text-slate-900">
+              Thêm lịch bảo trì
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">Tạo công việc bảo dưỡng / sửa chữa mới</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+            aria-label="Đóng"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 px-5 py-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
           {error && (
-            <div className="rounded-lg bg-[#fef2f2] px-3 py-2 text-[13px] text-[#dc2626]">{error}</div>
+            <div className="rounded-lg bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-rose-700 shadow-2xs">{error}</div>
           )}
 
-          <label className="block text-[12px] font-semibold text-[#475569]">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Tên công việc *
             <input
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
               placeholder="VD: Bảo dưỡng định kỳ 500h"
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[12px] font-semibold text-[#475569]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày
               <input
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
               />
             </label>
-            <label className="block text-[12px] font-semibold text-[#475569]">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Giờ bắt đầu
               <input
                 type="time"
                 value={form.time}
                 onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
               />
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[12px] font-semibold text-[#475569]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Máy
               <select
                 value={form.machine}
                 onChange={(e) => setForm((f) => ({ ...f, machine: e.target.value }))}
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
               >
                 {machines.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>
             </label>
-            <label className="block text-[12px] font-semibold text-[#475569]">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Thời lượng (phút)
               <input
                 type="number"
@@ -174,34 +191,34 @@ export default function MaintenanceFormModal({
                 step={15}
                 value={form.durationMin}
                 onChange={(e) => setForm((f) => ({ ...f, durationMin: Number(e.target.value) || 60 }))}
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
               />
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[12px] font-semibold text-[#475569]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại công việc
               <select
                 value={form.type}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, type: e.target.value as MaintenanceEvent["type"] }))
                 }
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
               >
                 {(["Bảo dưỡng", "Sửa chữa", "Kiểm định", "Thay phụ tùng"] as const).map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
             </label>
-            <label className="block text-[12px] font-semibold text-[#475569]">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Trạng thái
               <select
                 value={form.status}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, status: e.target.value as MaintenanceEvent["status"] }))
                 }
-                className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
               >
                 {(["Chờ xác nhận", "Đang làm", "Đã xong"] as const).map((s) => (
                   <option key={s}>{s}</option>
@@ -211,49 +228,49 @@ export default function MaintenanceFormModal({
           </div>
 
           <fieldset className="block">
-            <legend className="text-[12px] font-semibold text-[#475569]">
+            <legend className="text-xs sm:text-[13px] font-semibold text-slate-700">
               Nhân sự phụ trách *
-              <span className="ml-1 font-normal text-[#94a3b8]">(chọn nhiều người)</span>
+              <span className="ml-1 font-normal text-slate-400">(chọn nhiều người)</span>
             </legend>
-            <div className="mt-2 max-h-[180px] space-y-1 overflow-y-auto rounded-lg border border-[#d9e2f1] p-2">
+            <div className="mt-2 max-h-[180px] space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 bg-slate-50">
               {assigneeOptions.map((a) => {
                 const checked = form.assigneeNames.includes(a.name);
                 return (
                   <label
                     key={a.name}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] transition ${
-                      checked ? "bg-[#eef4ff] text-[#0f172a]" : "text-[#334155] hover:bg-[#f8fafc]"
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm transition-colors duration-150 ${
+                      checked ? "bg-blue-50 text-[#0047AB] font-semibold" : "text-slate-700 hover:bg-white"
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleAssignee(a.name)}
-                      className="h-4 w-4 accent-[#0047AB]"
+                      className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer"
                     />
-                    <span className="font-medium">{a.name}</span>
+                    <span>{a.name}</span>
                   </label>
                 );
               })}
             </div>
             {form.assigneeNames.length > 0 && (
-              <p className="mt-1.5 text-[11px] text-[#64748b]">
-                Đã chọn {form.assigneeNames.length} nhân sự: {form.assigneeNames.join(", ")}
+              <p className="mt-1.5 text-xs text-slate-500">
+                Đã chọn <strong className="text-[#0047AB] font-semibold font-mono tabular-nums">{form.assigneeNames.length}</strong> nhân sự: {form.assigneeNames.join(", ")}
               </p>
             )}
           </fieldset>
 
-          <div className="flex justify-end gap-2 border-t border-[#e8eef8] pt-4">
+          <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="h-10 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
             >
               Lưu lịch
             </button>

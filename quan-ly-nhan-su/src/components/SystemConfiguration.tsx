@@ -30,54 +30,54 @@ function CatalogModal({
   const [form, setForm] = useState(item);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-[#0f172a]/45" aria-label="Đóng" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-[420px] rounded-2xl bg-white p-5 shadow-2xl">
-        <h3 className="text-[16px] font-bold text-[#0f172a]">
-          {mode === "create" ? "Thêm danh mục" : "Sửa danh mục"}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-[440px] rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl animate-in fade-in-50 zoom-in-95 duration-150">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900">
+          {mode === "create" ? "Thêm danh mục mới" : "Chỉnh sửa danh mục"}
         </h3>
-        <p className="mt-1 text-[12px] text-[#64748b]">Nhóm: {group}</p>
-        <div className="mt-4 space-y-3">
-          <label className="block text-[12px] font-medium text-[#64748b]">
-            Mã
+        <p className="mt-1 text-xs sm:text-sm text-slate-500">Nhóm: <span className="font-semibold text-[#0047AB]">{group}</span></p>
+        <div className="mt-4 space-y-3.5">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Mã danh mục
             <input
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
             />
           </label>
-          <label className="block text-[12px] font-medium text-[#64748b]">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Tên hiển thị
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
             />
           </label>
-          <label className="flex items-center gap-2 text-[13px] text-[#334155]">
+          <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 cursor-pointer pt-1">
             <input
               type="checkbox"
               checked={form.active}
               onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              className="h-4 w-4 accent-[#0047AB]"
+              className="h-4 w-4 rounded accent-[#0047AB] cursor-pointer"
             />
             Đang sử dụng
           </label>
         </div>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="h-10 rounded-lg border border-[#d9e2f1] px-4 text-[13px] font-medium text-[#334155]"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
           >
             Hủy
           </button>
           <button
             type="button"
             onClick={() => onSave({ ...form, group })}
-            className="h-10 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
           >
-            Lưu
+            Lưu danh mục
           </button>
         </div>
       </div>
@@ -122,14 +122,16 @@ function CatalogsPanel({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-1.5 sm:gap-2">
         {catalogGroups.map((g) => (
           <button
             key={g}
             type="button"
             onClick={() => setGroup(g)}
-            className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition ${
-              group === g ? "bg-[#0047AB] text-white" : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e8eef8]"
+            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
+              group === g
+                ? "bg-[#0047AB] text-white shadow-xs"
+                : "bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 shadow-2xs"
             }`}
           >
             {g}
@@ -137,13 +139,27 @@ function CatalogsPanel({
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm mã, tên danh mục..."
-          className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] outline-none focus:border-[#0047AB]"
-        />
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+        <div className="relative min-w-[220px] flex-1">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm mã, tên danh mục..."
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </div>
         <button
           type="button"
           onClick={() =>
@@ -152,82 +168,84 @@ function CatalogsPanel({
               item: { id: "", code: "", name: "", group, active: true },
             })
           }
-          className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
-          + Thêm mới
+          <span className="text-base leading-none">+</span> Thêm mới
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white">
-        <table className="w-full border-collapse text-left text-[13px]">
-          <thead>
-            <tr className="border-b border-[#eef1f5] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-              <th className="px-4 py-3">Mã</th>
-              <th className="px-3 py-3">Tên hiển thị</th>
-              <th className="px-3 py-3">Trạng thái</th>
-              <th className="w-12 px-2 py-3" aria-label="Thao tác" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id} className="border-b border-[#f2f4f7] hover:bg-[#f8fafc]">
-                <td className="px-4 py-3 font-semibold text-[#0047AB]">{c.code}</td>
-                <td className="px-3 py-3 text-[#334155]">{c.name}</td>
-                <td className="px-3 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      c.active ? "bg-[#e7f7ed] text-[#15803d]" : "bg-[#f1f5f9] text-[#64748b]"
-                    }`}
-                  >
-                    {c.active ? "Đang dùng" : "Ngừng"}
-                  </span>
-                </td>
-                <td className="relative px-2 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}
-                    className="rounded-full p-1.5 text-[#64748b] hover:bg-[#e2e8f0]"
-                    aria-label="Tùy chọn"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="1.5" />
-                      <circle cx="12" cy="12" r="1.5" />
-                      <circle cx="12" cy="19" r="1.5" />
-                    </svg>
-                  </button>
-                  {menuOpen === c.id && (
-                    <div className="absolute right-2 top-10 z-20 w-32 rounded-lg border border-[#e2e8f0] bg-white py-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
-                        onClick={() => {
-                          setModal({ mode: "edit", item: c });
-                          setMenuOpen(null);
-                        }}
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-[12px] text-[#dc2626] hover:bg-[#fef2f2]"
-                        onClick={() => handleDelete(c)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  )}
-                </td>
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        <div className="table-scroll overflow-x-auto">
+          <table className="w-full min-w-[600px] border-collapse text-left text-xs sm:text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <th className="px-4 py-3">Mã</th>
+                <th className="px-3.5 py-3">Tên hiển thị</th>
+                <th className="px-3.5 py-3">Trạng thái</th>
+                <th className="w-12 px-2 py-3" aria-label="Thao tác" />
               </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-[#64748b]">
-                  Không có danh mục trong nhóm này.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((c) => (
+                <tr key={c.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                  <td className="px-4 py-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">{c.code}</td>
+                  <td className="px-3.5 py-3 font-semibold text-slate-900">{c.name}</td>
+                  <td className="px-3.5 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        c.active ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" : "bg-slate-100 text-slate-500 border border-slate-200 shadow-2xs"
+                      }`}
+                    >
+                      {c.active ? "Đang dùng" : "Ngừng"}
+                    </span>
+                  </td>
+                  <td className="relative px-2 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+                      aria-label="Tùy chọn"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="5" cy="12" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="19" cy="12" r="1.5" />
+                      </svg>
+                    </button>
+                    {menuOpen === c.id && (
+                      <div className="absolute right-2 top-10 z-30 w-32 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100">
+                        <button
+                          type="button"
+                          className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
+                          onClick={() => {
+                            setModal({ mode: "edit", item: c });
+                            setMenuOpen(null);
+                          }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+                          onClick={() => handleDelete(c)}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-12 text-center text-slate-500">
+                    <div className="text-sm font-semibold text-slate-800">Không có danh mục trong nhóm này</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {modal && (
@@ -258,78 +276,81 @@ function SettingsPanel({
   }
 
   return (
-    <div className="max-w-[640px] rounded-xl border border-[#d9e2f1] bg-white p-5">
-      <div className="mb-4 text-[14px] font-semibold text-[#0f172a]">Thông số vận hành</div>
+    <div className="max-w-[680px] rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs">
+      <div className="mb-4">
+        <h2 className="text-sm sm:text-base font-bold text-slate-900">Thông số vận hành hệ thống</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Cấu hình các tham số toàn cục áp dụng cho toàn bộ phân hệ</p>
+      </div>
       <div className="space-y-4">
-        <label className="block text-[12px] font-medium text-[#64748b]">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Tên công ty
           <input
             value={settings.companyName}
             onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </label>
-        <label className="block text-[12px] font-medium text-[#64748b]">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Email hệ thống
           <input
             type="email"
             value={settings.systemEmail}
             onChange={(e) => setSettings({ ...settings, systemEmail: e.target.value })}
-            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[12px] font-medium text-[#64748b]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Cảnh báo chứng chỉ (ngày)
             <input
               type="number"
               min={1}
               value={settings.certWarningDays}
               onChange={(e) => setSettings({ ...settings, certWarningDays: Number(e.target.value) })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
             />
           </label>
-          <label className="block text-[12px] font-medium text-[#64748b]">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Mục tiêu sản lượng mặc định
             <input
               type="number"
               min={0}
               value={settings.defaultProductionTarget}
               onChange={(e) => setSettings({ ...settings, defaultProductionTarget: Number(e.target.value) })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
             />
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-[12px] font-medium text-[#64748b]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Múi giờ
             <input
               value={settings.timezone}
               onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
             />
           </label>
-          <label className="block text-[12px] font-medium text-[#64748b]">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Timeout phiên (phút)
             <input
               type="number"
               min={30}
               value={settings.sessionTimeoutMinutes}
               onChange={(e) => setSettings({ ...settings, sessionTimeoutMinutes: Number(e.target.value) })}
-              className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] px-3 text-[13px] outline-none focus:border-[#0047AB]"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
             />
           </label>
         </div>
       </div>
-      <div className="mt-5 flex items-center gap-3">
+      <div className="mt-6 flex items-center gap-3 border-t border-slate-200 pt-5">
         <button
           type="button"
           onClick={handleSave}
-          className="h-10 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           Lưu cấu hình
         </button>
-        {saved && <span className="text-[13px] font-medium text-[#15803d]">Đã lưu thay đổi</span>}
+        {saved && <span className="text-xs sm:text-sm font-semibold text-emerald-700 animate-in fade-in duration-200">✓ Đã lưu thay đổi thành công</span>}
       </div>
     </div>
   );
@@ -370,18 +391,32 @@ function AccountsPanel({
 
   return (
     <>
-      <div className="mb-4 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 text-[13px] text-[#1e40af]">
+      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 text-xs sm:text-sm text-[#0047AB] shadow-2xs">
         Danh sách tài khoản khởi tạo khi triển khai hệ thống. Tài khoản <strong>Quản trị</strong> có
         toàn quyền cấu hình và quản lý dữ liệu.
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm tên đăng nhập, họ tên, email..."
-          className="h-10 min-w-[240px] flex-1 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] outline-none focus:border-[#0047AB]"
-        />
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+        <div className="relative min-w-[240px] flex-1">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm tên đăng nhập, họ tên, email..."
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </div>
         <button
           type="button"
           onClick={() =>
@@ -399,97 +434,99 @@ function AccountsPanel({
               ...prev,
             ])
           }
-          className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
-          + Thêm tài khoản
+          <span className="text-base leading-none">+</span> Thêm tài khoản
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white">
-        <table className="w-full min-w-[900px] border-collapse text-left text-[13px]">
-          <thead>
-            <tr className="border-b border-[#eef1f5] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-              <th className="px-4 py-3">Tên đăng nhập</th>
-              <th className="px-3 py-3">Họ tên</th>
-              <th className="px-3 py-3">Email</th>
-              <th className="px-3 py-3">Vai trò</th>
-              <th className="px-3 py-3">Trạng thái</th>
-              <th className="px-3 py-3">Ngày tạo</th>
-              <th className="px-3 py-3">Ghi chú</th>
-              <th className="w-12 px-2 py-3" aria-label="Thao tác" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((a) => (
-              <tr key={a.id} className="border-b border-[#f2f4f7] hover:bg-[#f8fafc]">
-                <td className="px-4 py-3 font-semibold text-[#0047AB]">{a.username}</td>
-                <td className="px-3 py-3 font-medium text-[#0f172a]">{a.fullName}</td>
-                <td className="px-3 py-3 text-[#334155]">{a.email || "—"}</td>
-                <td className="px-3 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      a.role === "Quản trị" ? "bg-[#0047AB] text-white" : "bg-[#e8eef8] text-[#475569]"
-                    }`}
-                  >
-                    {a.role}
-                  </span>
-                </td>
-                <td className="px-3 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      a.status === "Hoạt động" ? "bg-[#e7f7ed] text-[#15803d]" : "bg-[#f1f5f9] text-[#64748b]"
-                    }`}
-                  >
-                    {a.status}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-[#334155]">
-                  {new Date(a.createdAt + "T00:00:00").toLocaleDateString("vi-VN")}
-                </td>
-                <td className="max-w-[180px] px-3 py-3 text-[12px] text-[#64748b]">{a.note}</td>
-                <td className="relative px-2 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setMenuOpen(menuOpen === a.id ? null : a.id)}
-                    className="rounded-full p-1.5 text-[#64748b] hover:bg-[#e2e8f0]"
-                    aria-label="Tùy chọn"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="1.5" />
-                      <circle cx="12" cy="12" r="1.5" />
-                      <circle cx="12" cy="19" r="1.5" />
-                    </svg>
-                  </button>
-                  {menuOpen === a.id && (
-                    <div className="absolute right-2 top-10 z-20 w-36 rounded-lg border border-[#e2e8f0] bg-white py-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
-                        onClick={() => toggleStatus(a)}
-                      >
-                        {a.status === "Hoạt động" ? "Khóa" : "Mở khóa"}
-                      </button>
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-[12px] text-[#dc2626] hover:bg-[#fef2f2]"
-                        onClick={() => handleDelete(a)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  )}
-                </td>
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        <div className="table-scroll overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-left text-xs sm:text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <th className="px-4 py-3">Tên đăng nhập</th>
+                <th className="px-3.5 py-3">Họ tên</th>
+                <th className="px-3.5 py-3">Email</th>
+                <th className="px-3.5 py-3">Vai trò</th>
+                <th className="px-3.5 py-3">Trạng thái</th>
+                <th className="px-3.5 py-3">Ngày tạo</th>
+                <th className="px-3.5 py-3">Ghi chú</th>
+                <th className="w-12 px-2 py-3" aria-label="Thao tác" />
               </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[#64748b]">
-                  Không tìm thấy tài khoản.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((a) => (
+                <tr key={a.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                  <td className="px-4 py-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">{a.username}</td>
+                  <td className="px-3.5 py-3 font-semibold text-slate-900">{a.fullName}</td>
+                  <td className="px-3.5 py-3 text-slate-700">{a.email || "—"}</td>
+                  <td className="px-3.5 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        a.role === "Quản trị" ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"
+                      }`}
+                    >
+                      {a.role}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        a.status === "Hoạt động" ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" : "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                      }`}
+                    >
+                      {a.status}
+                    </span>
+                  </td>
+                  <td className="px-3.5 py-3 text-slate-700 font-mono whitespace-nowrap">
+                    {new Date(a.createdAt + "T00:00:00").toLocaleDateString("vi-VN")}
+                  </td>
+                  <td className="max-w-[180px] px-3.5 py-3 text-xs text-slate-500">{a.note}</td>
+                  <td className="relative px-2 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen(menuOpen === a.id ? null : a.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+                      aria-label="Tùy chọn"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="5" cy="12" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="19" cy="12" r="1.5" />
+                      </svg>
+                    </button>
+                    {menuOpen === a.id && (
+                      <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100">
+                        <button
+                          type="button"
+                          className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
+                          onClick={() => toggleStatus(a)}
+                        >
+                          {a.status === "Hoạt động" ? "Khóa tài khoản" : "Mở khóa"}
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+                          onClick={() => handleDelete(a)}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                    <div className="text-sm font-semibold text-slate-800">Không tìm thấy tài khoản</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -508,22 +545,22 @@ export default function SystemConfiguration() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1400px] px-6 pb-8">
-      <div className="mb-4 inline-flex rounded-lg border border-[#d9e2f1] bg-white p-1">
+    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+      <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 gap-1">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-md px-4 py-2 text-[13px] font-semibold transition ${
-              tab === t.id ? "bg-[#0047AB] text-white" : "text-[#64748b] hover:bg-[#f8fafc]"
+            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
+              tab === t.id ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             {t.label}
             {t.count != null && (
               <span
-                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] ${
-                  tab === t.id ? "bg-white/20 text-white" : "bg-[#f1f5f9] text-[#64748b]"
+                className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-bold font-mono tabular-nums ${
+                  tab === t.id ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-white/80 text-slate-600 border border-slate-200 shadow-2xs"
                 }`}
               >
                 {t.count}
