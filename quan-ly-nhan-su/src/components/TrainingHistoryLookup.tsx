@@ -7,15 +7,15 @@ import {
 } from "@/data/trainingHistory";
 
 const resultStyle: Record<TrainingHistoryRecord["result"], string> = {
-  Đạt: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-  "Không đạt": "bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]",
-  "Đang học": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
+  Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Không đạt": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
+  "Đang học": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
 const statusStyle: Record<TrainingHistoryRecord["status"], string> = {
-  "Hoàn thành": "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-  "Đang học": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
-  "Không hoàn thành": "bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]",
+  "Hoàn thành": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Đang học": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
+  "Không hoàn thành": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
 };
 
 export default function TrainingHistoryLookup() {
@@ -54,7 +54,7 @@ export default function TrainingHistoryLookup() {
       <div className="mb-4 flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
           <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             width="16"
             height="16"
             viewBox="0 0 24 24"
@@ -69,14 +69,14 @@ export default function TrainingHistoryLookup() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm theo mã, họ tên, khóa đào tạo, người đào tạo..."
-            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <select
             value={personType}
             onChange={(e) => setPersonType(e.target.value)}
-            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             {["Tất cả đối tượng", "Nhân sự", "Thợ hàn"].map((t) => (
               <option key={t}>{t}</option>
@@ -85,7 +85,7 @@ export default function TrainingHistoryLookup() {
           <select
             value={course}
             onChange={(e) => setCourse(e.target.value)}
-            className="h-10 max-w-[220px] truncate rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+            className="h-10 max-w-[220px] truncate rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             {courseOptions.map((c) => (
               <option key={c}>{c}</option>
@@ -94,7 +94,7 @@ export default function TrainingHistoryLookup() {
           <select
             value={result}
             onChange={(e) => setResult(e.target.value)}
-            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
               <option key={r}>{r}</option>
@@ -103,23 +103,23 @@ export default function TrainingHistoryLookup() {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             {["Tất cả trạng thái", "Hoàn thành", "Đang học", "Không hoàn thành"].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
         </div>
-        <span className="text-[12.5px] text-[#64748b] whitespace-nowrap self-center">
-          <strong className="font-semibold text-[#0f172a]">{filtered.length}</strong> bản ghi
+        <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
+          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-xs">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1280px] border-collapse text-left text-[13px]">
+          <table className="w-full min-w-[1280px] border-collapse text-left text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Mã</th>
                 <th className="px-3.5 py-3">Họ tên</th>
                 <th className="px-3.5 py-3">Đối tượng</th>
@@ -133,56 +133,56 @@ export default function TrainingHistoryLookup() {
                 <th className="px-3.5 py-3">Chứng chỉ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f1f5f9]">
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((row) => (
-                <tr key={row.id} className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
-                  <td className="px-4 py-3 font-mono font-semibold text-[#0047AB] text-[12.5px]">{row.personCode}</td>
-                  <td className="px-3.5 py-3 font-semibold text-[#0f172a]">{row.personName}</td>
+                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                  <td className="px-4 py-3 font-mono font-semibold text-[#0047AB] text-xs sm:text-sm">{row.personCode}</td>
+                  <td className="px-3.5 py-3 font-semibold text-slate-900">{row.personName}</td>
                   <td className="px-3.5 py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         row.personType === "Thợ hàn"
-                          ? "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]"
-                          : "bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0]"
+                          ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs"
+                          : "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"
                       }`}
                     >
                       {row.personType}
                     </span>
                   </td>
-                  <td className="px-3.5 py-3 text-[#334155]">{row.department}</td>
-                  <td className="max-w-[240px] px-3.5 py-3 text-[#334155]">
+                  <td className="px-3.5 py-3 text-slate-700">{row.department}</td>
+                  <td className="max-w-[240px] px-3.5 py-3 text-slate-700">
                     <div className="line-clamp-2 font-medium">{row.courseTitle}</div>
                   </td>
-                  <td className="px-3.5 py-3 text-[#334155]">{row.trainer}</td>
-                  <td className="px-3.5 py-3 text-[#334155] whitespace-nowrap font-mono text-[12.5px]">{row.date}</td>
-                  <td className="px-3.5 py-3 text-[#334155] whitespace-nowrap font-mono text-[12.5px]">{row.duration}</td>
+                  <td className="px-3.5 py-3 text-slate-700">{row.trainer}</td>
+                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.date}</td>
+                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.duration}</td>
                   <td className="px-3.5 py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${resultStyle[row.result]}`}
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[row.result]}`}
                     >
                       {row.result}
                     </span>
                   </td>
                   <td className="px-3.5 py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[row.status]}`}
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[row.status]}`}
                     >
                       {row.status}
                     </span>
                   </td>
                   <td className="max-w-[220px] px-3.5 py-3">
                     {row.certificate === "Chưa cấp" ? (
-                      <span className="text-[12px] text-[#94a3b8]">Chưa cấp</span>
+                      <span className="text-xs text-slate-400">Chưa cấp</span>
                     ) : (
-                      <span className="text-[12.5px] font-semibold text-[#0047AB]">{row.certificate}</span>
+                      <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">{row.certificate}</span>
                     )}
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-[#64748b]">
-                    <div className="text-[14px] font-medium">Không tìm thấy lịch sử đào tạo</div>
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                    <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>
                   </td>
                 </tr>
               )}

@@ -201,23 +201,23 @@ export default function PersonnelReportDashboard() {
   const certDetail = selectedCert ? CERT_DATA[selectedCert] : null;
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-[#1f2937] text-[14px]">
+    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       {/* 1. Top 3 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {/* Card 1: Thợ hàn đang trực */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#0047AB]">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
               THỢ HÀN ĐANG TRỰC
             </div>
-            <div className="mt-2 text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
-              7 <span className="text-[13px] font-medium text-[#94a3b8]">/ 24</span>
+            <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
+              7 <span className="text-xs sm:text-sm font-medium text-slate-400">/ 24</span>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#15803d] font-medium">
-              ↑ 2 người <span className="text-[#8b95a5] font-normal">so với ca trước</span>
+            <div className="mt-2.5 text-xs text-emerald-700 font-medium">
+              ↑ 2 người <span className="text-slate-400 font-normal">so với ca trước</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
             </svg>
@@ -225,21 +225,21 @@ export default function PersonnelReportDashboard() {
         </div>
 
         {/* Card 2: Xếp hạng an toàn tổ đội */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#b45309]">
+            <div className="text-xs font-bold uppercase tracking-wider text-amber-700">
               XẾP HẠNG AN TOÀN TỔ ĐỘI
             </div>
-            <div className="mt-2 text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] leading-none">
+            <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 leading-none">
               Vàng
             </div>
             <div className="mt-2">
-              <span className="inline-flex items-center rounded-md bg-[#fffbeb] border border-[#fde68a] px-2.5 py-0.5 text-[10.5px] font-bold text-[#b45309]">
+              <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-2xs">
                 0 sự cố trong 90 ngày
               </span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#fffbeb] text-[#d97706] border border-[#fde68a]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
@@ -247,19 +247,19 @@ export default function PersonnelReportDashboard() {
         </div>
 
         {/* Card 3: Điểm hiệu suất tổ đội */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#0047AB]">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
               ĐIỂM HIỆU SUẤT TỔ ĐỘI
             </div>
-            <div className="mt-2 text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+            <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
               2.450
             </div>
-            <div className="mt-2.5 text-[12px] text-[#15803d] font-medium">
-              ↑ 6,5% <span className="text-[#8b95a5] font-normal">so với kỳ trước</span>
+            <div className="mt-2.5 text-xs text-emerald-700 font-medium">
+              ↑ 6,5% <span className="text-slate-400 font-normal">so với kỳ trước</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
             </svg>
@@ -272,22 +272,22 @@ export default function PersonnelReportDashboard() {
         {/* Left Column */}
         <div className="flex flex-col gap-4 min-w-0">
           {/* Sub Grid: Thợ hàn đang trực + Chứng chỉ */}
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)] gap-4 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-[1.15fr_1fr] gap-4 items-start">
             {/* Card: Thợ hàn đang trực (24) */}
-            <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
+            <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+                <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
                   Thợ hàn đang trực (24)
                 </div>
-                <button type="button" className="text-[12.5px] font-semibold text-[#0047AB] hover:underline cursor-pointer">
+                <button type="button" className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline cursor-pointer">
                   Xem tất cả →
                 </button>
               </div>
 
-              <div className="mt-3.5 flex flex-col max-h-[420px] overflow-y-auto divide-y divide-[#f8fafc]">
+              <div className="mt-3.5 flex flex-col max-h-[440px] overflow-y-auto divide-y divide-slate-100 pr-1">
                 {ACTIVE_WELDERS.map((w, idx) => (
-                  <div key={idx} className="flex items-center gap-3 py-2.5 px-1 hover:bg-[#f8fafc] rounded-lg transition-colors">
-                    <div className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ${w.borderColor}`}>
+                  <div key={idx} className="flex items-center gap-3 py-2.5 px-1 hover:bg-slate-50/80 rounded-lg transition-colors">
+                    <div className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ${w.borderColor} shadow-2xs`}>
                       <Image
                         src={w.photo}
                         alt={w.name}
@@ -297,18 +297,18 @@ export default function PersonnelReportDashboard() {
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-[#0f172a]">
+                      <div className="truncate text-xs sm:text-sm font-semibold text-slate-900">
                         {w.name}
                       </div>
-                      <div className="truncate text-[11px] text-[#64748b] mt-0.5">
+                      <div className="truncate text-xs text-slate-500 mt-0.5">
                         {w.meta}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide ${w.statusBg}`}>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-2xs ${w.statusBg}`}>
                         {w.status}
                       </span>
-                      <span className="text-[10.5px] text-[#94a3b8]">{w.shift}</span>
+                      <span className="text-xs text-slate-500 font-medium">{w.shift}</span>
                     </div>
                   </div>
                 ))}
@@ -316,17 +316,17 @@ export default function PersonnelReportDashboard() {
             </div>
 
             {/* Card: Chứng chỉ & huấn luyện */}
-            <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
+            <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+                <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
                   Chứng chỉ &amp; huấn luyện
                 </div>
-                <button type="button" className="text-[12.5px] font-semibold text-[#0047AB] hover:underline cursor-pointer">
+                <button type="button" className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline cursor-pointer">
                   Xem tất cả →
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-3.5">
+              <div className="grid grid-cols-2 gap-3 sm:gap-3.5 mt-3.5">
                 {[
                   {
                     id: "iso9606",
@@ -372,28 +372,28 @@ export default function PersonnelReportDashboard() {
                 ].map((c) => (
                   <div
                     key={c.id}
-                    className="rounded-xl border border-[#e2e8f0] p-3 text-center bg-white hover:border-[#cbd5e1] hover:shadow-2xs transition-all"
+                    className="rounded-xl border border-slate-200/80 p-3 sm:p-3.5 text-center bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between"
                   >
-                    <div className="h-[72px] rounded-lg border border-dashed border-[#cbd5e1] flex items-center justify-center bg-[#f8fafc]">
+                    <div className="h-[74px] sm:h-[82px] rounded-lg border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 shadow-2xs">
                       {c.icon}
                     </div>
-                    <div className="mt-2 text-[12px] text-[#334155] leading-snug whitespace-pre-line font-medium min-h-[34px]">
+                    <div className="mt-2.5 text-xs sm:text-sm text-slate-900 leading-snug whitespace-pre-line font-semibold min-h-[36px] flex items-center justify-center">
                       {c.title}
                     </div>
-                    <div className="mt-2.5 flex gap-1.5">
+                    <div className="mt-3 flex gap-1.5 sm:gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           setSelectedCert(c.id);
                           setCertModalTab("info");
                         }}
-                        className="flex-1 rounded-md border border-[#e2e8f0] py-1.5 text-[11.5px] text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] hover:text-[#0047AB] transition-colors cursor-pointer font-medium"
+                        className="flex-1 rounded-lg border border-slate-300 bg-white py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-[#0047AB] active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
                       >
                         Xem
                       </button>
                       <button
                         type="button"
-                        className="flex-1 rounded-md border border-[#e2e8f0] py-1.5 text-[11.5px] text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] hover:text-[#0047AB] transition-colors cursor-pointer font-medium"
+                        className="flex-1 rounded-lg border border-slate-300 bg-white py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-[#0047AB] active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
                       >
                         Tải PDF
                       </button>
@@ -405,13 +405,13 @@ export default function PersonnelReportDashboard() {
           </div>
 
           {/* Card: Năng suất theo thợ hàn */}
-          <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
-            <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               Năng suất theo thợ hàn
             </div>
             <div className="table-scroll overflow-x-auto mt-3.5">
               <div className="min-w-[560px]">
-                <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 border-b border-[#e2e8f0] pb-2 text-[11.5px] font-semibold uppercase tracking-wider text-[#64748b]">
+                <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <div>Họ tên</div>
                   <div>Tổ / Máy</div>
                   <div>Mối hàn</div>
@@ -419,13 +419,13 @@ export default function PersonnelReportDashboard() {
                   <div>Tỷ lệ đạt</div>
                   <div className="text-right">Ca làm</div>
                 </div>
-                <div className="divide-y divide-[#f8fafc]">
+                <div className="divide-y divide-slate-100">
                   {WELDER_PRODUCTIVITY.map((w, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 items-center py-2.5 text-[13px] text-[#334155] hover:bg-[#f8fafc] transition-colors"
+                      className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                     >
-                      <div className="font-semibold text-[#0f172a]">
+                      <div className="font-semibold text-slate-900">
                         {w.name}
                       </div>
                       <div>{w.teamMachine}</div>
@@ -434,17 +434,17 @@ export default function PersonnelReportDashboard() {
                       <div className={`font-semibold font-mono tabular-nums ${w.rateColor}`}>
                         {w.passRate}
                       </div>
-                      <div className="text-right">{w.shift}</div>
+                      <div className="text-right text-slate-600">{w.shift}</div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between pt-3 text-[12.5px] text-[#0047AB] font-medium">
+            <div className="flex items-center justify-between pt-3 text-xs sm:text-sm text-[#0047AB] font-semibold">
               <button type="button" className="hover:underline cursor-pointer">
                 Xem toàn bộ nhân sự
               </button>
-              <span className="text-[#94a3b8]">→</span>
+              <span className="text-slate-400">→</span>
             </div>
           </div>
         </div>
@@ -452,59 +452,61 @@ export default function PersonnelReportDashboard() {
         {/* Right Column (320px) */}
         <div className="flex flex-col gap-4">
           {/* Card: Bảng tin nhanh */}
-          <div className="rounded-xl bg-[#0d2346] border border-[#1e3a8a] p-4 sm:p-5 text-white shadow-xs">
-            <div className="flex items-center gap-2 text-[14.5px] font-bold">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
-              </svg>
+          <div className="rounded-xl border-2 border-[#0047AB]/25 bg-white p-4 sm:p-5 shadow-xs">
+            <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-slate-900">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-100 shadow-2xs">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+                </svg>
+              </span>
               <span>Bảng tin nhanh</span>
             </div>
 
-            <div className="mt-4 flex flex-col gap-3.5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#163567]">
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shadow-2xs">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold leading-snug">
+                  <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
                     Ca 2 · Tổ 1 thiếu 1 thợ hàn hạng 1
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#93c5fd]">
+                  <div className="mt-0.5 text-xs text-slate-500 font-medium">
                     2 phút trước
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#163567]">
+              <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shadow-2xs">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="12" cy="8" r="7" />
                     <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold leading-snug">
+                  <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
                     3 chứng chỉ sắp hết hạn trong tuần này
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#93c5fd]">
+                  <div className="mt-0.5 text-xs text-slate-500 font-medium">
                     1 giờ trước
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#163567]">
+              <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z" />
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold leading-snug">
+                  <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
                     Khóa tái huấn luyện PCCC ngày 15/03
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#93c5fd]">
+                  <div className="mt-0.5 text-xs text-slate-500 font-medium">
                     Hôm nay
                   </div>
                 </div>
@@ -513,32 +515,32 @@ export default function PersonnelReportDashboard() {
 
             <button
               type="button"
-              className="mt-4.5 w-full rounded-lg bg-[#f5a623] py-2.5 text-center text-[13px] font-bold text-[#0f172a] hover:bg-[#d97706] transition-colors cursor-pointer shadow-xs"
+              className="mt-4 w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2.5 text-center text-xs sm:text-sm font-semibold text-white transition-all duration-150 cursor-pointer shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               Xem tất cả tin
             </button>
           </div>
 
           {/* Card: Chứng chỉ sắp hết hạn */}
-          <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-            <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               Chứng chỉ sắp hết hạn
             </div>
             <div className="mt-3.5 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[#0047AB]">
+                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
                     Trần Thị Mai Anh
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#64748b]">
+                  <div className="mt-0.5 text-xs text-slate-500">
                     EN ISO 9606-1
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[12px] text-[#334155] font-mono">
+                  <div className="text-xs text-slate-700 font-mono">
                     15/07/2024
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-[#dc2626]">
+                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
                     Còn 10 ngày
                   </div>
                 </div>
@@ -546,18 +548,18 @@ export default function PersonnelReportDashboard() {
 
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[#0047AB]">
+                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
                     Nguyễn Văn Minh
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#64748b]">
+                  <div className="mt-0.5 text-xs text-slate-500">
                     Huấn luyện an toàn
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[12px] text-[#334155] font-mono">
+                  <div className="text-xs text-slate-700 font-mono">
                     20/07/2024
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-[#dc2626]">
+                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
                     Còn 15 ngày
                   </div>
                 </div>
@@ -565,18 +567,18 @@ export default function PersonnelReportDashboard() {
 
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[#0047AB]">
+                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
                     Phạm Quốc Bảo
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#64748b]">
+                  <div className="mt-0.5 text-xs text-slate-500">
                     Kiểm định UT cấp 2
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[12px] text-[#334155] font-mono">
+                  <div className="text-xs text-slate-700 font-mono">
                     05/08/2024
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-[#d97706]">
+                  <div className="mt-0.5 text-xs font-semibold text-amber-700 font-mono">
                     Còn 31 ngày
                   </div>
                 </div>
@@ -585,15 +587,15 @@ export default function PersonnelReportDashboard() {
           </div>
 
           {/* Card: Quote */}
-          <div className="rounded-xl bg-[#eff6ff] border border-[#bfdbfe] p-4 sm:p-5">
-            <div className="text-[32px] font-bold text-[#0047AB] leading-none opacity-40">
+          <div className="rounded-xl bg-blue-50/70 border border-blue-200/80 p-4 sm:p-5 shadow-xs">
+            <div className="text-3xl font-bold text-[#0047AB] leading-none opacity-40">
               “
             </div>
-            <div className="mt-1 text-[13px] italic leading-relaxed text-[#1e3a8a]">
+            <div className="mt-1 text-xs sm:text-sm italic leading-relaxed text-blue-950 font-medium">
               Mỗi mối hàn đạt chuẩn là một chuyến tàu an toàn. Kỷ luật hôm nay giữ đường ray cho mai sau.
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <div className="text-[11.5px] font-medium text-[#64748b]">Ban Giám đốc TCW</div>
+              <div className="text-xs font-semibold text-slate-500">Ban Giám đốc TCW</div>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="#0047AB" className="opacity-70">
                 <path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2l2-2h4l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V7h12v4z" />
               </svg>
@@ -605,34 +607,34 @@ export default function PersonnelReportDashboard() {
       {/* 3. Certificate Modal */}
       {selectedCert && certDetail && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedCert(null);
           }}
         >
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl animate-in zoom-in-95 duration-150 border border-[#e2e8f0]">
-            <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-              <h3 className="text-[16px] font-bold text-[#0f172a]">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-xl animate-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3.5">
+              <h3 className="text-base font-bold text-slate-900">
                 {certDetail.title}
               </h3>
               <button
                 type="button"
                 onClick={() => setSelectedCert(null)}
-                className="h-8 w-8 rounded-lg text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] flex items-center justify-center cursor-pointer text-[18px] transition-colors"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 flex items-center justify-center cursor-pointer text-lg transition-colors"
                 aria-label="Đóng"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mt-3 flex gap-2 border-b border-[#e2e8f0] pb-2">
+            <div className="mt-3.5 flex gap-1.5 border-b border-slate-200 pb-2.5">
               <button
                 type="button"
                 onClick={() => setCertModalTab("info")}
-                className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-all cursor-pointer ${
+                className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                   certModalTab === "info"
                     ? "bg-[#0047AB] text-white shadow-xs"
-                    : "text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
                 Thông tin
@@ -640,10 +642,10 @@ export default function PersonnelReportDashboard() {
               <button
                 type="button"
                 onClick={() => setCertModalTab("holders")}
-                className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-all cursor-pointer ${
+                className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                   certModalTab === "holders"
                     ? "bg-[#0047AB] text-white shadow-xs"
-                    : "text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
                 Danh sách người được cấp và còn hạn
@@ -652,19 +654,19 @@ export default function PersonnelReportDashboard() {
 
             <div className="mt-4 max-h-[380px] overflow-y-auto">
               {certModalTab === "info" ? (
-                <div className="divide-y divide-[#f1f5f9] text-[13px]">
+                <div className="divide-y divide-slate-100 text-xs sm:text-sm">
                   {certDetail.info.map(([label, val], i) => (
                     <div key={i} className="flex py-2.5 gap-3">
-                      <span className="w-1/3 text-[#64748b] font-medium">{label}</span>
-                      <span className="flex-1 text-[#0f172a] font-semibold">{val}</span>
+                      <span className="w-1/3 text-slate-500 font-medium">{label}</span>
+                      <span className="flex-1 text-slate-900 font-semibold">{val}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col divide-y divide-[#f1f5f9]">
+                <div className="flex flex-col divide-y divide-slate-100">
                   {certDetail.holders.map((h, i) => (
                     <div key={i} className="flex items-center gap-3 py-2.5">
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#e2e8f0]">
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-slate-200 shadow-2xs">
                         <Image
                           src={`https://randomuser.me/api/portraits/${h.photo}.jpg`}
                           alt={h.name}
@@ -674,14 +676,14 @@ export default function PersonnelReportDashboard() {
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13.5px] font-semibold text-[#0f172a]">
+                        <div className="text-xs sm:text-sm font-semibold text-slate-900">
                           {h.name}
                         </div>
-                        <div className="text-[11px] text-[#64748b]">
+                        <div className="text-xs text-slate-500 font-mono">
                           Cấp {h.issued} · Hết hạn {h.expires}
                         </div>
                       </div>
-                      <span className="rounded-md bg-[#f0fdf4] border border-[#bbf7d0] px-2 py-0.5 text-[10.5px] font-bold text-[#15803d]">
+                      <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
                         Còn hạn
                       </span>
                     </div>

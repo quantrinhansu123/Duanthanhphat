@@ -472,225 +472,228 @@ export default function OverviewDashboard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-[#1f2937] text-[14px]">
+    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       {/* 1. Filter Bar */}
       <div
         ref={filterBarRef}
-        className="rounded-xl border border-[#e2e8f0] bg-white p-3 sm:p-4 shadow-2xs"
+        className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs"
       >
-        <div className="flex flex-wrap items-end gap-2.5 sm:gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
           {/* Label icon */}
-          <div className="flex items-center gap-1.5 pb-2 text-[13px] font-bold text-[#0f172a] shrink-0">
+          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 sm:pb-2.5">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
             </svg>
             <span>Bộ lọc:</span>
             {filterCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-[#0047AB] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white font-mono shadow-xs">
                 {filterCount}
               </span>
             )}
           </div>
 
-          {/* Date from */}
-          <div className="shrink-0">
-            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
-              Từ ngày
-            </span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                const val = e.target.value;
-                setDateFrom(val);
-                if (dateTo && val > dateTo) setDateTo(val);
-              }}
-              className="h-9 w-[132px] rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#0f172a] shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
-            />
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2.5 sm:gap-3 flex-1">
+            {/* Date from */}
+            <div className="min-w-0 sm:w-[140px]">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">
+                Từ ngày
+              </span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDateFrom(val);
+                  if (dateTo && val > dateTo) setDateTo(val);
+                }}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
+              />
+            </div>
+
+            {/* Date to */}
+            <div className="min-w-0 sm:w-[140px]">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">
+                Đến ngày
+              </span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDateTo(val);
+                  if (dateFrom && val < dateFrom) setDateFrom(val);
+                }}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
+              />
+            </div>
+
+            {/* Projects dropdown */}
+            <div className="relative min-w-0 sm:w-[152px]">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">
+                Theo dự án
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setProjectFilterOpen((v) => !v);
+                  setPersonnelFilterOpen(false);
+                  setPlantFilterOpen(false);
+                }}
+                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
+              >
+                <span className="truncate">
+                  {filterPickLabel(projects.length, "Tất cả")}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {projectFilterOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {projectFilterOpen && (
+                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                  {PROJECTS.map((opt) => (
+                    <label
+                      key={opt}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={projects.includes(opt)}
+                        onChange={() => toggleList("projects", opt)}
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Personnel dropdown */}
+            <div className="relative min-w-0 sm:w-[152px]">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">
+                Theo nhân sự
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPersonnelFilterOpen((v) => !v);
+                  setProjectFilterOpen(false);
+                  setPlantFilterOpen(false);
+                }}
+                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
+              >
+                <span className="truncate">
+                  {filterPickLabel(personnel.length, "Tất cả")}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {personnelFilterOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {personnelFilterOpen && (
+                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                  {PERSONNEL.map((opt) => (
+                    <label
+                      key={opt}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={personnel.includes(opt)}
+                        onChange={() => toggleList("personnel", opt)}
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Plants dropdown */}
+            <div className="relative col-span-2 sm:col-span-1 min-w-0 sm:w-[152px]">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">
+                Theo nhà máy
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlantFilterOpen((v) => !v);
+                  setProjectFilterOpen(false);
+                  setPersonnelFilterOpen(false);
+                }}
+                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
+              >
+                <span className="truncate">
+                  {filterPickLabel(plants.length, "Tất cả")}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {plantFilterOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {plantFilterOpen && (
+                <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                  {PLANTS.map((opt) => (
+                    <label
+                      key={opt}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer whitespace-nowrap transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={plants.includes(opt)}
+                        onChange={() => toggleList("plants", opt)}
+                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div className="col-span-2 sm:col-span-1 flex items-center gap-2 pt-1 sm:pt-0">
+              <button
+                type="button"
+                onClick={handleApplyFilters}
+                className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+                </svg>
+                Áp dụng
+              </button>
+
+              {hasFilter && (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                >
+                  Xóa lọc
+                </button>
+              )}
+            </div>
           </div>
-
-          {/* Date to */}
-          <div className="shrink-0">
-            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
-              Đến ngày
-            </span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                const val = e.target.value;
-                setDateTo(val);
-                if (dateFrom && val < dateFrom) setDateFrom(val);
-              }}
-              className="h-9 w-[132px] rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#0f172a] shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
-            />
-          </div>
-
-          {/* Projects dropdown */}
-          <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
-              Theo dự án
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setProjectFilterOpen((v) => !v);
-                setPersonnelFilterOpen(false);
-                setPlantFilterOpen(false);
-              }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
-            >
-              <span className="truncate">
-                {filterPickLabel(projects.length, "Tất cả")}
-              </span>
-              <span className="text-[11px] text-[#64748b]">
-                {projectFilterOpen ? "▾" : "▸"}
-              </span>
-            </button>
-            {projectFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
-                {PROJECTS.map((opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={projects.includes(opt)}
-                      onChange={() => toggleList("projects", opt)}
-                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Personnel dropdown */}
-          <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
-              Theo nhân sự
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setPersonnelFilterOpen((v) => !v);
-                setProjectFilterOpen(false);
-                setPlantFilterOpen(false);
-              }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
-            >
-              <span className="truncate">
-                {filterPickLabel(personnel.length, "Tất cả")}
-              </span>
-              <span className="text-[11px] text-[#64748b]">
-                {personnelFilterOpen ? "▾" : "▸"}
-              </span>
-            </button>
-            {personnelFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
-                {PERSONNEL.map((opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={personnel.includes(opt)}
-                      onChange={() => toggleList("personnel", opt)}
-                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Plants dropdown */}
-          <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
-              Theo nhà máy
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setPlantFilterOpen((v) => !v);
-                setProjectFilterOpen(false);
-                setPersonnelFilterOpen(false);
-              }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
-            >
-              <span className="truncate">
-                {filterPickLabel(plants.length, "Tất cả")}
-              </span>
-              <span className="text-[11px] text-[#64748b]">
-                {plantFilterOpen ? "▾" : "▸"}
-              </span>
-            </button>
-            {plantFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
-                {PLANTS.map((opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={plants.includes(opt)}
-                      onChange={() => toggleList("plants", opt)}
-                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Apply button */}
-          <button
-            type="button"
-            onClick={handleApplyFilters}
-            className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-[#0047AB] px-4 text-[12.5px] font-semibold text-white shadow-xs hover:bg-[#00388a] transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-[#0047ab]/20"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-            </svg>
-            Áp dụng
-          </button>
-
-          {/* Clear button */}
-          {hasFilter && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-[#e2e8f0] bg-white px-3.5 text-[12.5px] font-semibold text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] transition-all cursor-pointer whitespace-nowrap"
-            >
-              Xóa lọc
-            </button>
-          )}
         </div>
       </div>
 
       {/* 2. Top 5 KPI Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Tổng mối hàn */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#0047AB] uppercase">
+            <div className="text-xs font-bold tracking-wider text-[#0047AB] uppercase">
               TỔNG MỐI HÀN
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#64748b]">Toàn thời gian</div>
+            <div className="mt-2.5 text-xs text-slate-500">Toàn thời gian</div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 13h4l3-8 4 14 3-6h4v-2h-3l-3 6-4-14-3 8H3v2z" />
             </svg>
@@ -698,23 +701,23 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Card 2: Mối hàn hôm nay */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#15803d] uppercase">
+            <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
               MỐI HÀN HÔM NAY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
                 {today}
               </div>
-              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#15803d] font-medium">
+            <div className="mt-2.5 text-xs text-emerald-700 font-medium">
               {factor >= 1 ? `↑ ${(8.6 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(8.6 / factor).toFixed(1).replace(".", ",")}%`}{" "}
-              <span className="text-[#8b95a5] font-normal">so với hôm qua</span>
+              <span className="text-slate-400 font-normal">so với hôm qua</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9.5 14.5l-2.5-2.5 1.4-1.4 1.1 1.1 4.6-4.6 1.4 1.4z" />
             </svg>
@@ -722,23 +725,23 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Card 3: Tháng này */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#7e22ce] uppercase">
+            <div className="text-xs font-bold tracking-wider text-indigo-700 uppercase">
               THÁNG NÀY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
                 {fmt(month)}
               </div>
-              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#7e22ce] font-medium">
+            <div className="mt-2.5 text-xs text-indigo-700 font-medium">
               {factor >= 1 ? `↑ ${(12.4 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(12.4 / factor).toFixed(1).replace(".", ",")}%`}{" "}
-              <span className="text-[#8b95a5] font-normal">so với tháng trước</span>
+              <span className="text-slate-400 font-normal">so với tháng trước</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f5f3ff] text-[#7e22ce] border border-[#ddd6fe]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z" />
             </svg>
@@ -746,22 +749,22 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Card 4: Đạt */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#0d9488] uppercase">
+            <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
               ĐẠT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
                 {fmt(passed)}
               </div>
-              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#64748b]">
-              <span className="font-semibold text-[#0d9488] font-mono">{pctComma(passed, total)}</span> tổng số
+            <div className="mt-2.5 text-xs text-slate-500">
+              <span className="font-semibold text-emerald-700 font-mono tabular-nums">{pctComma(passed, total)}</span> tổng số
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f0fdfa] text-[#0d9488] border border-[#99f6e4]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
@@ -769,24 +772,24 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Card 5: Không đạt */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#dc2626] uppercase">
+            <div className="text-xs font-bold tracking-wider text-rose-700 uppercase">
               KHÔNG ĐẠT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
                 {failed}
               </div>
-              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-[12px] text-[#64748b]">
-              <span className="font-semibold text-[#dc2626] font-mono">{pctComma(failed, total)}</span> tổng số
+            <div className="mt-2.5 text-xs text-slate-500">
+              <span className="font-semibold text-rose-700 font-mono tabular-nums">{pctComma(failed, total)}</span> tổng số
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+              <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.48 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
             </svg>
           </div>
         </div>
@@ -795,8 +798,8 @@ export default function OverviewDashboard() {
       {/* 3. Middle Charts Row (Production Progress + Daily Chart + Welds by Plant) */}
       <div className="grid grid-cols-1 lg:grid-cols-[395px_minmax(0,1fr)_290px] gap-4 items-start">
         {/* Box 1: TIẾN ĐỘ SẢN XUẤT */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             TIẾN ĐỘ SẢN XUẤT
           </div>
           <div className="mt-3.5 flex flex-col sm:flex-row gap-3.5">
@@ -806,7 +809,7 @@ export default function OverviewDashboard() {
                   <path
                     d="M 16 104 A 84 84 0 0 1 184 104"
                     fill="none"
-                    stroke="#e2e8f0"
+                    stroke="#f1f5f9"
                     strokeWidth="24"
                     strokeLinecap="round"
                   />
@@ -819,53 +822,53 @@ export default function OverviewDashboard() {
                     strokeDasharray={gaugeDash(progressPctNum)}
                   />
                 </svg>
-                <div className="absolute top-[44px] left-0 right-0 text-[32px] sm:text-[34px] font-bold font-mono tracking-tight text-[#0f172a] leading-none">
+                <div className="absolute top-[54px] left-0 right-0 text-2xl sm:text-3xl font-bold font-mono tracking-tight text-slate-900 leading-none">
                   {progressPct}%
                 </div>
-                <div className="absolute top-[78px] left-0 right-0 text-[11.5px] text-[#64748b]">
+                <div className="absolute top-[86px] left-0 right-0 text-xs text-slate-500 font-medium">
                   Tiến độ mục tiêu
                 </div>
               </div>
-              <div className="mt-2 text-[19px] sm:text-[20px] font-bold font-mono text-[#0f172a] tracking-tight">
+              <div className="mt-2 text-lg sm:text-xl font-bold font-mono text-slate-900 tracking-tight">
                 {fmt(total)} / {fmt(BASE.target)}
               </div>
-              <div className="mt-1 text-[12px] text-[#64748b]">
+              <div className="mt-1 text-xs text-slate-500">
                 Mục tiêu: 22.500 mối
               </div>
             </div>
 
             <div className="flex-1 flex flex-col gap-2.5 pt-1">
               <div>
-                <div className="text-[11.5px] text-[#64748b]">Còn lại</div>
+                <div className="text-xs text-slate-500">Còn lại</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#0f172a]">
+                  <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
                     {fmt(Math.max(0, BASE.target - total))}
                   </span>
-                  <span className="text-[11.5px] text-[#94a3b8]">mối</span>
+                  <span className="text-xs text-slate-400">mối</span>
                 </div>
               </div>
               <div>
-                <div className="text-[11.5px] text-[#64748b]">Định mức yêu cầu/ngày</div>
+                <div className="text-xs text-slate-500">Định mức yêu cầu/ngày</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#0f172a]">
+                  <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
                     {BASE.quota}
                   </span>
-                  <span className="text-[11.5px] text-[#94a3b8]">mối/ngày</span>
+                  <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="text-[11.5px] text-[#64748b]">Thực hiện/ngày</div>
+                <div className="text-xs text-slate-500">Thực hiện/ngày</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#15803d]">
+                  <span className="text-base sm:text-lg font-bold font-mono text-emerald-700">
                     {today}
                   </span>
-                  <span className="text-[11.5px] text-[#94a3b8]">mối/ngày</span>
+                  <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="mb-1 text-[11.5px] text-[#64748b]">Trạng thái</div>
-                <div className="inline-flex items-center gap-1.5 rounded-lg bg-[#f0fdf4] border border-[#bbf7d0] px-2.5 py-1 text-[11px] font-bold tracking-wide text-[#15803d]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
+                <div className="mb-1 text-xs text-slate-500">Trạng thái</div>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-700 shadow-2xs">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   ĐÚNG TIẾN ĐỘ
                 </div>
               </div>
@@ -874,21 +877,21 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               SẢN LƯỢNG HÀN THEO NGÀY
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1 text-[12px] text-[#334155]">
-              <span className="font-medium">{chart.chartRangeLabel}</span>
-              <span className="text-[#94a3b8]">▾</span>
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700 shadow-2xs">
+              <span className="font-medium font-mono">{chart.chartRangeLabel}</span>
+              <span className="text-slate-400">▾</span>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[12px] text-[#475569]">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-600">
             <div className="flex items-center gap-1.5">
               <svg width="22" height="8">
-                <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="1.8" />
+                <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="2" />
                 <circle cx="11" cy="4" r="3" fill="#0047AB" />
               </svg>
               <span>Thực tế</span>
@@ -908,14 +911,14 @@ export default function OverviewDashboard() {
               <span>Mục tiêu</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-4 rounded-xs bg-[#bfdbfe]" />
+              <span className="h-2.5 w-4 rounded-xs bg-blue-200" />
               <span>Bình quân 7 ngày</span>
             </div>
           </div>
 
           <div className="mt-2 flex">
             {/* Y-axis labels */}
-            <div className="relative h-[190px] w-[30px] shrink-0 text-right text-[11px] text-[#94a3b8] pr-1.5 font-mono">
+            <div className="relative h-[190px] w-[30px] shrink-0 text-right text-[11px] text-slate-400 pr-1.5 font-mono">
               <div className="absolute right-1.5 -top-1.5">250</div>
               <div className="absolute right-1.5 top-[31px]">200</div>
               <div className="absolute right-1.5 top-[69px]">150</div>
@@ -938,7 +941,7 @@ export default function OverviewDashboard() {
                 <line x1="0" y1="152" x2="500" y2="152" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="189.5" x2="500" y2="189.5" stroke="#cbd5e1" strokeWidth="1" />
                 {chart.areaPath && (
-                  <path d={chart.areaPath} fill="#eff6ff" opacity="0.95" />
+                  <path d={chart.areaPath} fill="#eff6ff" opacity="0.9" />
                 )}
                 {chart.bars.map((b, i) => (
                   <rect
@@ -949,7 +952,7 @@ export default function OverviewDashboard() {
                     height={b.h}
                     fill="#3b82f6"
                     rx="1"
-                    className="hover:fill-[#1d4ed8] transition-colors"
+                    className="hover:fill-[#0047AB] transition-colors"
                   />
                 ))}
                 <line
@@ -962,13 +965,13 @@ export default function OverviewDashboard() {
                   strokeDasharray="7 5"
                 />
                 {chart.linePath && (
-                  <path d={chart.linePath} fill="none" stroke="#0047AB" strokeWidth="1.8" />
+                  <path d={chart.linePath} fill="none" stroke="#0047AB" strokeWidth="2" />
                 )}
                 {chart.dots.map((p, i) => (
                   <circle key={i} cx={p.cx} cy={p.cy} r="2.8" fill="#0047AB" />
                 ))}
               </svg>
-              <div className="flex justify-between px-1 pt-2 text-[11px] font-mono text-[#94a3b8]">
+              <div className="flex justify-between px-1 pt-2 text-[11px] font-mono text-slate-400">
                 {chart.chartLabels.map((lbl, i) => (
                   <span key={i}>{lbl.text}</span>
                 ))}
@@ -978,8 +981,8 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 3: MỐI HÀN THEO NHÀ MÁY */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             MỐI HÀN THEO NHÀ MÁY
           </div>
           <div className="mt-3.5 flex justify-center">
@@ -1001,7 +1004,7 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#38bdf8"
+                  stroke="#0284c7"
                   strokeWidth="20"
                   strokeDasharray="78.1 248.6"
                   transform="rotate(34.9 70 70)"
@@ -1037,10 +1040,10 @@ export default function OverviewDashboard() {
                   transform="rotate(257.0 70 70)"
                 />
               </svg>
-              <div className="absolute top-[46px] left-0 right-0 text-center text-[18px] font-bold font-mono text-[#0f172a] leading-none tabular-nums">
+              <div className="absolute top-[46px] left-0 right-0 text-center text-lg sm:text-xl font-bold font-mono text-slate-900 leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="absolute top-[66px] left-0 right-0 text-center text-[11px] text-[#64748b]">
+              <div className="absolute top-[66px] left-0 right-0 text-center text-xs text-slate-500 font-medium">
                 Tổng
               </div>
             </div>
@@ -1048,18 +1051,18 @@ export default function OverviewDashboard() {
 
           <div className="mt-4 flex flex-col gap-2">
             {plantRows.map((row) => (
-              <div key={row.name} className="flex items-center gap-2 text-[12.5px]">
+              <div key={row.name} className="flex items-center gap-2 text-xs sm:text-sm">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                 />
-                <span className="flex-1 min-w-0 truncate text-[#334155]">
+                <span className="flex-1 min-w-0 truncate text-slate-700">
                   {row.name}
                 </span>
-                <span className="font-semibold font-mono text-[#0f172a] tabular-nums">
+                <span className="font-semibold font-mono text-slate-900 tabular-nums">
                   {row.value}
                 </span>
-                <span className="text-[11.5px] font-mono text-[#94a3b8]">
+                <span className="text-xs font-mono text-slate-400">
                   ({row.pct})
                 </span>
               </div>
@@ -1071,29 +1074,29 @@ export default function OverviewDashboard() {
       {/* 4. 4-column Grid: Máy, Lỗi hàn, Nhân sự đang trực, Trạng thái */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
         {/* Card 1: Mối hàn theo máy */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
-          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             MỐI HÀN THEO MÁY
           </div>
-          <div className="mt-3 grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 border-b border-[#f1f5f9] pb-2 text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">
+          <div className="mt-3 grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
             <div>Máy</div>
             <div>Mối hàn</div>
             <div>Hôm nay</div>
             <div>Tỷ lệ lỗi</div>
             <div className="text-right">Khả dụng</div>
           </div>
-          <div className="divide-y divide-[#f8fafc]">
+          <div className="divide-y divide-slate-100">
             {machineRows.map((m) => (
               <div
                 key={m.code}
-                className="grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 items-center py-2.5 text-[12.5px] text-[#334155]"
+                className="grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 items-center py-2.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/60 transition-colors"
               >
-                <div className="font-semibold truncate font-mono text-[#0f172a]">{m.code}</div>
+                <div className="font-semibold truncate font-mono text-slate-900">{m.code}</div>
                 <div className="font-mono tabular-nums">{m.total}</div>
                 <div className="font-mono tabular-nums">{m.today}</div>
                 <div className="font-mono tabular-nums">{m.errorRate}</div>
                 <div className="flex items-center justify-end gap-1.5">
-                  <div className="h-1.5 w-12 rounded-full bg-[#f1f5f9] overflow-hidden">
+                  <div className="h-1.5 w-12 rounded-full bg-slate-100 overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -1102,24 +1105,24 @@ export default function OverviewDashboard() {
                       }}
                     />
                   </div>
-                  <span className="w-6 text-right text-[11px] font-mono tabular-nums">
+                  <span className="w-6 text-right text-xs font-mono tabular-nums font-semibold">
                     {m.availLabel}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-3 text-[12.5px] text-[#0047AB] font-medium">
+          <div className="flex items-center justify-between pt-3 text-xs sm:text-sm text-[#0047AB] font-semibold">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả máy
             </button>
-            <span className="text-[#94a3b8]">→</span>
+            <span className="text-slate-400">→</span>
           </div>
         </div>
 
         {/* Card 2: Lỗi hàn phổ biến */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
-          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             LỖI HÀN PHỔ BIẾN
           </div>
           <div className="mt-3 flex flex-col gap-2.5">
@@ -1130,80 +1133,80 @@ export default function OverviewDashboard() {
               { label: "Bavia quá mức", count: 4, pct: 25 },
               { label: "Khác", count: 3, pct: 19 },
             ].map((err) => (
-              <div key={err.label} className="flex items-center gap-2 text-[12px]">
-                <div className="w-[88px] shrink-0 truncate text-[#334155]">
+              <div key={err.label} className="flex items-center gap-2 text-xs sm:text-sm">
+                <div className="w-[90px] shrink-0 truncate text-slate-700 font-medium">
                   {err.label}
                 </div>
                 <div className="flex flex-1 min-w-0 items-center gap-1.5">
-                  <div className="h-2 flex-1 min-w-0 rounded-full bg-[#f1f5f9] overflow-hidden">
+                  <div className="h-2 flex-1 min-w-0 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[#ef4444]"
+                      className="h-full rounded-full bg-rose-500"
                       style={{ width: `${err.pct}%` }}
                     />
                   </div>
-                  <span className="text-[11px] font-mono text-[#64748b] shrink-0 tabular-nums">
+                  <span className="text-xs font-mono text-slate-500 shrink-0 tabular-nums font-semibold">
                     {err.count}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-3 text-[12.5px] text-[#0047AB] font-medium">
+          <div className="flex items-center justify-between pt-3 text-xs sm:text-sm text-[#0047AB] font-semibold">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả lỗi
             </button>
-            <span className="text-[#94a3b8]">→</span>
+            <span className="text-slate-400">→</span>
           </div>
         </div>
 
         {/* Card 3: Nhân sự đang trực */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="flex items-start justify-between gap-2">
-            <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               NHÂN SỰ ĐANG TRỰC
             </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-[#f0fdf4] px-2 py-0.5 text-[10px] font-bold text-[#15803d] border border-[#bbf7d0] shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a] animate-pulse" />
+            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200 shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live
             </div>
           </div>
-          <div className="mt-2.5 flex flex-col divide-y divide-[#f8fafc]">
+          <div className="mt-2.5 flex flex-col divide-y divide-slate-100">
             {personnelRows.map((p) => (
               <div key={p.name} className="flex items-center gap-2.5 py-1.5">
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ring-1 ring-[#e2e8f0]"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-slate-200 shadow-2xs font-mono"
                   style={{ background: p.bg, color: p.fg }}
                 >
                   {p.initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-semibold text-[#0f172a]">
+                  <div className="truncate text-xs sm:text-sm font-semibold text-slate-900">
                     {p.name}
                   </div>
-                  <div className="truncate text-[10.5px] text-[#64748b]">
+                  <div className="truncate text-[11px] sm:text-xs text-slate-500">
                     {p.meta}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-[12px] font-bold font-mono text-[#0f172a] tabular-nums">
+                  <div className="text-xs sm:text-sm font-bold font-mono text-slate-900 tabular-nums">
                     {p.welds}
                   </div>
-                  <div className="text-[10px] text-[#94a3b8]">{p.timeAgo}</div>
+                  <div className="text-[11px] sm:text-xs text-slate-400">{p.timeAgo}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-2.5 text-[12.5px] text-[#0047AB] font-medium">
+          <div className="flex items-center justify-between pt-2.5 text-xs sm:text-sm text-[#0047AB] font-semibold">
             <button type="button" className="hover:underline cursor-pointer">
               Xem báo cáo nhân sự
             </button>
-            <span className="text-[#94a3b8]">→</span>
+            <span className="text-slate-400">→</span>
           </div>
         </div>
 
         {/* Card 4: Mối hàn theo trạng thái */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
-          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             MỐI HÀN THEO TRẠNG THÁI
           </div>
           <div className="mt-2.5 flex justify-center">
@@ -1231,28 +1234,28 @@ export default function OverviewDashboard() {
                   transform="rotate(-87 70 70)"
                 />
               </svg>
-              <div className="absolute top-[38px] left-0 right-0 text-center text-[16px] font-bold font-mono text-[#0f172a] leading-none tabular-nums">
+              <div className="absolute top-[38px] left-0 right-0 text-center text-base sm:text-lg font-bold font-mono text-slate-900 leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="absolute top-[56px] left-0 right-0 text-center text-[10px] text-[#64748b]">
+              <div className="absolute top-[56px] left-0 right-0 text-center text-xs text-slate-500 font-medium">
                 Tổng
               </div>
             </div>
           </div>
           <div className="mt-3 flex flex-col gap-1.5">
             {statusRows.map((row) => (
-              <div key={row.name} className="flex items-center gap-1.5 text-[11.5px]">
+              <div key={row.name} className="flex items-center gap-1.5 text-xs sm:text-sm">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                 />
-                <span className="flex-1 min-w-0 truncate text-[#334155]">
+                <span className="flex-1 min-w-0 truncate text-slate-700">
                   {row.name}
                 </span>
-                <span className="font-semibold font-mono text-[#0f172a] tabular-nums">
+                <span className="font-semibold font-mono text-slate-900 tabular-nums">
                   {row.value}
                 </span>
-                <span className="text-[11px] font-mono text-[#94a3b8]">
+                <span className="text-xs font-mono text-slate-400">
                   ({row.pct})
                 </span>
               </div>
@@ -1264,13 +1267,13 @@ export default function OverviewDashboard() {
       {/* 5. Bottom Row (Recent Welds Table 2-col span + Quick Actions 1-col) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4 items-start">
         {/* Table: MỐI HÀN GẦN ĐÂY */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             MỐI HÀN GẦN ĐÂY
           </div>
           <div className="table-scroll overflow-x-auto mt-3.5">
             <div className="min-w-[760px]">
-              <div className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 border-b border-[#e2e8f0] pb-2 text-[11.5px] font-semibold uppercase tracking-wider text-[#64748b]">
+              <div className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <div>Weld ID</div>
                 <div>Date / Time</div>
                 <div>Nhà máy</div>
@@ -1282,50 +1285,52 @@ export default function OverviewDashboard() {
                 <div>Inspection</div>
                 <div>Actions</div>
               </div>
-              <div className="divide-y divide-[#f8fafc]">
+              <div className="divide-y divide-slate-100">
                 {RECENT_WELDS.map((w) => (
                   <div
                     key={w.id}
-                    className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 text-[13px] text-[#334155] hover:bg-[#f8fafc] transition-colors"
+                    className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                   >
                     <div className="font-semibold text-[#0047AB] font-mono">
                       {w.id}
                     </div>
-                    <div className="font-mono text-[12px] text-[#64748b]">{w.dateTime}</div>
+                    <div className="font-mono text-xs text-slate-500">{w.dateTime}</div>
                     <div>{w.plant}</div>
-                    <div className="font-mono text-[12px]">{w.machine}</div>
-                    <div className="font-mono text-[12px]">{w.railType}</div>
-                    <div className="font-mono text-[12px]">{w.heatNo}</div>
+                    <div className="font-mono text-xs">{w.machine}</div>
+                    <div className="font-mono text-xs">{w.railType}</div>
+                    <div className="font-mono text-xs text-slate-600">{w.heatNo}</div>
                     <div>{w.operator}</div>
                     <div>
                       {w.resultType === "pass" ? (
-                        <span className="rounded-md bg-[#f0fdf4] border border-[#bbf7d0] px-2 py-0.5 text-[10.5px] font-bold tracking-wide text-[#15803d]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           ĐẠT
                         </span>
                       ) : (
-                        <span className="rounded-md bg-[#fef2f2] border border-[#fecaca] px-2 py-0.5 text-[10.5px] font-bold tracking-wide text-[#b91c1c]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                           KHÔNG ĐẠT
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[12px]">
-                      <span className="text-[#64748b]">UT</span>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm">
+                      <span className="text-slate-500 text-xs">UT</span>
                       {w.ut ? (
-                        <span className="text-[#15803d] font-bold text-[13px]">✓</span>
+                        <span className="text-emerald-700 font-bold text-sm">✓</span>
                       ) : (
-                        <span className="text-[#dc2626] font-bold text-[13px]">✗</span>
+                        <span className="text-rose-600 font-bold text-sm">✗</span>
                       )}
-                      <span className="text-[#64748b]">Ngoại quan</span>
+                      <span className="text-slate-500 text-xs">Ngoại quan</span>
                       {w.visual ? (
-                        <span className="text-[#15803d] font-bold text-[13px]">✓</span>
+                        <span className="text-emerald-700 font-bold text-sm">✓</span>
                       ) : (
-                        <span className="text-[#dc2626] font-bold text-[13px]">✗</span>
+                        <span className="text-rose-600 font-bold text-sm">✗</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-[#0047AB]">
                       <button
                         type="button"
-                        className="hover:text-[#00388a] transition-colors cursor-pointer"
+                        className="hover:text-[#00388A] transition-colors cursor-pointer p-1 rounded-md hover:bg-blue-50"
                         title="Xem chi tiết"
                       >
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1334,7 +1339,7 @@ export default function OverviewDashboard() {
                       </button>
                       <button
                         type="button"
-                        className="text-[#94a3b8] hover:text-[#0f172a] transition-colors cursor-pointer"
+                        className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer p-1 rounded-md hover:bg-slate-100"
                         title="In tem"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -1347,17 +1352,17 @@ export default function OverviewDashboard() {
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2 pt-3.5 text-[12.5px] text-[#0047AB] font-medium">
+          <div className="flex items-center justify-end gap-2 pt-3.5 text-xs sm:text-sm text-[#0047AB] font-semibold">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả mối hàn
             </button>
-            <span className="text-[#94a3b8]">→</span>
+            <span className="text-slate-400">→</span>
           </div>
         </div>
 
         {/* Actions: TÁC VỤ NHANH */}
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             TÁC VỤ NHANH
           </div>
           <div className="mt-3.5 flex flex-col gap-2">
@@ -1428,7 +1433,7 @@ export default function OverviewDashboard() {
               <button
                 key={action.label}
                 type="button"
-                className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] px-3.5 py-2 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] hover:text-[#0047AB] transition-all cursor-pointer text-left"
+                className="flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:text-[#0047AB] shadow-xs transition-all cursor-pointer text-left"
               >
                 {action.icon}
                 <span>{action.label}</span>

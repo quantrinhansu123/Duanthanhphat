@@ -5,9 +5,9 @@ import { useMemo, useState } from "react";
 import { welders as seedWelders, type Welder } from "@/data/welders";
 
 const rankStyle: Record<string, string> = {
-  "Hạng 1": "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-  "Hạng 2": "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-  "Hạng 3": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
+  "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
+  "Hạng 2": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Hạng 3": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
 function IconEye() {
@@ -60,15 +60,15 @@ function FilterGroup({
   onChange: (next: string[]) => void;
 }) {
   return (
-    <div className="min-w-[150px] flex-1 rounded-xl border border-[#d9e2f1] bg-white px-3.5 py-3 shadow-xs">
-      <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.05em] text-[#64748b]">{title}</div>
+    <div className="min-w-[150px] flex-1 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-xs">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{title}</div>
       <div className="flex flex-col gap-1.5">
         {options.map((opt) => {
           const checked = selected.includes(opt);
           return (
             <label
               key={opt}
-              className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] text-[#334155] hover:bg-[#f8fafc] transition-colors duration-150"
+              className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-xs sm:text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150"
             >
               <input
                 type="checkbox"
@@ -76,7 +76,7 @@ function FilterGroup({
                 onChange={() => onChange(toggleValue(selected, opt))}
                 className="h-3.5 w-3.5 accent-[#0047AB] rounded cursor-pointer"
               />
-              <span className={checked ? "font-semibold text-[#0f172a]" : ""}>{opt}</span>
+              <span className={checked ? "font-semibold text-slate-900" : ""}>{opt}</span>
             </label>
           );
         })}
@@ -154,14 +154,14 @@ export default function WelderManagement() {
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
       <div className="mb-5 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-        <div className="rounded-xl border border-[#d9e2f1] bg-white p-4.5 shadow-xs">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#64748b]">Tổng thợ hàn</div>
-              <div className="mt-2 text-[28px] font-bold leading-none text-[#0f172a]">{list.length}</div>
-              <div className="mt-1.5 text-[12px] text-[#94a3b8]">Toàn bộ hồ sơ trong hệ thống</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng thợ hàn</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{list.length}</div>
+              <div className="mt-1.5 text-xs text-slate-400">Toàn bộ hồ sơ trong hệ thống</div>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#eff6ff] text-[#0047AB] ring-1 ring-[#bfdbfe]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] ring-1 ring-blue-200">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
@@ -171,46 +171,46 @@ export default function WelderManagement() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#d9e2f1] bg-white p-4.5 shadow-xs">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#64748b]">Trạng thái</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Trạng thái</div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-[28px] font-bold leading-none text-[#0f172a]">{activeCount}</span>
-                <span className="text-[12.5px] font-semibold text-[#15803d]">hoạt động</span>
+                <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{activeCount}</span>
+                <span className="text-xs sm:text-sm font-semibold text-emerald-700">hoạt động</span>
               </div>
-              <div className="mt-1.5 text-[12px] text-[#94a3b8]">
-                <span className="font-semibold text-[#b91c1c]">{lockedCount}</span> đang khóa
+              <div className="mt-1.5 text-xs text-slate-400">
+                <span className="font-semibold text-rose-700 font-mono tabular-nums">{lockedCount}</span> đang khóa
               </div>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f0fdf4] text-[#16a34a] ring-1 ring-[#bbf7d0]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <path d="M22 4 12 14.01l-3-3" />
               </svg>
             </div>
           </div>
-          <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-[#f1f5f9]">
+          <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-[#16a34a] transition-all"
+              className="h-full rounded-full bg-emerald-600 transition-all"
               style={{ width: `${list.length ? (activeCount / list.length) * 100 : 0}%` }}
             />
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#d9e2f1] bg-white p-4.5 shadow-xs sm:col-span-2 xl:col-span-1">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs sm:col-span-2 xl:col-span-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-[#64748b]">Phân hạng</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Phân hạng</div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-[28px] font-bold leading-none text-[#0f172a]">{rank1}</span>
-                <span className="text-[12.5px] font-semibold text-[#0047AB]">hạng 1</span>
+                <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{rank1}</span>
+                <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">hạng 1</span>
               </div>
-              <div className="mt-1.5 text-[12px] text-[#94a3b8]">
-                <span className="font-semibold text-[#64748b]">{rankOther}</span> hạng khác
+              <div className="mt-1.5 text-xs text-slate-400">
+                <span className="font-semibold text-slate-600 font-mono tabular-nums">{rankOther}</span> hạng khác
               </div>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#fffbeb] text-[#d97706] ring-1 ring-[#fde68a]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M12 2l3 7h7l-5.5 4.2L18.5 21 12 16.8 5.5 21l2-7.8L2 9h7z" />
               </svg>
@@ -223,7 +223,7 @@ export default function WelderManagement() {
               title={`Hạng 1: ${rank1}`}
             />
             <div
-              className="h-1.5 rounded-full bg-[#cbd5e1]"
+              className="h-1.5 rounded-full bg-slate-200"
               style={{ flex: rankOther || 0.01 }}
               title={`Hạng khác: ${rankOther}`}
             />
@@ -234,7 +234,7 @@ export default function WelderManagement() {
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
           <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             width="16"
             height="16"
             viewBox="0 0 24 24"
@@ -249,13 +249,13 @@ export default function WelderManagement() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm theo tên, Welding ID, loại ray, máy..."
-            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
         <button
           type="button"
           onClick={() => showToast("Form thêm thợ hàn sẽ bổ sung sau")}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-[#00388a] active:bg-[#002d6e] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/25 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm mới
         </button>
@@ -269,13 +269,13 @@ export default function WelderManagement() {
               setMachinesSel([]);
               setStatusesSel([]);
             }}
-            className="inline-flex h-10 items-center rounded-lg border border-[#d9e2f1] bg-white px-3.5 text-[12.5px] font-medium text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] active:bg-[#f1f5f9] transition-all duration-150 cursor-pointer shadow-2xs"
+            className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
           >
             Xóa lọc
           </button>
         )}
-        <span className="text-[12.5px] text-[#64748b]">
-          <strong className="font-semibold text-[#0f172a]">{filtered.length}</strong> kết quả
+        <span className="text-xs sm:text-sm text-slate-500">
+          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> kết quả
         </span>
       </div>
 
@@ -286,11 +286,11 @@ export default function WelderManagement() {
         <FilterGroup title="Trạng thái" options={statusOptions} selected={statusesSel} onChange={setStatusesSel} />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-xs">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-left text-[13px]">
+          <table className="w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Chọn tất cả" className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer" />
                 </th>
@@ -304,9 +304,9 @@ export default function WelderManagement() {
                 <th className="px-3.5 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f1f5f9]">
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((w) => (
-                <tr key={w.id} className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
+                <tr key={w.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -316,15 +316,15 @@ export default function WelderManagement() {
                       className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer"
                     />
                   </td>
-                  <td className="px-3.5 py-3 font-mono font-semibold text-[#0047AB] text-[12.5px]">{w.weldingId}</td>
+                  <td className="px-3.5 py-3 font-mono font-semibold text-[#0047AB] text-xs sm:text-sm">{w.weldingId}</td>
                   <td className="px-3.5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-[#e2e8f0] ring-1 ring-[#cbd5e1]/80">
+                      <div className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200 shadow-2xs">
                         <Image src={w.photo} alt={w.name} fill className="object-cover" sizes="40px" />
                       </div>
                       <div className="min-w-0 leading-tight">
-                        <div className="truncate font-semibold text-[#0f172a]">{w.name}</div>
-                        <div className="truncate text-[12px] text-[#64748b]">
+                        <div className="truncate font-semibold text-slate-900 text-xs sm:text-sm">{w.name}</div>
+                        <div className="truncate text-xs text-slate-500">
                           {w.position} · {w.department}
                         </div>
                       </div>
@@ -332,38 +332,38 @@ export default function WelderManagement() {
                   </td>
                   <td className="px-3.5 py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                        rankStyle[w.rank] ?? "bg-[#f1f5f9] border border-[#e2e8f0] text-[#475569]"
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        rankStyle[w.rank] ?? "bg-slate-100 border border-slate-200 text-slate-700 shadow-2xs"
                       }`}
                     >
                       {w.rank}
                     </span>
                   </td>
-                  <td className="px-3.5 py-3 text-[#334155]">{w.railTypes}</td>
-                  <td className="px-3.5 py-3 text-[#334155]">{w.trainedMachines}</td>
-                  <td className="px-3.5 py-3 text-[#334155]">{w.experience}</td>
+                  <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{w.railTypes}</td>
+                  <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{w.trainedMachines}</td>
+                  <td className="px-3.5 py-3 text-slate-700">{w.experience}</td>
                   <td className="px-3.5 py-3">
                     {w.status === "Hoạt động" ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] px-2.5 py-0.5 text-[11px] font-semibold text-[#15803d]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         {w.status}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fef2f2] border border-[#fecaca] px-2.5 py-0.5 text-[11px] font-semibold text-[#b91c1c]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-semibold text-rose-700 shadow-2xs">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                         {w.status}
                       </span>
                     )}
                   </td>
                   <td className="px-3.5 py-3">
-                    <div className="flex items-center justify-end gap-1 text-[#64748b]">
-                      <button type="button" className="rounded-lg p-1.5 hover:bg-[#f1f5f9] hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Xem">
+                    <div className="flex items-center justify-end gap-1 text-slate-400">
+                      <button type="button" className="rounded-lg p-1.5 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Xem">
                         <IconEye />
                       </button>
-                      <button type="button" className="rounded-lg p-1.5 hover:bg-[#f1f5f9] hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Sửa">
+                      <button type="button" className="rounded-lg p-1.5 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Sửa">
                         <IconEdit />
                       </button>
-                      <button type="button" className="rounded-lg p-1.5 hover:bg-[#f1f5f9] hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Khóa">
+                      <button type="button" className="rounded-lg p-1.5 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer" aria-label="Khóa">
                         <IconLock />
                       </button>
                       <button
@@ -373,7 +373,7 @@ export default function WelderManagement() {
                           setSelected((prev) => prev.filter((id) => id !== w.id));
                           showToast(`Đã xóa ${w.name}`);
                         }}
-                        className="rounded-lg p-1.5 hover:bg-[#fef2f2] hover:text-[#dc2626] transition-colors duration-150 cursor-pointer"
+                        className="rounded-lg p-1.5 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-150 cursor-pointer"
                         aria-label="Xóa"
                       >
                         <IconTrash />
@@ -384,9 +384,9 @@ export default function WelderManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-[#64748b]">
-                    <div className="text-[14px] font-medium">Không tìm thấy thợ hàn phù hợp</div>
-                    <div className="mt-1 text-[12.5px] text-[#94a3b8]">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
+                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                    <div className="text-sm font-semibold text-slate-800">Không tìm thấy thợ hàn phù hợp</div>
+                    <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>
                 </tr>
               )}
@@ -396,7 +396,7 @@ export default function WelderManagement() {
       </div>
 
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-[#071633] px-4 py-3 text-[13px] font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
             <polyline points="20 6 9 17 4 12" />
           </svg>

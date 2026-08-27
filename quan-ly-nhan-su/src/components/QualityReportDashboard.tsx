@@ -21,7 +21,7 @@ function KpiCard({
   value,
   unit,
   note,
-  noteColor = "text-[#64748b]",
+  noteColor = "text-slate-500",
   iconBg,
   labelColor,
   icon,
@@ -36,14 +36,14 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow duration-150">
+    <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all duration-150">
       <div className="min-w-0 flex-1">
-        <div className={`text-[11.5px] font-bold uppercase tracking-[0.06em] ${labelColor}`}>{label}</div>
+        <div className={`text-xs font-bold uppercase tracking-wider ${labelColor}`}>{label}</div>
         <div className="mt-2 flex items-baseline gap-1.5">
-          <span className="text-[26px] sm:text-[28px] font-bold leading-none text-[#0f172a] font-mono tabular-nums">{value}</span>
-          {unit ? <span className="text-[12px] font-medium text-[#94a3b8]">{unit}</span> : null}
+          <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{value}</span>
+          {unit ? <span className="text-xs font-medium text-slate-400">{unit}</span> : null}
         </div>
-        {note ? <div className={`mt-2.5 text-[12px] font-medium ${noteColor}`}>{note}</div> : null}
+        {note ? <div className={`mt-2.5 text-xs font-medium ${noteColor}`}>{note}</div> : null}
       </div>
       <div className={`flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl ${iconBg}`}>{icon}</div>
     </div>
@@ -62,16 +62,16 @@ function DonutChart({ rate }: { rate: number }) {
         cy="70"
         r={r}
         fill="none"
-        stroke="#15803d"
+        stroke="#0047AB"
         strokeWidth="20"
         strokeDasharray={`${passLen} ${c}`}
         transform="rotate(-90 70 70)"
         strokeLinecap="round"
       />
-      <text x="70" y="68" textAnchor="middle" className="fill-[#0f172a] text-[20px] font-bold font-mono">
+      <text x="70" y="68" textAnchor="middle" className="fill-slate-900 text-xl font-bold font-mono">
         {rate.toLocaleString("vi-VN")}%
       </text>
-      <text x="70" y="86" textAnchor="middle" className="fill-[#64748b] text-[9.5px] font-bold tracking-wider">
+      <text x="70" y="86" textAnchor="middle" className="fill-slate-500 text-[10px] font-bold tracking-wider">
         ĐẠT CHUẨN
       </text>
     </svg>
@@ -79,15 +79,15 @@ function DonutChart({ rate }: { rate: number }) {
 }
 
 const severityStyle = {
-  Cao: "bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]",
-  "Trung bình": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
-  Thấp: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+  Cao: "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
+  "Trung bình": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
+  Thấp: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
 };
 
 const statusStyle = {
-  "Chờ xử lý": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
-  "Đang sửa": "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-  "Đã đóng": "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+  "Chờ xử lý": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
+  "Đang sửa": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
+  "Đã đóng": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
 };
 
 export default function QualityReportDashboard() {
@@ -100,12 +100,12 @@ export default function QualityReportDashboard() {
   const totalDefects = defectCategories.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-[#1f2937] text-[14px]">
+    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       {/* Filter Bar */}
-      <div className="rounded-xl border border-[#e2e8f0] bg-white p-3 sm:p-4 shadow-2xs">
+      <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#0f172a] shrink-0">
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
               </svg>
@@ -114,7 +114,7 @@ export default function QualityReportDashboard() {
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="h-9 w-full sm:w-auto rounded-lg border border-[#cbd5e1] bg-white px-3 text-[12.5px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#93b4e8] transition-colors duration-150 cursor-pointer"
+              className="h-10 w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
             >
               {["Hôm nay", "Tuần này", "Tháng này", "Quý này", "Năm nay"].map((p) => (
                 <option key={p}>{p}</option>
@@ -123,14 +123,14 @@ export default function QualityReportDashboard() {
             <select
               value={plant}
               onChange={(e) => setPlant(e.target.value)}
-              className="h-9 w-full sm:w-auto rounded-lg border border-[#cbd5e1] bg-white px-3 text-[12.5px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#93b4e8] transition-colors duration-150 cursor-pointer"
+              className="h-10 w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
             >
               {["Tất cả nhà máy", "Nhà máy Hà Nội", "Nhà máy Đà Nẵng", "Nhà máy TP.HCM"].map((p) => (
                 <option key={p}>{p}</option>
               ))}
             </select>
           </div>
-          <span className="text-[12px] text-[#64748b]">Cập nhật realtime · {period}</span>
+          <span className="text-xs text-slate-500 font-medium">Cập nhật realtime · {period}</span>
         </div>
       </div>
 
@@ -141,9 +141,9 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.passed)}
           unit="mối"
           note="↑ 1,2% so tháng trước"
-          noteColor="text-[#15803d]"
-          iconBg="bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]"
-          labelColor="text-[#15803d]"
+          noteColor="text-emerald-700"
+          iconBg="bg-emerald-50 text-emerald-700 border border-emerald-200"
+          labelColor="text-emerald-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="9" />
@@ -156,9 +156,9 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.failed)}
           unit="mối"
           note={`${qualityKpis.criticalDefects} lỗi nghiêm trọng`}
-          noteColor="text-[#b91c1c]"
-          iconBg="bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]"
-          labelColor="text-[#b91c1c]"
+          noteColor="text-rose-700"
+          iconBg="bg-rose-50 text-rose-700 border border-rose-200"
+          labelColor="text-rose-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="9" />
@@ -171,7 +171,7 @@ export default function QualityReportDashboard() {
           value={qualityKpis.passRate.toLocaleString("vi-VN")}
           unit="%"
           note={`First-pass ${qualityKpis.firstPassRate}%`}
-          iconBg="bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]"
+          iconBg="bg-blue-50 text-[#0047AB] border border-blue-200/80"
           labelColor="text-[#0047AB]"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -185,9 +185,9 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.rework)}
           unit="mối"
           note={`TB ${qualityKpis.avgFixHours}h xử lý`}
-          noteColor="text-[#b45309]"
-          iconBg="bg-[#fffbeb] text-[#b45309] border border-[#fde68a]"
-          labelColor="text-[#b45309]"
+          noteColor="text-amber-700"
+          iconBg="bg-amber-50 text-amber-700 border border-amber-200"
+          labelColor="text-amber-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
@@ -205,8 +205,8 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.totalInspected)}
           unit="mối"
           note="NDT + ngoại quan"
-          iconBg="bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0]"
-          labelColor="text-[#475569]"
+          iconBg="bg-slate-50 text-slate-700 border border-slate-200"
+          labelColor="text-slate-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 11l3 3L22 4" />
@@ -219,8 +219,8 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.ndtPassed)}
           unit="mối"
           note="Siêu âm & kiểm tra vết nứt"
-          iconBg="bg-[#ecfeff] text-[#0891b2] border border-[#a5f3fc]"
-          labelColor="text-[#0891b2]"
+          iconBg="bg-cyan-50 text-cyan-700 border border-cyan-200"
+          labelColor="text-cyan-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M2 12c2-4 6-7 10-7s8 3 10 7c-2 4-6 7-10 7S4 16 2 12z" />
@@ -233,9 +233,9 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.visualFailed)}
           unit="mối"
           note="Phát hiện bằng mắt thường"
-          noteColor="text-[#6d28d9]"
-          iconBg="bg-[#faf5ff] text-[#7e22ce] border border-[#ddd6fe]"
-          labelColor="text-[#7e22ce]"
+          noteColor="text-purple-700"
+          iconBg="bg-purple-50 text-purple-700 border border-purple-200"
+          labelColor="text-purple-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
@@ -248,9 +248,9 @@ export default function QualityReportDashboard() {
           value={fmt(qualityKpis.openCases)}
           unit="ca"
           note={`${qualityKpis.closedThisMonth} đã đóng tháng này`}
-          noteColor="text-[#15803d]"
-          iconBg="bg-[#fff7ed] text-[#ea580c] border border-[#ffedd5]"
-          labelColor="text-[#ea580c]"
+          noteColor="text-emerald-700"
+          iconBg="bg-orange-50 text-orange-700 border border-orange-200"
+          labelColor="text-orange-700"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 9v4M12 17h.01" />
@@ -262,35 +262,35 @@ export default function QualityReportDashboard() {
 
       {/* Charts row */}
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Cơ cấu kết quả kiểm định</div>
-          <div className="mt-0.5 text-[12px] text-[#64748b]">Đạt chuẩn, không đạt và phải xử lý lại</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Cơ cấu kết quả kiểm định</div>
+          <div className="mt-0.5 text-xs text-slate-500">Đạt chuẩn, không đạt và phải xử lý lại</div>
           <div className="my-4 flex justify-center">
             <DonutChart rate={qualityKpis.passRate} />
           </div>
-          <div className="mt-2 divide-y divide-[#f8fafc]">
+          <div className="mt-2 divide-y divide-slate-100">
             {inspectionBreakdown.map((item) => (
-              <div key={item.label} className="flex items-center gap-2 py-2.5 text-[12.5px]">
+              <div key={item.label} className="flex items-center gap-2 py-2.5 text-xs sm:text-sm">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
-                <span className="flex-1 min-w-0 truncate text-[#334155]">{item.label}</span>
-                <span className="font-semibold font-mono text-[#0f172a] shrink-0 tabular-nums">{fmt(item.count)} mối</span>
+                <span className="flex-1 min-w-0 truncate text-slate-700">{item.label}</span>
+                <span className="font-semibold font-mono text-slate-900 shrink-0 tabular-nums">{fmt(item.count)} mối</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[14.5px] font-bold tracking-tight text-[#0f172a]">
+              <div className="flex items-center gap-2 text-sm sm:text-base font-bold tracking-tight text-slate-900">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="#dc2626" className="shrink-0">
                   <path d="M12 2L1 21h22L12 2zm0 6v6m0 4h.01" stroke="#dc2626" strokeWidth="0" />
                 </svg>
                 <span>Phân loại lỗi</span>
               </div>
-              <div className="mt-0.5 text-[12px] text-[#64748b]">Khuyết tật phát hiện qua NDT/UT và ngoại quan</div>
+              <div className="mt-0.5 text-xs text-slate-500">Khuyết tật phát hiện qua NDT/UT và ngoại quan</div>
             </div>
-            <span className="shrink-0 rounded-full bg-[#fef2f2] border border-[#fecaca] px-2.5 py-0.5 text-[11px] font-bold font-mono text-[#b91c1c] tabular-nums">
+            <span className="shrink-0 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold font-mono text-rose-700 tabular-nums shadow-2xs">
               {totalDefects} lỗi
             </span>
           </div>
@@ -299,13 +299,13 @@ export default function QualityReportDashboard() {
               const pct = ((d.count / totalDefects) * 100).toFixed(1);
               const w = (d.count / maxDefect) * 100;
               return (
-                <div key={d.name} className="flex items-center gap-2 sm:gap-3 text-[12.5px]">
-                  <div className="w-[100px] sm:w-[130px] flex-none truncate text-[#334155] font-medium" title={d.name}>{d.name}</div>
+                <div key={d.name} className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+                  <div className="w-[100px] sm:w-[130px] flex-none truncate text-slate-700 font-medium" title={d.name}>{d.name}</div>
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[#f1f5f9]">
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                       <div className="h-full rounded-full transition-all duration-300" style={{ width: `${w}%`, background: d.color }} />
                     </div>
-                    <span className="w-[68px] sm:w-[76px] flex-none text-right text-[11.5px] font-mono font-medium text-[#64748b] tabular-nums">
+                    <span className="w-[68px] sm:w-[76px] flex-none text-right text-xs font-mono font-medium text-slate-500 tabular-nums">
                       {d.count} ({pct.replace(".", ",")}%)
                     </span>
                   </div>
@@ -318,40 +318,40 @@ export default function QualityReportDashboard() {
 
       {/* Trend + plant */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Xu hướng tỷ lệ đạt (8 tuần)</div>
-          <div className="mt-0.5 text-[12px] text-[#64748b]">Theo dõi biến động chất lượng theo tuần</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Xu hướng tỷ lệ đạt (8 tuần)</div>
+          <div className="mt-0.5 text-xs text-slate-500">Theo dõi biến động chất lượng theo tuần</div>
           <div className="mt-4 flex h-[150px] sm:h-[160px] items-end gap-1 sm:gap-2">
             {weeklyTrend.map((w) => {
               const h = ((w.rate - minTrend + 0.5) / (maxTrend - minTrend + 1)) * 100;
               return (
                 <div key={w.week} className="flex flex-1 min-w-0 flex-col items-center gap-1.5">
-                  <span className="text-[10px] font-bold font-mono text-[#0047AB] whitespace-nowrap tabular-nums">{w.rate}%</span>
-                  <div className="w-full max-w-[28px] sm:max-w-none overflow-hidden rounded-t-md bg-[#eff6ff] group" style={{ height: `${Math.max(h, 20)}%` }}>
-                    <div className="h-full w-full bg-[#0047AB] group-hover:bg-[#00388a] transition-colors" />
+                  <span className="text-[11px] font-bold font-mono text-[#0047AB] whitespace-nowrap tabular-nums">{w.rate}%</span>
+                  <div className="w-full max-w-[28px] sm:max-w-none overflow-hidden rounded-t-md bg-blue-50 group" style={{ height: `${Math.max(h, 20)}%` }}>
+                    <div className="h-full w-full bg-[#0047AB] group-hover:bg-[#00388A] transition-colors" />
                   </div>
-                  <span className="text-[10.5px] sm:text-[11px] font-medium font-mono text-[#64748b] truncate">{w.week}</span>
+                  <span className="text-xs font-medium font-mono text-slate-500 truncate">{w.week}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Chất lượng theo nhà máy</div>
-          <div className="mt-0.5 text-[12px] text-[#64748b]">Tỷ lệ đạt và số mối không đạt</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Chất lượng theo nhà máy</div>
+          <div className="mt-0.5 text-xs text-slate-500">Tỷ lệ đạt và số mối không đạt</div>
           <div className="mt-4 flex flex-col gap-3.5">
             {plantQuality.map((p) => (
               <div key={p.plant}>
-                <div className="mb-1 flex items-center justify-between text-[12.5px]">
-                  <span className="font-semibold text-[#0f172a] truncate">{p.plant}</span>
+                <div className="mb-1 flex items-center justify-between text-xs sm:text-sm">
+                  <span className="font-semibold text-slate-900 truncate">{p.plant}</span>
                   <span className="text-[#0047AB] font-bold font-mono shrink-0 ml-2 tabular-nums">{p.passRate}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[#f1f5f9]">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-[#0047AB]" style={{ width: `${p.passRate}%` }} />
                 </div>
-                <div className="mt-1 text-[11px] text-[#64748b]">
-                  <span className="font-mono tabular-nums">{fmt(p.total)}</span> mối · <span className="text-[#b91c1c] font-medium font-mono tabular-nums">{p.failed} không đạt</span>
+                <div className="mt-1 text-xs text-slate-500">
+                  <span className="font-mono tabular-nums">{fmt(p.total)}</span> mối · <span className="text-rose-700 font-medium font-mono tabular-nums">{p.failed} không đạt</span>
                 </div>
               </div>
             ))}
@@ -361,27 +361,27 @@ export default function QualityReportDashboard() {
 
       {/* Rail type + welder ranking */}
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Theo loại ray</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Theo loại ray</div>
           <div className="mt-3.5 flex flex-col gap-2.5">
             {railTypeQuality.map((r) => (
-              <div key={r.type} className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3.5 py-2.5 hover:border-[#cbd5e1] transition-colors">
+              <div key={r.type} className="rounded-lg border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 hover:border-slate-300 transition-colors">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold font-mono text-[#0f172a]">{r.type}</span>
-                  <span className="text-[13px] font-bold font-mono text-[#0047AB] tabular-nums">{r.passRate}%</span>
+                  <span className="font-semibold font-mono text-slate-900">{r.type}</span>
+                  <span className="text-sm font-bold font-mono text-[#0047AB] tabular-nums">{r.passRate}%</span>
                 </div>
-                <div className="mt-0.5 text-[11.5px] text-[#64748b]"><span className="font-mono tabular-nums">{fmt(r.total)}</span> mối kiểm tra</div>
+                <div className="mt-0.5 text-xs text-slate-500"><span className="font-mono tabular-nums">{fmt(r.total)}</span> mối kiểm tra</div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs overflow-hidden">
-          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Top thợ hàn theo chất lượng</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs overflow-hidden">
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Top thợ hàn theo chất lượng</div>
           <div className="table-scroll mt-3.5 overflow-x-auto">
-            <table className="w-full min-w-[460px] border-collapse text-left text-[12.5px]">
+            <table className="w-full min-w-[460px] border-collapse text-left text-xs sm:text-sm">
               <thead>
-                <tr className="border-b border-[#e2e8f0] text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">
+                <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
                   <th className="pb-2 pr-3 whitespace-nowrap">Thợ hàn</th>
                   <th className="pb-2 pr-3 whitespace-nowrap">Welding ID</th>
                   <th className="pb-2 pr-3 whitespace-nowrap">Tổng mối</th>
@@ -389,18 +389,18 @@ export default function QualityReportDashboard() {
                   <th className="pb-2 whitespace-nowrap">Tỷ lệ đạt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#f8fafc]">
+              <tbody className="divide-y divide-slate-100">
                 {welderQuality.map((w, i) => (
-                  <tr key={w.weldingId} className="hover:bg-[#f8fafc] transition-colors duration-150">
+                  <tr key={w.weldingId} className="hover:bg-slate-50/80 transition-colors duration-150">
                     <td className="py-2.5 pr-3 whitespace-nowrap">
-                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-md bg-[#eff6ff] text-[10px] font-bold font-mono text-[#0047AB] border border-[#bfdbfe]">
+                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-md bg-blue-50 text-[10px] font-bold font-mono text-[#0047AB] border border-blue-200">
                         {i + 1}
                       </span>
-                      <span className="font-semibold text-[#0f172a]">{w.name}</span>
+                      <span className="font-semibold text-slate-900">{w.name}</span>
                     </td>
-                    <td className="py-2.5 pr-3 font-mono text-[12px] text-[#64748b] whitespace-nowrap">{w.weldingId}</td>
-                    <td className="py-2.5 pr-3 text-[#334155] font-mono tabular-nums whitespace-nowrap">{fmt(w.total)}</td>
-                    <td className="py-2.5 pr-3 font-semibold font-mono text-[#b91c1c] tabular-nums whitespace-nowrap">{w.failed}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-slate-500 whitespace-nowrap">{w.weldingId}</td>
+                    <td className="py-2.5 pr-3 text-slate-700 font-mono tabular-nums whitespace-nowrap">{fmt(w.total)}</td>
+                    <td className="py-2.5 pr-3 font-semibold font-mono text-rose-700 tabular-nums whitespace-nowrap">{w.failed}</td>
                     <td className="py-2.5 font-bold font-mono text-[#0047AB] tabular-nums whitespace-nowrap">{w.passRate}%</td>
                   </tr>
                 ))}
@@ -411,20 +411,20 @@ export default function QualityReportDashboard() {
       </div>
 
       {/* Recent defects table */}
-      <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs overflow-hidden">
+      <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs overflow-hidden">
         <div className="mb-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
           <div>
-            <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">Lỗi gần đây</div>
-            <div className="mt-0.5 text-[12px] text-[#64748b]">Danh sách khuyết tật cần theo dõi</div>
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Lỗi gần đây</div>
+            <div className="mt-0.5 text-xs text-slate-500">Danh sách khuyết tật cần theo dõi</div>
           </div>
-          <button type="button" className="self-start sm:self-auto text-[12.5px] font-bold text-[#0047AB] hover:underline cursor-pointer">
+          <button type="button" className="self-start sm:self-auto text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline cursor-pointer">
             Xem tất cả lỗi →
           </button>
         </div>
-        <div className="table-scroll overflow-x-auto rounded-lg border border-[#e2e8f0]">
-          <table className="w-full min-w-[760px] sm:min-w-[900px] border-collapse text-left text-[12.5px]">
+        <div className="table-scroll overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[760px] sm:min-w-[900px] border-collapse text-left text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Ngày</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Mối hàn</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Loại lỗi</th>
@@ -434,21 +434,21 @@ export default function QualityReportDashboard() {
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Trạng thái</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f1f5f9]">
+            <tbody className="divide-y divide-slate-100">
               {recentDefects.map((d) => (
-                <tr key={d.id} className="hover:bg-[#f8fafc] transition-colors duration-150">
-                  <td className="px-3.5 py-2.5 text-[#64748b] font-mono whitespace-nowrap">{d.date}</td>
-                  <td className="px-3.5 py-2.5 font-mono text-[12px] font-bold text-[#0047AB] whitespace-nowrap">{d.weldJoint}</td>
-                  <td className="px-3.5 py-2.5 text-[#334155] font-medium whitespace-nowrap">{d.defectType}</td>
-                  <td className="px-3.5 py-2.5 font-semibold text-[#0f172a] whitespace-nowrap">{d.welder}</td>
-                  <td className="px-3.5 py-2.5 text-[#64748b] whitespace-nowrap">{d.plant}</td>
+                <tr key={d.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                  <td className="px-3.5 py-2.5 text-slate-500 font-mono whitespace-nowrap">{d.date}</td>
+                  <td className="px-3.5 py-2.5 font-mono text-xs font-bold text-[#0047AB] whitespace-nowrap">{d.weldJoint}</td>
+                  <td className="px-3.5 py-2.5 text-slate-700 font-medium whitespace-nowrap">{d.defectType}</td>
+                  <td className="px-3.5 py-2.5 font-semibold text-slate-900 whitespace-nowrap">{d.welder}</td>
+                  <td className="px-3.5 py-2.5 text-slate-500 whitespace-nowrap">{d.plant}</td>
                   <td className="px-3.5 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold tracking-wide ${severityStyle[d.severity]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide ${severityStyle[d.severity]}`}>
                       {d.severity}
                     </span>
                   </td>
                   <td className="px-3.5 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold tracking-wide ${statusStyle[d.status]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide ${statusStyle[d.status]}`}>
                       {d.status}
                     </span>
                   </td>

@@ -39,10 +39,10 @@ const icons: Record<string, React.ReactNode> = {
 
 export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps) {
   return (
-    <div className="shrink-0 border-b border-[#e2e8f0] bg-[#f8fafc] px-3.5 sm:px-6 py-2 sm:py-2.5">
+    <div className="shrink-0 border-b border-slate-200/80 bg-slate-50/70 px-3.5 sm:px-6 py-2 sm:py-2.5">
       <div className="table-scroll overflow-x-auto">
         <div
-          className="inline-flex min-w-max sm:min-w-0 sm:w-full gap-1.5 rounded-xl border border-[#e2e8f0] bg-[#f1f5f9] p-1 shadow-2xs"
+          className="inline-flex min-w-max sm:min-w-0 sm:w-full gap-1.5 rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-xs"
           role="tablist"
         >
           {REPORT_TABS.map((tab) => {
@@ -54,13 +54,13 @@ export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps
                 role="tab"
                 aria-selected={active}
                 onClick={() => onNavigate(tab.id)}
-                className={`flex shrink-0 sm:flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 sm:px-4 py-2 text-[12.5px] sm:text-[13px] font-semibold transition-all duration-150 cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047ab]/25 ${
+                className={`flex shrink-0 sm:flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047ab]/25 ${
                   active
                     ? "bg-[#0047AB] text-white shadow-xs"
-                    : "text-[#64748b] hover:bg-white/80 hover:text-[#0f172a]"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
                 }`}
               >
-                <span className={active ? "text-white" : "text-[#64748b]"}>{icons[tab.id]}</span>
+                <span className={active ? "text-white" : "text-slate-500"}>{icons[tab.id]}</span>
                 <span>{tab.label}</span>
               </button>
             );

@@ -189,7 +189,8 @@ export function isValidTab(id: string) {
   return allTabIds().includes(id);
 }
 
-export function findNavMeta(activeId: string) {
+export function findNavMeta(activeId?: string) {
+  if (!activeId) return null;
   for (const group of navigation) {
     const child = group.children.find((c) => c.id === activeId);
     if (child) {
@@ -202,12 +203,5 @@ export function findNavMeta(activeId: string) {
       };
     }
   }
-  const first = navigation[0].children[0];
-  return {
-    parent: navigation[0].label,
-    parentEn: navigation[0].labelEn,
-    code: navigation[0].code,
-    title: first.label,
-    description: first.description ?? "",
-  };
+  return null;
 }
