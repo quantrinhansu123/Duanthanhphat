@@ -153,7 +153,7 @@ export function getMachineMaintenanceHistory(machineCode: string): MachineMainte
 
   const archive = k920Archive
     .filter((r) => r.machineCode === machineCode)
-    .map(({ machineCode: _code, ...row }) => row);
+    .map(({ machineCode: _, ...row }) => row);
 
   const merged = new Map<string, MachineMaintenanceHistoryRow>();
   for (const row of [...calendar, ...archive]) {

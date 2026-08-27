@@ -35,40 +35,37 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   ),
-  "quan-ly-du-an": (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  ),
 };
 
 export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps) {
   return (
-    <div className="shrink-0 border-b border-[#e8eef8] bg-[#eef2f8] px-3 pb-3 pt-2">
-      <div
-        className="flex gap-1.5 rounded-xl border border-[#e8ebf0] bg-white p-1.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
-        role="tablist"
-      >
-        {REPORT_TABS.map((tab) => {
-          const active = tab.id === activeId;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onNavigate(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-[13px] font-semibold transition ${
-                active
-                  ? "bg-[#1565d8] text-white shadow-[0_2px_8px_rgba(21,101,216,0.35)]"
-                  : "text-[#5d6b7d] hover:bg-[#f3f6fb] hover:text-[#16233a]"
-              }`}
-            >
-              <span className={active ? "text-white" : "text-[#64748b]"}>{icons[tab.id]}</span>
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+    <div className="shrink-0 border-b border-[#e2e8f0] bg-[#f8fafc] px-3.5 sm:px-6 py-2 sm:py-2.5">
+      <div className="table-scroll overflow-x-auto">
+        <div
+          className="inline-flex min-w-max sm:min-w-0 sm:w-full gap-1.5 rounded-xl border border-[#d9e2f1] bg-[#f1f5f9] p-1 shadow-2xs"
+          role="tablist"
+        >
+          {REPORT_TABS.map((tab) => {
+            const active = tab.id === activeId;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onNavigate(tab.id)}
+                className={`flex shrink-0 sm:flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 sm:px-3.5 py-2 text-[12.5px] sm:text-[13px] font-semibold transition-all duration-150 cursor-pointer ${
+                  active
+                    ? "bg-[#0047AB] text-white shadow-xs"
+                    : "text-[#64748b] hover:bg-white/80 hover:text-[#0f172a]"
+                }`}
+              >
+                <span className={active ? "text-white" : "text-[#64748b]"}>{icons[tab.id]}</span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

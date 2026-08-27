@@ -127,23 +127,24 @@ export default function EmployeeManagement() {
     showToast(nextStatus === "Khóa" ? `Đã khóa ${employee.name}` : `Đã mở khóa ${employee.name}`);
   }
 
-  return (    <main className="mx-auto max-w-[1400px] px-6 py-5">
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[#475569]">
+  return (
+    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 py-5">
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-[12.5px] sm:text-[13px] text-[#475569]">
         <span>
-          <strong className="text-[#0f172a]">{list.length}</strong> nhân viên
+          <strong className="font-semibold text-[#0f172a]">{list.length}</strong> nhân viên
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#0f172a]">{activeCount}</strong> hoạt động · {lockedCount} khóa
+          <strong className="font-semibold text-[#15803d]">{activeCount}</strong> hoạt động · <span className="text-[#b91c1c] font-medium">{lockedCount}</span> khóa
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#0f172a]">{adminCount}</strong> quản trị · {staffCount} nhân viên
+          <strong className="font-semibold text-[#0047AB]">{adminCount}</strong> quản trị · {staffCount} nhân viên
         </span>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[260px] flex-1">
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+        <div className="relative min-w-[240px] flex-1">
           <svg
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
             width="16"
@@ -160,87 +161,90 @@ export default function EmployeeManagement() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm theo tên, mã NV, email..."
-            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15"
+            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
           />
         </div>
-        <select
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
-        >
-          {departments.map((d) => (
-            <option key={d}>{d}</option>
-          ))}
-        </select>
-        <select
-          value={position}
-          onChange={(e) => setPosition(e.target.value)}
-          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
-        >
-          {positions.map((p) => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
-        >
-          {roles.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
-        >
-          {statuses.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+          <select
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+          >
+            {departments.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+          <select
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+          >
+            {positions.map((p) => (
+              <option key={p}>{p}</option>
+            ))}
+          </select>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+          >
+            {roles.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
+          >
+            {statuses.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
           onClick={() => setOpenAdd(true)}
-          className="inline-flex h-10 items-center gap-1 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-[#00388a] active:bg-[#002d6e] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/25 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm mới
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-        <div className="overflow-x-auto">
+      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-xs">
+        <div className="table-scroll overflow-x-auto">
           <table className="w-full min-w-[980px] border-collapse text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[#e8eef8] bg-[#f7f9fc] text-[12px] font-semibold uppercase tracking-[0.03em] text-[#64748b]">
+              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
                 <th className="w-10 px-4 py-3">
-                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Chọn tất cả" />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Chọn tất cả" className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer" />
                 </th>
-                <th className="px-3 py-3">Mã NV</th>
-                <th className="px-3 py-3">Nhân viên</th>
-                <th className="px-3 py-3">Tên đăng nhập</th>
-                <th className="px-3 py-3">Phòng ban</th>
-                <th className="px-3 py-3">Chức vụ</th>
-                <th className="px-3 py-3">Vai trò</th>
-                <th className="px-3 py-3">Trạng thái</th>
-                <th className="w-12 px-2 py-3" aria-label="Thao tác" />
+                <th className="px-3.5 py-3">Mã NV</th>
+                <th className="px-3.5 py-3">Nhân viên</th>
+                <th className="px-3.5 py-3">Tên đăng nhập</th>
+                <th className="px-3.5 py-3">Phòng ban</th>
+                <th className="px-3.5 py-3">Chức vụ</th>
+                <th className="px-3.5 py-3">Vai trò</th>
+                <th className="px-3.5 py-3">Trạng thái</th>
+                <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#f1f5f9]">
               {filtered.map((e: Employee) => (
-                <tr key={e.id} className="border-b border-[#f1f5f9] hover:bg-[#f8fafc]">
+                <tr key={e.id} className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selected.includes(e.id)}
                       onChange={() => toggleOne(e.id)}
                       aria-label={`Chọn ${e.name}`}
+                      className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-3 font-medium text-[#0f172a]">{e.code}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-3.5 py-3 font-mono font-semibold text-[#0047AB] text-[12.5px]">{e.code}</td>
+                  <td className="px-3.5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-[#e2e8f0] ring-1 ring-[#dbe4f3]">
+                      <div className="relative h-10 w-10 flex-none overflow-hidden rounded-full bg-[#e2e8f0] ring-1 ring-[#cbd5e1]/80">
                         <Image
                           src={e.photo}
                           alt={e.name}
@@ -256,34 +260,38 @@ export default function EmployeeManagement() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-3 text-[#334155]">{e.username}</td>
-                  <td className="px-3 py-3 text-[#334155]">{e.department}</td>
-                  <td className="px-3 py-3 text-[#334155]">{e.position}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-3.5 py-3 font-mono text-[12.5px] text-[#334155]">{e.username}</td>
+                  <td className="px-3.5 py-3 text-[#334155]">{e.department}</td>
+                  <td className="px-3.5 py-3 text-[#334155]">{e.position}</td>
+                  <td className="px-3.5 py-3">
                     {e.role === "Quản trị" ? (
-                      <span className="inline-flex rounded-full bg-[#0047AB] px-2.5 py-1 text-[11px] font-semibold text-white">
+                      <span className="inline-flex items-center rounded-full bg-[#eff6ff] border border-[#bfdbfe] px-2.5 py-0.5 text-[11px] font-semibold text-[#0047AB]">
                         {e.role}
                       </span>
                     ) : (
-                      <span className="inline-flex rounded-full bg-[#e8eef8] px-2.5 py-1 text-[11px] font-semibold text-[#475569]">
+                      <span className="inline-flex items-center rounded-full bg-[#f1f5f9] border border-[#e2e8f0] px-2.5 py-0.5 text-[11px] font-medium text-[#475569]">
                         {e.role}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold text-white ${
-                        e.status === "Hoạt động" ? "bg-[#0047AB]" : "bg-[#64748b]"
-                      }`}
-                    >
-                      {e.status}
-                    </span>
+                  <td className="px-3.5 py-3">
+                    {e.status === "Hoạt động" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] px-2.5 py-0.5 text-[11px] font-semibold text-[#15803d]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
+                        {e.status}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fef2f2] border border-[#fecaca] px-2.5 py-0.5 text-[11px] font-semibold text-[#b91c1c]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
+                        {e.status}
+                      </span>
+                    )}
                   </td>
-                  <td className="relative px-2 py-3">
+                  <td className="relative px-2 py-3 text-center">
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === e.id ? null : e.id)}
-                      className="rounded-full p-1.5 text-[#64748b] hover:bg-[#e2e8f0]"
+                      className="rounded-lg p-1.5 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors duration-150 cursor-pointer"
                       aria-label="Tùy chọn"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -293,10 +301,10 @@ export default function EmployeeManagement() {
                       </svg>
                     </button>
                     {menuOpen === e.id && (
-                      <div className="absolute right-2 top-10 z-20 w-36 rounded-lg border border-[#e2e8f0] bg-white py-1 shadow-lg">
+                      <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-[#e2e8f0] bg-white py-1.5 shadow-[0_10px_25px_rgba(7,22,51,0.12)] animate-in fade-in-50 zoom-in-95 duration-100">
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
                             showToast(`${e.name} · ${e.code} · ${e.department}`);
                             setMenuOpen(null);
@@ -306,7 +314,7 @@ export default function EmployeeManagement() {
                         </button>
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
                             showToast(`Sửa thông tin ${e.name}`);
                             setMenuOpen(null);
@@ -316,14 +324,14 @@ export default function EmployeeManagement() {
                         </button>
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] cursor-pointer transition-colors"
                           onClick={() => handleToggleLock(e)}
                         >
                           {e.status === "Hoạt động" ? "Khóa" : "Mở khóa"}
                         </button>
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#dc2626] hover:bg-[#fef2f2]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#dc2626] hover:bg-[#fef2f2] cursor-pointer transition-colors"
                           onClick={() => handleDelete(e)}
                         >
                           Xóa
@@ -332,10 +340,12 @@ export default function EmployeeManagement() {
                     )}
                   </td>
                 </tr>
-              ))}              {filtered.length === 0 && (
+              ))}
+              {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-[#64748b]">
-                    Không tìm thấy nhân viên phù hợp.
+                  <td colSpan={9} className="px-4 py-12 text-center text-[#64748b]">
+                    <div className="text-[14px] font-medium">Không tìm thấy nhân viên phù hợp</div>
+                    <div className="mt-1 text-[12.5px] text-[#94a3b8]">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>
                 </tr>
               )}
@@ -355,7 +365,10 @@ export default function EmployeeManagement() {
       />
 
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-[#071633] px-4 py-3 text-[13px] font-medium text-white shadow-lg">
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-[#071633] px-4 py-3 text-[13px] font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
           {toast}
         </div>
       )}

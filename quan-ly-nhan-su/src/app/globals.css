@@ -1,60 +1,154 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef2f8;
+  --background: #f8fafc;
   --foreground: #0f172a;
+
   --cobalt: #0047ab;
   --cobalt-dark: #071633;
   --cobalt-mid: #0a254f;
+  --cobalt-light: #eff6ff;
+  --cobalt-hover: #00388a;
+  --cobalt-active: #002d6e;
+
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --surface-subtle: #f8fafc;
+
+  --border-default: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --border-strong: #cbd5e1;
+  --border-brand: #bfdbfe;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: #bbf7d0;
+  --color-success-text: #15803d;
+
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-text: #b45309;
+
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-error-border: #fecaca;
+  --color-error-text: #b91c1c;
+
+  --color-info: #0284c7;
+  --color-info-bg: #f0f9ff;
+  --color-info-border: #bae6fd;
+  --color-info-text: #0369a1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-cobalt: var(--cobalt);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-cobalt-dark: var(--cobalt-dark);
+  --color-cobalt-mid: var(--cobalt-mid);
+  --color-cobalt-light: var(--cobalt-light);
+  --color-cobalt-hover: var(--cobalt-hover);
+  --color-cobalt-active: var(--cobalt-active);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-subtle: var(--surface-subtle);
+
+  --color-border: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-border-brand: var(--border-brand);
+
+  --font-sans: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Custom Scrollbar for Sidebar */
 .sidebar-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #1e3f73 #0a254f;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .sidebar-scroll::-webkit-scrollbar {
-  width: 8px;
-  background: #0a254f;
+  width: 5px;
 }
 
 .sidebar-scroll::-webkit-scrollbar-track {
-  background: #0a254f;
-  border: none;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb {
-  background: #1e3f73;
-  border-radius: 999px;
-  border: 2px solid #0a254f;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: #2a558f;
-}
-
-.sidebar-scroll::-webkit-scrollbar-corner {
-  background: #0a254f;
-}
-
-.sidebar-scroll::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
   background: transparent;
 }
 
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
 
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Smooth Table Scrollbar */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Accessibility: Interactive focus styles */
+:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+/* Touch target comfort on touch devices */
+@media (pointer: coarse) {
+  button, 
+  a, 
+  input[type="checkbox"], 
+  input[type="radio"],
+  select {
+    min-height: 40px;
+  }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

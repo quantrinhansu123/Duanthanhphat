@@ -6,15 +6,15 @@ import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/dat
 import { projects as seedProjects, type Project } from "@/data/projects";
 
 const statusStyle: Record<Project["status"], string> = {
-  "Đang triển khai": "bg-[#e7f7ed] text-[#15803d]",
-  "Hoàn thành": "bg-[#e8eef8] text-[#0047AB]",
-  "Tạm dừng": "bg-[#fff4dd] text-[#b26a00]",
+  "Đang triển khai": "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+  "Hoàn thành": "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+  "Tạm dừng": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
 };
 
 const weldStatusStyle: Record<ProjectWeldStatus, string> = {
-  Đạt: "bg-[#e7f7ed] text-[#15803d]",
-  Lỗi: "bg-[#fdeaea] text-[#c62828]",
-  "Chờ kiểm tra": "bg-[#fff4dd] text-[#b26a00]",
+  Đạt: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+  Lỗi: "bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]",
+  "Chờ kiểm tra": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
 };
 
 const statusOptions: Project["status"][] = ["Đang triển khai", "Hoàn thành", "Tạm dừng"];
@@ -41,36 +41,36 @@ function ProjectInfoFields({
   readOnly: boolean;
 }) {
   return (
-    <div className="space-y-3">
-      <label className="block text-[12px] font-medium text-[#64748b]">
+    <div className="space-y-3.5">
+      <label className="block text-[12px] font-semibold text-[#475569]">
         Tên dự án
         <input
           readOnly={readOnly}
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
         />
       </label>
-      <label className="block text-[12px] font-medium text-[#64748b]">
+      <label className="block text-[12px] font-semibold text-[#475569]">
         Người phụ trách
         <input
           readOnly={readOnly}
           value={form.manager}
           onChange={(e) => setForm({ ...form, manager: e.target.value })}
-          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
         />
       </label>
-      <label className="block text-[12px] font-medium text-[#64748b]">
+      <label className="block text-[12px] font-semibold text-[#475569]">
         Nhà máy
         <input
           readOnly={readOnly}
           value={form.plant}
           onChange={(e) => setForm({ ...form, plant: e.target.value })}
-          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
         />
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-[12px] font-medium text-[#64748b]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <label className="block text-[12px] font-semibold text-[#475569]">
           Số nhân sự
           <input
             readOnly={readOnly}
@@ -78,10 +78,10 @@ function ProjectInfoFields({
             min={0}
             value={form.staffCount}
             onChange={(e) => setForm({ ...form, staffCount: Number(e.target.value) })}
-            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150 font-mono"
           />
         </label>
-        <label className="block text-[12px] font-medium text-[#64748b]">
+        <label className="block text-[12px] font-semibold text-[#475569]">
           Số máy
           <input
             readOnly={readOnly}
@@ -89,15 +89,15 @@ function ProjectInfoFields({
             min={0}
             value={form.machineCount}
             onChange={(e) => setForm({ ...form, machineCount: Number(e.target.value) })}
-            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150 font-mono"
           />
         </label>
       </div>
-      <label className="block text-[12px] font-medium text-[#64748b]">
+      <label className="block text-[12px] font-semibold text-[#475569]">
         Trạng thái
         {readOnly ? (
           <div className="mt-2">
-            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[form.status]}`}>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[form.status]}`}>
               {form.status}
             </span>
           </div>
@@ -105,7 +105,7 @@ function ProjectInfoFields({
           <select
             value={form.status}
             onChange={(e) => setForm({ ...form, status: e.target.value as Project["status"] })}
-            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
+            className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
           >
             {statusOptions.map((s) => (
               <option key={s}>{s}</option>
@@ -113,14 +113,14 @@ function ProjectInfoFields({
           </select>
         )}
       </label>
-      <label className="block text-[12px] font-medium text-[#64748b]">
+      <label className="block text-[12px] font-semibold text-[#475569]">
         Ngày bắt đầu
         <input
           readOnly={readOnly}
           type="date"
           value={form.startDate}
           onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] outline-none read-only:bg-[#f8fafc] focus:border-[#0047AB]"
+          className="mt-1 h-10 w-full rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#0f172a] shadow-2xs outline-hidden read-only:bg-[#f8fafc] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
         />
       </label>
     </div>
@@ -133,27 +133,27 @@ function ProjectPersonnelTab({ projectId }: { projectId: string }) {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#64748b]">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-[#64748b]">
         <span>
-          <strong className="text-[#0f172a]">{rows.length}</strong> nhân sự
+          <strong className="font-semibold text-[#0f172a]">{rows.length}</strong> nhân sự
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#15803d]">{onDuty}</strong> đang trực
+          <strong className="font-semibold text-[#15803d]">{onDuty}</strong> đang trực
         </span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-[#e8eef8]">
+      <div className="overflow-hidden rounded-xl border border-[#d9e2f1]">
         <table className="w-full border-collapse text-left text-[13px]">
           <thead>
-            <tr className="border-b border-[#eef1f5] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-              <th className="px-3 py-2.5">Họ tên</th>
-              <th className="px-3 py-2.5">Vị trí</th>
-              <th className="px-3 py-2.5">Vai trò</th>
-              <th className="px-3 py-2.5">Trạng thái</th>
-              <th className="px-3 py-2.5 text-right">Mối hôm nay</th>
+            <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
+              <th className="px-3.5 py-2.5">Họ tên</th>
+              <th className="px-3.5 py-2.5">Vị trí</th>
+              <th className="px-3.5 py-2.5">Vai trò</th>
+              <th className="px-3.5 py-2.5">Trạng thái</th>
+              <th className="px-3.5 py-2.5 text-right">Mối hôm nay</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-[#f1f5f9]">
             {rows.map((p) => (
               <PersonnelRow key={p.id} row={p} />
             ))}
@@ -173,23 +173,23 @@ function ProjectPersonnelTab({ projectId }: { projectId: string }) {
 
 function PersonnelRow({ row }: { row: ProjectPersonnel }) {
   return (
-    <tr className="border-b border-[#f2f4f7] hover:bg-[#f8fafc]">
-      <td className="px-3 py-2.5 font-semibold text-[#0f172a]">{row.name}</td>
-      <td className="px-3 py-2.5 text-[#334155]">{row.position}</td>
-      <td className="px-3 py-2.5 text-[#334155]">{row.role}</td>
-      <td className="px-3 py-2.5">
+    <tr className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
+      <td className="px-3.5 py-2.5 font-semibold text-[#0f172a]">{row.name}</td>
+      <td className="px-3.5 py-2.5 text-[#334155]">{row.position}</td>
+      <td className="px-3.5 py-2.5 text-[#334155]">{row.role}</td>
+      <td className="px-3.5 py-2.5">
         {row.onDuty ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e7f7ed] px-2 py-0.5 text-[11px] font-semibold text-[#15803d]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#22a94f]" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] px-2.5 py-0.5 text-[11px] font-semibold text-[#15803d]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803d]" />
             Đang trực
           </span>
         ) : (
-          <span className="inline-flex rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-[#64748b]">
+          <span className="inline-flex items-center rounded-full bg-[#f1f5f9] border border-[#e2e8f0] px-2.5 py-0.5 text-[11px] font-semibold text-[#64748b]">
             Nghỉ
           </span>
         )}
       </td>
-      <td className="px-3 py-2.5 text-right font-medium text-[#0f172a]">{row.weldsToday}</td>
+      <td className="px-3.5 py-2.5 text-right font-semibold font-mono text-[#0f172a]">{row.weldsToday}</td>
     </tr>
   );
 }
@@ -201,30 +201,30 @@ function ProjectWorkTab({ projectId }: { projectId: string }) {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#64748b]">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-[#64748b]">
         <span>
-          <strong className="text-[#0f172a]">{rows.length}</strong> mối hàn
+          <strong className="font-semibold text-[#0f172a]">{rows.length}</strong> mối hàn
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#15803d]">{passed}</strong> đạt ·{" "}
-          <strong className="text-[#dc2626]">{failed}</strong> lỗi
+          <strong className="font-semibold text-[#15803d]">{passed}</strong> đạt ·{" "}
+          <strong className="font-semibold text-[#b91c1c]">{failed}</strong> lỗi
         </span>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-[#e8eef8]">
+      <div className="table-scroll overflow-x-auto rounded-xl border border-[#d9e2f1]">
         <table className="w-full min-w-[720px] border-collapse text-left text-[13px]">
           <thead>
-            <tr className="border-b border-[#eef1f5] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-              <th className="px-3 py-2.5">ID mối hàn</th>
-              <th className="px-3 py-2.5">Thời gian</th>
-              <th className="px-3 py-2.5">PP hàn</th>
-              <th className="px-3 py-2.5">Máy</th>
-              <th className="px-3 py-2.5">Thợ hàn</th>
-              <th className="px-3 py-2.5">Trạng thái</th>
-              <th className="px-3 py-2.5">Lỗi gặp phải</th>
+            <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
+              <th className="px-3.5 py-2.5">ID mối hàn</th>
+              <th className="px-3.5 py-2.5">Thời gian</th>
+              <th className="px-3.5 py-2.5">PP hàn</th>
+              <th className="px-3.5 py-2.5">Máy</th>
+              <th className="px-3.5 py-2.5">Thợ hàn</th>
+              <th className="px-3.5 py-2.5">Trạng thái</th>
+              <th className="px-3.5 py-2.5">Lỗi gặp phải</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-[#f1f5f9]">
             {rows.map((w) => (
               <WeldRow key={w.id} row={w} />
             ))}
@@ -244,22 +244,22 @@ function ProjectWorkTab({ projectId }: { projectId: string }) {
 
 function WeldRow({ row }: { row: ProjectWeld }) {
   return (
-    <tr className="border-b border-[#f2f4f7] hover:bg-[#f8fafc]">
-      <td className="px-3 py-2.5 font-semibold text-[#0f172a]">{row.weldId}</td>
-      <td className="px-3 py-2.5 text-[#334155]">{formatDateTime(row.performedAt)}</td>
-      <td className="px-3 py-2.5">
-        <span className="inline-flex rounded bg-[#e8eef8] px-2 py-0.5 text-[11px] font-semibold text-[#0047AB]">
+    <tr className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
+      <td className="px-3.5 py-2.5 font-mono font-bold text-[#0047AB]">{row.weldId}</td>
+      <td className="px-3.5 py-2.5 text-[#334155] font-mono whitespace-nowrap">{formatDateTime(row.performedAt)}</td>
+      <td className="px-3.5 py-2.5">
+        <span className="inline-flex items-center rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[11px] font-semibold text-[#0047AB] border border-[#bfdbfe]">
           {row.method}
         </span>
       </td>
-      <td className="px-3 py-2.5 text-[#334155]">{row.machine}</td>
-      <td className="px-3 py-2.5 text-[#334155]">{row.welderName}</td>
-      <td className="px-3 py-2.5">
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${weldStatusStyle[row.status]}`}>
+      <td className="px-3.5 py-2.5 text-[#334155] font-mono">{row.machine}</td>
+      <td className="px-3.5 py-2.5 text-[#334155] font-medium">{row.welderName}</td>
+      <td className="px-3.5 py-2.5">
+        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${weldStatusStyle[row.status]}`}>
           {row.status}
         </span>
       </td>
-      <td className="px-3 py-2.5 text-[#334155]">
+      <td className="px-3.5 py-2.5 text-[#334155]">
         {row.errorReason || <span className="text-[#94a3b8]">—</span>}
       </td>
     </tr>
@@ -304,24 +304,29 @@ function ProjectModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-[#0f172a]/45" aria-label="Đóng" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <button
+        type="button"
+        className="fixed inset-0 bg-[#071633]/60 backdrop-blur-xs transition-opacity duration-200"
+        aria-label="Đóng"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex max-h-[90vh] w-full max-w-[860px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-2xl border border-[#d9e2f1] bg-white shadow-[0_24px_60px_rgba(7,22,51,0.24)] animate-in fade-in-50 zoom-in-95 duration-150"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#e8eef8] px-5 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#e8eef8] px-5 sm:px-6 py-4 bg-white">
           <div>
-            <div className="text-[12px] font-semibold text-[#0047AB]">
+            <div className="text-[11.5px] font-bold uppercase tracking-wider text-[#0047AB]">
               {mode === "view" ? "Chi tiết dự án" : "Sửa dự án"}
             </div>
-            <h2 className="mt-0.5 text-[18px] font-bold text-[#0f172a]">{project.name}</h2>
+            <h2 className="mt-0.5 text-[17px] sm:text-[18px] font-bold text-[#0f172a]">{project.name}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -330,14 +335,14 @@ function ProjectModal({
           </button>
         </div>
 
-        <div className="border-b border-[#e8eef8] px-5">
+        <div className="border-b border-[#e8eef8] px-5 sm:px-6 bg-white">
           <div className="flex gap-1 overflow-x-auto">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`shrink-0 border-b-2 px-4 py-3 text-[13px] font-semibold transition ${
+                className={`shrink-0 border-b-2 px-4 py-3 text-[13px] font-semibold transition-colors duration-150 cursor-pointer ${
                   tab === t.id
                     ? "border-[#0047AB] text-[#0047AB]"
                     : "border-transparent text-[#64748b] hover:text-[#334155]"
@@ -345,7 +350,7 @@ function ProjectModal({
               >
                 {t.label}
                 {t.count != null && (
-                  <span className="ml-1.5 rounded-full bg-[#f1f5f9] px-1.5 py-0.5 text-[11px] font-medium text-[#64748b]">
+                  <span className="ml-1.5 rounded-full bg-[#f1f5f9] border border-[#e2e8f0] px-2 py-0.5 text-[11px] font-semibold font-mono text-[#64748b]">
                     {t.count}
                   </span>
                 )}
@@ -354,17 +359,17 @@ function ProjectModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
           {tab === "info" && <ProjectInfoFields form={form} setForm={setForm} readOnly={readOnly} />}
           {tab === "personnel" && <ProjectPersonnelTab projectId={project.id} />}
           {tab === "work" && <ProjectWorkTab projectId={project.id} />}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[#e8eef8] px-5 py-4">
+        <div className="flex shrink-0 justify-end gap-2.5 border-t border-[#e8eef8] px-5 sm:px-6 py-3.5 bg-white">
           <button
             type="button"
             onClick={onClose}
-            className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] active:bg-[#f1f5f9] transition-all duration-150 cursor-pointer shadow-2xs"
           >
             {readOnly ? "Đóng" : "Hủy"}
           </button>
@@ -372,7 +377,7 @@ function ProjectModal({
             <button
               type="button"
               onClick={() => onSave(form)}
-              className="h-10 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-[#00388a] active:bg-[#002d6e] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/25 transition-all duration-150 cursor-pointer"
             >
               Lưu thay đổi
             </button>
@@ -417,19 +422,19 @@ export default function ProjectManagement() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-6 pb-8">
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[#475569]">
+    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-[12.5px] sm:text-[13px] text-[#475569]">
         <span>
-          <strong className="text-[#0f172a]">{list.length}</strong> dự án
+          <strong className="font-semibold text-[#0f172a]">{list.length}</strong> dự án
         </span>
         <span className="text-[#cbd5e1]">|</span>
         <span>
-          <strong className="text-[#0f172a]">{activeCount}</strong> đang triển khai
+          <strong className="font-semibold text-[#15803d]">{activeCount}</strong> đang triển khai
         </span>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[260px] flex-1">
+      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+        <div className="relative min-w-[240px] flex-1">
           <svg
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]"
             width="16"
@@ -446,13 +451,13 @@ export default function ProjectManagement() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm tên dự án, người phụ trách, nhà máy..."
-            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15"
+            className="h-10 w-full rounded-lg border border-[#d9e2f1] bg-white pl-9 pr-3 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-all duration-150"
           />
         </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155]"
+          className="h-10 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] text-[#334155] shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 hover:border-[#cbd5e1] transition-colors duration-150 cursor-pointer"
         >
           <option>Tất cả trạng thái</option>
           <option>Đang triển khai</option>
@@ -461,48 +466,48 @@ export default function ProjectManagement() {
         </select>
         <button
           type="button"
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-[#00388a] active:bg-[#002d6e] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/25 transition-all duration-150 cursor-pointer"
         >
-          + Thêm dự án
+          <span className="text-base leading-none">+</span> Thêm dự án
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-        <div className="overflow-x-auto">
+      <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-xs">
+        <div className="table-scroll overflow-x-auto">
           <table className="w-full min-w-[960px] border-collapse text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[#eef1f5] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
+              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#64748b]">
                 <th className="px-4 py-3">Tên dự án</th>
-                <th className="px-4 py-3">Người phụ trách</th>
-                <th className="px-4 py-3">Nhà máy</th>
-                <th className="px-4 py-3">Nhân sự</th>
-                <th className="px-4 py-3">Máy</th>
-                <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-4 py-3">Ngày bắt đầu</th>
+                <th className="px-3.5 py-3">Người phụ trách</th>
+                <th className="px-3.5 py-3">Nhà máy</th>
+                <th className="px-3.5 py-3">Nhân sự</th>
+                <th className="px-3.5 py-3">Máy</th>
+                <th className="px-3.5 py-3">Trạng thái</th>
+                <th className="px-3.5 py-3">Ngày bắt đầu</th>
                 <th className="w-12 px-2 py-3" aria-label="Thao tác" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#f1f5f9]">
               {filtered.map((p) => (
-                <tr key={p.id} className="border-b border-[#f2f4f7] text-[#334155] hover:bg-[#f8fafc]">
+                <tr key={p.id} className="hover:bg-[#f8fafc]/90 transition-colors duration-150">
                   <td className="px-4 py-3 font-semibold text-[#0f172a]">{p.name}</td>
-                  <td className="px-4 py-3">{p.manager}</td>
-                  <td className="px-4 py-3">{p.plant}</td>
-                  <td className="px-4 py-3">{p.staffCount}</td>
-                  <td className="px-4 py-3">{p.machineCount}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[p.status]}`}>
+                  <td className="px-3.5 py-3 text-[#334155]">{p.manager}</td>
+                  <td className="px-3.5 py-3 text-[#334155]">{p.plant}</td>
+                  <td className="px-3.5 py-3 font-medium font-mono text-[#0f172a]">{p.staffCount}</td>
+                  <td className="px-3.5 py-3 font-medium font-mono text-[#0f172a]">{p.machineCount}</td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[p.status]}`}>
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-3 text-[#334155] font-mono whitespace-nowrap">
                     {new Date(p.startDate + "T00:00:00").toLocaleDateString("vi-VN")}
                   </td>
                   <td className="relative px-2 py-3">
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === p.id ? null : p.id)}
-                      className="rounded-full p-1.5 text-[#64748b] hover:bg-[#e2e8f0]"
+                      className="rounded-lg p-1.5 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors duration-150 cursor-pointer"
                       aria-label="Tùy chọn"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -512,10 +517,10 @@ export default function ProjectManagement() {
                       </svg>
                     </button>
                     {menuOpen === p.id && (
-                      <div className="absolute right-2 top-10 z-20 w-36 rounded-lg border border-[#e2e8f0] bg-white py-1 shadow-lg">
+                      <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-[#e2e8f0] bg-white py-1.5 shadow-[0_10px_25px_rgba(7,22,51,0.12)] animate-in fade-in-50 zoom-in-95 duration-100">
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
                             setModal({ project: p, mode: "view" });
                             setMenuOpen(null);
@@ -525,7 +530,7 @@ export default function ProjectManagement() {
                         </button>
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#334155] hover:bg-[#f8fafc]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
                             setModal({ project: p, mode: "edit" });
                             setMenuOpen(null);
@@ -535,7 +540,7 @@ export default function ProjectManagement() {
                         </button>
                         <button
                           type="button"
-                          className="block w-full px-3 py-2 text-left text-[12px] text-[#dc2626] hover:bg-[#fef2f2]"
+                          className="block w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-[#dc2626] hover:bg-[#fef2f2] cursor-pointer transition-colors"
                           onClick={() => handleDelete(p)}
                         >
                           Xóa
@@ -547,8 +552,8 @@ export default function ProjectManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-[#64748b]">
-                    Không tìm thấy dự án phù hợp.
+                  <td colSpan={8} className="px-4 py-12 text-center text-[#64748b]">
+                    <div className="text-[14px] font-medium">Không tìm thấy dự án phù hợp</div>
                   </td>
                 </tr>
               )}

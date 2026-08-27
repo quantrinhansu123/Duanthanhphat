@@ -12,15 +12,15 @@ const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
 const typeColor: Record<MaintenanceEvent["type"], string> = {
   "Bảo dưỡng": "bg-[#0047AB]",
-  "Sửa chữa": "bg-[#ef4444]",
-  "Kiểm định": "bg-[#0d9488]",
-  "Thay phụ tùng": "bg-[#c9a227]",
+  "Sửa chữa": "bg-[#dc2626]",
+  "Kiểm định": "bg-[#16a34a]",
+  "Thay phụ tùng": "bg-[#d97706]",
 };
 
 const statusStyle: Record<MaintenanceEvent["status"], string> = {
-  "Đã xong": "bg-[#e7f7ed] text-[#15803d]",
-  "Đang làm": "bg-[#eef4ff] text-[#0047AB]",
-  "Chờ xác nhận": "bg-[#fef3c7] text-[#b45309]",
+  "Đã xong": "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+  "Đang làm": "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+  "Chờ xác nhận": "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
 };
 
 function pad(n: number) {
@@ -162,24 +162,24 @@ export default function MaintenanceCalendar() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-6 pb-8">
+    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={prevMonth}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9e2f1] bg-white text-[#475569] hover:bg-[#f8fafc]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9e2f1] bg-white text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] transition-all duration-150 cursor-pointer shadow-2xs"
             aria-label="Tháng trước"
           >
             ‹
           </button>
-          <div className="min-w-[160px] text-center text-[15px] font-bold capitalize text-[#0f172a]">
+          <div className="min-w-[140px] sm:min-w-[160px] text-center text-[14px] sm:text-[15px] font-bold capitalize text-[#0f172a]">
             {monthLabel}
           </div>
           <button
             type="button"
             onClick={nextMonth}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9e2f1] bg-white text-[#475569] hover:bg-[#f8fafc]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9e2f1] bg-white text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] transition-all duration-150 cursor-pointer shadow-2xs"
             aria-label="Tháng sau"
           >
             ›
@@ -191,11 +191,11 @@ export default function MaintenanceCalendar() {
             setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
             setSelected(toKey(today.getFullYear(), today.getMonth(), today.getDate()));
           }}
-          className="h-9 rounded-lg border border-[#d9e2f1] bg-white px-3 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
+          className="h-9 rounded-lg border border-[#d9e2f1] bg-white px-3.5 text-[12.5px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] active:bg-[#f1f5f9] transition-all duration-150 cursor-pointer shadow-2xs"
         >
           Hôm nay
         </button>
-        <div className="flex flex-wrap gap-3 text-[12px] text-[#64748b]">
+        <div className="hidden md:flex flex-wrap gap-3 text-[12px] text-[#64748b]">
           {(Object.keys(typeColor) as MaintenanceEvent["type"][]).map((t) => (
             <span key={t} className="inline-flex items-center gap-1.5">
               <span className={`h-2.5 w-2.5 rounded-full ${typeColor[t]}`} />
@@ -203,30 +203,23 @@ export default function MaintenanceCalendar() {
             </span>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2 text-[12px]">
-          {(Object.keys(statusStyle) as MaintenanceEvent["status"][]).map((s) => (
-            <span key={s} className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${statusStyle[s]}`}>
-              {s}
-            </span>
-          ))}
-        </div>
-        <span className="ml-auto text-[13px] text-[#64748b]">
-          <strong className="text-[#0f172a]">{monthEvents.length}</strong> lịch trong tháng
+        <span className="ml-auto text-[12.5px] text-[#64748b]">
+          <strong className="font-semibold text-[#0f172a]">{monthEvents.length}</strong> lịch trong tháng
         </span>
         <button
           type="button"
           onClick={() => setOpenAdd(true)}
-          className="inline-flex h-10 items-center gap-1 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white hover:bg-[#003987]"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-[#00388a] active:bg-[#002d6e] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/25 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm mới
         </button>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <div className="grid grid-cols-7 border-b border-[#e8eef8] bg-[#f7f9fc]">
+        <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-xs">
+          <div className="grid grid-cols-7 border-b border-[#e2e8f0] bg-[#f8fafc]">
             {weekdays.map((d) => (
-              <div key={d} className="px-2 py-2.5 text-center text-[12px] font-semibold text-[#64748b]">
+              <div key={d} className="px-2 py-2.5 text-center text-[11.5px] font-bold uppercase tracking-wider text-[#64748b]">
                 {d}
               </div>
             ))}
@@ -241,14 +234,14 @@ export default function MaintenanceCalendar() {
                   key={cell.key + String(cell.inMonth)}
                   type="button"
                   onClick={() => setSelected(cell.key)}
-                  className={`min-h-[96px] border-b border-r border-[#f1f5f9] p-1.5 text-left transition hover:bg-[#f8fafc] ${
-                    isSelected ? "bg-[#eef4ff]" : ""
-                  } ${!cell.inMonth ? "bg-[#fafbfc]" : ""}`}
+                  className={`min-h-[85px] sm:min-h-[96px] border-b border-r border-[#f1f5f9] p-1.5 text-left transition-colors duration-150 cursor-pointer hover:bg-[#f8fafc] ${
+                    isSelected ? "bg-[#eff6ff]/80 ring-1 ring-inset ring-[#0047AB]/30" : ""
+                  } ${!cell.inMonth ? "bg-[#f8fafc]/60" : ""}`}
                 >
                   <div
-                    className={`mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-semibold ${
+                    className={`mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-bold ${
                       isToday
-                        ? "bg-[#0047AB] text-white"
+                        ? "bg-[#0047AB] text-white shadow-xs"
                         : cell.inMonth
                           ? "text-[#0f172a]"
                           : "text-[#cbd5e1]"
@@ -260,14 +253,14 @@ export default function MaintenanceCalendar() {
                     {cell.events.slice(0, 2).map((e) => (
                       <div
                         key={e.id}
-                        className={`truncate rounded px-1 py-0.5 text-[10px] font-medium text-white ${typeColor[e.type]}`}
+                        className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium font-mono text-white shadow-2xs ${typeColor[e.type]}`}
                         title={`${e.time} · ${e.title} · ${e.assignees.map((a) => a.name).join(", ")}`}
                       >
                         {e.time} {e.machine}
                       </div>
                     ))}
                     {cell.events.length > 2 && (
-                      <div className="px-1 text-[10px] font-medium text-[#64748b]">
+                      <div className="px-1 text-[10px] font-semibold text-[#0047AB]">
                         +{cell.events.length - 2} nữa
                       </div>
                     )}
@@ -278,7 +271,7 @@ export default function MaintenanceCalendar() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#d9e2f1] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="rounded-xl border border-[#d9e2f1] bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-[14px] font-bold capitalize text-[#0f172a]">
             {new Date(selected + "T00:00:00").toLocaleDateString("vi-VN", {
               weekday: "long",
@@ -288,7 +281,7 @@ export default function MaintenanceCalendar() {
             })}
           </div>
           <div className="mt-1 text-[12px] text-[#64748b]">
-            {dayEvents.length} công việc · sắp xếp theo giờ
+            <strong className="font-semibold text-[#0f172a]">{dayEvents.length}</strong> công việc · sắp xếp theo giờ
           </div>
 
           <div className="mt-4">
@@ -298,41 +291,41 @@ export default function MaintenanceCalendar() {
                   <span className="absolute bottom-0 left-[15px] top-8 w-px bg-[#e2e8f0]" />
                 )}
                 <div className="relative z-[1] flex w-[52px] flex-none flex-col items-center pt-0.5">
-                  <div className="text-[13px] font-bold tabular-nums text-[#0047AB]">{e.time}</div>
-                  <div className="mt-0.5 text-[10px] tabular-nums text-[#94a3b8]">
+                  <div className="text-[13px] font-bold font-mono tabular-nums text-[#0047AB]">{e.time}</div>
+                  <div className="mt-0.5 text-[10px] font-mono tabular-nums text-[#94a3b8]">
                     {endTime(e.time, e.durationMin)}
                   </div>
                 </div>
                 <div className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${typeColor[e.type]}`} />
-                <div className="min-w-0 flex-1 rounded-lg border border-[#e8eef8] p-3">
+                <div className="min-w-0 flex-1 rounded-xl border border-[#e8eef8] p-3.5 bg-white shadow-2xs">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-[#0f172a]">{e.title}</div>
+                      <div className="text-[13px] font-bold text-[#0f172a]">{e.title}</div>
                       <div className="mt-0.5 text-[12px] text-[#64748b]">
-                        {e.machine} · {e.type} · {e.durationMin} phút
+                        <span className="font-mono font-medium text-[#334155]">{e.machine}</span> · {e.type} · <span className="font-mono">{e.durationMin}</span> phút
                       </div>
                     </div>
                     <span
-                      className={`flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusStyle[e.status]}`}
+                      className={`flex-none inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${statusStyle[e.status]}`}
                     >
                       {e.status}
                     </span>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f1f5f9] pt-2.5">
                     <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-[#64748b]">Người được giao</div>
-                      <div className="mt-0.5 truncate text-[12px] text-[#334155]">
+                      <div className="text-[11px] font-semibold text-[#64748b]">Người được giao</div>
+                      <div className="mt-0.5 truncate text-[12px] font-medium text-[#334155]">
                         {e.assignees.map((a) => a.name).join(", ")}
                       </div>
                     </div>
-                    <AssigneeAvatars assignees={e.assignees} size={32} />
+                    <AssigneeAvatars assignees={e.assignees} size={30} />
                   </div>
                 </div>
               </div>
             ))}
             {dayEvents.length === 0 && (
-              <div className="rounded-lg border border-dashed border-[#d9e2f1] px-3 py-8 text-center text-[13px] text-[#64748b]">
+              <div className="rounded-xl border border-dashed border-[#d9e2f1] px-3 py-10 text-center text-[13px] text-[#64748b]">
                 Không có lịch bảo trì trong ngày này.
               </div>
             )}
@@ -348,7 +341,10 @@ export default function MaintenanceCalendar() {
       />
 
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-[#071633] px-4 py-3 text-[13px] font-medium text-white shadow-lg">
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-[#071633] px-4 py-3 text-[13px] font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
           {toast}
         </div>
       )}
