@@ -65,19 +65,19 @@ const CHART_PERIOD_START = "2024-05-01";
 const CHART_PERIOD_END = "2024-05-30";
 
 const PLANT_ROWS = [
-  { name: "Cổ Loa – Xưởng A", share: 0.347, color: "#1a63e0", plants: ["Nhà máy Hà Nội"] },
-  { name: "Cổ Loa – Xưởng B", share: 0.239, color: "#4f9df7", plants: ["Nhà máy Hà Nội"] },
-  { name: "Hạ Long Xanh – Xưởng C", share: 0.269, color: "#14b8a6", plants: ["Nhà máy Đà Nẵng"] },
-  { name: "Hạ Long Xanh – Xưởng D", share: 0.109, color: "#a855f7", plants: ["Nhà máy Đà Nẵng"] },
-  { name: "Khác", share: 0.037, color: "#f0b323", plants: ["Nhà máy TP.HCM"] },
+  { name: "Cổ Loa – Xưởng A", share: 0.347, color: "#0047AB", plants: ["Nhà máy Hà Nội"] },
+  { name: "Cổ Loa – Xưởng B", share: 0.239, color: "#38bdf8", plants: ["Nhà máy Hà Nội"] },
+  { name: "Hạ Long Xanh – Xưởng C", share: 0.269, color: "#10b981", plants: ["Nhà máy Đà Nẵng"] },
+  { name: "Hạ Long Xanh – Xưởng D", share: 0.109, color: "#8b5cf6", plants: ["Nhà máy Đà Nẵng"] },
+  { name: "Khác", share: 0.037, color: "#f59e0b", plants: ["Nhà máy TP.HCM"] },
 ];
 
 const PERSONNEL_ROWS = [
-  { name: "Trần Thị Mai Anh", initials: "MA", bg: "#e8f1fe", fg: "#1257b8", meta: "K922-1 · Cổ Loa", welds: 62, timeAgo: "2 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
-  { name: "Nguyễn Văn Minh", initials: "VM", bg: "#e7f7ed", fg: "#15803d", meta: "K922-2 · Hạ Long Xanh", welds: 51, timeAgo: "3 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
-  { name: "Trần Văn C", initials: "VC", bg: "#fdeaea", fg: "#c62828", meta: "K922-2 · Hạ Long Xanh", welds: 28, timeAgo: "5 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
-  { name: "Phạm Văn B", initials: "VB", bg: "#f3e8ff", fg: "#7e22ce", meta: "K922-1 · Cổ Loa", welds: 44, timeAgo: "6 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
-  { name: "Lê Thị Kim Anh", initials: "KA", bg: "#fff4dd", fg: "#b26a00", meta: "K920 · Cổ Loa · Kiểm tra UT", welds: 13, timeAgo: "8 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["Khu vực depot Hà Nội"] },
+  { name: "Trần Thị Mai Anh", initials: "MA", bg: "#eff6ff", fg: "#0047AB", meta: "K922-1 · Cổ Loa", welds: 62, timeAgo: "2 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
+  { name: "Nguyễn Văn Minh", initials: "VM", bg: "#f0fdf4", fg: "#15803d", meta: "K922-2 · Hạ Long Xanh", welds: 51, timeAgo: "3 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
+  { name: "Trần Văn C", initials: "VC", bg: "#fef2f2", fg: "#b91c1c", meta: "K922-2 · Hạ Long Xanh", welds: 28, timeAgo: "5 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
+  { name: "Phạm Văn B", initials: "VB", bg: "#f5f3ff", fg: "#6d28d9", meta: "K922-1 · Cổ Loa", welds: 44, timeAgo: "6 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
+  { name: "Lê Thị Kim Anh", initials: "KA", bg: "#fffbeb", fg: "#b45309", meta: "K920 · Cổ Loa · Kiểm tra UT", welds: 13, timeAgo: "8 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["Khu vực depot Hà Nội"] },
 ];
 
 const MACHINE_ROWS = [
@@ -198,46 +198,33 @@ function sampleChartLabels(labels: string[], maxCount: number) {
 }
 
 function sumWeight(map: Record<string, number>, keys: string[]) {
-  if (!keys.length) return 1;
-  return keys.reduce((s, k) => s + (map[k] || 0.15), 0);
-}
-
-function matchPlant(rowPlants: string[], selected: string[]) {
-  return !selected.length || rowPlants.some((p) => selected.includes(p));
-}
-
-function matchProject(rowProjects: string[], selected: string[]) {
-  return !selected.length || rowProjects.some((p) => selected.includes(p));
-}
-
-function filterPickLabel(count: number, allText: string) {
-  return count ? `${count} đã chọn` : allText;
+  return keys.reduce((acc, k) => acc + (map[k] ?? 0), 0);
 }
 
 export default function OverviewDashboard() {
-  const [dateFrom, setDateFrom] = useState("2024-05-01");
-  const [dateTo, setDateTo] = useState("2024-05-31");
+  const [dateFrom, setDateFrom] = useState(CHART_PERIOD_START);
+  const [dateTo, setDateTo] = useState(CHART_PERIOD_END);
   const [projects, setProjects] = useState<string[]>([]);
   const [personnel, setPersonnel] = useState<string[]>([]);
   const [plants, setPlants] = useState<string[]>([]);
 
-  const [projectFilterOpen, setProjectFilterOpen] = useState(false);
-  const [personnelFilterOpen, setPersonnelFilterOpen] = useState(false);
-  const [plantFilterOpen, setPlantFilterOpen] = useState(false);
-
-  const [applied, setApplied] = useState({
-    dateFrom: "2024-05-01",
-    dateTo: "2024-05-31",
+  const [appliedFilters, setAppliedFilters] = useState({
+    dateFrom: CHART_PERIOD_START,
+    dateTo: CHART_PERIOD_END,
     projects: [] as string[],
     personnel: [] as string[],
     plants: [] as string[],
   });
 
-  const filterRef = useRef<HTMLDivElement>(null);
+  const [projectFilterOpen, setProjectFilterOpen] = useState(false);
+  const [personnelFilterOpen, setPersonnelFilterOpen] = useState(false);
+  const [plantFilterOpen, setPlantFilterOpen] = useState(false);
+
+  const filterBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+      if (filterBarRef.current && !filterBarRef.current.contains(e.target as Node)) {
         setProjectFilterOpen(false);
         setPersonnelFilterOpen(false);
         setPlantFilterOpen(false);
@@ -247,212 +234,29 @@ export default function OverviewDashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function toggleList(
-    key: "projects" | "personnel" | "plants",
-    value: string
-  ) {
-    if (key === "projects") {
+  function toggleList(type: "projects" | "personnel" | "plants", item: string) {
+    if (type === "projects") {
       setProjects((prev) =>
-        prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]
+        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
       );
-    } else if (key === "personnel") {
+    } else if (type === "personnel") {
       setPersonnel((prev) =>
-        prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]
+        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
       );
-    } else if (key === "plants") {
+    } else {
       setPlants((prev) =>
-        prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]
+        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
       );
     }
   }
 
-  const factor = useMemo(() => {
-    const d1 = new Date(applied.dateFrom + "T00:00:00");
-    const d2 = new Date(applied.dateTo + "T00:00:00");
-    const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
-    const dateFactor = Math.min(1.2, Math.max(0.25, days / 31));
-    const projectFactor = sumWeight(PROJECT_W, applied.projects);
-    const plantFactor = sumWeight(PLANT_W, applied.plants);
-    const personFactor = sumWeight(PERSON_W, applied.personnel);
-    return dateFactor * projectFactor * plantFactor * personFactor;
-  }, [applied]);
-
-  const total = Math.round(BASE.total * factor);
-  const today = Math.max(1, Math.round(BASE.today * Math.min(1.15, factor * 1.05)));
-  const month = Math.round(BASE.month * factor);
-  const failed = Math.max(1, Math.round(BASE.failed * factor));
-  const passed = Math.max(0, total - failed - Math.round(BASE.pending * factor));
-  const pending = Math.max(0, total - passed - failed);
-  const progressPctNum = Math.min(99.9, (total / BASE.target) * 100);
-  const progressPct = progressPctNum.toLocaleString("vi-VN", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-
-  const chart = useMemo(() => {
-    let from = clampChartDate(applied.dateFrom);
-    let to = clampChartDate(applied.dateTo);
-    if (new Date(to) < new Date(from)) {
-      const tmp = from;
-      from = to;
-      to = tmp;
-    }
-    let startIdx = chartDayIndex(from);
-    let endIdx = chartDayIndex(to);
-    if (startIdx > endIdx) {
-      startIdx = 0;
-      endIdx = CHART_BASE.length - 1;
-    }
-    const indices: number[] = [];
-    for (let i = startIdx; i <= endIdx; i++) indices.push(i);
-    const raw = indices.map((i) => CHART_BASE[i] ?? 140);
-    const data = raw.map((v) => Math.max(40, Math.round(v * factor)));
-    const allLabels = indices.map((i) => viDateShortFromIndex(i));
-    const W = 500,
-      H = 190,
-      max = 250;
-    const step = data.length > 1 ? W / data.length : W;
-    const px = (i: number) => step * i + step / 2;
-    const py = (v: number) => H - (v / max) * H;
-    const bars = data.map((v, i) => ({
-      x: +(px(i) - 2.5).toFixed(1),
-      y: +py(v).toFixed(1),
-      h: +(H - py(v)).toFixed(1),
-    }));
-    const dots = data.map((v, i) => ({
-      cx: +px(i).toFixed(1),
-      cy: +py(v).toFixed(1),
-    }));
-    const linePath = data.length
-      ? "M" + dots.map((p) => p.cx + "," + p.cy).join("L")
-      : "";
-    const avg = data.map((v, i) => {
-      const s = data.slice(Math.max(0, i - 6), i + 1);
-      return s.reduce((a, b) => a + b, 0) / s.length;
-    });
-    const top = avg
-      .map((v, i) => px(i).toFixed(1) + "," + py(v * 1.13).toFixed(1))
-      .join("L");
-    const areaPath = data.length
-      ? "M" +
-        top +
-        "L" +
-        px(data.length - 1).toFixed(1) +
-        "," +
-        H +
-        "L" +
-        px(0).toFixed(1) +
-        "," +
-        H +
-        "Z"
-      : "";
-    const dayCount = indices.length;
-    const chartRangeLabel = `${dayCount} ngày · ${viDate(applied.dateFrom)} – ${viDate(
-      applied.dateTo
-    )}`;
-    return {
-      bars,
-      dots,
-      linePath,
-      areaPath,
-      chartLabels: sampleChartLabels(allLabels, 7),
-      chartRangeLabel,
-      dayCount,
-    };
-  }, [factor, applied.dateFrom, applied.dateTo]);
-
-  const filterCount =
-    applied.projects.length + applied.personnel.length + applied.plants.length;
-  const hasFilter =
-    filterCount > 0 ||
-    applied.dateFrom !== "2024-05-01" ||
-    applied.dateTo !== "2024-05-31";
-
-  const plantRows = useMemo(() => {
-    let list = PLANT_ROWS.filter((r) => matchPlant(r.plants, applied.plants)).map(
-      (r) => {
-        const val = Math.round(BASE.total * r.share * factor);
-        return {
-          name: r.name,
-          color: r.color,
-          value: fmt(val),
-          pct: pctComma(val, total),
-        };
-      }
-    );
-    if (!list.length) {
-      list = PLANT_ROWS.map((r) => {
-        const val = Math.round(BASE.total * r.share * factor);
-        return {
-          name: r.name,
-          color: r.color,
-          value: fmt(val),
-          pct: pctComma(val, total),
-        };
-      });
-    }
-    return list;
-  }, [applied.plants, factor, total]);
-
-  const personnelRows = useMemo(() => {
-    let list = PERSONNEL_ROWS.filter((p) => {
-      const okPlant = matchPlant(p.plants, applied.plants);
-      const okProject = matchProject(p.projects, applied.projects);
-      const okPerson =
-        !applied.personnel.length || applied.personnel.includes(p.name);
-      return okPlant && okProject && okPerson;
-    }).map((p) => ({
-      ...p,
-      welds: Math.max(1, Math.round(p.welds * factor)),
-    }));
-    if (!list.length) {
-      list = PERSONNEL_ROWS.map((p) => ({
-        ...p,
-        welds: Math.max(1, Math.round(p.welds * factor)),
-      }));
-    }
-    return list;
-  }, [applied.plants, applied.projects, applied.personnel, factor]);
-
-  const machineRows = useMemo(() => {
-    let list = MACHINE_ROWS.filter((m) =>
-      matchPlant(m.plants, applied.plants)
-    ).map((m) => ({
-      code: m.code,
-      total: fmt(BASE.total * m.totalShare * factor),
-      today: String(Math.max(1, Math.round(BASE.today * m.todayShare * factor))),
-      errorRate: m.errorRate,
-      availPct: m.avail,
-      availColor: m.avail >= 94 ? "#22a94f" : "#f0b323",
-      availLabel: m.avail + "%",
-    }));
-    if (!list.length) {
-      list = MACHINE_ROWS.map((m) => ({
-        code: m.code,
-        total: fmt(BASE.total * m.totalShare * factor),
-        today: String(Math.max(1, Math.round(BASE.today * m.todayShare * factor))),
-        errorRate: m.errorRate,
-        availPct: m.avail,
-        availColor: m.avail >= 94 ? "#22a94f" : "#f0b323",
-        availLabel: m.avail + "%",
-      }));
-    }
-    return list;
-  }, [applied.plants, factor]);
-
-  const statusRows = [
-    { name: "Đạt", color: "#22a94f", value: fmt(passed), pct: pctComma(passed, total) },
-    { name: "Chờ kiểm tra", color: "#f0b323", value: fmt(pending), pct: pctComma(pending, total) },
-    { name: "Không đạt", color: "#ef4444", value: fmt(failed), pct: pctComma(failed, total) },
-  ];
-
   function handleApplyFilters() {
-    setApplied({
+    setAppliedFilters({
       dateFrom,
       dateTo,
-      projects: [...projects],
-      personnel: [...personnel],
-      plants: [...plants],
+      projects,
+      personnel,
+      plants,
     });
     setProjectFilterOpen(false);
     setPersonnelFilterOpen(false);
@@ -460,14 +264,14 @@ export default function OverviewDashboard() {
   }
 
   function handleClearFilters() {
-    setDateFrom("2024-05-01");
-    setDateTo("2024-05-31");
+    setDateFrom(CHART_PERIOD_START);
+    setDateTo(CHART_PERIOD_END);
     setProjects([]);
     setPersonnel([]);
     setPlants([]);
-    setApplied({
-      dateFrom: "2024-05-01",
-      dateTo: "2024-05-31",
+    setAppliedFilters({
+      dateFrom: CHART_PERIOD_START,
+      dateTo: CHART_PERIOD_END,
       projects: [],
       personnel: [],
       plants: [],
@@ -477,28 +281,212 @@ export default function OverviewDashboard() {
     setPlantFilterOpen(false);
   }
 
+  const factor = useMemo(() => {
+    let f = 1;
+    if (appliedFilters.projects.length) {
+      f *= sumWeight(PROJECT_W, appliedFilters.projects);
+    }
+    if (appliedFilters.plants.length) {
+      f *= sumWeight(PLANT_W, appliedFilters.plants);
+    }
+    if (appliedFilters.personnel.length) {
+      f *= sumWeight(PERSON_W, appliedFilters.personnel);
+    }
+    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
+      const d1 = new Date(appliedFilters.dateFrom + "T00:00:00");
+      const d2 = new Date(appliedFilters.dateTo + "T00:00:00");
+      const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
+      f *= Math.min(1.2, Math.max(0.08, days / 30));
+    }
+    return Math.max(0.05, Math.min(2.5, f));
+  }, [appliedFilters]);
+
+  const total = Math.max(1, Math.round(BASE.total * factor));
+  const today = Math.max(0, Math.round(BASE.today * factor));
+  const month = Math.max(1, Math.round(BASE.month * factor));
+  const passed = Math.max(1, Math.round(BASE.passed * factor));
+  const failed = Math.max(0, Math.round(BASE.failed * factor));
+  const pending = Math.max(0, Math.round(BASE.pending * factor));
+
+  const progressPct = ((total / BASE.target) * 100)
+    .toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    .replace(".", ",");
+  const progressPctNum = (total / BASE.target) * 100;
+
+  const chart = useMemo(() => {
+    const fromClamped = clampChartDate(appliedFilters.dateFrom || CHART_PERIOD_START);
+    const toClamped = clampChartDate(appliedFilters.dateTo || CHART_PERIOD_END);
+    const iStart = Math.min(chartDayIndex(fromClamped), chartDayIndex(toClamped));
+    const iEnd = Math.max(chartDayIndex(fromClamped), chartDayIndex(toClamped));
+    const slice = CHART_BASE.slice(iStart, iEnd + 1);
+    const count = slice.length;
+
+    let chartRangeLabel = `${viDate(CHART_PERIOD_START)} – ${viDate(CHART_PERIOD_END)}`;
+    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
+      chartRangeLabel = `${viDate(appliedFilters.dateFrom)} – ${viDate(appliedFilters.dateTo)}`;
+    }
+
+    if (count === 0) {
+      return {
+        chartRangeLabel,
+        bars: [],
+        dots: [],
+        linePath: "",
+        areaPath: "",
+        chartLabels: [],
+      };
+    }
+
+    const maxVal = 250;
+    const plotH = 190;
+    const padX = 14;
+    const plotW = 500 - padX * 2;
+    const step = count > 1 ? plotW / (count - 1) : 0;
+
+    const bars = slice.map((val, idx) => {
+      const scaledVal = Math.round(val * factor);
+      const h = Math.min(plotH - 8, Math.max(4, (scaledVal / maxVal) * plotH));
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const x = cx - 2.5;
+      const y = plotH - h;
+      return { x, y, h, val: scaledVal };
+    });
+
+    const pts = slice.map((val, idx) => {
+      const scaledVal = Math.round(val * factor);
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const cy = Math.max(6, plotH - (scaledVal / maxVal) * plotH);
+      return { cx, cy, val: scaledVal };
+    });
+
+    let linePath = "";
+    if (pts.length === 1) {
+      linePath = `M ${pts[0].cx} ${pts[0].cy}`;
+    } else if (pts.length > 1) {
+      linePath = `M ${pts[0].cx} ${pts[0].cy} ` + pts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
+    }
+
+    const maPts = slice.map((_, idx) => {
+      const windowStart = Math.max(0, idx - 6);
+      const win = slice.slice(windowStart, idx + 1);
+      const avg = win.reduce((a, b) => a + b, 0) / win.length;
+      const scaledAvg = avg * factor;
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const cy = Math.max(6, plotH - (scaledAvg / maxVal) * plotH);
+      return { cx, cy };
+    });
+
+    let areaPath = "";
+    if (maPts.length > 1) {
+      const top = maPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.cx} ${p.cy}`).join(" ");
+      const bottom = `L ${maPts[maPts.length - 1].cx} ${plotH} L ${maPts[0].cx} ${plotH} Z`;
+      areaPath = `${top} ${bottom}`;
+    }
+
+    const fullLabels: string[] = [];
+    for (let k = 0; k < count; k++) {
+      fullLabels.push(viDateShortFromIndex(iStart + k));
+    }
+    const chartLabels = sampleChartLabels(fullLabels, 8);
+
+    return {
+      chartRangeLabel,
+      bars,
+      dots: pts,
+      linePath,
+      areaPath,
+      chartLabels,
+    };
+  }, [appliedFilters, factor]);
+
+  const plantRows = useMemo(() => {
+    let rows = PLANT_ROWS;
+    if (appliedFilters.plants.length) {
+      rows = rows.filter((r) => r.plants.some((p) => appliedFilters.plants.includes(p)));
+    }
+    return rows.map((r) => ({
+      name: r.name,
+      color: r.color,
+      value: fmt(Math.round(total * r.share)),
+      pct: pctComma(Math.round(total * r.share), total),
+    }));
+  }, [appliedFilters.plants, total]);
+
+  const machineRows = useMemo(() => {
+    let list = MACHINE_ROWS;
+    if (appliedFilters.plants.length) {
+      list = list.filter((m) => m.plants.some((p) => appliedFilters.plants.includes(p)));
+    }
+    return list.map((m) => ({
+      code: m.code,
+      total: fmt(Math.round(total * m.totalShare)),
+      today: fmt(Math.round(today * m.todayShare)),
+      errorRate: m.errorRate,
+      availLabel: `${m.avail}%`,
+      availPct: m.avail,
+      availColor: m.avail >= 90 ? "#15803d" : "#d97706",
+    }));
+  }, [appliedFilters.plants, total, today]);
+
+  const personnelRows = useMemo(() => {
+    let list = PERSONNEL_ROWS;
+    if (appliedFilters.plants.length) {
+      list = list.filter((p) => p.plants.some((pl) => appliedFilters.plants.includes(pl)));
+    }
+    if (appliedFilters.projects.length) {
+      list = list.filter((p) => p.projects.some((pr) => appliedFilters.projects.includes(pr)));
+    }
+    return list.map((p) => ({
+      name: p.name,
+      initials: p.initials,
+      bg: p.bg,
+      fg: p.fg,
+      meta: p.meta,
+      welds: Math.max(1, Math.round(p.welds * factor)),
+      timeAgo: p.timeAgo,
+    }));
+  }, [appliedFilters.plants, appliedFilters.projects, factor]);
+
+  const statusRows = [
+    { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
+    { name: "Chờ kiểm tra", color: "#d97706", value: fmt(pending), pct: pctComma(pending, total) },
+    { name: "Không đạt", color: "#dc2626", value: fmt(failed), pct: pctComma(failed, total) },
+  ];
+
+  const hasFilter =
+    appliedFilters.dateFrom !== CHART_PERIOD_START ||
+    appliedFilters.dateTo !== CHART_PERIOD_END ||
+    appliedFilters.projects.length > 0 ||
+    appliedFilters.personnel.length > 0 ||
+    appliedFilters.plants.length > 0;
+
+  const filterCount =
+    (appliedFilters.projects.length ? 1 : 0) +
+    (appliedFilters.personnel.length ? 1 : 0) +
+    (appliedFilters.plants.length ? 1 : 0) +
+    (appliedFilters.dateFrom !== CHART_PERIOD_START || appliedFilters.dateTo !== CHART_PERIOD_END ? 1 : 0);
+
+  function filterPickLabel(count: number, defaultText: string) {
+    if (count === 0) return defaultText;
+    return `Đã chọn (${count})`;
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-[#1f2937] text-[14px]">
-      {/* 1. Filter Panel */}
+      {/* 1. Filter Bar */}
       <div
-        ref={filterRef}
-        className="relative z-30 rounded-xl border border-[#e4e8ee] bg-white shadow-2xs"
+        ref={filterBarRef}
+        className="rounded-xl border border-[#e2e8f0] bg-white p-3 sm:p-4 shadow-2xs"
       >
-        <div className="flex flex-wrap items-end gap-2 p-2.5 sm:p-3">
-          {/* Brand */}
-          <div className="flex items-center gap-1.5 pb-1 whitespace-nowrap">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="#1a73e8"
-              className="shrink-0"
-            >
-              <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+        <div className="flex flex-wrap items-end gap-2.5 sm:gap-3">
+          {/* Label icon */}
+          <div className="flex items-center gap-1.5 pb-2 text-[13px] font-bold text-[#0f172a] shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
             </svg>
-            <span className="text-[13px] font-bold text-[#243447]">Bộ lọc</span>
+            <span>Bộ lọc:</span>
             {filterCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-[#1a73e8] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-[#0047AB] px-1.5 py-0.5 text-[10px] font-bold text-white">
                 {filterCount}
               </span>
             )}
@@ -506,7 +494,7 @@ export default function OverviewDashboard() {
 
           {/* Date from */}
           <div className="shrink-0">
-            <span className="mb-1 block text-[10px] font-semibold text-[#64748b]">
+            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
               Từ ngày
             </span>
             <input
@@ -517,13 +505,13 @@ export default function OverviewDashboard() {
                 setDateFrom(val);
                 if (dateTo && val > dateTo) setDateTo(val);
               }}
-              className="h-9 w-[132px] rounded-lg border border-[#d9e2f1] bg-white px-2 text-[12px] text-[#0f172a] shadow-2xs focus:border-[#1a73e8] focus:outline-hidden"
+              className="h-9 w-[132px] rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#0f172a] shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
             />
           </div>
 
           {/* Date to */}
           <div className="shrink-0">
-            <span className="mb-1 block text-[10px] font-semibold text-[#64748b]">
+            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
               Đến ngày
             </span>
             <input
@@ -534,13 +522,13 @@ export default function OverviewDashboard() {
                 setDateTo(val);
                 if (dateFrom && val < dateFrom) setDateFrom(val);
               }}
-              className="h-9 w-[132px] rounded-lg border border-[#d9e2f1] bg-white px-2 text-[12px] text-[#0f172a] shadow-2xs focus:border-[#1a73e8] focus:outline-hidden"
+              className="h-9 w-[132px] rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#0f172a] shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
             />
           </div>
 
           {/* Projects dropdown */}
           <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[10px] font-semibold text-[#64748b]">
+            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
               Theo dự án
             </span>
             <button
@@ -550,7 +538,7 @@ export default function OverviewDashboard() {
                 setPersonnelFilterOpen(false);
                 setPlantFilterOpen(false);
               }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#d9e2f1] bg-white px-2.5 text-[12px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer"
+              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
             >
               <span className="truncate">
                 {filterPickLabel(projects.length, "Tất cả")}
@@ -560,17 +548,17 @@ export default function OverviewDashboard() {
               </span>
             </button>
             {projectFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-lg border border-[#d9e2f1] bg-white p-2 shadow-2xl">
+              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
                 {PROJECTS.map((opt) => (
                   <label
                     key={opt}
-                    className="flex items-center gap-2 px-1 py-1 text-[12px] text-[#334155] hover:bg-[#f1f5f9] rounded cursor-pointer whitespace-nowrap"
+                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
                   >
                     <input
                       type="checkbox"
                       checked={projects.includes(opt)}
                       onChange={() => toggleList("projects", opt)}
-                      className="h-3.5 w-3.5 rounded accent-[#1a73e8] cursor-pointer"
+                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
                     />
                     <span>{opt}</span>
                   </label>
@@ -581,7 +569,7 @@ export default function OverviewDashboard() {
 
           {/* Personnel dropdown */}
           <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[10px] font-semibold text-[#64748b]">
+            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
               Theo nhân sự
             </span>
             <button
@@ -591,7 +579,7 @@ export default function OverviewDashboard() {
                 setProjectFilterOpen(false);
                 setPlantFilterOpen(false);
               }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#d9e2f1] bg-white px-2.5 text-[12px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer"
+              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
             >
               <span className="truncate">
                 {filterPickLabel(personnel.length, "Tất cả")}
@@ -601,17 +589,17 @@ export default function OverviewDashboard() {
               </span>
             </button>
             {personnelFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-lg border border-[#d9e2f1] bg-white p-2 shadow-2xl">
+              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
                 {PERSONNEL.map((opt) => (
                   <label
                     key={opt}
-                    className="flex items-center gap-2 px-1 py-1 text-[12px] text-[#334155] hover:bg-[#f1f5f9] rounded cursor-pointer whitespace-nowrap"
+                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
                   >
                     <input
                       type="checkbox"
                       checked={personnel.includes(opt)}
                       onChange={() => toggleList("personnel", opt)}
-                      className="h-3.5 w-3.5 rounded accent-[#1a73e8] cursor-pointer"
+                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
                     />
                     <span>{opt}</span>
                   </label>
@@ -622,7 +610,7 @@ export default function OverviewDashboard() {
 
           {/* Plants dropdown */}
           <div className="relative shrink-0 w-[148px] min-w-[132px]">
-            <span className="mb-1 block text-[10px] font-semibold text-[#64748b]">
+            <span className="mb-1 block text-[11px] font-semibold text-[#64748b]">
               Theo nhà máy
             </span>
             <button
@@ -632,7 +620,7 @@ export default function OverviewDashboard() {
                 setProjectFilterOpen(false);
                 setPersonnelFilterOpen(false);
               }}
-              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#d9e2f1] bg-white px-2.5 text-[12px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer"
+              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[12.5px] text-[#334155] shadow-2xs hover:border-[#93b4e8] hover:bg-[#f8fafc] cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15 focus:outline-hidden transition-all"
             >
               <span className="truncate">
                 {filterPickLabel(plants.length, "Tất cả")}
@@ -642,17 +630,17 @@ export default function OverviewDashboard() {
               </span>
             </button>
             {plantFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-lg border border-[#d9e2f1] bg-white p-2 shadow-2xl">
+              <div className="absolute top-[calc(100%+4px)] left-0 z-50 flex max-h-60 min-w-[220px] flex-col gap-1 overflow-y-auto rounded-xl border border-[#e2e8f0] bg-white p-2 shadow-xl animate-in fade-in-50 duration-150">
                 {PLANTS.map((opt) => (
                   <label
                     key={opt}
-                    className="flex items-center gap-2 px-1 py-1 text-[12px] text-[#334155] hover:bg-[#f1f5f9] rounded cursor-pointer whitespace-nowrap"
+                    className="flex items-center gap-2 px-2 py-1.5 text-[12.5px] text-[#334155] hover:bg-[#f1f5f9] rounded-lg cursor-pointer whitespace-nowrap"
                   >
                     <input
                       type="checkbox"
                       checked={plants.includes(opt)}
                       onChange={() => toggleList("plants", opt)}
-                      className="h-3.5 w-3.5 rounded accent-[#1a73e8] cursor-pointer"
+                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#0047AB] cursor-pointer"
                     />
                     <span>{opt}</span>
                   </label>
@@ -665,7 +653,7 @@ export default function OverviewDashboard() {
           <button
             type="button"
             onClick={handleApplyFilters}
-            className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-[#1a73e8] px-3.5 text-[12px] font-semibold text-white shadow-xs hover:bg-[#1565d8] transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 h-9 rounded-lg bg-[#0047AB] px-4 text-[12.5px] font-semibold text-white shadow-xs hover:bg-[#00388a] transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-[#0047ab]/20"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
               <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
@@ -678,7 +666,7 @@ export default function OverviewDashboard() {
             <button
               type="button"
               onClick={handleClearFilters}
-              className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-[#d9e2f1] bg-white px-3.5 text-[12px] font-semibold text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] transition-colors cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-[#e2e8f0] bg-white px-3.5 text-[12.5px] font-semibold text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] hover:border-[#cbd5e1] transition-all cursor-pointer whitespace-nowrap"
             >
               Xóa lọc
             </button>
@@ -689,115 +677,115 @@ export default function OverviewDashboard() {
       {/* 2. Top 5 KPI Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Tổng mối hàn */}
-        <div className="flex items-center gap-3 rounded-xl border border-[#e8ebf0] bg-white p-3.5 sm:p-4 shadow-xs">
+        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#3b62b5]">
+            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#0047AB] uppercase">
               TỔNG MỐI HÀN
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[29px] font-bold tracking-tight text-[#16233a] font-mono leading-none">
+              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="text-[12.5px] text-[#8b95a5]">mối</div>
+              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
             </div>
-            <div className="mt-3 text-[12.5px] text-[#8b95a5]">Toàn thời gian</div>
+            <div className="mt-2.5 text-[12px] text-[#64748b]">Toàn thời gian</div>
           </div>
-          <div className="flex h-[52px] w-[52px] sm:h-[58px] sm:w-[58px] shrink-0 items-center justify-center rounded-full bg-[#2f80ed] text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 13h4l3-8 4 14 3-6h4v-2h-3l-3 6-4-14-3 8H3v2z" />
             </svg>
           </div>
         </div>
 
         {/* Card 2: Mối hàn hôm nay */}
-        <div className="flex items-center gap-3 rounded-xl border border-[#e8ebf0] bg-white p-3.5 sm:p-4 shadow-xs">
+        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#1a9e4b]">
+            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#15803d] uppercase">
               MỐI HÀN HÔM NAY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[29px] font-bold tracking-tight text-[#16233a] font-mono leading-none">
+              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
                 {today}
               </div>
-              <div className="text-[12.5px] text-[#8b95a5]">mối</div>
+              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
             </div>
-            <div className="mt-3 text-[12.5px] text-[#1a9e4b]">
+            <div className="mt-2.5 text-[12px] text-[#15803d] font-medium">
               {factor >= 1 ? `↑ ${(8.6 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(8.6 / factor).toFixed(1).replace(".", ",")}%`}{" "}
-              <span className="text-[#8b95a5]">so với hôm qua</span>
+              <span className="text-[#8b95a5] font-normal">so với hôm qua</span>
             </div>
           </div>
-          <div className="flex h-[52px] w-[52px] sm:h-[58px] sm:w-[58px] shrink-0 items-center justify-center rounded-full bg-[#22a94f] text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9.5 14.5l-2.5-2.5 1.4-1.4 1.1 1.1 4.6-4.6 1.4 1.4z" />
             </svg>
           </div>
         </div>
 
         {/* Card 3: Tháng này */}
-        <div className="flex items-center gap-3 rounded-xl border border-[#e8ebf0] bg-white p-3.5 sm:p-4 shadow-xs">
+        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#b4249c]">
+            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#7e22ce] uppercase">
               THÁNG NÀY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[29px] font-bold tracking-tight text-[#16233a] font-mono leading-none">
+              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
                 {fmt(month)}
               </div>
-              <div className="text-[12.5px] text-[#8b95a5]">mối</div>
+              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
             </div>
-            <div className="mt-3 text-[12.5px] text-[#b4249c]">
+            <div className="mt-2.5 text-[12px] text-[#7e22ce] font-medium">
               {factor >= 1 ? `↑ ${(12.4 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(12.4 / factor).toFixed(1).replace(".", ",")}%`}{" "}
-              <span className="text-[#8b95a5]">so với tháng trước</span>
+              <span className="text-[#8b95a5] font-normal">so với tháng trước</span>
             </div>
           </div>
-          <div className="flex h-[52px] w-[52px] sm:h-[58px] sm:w-[58px] shrink-0 items-center justify-center rounded-full bg-[#a855f7] text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f5f3ff] text-[#7e22ce] border border-[#ddd6fe]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z" />
             </svg>
           </div>
         </div>
 
         {/* Card 4: Đạt */}
-        <div className="flex items-center gap-3 rounded-xl border border-[#e8ebf0] bg-white p-3.5 sm:p-4 shadow-xs">
+        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#0d9488]">
+            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#0d9488] uppercase">
               ĐẠT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[29px] font-bold tracking-tight text-[#16233a] font-mono leading-none">
+              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
                 {fmt(passed)}
               </div>
-              <div className="text-[12.5px] text-[#8b95a5]">mối</div>
+              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
             </div>
-            <div className="mt-3 text-[12.5px] text-[#8b95a5]">
-              {pctComma(passed, total)} tổng số
+            <div className="mt-2.5 text-[12px] text-[#64748b]">
+              <span className="font-semibold text-[#0d9488] font-mono">{pctComma(passed, total)}</span> tổng số
             </div>
           </div>
-          <div className="flex h-[52px] w-[52px] sm:h-[58px] sm:w-[58px] shrink-0 items-center justify-center rounded-full bg-[#14b8a6] text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#f0fdfa] text-[#0d9488] border border-[#99f6e4]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
           </div>
         </div>
 
         {/* Card 5: Không đạt */}
-        <div className="flex items-center gap-3 rounded-xl border border-[#e8ebf0] bg-white p-3.5 sm:p-4 shadow-xs">
+        <div className="flex items-center gap-3.5 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="min-w-0 flex-1">
-            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#dc2626]">
+            <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#dc2626] uppercase">
               KHÔNG ĐẠT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-[26px] sm:text-[29px] font-bold tracking-tight text-[#16233a] font-mono leading-none">
+              <div className="text-[26px] sm:text-[28px] font-bold tracking-tight text-[#0f172a] font-mono leading-none tabular-nums">
                 {failed}
               </div>
-              <div className="text-[12.5px] text-[#8b95a5]">mối</div>
+              <div className="text-[12px] font-medium text-[#94a3b8]">mối</div>
             </div>
-            <div className="mt-3 text-[12.5px] text-[#8b95a5]">
-              {pctComma(failed, total)} tổng số
+            <div className="mt-2.5 text-[12px] text-[#64748b]">
+              <span className="font-semibold text-[#dc2626] font-mono">{pctComma(failed, total)}</span> tổng số
             </div>
           </div>
-          <div className="flex h-[52px] w-[52px] sm:h-[58px] sm:w-[58px] shrink-0 items-center justify-center rounded-full bg-[#ef4444] text-white">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
             </svg>
           </div>
@@ -807,8 +795,8 @@ export default function OverviewDashboard() {
       {/* 3. Middle Charts Row (Production Progress + Daily Chart + Welds by Plant) */}
       <div className="grid grid-cols-1 lg:grid-cols-[395px_minmax(0,1fr)_290px] gap-4 items-start">
         {/* Box 1: TIẾN ĐỘ SẢN XUẤT */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
+          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
             TIẾN ĐỘ SẢN XUẤT
           </div>
           <div className="mt-3.5 flex flex-col sm:flex-row gap-3.5">
@@ -818,66 +806,66 @@ export default function OverviewDashboard() {
                   <path
                     d="M 16 104 A 84 84 0 0 1 184 104"
                     fill="none"
-                    stroke="#e6e9ee"
-                    strokeWidth="25"
+                    stroke="#e2e8f0"
+                    strokeWidth="24"
                     strokeLinecap="round"
                   />
                   <path
                     d="M 16 104 A 84 84 0 0 1 184 104"
                     fill="none"
-                    stroke="#1a63e0"
-                    strokeWidth="25"
+                    stroke="#0047AB"
+                    strokeWidth="24"
                     strokeLinecap="round"
                     strokeDasharray={gaugeDash(progressPctNum)}
                   />
                 </svg>
-                <div className="absolute top-[44px] left-0 right-0 text-[32px] sm:text-[35px] font-bold font-mono tracking-tight text-[#16233a] leading-none">
+                <div className="absolute top-[44px] left-0 right-0 text-[32px] sm:text-[34px] font-bold font-mono tracking-tight text-[#0f172a] leading-none">
                   {progressPct}%
                 </div>
-                <div className="absolute top-[78px] left-0 right-0 text-[11.5px] text-[#8b95a5]">
+                <div className="absolute top-[78px] left-0 right-0 text-[11.5px] text-[#64748b]">
                   Tiến độ mục tiêu
                 </div>
               </div>
-              <div className="mt-2 text-[19px] sm:text-[21px] font-bold font-mono text-[#16233a] tracking-tight">
+              <div className="mt-2 text-[19px] sm:text-[20px] font-bold font-mono text-[#0f172a] tracking-tight">
                 {fmt(total)} / {fmt(BASE.target)}
               </div>
-              <div className="mt-1 text-[12.5px] text-[#8b95a5]">
+              <div className="mt-1 text-[12px] text-[#64748b]">
                 Mục tiêu: 22.500 mối
               </div>
             </div>
 
             <div className="flex-1 flex flex-col gap-2.5 pt-1">
               <div>
-                <div className="text-[12px] text-[#8b95a5]">Còn lại</div>
+                <div className="text-[11.5px] text-[#64748b]">Còn lại</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#16233a]">
+                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#0f172a]">
                     {fmt(Math.max(0, BASE.target - total))}
                   </span>
-                  <span className="text-[11.5px] text-[#8b95a5]">mối</span>
+                  <span className="text-[11.5px] text-[#94a3b8]">mối</span>
                 </div>
               </div>
               <div>
-                <div className="text-[12px] text-[#8b95a5]">Định mức yêu cầu/ngày</div>
+                <div className="text-[11.5px] text-[#64748b]">Định mức yêu cầu/ngày</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#16233a]">
+                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#0f172a]">
                     {BASE.quota}
                   </span>
-                  <span className="text-[11.5px] text-[#8b95a5]">mối/ngày</span>
+                  <span className="text-[11.5px] text-[#94a3b8]">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="text-[12px] text-[#8b95a5]">Thực hiện/ngày</div>
+                <div className="text-[11.5px] text-[#64748b]">Thực hiện/ngày</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#1a9e4b]">
+                  <span className="text-[17px] sm:text-[18px] font-bold font-mono text-[#15803d]">
                     {today}
                   </span>
-                  <span className="text-[11.5px] text-[#8b95a5]">mối/ngày</span>
+                  <span className="text-[11.5px] text-[#94a3b8]">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="mb-1 text-[12px] text-[#8b95a5]">Trạng thái</div>
-                <div className="inline-flex items-center gap-1.5 rounded-xl bg-[#e7f7ed] px-2.5 py-1 text-[11.5px] font-bold tracking-wide text-[#15803d]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#22a94f]" />
+                <div className="mb-1 text-[11.5px] text-[#64748b]">Trạng thái</div>
+                <div className="inline-flex items-center gap-1.5 rounded-lg bg-[#f0fdf4] border border-[#bbf7d0] px-2.5 py-1 text-[11px] font-bold tracking-wide text-[#15803d]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
                   ĐÚNG TIẾN ĐỘ
                 </div>
               </div>
@@ -886,22 +874,22 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 sm:p-5 shadow-xs min-w-0">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+            <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
               SẢN LƯỢNG HÀN THEO NGÀY
             </div>
-            <div className="flex items-center gap-4 rounded-lg border border-[#e4e8ee] px-2.5 py-1 text-[12.5px] text-[#3d4a5c]">
-              <span>{chart.chartRangeLabel}</span>
-              <span className="text-[#8b95a5]">▾</span>
+            <div className="flex items-center gap-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1 text-[12px] text-[#334155]">
+              <span className="font-medium">{chart.chartRangeLabel}</span>
+              <span className="text-[#94a3b8]">▾</span>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[12px] text-[#4b5563]">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[12px] text-[#475569]">
             <div className="flex items-center gap-1.5">
               <svg width="22" height="8">
-                <line x1="0" y1="4" x2="22" y2="4" stroke="#1e5fc0" strokeWidth="1.6" />
-                <circle cx="11" cy="4" r="3.2" fill="#1e5fc0" />
+                <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="1.8" />
+                <circle cx="11" cy="4" r="3" fill="#0047AB" />
               </svg>
               <span>Thực tế</span>
             </div>
@@ -912,7 +900,7 @@ export default function OverviewDashboard() {
                   y1="4"
                   x2="22"
                   y2="4"
-                  stroke="#8896a8"
+                  stroke="#94a3b8"
                   strokeWidth="1.6"
                   strokeDasharray="5 4"
                 />
@@ -920,14 +908,14 @@ export default function OverviewDashboard() {
               <span>Mục tiêu</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-4 rounded-xs bg-[#d3e4fb]" />
+              <span className="h-2.5 w-4 rounded-xs bg-[#bfdbfe]" />
               <span>Bình quân 7 ngày</span>
             </div>
           </div>
 
           <div className="mt-2 flex">
             {/* Y-axis labels */}
-            <div className="relative h-[190px] w-[30px] shrink-0 text-right text-[11.5px] text-[#8b95a5] pr-1.5 font-mono">
+            <div className="relative h-[190px] w-[30px] shrink-0 text-right text-[11px] text-[#94a3b8] pr-1.5 font-mono">
               <div className="absolute right-1.5 -top-1.5">250</div>
               <div className="absolute right-1.5 top-[31px]">200</div>
               <div className="absolute right-1.5 top-[69px]">150</div>
@@ -943,14 +931,14 @@ export default function OverviewDashboard() {
                 preserveAspectRatio="none"
                 className="h-[190px] w-full block"
               >
-                <line x1="0" y1="0.5" x2="500" y2="0.5" stroke="#eef1f5" strokeWidth="1" />
-                <line x1="0" y1="38" x2="500" y2="38" stroke="#eef1f5" strokeWidth="1" />
-                <line x1="0" y1="76" x2="500" y2="76" stroke="#eef1f5" strokeWidth="1" />
-                <line x1="0" y1="114" x2="500" y2="114" stroke="#eef1f5" strokeWidth="1" />
-                <line x1="0" y1="152" x2="500" y2="152" stroke="#eef1f5" strokeWidth="1" />
-                <line x1="0" y1="189.5" x2="500" y2="189.5" stroke="#cfd6df" strokeWidth="1" />
+                <line x1="0" y1="0.5" x2="500" y2="0.5" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="38" x2="500" y2="38" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="76" x2="500" y2="76" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="114" x2="500" y2="114" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="152" x2="500" y2="152" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="189.5" x2="500" y2="189.5" stroke="#cbd5e1" strokeWidth="1" />
                 {chart.areaPath && (
-                  <path d={chart.areaPath} fill="#d9e7fb" opacity="0.95" />
+                  <path d={chart.areaPath} fill="#eff6ff" opacity="0.95" />
                 )}
                 {chart.bars.map((b, i) => (
                   <rect
@@ -959,8 +947,9 @@ export default function OverviewDashboard() {
                     y={b.y}
                     width="5"
                     height={b.h}
-                    fill="#5b95ef"
+                    fill="#3b82f6"
                     rx="1"
+                    className="hover:fill-[#1d4ed8] transition-colors"
                   />
                 ))}
                 <line
@@ -968,18 +957,18 @@ export default function OverviewDashboard() {
                   y1="60.8"
                   x2="500"
                   y2="60.8"
-                  stroke="#8896a8"
+                  stroke="#94a3b8"
                   strokeWidth="1.3"
                   strokeDasharray="7 5"
                 />
                 {chart.linePath && (
-                  <path d={chart.linePath} fill="none" stroke="#1e5fc0" strokeWidth="1.6" />
+                  <path d={chart.linePath} fill="none" stroke="#0047AB" strokeWidth="1.8" />
                 )}
                 {chart.dots.map((p, i) => (
-                  <circle key={i} cx={p.cx} cy={p.cy} r="2.7" fill="#1e5fc0" />
+                  <circle key={i} cx={p.cx} cy={p.cy} r="2.8" fill="#0047AB" />
                 ))}
               </svg>
-              <div className="flex justify-between px-1 pt-2 text-[11.5px] font-mono text-[#8b95a5]">
+              <div className="flex justify-between px-1 pt-2 text-[11px] font-mono text-[#94a3b8]">
                 {chart.chartLabels.map((lbl, i) => (
                   <span key={i}>{lbl.text}</span>
                 ))}
@@ -989,21 +978,21 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 3: MỐI HÀN THEO NHÀ MÁY */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
+          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
             MỐI HÀN THEO NHÀ MÁY
           </div>
           <div className="mt-3.5 flex justify-center">
             <div className="relative h-[126px] w-[126px]">
               <svg viewBox="0 0 140 140" className="h-[126px] w-[126px] block">
-                <circle cx="70" cy="70" r="52" fill="none" stroke="#eef1f5" strokeWidth="21" />
+                <circle cx="70" cy="70" r="52" fill="none" stroke="#f1f5f9" strokeWidth="20" />
                 <circle
                   cx="70"
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#1a63e0"
-                  strokeWidth="21"
+                  stroke="#0047AB"
+                  strokeWidth="20"
                   strokeDasharray="113.4 213.3"
                   transform="rotate(-90 70 70)"
                 />
@@ -1012,8 +1001,8 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#4f9df7"
-                  strokeWidth="21"
+                  stroke="#38bdf8"
+                  strokeWidth="20"
                   strokeDasharray="78.1 248.6"
                   transform="rotate(34.9 70 70)"
                 />
@@ -1022,8 +1011,8 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#14b8a6"
-                  strokeWidth="21"
+                  stroke="#10b981"
+                  strokeWidth="20"
                   strokeDasharray="87.9 238.8"
                   transform="rotate(120.9 70 70)"
                 />
@@ -1032,8 +1021,8 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#a855f7"
-                  strokeWidth="21"
+                  stroke="#8b5cf6"
+                  strokeWidth="20"
                   strokeDasharray="35.6 291.1"
                   transform="rotate(217.8 70 70)"
                 />
@@ -1042,35 +1031,35 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#f0b323"
-                  strokeWidth="21"
+                  stroke="#f59e0b"
+                  strokeWidth="20"
                   strokeDasharray="12.1 314.6"
                   transform="rotate(257.0 70 70)"
                 />
               </svg>
-              <div className="absolute top-[46px] left-0 right-0 text-center text-[18px] font-bold font-mono text-[#16233a] leading-none">
+              <div className="absolute top-[46px] left-0 right-0 text-center text-[18px] font-bold font-mono text-[#0f172a] leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="absolute top-[66px] left-0 right-0 text-center text-[11px] text-[#8b95a5]">
+              <div className="absolute top-[66px] left-0 right-0 text-center text-[11px] text-[#64748b]">
                 Tổng
               </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2.5">
+          <div className="mt-4 flex flex-col gap-2">
             {plantRows.map((row) => (
               <div key={row.name} className="flex items-center gap-2 text-[12.5px]">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                 />
-                <span className="flex-1 min-w-0 truncate text-[#3d4a5c]">
+                <span className="flex-1 min-w-0 truncate text-[#334155]">
                   {row.name}
                 </span>
-                <span className="font-semibold font-mono text-[#16233a]">
+                <span className="font-semibold font-mono text-[#0f172a] tabular-nums">
                   {row.value}
                 </span>
-                <span className="text-[11.5px] font-mono text-[#8b95a5]">
+                <span className="text-[11.5px] font-mono text-[#94a3b8]">
                   ({row.pct})
                 </span>
               </div>
@@ -1082,29 +1071,29 @@ export default function OverviewDashboard() {
       {/* 4. 4-column Grid: Máy, Lỗi hàn, Nhân sự đang trực, Trạng thái */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
         {/* Card 1: Mối hàn theo máy */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 shadow-xs min-w-0">
-          <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
+          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
             MỐI HÀN THEO MÁY
           </div>
-          <div className="mt-3 grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 border-b border-[#eef1f5] pb-2 text-[11px] text-[#8b95a5]">
+          <div className="mt-3 grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 border-b border-[#f1f5f9] pb-2 text-[11px] font-semibold uppercase tracking-wider text-[#64748b]">
             <div>Máy</div>
             <div>Mối hàn</div>
             <div>Hôm nay</div>
             <div>Tỷ lệ lỗi</div>
             <div className="text-right">Khả dụng</div>
           </div>
-          <div className="divide-y divide-[#f2f4f7]">
+          <div className="divide-y divide-[#f8fafc]">
             {machineRows.map((m) => (
               <div
                 key={m.code}
-                className="grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 items-center py-2 text-[12px] text-[#243447]"
+                className="grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 items-center py-2.5 text-[12.5px] text-[#334155]"
               >
-                <div className="font-semibold truncate font-mono">{m.code}</div>
-                <div className="font-mono">{m.total}</div>
-                <div className="font-mono">{m.today}</div>
-                <div className="font-mono">{m.errorRate}</div>
+                <div className="font-semibold truncate font-mono text-[#0f172a]">{m.code}</div>
+                <div className="font-mono tabular-nums">{m.total}</div>
+                <div className="font-mono tabular-nums">{m.today}</div>
+                <div className="font-mono tabular-nums">{m.errorRate}</div>
                 <div className="flex items-center justify-end gap-1.5">
-                  <div className="h-1.5 w-12 rounded-full bg-[#eef1f5] overflow-hidden">
+                  <div className="h-1.5 w-12 rounded-full bg-[#f1f5f9] overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -1113,27 +1102,27 @@ export default function OverviewDashboard() {
                       }}
                     />
                   </div>
-                  <span className="w-6 text-right text-[11px] font-mono">
+                  <span className="w-6 text-right text-[11px] font-mono tabular-nums">
                     {m.availLabel}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-3.5 text-[13px] text-[#1a73e8] font-medium">
+          <div className="flex items-center justify-between pt-3 text-[12.5px] text-[#0047AB] font-medium">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả máy
             </button>
-            <span className="text-[#5d6b7d]">→</span>
+            <span className="text-[#94a3b8]">→</span>
           </div>
         </div>
 
         {/* Card 2: Lỗi hàn phổ biến */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-3.5 shadow-xs min-w-0">
-          <div className="text-[14px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
+          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
             LỖI HÀN PHỔ BIẾN
           </div>
-          <div className="mt-2.5 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-2.5">
             {[
               { label: "Lỗi bề mặt", count: 16, pct: 74 },
               { label: "Lỗi siêu âm", count: 12, pct: 56 },
@@ -1142,92 +1131,92 @@ export default function OverviewDashboard() {
               { label: "Khác", count: 3, pct: 19 },
             ].map((err) => (
               <div key={err.label} className="flex items-center gap-2 text-[12px]">
-                <div className="w-[88px] shrink-0 truncate text-[#3d4a5c]">
+                <div className="w-[88px] shrink-0 truncate text-[#334155]">
                   {err.label}
                 </div>
                 <div className="flex flex-1 min-w-0 items-center gap-1.5">
-                  <div className="h-2.5 flex-1 min-w-0 rounded-xs bg-[#eef1f5] overflow-hidden">
+                  <div className="h-2 flex-1 min-w-0 rounded-full bg-[#f1f5f9] overflow-hidden">
                     <div
-                      className="h-full rounded-xs bg-[#ef4444]"
+                      className="h-full rounded-full bg-[#ef4444]"
                       style={{ width: `${err.pct}%` }}
                     />
                   </div>
-                  <span className="text-[11px] font-mono text-[#4b5563] shrink-0">
+                  <span className="text-[11px] font-mono text-[#64748b] shrink-0 tabular-nums">
                     {err.count}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-2.5 text-[12px] text-[#1a73e8] font-medium">
+          <div className="flex items-center justify-between pt-3 text-[12.5px] text-[#0047AB] font-medium">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả lỗi
             </button>
-            <span className="text-[#5d6b7d]">→</span>
+            <span className="text-[#94a3b8]">→</span>
           </div>
         </div>
 
         {/* Card 3: Nhân sự đang trực */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-3.5 shadow-xs">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
           <div className="flex items-start justify-between gap-2">
-            <div className="text-[14px] font-bold tracking-[0.02em] text-[#243447]">
+            <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
               NHÂN SỰ ĐANG TRỰC
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1a9e4b] shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#22a94f] animate-pulse" />
+            <div className="inline-flex items-center gap-1 rounded-full bg-[#f0fdf4] px-2 py-0.5 text-[10px] font-bold text-[#15803d] border border-[#bbf7d0] shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a] animate-pulse" />
               Live
             </div>
           </div>
-          <div className="mt-2.5 flex flex-col divide-y divide-[#f2f4f7]">
+          <div className="mt-2.5 flex flex-col divide-y divide-[#f8fafc]">
             {personnelRows.map((p) => (
-              <div key={p.name} className="flex items-center gap-2 py-1.5">
+              <div key={p.name} className="flex items-center gap-2.5 py-1.5">
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ring-1 ring-[#e2e8f0]"
                   style={{ background: p.bg, color: p.fg }}
                 >
                   {p.initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-semibold text-[#16233a]">
+                  <div className="truncate text-[12px] font-semibold text-[#0f172a]">
                     {p.name}
                   </div>
-                  <div className="truncate text-[10px] text-[#8b95a5]">
+                  <div className="truncate text-[10.5px] text-[#64748b]">
                     {p.meta}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-[12px] font-bold font-mono text-[#16233a]">
+                  <div className="text-[12px] font-bold font-mono text-[#0f172a] tabular-nums">
                     {p.welds}
                   </div>
-                  <div className="text-[10px] text-[#8b95a5]">{p.timeAgo}</div>
+                  <div className="text-[10px] text-[#94a3b8]">{p.timeAgo}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between pt-2 text-[12px] text-[#1a73e8] font-medium">
+          <div className="flex items-center justify-between pt-2.5 text-[12.5px] text-[#0047AB] font-medium">
             <button type="button" className="hover:underline cursor-pointer">
               Xem báo cáo nhân sự
             </button>
-            <span className="text-[#5d6b7d]">→</span>
+            <span className="text-[#94a3b8]">→</span>
           </div>
         </div>
 
         {/* Card 4: Mối hàn theo trạng thái */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-3.5 shadow-xs min-w-0">
-          <div className="text-[14px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs min-w-0">
+          <div className="text-[14px] font-bold tracking-tight text-[#0f172a]">
             MỐI HÀN THEO TRẠNG THÁI
           </div>
           <div className="mt-2.5 flex justify-center">
             <div className="relative h-[108px] w-[108px]">
               <svg viewBox="0 0 140 140" className="h-[108px] w-[108px] block">
-                <circle cx="70" cy="70" r="52" fill="none" stroke="#22a94f" strokeWidth="21" />
+                <circle cx="70" cy="70" r="52" fill="none" stroke="#15803d" strokeWidth="20" />
                 <circle
                   cx="70"
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#f0b323"
-                  strokeWidth="21"
+                  stroke="#d97706"
+                  strokeWidth="20"
                   strokeDasharray="2.9 323.8"
                   transform="rotate(-90 70 70)"
                 />
@@ -1236,34 +1225,34 @@ export default function OverviewDashboard() {
                   cy="70"
                   r="52"
                   fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="21"
+                  stroke="#dc2626"
+                  strokeWidth="20"
                   strokeDasharray="0.7 326"
                   transform="rotate(-87 70 70)"
                 />
               </svg>
-              <div className="absolute top-[38px] left-0 right-0 text-center text-[16px] font-bold font-mono text-[#16233a] leading-none">
+              <div className="absolute top-[38px] left-0 right-0 text-center text-[16px] font-bold font-mono text-[#0f172a] leading-none tabular-nums">
                 {fmt(total)}
               </div>
-              <div className="absolute top-[56px] left-0 right-0 text-center text-[10px] text-[#8b95a5]">
+              <div className="absolute top-[56px] left-0 right-0 text-center text-[10px] text-[#64748b]">
                 Tổng
               </div>
             </div>
           </div>
-          <div className="mt-2.5 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-1.5">
             {statusRows.map((row) => (
               <div key={row.name} className="flex items-center gap-1.5 text-[11.5px]">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                 />
-                <span className="flex-1 min-w-0 truncate text-[#3d4a5c]">
+                <span className="flex-1 min-w-0 truncate text-[#334155]">
                   {row.name}
                 </span>
-                <span className="font-semibold font-mono text-[#16233a]">
+                <span className="font-semibold font-mono text-[#0f172a] tabular-nums">
                   {row.value}
                 </span>
-                <span className="text-[11px] font-mono text-[#8b95a5]">
+                <span className="text-[11px] font-mono text-[#94a3b8]">
                   ({row.pct})
                 </span>
               </div>
@@ -1275,13 +1264,13 @@ export default function OverviewDashboard() {
       {/* 5. Bottom Row (Recent Welds Table 2-col span + Quick Actions 1-col) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4 items-start">
         {/* Table: MỐI HÀN GẦN ĐÂY */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 sm:p-5 shadow-xs min-w-0">
-          <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs min-w-0">
+          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
             MỐI HÀN GẦN ĐÂY
           </div>
           <div className="table-scroll overflow-x-auto mt-3.5">
             <div className="min-w-[760px]">
-              <div className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 border-b border-[#eef1f5] pb-2 text-[12px] text-[#8b95a5]">
+              <div className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 border-b border-[#e2e8f0] pb-2 text-[11.5px] font-semibold uppercase tracking-wider text-[#64748b]">
                 <div>Weld ID</div>
                 <div>Date / Time</div>
                 <div>Nhà máy</div>
@@ -1293,16 +1282,16 @@ export default function OverviewDashboard() {
                 <div>Inspection</div>
                 <div>Actions</div>
               </div>
-              <div className="divide-y divide-[#f2f4f7]">
+              <div className="divide-y divide-[#f8fafc]">
                 {RECENT_WELDS.map((w) => (
                   <div
                     key={w.id}
-                    className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 text-[13px] text-[#3d4a5c]"
+                    className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 text-[13px] text-[#334155] hover:bg-[#f8fafc] transition-colors"
                   >
-                    <div className="font-semibold text-[#243447] font-mono">
+                    <div className="font-semibold text-[#0047AB] font-mono">
                       {w.id}
                     </div>
-                    <div className="font-mono text-[12px]">{w.dateTime}</div>
+                    <div className="font-mono text-[12px] text-[#64748b]">{w.dateTime}</div>
                     <div>{w.plant}</div>
                     <div className="font-mono text-[12px]">{w.machine}</div>
                     <div className="font-mono text-[12px]">{w.railType}</div>
@@ -1310,33 +1299,33 @@ export default function OverviewDashboard() {
                     <div>{w.operator}</div>
                     <div>
                       {w.resultType === "pass" ? (
-                        <span className="rounded bg-[#e7f7ed] px-2 py-1 text-[10.5px] font-bold tracking-wide text-[#15803d]">
+                        <span className="rounded-md bg-[#f0fdf4] border border-[#bbf7d0] px-2 py-0.5 text-[10.5px] font-bold tracking-wide text-[#15803d]">
                           ĐẠT
                         </span>
                       ) : (
-                        <span className="rounded bg-[#fdeaea] px-2 py-1 text-[10.5px] font-bold tracking-wide text-[#c62828]">
+                        <span className="rounded-md bg-[#fef2f2] border border-[#fecaca] px-2 py-0.5 text-[10.5px] font-bold tracking-wide text-[#b91c1c]">
                           KHÔNG ĐẠT
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[12px]">
-                      <span>UT</span>
+                    <div className="flex items-center gap-2 text-[12px]">
+                      <span className="text-[#64748b]">UT</span>
                       {w.ut ? (
-                        <span className="text-[#22a94f] font-bold text-[13px]">✓</span>
+                        <span className="text-[#15803d] font-bold text-[13px]">✓</span>
                       ) : (
-                        <span className="text-[#ef4444] font-bold text-[13px]">✗</span>
+                        <span className="text-[#dc2626] font-bold text-[13px]">✗</span>
                       )}
-                      <span>Ngoại quan</span>
+                      <span className="text-[#64748b]">Ngoại quan</span>
                       {w.visual ? (
-                        <span className="text-[#22a94f] font-bold text-[13px]">✓</span>
+                        <span className="text-[#15803d] font-bold text-[13px]">✓</span>
                       ) : (
-                        <span className="text-[#ef4444] font-bold text-[13px]">✗</span>
+                        <span className="text-[#dc2626] font-bold text-[13px]">✗</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[#2f80ed]">
+                    <div className="flex items-center gap-2 text-[#0047AB]">
                       <button
                         type="button"
-                        className="hover:opacity-75 cursor-pointer"
+                        className="hover:text-[#00388a] transition-colors cursor-pointer"
                         title="Xem chi tiết"
                       >
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1345,7 +1334,8 @@ export default function OverviewDashboard() {
                       </button>
                       <button
                         type="button"
-                        className="text-[#8b95a5] hover:text-[#0f172a] cursor-pointer"
+                        className="text-[#94a3b8] hover:text-[#0f172a] transition-colors cursor-pointer"
+                        title="In tem"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -1357,17 +1347,17 @@ export default function OverviewDashboard() {
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2 pt-3.5 text-[13px] text-[#1a73e8] font-medium">
+          <div className="flex items-center justify-end gap-2 pt-3.5 text-[12.5px] text-[#0047AB] font-medium">
             <button type="button" className="hover:underline cursor-pointer">
               Xem tất cả mối hàn
             </button>
-            <span className="text-[#5d6b7d]">→</span>
+            <span className="text-[#94a3b8]">→</span>
           </div>
         </div>
 
         {/* Actions: TÁC VỤ NHANH */}
-        <div className="rounded-xl border border-[#e8ebf0] bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-[14.5px] font-bold tracking-[0.02em] text-[#243447]">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-2xs">
+          <div className="text-[14.5px] font-bold tracking-tight text-[#0f172a]">
             TÁC VỤ NHANH
           </div>
           <div className="mt-3.5 flex flex-col gap-2">
@@ -1375,7 +1365,7 @@ export default function OverviewDashboard() {
               {
                 label: "Thêm mối hàn mới",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5d6b7d" strokeWidth="2.2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2.2">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                 ),
@@ -1383,7 +1373,7 @@ export default function OverviewDashboard() {
               {
                 label: "Phiếu kiểm tra",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5d6b7d" strokeWidth="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
                     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                     <rect x="8" y="2" width="8" height="4" rx="1" />
                     <path d="M9 12h6M9 16h4" />
@@ -1393,7 +1383,7 @@ export default function OverviewDashboard() {
               {
                 label: "Nhập sản lượng",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5d6b7d" strokeWidth="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
                     <rect x="4" y="2" width="16" height="20" rx="2" />
                     <line x1="8" y1="6" x2="16" y2="6" />
                     <line x1="8" y1="10" x2="8.01" y2="10" />
@@ -1408,7 +1398,7 @@ export default function OverviewDashboard() {
               {
                 label: "Tình trạng máy",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5d6b7d" strokeWidth="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
                     <rect x="4" y="4" width="16" height="16" rx="2" />
                     <rect x="9" y="9" width="6" height="6" />
                     <line x1="9" y1="1" x2="9" y2="4" />
@@ -1425,7 +1415,7 @@ export default function OverviewDashboard() {
               {
                 label: "Tạo báo cáo",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5d6b7d" strokeWidth="2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                     <line x1="16" y1="13" x2="8" y2="13" />
@@ -1438,7 +1428,7 @@ export default function OverviewDashboard() {
               <button
                 key={action.label}
                 type="button"
-                className="flex items-center gap-2.5 rounded-lg border border-[#e4e8ee] px-3 py-2 text-[13px] text-[#243447] hover:bg-[#f5f9ff] hover:border-[#c9dcf8] transition-colors cursor-pointer text-left"
+                className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] px-3.5 py-2 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc] hover:border-[#cbd5e1] hover:text-[#0047AB] transition-all cursor-pointer text-left"
               >
                 {action.icon}
                 <span>{action.label}</span>

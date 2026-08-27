@@ -65,26 +65,26 @@ type SidebarProps = {
 };
 
 export default function Sidebar({
-  activeId = "ho-so-nhan-su",
+  activeId,
   onNavigate,
   collapsed = false,
   onToggle,
   onClose,
 }: SidebarProps) {
+  const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
+
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
-    const group = navigation.find((g) => g.children.some((c) => c.id === activeId));
-    return group ? [group.id] : ["nhan-su"];
+    return activeGroup ? [activeGroup.id] : [];
   });
 
   useEffect(() => {
-    const group = navigation.find((g) => g.children.some((c) => c.id === activeId));
-    if (group) {
-      setOpenGroups([group.id]);
+    if (activeGroup) {
+      setOpenGroups([activeGroup.id]);
     }
   }, [activeId]);
 
   function toggleGroup(id: string) {
-    setOpenGroups((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id]));
+    setOpenGroups((prev) => (prev.includes(id) ? [] : [id]));
   }
 
   function handleNavigate(id: string) {

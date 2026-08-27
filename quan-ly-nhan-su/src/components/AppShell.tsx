@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import BulkImportList from "@/components/BulkImportList";
@@ -82,11 +81,28 @@ function useClientClock() {
 }
 
 export default function AppShell({ tab }: AppShellProps) {
-  const router = useRouter();
+  const [activeTab, setActiveTab] = useState(tab && isValidTab(tab) ? tab : DEFAULT_TAB);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const current = tab && isValidTab(tab) ? tab : DEFAULT_TAB;
+  useEffect(() => {
+    if (tab && isValidTab(tab) && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    function handlePopState() {
+      const path = window.location.pathname.replace(/^\//, "");
+      if (isValidTab(path)) {
+        setActiveTab(path);
+      }
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const current = activeTab && isValidTab(activeTab) ? activeTab : DEFAULT_TAB;
   const crumb = findNavMeta(current);
   const reportTab = isReportTab(current);
   const clock = useClientClock();
@@ -95,7 +111,9 @@ export default function AppShell({ tab }: AppShellProps) {
   const content = views[current];
 
   function go(id: string) {
-    router.push(`/${id}`);
+    const targetId = id === "bc-san-luong" ? "bc-tong-quan" : id;
+    setActiveTab(targetId);
+    window.history.pushState(null, "", `/${targetId}`);
     setMobileNavOpen(false);
   }
 
