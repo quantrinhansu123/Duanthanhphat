@@ -153,14 +153,14 @@ export default function GoogleCoordinateMap({
             position={{ lat: p.latitude, lng: p.longitude }}
             title={`${p.code} · ${p.chainage}`}
             label={{
-              text: p.code.replace("TT", ""),
+              text: p.code.replace(/^TT0*/, "").slice(-4) || p.code.replace("TT", ""),
               color: "#ffffff",
-              fontSize: "11px",
+              fontSize: "8px",
               fontWeight: "700",
             }}
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
-              scale: active ? 14 : 11,
+              scale: active ? 9 : 7,
               fillColor: active ? "#dc2626" : "#0047AB",
               fillOpacity: 1,
               strokeColor: "#ffffff",

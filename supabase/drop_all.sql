@@ -8,6 +8,7 @@ drop table if exists public.tasks cascade;
 drop table if exists public.categories cascade;
 
 -- Schema nhân sự / hàn ray
+drop table if exists public.tai_lieu cascade;
 drop table if exists public.toa_do cascade;
 drop table if exists public.nhan_su_du_an cascade;
 drop table if exists public.chung_chi cascade;

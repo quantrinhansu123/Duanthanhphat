@@ -15,14 +15,15 @@ import "leaflet/dist/leaflet.css";
 
 function makePinIcon(label: string, active: boolean) {
   const bg = active ? "#dc2626" : "#0047AB";
-  const size = active ? 34 : 28;
+  const size = active ? 22 : 18;
+  const short = label.replace(/^TT0*/, "").slice(-4) || label.replace("TT", "");
   return L.divIcon({
     className: "map-pin-wrap",
-    iconSize: [size, size + 8],
-    iconAnchor: [size / 2, size + 4],
+    iconSize: [size, size + 6],
+    iconAnchor: [size / 2, size + 3],
     popupAnchor: [0, -(size + 2)],
-            html: `<div class="map-pin" style="--pin-bg:${bg};--pin-size:${size}px" title="${label}">
-      <span class="map-pin-dot">${label.replace("TT", "")}</span>
+    html: `<div class="map-pin" style="--pin-bg:${bg};--pin-size:${size}px" title="${label}">
+      <span class="map-pin-dot">${short}</span>
       <span class="map-pin-tail"></span>
     </div>`,
   });

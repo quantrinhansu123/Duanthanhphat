@@ -118,8 +118,13 @@ export const navigation: NavItem[] = [
       },
       {
         id: "ban-do",
-        label: "Bản đồ Việt Nam",
-        description: "Bản đồ có đánh dấu điểm tọa độ / lý trình Km (mở thêm trên Google Maps)",
+        label: "Quản lý mối hàn theo GPS",
+        description: "Bản đồ đánh dấu mối hàn theo tọa độ GPS / lý trình Km",
+      },
+      {
+        id: "tai-lieu",
+        label: "Tài liệu PDF",
+        description: "Tải lên, xem và tải về tài liệu PDF",
       },
     ],
   },

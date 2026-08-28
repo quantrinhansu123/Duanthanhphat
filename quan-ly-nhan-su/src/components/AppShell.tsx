@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
 import DeploymentHandoverList from "@/components/DeploymentHandoverList";
+import DocumentLibrary from "@/components/DocumentLibrary";
 import EmployeeManagement from "@/components/EmployeeManagement";
 import ErrorLibrary from "@/components/ErrorLibrary";
 import MachineAssignmentList from "@/components/MachineAssignmentList";
@@ -48,6 +49,7 @@ const views: Record<string, React.ReactNode> = {
   "quan-ly-du-an": <ProjectManagement />,
   "quan-ly-moi-han": <WeldJointManagement />,
   "ban-do": <MapView />,
+  "tai-lieu": <DocumentLibrary />,
   "trien-khai": <DeploymentHandoverList />,
   "nhap-hang-loat": <BulkImportList />,
   "cau-hinh": <SystemConfiguration />,
