@@ -2,6 +2,7 @@
   "name": "quan-ly-nhan-su",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.5.2",
   "scripts": {
     "dev": "next dev --webpack -p 3010",
     "build": "next build --webpack",

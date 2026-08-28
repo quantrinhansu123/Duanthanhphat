@@ -20,7 +20,14 @@ const PERSONNEL = [
   "Trần Quốc Bảo",
 ];
 
-const PLANTS = ["Nhà máy Hà Nội", "Nhà máy Đà Nẵng", "Nhà máy TP.HCM"];
+const MACHINES = ["K922-1", "K922-2", "K920"];
+
+const WELD_METHODS = [
+  { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
+  { value: "ATW", label: "ATW (Hàn nhiệt nhôm)" },
+];
+
+const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
 
 const PROJECT_W: Record<string, number> = {
   "ĐSCT Bắc – Nam": 0.38,
@@ -30,10 +37,21 @@ const PROJECT_W: Record<string, number> = {
   "Tuyến metro số 1": 0.1,
 };
 
-const PLANT_W: Record<string, number> = {
-  "Nhà máy Hà Nội": 0.42,
-  "Nhà máy Đà Nẵng": 0.33,
-  "Nhà máy TP.HCM": 0.25,
+const MACHINE_W: Record<string, number> = {
+  "K922-1": 0.46,
+  "K922-2": 0.42,
+  "K920": 0.12,
+};
+
+const METHOD_W: Record<string, number> = {
+  FBW: 0.72,
+  ATW: 0.28,
+};
+
+const WELD_TYPE_W: Record<string, number> = {
+  "Sản xuất": 0.85,
+  "Thử nghiệm": 0.1,
+  "Đào tạo": 0.05,
 };
 
 const PERSON_W: Record<string, number> = {
@@ -64,26 +82,18 @@ const CHART_BASE = [
 const CHART_PERIOD_START = "2024-05-01";
 const CHART_PERIOD_END = "2024-05-30";
 
-const PLANT_ROWS = [
-  { name: "Cổ Loa – Xưởng A", share: 0.347, color: "#0047AB", plants: ["Nhà máy Hà Nội"] },
-  { name: "Cổ Loa – Xưởng B", share: 0.239, color: "#38bdf8", plants: ["Nhà máy Hà Nội"] },
-  { name: "Hạ Long Xanh – Xưởng C", share: 0.269, color: "#10b981", plants: ["Nhà máy Đà Nẵng"] },
-  { name: "Hạ Long Xanh – Xưởng D", share: 0.109, color: "#8b5cf6", plants: ["Nhà máy Đà Nẵng"] },
-  { name: "Khác", share: 0.037, color: "#f59e0b", plants: ["Nhà máy TP.HCM"] },
-];
-
-const PERSONNEL_ROWS = [
-  { name: "Trần Thị Mai Anh", initials: "MA", bg: "#eff6ff", fg: "#0047AB", meta: "K922-1 · Cổ Loa", welds: 62, timeAgo: "2 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
-  { name: "Nguyễn Văn Minh", initials: "VM", bg: "#f0fdf4", fg: "#15803d", meta: "K922-2 · Hạ Long Xanh", welds: 51, timeAgo: "3 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
-  { name: "Trần Văn C", initials: "VC", bg: "#fef2f2", fg: "#b91c1c", meta: "K922-2 · Hạ Long Xanh", welds: 28, timeAgo: "5 phút trước", plants: ["Nhà máy Đà Nẵng"], projects: ["Dự án ga Đà Nẵng"] },
-  { name: "Phạm Văn B", initials: "VB", bg: "#f5f3ff", fg: "#6d28d9", meta: "K922-1 · Cổ Loa", welds: 44, timeAgo: "6 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["ĐSCT Bắc – Nam"] },
-  { name: "Lê Thị Kim Anh", initials: "KA", bg: "#fffbeb", fg: "#b45309", meta: "K920 · Cổ Loa · Kiểm tra UT", welds: 13, timeAgo: "8 phút trước", plants: ["Nhà máy Hà Nội"], projects: ["Khu vực depot Hà Nội"] },
+const PROJECT_ROWS = [
+  { name: "ĐSCT Bắc – Nam", share: 0.38, color: "#0047AB" },
+  { name: "Dự án ga Đà Nẵng", share: 0.22, color: "#0284c7" },
+  { name: "Dự án đường sắt Bắc Nam", share: 0.18, color: "#10b981" },
+  { name: "Khu vực depot Hà Nội", share: 0.12, color: "#8b5cf6" },
+  { name: "Tuyến metro số 1", share: 0.10, color: "#f59e0b" },
 ];
 
 const MACHINE_ROWS = [
-  { code: "K922-1", totalShare: 0.46, todayShare: 0.49, errorRate: "0,18%", avail: 96, plants: ["Nhà máy Hà Nội"] },
-  { code: "K922-2", totalShare: 0.42, todayShare: 0.4, errorRate: "0,25%", avail: 93, plants: ["Nhà máy Đà Nẵng"] },
-  { code: "K920", totalShare: 0.12, todayShare: 0.11, errorRate: "0,31%", avail: 88, plants: ["Nhà máy TP.HCM"] },
+  { code: "K922-1", totalShare: 0.46, todayShare: 0.49, errorRate: "0,18%", avail: 96 },
+  { code: "K922-2", totalShare: 0.42, todayShare: 0.4, errorRate: "0,25%", avail: 93 },
+  { code: "K920", totalShare: 0.12, todayShare: 0.11, errorRate: "0,31%", avail: 88 },
 ];
 
 const RECENT_WELDS = [
@@ -92,6 +102,8 @@ const RECENT_WELDS = [
     dateTime: "31/05/2024 14:32",
     plant: "Cổ Loa",
     machine: "K922-1",
+    method: "FBW",
+    weldType: "Sản xuất",
     railType: "60E1",
     heatNo: "HEAT-240501-12",
     operator: "Nguyen Van A",
@@ -105,6 +117,8 @@ const RECENT_WELDS = [
     dateTime: "31/05/2024 14:18",
     plant: "Cổ Loa",
     machine: "K922-1",
+    method: "FBW",
+    weldType: "Sản xuất",
     railType: "60E1",
     heatNo: "HEAT-240501-12",
     operator: "Pham Van B",
@@ -118,6 +132,8 @@ const RECENT_WELDS = [
     dateTime: "31/05/2024 14:05",
     plant: "Hạ Long Xanh",
     machine: "K922-2",
+    method: "FBW",
+    weldType: "Thử nghiệm",
     railType: "60E1",
     heatNo: "HEAT-240501-08",
     operator: "Tran Van C",
@@ -127,10 +143,12 @@ const RECENT_WELDS = [
     visual: true,
   },
   {
-    id: "FBW-18517",
+    id: "ATW-0420",
     dateTime: "31/05/2024 13:47",
     plant: "Cổ Loa",
     machine: "K920",
+    method: "ATW",
+    weldType: "Đào tạo",
     railType: "50N",
     heatNo: "HEAT-240501-05",
     operator: "Le Van D",
@@ -206,35 +224,61 @@ export default function OverviewDashboard() {
   const [dateTo, setDateTo] = useState(CHART_PERIOD_END);
   const [projects, setProjects] = useState<string[]>([]);
   const [personnel, setPersonnel] = useState<string[]>([]);
-  const [plants, setPlants] = useState<string[]>([]);
+  const [machines, setMachines] = useState<string[]>([]);
+  const [methods, setMethods] = useState<string[]>([]);
+  const [weldTypes, setWeldTypes] = useState<string[]>([]);
+
+  const [chartViewMode, setChartViewMode] = useState<"daily" | "cumulative">("daily");
 
   const [appliedFilters, setAppliedFilters] = useState({
     dateFrom: CHART_PERIOD_START,
     dateTo: CHART_PERIOD_END,
     projects: [] as string[],
     personnel: [] as string[],
-    plants: [] as string[],
+    machines: [] as string[],
+    methods: [] as string[],
+    weldTypes: [] as string[],
   });
 
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
   const [personnelFilterOpen, setPersonnelFilterOpen] = useState(false);
-  const [plantFilterOpen, setPlantFilterOpen] = useState(false);
+  const [machineFilterOpen, setMachineFilterOpen] = useState(false);
+  const [methodFilterOpen, setMethodFilterOpen] = useState(false);
+  const [weldTypeFilterOpen, setWeldTypeFilterOpen] = useState(false);
 
-  const filterBarRef = useRef<HTMLDivElement>(null);
+  const projectRef = useRef<HTMLDivElement>(null);
+  const personnelRef = useRef<HTMLDivElement>(null);
+  const machineRef = useRef<HTMLDivElement>(null);
+  const methodRef = useRef<HTMLDivElement>(null);
+  const weldTypeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (filterBarRef.current && !filterBarRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (projectRef.current && !projectRef.current.contains(target)) {
         setProjectFilterOpen(false);
+      }
+      if (personnelRef.current && !personnelRef.current.contains(target)) {
         setPersonnelFilterOpen(false);
-        setPlantFilterOpen(false);
+      }
+      if (machineRef.current && !machineRef.current.contains(target)) {
+        setMachineFilterOpen(false);
+      }
+      if (methodRef.current && !methodRef.current.contains(target)) {
+        setMethodFilterOpen(false);
+      }
+      if (weldTypeRef.current && !weldTypeRef.current.contains(target)) {
+        setWeldTypeFilterOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function toggleList(type: "projects" | "personnel" | "plants", item: string) {
+  function toggleList(
+    type: "projects" | "personnel" | "machines" | "methods" | "weldTypes",
+    item: string
+  ) {
     if (type === "projects") {
       setProjects((prev) =>
         prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
@@ -243,8 +287,16 @@ export default function OverviewDashboard() {
       setPersonnel((prev) =>
         prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
       );
+    } else if (type === "machines") {
+      setMachines((prev) =>
+        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
+      );
+    } else if (type === "methods") {
+      setMethods((prev) =>
+        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
+      );
     } else {
-      setPlants((prev) =>
+      setWeldTypes((prev) =>
         prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
       );
     }
@@ -256,11 +308,15 @@ export default function OverviewDashboard() {
       dateTo,
       projects,
       personnel,
-      plants,
+      machines,
+      methods,
+      weldTypes,
     });
     setProjectFilterOpen(false);
     setPersonnelFilterOpen(false);
-    setPlantFilterOpen(false);
+    setMachineFilterOpen(false);
+    setMethodFilterOpen(false);
+    setWeldTypeFilterOpen(false);
   }
 
   function handleClearFilters() {
@@ -268,17 +324,23 @@ export default function OverviewDashboard() {
     setDateTo(CHART_PERIOD_END);
     setProjects([]);
     setPersonnel([]);
-    setPlants([]);
+    setMachines([]);
+    setMethods([]);
+    setWeldTypes([]);
     setAppliedFilters({
       dateFrom: CHART_PERIOD_START,
       dateTo: CHART_PERIOD_END,
       projects: [],
       personnel: [],
-      plants: [],
+      machines: [],
+      methods: [],
+      weldTypes: [],
     });
     setProjectFilterOpen(false);
     setPersonnelFilterOpen(false);
-    setPlantFilterOpen(false);
+    setMachineFilterOpen(false);
+    setMethodFilterOpen(false);
+    setWeldTypeFilterOpen(false);
   }
 
   const factor = useMemo(() => {
@@ -286,11 +348,17 @@ export default function OverviewDashboard() {
     if (appliedFilters.projects.length) {
       f *= sumWeight(PROJECT_W, appliedFilters.projects);
     }
-    if (appliedFilters.plants.length) {
-      f *= sumWeight(PLANT_W, appliedFilters.plants);
+    if (appliedFilters.machines.length) {
+      f *= sumWeight(MACHINE_W, appliedFilters.machines);
     }
     if (appliedFilters.personnel.length) {
       f *= sumWeight(PERSON_W, appliedFilters.personnel);
+    }
+    if (appliedFilters.methods.length) {
+      f *= sumWeight(METHOD_W, appliedFilters.methods);
+    }
+    if (appliedFilters.weldTypes.length) {
+      f *= sumWeight(WELD_TYPE_W, appliedFilters.weldTypes);
     }
     if (appliedFilters.dateFrom && appliedFilters.dateTo) {
       const d1 = new Date(appliedFilters.dateFrom + "T00:00:00");
@@ -334,6 +402,14 @@ export default function OverviewDashboard() {
         linePath: "",
         areaPath: "",
         chartLabels: [],
+        cumPts: [],
+        cumLinePath: "",
+        totalCum: 0,
+        targetCumPts: [],
+        targetCumLinePath: "",
+        totalTargetCum: 0,
+        maxCumVal: 3000,
+        rightAxisLabels: [3000, 2400, 1800, 1200, 600, 0],
       };
     }
 
@@ -366,6 +442,54 @@ export default function OverviewDashboard() {
       linePath = `M ${pts[0].cx} ${pts[0].cy} ` + pts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
     }
 
+    let runCum = 0;
+    const cumValues = slice.map((val) => {
+      runCum += Math.round(val * factor);
+      return runCum;
+    });
+    const totalCum = cumValues[cumValues.length - 1] || 0;
+
+    const dailyTargetVal = Math.round(170 * factor);
+    const targetCumValues = slice.map((_, idx) => (idx + 1) * dailyTargetVal);
+    const totalTargetCum = targetCumValues[targetCumValues.length - 1] || 0;
+
+    const maxCumVal = Math.max(500, Math.ceil(Math.max(totalCum, totalTargetCum) / 500) * 500);
+
+    const cumPts = cumValues.map((cumVal, idx) => {
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const cy = Math.max(8, plotH - (cumVal / maxCumVal) * (plotH - 18));
+      return { cx, cy, val: cumVal };
+    });
+
+    let cumLinePath = "";
+    if (cumPts.length === 1) {
+      cumLinePath = `M ${cumPts[0].cx} ${cumPts[0].cy}`;
+    } else if (cumPts.length > 1) {
+      cumLinePath = `M ${cumPts[0].cx} ${cumPts[0].cy} ` + cumPts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
+    }
+
+    const targetCumPts = targetCumValues.map((tVal, idx) => {
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const cy = Math.max(8, plotH - (tVal / maxCumVal) * (plotH - 18));
+      return { cx, cy, val: tVal };
+    });
+
+    let targetCumLinePath = "";
+    if (targetCumPts.length === 1) {
+      targetCumLinePath = `M ${targetCumPts[0].cx} ${targetCumPts[0].cy}`;
+    } else if (targetCumPts.length > 1) {
+      targetCumLinePath = `M ${targetCumPts[0].cx} ${targetCumPts[0].cy} ` + targetCumPts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
+    }
+
+    const rightAxisLabels = [
+      maxCumVal,
+      Math.round(maxCumVal * 0.8),
+      Math.round(maxCumVal * 0.6),
+      Math.round(maxCumVal * 0.4),
+      Math.round(maxCumVal * 0.2),
+      0,
+    ];
+
     const maPts = slice.map((_, idx) => {
       const windowStart = Math.max(0, idx - 6);
       const win = slice.slice(windowStart, idx + 1);
@@ -396,26 +520,29 @@ export default function OverviewDashboard() {
       linePath,
       areaPath,
       chartLabels,
+      cumPts,
+      cumLinePath,
+      totalCum,
+      targetCumPts,
+      targetCumLinePath,
+      totalTargetCum,
+      maxCumVal,
+      rightAxisLabels,
     };
   }, [appliedFilters, factor]);
 
-  const plantRows = useMemo(() => {
-    let rows = PLANT_ROWS;
-    if (appliedFilters.plants.length) {
-      rows = rows.filter((r) => r.plants.some((p) => appliedFilters.plants.includes(p)));
+  const projectRows = useMemo(() => {
+    let rows = PROJECT_ROWS;
+    if (appliedFilters.projects.length) {
+      rows = rows.filter((r) => appliedFilters.projects.includes(r.name));
     }
-    return rows.map((r) => ({
-      name: r.name,
-      color: r.color,
-      value: fmt(Math.round(total * r.share)),
-      pct: pctComma(Math.round(total * r.share), total),
-    }));
-  }, [appliedFilters.plants, total]);
+    return rows;
+  }, [appliedFilters.projects]);
 
   const machineRows = useMemo(() => {
     let list = MACHINE_ROWS;
-    if (appliedFilters.plants.length) {
-      list = list.filter((m) => m.plants.some((p) => appliedFilters.plants.includes(p)));
+    if (appliedFilters.machines.length) {
+      list = list.filter((m) => appliedFilters.machines.includes(m.code));
     }
     return list.map((m) => ({
       code: m.code,
@@ -426,26 +553,22 @@ export default function OverviewDashboard() {
       availPct: m.avail,
       availColor: m.avail >= 90 ? "#15803d" : "#d97706",
     }));
-  }, [appliedFilters.plants, total, today]);
+  }, [appliedFilters.machines, total, today]);
 
-  const personnelRows = useMemo(() => {
-    let list = PERSONNEL_ROWS;
-    if (appliedFilters.plants.length) {
-      list = list.filter((p) => p.plants.some((pl) => appliedFilters.plants.includes(pl)));
+
+  const recentWelds = useMemo(() => {
+    let list = RECENT_WELDS;
+    if (appliedFilters.machines.length) {
+      list = list.filter((w) => appliedFilters.machines.includes(w.machine));
     }
-    if (appliedFilters.projects.length) {
-      list = list.filter((p) => p.projects.some((pr) => appliedFilters.projects.includes(pr)));
+    if (appliedFilters.methods.length) {
+      list = list.filter((w) => appliedFilters.methods.includes(w.method));
     }
-    return list.map((p) => ({
-      name: p.name,
-      initials: p.initials,
-      bg: p.bg,
-      fg: p.fg,
-      meta: p.meta,
-      welds: Math.max(1, Math.round(p.welds * factor)),
-      timeAgo: p.timeAgo,
-    }));
-  }, [appliedFilters.plants, appliedFilters.projects, factor]);
+    if (appliedFilters.weldTypes.length) {
+      list = list.filter((w) => appliedFilters.weldTypes.includes(w.weldType));
+    }
+    return list;
+  }, [appliedFilters.machines, appliedFilters.methods, appliedFilters.weldTypes]);
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
@@ -458,12 +581,16 @@ export default function OverviewDashboard() {
     appliedFilters.dateTo !== CHART_PERIOD_END ||
     appliedFilters.projects.length > 0 ||
     appliedFilters.personnel.length > 0 ||
-    appliedFilters.plants.length > 0;
+    appliedFilters.machines.length > 0 ||
+    appliedFilters.methods.length > 0 ||
+    appliedFilters.weldTypes.length > 0;
 
   const filterCount =
     (appliedFilters.projects.length ? 1 : 0) +
     (appliedFilters.personnel.length ? 1 : 0) +
-    (appliedFilters.plants.length ? 1 : 0) +
+    (appliedFilters.machines.length ? 1 : 0) +
+    (appliedFilters.methods.length ? 1 : 0) +
+    (appliedFilters.weldTypes.length ? 1 : 0) +
     (appliedFilters.dateFrom !== CHART_PERIOD_START || appliedFilters.dateTo !== CHART_PERIOD_END ? 1 : 0);
 
   function filterPickLabel(count: number, defaultText: string) {
@@ -474,13 +601,11 @@ export default function OverviewDashboard() {
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       {/* 1. Filter Bar */}
-      <div
-        ref={filterBarRef}
-        className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs"
-      >
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+      <div className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs flex flex-col gap-3">
+        {/* Row 1: Label + Date Range + Project + Personnel + Machine (stretched full width) */}
+        <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
           {/* Label icon */}
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 sm:pb-2.5">
+          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 lg:pb-2.5">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
             </svg>
@@ -492,9 +617,9 @@ export default function OverviewDashboard() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2.5 sm:gap-3 flex-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-end gap-2.5 sm:gap-3 flex-1 min-w-0">
             {/* Date from */}
-            <div className="min-w-0 sm:w-[140px]">
+            <div className="min-w-0 flex-1">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Từ ngày
               </span>
@@ -511,7 +636,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Date to */}
-            <div className="min-w-0 sm:w-[140px]">
+            <div className="min-w-0 flex-1">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Đến ngày
               </span>
@@ -528,7 +653,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Projects dropdown */}
-            <div className="relative min-w-0 sm:w-[195px]">
+            <div ref={projectRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Theo dự án
               </span>
@@ -537,19 +662,40 @@ export default function OverviewDashboard() {
                 onClick={() => {
                   setProjectFilterOpen((v) => !v);
                   setPersonnelFilterOpen(false);
-                  setPlantFilterOpen(false);
+                  setMachineFilterOpen(false);
+                  setMethodFilterOpen(false);
+                  setWeldTypeFilterOpen(false);
                 }}
                 className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
               >
                 <span className="truncate">
                   {filterPickLabel(projects.length, "Tất cả")}
                 </span>
-                <span className="text-xs text-slate-500">
-                  {projectFilterOpen ? "▾" : "▸"}
-                </span>
+                <svg
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                    projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </button>
               {projectFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
+                    <input
+                      type="checkbox"
+                      checked={projects.length === 0 || projects.length === PROJECTS.length}
+                      onChange={() => setProjects([])}
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                    />
+                    <span className="truncate">Tất cả</span>
+                  </label>
                   {PROJECTS.map((opt) => (
                     <label
                       key={opt}
@@ -569,7 +715,7 @@ export default function OverviewDashboard() {
             </div>
 
             {/* Personnel dropdown */}
-            <div className="relative min-w-0 sm:w-[220px]">
+            <div ref={personnelRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
                 Theo nhân sự
               </span>
@@ -578,19 +724,40 @@ export default function OverviewDashboard() {
                 onClick={() => {
                   setPersonnelFilterOpen((v) => !v);
                   setProjectFilterOpen(false);
-                  setPlantFilterOpen(false);
+                  setMachineFilterOpen(false);
+                  setMethodFilterOpen(false);
+                  setWeldTypeFilterOpen(false);
                 }}
                 className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
               >
                 <span className="truncate">
                   {filterPickLabel(personnel.length, "Tất cả")}
                 </span>
-                <span className="text-xs text-slate-500">
-                  {personnelFilterOpen ? "▾" : "▸"}
-                </span>
+                <svg
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                    personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </button>
               {personnelFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
+                    <input
+                      type="checkbox"
+                      checked={personnel.length === 0 || personnel.length === PERSONNEL.length}
+                      onChange={() => setPersonnel([])}
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                    />
+                    <span className="truncate">Tất cả</span>
+                  </label>
                   {PERSONNEL.map((opt) => (
                     <label
                       key={opt}
@@ -609,38 +776,59 @@ export default function OverviewDashboard() {
               )}
             </div>
 
-            {/* Plants dropdown */}
-            <div className="relative col-span-2 sm:col-span-1 min-w-0 sm:w-[195px]">
+            {/* Machines dropdown */}
+            <div ref={machineRef} className="relative col-span-2 sm:col-span-1 min-w-0 flex-1">
               <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Theo nhà máy
+                Theo máy
               </span>
               <button
                 type="button"
                 onClick={() => {
-                  setPlantFilterOpen((v) => !v);
+                  setMachineFilterOpen((v) => !v);
                   setProjectFilterOpen(false);
                   setPersonnelFilterOpen(false);
+                  setMethodFilterOpen(false);
+                  setWeldTypeFilterOpen(false);
                 }}
                 className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
               >
                 <span className="truncate">
-                  {filterPickLabel(plants.length, "Tất cả")}
+                  {filterPickLabel(machines.length, "Tất cả")}
                 </span>
-                <span className="text-xs text-slate-500">
-                  {plantFilterOpen ? "▾" : "▸"}
-                </span>
+                <svg
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                    machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </button>
-              {plantFilterOpen && (
+              {machineFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                  {PLANTS.map((opt) => (
+                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
+                    <input
+                      type="checkbox"
+                      checked={machines.length === 0 || machines.length === MACHINES.length}
+                      onChange={() => setMachines([])}
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                    />
+                    <span className="truncate">Tất cả</span>
+                  </label>
+                  {MACHINES.map((opt) => (
                     <label
                       key={opt}
                       className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
-                        checked={plants.includes(opt)}
-                        onChange={() => toggleList("plants", opt)}
+                        checked={machines.includes(opt)}
+                        onChange={() => toggleList("machines", opt)}
                         className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
                       />
                       <span className="truncate">{opt}</span>
@@ -649,30 +837,157 @@ export default function OverviewDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
 
-            {/* Buttons */}
-            <div className="col-span-2 sm:col-span-1 flex items-center gap-2 pt-1 sm:pt-0">
+        {/* Row 2: Method + Weld Type + Apply / Clear Action Buttons */}
+        <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 pt-2.5 border-t border-slate-100">
+          {/* Methods dropdown */}
+          <div ref={methodRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[220px]">
+            <span className="mb-1 block text-xs font-semibold text-slate-600">
+              Phương pháp hàn
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setMethodFilterOpen((v) => !v);
+                setProjectFilterOpen(false);
+                setPersonnelFilterOpen(false);
+                setMachineFilterOpen(false);
+                setWeldTypeFilterOpen(false);
+              }}
+              className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
+            >
+              <span className="truncate">
+                {filterPickLabel(methods.length, "Tất cả")}
+              </span>
+              <svg
+                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                  methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""
+                }`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {methodFilterOpen && (
+              <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
+                  <input
+                    type="checkbox"
+                    checked={methods.length === 0 || methods.length === WELD_METHODS.length}
+                    onChange={() => setMethods([])}
+                    className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                  />
+                  <span className="truncate">Tất cả</span>
+                </label>
+                {WELD_METHODS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={methods.includes(opt.value)}
+                      onChange={() => toggleList("methods", opt.value)}
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                    />
+                    <span className="truncate font-medium">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Weld Types dropdown */}
+          <div ref={weldTypeRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[200px]">
+            <span className="mb-1 block text-xs font-semibold text-slate-600">
+              Loại mối hàn
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setWeldTypeFilterOpen((v) => !v);
+                setProjectFilterOpen(false);
+                setPersonnelFilterOpen(false);
+                setMachineFilterOpen(false);
+                setMethodFilterOpen(false);
+              }}
+              className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
+            >
+              <span className="truncate">
+                {filterPickLabel(weldTypes.length, "Tất cả")}
+              </span>
+              <svg
+                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
+                  weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""
+                }`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {weldTypeFilterOpen && (
+              <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
+                  <input
+                    type="checkbox"
+                    checked={weldTypes.length === 0 || weldTypes.length === WELD_TYPES.length}
+                    onChange={() => setWeldTypes([])}
+                    className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                  />
+                  <span className="truncate">Tất cả</span>
+                </label>
+                {WELD_TYPES.map((opt) => (
+                  <label
+                    key={opt}
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={weldTypes.includes(opt)}
+                      onChange={() => toggleList("weldTypes", opt)}
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
+                    />
+                    <span className="truncate">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 pt-1 sm:pt-0 sm:ml-auto w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleApplyFilters}
+              className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+              </svg>
+              Áp dụng
+            </button>
+
+            {hasFilter && (
               <button
                 type="button"
-                onClick={handleApplyFilters}
-                className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
+                onClick={handleClearFilters}
+                className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-                </svg>
-                Áp dụng
+                Xóa lọc
               </button>
-
-              {hasFilter && (
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
-                >
-                  Xóa lọc
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -876,55 +1191,140 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY */}
+        {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY / LŨY KẾ */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              SẢN LƯỢNG HÀN THEO NGÀY
+              {chartViewMode === "daily" ? "SẢN LƯỢNG HÀN THEO NGÀY" : "SẢN LƯỢNG HÀN THEO LŨY KẾ"}
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700 shadow-2xs">
-              <span className="font-medium font-mono">{chart.chartRangeLabel}</span>
-              <span className="text-slate-400">▾</span>
+            
+            {/* 1 nút chia làm 2: Ngày | Lũy kế */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setChartViewMode("daily")}
+                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  chartViewMode === "daily"
+                    ? "bg-white text-[#0047AB] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span>Ngày</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartViewMode("cumulative")}
+                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  chartViewMode === "cumulative"
+                    ? "bg-white text-[#0047AB] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M3 17l6-6 4 4 8-8" strokeDasharray="3 2" />
+                  <circle cx="21" cy="7" r="2" fill="currentColor" />
+                </svg>
+                <span>Lũy kế</span>
+              </button>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <svg width="22" height="8">
-                <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="2" />
-                <circle cx="11" cy="4" r="3" fill="#0047AB" />
-              </svg>
-              <span>Thực tế</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="22" height="8">
-                <line
-                  x1="0"
-                  y1="4"
-                  x2="22"
-                  y2="4"
-                  stroke="#94a3b8"
-                  strokeWidth="1.6"
-                  strokeDasharray="5 4"
-                />
-              </svg>
-              <span>Mục tiêu</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-4 rounded-xs bg-blue-200" />
-              <span>Bình quân 7 ngày</span>
-            </div>
+          {/* Legend */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs text-slate-600">
+            {chartViewMode === "daily" ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <svg width="22" height="8">
+                    <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="2" />
+                    <circle cx="11" cy="4" r="3" fill="#0047AB" />
+                  </svg>
+                  <span>Thực tế</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <svg width="22" height="8">
+                    <line
+                      x1="0"
+                      y1="4"
+                      x2="22"
+                      y2="4"
+                      stroke="#94a3b8"
+                      strokeWidth="1.6"
+                      strokeDasharray="5 4"
+                    />
+                  </svg>
+                  <span>Mục tiêu</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-4 rounded-xs bg-blue-200" />
+                  <span>Bình quân 7 ngày</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 text-red-600 font-semibold animate-in fade-in duration-150">
+                  <svg width="24" height="8">
+                    <line
+                      x1="0"
+                      y1="4"
+                      x2="24"
+                      y2="4"
+                      stroke="#dc2626"
+                      strokeWidth="2.2"
+                      strokeDasharray="5 3"
+                    />
+                    <circle cx="12" cy="4" r="3" fill="#dc2626" />
+                  </svg>
+                  <span>Lũy kế mục tiêu</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[#0066cc] font-semibold animate-in fade-in duration-150">
+                  <svg width="24" height="8">
+                    <line
+                      x1="0"
+                      y1="4"
+                      x2="24"
+                      y2="4"
+                      stroke="#0066cc"
+                      strokeWidth="2.5"
+                    />
+                    <rect x="9" y="1" width="6" height="6" rx="1.5" fill="#0066cc" />
+                  </svg>
+                  <span>Lũy kế thực tế</span>
+                </div>
+              </>
+            )}
           </div>
 
+          {/* Chart Plot */}
           <div className="mt-2 flex">
-            {/* Y-axis labels */}
-            <div className="relative h-[190px] w-[30px] shrink-0 text-right text-[11px] text-slate-400 pr-1.5 font-mono">
-              <div className="absolute right-1.5 -top-1.5">250</div>
-              <div className="absolute right-1.5 top-[31px]">200</div>
-              <div className="absolute right-1.5 top-[69px]">150</div>
-              <div className="absolute right-1.5 top-[107px]">100</div>
-              <div className="absolute right-1.5 top-[145px]">50</div>
-              <div className="absolute right-1.5 top-[183px]">0</div>
+            {/* Left Y-axis labels */}
+            <div className={`relative h-[190px] shrink-0 text-right text-[11px] font-mono select-none pr-2 ${
+              chartViewMode === "cumulative" ? "w-[46px] text-slate-500" : "w-[32px] text-slate-400"
+            }`}>
+              {chartViewMode === "daily" ? (
+                <>
+                  <div className="absolute right-2 -top-1.5">250</div>
+                  <div className="absolute right-2 top-[31px]">200</div>
+                  <div className="absolute right-2 top-[69px]">150</div>
+                  <div className="absolute right-2 top-[107px]">100</div>
+                  <div className="absolute right-2 top-[145px]">50</div>
+                  <div className="absolute right-2 top-[183px]">0</div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute right-2 -top-1.5 font-bold text-[#0066cc]">{fmt(chart.rightAxisLabels[0])}</div>
+                  <div className="absolute right-2 top-[31px]">{fmt(chart.rightAxisLabels[1])}</div>
+                  <div className="absolute right-2 top-[69px]">{fmt(chart.rightAxisLabels[2])}</div>
+                  <div className="absolute right-2 top-[107px]">{fmt(chart.rightAxisLabels[3])}</div>
+                  <div className="absolute right-2 top-[145px]">{fmt(chart.rightAxisLabels[4])}</div>
+                  <div className="absolute right-2 top-[183px]">0</div>
+                </>
+              )}
             </div>
 
             {/* SVG Plot */}
@@ -932,46 +1332,154 @@ export default function OverviewDashboard() {
               <svg
                 viewBox="0 0 500 190"
                 preserveAspectRatio="none"
-                className="h-[190px] w-full block"
+                className="h-[190px] w-full block overflow-visible"
               >
+                {/* Horizontal Grid */}
                 <line x1="0" y1="0.5" x2="500" y2="0.5" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="38" x2="500" y2="38" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="76" x2="500" y2="76" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="114" x2="500" y2="114" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="152" x2="500" y2="152" stroke="#f1f5f9" strokeWidth="1" />
                 <line x1="0" y1="189.5" x2="500" y2="189.5" stroke="#cbd5e1" strokeWidth="1" />
-                {chart.areaPath && (
-                  <path d={chart.areaPath} fill="#eff6ff" opacity="0.9" />
+
+                {/* Daily Mode Visuals */}
+                {chartViewMode === "daily" && (
+                  <>
+                    {chart.areaPath && (
+                      <path d={chart.areaPath} fill="#eff6ff" opacity="0.9" />
+                    )}
+                    {chart.bars.map((b, i) => (
+                      <rect
+                        key={i}
+                        x={b.x}
+                        y={b.y}
+                        width="5"
+                        height={b.h}
+                        fill="#3b82f6"
+                        rx="1"
+                        className="hover:fill-[#0047AB] transition-colors"
+                      />
+                    ))}
+                    <line
+                      x1="0"
+                      y1="60.8"
+                      x2="500"
+                      y2="60.8"
+                      stroke="#94a3b8"
+                      strokeWidth="1.3"
+                      strokeDasharray="7 5"
+                    />
+                    {chart.linePath && (
+                      <path d={chart.linePath} fill="none" stroke="#0047AB" strokeWidth="2" />
+                    )}
+                    {chart.dots.map((p, i) => (
+                      <circle key={i} cx={p.cx} cy={p.cy} r="2.8" fill="#0047AB" />
+                    ))}
+                  </>
                 )}
-                {chart.bars.map((b, i) => (
-                  <rect
-                    key={i}
-                    x={b.x}
-                    y={b.y}
-                    width="5"
-                    height={b.h}
-                    fill="#3b82f6"
-                    rx="1"
-                    className="hover:fill-[#0047AB] transition-colors"
-                  />
-                ))}
-                <line
-                  x1="0"
-                  y1="60.8"
-                  x2="500"
-                  y2="60.8"
-                  stroke="#94a3b8"
-                  strokeWidth="1.3"
-                  strokeDasharray="7 5"
-                />
-                {chart.linePath && (
-                  <path d={chart.linePath} fill="none" stroke="#0047AB" strokeWidth="2" />
+
+                {/* Cumulative Mode Visuals */}
+                {chartViewMode === "cumulative" && (
+                  <g className="animate-in fade-in duration-150">
+                    {/* 1. Đường Mục tiêu Lũy kế (Nét đứt màu đỏ) */}
+                    {chart.targetCumLinePath && (
+                      <g>
+                        <path
+                          d={chart.targetCumLinePath}
+                          fill="none"
+                          stroke="#dc2626"
+                          strokeWidth="2.2"
+                          strokeDasharray="6 4"
+                        />
+                        {chart.targetCumPts.map((p, i) => (
+                          <circle
+                            key={`tgt-cum-${i}`}
+                            cx={p.cx}
+                            cy={p.cy}
+                            r={i === chart.targetCumPts.length - 1 ? "4" : "2.5"}
+                            fill="#dc2626"
+                          />
+                        ))}
+                        {/* Callout badge Mục tiêu lũy kế */}
+                        {chart.targetCumPts.length > 0 && (
+                          <g>
+                            <rect
+                              x={chart.targetCumPts[chart.targetCumPts.length - 1].cx - 56}
+                              y={Math.max(4, chart.targetCumPts[chart.targetCumPts.length - 1].cy - 20)}
+                              width="52"
+                              height="16"
+                              rx="3"
+                              fill="#dc2626"
+                            />
+                            <text
+                              x={chart.targetCumPts[chart.targetCumPts.length - 1].cx - 30}
+                              y={Math.max(15, chart.targetCumPts[chart.targetCumPts.length - 1].cy - 8)}
+                              textAnchor="middle"
+                              className="fill-white font-bold font-mono text-[9px]"
+                            >
+                              MT: {fmt(chart.totalTargetCum)}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    )}
+
+                    {/* 2. Đường Thực tế Lũy kế (Nét liền màu xanh dương) */}
+                    {chart.cumLinePath && (
+                      <g>
+                        <path
+                          d={chart.cumLinePath}
+                          fill="none"
+                          stroke="#0066cc"
+                          strokeWidth="2.8"
+                        />
+                        {chart.cumPts.map((p, i) => (
+                          <rect
+                            key={`cum-${i}`}
+                            x={p.cx - 3.5}
+                            y={p.cy - 3.5}
+                            width="7"
+                            height="7"
+                            rx="1.5"
+                            fill="#0066cc"
+                            stroke="#ffffff"
+                            strokeWidth="1"
+                          />
+                        ))}
+                        {/* Callout badge Thực tế lũy kế */}
+                        {chart.cumPts.length > 0 && (
+                          <g>
+                            <circle
+                              cx={chart.cumPts[chart.cumPts.length - 1].cx}
+                              cy={chart.cumPts[chart.cumPts.length - 1].cy}
+                              r="7"
+                              fill="#0066cc"
+                              fillOpacity="0.25"
+                            />
+                            <rect
+                              x={chart.cumPts[chart.cumPts.length - 1].cx - 56}
+                              y={Math.max(22, chart.cumPts[chart.cumPts.length - 1].cy - 20)}
+                              width="52"
+                              height="16"
+                              rx="3"
+                              fill="#0066cc"
+                            />
+                            <text
+                              x={chart.cumPts[chart.cumPts.length - 1].cx - 30}
+                              y={Math.max(33, chart.cumPts[chart.cumPts.length - 1].cy - 8)}
+                              textAnchor="middle"
+                              className="fill-white font-bold font-mono text-[9px]"
+                            >
+                              TT: {fmt(chart.totalCum)}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    )}
+                  </g>
                 )}
-                {chart.dots.map((p, i) => (
-                  <circle key={i} cx={p.cx} cy={p.cy} r="2.8" fill="#0047AB" />
-                ))}
               </svg>
-              <div className="flex justify-between px-1 pt-2 text-[11px] font-mono text-slate-400">
+              <div className="flex justify-between px-1 pt-2 text-[11px] font-mono text-slate-400 select-none">
                 {chart.chartLabels.map((lbl, i) => (
                   <span key={i}>{lbl.text}</span>
                 ))}
@@ -980,10 +1488,10 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* Box 3: MỐI HÀN THEO NHÀ MÁY */}
+        {/* Box 3: DỰ ÁN */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-            MỐI HÀN THEO NHÀ MÁY
+            DỰ ÁN
           </div>
           <div className="mt-3.5 flex justify-center">
             <div className="relative h-[126px] w-[126px]">
@@ -996,7 +1504,7 @@ export default function OverviewDashboard() {
                   fill="none"
                   stroke="#0047AB"
                   strokeWidth="20"
-                  strokeDasharray="113.4 213.3"
+                  strokeDasharray="124.2 202.5"
                   transform="rotate(-90 70 70)"
                 />
                 <circle
@@ -1006,8 +1514,8 @@ export default function OverviewDashboard() {
                   fill="none"
                   stroke="#0284c7"
                   strokeWidth="20"
-                  strokeDasharray="78.1 248.6"
-                  transform="rotate(34.9 70 70)"
+                  strokeDasharray="71.9 254.8"
+                  transform="rotate(46.8 70 70)"
                 />
                 <circle
                   cx="70"
@@ -1016,8 +1524,8 @@ export default function OverviewDashboard() {
                   fill="none"
                   stroke="#10b981"
                   strokeWidth="20"
-                  strokeDasharray="87.9 238.8"
-                  transform="rotate(120.9 70 70)"
+                  strokeDasharray="58.8 267.9"
+                  transform="rotate(126.0 70 70)"
                 />
                 <circle
                   cx="70"
@@ -1026,8 +1534,8 @@ export default function OverviewDashboard() {
                   fill="none"
                   stroke="#8b5cf6"
                   strokeWidth="20"
-                  strokeDasharray="35.6 291.1"
-                  transform="rotate(217.8 70 70)"
+                  strokeDasharray="39.2 287.5"
+                  transform="rotate(190.8 70 70)"
                 />
                 <circle
                   cx="70"
@@ -1036,8 +1544,8 @@ export default function OverviewDashboard() {
                   fill="none"
                   stroke="#f59e0b"
                   strokeWidth="20"
-                  strokeDasharray="12.1 314.6"
-                  transform="rotate(257.0 70 70)"
+                  strokeDasharray="32.7 294.0"
+                  transform="rotate(234.0 70 70)"
                 />
               </svg>
               <div className="absolute top-[46px] left-0 right-0 text-center text-lg sm:text-xl font-bold font-mono text-slate-900 leading-none tabular-nums">
@@ -1050,20 +1558,14 @@ export default function OverviewDashboard() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
-            {plantRows.map((row) => (
+            {projectRows.map((row) => (
               <div key={row.name} className="flex items-center gap-2 text-xs sm:text-sm">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                 />
-                <span className="flex-1 min-w-0 truncate text-slate-700">
+                <span className="flex-1 min-w-0 truncate text-slate-700 font-medium">
                   {row.name}
-                </span>
-                <span className="font-semibold font-mono text-slate-900 tabular-nums">
-                  {row.value}
-                </span>
-                <span className="text-xs font-mono text-slate-400">
-                  ({row.pct})
                 </span>
               </div>
             ))}
@@ -1071,8 +1573,8 @@ export default function OverviewDashboard() {
         </div>
       </div>
 
-      {/* 4. 4-column Grid: Máy, Lỗi hàn, Nhân sự đang trực, Trạng thái */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+      {/* 4. 3-column Grid: Máy, Lỗi hàn, Trạng thái */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
         {/* Card 1: Mối hàn theo máy */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
@@ -1159,52 +1661,7 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* Card 3: Nhân sự đang trực */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              NHÂN SỰ ĐANG TRỰC
-            </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200 shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live
-            </div>
-          </div>
-          <div className="mt-2.5 flex flex-col divide-y divide-slate-100">
-            {personnelRows.map((p) => (
-              <div key={p.name} className="flex items-center gap-2.5 py-1.5">
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-slate-200 shadow-2xs font-mono"
-                  style={{ background: p.bg, color: p.fg }}
-                >
-                  {p.initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs sm:text-sm font-semibold text-slate-900">
-                    {p.name}
-                  </div>
-                  <div className="truncate text-[11px] sm:text-xs text-slate-500">
-                    {p.meta}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-xs sm:text-sm font-bold font-mono text-slate-900 tabular-nums">
-                    {p.welds}
-                  </div>
-                  <div className="text-[11px] sm:text-xs text-slate-400">{p.timeAgo}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between pt-2.5 text-xs sm:text-sm text-[#0047AB] font-semibold">
-            <button type="button" className="hover:underline cursor-pointer">
-              Xem báo cáo nhân sự
-            </button>
-            <span className="text-slate-400">→</span>
-          </div>
-        </div>
-
-        {/* Card 4: Mối hàn theo trạng thái */}
+        {/* Card 3: Mối hàn theo trạng thái */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             MỐI HÀN THEO TRẠNG THÁI
@@ -1286,7 +1743,7 @@ export default function OverviewDashboard() {
                 <div>Actions</div>
               </div>
               <div className="divide-y divide-slate-100">
-                {RECENT_WELDS.map((w) => (
+                {recentWelds.map((w) => (
                   <div
                     key={w.id}
                     className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"

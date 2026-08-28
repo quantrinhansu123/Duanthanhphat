@@ -2,9 +2,9 @@
   "name": "du-an-thanh-phat",
   "private": true,
   "scripts": {
-    "postinstall": "npm install --prefix quan-ly-nhan-su",
-    "dev": "npm run dev --prefix quan-ly-nhan-su",
-    "build": "npm run build --prefix quan-ly-nhan-su",
-    "start": "npm run start --prefix quan-ly-nhan-su"
+    "postinstall": "pnpm --dir quan-ly-nhan-su install",
+    "dev": "pnpm --dir quan-ly-nhan-su dev",
+    "build": "pnpm --dir quan-ly-nhan-su build",
+    "start": "pnpm --dir quan-ly-nhan-su start"
   }
 }
