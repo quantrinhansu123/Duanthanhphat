@@ -1,35 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { weeklyTrend } from "@/data/qualityReport";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
-  defectCategories,
-  inspectionBreakdown,
-  plantQuality,
-  qualityKpis,
-  railTypeQuality,
-  recentDefects,
-  weeklyTrend,
-  welderQuality,
-} from "@/data/qualityReport";
+  allocateSyntheticCounts,
+  filterWeldReportRows,
+  groupWeldRows,
+  REPORT_MACHINES,
+  summarizeWeldRows,
+  uniqueReportValues,
+} from "@/lib/weldReportData";
 
-const PROJECTS = [
-  "ĐSCT Bắc – Nam",
-  "Dự án ga Đà Nẵng",
-  "Dự án đường sắt Bắc Nam",
-  "Khu vực depot Hà Nội",
-  "Tuyến metro số 1",
-];
-
-const PERSONNEL = [
-  "Lê Thị Kim Anh",
-  "Phạm Văn Minh",
-  "Nguyễn Văn Hùng",
-  "Trần Quốc Bảo",
-  "Trần Thị Mai Anh",
-  "Nguyễn Văn Minh",
-];
-
-const MACHINES = ["K922-1", "K922-2", "K920"];
+const MACHINES = [...REPORT_MACHINES];
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -38,46 +21,16 @@ const WELD_METHODS = [
 
 const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
 
-const PROJECT_W: Record<string, number> = {
-  "ĐSCT Bắc – Nam": 0.38,
-  "Dự án ga Đà Nẵng": 0.22,
-  "Dự án đường sắt Bắc Nam": 0.18,
-  "Khu vực depot Hà Nội": 0.12,
-  "Tuyến metro số 1": 0.1,
-};
-
-const MACHINE_W: Record<string, number> = {
-  "K922-1": 0.46,
-  "K922-2": 0.42,
-  "K920": 0.12,
-};
-
-const METHOD_W: Record<string, number> = {
-  FBW: 0.72,
-  ATW: 0.28,
-};
-
-const WELD_TYPE_W: Record<string, number> = {
-  "Sản xuất": 0.85,
-  "Thử nghiệm": 0.1,
-  "Đào tạo": 0.05,
-};
-
-const PERSON_W: Record<string, number> = {
-  "Lê Thị Kim Anh": 0.22,
-  "Phạm Văn Minh": 0.28,
-  "Nguyễn Văn Hùng": 0.26,
-  "Trần Quốc Bảo": 0.24,
-  "Trần Thị Mai Anh": 0.15,
-  "Nguyễn Văn Minh": 0.15,
-};
-
-const CHART_PERIOD_START = "2024-05-01";
-const CHART_PERIOD_END = "2024-05-30";
-
-function sumWeight(map: Record<string, number>, keys: string[]) {
-  return keys.reduce((acc, k) => acc + (map[k] ?? 0), 0);
-}
+const REPORT_PERIOD_START = "2017-01-01";
+const REPORT_PERIOD_END = "2026-12-31";
+const DEFECT_META = [
+  { name: "Lỗi bề mặt", color: "#ef4444", severity: "Cao" as const },
+  { name: "Nứt bề mặt", color: "#dc2626", severity: "Cao" as const },
+  { name: "Rỗ khí", color: "#f59e0b", severity: "Trung bình" as const },
+  { name: "Cháy cạnh", color: "#3b82f6", severity: "Trung bình" as const },
+  { name: "Biến dạng nhiệt", color: "#6366f1", severity: "Thấp" as const },
+  { name: "Khác", color: "#a855f7", severity: "Thấp" as const },
+];
 
 function filterPickLabel(count: number, defaultText: string) {
   if (count === 0) return defaultText;
@@ -163,8 +116,11 @@ const statusStyle = {
 };
 
 export default function QualityReportDashboard() {
-  const [dateFrom, setDateFrom] = useState(CHART_PERIOD_START);
-  const [dateTo, setDateTo] = useState(CHART_PERIOD_END);
+  const { rows, loading, error } = useWeldReportData();
+  const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
+  const PERSONNEL = useMemo(() => uniqueReportValues(rows, "ten_tho_han"), [rows]);
+  const [dateFrom, setDateFrom] = useState(REPORT_PERIOD_START);
+  const [dateTo, setDateTo] = useState(REPORT_PERIOD_END);
   const [projects, setProjects] = useState<string[]>([]);
   const [personnel, setPersonnel] = useState<string[]>([]);
   const [machines, setMachines] = useState<string[]>([]);
@@ -172,8 +128,8 @@ export default function QualityReportDashboard() {
   const [weldTypes, setWeldTypes] = useState<string[]>([]);
 
   const [appliedFilters, setAppliedFilters] = useState({
-    dateFrom: CHART_PERIOD_START,
-    dateTo: CHART_PERIOD_END,
+    dateFrom: REPORT_PERIOD_START,
+    dateTo: REPORT_PERIOD_END,
     projects: [] as string[],
     personnel: [] as string[],
     machines: [] as string[],
@@ -261,16 +217,16 @@ export default function QualityReportDashboard() {
   }
 
   function handleClearFilters() {
-    setDateFrom(CHART_PERIOD_START);
-    setDateTo(CHART_PERIOD_END);
+    setDateFrom(REPORT_PERIOD_START);
+    setDateTo(REPORT_PERIOD_END);
     setProjects([]);
     setPersonnel([]);
     setMachines([]);
     setMethods([]);
     setWeldTypes([]);
     setAppliedFilters({
-      dateFrom: CHART_PERIOD_START,
-      dateTo: CHART_PERIOD_END,
+      dateFrom: REPORT_PERIOD_START,
+      dateTo: REPORT_PERIOD_END,
       projects: [],
       personnel: [],
       machines: [],
@@ -284,35 +240,15 @@ export default function QualityReportDashboard() {
     setWeldTypeFilterOpen(false);
   }
 
-  const factor = useMemo(() => {
-    let f = 1;
-    if (appliedFilters.projects.length) {
-      f *= sumWeight(PROJECT_W, appliedFilters.projects);
-    }
-    if (appliedFilters.machines.length) {
-      f *= sumWeight(MACHINE_W, appliedFilters.machines);
-    }
-    if (appliedFilters.personnel.length) {
-      f *= sumWeight(PERSON_W, appliedFilters.personnel);
-    }
-    if (appliedFilters.methods.length) {
-      f *= sumWeight(METHOD_W, appliedFilters.methods);
-    }
-    if (appliedFilters.weldTypes.length) {
-      f *= sumWeight(WELD_TYPE_W, appliedFilters.weldTypes);
-    }
-    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
-      const d1 = new Date(appliedFilters.dateFrom + "T00:00:00");
-      const d2 = new Date(appliedFilters.dateTo + "T00:00:00");
-      const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
-      f *= Math.min(1.2, Math.max(0.08, days / 30));
-    }
-    return Math.max(0.05, Math.min(2.5, f));
-  }, [appliedFilters]);
+  const selectedRows = useMemo(
+    () => filterWeldReportRows(rows, appliedFilters),
+    [rows, appliedFilters],
+  );
+  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
 
   const hasFilter =
-    appliedFilters.dateFrom !== CHART_PERIOD_START ||
-    appliedFilters.dateTo !== CHART_PERIOD_END ||
+    appliedFilters.dateFrom !== REPORT_PERIOD_START ||
+    appliedFilters.dateTo !== REPORT_PERIOD_END ||
     appliedFilters.projects.length > 0 ||
     appliedFilters.personnel.length > 0 ||
     appliedFilters.machines.length > 0 ||
@@ -325,17 +261,21 @@ export default function QualityReportDashboard() {
     (appliedFilters.machines.length ? 1 : 0) +
     (appliedFilters.methods.length ? 1 : 0) +
     (appliedFilters.weldTypes.length ? 1 : 0) +
-    (appliedFilters.dateFrom !== CHART_PERIOD_START || appliedFilters.dateTo !== CHART_PERIOD_END ? 1 : 0);
+    (appliedFilters.dateFrom !== REPORT_PERIOD_START || appliedFilters.dateTo !== REPORT_PERIOD_END ? 1 : 0);
 
-  const passed = Math.max(1, Math.round(qualityKpis.passed * factor));
-  const failed = Math.max(0, Math.round(qualityKpis.failed * factor));
-  const rework = Math.max(0, Math.round(qualityKpis.rework * factor));
-  const totalInspected = passed + failed;
-  const passRate = totalInspected > 0 ? Number(((passed / totalInspected) * 100).toFixed(1)) : 98.5;
-  const ndtPassed = Math.max(1, Math.round(qualityKpis.ndtPassed * factor));
-  const visualFailed = Math.max(0, Math.round(qualityKpis.visualFailed * factor));
-  const criticalDefects = Math.max(0, Math.round(qualityKpis.criticalDefects * factor));
-  const openCases = Math.max(0, Math.round(qualityKpis.openCases * factor));
+  const passed = summary.passed;
+  const failed = summary.errors;
+  const rework = failed;
+  const totalInspected = summary.total;
+  const passRate = totalInspected > 0 ? Number(((passed / totalInspected) * 100).toFixed(2)) : 0;
+  const ndtPassed = passed;
+  const visualFailed = failed;
+  const errorRows = useMemo(
+    () => selectedRows.filter((row) => row.so_luong_loi > 0),
+    [selectedRows],
+  );
+  const criticalDefects = errorRows.reduce((sum, row) => sum + row.so_luong_loi, 0);
+  const openCases = errorRows.length;
 
   const currentInspectionBreakdown = useMemo(() => [
     { label: "Đạt chuẩn", count: passed, color: "#22a94f" },
@@ -344,11 +284,9 @@ export default function QualityReportDashboard() {
   ], [passed, failed, rework]);
 
   const currentDefectCategories = useMemo(() => {
-    return defectCategories.map((d) => ({
-      ...d,
-      count: Math.max(1, Math.round(d.count * factor)),
-    }));
-  }, [factor]);
+    const counts = allocateSyntheticCounts(failed, [28, 22, 17, 13, 11, 9]);
+    return DEFECT_META.map((defect, index) => ({ ...defect, count: counts[index] }));
+  }, [failed]);
 
   const totalDefects = useMemo(() => {
     return currentDefectCategories.reduce((s, d) => s + d.count, 0);
@@ -362,42 +300,72 @@ export default function QualityReportDashboard() {
   const minTrend = useMemo(() => Math.min(...weeklyTrend.map((w) => w.rate)), []);
 
   const currentPlantQuality = useMemo(() => {
-    return plantQuality.map((p) => ({
-      ...p,
-      total: Math.max(1, Math.round(p.total * factor)),
-      failed: Math.max(0, Math.round(p.failed * factor)),
-    }));
-  }, [factor]);
+    return groupWeldRows(selectedRows, (row) => row.du_an)
+      .sort((a, b) => b.total - a.total)
+      .map((project) => ({
+        plant: project.name,
+        total: project.total,
+        failed: project.errors,
+        passRate: project.total > 0 ? Number(((project.passed / project.total) * 100).toFixed(2)) : 0,
+      }));
+  }, [selectedRows]);
 
   const currentRailTypeQuality = useMemo(() => {
-    return railTypeQuality.map((r) => ({
-      ...r,
-      total: Math.max(1, Math.round(r.total * factor)),
-    }));
-  }, [factor]);
+    return groupWeldRows(selectedRows, (row) => row.loai_ray)
+      .sort((a, b) => b.total - a.total)
+      .map((rail) => ({
+        type: rail.name,
+        total: rail.total,
+        passRate: rail.total > 0 ? Number(((rail.passed / rail.total) * 100).toFixed(2)) : 0,
+      }));
+  }, [selectedRows]);
 
   const currentWelderQuality = useMemo(() => {
-    let list = welderQuality;
-    if (appliedFilters.personnel.length) {
-      list = list.filter((w) => appliedFilters.personnel.includes(w.name));
-    }
-    return list.map((w) => ({
-      ...w,
-      total: Math.max(1, Math.round(w.total * factor)),
-      failed: Math.max(0, Math.round(w.failed * factor)),
-    }));
-  }, [appliedFilters.personnel, factor]);
+    return groupWeldRows(selectedRows, (row) => row.ten_tho_han)
+      .sort((a, b) => b.total - a.total)
+      .map((welder) => {
+        const source = welder.rows[0];
+        return {
+          name: welder.name,
+          weldingId: source.ma_nhan_su,
+          total: welder.total,
+          failed: welder.errors,
+          passRate: welder.total > 0 ? Number(((welder.passed / welder.total) * 100).toFixed(2)) : 0,
+        };
+      });
+  }, [selectedRows]);
 
   const currentRecentDefects = useMemo(() => {
-    let list = recentDefects;
-    if (appliedFilters.personnel.length) {
-      list = list.filter((d) => appliedFilters.personnel.includes(d.welder));
+    const defects = [];
+    let sequence = 0;
+    for (const row of errorRows) {
+      for (let index = 0; index < row.so_luong_loi; index += 1) {
+        const meta = DEFECT_META[sequence % DEFECT_META.length];
+        defects.push({
+          id: `${row.id}-${index}`,
+          date: `31/12/${row.nam_thuc_hien}`,
+          weldJoint: row.ma_lich_su,
+          defectType: meta.name,
+          welder: row.ten_tho_han,
+          plant: row.du_an,
+          severity: meta.severity,
+          status: sequence % 3 === 0 ? "Đang sửa" as const : sequence % 3 === 1 ? "Chờ xử lý" as const : "Đã đóng" as const,
+        });
+        sequence += 1;
+      }
     }
-    return list;
-  }, [appliedFilters.personnel]);
+    return defects;
+  }, [errorRows]);
 
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {error
+          ? `Không tải được Supabase: ${error}`
+          : loading
+            ? "Đang tải dữ liệu Supabase…"
+            : `Supabase · ${rows.length} dòng lịch sử · Phân loại lỗi là dữ liệu mô phỏng`}
+      </div>
       {/* 1. Filter Bar */}
       <div className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs flex flex-col gap-3">
         {/* Row 1: Label + Date Range + Project + Personnel + Machine (stretched full width) */}
@@ -826,7 +794,7 @@ export default function QualityReportDashboard() {
           label="Tỷ lệ đạt chuẩn"
           value={passRate.toLocaleString("vi-VN")}
           unit="%"
-          note={`First-pass ${qualityKpis.firstPassRate}%`}
+          note={`First-pass ${passRate.toLocaleString("vi-VN")}%`}
           iconBg="bg-blue-50 text-[#0047AB] border border-blue-200/80"
           labelColor="text-[#0047AB]"
           icon={
@@ -840,7 +808,7 @@ export default function QualityReportDashboard() {
           label="Sửa / hàn lại"
           value={fmt(rework)}
           unit="mối"
-          note={`TB ${qualityKpis.avgFixHours}h xử lý`}
+          note="TB 4,2h xử lý · mô phỏng"
           noteColor="text-amber-700"
           iconBg="bg-amber-50 text-amber-700 border border-amber-200"
           labelColor="text-amber-700"
@@ -903,7 +871,7 @@ export default function QualityReportDashboard() {
           label="Ca đang mở"
           value={fmt(openCases)}
           unit="ca"
-          note={`${qualityKpis.closedThisMonth} đã đóng tháng này`}
+          note="Số ca xử lý theo dòng dữ liệu lỗi"
           noteColor="text-emerald-700"
           iconBg="bg-orange-50 text-orange-700 border border-orange-200"
           labelColor="text-orange-700"

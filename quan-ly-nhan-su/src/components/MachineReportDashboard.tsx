@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
+import {
+  buildSyntheticDailySeries,
+  groupWeldRows,
+  machineForRow,
+  REPORT_MACHINES,
+  summarizeWeldRows,
+} from "@/lib/weldReportData";
 
 const MACHINES_RECOMMENDED = [
   {
@@ -116,10 +124,50 @@ const CALIBRATION_DOCS = [
 ];
 
 export default function MachineReportDashboard() {
+  const { rows, loading, error } = useWeldReportData();
   const [activeSlide, setActiveSlide] = useState(0);
+  const summary = useMemo(() => summarizeWeldRows(rows), [rows]);
+  const today = useMemo(
+    () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
+    [summary.total],
+  );
+  const machineStats = useMemo(() => {
+    const grouped = new Map(groupWeldRows(rows, machineForRow).map((group) => [group.name, group]));
+    return REPORT_MACHINES.map((code) => {
+      const group = grouped.get(code);
+      return {
+        code,
+        total: group?.total ?? 0,
+        errors: group?.errors ?? 0,
+      };
+    });
+  }, [rows]);
+  const machinesRecommended = MACHINES_RECOMMENDED.map((machine, index) => ({
+    ...machine,
+    welds: `${(machineStats[index]?.total ?? 0).toLocaleString("vi-VN")} mối`,
+  }));
+  const machinePerformance = MACHINE_PERFORMANCE.map((machine, index) => {
+    const stat = machineStats[index];
+    const machineToday = summary.total > 0 ? Math.round(today * ((stat?.total ?? 0) / summary.total)) : 0;
+    const errorRate = stat?.total ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) : "0";
+    return {
+      ...machine,
+      welds: (stat?.total ?? 0).toLocaleString("vi-VN"),
+      today: machineToday.toLocaleString("vi-VN"),
+      errorRate: `${errorRate}%`,
+    };
+  });
+  const operatingMachines = machineStats.filter((machine) => machine.total > 0).length;
 
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {error
+          ? `Không tải được Supabase: ${error}`
+          : loading
+            ? "Đang tải dữ liệu Supabase…"
+            : "Sản lượng lấy từ Supabase · Phân bổ máy và thông số ngày là mô phỏng"}
+      </div>
       {/* 1. Top 3 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {/* Card 1: Số máy đang vận hành */}
@@ -129,7 +177,7 @@ export default function MachineReportDashboard() {
               SỐ MÁY ĐANG VẬN HÀNH
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-              12
+              {operatingMachines}
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
               ↑ 8,3% <span className="text-slate-400 font-normal">so với tuần trước</span>
@@ -203,7 +251,7 @@ export default function MachineReportDashboard() {
 
             <div className="mt-3.5 flex items-center gap-2.5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 flex-1 min-w-0">
-                {MACHINES_RECOMMENDED.map((m) => (
+                {machinesRecommended.map((m) => (
                   <div
                     key={m.id}
                     className="rounded-xl border border-slate-200 overflow-hidden bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between"
@@ -273,8 +321,8 @@ export default function MachineReportDashboard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveSlide((v) => Math.min(MACHINES_RECOMMENDED.length - 1, v + 1))}
-                  disabled={activeSlide >= MACHINES_RECOMMENDED.length - 1}
+                  onClick={() => setActiveSlide((v) => Math.min(machinesRecommended.length - 1, v + 1))}
+                  disabled={activeSlide >= machinesRecommended.length - 1}
                   className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-[#0047AB] hover:text-[#0047AB] hover:bg-blue-50 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                   aria-label="Next"
                 >
@@ -300,7 +348,7 @@ export default function MachineReportDashboard() {
                   <div className="text-right">Khả dụng</div>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {MACHINE_PERFORMANCE.map((m) => (
+                  {machinePerformance.map((m) => (
                     <div
                       key={m.code}
                       className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"

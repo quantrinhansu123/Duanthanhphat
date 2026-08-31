@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   googleOpenPoint,
   googleOpenRoute,
@@ -43,6 +43,7 @@ const CoordinateLeafletMap = dynamic(() => import("@/components/CoordinateLeafle
 });
 
 const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+const POINT_LIST_RENDER_LIMIT = 200;
 
 const emptyForm = {
   code: "",
@@ -67,13 +68,14 @@ export default function MapView() {
   const [showForm, setShowForm] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const deferredQuery = useDeferredValue(query);
   const useGoogle = Boolean(googleApiKey);
   const supabaseReady = hasSupabaseEnv();
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (force = false) => {
     setLoading(true);
     setErrorMsg(null);
-    const res = await fetchMapPointsFromDb();
+    const res = await fetchMapPointsFromDb({ force });
     setPoints(res.points.length ? res.points : res.source === "seed" ? seedMapPoints : []);
     setDataSource(res.source);
     if (res.error) setErrorMsg(res.error);
@@ -81,7 +83,7 @@ export default function MapView() {
   }, []);
 
   useEffect(() => {
-    void reload();
+    void reload(false);
   }, [reload]);
 
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function MapView() {
   }
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return points;
     return points.filter(
       (p) =>
@@ -116,9 +118,23 @@ export default function MapView() {
         String(p.latitude).includes(q) ||
         String(p.longitude).includes(q),
     );
-  }, [query, points]);
+  }, [deferredQuery, points]);
 
   const selected = filtered.find((p) => p.id === selectedId) ?? null;
+  const visibleListPoints = useMemo(() => {
+    if (filtered.length <= POINT_LIST_RENDER_LIMIT) return filtered;
+    const visible = filtered.slice(0, POINT_LIST_RENDER_LIMIT);
+    if (selected && !visible.some((point) => point.id === selected.id)) {
+      return [selected, ...visible.slice(0, POINT_LIST_RENDER_LIMIT - 1)];
+    }
+    return visible;
+  }, [filtered, selected]);
+  const googleRouteUrl = useMemo(() => {
+    const source = filtered.length ? filtered : points;
+    if (source.length <= 20) return googleOpenRoute(source);
+    const step = Math.ceil(source.length / 20);
+    return googleOpenRoute(source.filter((_, index) => index % step === 0).slice(0, 20));
+  }, [filtered, points]);
 
   function selectPoint(id: string) {
     if (!id) {
@@ -164,7 +180,7 @@ export default function MapView() {
     setForm(emptyForm);
     setShowForm(false);
     setStatusMsg(`Đã thêm ${res.point?.code}`);
-    await reload();
+    await reload(true);
     if (res.point) selectPoint(res.point.id);
   }
 
@@ -179,7 +195,7 @@ export default function MapView() {
       return;
     }
     setStatusMsg(`Đã seed ${res.inserted} điểm mẫu vào Supabase`);
-    await reload();
+    await reload(true);
   }
 
   async function handleDelete(id: string, code: string) {
@@ -197,7 +213,7 @@ export default function MapView() {
       setFocusSelected(false);
     }
     setStatusMsg(`Đã xóa ${code}`);
-    await reload();
+    await reload(true);
   }
 
   async function handleExcelFile(file: File | null) {
@@ -231,7 +247,7 @@ export default function MapView() {
       setStatusMsg(
         `Đã import ${res.upserted} điểm từ Excel (${file.name})${warn}`,
       );
-      await reload();
+      await reload(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Không đọc được file Excel");
     } finally {
@@ -390,7 +406,7 @@ export default function MapView() {
         <button
           type="button"
           disabled={saving}
-          onClick={() => void reload()}
+          onClick={() => void reload(true)}
           className="inline-flex h-10 items-center rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
         >
           Tải lại
@@ -404,7 +420,7 @@ export default function MapView() {
           Mở Google Maps
         </a>
         <a
-          href={googleOpenRoute(filtered.length ? filtered : points)}
+          href={googleRouteUrl}
           target="_blank"
           rel="noreferrer"
           className="inline-flex h-10 items-center rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
@@ -555,7 +571,7 @@ export default function MapView() {
         {!mapFullscreen && (
         <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
           <div className="border-b border-[#e8eef8] bg-[#f8fafc] px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-            Danh sách điểm ({filtered.length})
+            Danh sách điểm ({visibleListPoints.length}/{filtered.length})
           </div>
           <div className="max-h-[min(62vh,560px)] overflow-auto">
             <table className="w-full border-collapse text-left text-[13px]">
@@ -575,7 +591,7 @@ export default function MapView() {
                     </td>
                   </tr>
                 )}
-                {filtered.map((p: MapPoint) => {
+                {visibleListPoints.map((p: MapPoint) => {
                   const active = p.id === selected?.id;
                   const canDelete = dataSource === "supabase" && p.id.length > 8;
                   return (
@@ -611,6 +627,13 @@ export default function MapView() {
                     </tr>
                   );
                 })}
+                {filtered.length > visibleListPoints.length && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3 text-center text-xs text-[#64748b]">
+                      Đang giới hạn {POINT_LIST_RENDER_LIMIT} dòng để tải nhanh. Dùng ô tìm kiếm để mở điểm khác.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

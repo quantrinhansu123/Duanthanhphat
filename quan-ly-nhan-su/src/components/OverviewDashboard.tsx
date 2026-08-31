@@ -1,26 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
+import { googleOpenPoint } from "@/data/mapPoints";
+import {
+  buildSyntheticDailySeries,
+  filterWeldReportRows,
+  groupWeldRows,
+  machineForRow,
+  REPORT_MACHINES,
+  summarizeWeldRows,
+  uniqueReportValues,
+} from "@/lib/weldReportData";
 
-const PROJECTS = [
-  "ĐSCT Bắc – Nam",
-  "Dự án ga Đà Nẵng",
-  "Dự án đường sắt Bắc Nam",
-  "Khu vực depot Hà Nội",
-  "Tuyến metro số 1",
-];
-
-const PERSONNEL = [
-  "Trần Thị Mai Anh",
-  "Nguyễn Văn Minh",
-  "Trần Văn C",
-  "Phạm Văn B",
-  "Lê Thị Kim Anh",
-  "Phạm Văn Minh",
-  "Trần Quốc Bảo",
-];
-
-const MACHINES = ["K922-1", "K922-2", "K920"];
+const MACHINES = [...REPORT_MACHINES];
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -29,134 +23,17 @@ const WELD_METHODS = [
 
 const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
 
-const PROJECT_W: Record<string, number> = {
-  "ĐSCT Bắc – Nam": 0.38,
-  "Dự án ga Đà Nẵng": 0.22,
-  "Dự án đường sắt Bắc Nam": 0.18,
-  "Khu vực depot Hà Nội": 0.12,
-  "Tuyến metro số 1": 0.1,
-};
-
-const MACHINE_W: Record<string, number> = {
-  "K922-1": 0.46,
-  "K922-2": 0.42,
-  "K920": 0.12,
-};
-
-const METHOD_W: Record<string, number> = {
-  FBW: 0.72,
-  ATW: 0.28,
-};
-
-const WELD_TYPE_W: Record<string, number> = {
-  "Sản xuất": 0.85,
-  "Thử nghiệm": 0.1,
-  "Đào tạo": 0.05,
-};
-
-const PERSON_W: Record<string, number> = {
-  "Trần Thị Mai Anh": 0.14,
-  "Nguyễn Văn Minh": 0.12,
-  "Trần Văn C": 0.1,
-  "Phạm Văn B": 0.11,
-  "Lê Thị Kim Anh": 0.09,
-  "Phạm Văn Minh": 0.13,
-  "Trần Quốc Bảo": 0.08,
-};
-
-const BASE = {
-  total: 18520,
-  today: 126,
-  month: 3240,
-  passed: 18310,
-  failed: 42,
-  pending: 168,
-  target: 22500,
-  quota: 118,
-};
-
-const CHART_BASE = [
-  128, 148, 138, 158, 176, 150, 142, 156, 168, 152, 132, 146, 190, 168, 158,
-  150, 120, 112, 126, 146, 164, 152, 140, 158, 176, 166, 152, 142, 176, 164,
-];
-const CHART_PERIOD_START = "2024-05-01";
-const CHART_PERIOD_END = "2024-05-30";
-
-const PROJECT_ROWS = [
-  { name: "ĐSCT Bắc – Nam", share: 0.38, color: "#0047AB" },
-  { name: "Dự án ga Đà Nẵng", share: 0.22, color: "#0284c7" },
-  { name: "Dự án đường sắt Bắc Nam", share: 0.18, color: "#10b981" },
-  { name: "Khu vực depot Hà Nội", share: 0.12, color: "#8b5cf6" },
-  { name: "Tuyến metro số 1", share: 0.10, color: "#f59e0b" },
-];
-
-const MACHINE_ROWS = [
-  { code: "K922-1", totalShare: 0.46, todayShare: 0.49, errorRate: "0,18%", avail: 96 },
-  { code: "K922-2", totalShare: 0.42, todayShare: 0.4, errorRate: "0,25%", avail: 93 },
-  { code: "K920", totalShare: 0.12, todayShare: 0.11, errorRate: "0,31%", avail: 88 },
-];
-
-const RECENT_WELDS = [
-  {
-    id: "FBW-18520",
-    dateTime: "31/05/2024 14:32",
-    plant: "Cổ Loa",
-    machine: "K922-1",
-    method: "FBW",
-    weldType: "Sản xuất",
-    railType: "60E1",
-    heatNo: "HEAT-240501-12",
-    operator: "Nguyen Van A",
-    result: "ĐẠT",
-    resultType: "pass",
-    ut: true,
-    visual: true,
-  },
-  {
-    id: "FBW-18519",
-    dateTime: "31/05/2024 14:18",
-    plant: "Cổ Loa",
-    machine: "K922-1",
-    method: "FBW",
-    weldType: "Sản xuất",
-    railType: "60E1",
-    heatNo: "HEAT-240501-12",
-    operator: "Pham Van B",
-    result: "ĐẠT",
-    resultType: "pass",
-    ut: true,
-    visual: true,
-  },
-  {
-    id: "FBW-18518",
-    dateTime: "31/05/2024 14:05",
-    plant: "Hạ Long Xanh",
-    machine: "K922-2",
-    method: "FBW",
-    weldType: "Thử nghiệm",
-    railType: "60E1",
-    heatNo: "HEAT-240501-08",
-    operator: "Tran Van C",
-    result: "KHÔNG ĐẠT",
-    resultType: "fail",
-    ut: false,
-    visual: true,
-  },
-  {
-    id: "ATW-0420",
-    dateTime: "31/05/2024 13:47",
-    plant: "Cổ Loa",
-    machine: "K920",
-    method: "ATW",
-    weldType: "Đào tạo",
-    railType: "50N",
-    heatNo: "HEAT-240501-05",
-    operator: "Le Van D",
-    result: "ĐẠT",
-    resultType: "pass",
-    ut: true,
-    visual: true,
-  },
+const REPORT_PERIOD_START = "2017-01-01";
+const REPORT_PERIOD_END = "2026-12-31";
+const DAILY_PERIOD_START = "2026-08-02";
+const DAILY_PERIOD_END = "2026-08-31";
+const PROJECT_COLORS = ["#0047AB", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
+const MACHINE_AVAILABILITY: Record<string, number> = { "K922-1": 96, "K922-2": 93, K920: 88 };
+const SYNTHETIC_FAILURE_REASONS = [
+  "Rỗ khí trong vùng hàn",
+  "Lệch tim ray vượt dung sai",
+  "Nứt bề mặt sau khi nguội",
+  "Không đạt kiểm tra siêu âm",
 ];
 
 function fmt(n: number) {
@@ -185,24 +62,9 @@ function viDate(iso: string) {
 }
 
 function viDateShortFromIndex(dayOffset: number) {
-  const d = new Date(CHART_PERIOD_START + "T00:00:00");
+  const d = new Date(DAILY_PERIOD_START + "T00:00:00");
   d.setDate(d.getDate() + dayOffset);
   return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-}
-
-function clampChartDate(iso: string) {
-  const d = new Date(iso + "T00:00:00");
-  const start = new Date(CHART_PERIOD_START + "T00:00:00");
-  const end = new Date(CHART_PERIOD_END + "T00:00:00");
-  if (d < start) return CHART_PERIOD_START;
-  if (d > end) return CHART_PERIOD_END;
-  return iso;
-}
-
-function chartDayIndex(iso: string) {
-  const start = new Date(CHART_PERIOD_START + "T00:00:00");
-  const d = new Date(iso + "T00:00:00");
-  return Math.round((d.getTime() - start.getTime()) / 86400000);
 }
 
 function sampleChartLabels(labels: string[], maxCount: number) {
@@ -215,13 +77,13 @@ function sampleChartLabels(labels: string[], maxCount: number) {
   return picked;
 }
 
-function sumWeight(map: Record<string, number>, keys: string[]) {
-  return keys.reduce((acc, k) => acc + (map[k] ?? 0), 0);
-}
-
 export default function OverviewDashboard() {
-  const [dateFrom, setDateFrom] = useState(CHART_PERIOD_START);
-  const [dateTo, setDateTo] = useState(CHART_PERIOD_END);
+  const { rows, loading, error } = useWeldReportData();
+  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints(30);
+  const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
+  const PERSONNEL = useMemo(() => uniqueReportValues(rows, "ten_tho_han"), [rows]);
+  const [dateFrom, setDateFrom] = useState(REPORT_PERIOD_START);
+  const [dateTo, setDateTo] = useState(REPORT_PERIOD_END);
   const [projects, setProjects] = useState<string[]>([]);
   const [personnel, setPersonnel] = useState<string[]>([]);
   const [machines, setMachines] = useState<string[]>([]);
@@ -231,8 +93,8 @@ export default function OverviewDashboard() {
   const [chartViewMode, setChartViewMode] = useState<"daily" | "cumulative">("daily");
 
   const [appliedFilters, setAppliedFilters] = useState({
-    dateFrom: CHART_PERIOD_START,
-    dateTo: CHART_PERIOD_END,
+    dateFrom: REPORT_PERIOD_START,
+    dateTo: REPORT_PERIOD_END,
     projects: [] as string[],
     personnel: [] as string[],
     machines: [] as string[],
@@ -320,16 +182,16 @@ export default function OverviewDashboard() {
   }
 
   function handleClearFilters() {
-    setDateFrom(CHART_PERIOD_START);
-    setDateTo(CHART_PERIOD_END);
+    setDateFrom(REPORT_PERIOD_START);
+    setDateTo(REPORT_PERIOD_END);
     setProjects([]);
     setPersonnel([]);
     setMachines([]);
     setMethods([]);
     setWeldTypes([]);
     setAppliedFilters({
-      dateFrom: CHART_PERIOD_START,
-      dateTo: CHART_PERIOD_END,
+      dateFrom: REPORT_PERIOD_START,
+      dateTo: REPORT_PERIOD_END,
       projects: [],
       personnel: [],
       machines: [],
@@ -343,56 +205,34 @@ export default function OverviewDashboard() {
     setWeldTypeFilterOpen(false);
   }
 
-  const factor = useMemo(() => {
-    let f = 1;
-    if (appliedFilters.projects.length) {
-      f *= sumWeight(PROJECT_W, appliedFilters.projects);
-    }
-    if (appliedFilters.machines.length) {
-      f *= sumWeight(MACHINE_W, appliedFilters.machines);
-    }
-    if (appliedFilters.personnel.length) {
-      f *= sumWeight(PERSON_W, appliedFilters.personnel);
-    }
-    if (appliedFilters.methods.length) {
-      f *= sumWeight(METHOD_W, appliedFilters.methods);
-    }
-    if (appliedFilters.weldTypes.length) {
-      f *= sumWeight(WELD_TYPE_W, appliedFilters.weldTypes);
-    }
-    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
-      const d1 = new Date(appliedFilters.dateFrom + "T00:00:00");
-      const d2 = new Date(appliedFilters.dateTo + "T00:00:00");
-      const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
-      f *= Math.min(1.2, Math.max(0.08, days / 30));
-    }
-    return Math.max(0.05, Math.min(2.5, f));
-  }, [appliedFilters]);
+  const selectedRows = useMemo(
+    () => filterWeldReportRows(rows, appliedFilters),
+    [rows, appliedFilters],
+  );
+  const fullSummary = useMemo(() => summarizeWeldRows(rows), [rows]);
+  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
+  const dailySeries = useMemo(
+    () => buildSyntheticDailySeries(summary.total, fullSummary.total),
+    [summary.total, fullSummary.total],
+  );
+  const total = summary.total;
+  const today = dailySeries.at(-1) ?? 0;
+  const month = dailySeries.reduce((sum, value) => sum + value, 0);
+  const passed = summary.passed;
+  const failed = summary.errors;
+  const pending = 0;
+  const target = total > 0 ? Math.ceil((total * 1.2) / 100) * 100 : 100;
+  const quota = 118;
 
-  const total = Math.max(1, Math.round(BASE.total * factor));
-  const today = Math.max(0, Math.round(BASE.today * factor));
-  const month = Math.max(1, Math.round(BASE.month * factor));
-  const passed = Math.max(1, Math.round(BASE.passed * factor));
-  const failed = Math.max(0, Math.round(BASE.failed * factor));
-  const pending = Math.max(0, Math.round(BASE.pending * factor));
-
-  const progressPct = ((total / BASE.target) * 100)
+  const progressPct = ((total / target) * 100)
     .toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
     .replace(".", ",");
-  const progressPctNum = (total / BASE.target) * 100;
+  const progressPctNum = (total / target) * 100;
 
   const chart = useMemo(() => {
-    const fromClamped = clampChartDate(appliedFilters.dateFrom || CHART_PERIOD_START);
-    const toClamped = clampChartDate(appliedFilters.dateTo || CHART_PERIOD_END);
-    const iStart = Math.min(chartDayIndex(fromClamped), chartDayIndex(toClamped));
-    const iEnd = Math.max(chartDayIndex(fromClamped), chartDayIndex(toClamped));
-    const slice = CHART_BASE.slice(iStart, iEnd + 1);
+    const slice = dailySeries;
     const count = slice.length;
-
-    let chartRangeLabel = `${viDate(CHART_PERIOD_START)} – ${viDate(CHART_PERIOD_END)}`;
-    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
-      chartRangeLabel = `${viDate(appliedFilters.dateFrom)} – ${viDate(appliedFilters.dateTo)}`;
-    }
+    const chartRangeLabel = `${viDate(DAILY_PERIOD_START)} – ${viDate(DAILY_PERIOD_END)} · mô phỏng`;
 
     if (count === 0) {
       return {
@@ -420,7 +260,7 @@ export default function OverviewDashboard() {
     const step = count > 1 ? plotW / (count - 1) : 0;
 
     const bars = slice.map((val, idx) => {
-      const scaledVal = Math.round(val * factor);
+      const scaledVal = val;
       const h = Math.min(plotH - 8, Math.max(4, (scaledVal / maxVal) * plotH));
       const cx = count === 1 ? 250 : padX + idx * step;
       const x = cx - 2.5;
@@ -429,7 +269,7 @@ export default function OverviewDashboard() {
     });
 
     const pts = slice.map((val, idx) => {
-      const scaledVal = Math.round(val * factor);
+      const scaledVal = val;
       const cx = count === 1 ? 250 : padX + idx * step;
       const cy = Math.max(6, plotH - (scaledVal / maxVal) * plotH);
       return { cx, cy, val: scaledVal };
@@ -442,14 +282,13 @@ export default function OverviewDashboard() {
       linePath = `M ${pts[0].cx} ${pts[0].cy} ` + pts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
     }
 
-    let runCum = 0;
-    const cumValues = slice.map((val) => {
-      runCum += Math.round(val * factor);
-      return runCum;
-    });
+    const cumValues = slice.map((_, index) =>
+      slice.slice(0, index + 1).reduce((sum, value) => sum + value, 0),
+    );
     const totalCum = cumValues[cumValues.length - 1] || 0;
 
-    const dailyTargetVal = Math.round(170 * factor);
+    const share = fullSummary.total > 0 ? summary.total / fullSummary.total : 0;
+    const dailyTargetVal = Math.max(1, Math.round(170 * Math.max(0.03, share)));
     const targetCumValues = slice.map((_, idx) => (idx + 1) * dailyTargetVal);
     const totalTargetCum = targetCumValues[targetCumValues.length - 1] || 0;
 
@@ -494,7 +333,7 @@ export default function OverviewDashboard() {
       const windowStart = Math.max(0, idx - 6);
       const win = slice.slice(windowStart, idx + 1);
       const avg = win.reduce((a, b) => a + b, 0) / win.length;
-      const scaledAvg = avg * factor;
+      const scaledAvg = avg;
       const cx = count === 1 ? 250 : padX + idx * step;
       const cy = Math.max(6, plotH - (scaledAvg / maxVal) * plotH);
       return { cx, cy };
@@ -509,7 +348,7 @@ export default function OverviewDashboard() {
 
     const fullLabels: string[] = [];
     for (let k = 0; k < count; k++) {
-      fullLabels.push(viDateShortFromIndex(iStart + k));
+      fullLabels.push(viDateShortFromIndex(k));
     }
     const chartLabels = sampleChartLabels(fullLabels, 8);
 
@@ -529,46 +368,64 @@ export default function OverviewDashboard() {
       maxCumVal,
       rightAxisLabels,
     };
-  }, [appliedFilters, factor]);
+  }, [dailySeries, fullSummary.total, summary.total]);
 
   const projectRows = useMemo(() => {
-    let rows = PROJECT_ROWS;
-    if (appliedFilters.projects.length) {
-      rows = rows.filter((r) => appliedFilters.projects.includes(r.name));
-    }
-    return rows;
-  }, [appliedFilters.projects]);
+    return groupWeldRows(selectedRows, (row) => row.du_an)
+      .sort((a, b) => b.total - a.total)
+      .map((row, index) => ({
+        name: row.name,
+        share: total > 0 ? row.total / total : 0,
+        color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+      }));
+  }, [selectedRows, total]);
 
   const machineRows = useMemo(() => {
-    let list = MACHINE_ROWS;
-    if (appliedFilters.machines.length) {
-      list = list.filter((m) => appliedFilters.machines.includes(m.code));
-    }
-    return list.map((m) => ({
-      code: m.code,
-      total: fmt(Math.round(total * m.totalShare)),
-      today: fmt(Math.round(today * m.todayShare)),
-      errorRate: m.errorRate,
-      availLabel: `${m.avail}%`,
-      availPct: m.avail,
-      availColor: m.avail >= 90 ? "#15803d" : "#d97706",
-    }));
-  }, [appliedFilters.machines, total, today]);
+    return groupWeldRows(selectedRows, machineForRow)
+      .sort((a, b) => REPORT_MACHINES.indexOf(a.name as (typeof REPORT_MACHINES)[number]) - REPORT_MACHINES.indexOf(b.name as (typeof REPORT_MACHINES)[number]))
+      .map((machine) => {
+        const avail = MACHINE_AVAILABILITY[machine.name] ?? 90;
+        return {
+          code: machine.name,
+          total: fmt(machine.total),
+          today: fmt(total > 0 ? Math.round(today * (machine.total / total)) : 0),
+          errorRate: pctComma(machine.errors, machine.total),
+          availLabel: `${avail}%`,
+          availPct: avail,
+          availColor: avail >= 90 ? "#15803d" : "#d97706",
+        };
+      });
+  }, [selectedRows, total, today]);
 
 
   const recentWelds = useMemo(() => {
-    let list = RECENT_WELDS;
-    if (appliedFilters.machines.length) {
-      list = list.filter((w) => appliedFilters.machines.includes(w.machine));
-    }
-    if (appliedFilters.methods.length) {
-      list = list.filter((w) => appliedFilters.methods.includes(w.method));
-    }
-    if (appliedFilters.weldTypes.length) {
-      list = list.filter((w) => appliedFilters.weldTypes.includes(w.weldType));
-    }
-    return list;
-  }, [appliedFilters.machines, appliedFilters.methods, appliedFilters.weldTypes]);
+    return selectedRows.map((row, index) => {
+      const sequence = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? 0);
+      const gpsPoint = gpsPoints.length
+        ? gpsPoints[(Math.max(sequence, index + 1) - 1) % gpsPoints.length]
+        : null;
+      const day = String(((sequence * 7) % 28) + 1).padStart(2, "0");
+      const month = String(((sequence * 5) % 12) + 1).padStart(2, "0");
+      const hour = String(7 + (sequence % 10)).padStart(2, "0");
+      const minute = String((sequence * 13) % 60).padStart(2, "0");
+      return {
+        id: row.id,
+        dateTime: `${day}/${month}/${row.nam_thuc_hien} ${hour}:${minute}`,
+        operator: row.ten_tho_han,
+        weldName: gpsPoint?.code ?? row.ma_lich_su,
+        project: row.du_an,
+        location: gpsPoint
+          ? `${gpsPoint.chainage} · ${gpsPoint.latitude.toFixed(6)}, ${gpsPoint.longitude.toFixed(6)}`
+          : "Chưa có GPS",
+        mapUrl: gpsPoint ? googleOpenPoint(gpsPoint.latitude, gpsPoint.longitude) : "",
+        failureReason: row.so_luong_loi > 0
+          ? row.nguyen_nhan_loi?.trim() || SYNTHETIC_FAILURE_REASONS[sequence % SYNTHETIC_FAILURE_REASONS.length]
+          : "—",
+        result: row.so_luong_loi > 0 ? "KHÔNG ĐẠT" : "ĐẠT",
+        resultType: row.so_luong_loi > 0 ? "fail" : "pass",
+      };
+    });
+  }, [selectedRows, gpsPoints]);
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
@@ -577,8 +434,8 @@ export default function OverviewDashboard() {
   ];
 
   const hasFilter =
-    appliedFilters.dateFrom !== CHART_PERIOD_START ||
-    appliedFilters.dateTo !== CHART_PERIOD_END ||
+    appliedFilters.dateFrom !== REPORT_PERIOD_START ||
+    appliedFilters.dateTo !== REPORT_PERIOD_END ||
     appliedFilters.projects.length > 0 ||
     appliedFilters.personnel.length > 0 ||
     appliedFilters.machines.length > 0 ||
@@ -591,7 +448,7 @@ export default function OverviewDashboard() {
     (appliedFilters.machines.length ? 1 : 0) +
     (appliedFilters.methods.length ? 1 : 0) +
     (appliedFilters.weldTypes.length ? 1 : 0) +
-    (appliedFilters.dateFrom !== CHART_PERIOD_START || appliedFilters.dateTo !== CHART_PERIOD_END ? 1 : 0);
+    (appliedFilters.dateFrom !== REPORT_PERIOD_START || appliedFilters.dateTo !== REPORT_PERIOD_END ? 1 : 0);
 
   function filterPickLabel(count: number, defaultText: string) {
     if (count === 0) return defaultText;
@@ -600,6 +457,13 @@ export default function OverviewDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {error
+          ? `Không tải được Supabase: ${error}`
+          : loading
+            ? "Đang tải dữ liệu Supabase…"
+            : `Supabase · ${rows.length} dòng lịch sử · Dữ liệu theo ngày là mô phỏng`}
+      </div>
       {/* 1. Filter Bar */}
       <div className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs flex flex-col gap-3">
         {/* Row 1: Label + Date Range + Project + Personnel + Machine (stretched full width) */}
@@ -1028,7 +892,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
-              {factor >= 1 ? `↑ ${(8.6 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(8.6 / factor).toFixed(1).replace(".", ",")}%`}{" "}
+              ↑ 8,6%{" "}
               <span className="text-slate-400 font-normal">so với hôm qua</span>
             </div>
           </div>
@@ -1052,7 +916,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-indigo-700 font-medium">
-              {factor >= 1 ? `↑ ${(12.4 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(12.4 / factor).toFixed(1).replace(".", ",")}%`}{" "}
+              ↑ 12,4%{" "}
               <span className="text-slate-400 font-normal">so với tháng trước</span>
             </div>
           </div>
@@ -1145,10 +1009,10 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <div className="mt-2 text-lg sm:text-xl font-bold font-mono text-slate-900 tracking-tight">
-                {fmt(total)} / {fmt(BASE.target)}
+                {fmt(total)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Mục tiêu: 22.500 mối
+                Mục tiêu: {fmt(target)} mối
               </div>
             </div>
 
@@ -1157,7 +1021,7 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Còn lại</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {fmt(Math.max(0, BASE.target - total))}
+                    {fmt(Math.max(0, target - total))}
                   </span>
                   <span className="text-xs text-slate-400">mối</span>
                 </div>
@@ -1166,7 +1030,7 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Định mức yêu cầu/ngày</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {BASE.quota}
+                    {quota}
                   </span>
                   <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
@@ -1721,99 +1585,88 @@ export default function OverviewDashboard() {
         </div>
       </div>
 
-      {/* 5. Bottom Row (Recent Welds Table 2-col span + Quick Actions 1-col) */}
+      {/* 5. Bottom Row (Welding log + Quick Actions) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4 items-start">
-        {/* Table: MỐI HÀN GẦN ĐÂY */}
+        {/* Table: NHẬT KÝ HÀN */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
-          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-            MỐI HÀN GẦN ĐÂY
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              NHẬT KÝ HÀN
+            </div>
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0047AB]">
+              {gpsLoading ? "Đang ghép GPS…" : `${recentWelds.length} bản ghi`}
+            </span>
           </div>
           <div className="table-scroll overflow-x-auto mt-3.5">
-            <div className="min-w-[760px]">
-              <div className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <div>Weld ID</div>
-                <div>Date / Time</div>
-                <div>Nhà máy</div>
-                <div>Machine</div>
-                <div>Rail Type</div>
-                <div>Rail Heat No.</div>
-                <div>Operator</div>
-                <div>Result</div>
-                <div>Inspection</div>
-                <div>Actions</div>
+            <div className="min-w-[1220px]">
+              <div className="grid grid-cols-[0.7fr_0.95fr_1.1fr_0.8fr_1.65fr_1.2fr_1.25fr_0.85fr] gap-x-3 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <div>ID</div>
+                <div>Ngày giờ</div>
+                <div>Nhân sự phụ trách</div>
+                <div>Tên mối hàn</div>
+                <div>Dự án</div>
+                <div>Vị trí</div>
+                <div>Lý do không đạt</div>
+                <div>Tình trạng</div>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto">
                 {recentWelds.map((w) => (
                   <div
                     key={w.id}
-                    className="grid grid-cols-[1fr_1.3fr_0.95fr_0.8fr_0.75fr_1.2fr_1.1fr_0.85fr_1.05fr_0.6fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
+                    className="grid grid-cols-[0.7fr_0.95fr_1.1fr_0.8fr_1.65fr_1.2fr_1.25fr_0.85fr] gap-x-3 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                   >
-                    <div className="font-semibold text-[#0047AB] font-mono">
-                      {w.id}
+                    <div className="truncate font-mono text-xs text-slate-500" title={w.id}>
+                      {w.id.slice(0, 8)}
                     </div>
-                    <div className="font-mono text-xs text-slate-500">{w.dateTime}</div>
-                    <div>{w.plant}</div>
-                    <div className="font-mono text-xs">{w.machine}</div>
-                    <div className="font-mono text-xs">{w.railType}</div>
-                    <div className="font-mono text-xs text-slate-600">{w.heatNo}</div>
-                    <div>{w.operator}</div>
+                    <div className="whitespace-nowrap font-mono text-xs text-slate-500">{w.dateTime}</div>
+                    <div className="font-semibold text-slate-900">{w.operator}</div>
+                    <div className="font-mono font-semibold text-[#0047AB]">{w.weldName}</div>
+                    <div className="line-clamp-2" title={w.project}>{w.project}</div>
+                    <div className="min-w-0">
+                      {w.mapUrl ? (
+                        <a
+                          href={w.mapUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={w.location}
+                          className="line-clamp-2 text-xs font-medium text-[#0047AB] hover:underline"
+                        >
+                          {w.location}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400">{w.location}</span>
+                      )}
+                    </div>
+                    <div className={w.resultType === "fail" ? "line-clamp-2 text-xs font-medium text-rose-700" : "text-slate-400"}>
+                      {w.failureReason}
+                    </div>
                     <div>
                       {w.resultType === "pass" ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          ĐẠT
+                          Đạt
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                          KHÔNG ĐẠT
+                          Không đạt
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm">
-                      <span className="text-slate-500 text-xs">UT</span>
-                      {w.ut ? (
-                        <span className="text-emerald-700 font-bold text-sm">✓</span>
-                      ) : (
-                        <span className="text-rose-600 font-bold text-sm">✗</span>
-                      )}
-                      <span className="text-slate-500 text-xs">Ngoại quan</span>
-                      {w.visual ? (
-                        <span className="text-emerald-700 font-bold text-sm">✓</span>
-                      ) : (
-                        <span className="text-rose-600 font-bold text-sm">✗</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[#0047AB]">
-                      <button
-                        type="button"
-                        className="hover:text-[#00388A] transition-colors cursor-pointer p-1 rounded-md hover:bg-blue-50"
-                        title="Xem chi tiết"
-                      >
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer p-1 rounded-md hover:bg-slate-100"
-                        title="In tem"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                        </svg>
-                      </button>
-                    </div>
                   </div>
                 ))}
+                {recentWelds.length === 0 && (
+                  <div className="px-3 py-10 text-center text-sm text-slate-500">
+                    Không có nhật ký hàn phù hợp với bộ lọc.
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2 pt-3.5 text-xs sm:text-sm text-[#0047AB] font-semibold">
-            <button type="button" className="hover:underline cursor-pointer">
-              Xem tất cả mối hàn
-            </button>
-            <span className="text-slate-400">→</span>
+          <div className="pt-3 text-right text-xs text-slate-500">
+            {gpsError
+              ? `GPS dự phòng: ${gpsError}`
+              : "Tên mối hàn và vị trí lấy từ GPS theo thứ tự điểm; ngày giờ được mô phỏng từ năm thực hiện."}
           </div>
         </div>
 

@@ -1,13 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
+import {
+  buildSyntheticDailySeries,
+  groupWeldRows,
+  machineForRow,
+  summarizeWeldRows,
+} from "@/lib/weldReportData";
 
 type CertDetail = {
   title: string;
   info: [string, string][];
   holders: { name: string; photo: string; issued: string; expires: string }[];
 };
+
+const PORTRAIT_IDS = [32, 52, 36, 22, 48, 44];
 
 const CERT_DATA: Record<string, CertDetail> = {
   iso9606: {
@@ -81,114 +90,47 @@ const CERT_DATA: Record<string, CertDetail> = {
   },
 };
 
-const ACTIVE_WELDERS = [
-  {
-    name: "Lê Thị Kim Anh",
-    photo: "https://randomuser.me/api/portraits/women/65.jpg",
-    meta: "K920 · Hà Nội · Tổ 1",
-    status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-    shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Phạm Văn Minh",
-    photo: "https://randomuser.me/api/portraits/men/52.jpg",
-    meta: "K922-2 · Nhà máy Đà Nẵng · Tổ hàn số 2",
-    status: "Đạt chuẩn",
-    statusBg: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-    shift: "Ca chiều",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Nguyễn Văn Hùng",
-    photo: "https://randomuser.me/api/portraits/men/36.jpg",
-    meta: "AMS60 · Nhà máy Hà Nội · Tổ hàn số 3",
-    status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-    shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Trần Quốc Bảo",
-    photo: "https://randomuser.me/api/portraits/men/22.jpg",
-    meta: "K920 · Nhà máy TP.HCM · Tổ kiểm tra CL",
-    status: "Hoàn thành ca",
-    statusBg: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-    shift: "Ca đêm",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Đỗ Thị Lan",
-    photo: "https://randomuser.me/api/portraits/women/48.jpg",
-    meta: "K355 · Nhà máy Hà Nội · Tổ hàn số 4",
-    status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-    shift: "Ca chiều",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Trần Thị Mai Anh",
-    photo: "https://randomuser.me/api/portraits/women/44.jpg",
-    meta: "K922-1 · Nhà máy Cổ Loa · Tổ hàn số 4",
-    status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
-    shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
-  },
-  {
-    name: "Nguyễn Văn Minh",
-    photo: "https://randomuser.me/api/portraits/men/32.jpg",
-    meta: "GEO-01 · Hạ Long Xanh · Tổ hàn số 2",
-    status: "Nghỉ ca",
-    statusBg: "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
-    shift: "Ca chiều",
-    borderColor: "ring-[#f59e0b]",
-  },
-];
-
-const WELDER_PRODUCTIVITY = [
-  {
-    name: "Trần Thị Mai Anh",
-    teamMachine: "Tổ 4 · K922-1",
-    welds: "1.240",
-    today: "62",
-    passRate: "99,8%",
-    rateColor: "text-[#15803d]",
-    shift: "Sáng",
-  },
-  {
-    name: "Nguyễn Văn Minh",
-    teamMachine: "Tổ 2 · K922-2",
-    welds: "1.180",
-    today: "51",
-    passRate: "99,7%",
-    rateColor: "text-[#15803d]",
-    shift: "Chiều",
-  },
-  {
-    name: "Phạm Văn B",
-    teamMachine: "Tổ 4 · K922-1",
-    welds: "980",
-    today: "44",
-    passRate: "99,5%",
-    rateColor: "text-[#15803d]",
-    shift: "Sáng",
-  },
-  {
-    name: "Trần Văn C",
-    teamMachine: "Tổ 1 · K920",
-    welds: "860",
-    today: "13",
-    passRate: "99,1%",
-    rateColor: "text-[#b45309]",
-    shift: "Đêm",
-  },
-];
-
 export default function PersonnelReportDashboard() {
+  const { rows, loading, error } = useWeldReportData();
   const [selectedCert, setSelectedCert] = useState<string | null>(null);
   const [certModalTab, setCertModalTab] = useState<"info" | "holders">("info");
+  const summary = useMemo(() => summarizeWeldRows(rows), [rows]);
+  const welders = useMemo(
+    () => groupWeldRows(rows, (row) => row.ten_tho_han).sort((a, b) => b.total - a.total),
+    [rows],
+  );
+  const today = useMemo(
+    () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
+    [summary.total],
+  );
+  const activeWelders = welders.map((welder, index) => {
+    const source = welder.rows[0];
+    const machine = machineForRow(source);
+    return {
+      name: welder.name,
+      photo: `https://randomuser.me/api/portraits/men/${PORTRAIT_IDS[index % PORTRAIT_IDS.length]}.jpg`,
+      meta: `${machine} · ${source.ma_nhan_su} · ${source.loai_ray}`,
+      status: welder.errors > 0 ? "Cần theo dõi" : "Đạt chuẩn",
+      statusBg: welder.errors > 0
+        ? "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]"
+        : "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+      shift: ["Ca sáng", "Ca chiều", "Ca đêm"][index % 3],
+      borderColor: welder.errors > 0 ? "ring-[#f59e0b]" : "ring-[#16a34a]",
+    };
+  });
+  const welderProductivity = welders.map((welder, index) => {
+    const source = welder.rows[0];
+    const passRate = welder.total > 0 ? ((welder.passed / welder.total) * 100) : 0;
+    return {
+      name: welder.name,
+      teamMachine: `${source.ma_nhan_su} · ${machineForRow(source)}`,
+      welds: welder.total.toLocaleString("vi-VN"),
+      today: (summary.total > 0 ? Math.round(today * (welder.total / summary.total)) : 0).toLocaleString("vi-VN"),
+      passRate: `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`,
+      rateColor: passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
+      shift: ["Sáng", "Chiều", "Đêm"][index % 3],
+    };
+  });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -198,10 +140,30 @@ export default function PersonnelReportDashboard() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const certDetail = selectedCert ? CERT_DATA[selectedCert] : null;
+  const certDetail = useMemo(() => {
+    if (!selectedCert) return null;
+    const base = CERT_DATA[selectedCert];
+    if (!base) return null;
+    return {
+      ...base,
+      holders: welders.slice(0, 4).map((welder, index) => ({
+        name: welder.name,
+        photo: `men/${PORTRAIT_IDS[index % PORTRAIT_IDS.length]}`,
+        issued: "01/07/2024",
+        expires: "01/07/2027",
+      })),
+    };
+  }, [selectedCert, welders]);
 
   return (
     <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {error
+          ? `Không tải được Supabase: ${error}`
+          : loading
+            ? "Đang tải dữ liệu Supabase…"
+            : `Supabase · ${welders.length} thợ hàn · Sản lượng ngày và ca trực là mô phỏng`}
+      </div>
       {/* 1. Top 3 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {/* Card 1: Thợ hàn đang trực */}
@@ -211,7 +173,7 @@ export default function PersonnelReportDashboard() {
               THỢ HÀN ĐANG TRỰC
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-              7 <span className="text-xs sm:text-sm font-medium text-slate-400">/ 24</span>
+              {welders.length} <span className="text-xs sm:text-sm font-medium text-slate-400">/ {welders.length}</span>
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
               ↑ 2 người <span className="text-slate-400 font-normal">so với ca trước</span>
@@ -253,7 +215,7 @@ export default function PersonnelReportDashboard() {
               ĐIỂM HIỆU SUẤT TỔ ĐỘI
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-              2.450
+              {summary.passed.toLocaleString("vi-VN")}
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
               ↑ 6,5% <span className="text-slate-400 font-normal">so với kỳ trước</span>
@@ -277,7 +239,7 @@ export default function PersonnelReportDashboard() {
             <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-                  Thợ hàn đang trực (24)
+                  Thợ hàn trong dữ liệu ({welders.length})
                 </div>
                 <button type="button" className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline cursor-pointer">
                   Xem tất cả →
@@ -285,7 +247,7 @@ export default function PersonnelReportDashboard() {
               </div>
 
               <div className="mt-3.5 flex flex-col max-h-[440px] overflow-y-auto divide-y divide-slate-100 pr-1">
-                {ACTIVE_WELDERS.map((w, idx) => (
+                {activeWelders.map((w, idx) => (
                   <div key={idx} className="flex items-center gap-3 py-2.5 px-1 hover:bg-slate-50/80 rounded-lg transition-colors">
                     <div className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ${w.borderColor} shadow-2xs`}>
                       <Image
@@ -420,7 +382,7 @@ export default function PersonnelReportDashboard() {
                   <div className="text-right">Ca làm</div>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {WELDER_PRODUCTIVITY.map((w, idx) => (
+                  {welderProductivity.map((w, idx) => (
                     <div
                       key={idx}
                       className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
@@ -530,7 +492,7 @@ export default function PersonnelReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Trần Thị Mai Anh
+                    {welders[0]?.name ?? "—"}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     EN ISO 9606-1
@@ -549,7 +511,7 @@ export default function PersonnelReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Nguyễn Văn Minh
+                    {welders[1]?.name ?? "—"}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     Huấn luyện an toàn
@@ -568,7 +530,7 @@ export default function PersonnelReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Phạm Quốc Bảo
+                    {welders[2]?.name ?? "—"}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     Kiểm định UT cấp 2
