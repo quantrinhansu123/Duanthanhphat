@@ -57,3 +57,5 @@ drop policy if exists "anon_all_lich_su_moi_han" on public.lich_su_moi_han;
 create policy "anon_all_lich_su_moi_han"
   on public.lich_su_moi_han for all to anon
   using (true) with check (true);
+
+grant insert, update, delete on public.lich_su_moi_han to anon;

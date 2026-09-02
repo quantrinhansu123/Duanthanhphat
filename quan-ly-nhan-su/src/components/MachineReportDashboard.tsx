@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildSyntheticDailySeries,
+  filterWeldReportRows,
   groupWeldRows,
   machineForRow,
   REPORT_MACHINES,
@@ -125,14 +127,19 @@ const CALIBRATION_DOCS = [
 
 export default function MachineReportDashboard() {
   const { rows, loading, error } = useWeldReportData();
+  const { appliedFilters } = useReportFilters();
   const [activeSlide, setActiveSlide] = useState(0);
-  const summary = useMemo(() => summarizeWeldRows(rows), [rows]);
+  const selectedRows = useMemo(
+    () => filterWeldReportRows(rows, appliedFilters),
+    [rows, appliedFilters],
+  );
+  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
   const today = useMemo(
     () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
     [summary.total],
   );
   const machineStats = useMemo(() => {
-    const grouped = new Map(groupWeldRows(rows, machineForRow).map((group) => [group.name, group]));
+    const grouped = new Map(groupWeldRows(selectedRows, machineForRow).map((group) => [group.name, group]));
     return REPORT_MACHINES.map((code) => {
       const group = grouped.get(code);
       return {
@@ -141,7 +148,7 @@ export default function MachineReportDashboard() {
         errors: group?.errors ?? 0,
       };
     });
-  }, [rows]);
+  }, [selectedRows]);
   const machinesRecommended = MACHINES_RECOMMENDED.map((machine, index) => ({
     ...machine,
     welds: `${(machineStats[index]?.total ?? 0).toLocaleString("vi-VN")} mối`,
@@ -160,7 +167,7 @@ export default function MachineReportDashboard() {
   const operatingMachines = machineStats.filter((machine) => machine.total > 0).length;
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+    <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {error
           ? `Không tải được Supabase: ${error}`

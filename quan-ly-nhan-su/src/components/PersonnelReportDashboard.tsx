@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildSyntheticDailySeries,
+  filterWeldReportRows,
   groupWeldRows,
   machineForRow,
   summarizeWeldRows,
@@ -92,12 +94,17 @@ const CERT_DATA: Record<string, CertDetail> = {
 
 export default function PersonnelReportDashboard() {
   const { rows, loading, error } = useWeldReportData();
+  const { appliedFilters } = useReportFilters();
   const [selectedCert, setSelectedCert] = useState<string | null>(null);
   const [certModalTab, setCertModalTab] = useState<"info" | "holders">("info");
-  const summary = useMemo(() => summarizeWeldRows(rows), [rows]);
+  const selectedRows = useMemo(
+    () => filterWeldReportRows(rows, appliedFilters),
+    [rows, appliedFilters],
+  );
+  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
   const welders = useMemo(
-    () => groupWeldRows(rows, (row) => row.ten_tho_han).sort((a, b) => b.total - a.total),
-    [rows],
+    () => groupWeldRows(selectedRows, (row) => row.ten_tho_han).sort((a, b) => b.total - a.total),
+    [selectedRows],
   );
   const today = useMemo(
     () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
@@ -156,7 +163,7 @@ export default function PersonnelReportDashboard() {
   }, [selectedCert, welders]);
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+    <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
       <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {error
           ? `Không tải được Supabase: ${error}`

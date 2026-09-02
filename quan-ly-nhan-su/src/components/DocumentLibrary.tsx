@@ -409,14 +409,14 @@ export default function DocumentLibrary() {
       )}
 
       {viewer && (
-        <div className="fixed inset-0 z-[90] flex flex-col bg-[#0f172a]/70 p-3 sm:p-6">
+        <div className="fixed inset-0 z-[90] flex flex-col bg-[#0f172a]/70 p-1 sm:p-1.5">
           <button
             type="button"
             className="absolute inset-0"
             aria-label="Đóng xem PDF"
             onClick={() => setViewer(null)}
           />
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-[1100px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+          <div className="relative z-10 mx-auto flex h-[calc(100vh-0.75rem)] w-[96vw] max-w-[1650px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#e8eef8] px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate text-[15px] font-bold text-[#0f172a]">{viewer.title}</div>
