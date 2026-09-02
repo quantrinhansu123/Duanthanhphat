@@ -2,6 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Funnel,
+  CaretDown,
+  SlidersHorizontal,
+  CheckCircle,
+  XCircle,
+  SealCheck,
+  ArrowsClockwise,
+  ListChecks,
+  Eye,
+  Warning,
+} from "@/components/icons";
+import {
   defectCategories,
   inspectionBreakdown,
   plantQuality,
@@ -143,7 +155,7 @@ function DonutChart({ rate }: { rate: number }) {
       <text x="70" y="68" textAnchor="middle" className="fill-slate-900 text-xl font-bold font-mono">
         {rate.toLocaleString("vi-VN")}%
       </text>
-      <text x="70" y="86" textAnchor="middle" className="fill-slate-500 text-[10px] font-bold tracking-wider">
+      <text x="70" y="86" textAnchor="middle" className="fill-slate-500 text-[11px] font-bold tracking-wider">
         ĐẠT CHUẨN
       </text>
     </svg>
@@ -404,9 +416,7 @@ export default function QualityReportDashboard() {
         <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
           {/* Label icon */}
           <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 lg:pb-2.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-            </svg>
+            <Funnel size={16} weight="fill" aria-hidden />
             <span>Bộ lọc:</span>
             {filterCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white font-mono shadow-xs">
@@ -469,19 +479,7 @@ export default function QualityReportDashboard() {
                 <span className="truncate">
                   {filterPickLabel(projects.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {projectFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -531,19 +529,7 @@ export default function QualityReportDashboard() {
                 <span className="truncate">
                   {filterPickLabel(personnel.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {personnelFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -593,19 +579,7 @@ export default function QualityReportDashboard() {
                 <span className="truncate">
                   {filterPickLabel(machines.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {machineFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -659,19 +633,7 @@ export default function QualityReportDashboard() {
               <span className="truncate">
                 {filterPickLabel(methods.length, "Tất cả")}
               </span>
-              <svg
-                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                  methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                }`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
             </button>
             {methodFilterOpen && (
               <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -721,19 +683,7 @@ export default function QualityReportDashboard() {
               <span className="truncate">
                 {filterPickLabel(weldTypes.length, "Tất cả")}
               </span>
-              <svg
-                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                  weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                }`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
             </button>
             {weldTypeFilterOpen && (
               <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -771,9 +721,7 @@ export default function QualityReportDashboard() {
               onClick={handleApplyFilters}
               className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-              </svg>
+              <SlidersHorizontal size={13} weight="fill" aria-hidden />
               Áp dụng
             </button>
 
@@ -801,10 +749,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-emerald-50 text-emerald-700 border border-emerald-200"
           labelColor="text-emerald-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M8 12l3 3 5-6" />
-            </svg>
+            <CheckCircle size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -816,10 +761,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-rose-50 text-rose-700 border border-rose-200"
           labelColor="text-rose-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M15 9l-6 6M9 9l6 6" />
-            </svg>
+            <XCircle size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -830,10 +772,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-blue-50 text-[#0047AB] border border-blue-200/80"
           labelColor="text-[#0047AB]"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 5L9 15l-4-4" />
-              <path d="M14 5h5v5" />
-            </svg>
+            <SealCheck size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -845,11 +784,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-amber-50 text-amber-700 border border-amber-200"
           labelColor="text-amber-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-              <path d="M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
+            <ArrowsClockwise size={22} aria-hidden />
           }
         />
       </div>
@@ -864,10 +799,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-slate-50 text-slate-700 border border-slate-200"
           labelColor="text-slate-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
+            <ListChecks size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -878,10 +810,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-cyan-50 text-cyan-700 border border-cyan-200"
           labelColor="text-cyan-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M2 12c2-4 6-7 10-7s8 3 10 7c-2 4-6 7-10 7S4 16 2 12z" />
-              <circle cx="12" cy="12" r="2" />
-            </svg>
+            <Eye size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -893,10 +822,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-purple-50 text-purple-700 border border-purple-200"
           labelColor="text-purple-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
+            <Eye size={22} aria-hidden />
           }
         />
         <KpiCard
@@ -908,10 +834,7 @@ export default function QualityReportDashboard() {
           iconBg="bg-orange-50 text-orange-700 border border-orange-200"
           labelColor="text-orange-700"
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 9v4M12 17h.01" />
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            </svg>
+            <Warning size={22} aria-hidden />
           }
         />
       </div>
@@ -939,9 +862,7 @@ export default function QualityReportDashboard() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm sm:text-base font-bold tracking-tight text-slate-900">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="#dc2626" className="shrink-0">
-                  <path d="M12 2L1 21h22L12 2zm0 6v6m0 4h.01" stroke="#dc2626" strokeWidth="0" />
-                </svg>
+                <Warning size={16} weight="fill" aria-hidden className="shrink-0 text-rose-600" />
                 <span>Phân loại lỗi</span>
               </div>
               <div className="mt-0.5 text-xs text-slate-500">Khuyết tật phát hiện qua NDT/UT và ngoại quan</div>
@@ -1049,7 +970,7 @@ export default function QualityReportDashboard() {
                 {currentWelderQuality.map((w, i) => (
                   <tr key={w.weldingId} className="hover:bg-slate-50/80 transition-colors duration-150">
                     <td className="py-2.5 pr-3 whitespace-nowrap">
-                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-md bg-blue-50 text-[10px] font-bold font-mono text-[#0047AB] border border-blue-200">
+                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-lg bg-blue-50 text-[11px] font-bold font-mono text-[#0047AB] border border-blue-200">
                         {i + 1}
                       </span>
                       <span className="font-semibold text-slate-900">{w.name}</span>

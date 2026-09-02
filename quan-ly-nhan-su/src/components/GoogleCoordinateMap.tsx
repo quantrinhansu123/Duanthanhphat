@@ -96,7 +96,7 @@ export default function GoogleCoordinateMap({
 
   if (loadError) {
     return (
-      <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-2 bg-[#fef2f2] px-6 text-center text-[13px] text-[#b91c1c]">
+      <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-2 bg-rose-50 px-6 text-center text-sm text-rose-700">
         <strong>Không tải được Google Maps</strong>
         <span>Kiểm tra API key, bật Maps JavaScript API, hoặc hạn chế domain/localhost.</span>
       </div>
@@ -105,7 +105,7 @@ export default function GoogleCoordinateMap({
 
   if (!isLoaded) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center bg-[#e8eef8] text-[13px] text-[#64748b]">
+      <div className="flex h-full min-h-[420px] items-center justify-center bg-slate-200 text-sm text-slate-500">
         Đang tải Google Maps…
       </div>
     );

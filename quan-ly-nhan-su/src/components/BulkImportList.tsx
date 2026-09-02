@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MagnifyingGlass } from "@/components/icons";
 import {
   historicalWeldColumns,
   historicalWelds,
@@ -71,18 +72,7 @@ function DetailImportTable() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -216,18 +206,7 @@ function SummaryImportTable() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -251,34 +230,34 @@ function SummaryImportTable() {
           <table className="w-full min-w-[1200px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-[#00388A] bg-[#0047AB] text-xs font-bold uppercase tracking-wider text-white">
-                <th rowSpan={2} className="border-r border-blue-600 px-3 py-2.5 text-center">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3 py-2.5 text-center">
                   TT
                 </th>
-                <th rowSpan={2} className="border-r border-blue-600 px-3.5 py-2.5">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5">
                   Dự án
                 </th>
-                <th rowSpan={2} className="border-r border-blue-600 px-3.5 py-2.5">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5">
                   Ngày thực hiện
                 </th>
-                <th rowSpan={2} className="border-r border-blue-600 px-3.5 py-2.5">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5">
                   Loại mối hàn
                 </th>
-                <th rowSpan={2} className="border-r border-blue-600 px-3.5 py-2.5">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5">
                   Công nghệ hàn
                 </th>
-                <th colSpan={2} className="border-r border-blue-600 px-3.5 py-2.5 text-center">
+                <th colSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5 text-center">
                   Số lượng mối hàn
                 </th>
-                <th rowSpan={2} className="border-r border-blue-600 px-3.5 py-2.5">
+                <th rowSpan={2} className="border-r border-[#00388A] px-3.5 py-2.5">
                   Tên thợ hàn
                 </th>
                 <th rowSpan={2} className="px-3.5 py-2.5">
                   Nguyên nhân lỗi
                 </th>
               </tr>
-              <tr className="border-b border-blue-600 bg-blue-700 text-[11px] font-semibold uppercase text-white">
-                <th className="border-r border-blue-500 px-3 py-2 text-center">Thành phẩm</th>
-                <th className="border-r border-blue-500 px-3 py-2 text-center">Hàng lỗi</th>
+              <tr className="border-b border-[#00388A] bg-[#00388A] text-[11px] font-semibold uppercase text-white">
+                <th className="border-r border-white/20 px-3 py-2 text-center">Thành phẩm</th>
+                <th className="border-r border-white/20 px-3 py-2 text-center">Hàng lỗi</th>
               </tr>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] italic text-slate-500">
                 <th className="px-3 py-2 font-normal" />
@@ -361,38 +340,38 @@ function VolumeImportTable() {
           <table className="w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-[#00388A] bg-[#0047AB] text-xs font-bold uppercase tracking-wider text-white">
-                <th rowSpan={2} className="w-12 border-r border-blue-600 px-3 py-2.5 text-center">
+                <th rowSpan={2} className="w-12 border-r border-[#00388A] px-3 py-2.5 text-center">
                   TT
                 </th>
-                <th rowSpan={2} className="min-w-[100px] border-r border-blue-600 px-3.5 py-2.5 text-center">
+                <th rowSpan={2} className="min-w-[100px] border-r border-[#00388A] px-3.5 py-2.5 text-center">
                   Thời gian thực hiện
                 </th>
-                <th colSpan={3} className="border-r border-blue-600 px-3.5 py-2.5 text-center">
+                <th colSpan={3} className="border-r border-[#00388A] px-3.5 py-2.5 text-center">
                   Mối hàn thử nghiệm – đào tạo
                 </th>
-                <th colSpan={3} className="border-r border-blue-600 px-3.5 py-2.5 text-center">
+                <th colSpan={3} className="border-r border-[#00388A] px-3.5 py-2.5 text-center">
                   Thành phẩm
                 </th>
-                <th colSpan={3} className="border-r border-blue-600 px-3.5 py-2.5 text-center">
+                <th colSpan={3} className="border-r border-[#00388A] px-3.5 py-2.5 text-center">
                   Hàng lỗi
                 </th>
                 <th rowSpan={2} className="min-w-[180px] px-3.5 py-2.5 text-center">
                   Nguyên nhân lỗi
                 </th>
               </tr>
-              <tr className="border-b border-[#00388A] bg-blue-700 text-[11px] font-semibold uppercase text-white">
+              <tr className="border-b border-[#00388A] bg-[#00388A] text-[11px] font-semibold uppercase text-white">
                 {(["FBW", "ATW", "Tổng"] as const).map((label) => (
-                  <th key={`trial-${label}`} className="border-r border-blue-500 px-2 py-2 text-center">
+                  <th key={`trial-${label}`} className="border-r border-white/20 px-2 py-2 text-center">
                     {label}
                   </th>
                 ))}
                 {(["FBW", "ATW", "Tổng"] as const).map((label) => (
-                  <th key={`prod-${label}`} className="border-r border-blue-500 px-2 py-2 text-center">
+                  <th key={`prod-${label}`} className="border-r border-white/20 px-2 py-2 text-center">
                     {label}
                   </th>
                 ))}
                 {(["FBW", "ATW", "Tổng"] as const).map((label) => (
-                  <th key={`def-${label}`} className="border-r border-blue-500 px-2 py-2 text-center">
+                  <th key={`def-${label}`} className="border-r border-white/20 px-2 py-2 text-center">
                     {label}
                   </th>
                 ))}

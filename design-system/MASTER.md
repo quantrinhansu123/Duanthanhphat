@@ -57,8 +57,8 @@ Soft UI Evolution bridges the gap between clean flat enterprise design and tacti
 
 ## 3. Typography Standards
 
-- **Primary Font Family:** `Be Vietnam Pro`, `-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`, `sans-serif` (full Vietnamese diacritics support, optimal legibility).
-- **Monospace / Metric Font:** `JetBrains Mono`, `ui-monospace`, `monospace` (used for IDs, Serial numbers, Machine codes, Welder IDs, Heat numbers, UTM measurements, W/L/H, coordinates).
+- **Primary Font Family:** `Inter`, `-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `Roboto`, `sans-serif` (full Vietnamese diacritics support, optimal legibility).
+- **Monospace / Metric Font:** `IBM Plex Mono`, `ui-monospace`, `monospace` (used for IDs, Serial numbers, Machine codes, Welder IDs, Heat numbers, UTM measurements, W/L/H, coordinates).
 
 ### Hierarchy Scale
 
@@ -191,7 +191,7 @@ Soft UI Evolution bridges the gap between clean flat enterprise design and tacti
 ## 7. Quality & Verification Checklist
 
 - [x] All colors use unified design tokens from this master spec.
-- [x] Font loaded is `Be Vietnam Pro` with `JetBrains Mono` for data and numbers.
+- [x] Font loaded is `Inter` with `IBM Plex Mono` for data and numbers.
 - [x] No emoji icons; clean standard SVGs with proper `aria-hidden` or labels.
 - [x] Focus states are visible and keyboard accessible (`focus-visible:ring-2`).
 - [x] Buttons and touch targets are at least 38-44px high on touch viewports.

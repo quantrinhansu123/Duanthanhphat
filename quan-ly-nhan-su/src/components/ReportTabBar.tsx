@@ -1,40 +1,19 @@
 "use client";
 
+import type { Icon } from "@phosphor-icons/react";
 import { REPORT_TABS } from "@/data/reportTabs";
+import { SquaresFour, ShieldCheck, Wrench, Users } from "@/components/icons";
 
 type ReportTabBarProps = {
   activeId: string;
   onNavigate: (id: string) => void;
 };
 
-const icons: Record<string, React.ReactNode> = {
-  "bc-tong-quan": (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="3" y="3" width="8" height="8" rx="1.5" />
-      <rect x="13" y="3" width="8" height="8" rx="1.5" />
-      <rect x="3" y="13" width="8" height="8" rx="1.5" />
-      <rect x="13" y="13" width="8" height="8" rx="1.5" />
-    </svg>
-  ),
-  "bc-chat-luong": (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <path d="M9 12l2 2 4-4" />
-    </svg>
-  ),
-  "bc-may-moc": (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3" />
-    </svg>
-  ),
-  "bc-nhan-su": (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
+const icons: Record<string, Icon> = {
+  "bc-tong-quan": SquaresFour,
+  "bc-chat-luong": ShieldCheck,
+  "bc-may-moc": Wrench,
+  "bc-nhan-su": Users,
 };
 
 export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps) {
@@ -47,6 +26,7 @@ export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps
         >
           {REPORT_TABS.map((tab) => {
             const active = tab.id === activeId;
+            const TabIcon = icons[tab.id];
             return (
               <button
                 key={tab.id}
@@ -60,7 +40,14 @@ export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps
                     : "text-slate-600 hover:bg-white hover:text-slate-900"
                 }`}
               >
-                <span className={active ? "text-white" : "text-slate-500"}>{icons[tab.id]}</span>
+                {TabIcon ? (
+                  <TabIcon
+                    size={17}
+                    weight={active ? "fill" : "regular"}
+                    aria-hidden
+                    className={active ? "text-white" : "text-slate-500"}
+                  />
+                ) : null}
                 <span>{tab.label}</span>
               </button>
             );

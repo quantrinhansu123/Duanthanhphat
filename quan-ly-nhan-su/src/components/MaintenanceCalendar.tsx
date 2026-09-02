@@ -7,6 +7,7 @@ import MaintenanceFormModal, {
   type MaintenanceFormValues,
 } from "@/components/MaintenanceFormModal";
 import { maintenanceEvents as seedEvents, type MaintenanceEvent } from "@/data/maintenance";
+import { Check } from "@/components/icons";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
@@ -54,7 +55,7 @@ function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent
       ))}
       {extra > 0 && (
         <span
-          className="relative z-0 flex items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-700 ring-2 ring-white shadow-2xs"
+          className="relative z-0 flex items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-700 ring-2 ring-white shadow-2xs"
           style={{ width: size, height: size, marginLeft: -(size * 0.28) }}
         >
           +{extra}
@@ -253,14 +254,14 @@ export default function MaintenanceCalendar() {
                     {cell.events.slice(0, 2).map((e) => (
                       <div
                         key={e.id}
-                        className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium font-mono text-white shadow-2xs ${typeColor[e.type]}`}
+                        className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium font-mono text-white shadow-2xs ${typeColor[e.type]}`}
                         title={`${e.time} · ${e.title} · ${e.assignees.map((a) => a.name).join(", ")}`}
                       >
                         {e.time} {e.machine}
                       </div>
                     ))}
                     {cell.events.length > 2 && (
-                      <div className="px-1 text-[10px] font-semibold text-[#0047AB]">
+                      <div className="px-1 text-[11px] font-semibold text-[#0047AB]">
                         +{cell.events.length - 2} nữa
                       </div>
                     )}
@@ -292,7 +293,7 @@ export default function MaintenanceCalendar() {
                 )}
                 <div className="relative z-[1] flex w-[52px] flex-none flex-col items-center pt-0.5">
                   <div className="text-xs sm:text-sm font-bold font-mono tabular-nums text-[#0047AB]">{e.time}</div>
-                  <div className="mt-0.5 text-[10px] font-mono tabular-nums text-slate-400">
+                  <div className="mt-0.5 text-[11px] font-mono tabular-nums text-slate-400">
                     {endTime(e.time, e.durationMin)}
                   </div>
                 </div>
@@ -342,9 +343,7 @@ export default function MaintenanceCalendar() {
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Check size={16} weight="bold" aria-hidden className="text-emerald-500" />
           {toast}
         </div>
       )}

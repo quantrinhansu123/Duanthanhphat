@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { weldJoints, type WeldPurpose } from "@/data/weld-joints";
+import { MagnifyingGlass } from "@/components/icons";
 
 const weldTypeStyle: Record<WeldPurpose, string> = {
   "Thử nghiệm": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
@@ -39,18 +40,7 @@ export default function WeldJointManagement() {
 
       <div className="mb-4">
         <div className="relative max-w-md">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

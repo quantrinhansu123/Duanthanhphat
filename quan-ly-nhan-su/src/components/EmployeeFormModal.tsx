@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Employee } from "@/data/employees";
+import { X, WarningCircle } from "@/components/icons";
 
 export type EmployeeFormValues = {
   code: string;
@@ -180,9 +181,7 @@ export default function EmployeeFormModal({
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <X size={18} weight="bold" aria-hidden />
           </button>
         </div>
 
@@ -248,7 +247,7 @@ export default function EmployeeFormModal({
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
                 >
                   {showPassword ? "Ẩn" : "Hiện"}
                 </button>
@@ -342,7 +341,16 @@ export default function EmployeeFormModal({
             </label>
           </div>
 
-          {error && <p className="mt-4 rounded-lg bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-rose-700 shadow-2xs">{error}</p>}
+          {error && (
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="mt-4 flex items-start gap-2 rounded-lg bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-rose-700 shadow-2xs"
+            >
+              <WarningCircle size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0" />
+              {error}
+            </p>
+          )}
 
           <div className="mt-6 flex items-center justify-end gap-2.5 border-t border-slate-200 pt-4">
             <button

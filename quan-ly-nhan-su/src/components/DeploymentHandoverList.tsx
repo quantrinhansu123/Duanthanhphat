@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { deploymentItems, type DeploymentItem } from "@/data/deploymentItems";
+import { CaretRight, MagnifyingGlass } from "@/components/icons";
 
 const statusStyle: Record<DeploymentItem["status"], string> = {
   "Đã bàn giao": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -41,18 +42,7 @@ export default function DeploymentHandoverList() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -95,9 +85,7 @@ export default function DeploymentHandoverList() {
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 font-semibold text-[#0047AB] hover:underline"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
+                        <CaretRight size={14} weight="fill" aria-hidden />
                         Xem video
                       </a>
                     ) : (

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { employees as seedEmployees, type Employee } from "@/data/employees";
 import EmployeeFormModal, { type EmployeeFormValues } from "@/components/EmployeeFormModal";
+import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
 
 export default function EmployeeManagement() {
   const [list, setList] = useState<Employee[]>(seedEmployees);
@@ -118,6 +119,31 @@ export default function EmployeeManagement() {
     showToast(`Đã xóa ${employee.name}`);
   }
 
+  const selectedInView = filtered.filter((e) => selected.includes(e.id));
+
+  function clearSelection() {
+    setSelected([]);
+  }
+
+  function bulkSetStatus(nextStatus: Employee["status"]) {
+    const ids = new Set(selectedInView.map((e) => e.id));
+    setList((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, status: nextStatus } : x)));
+    showToast(
+      nextStatus === "Khóa"
+        ? `Đã khóa ${ids.size} tài khoản`
+        : `Đã mở khóa ${ids.size} tài khoản`,
+    );
+    setSelected([]);
+  }
+
+  function bulkDelete() {
+    if (!window.confirm(`Xóa ${selectedInView.length} nhân viên đã chọn?`)) return;
+    const ids = new Set(selectedInView.map((e) => e.id));
+    setList((prev) => prev.filter((x) => !ids.has(x.id)));
+    showToast(`Đã xóa ${ids.size} nhân viên`);
+    setSelected([]);
+  }
+
   function handleToggleLock(employee: Employee) {
     const nextStatus = employee.status === "Hoạt động" ? "Khóa" : "Hoạt động";
     setList((prev) =>
@@ -145,18 +171,7 @@ export default function EmployeeManagement() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -211,9 +226,46 @@ export default function EmployeeManagement() {
         </button>
       </div>
 
+      {selectedInView.length > 0 && (
+        <div className="bulk-bar mb-3" role="region" aria-label="Hành động hàng loạt">
+          <span className="text-xs sm:text-sm font-semibold text-[#0047AB] font-mono tabular-nums">
+            Đã chọn {selectedInView.length}
+          </span>
+          <span className="h-4 w-px bg-blue-200" />
+          <button
+            type="button"
+            onClick={() => bulkSetStatus("Khóa")}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs transition-colors duration-150 hover:bg-slate-50 hover:text-slate-900"
+          >
+            Khóa
+          </button>
+          <button
+            type="button"
+            onClick={() => bulkSetStatus("Hoạt động")}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs transition-colors duration-150 hover:bg-slate-50 hover:text-slate-900"
+          >
+            Mở khóa
+          </button>
+          <button
+            type="button"
+            onClick={bulkDelete}
+            className="rounded-lg px-2.5 py-1 text-xs font-medium text-rose-600 transition-colors duration-150 hover:bg-rose-50"
+          >
+            Xóa
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="ml-auto rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors duration-150 hover:bg-white hover:text-slate-700"
+          >
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
-        <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-left text-xs sm:text-sm">
+        <div className="table-scroll overflow-x-auto max-h-[calc(100dvh-320px)]">
+          <table className="sticky-thead w-full min-w-[980px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
@@ -294,11 +346,7 @@ export default function EmployeeManagement() {
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
                       aria-label="Tùy chọn"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="5" cy="12" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="19" cy="12" r="1.5" />
-                      </svg>
+                      <DotsThree size={16} weight="bold" aria-hidden />
                     </button>
                     {menuOpen === e.id && (
                       <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100">
@@ -366,9 +414,7 @@ export default function EmployeeManagement() {
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Check size={16} weight="bold" aria-hidden className="text-emerald-500" />
           {toast}
         </div>
       )}

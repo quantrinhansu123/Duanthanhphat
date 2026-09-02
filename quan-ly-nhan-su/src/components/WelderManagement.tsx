@@ -3,46 +3,21 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { welders as seedWelders, type Welder } from "@/data/welders";
+import {
+  Check,
+  DotsThree,
+  MagnifyingGlass,
+  CaretDown,
+  Users,
+  SealCheck,
+  Sparkle,
+} from "@/components/icons";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
   "Hạng 2": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Hạng 3": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
-
-function IconEye() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-function IconEdit() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-function IconLock() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-function IconTrash() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 6h18" />
-      <path d="M8 6V4h8v2" />
-      <path d="M19 6l-1 14H6L5 6" />
-    </svg>
-  );
-}
 
 function toggleValue(list: string[], value: string) {
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -98,21 +73,16 @@ function MultiSelectCombobox({
         <span className="truncate">{displayLabel}</span>
         <div className="flex items-center gap-1 shrink-0">
           {count > 0 && (
-            <span className="inline-flex items-center justify-center rounded-full bg-[#0047AB] px-1.5 py-0.2 text-[10px] font-bold text-white font-mono">
+            <span className="inline-flex items-center justify-center rounded-full bg-[#0047AB] px-1.5 py-0.2 text-[11px] font-bold text-white font-mono">
               {count}
             </span>
           )}
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+          <CaretDown
+            size={13}
+            weight="bold"
+            aria-hidden
             className={`shrink-0 text-slate-400 transition-transform duration-150 ${open ? "rotate-180 text-[#0047AB]" : ""}`}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          />
         </div>
       </button>
 
@@ -250,11 +220,7 @@ export default function WelderManagement() {
               <div className="mt-1.5 text-xs text-slate-400">Toàn bộ hồ sơ trong hệ thống</div>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] ring-1 ring-blue-200">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
+              <Users size={22} aria-hidden />
             </div>
           </div>
         </div>
@@ -272,10 +238,7 @@ export default function WelderManagement() {
               </div>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <path d="M22 4 12 14.01l-3-3" />
-              </svg>
+              <SealCheck size={22} aria-hidden />
             </div>
           </div>
           <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -299,9 +262,7 @@ export default function WelderManagement() {
               </div>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M12 2l3 7h7l-5.5 4.2L18.5 21 12 16.8 5.5 21l2-7.8L2 9h7z" />
-              </svg>
+              <Sparkle size={22} aria-hidden />
             </div>
           </div>
           <div className="mt-3.5 flex gap-1.5">
@@ -321,18 +282,7 @@ export default function WelderManagement() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -478,11 +428,7 @@ export default function WelderManagement() {
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
                       aria-label="Tùy chọn"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="5" cy="12" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="19" cy="12" r="1.5" />
-                      </svg>
+                      <DotsThree size={16} weight="bold" aria-hidden />
                     </button>
                     {menuOpen === w.id && (
                       <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
@@ -557,9 +503,7 @@ export default function WelderManagement() {
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Check size={16} weight="bold" aria-hidden className="text-emerald-500" />
           {toast}
         </div>
       )}

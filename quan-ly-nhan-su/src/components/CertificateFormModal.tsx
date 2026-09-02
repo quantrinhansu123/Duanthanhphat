@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import type { Certificate, CertificateImageKey } from "@/data/certificates";
+import { X } from "@/components/icons";
 
 export type CertificateFormValues = {
   title: string;
@@ -124,9 +125,7 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <X size={18} weight="bold" aria-hidden />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { trainingHistory } from "@/data/trainingHistory";
 import { trainingCourses, type TrainingCourse } from "@/data/trainings";
+import { CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
 
 const resultStyle: Record<string, string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -62,11 +63,7 @@ function TrainingDetailModal({
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
                 aria-label="Tùy chọn"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="1.5" />
-                  <circle cx="12" cy="12" r="1.5" />
-                  <circle cx="19" cy="12" r="1.5" />
-                </svg>
+                <DotsThree size={16} weight="bold" aria-hidden />
               </button>
               {menuOpen && (
                 <div className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
@@ -81,9 +78,7 @@ function TrainingDetailModal({
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
               aria-label="Đóng"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <X size={18} weight="bold" aria-hidden />
             </button>
           </div>
         </div>
@@ -222,18 +217,7 @@ export default function TrainingList() {
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -261,9 +245,7 @@ export default function TrainingList() {
                 >
                   {selected && (
                     <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[#0047AB]">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
+                      <CaretRight size={10} weight="fill" aria-hidden />
                     </span>
                   )}
 
@@ -275,7 +257,7 @@ export default function TrainingList() {
                       className="object-cover"
                       sizes="128px"
                     />
-                    <span className="absolute bottom-1.5 right-1.5 rounded bg-slate-900/85 px-1.5 py-0.5 text-[10px] font-bold font-mono text-white tracking-wide">
+                    <span className="absolute bottom-1.5 right-1.5 rounded bg-slate-900/85 px-1.5 py-0.5 text-[11px] font-bold font-mono text-white tracking-wide">
                       {course.duration}
                     </span>
                   </div>

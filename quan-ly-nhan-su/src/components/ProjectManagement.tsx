@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
 import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { projects as seedProjects, type Project } from "@/data/projects";
+import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
 
 const statusStyle: Record<Project["status"], string> = {
   "Đang triển khai": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -329,9 +330,7 @@ function ProjectModal({
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <X size={18} weight="bold" aria-hidden />
           </button>
         </div>
 
@@ -435,18 +434,7 @@ export default function ProjectManagement() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -510,11 +498,7 @@ export default function ProjectManagement() {
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
                       aria-label="Tùy chọn"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="5" cy="12" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="19" cy="12" r="1.5" />
-                      </svg>
+                      <DotsThree size={16} weight="bold" aria-hidden />
                     </button>
                     {menuOpen === p.id && (
                       <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100">

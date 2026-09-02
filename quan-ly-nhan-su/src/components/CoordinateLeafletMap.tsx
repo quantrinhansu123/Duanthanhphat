@@ -164,9 +164,9 @@ export default function CoordinateLeafletMap({
           >
             <Popup>
               <div className="min-w-[160px] text-[13px] leading-snug">
-                <div className="text-[15px] font-bold text-[#0f172a]">{p.code}</div>
-                <div className="mt-1 font-medium text-[#334155]">{p.chainage}</div>
-                <div className="mt-1 text-[12px] text-[#64748b]">
+                <div className="text-sm font-bold text-slate-900">{p.code}</div>
+                <div className="mt-1 font-medium text-slate-700">{p.chainage}</div>
+                <div className="mt-1 text-xs text-slate-500">
                   Lon {p.longitude}
                   <br />
                   Lat {p.latitude}
@@ -175,7 +175,7 @@ export default function CoordinateLeafletMap({
                   href={googleOpenPoint(p.latitude, p.longitude)}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-block text-[12px] font-semibold text-[#0047AB]"
+                  className="mt-2 inline-block text-xs font-semibold text-[#0047AB]"
                 >
                   Mở trên Google Maps →
                 </a>

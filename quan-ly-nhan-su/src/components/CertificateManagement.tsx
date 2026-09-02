@@ -6,6 +6,7 @@ import CertificateFormModal, {
 } from "@/components/CertificateFormModal";
 import CertificateThumbnail from "@/components/CertificateThumbnail";
 import { certificates as seedCertificates, type Certificate } from "@/data/certificates";
+import { CaretRight, DotsThree, MagnifyingGlass, Plus, X } from "@/components/icons";
 
 const statusStyle: Record<Certificate["status"], string> = {
   "Còn hiệu lực": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -59,11 +60,7 @@ function CertificateDetailModal({
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
                 aria-label="Tùy chọn"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="1.5" />
-                  <circle cx="12" cy="12" r="1.5" />
-                  <circle cx="19" cy="12" r="1.5" />
-                </svg>
+                <DotsThree size={16} weight="bold" aria-hidden />
               </button>
               {menuOpen && (
                 <div className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
@@ -79,9 +76,7 @@ function CertificateDetailModal({
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
               aria-label="Đóng"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <X size={18} weight="bold" aria-hidden />
             </button>
           </div>
         </div>
@@ -195,18 +190,7 @@ export default function CertificateManagement() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -229,9 +213,7 @@ export default function CertificateManagement() {
             onClick={() => setFormOpen(true)}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Plus size={14} weight="bold" aria-hidden />
             Thêm mới
           </button>
         </div>
@@ -252,15 +234,13 @@ export default function CertificateManagement() {
                 >
                   {selected && (
                     <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[#0047AB]">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
+                      <CaretRight size={10} weight="fill" aria-hidden />
                     </span>
                   )}
 
                   <div className="relative h-[80px] w-[130px] sm:h-[88px] sm:w-[140px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-2xs">
                     <CertificateThumbnail cert={cert} />
-                    <span className="absolute bottom-1 right-1 rounded bg-slate-900/85 px-1.5 py-0.5 text-[9px] font-bold font-mono text-white tracking-wide">
+                    <span className="absolute bottom-1 right-1 rounded bg-slate-900/85 px-1.5 py-0.5 text-[11px] font-bold font-mono text-white tracking-wide">
                       {cert.expiresAt}
                     </span>
                   </div>

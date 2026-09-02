@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { List, Bell, CaretRight } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
@@ -132,7 +133,7 @@ export default function AppShell({ tab }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f8fafc] text-[#0f172a]">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block shrink-0">
         <Sidebar
@@ -173,15 +174,13 @@ export default function AppShell({ tab }: AppShellProps) {
               className="flex lg:hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] hover:border-slate-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/20 transition-all duration-150 cursor-pointer"
               aria-label="Mở menu điều hướng"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <List size={20} weight="bold" aria-hidden />
             </button>
 
             {crumb ? (
               <>
                 <span className="hidden md:inline truncate font-medium text-slate-600">{crumb.parent}</span>
-                <span className="hidden md:inline text-slate-400 font-mono">›</span>
+                <CaretRight size={12} weight="bold" aria-hidden className="hidden md:inline shrink-0 text-slate-400" />
                 <span className="truncate font-semibold text-slate-900 text-xs sm:text-sm">{crumb.title}</span>
               </>
             ) : (
@@ -201,10 +200,7 @@ export default function AppShell({ tab }: AppShellProps) {
               type="button"
               aria-label="Thông báo"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
-                <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-              </svg>
+              <Bell size={18} weight="regular" aria-hidden />
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#0047AB] ring-2 ring-white" />
             </button>
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">

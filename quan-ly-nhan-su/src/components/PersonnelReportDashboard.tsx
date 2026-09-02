@@ -2,6 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import {
+  Users,
+  Star,
+  Certificate,
+  ShieldCheck,
+  MagnifyingGlass,
+  ClipboardText,
+  Warning,
+  GraduationCap,
+  Train,
+} from "@/components/icons";
 
 type CertDetail = {
   title: string;
@@ -87,63 +98,63 @@ const ACTIVE_WELDERS = [
     photo: "https://randomuser.me/api/portraits/women/65.jpg",
     meta: "K920 · Hà Nội · Tổ 1",
     status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+    statusBg: "bg-blue-50 text-[#0047AB] border border-blue-200",
     shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Phạm Văn Minh",
     photo: "https://randomuser.me/api/portraits/men/52.jpg",
     meta: "K922-2 · Nhà máy Đà Nẵng · Tổ hàn số 2",
     status: "Đạt chuẩn",
-    statusBg: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+    statusBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
     shift: "Ca chiều",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Nguyễn Văn Hùng",
     photo: "https://randomuser.me/api/portraits/men/36.jpg",
     meta: "AMS60 · Nhà máy Hà Nội · Tổ hàn số 3",
     status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+    statusBg: "bg-blue-50 text-[#0047AB] border border-blue-200",
     shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Trần Quốc Bảo",
     photo: "https://randomuser.me/api/portraits/men/22.jpg",
     meta: "K920 · Nhà máy TP.HCM · Tổ kiểm tra CL",
     status: "Hoàn thành ca",
-    statusBg: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+    statusBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
     shift: "Ca đêm",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Đỗ Thị Lan",
     photo: "https://randomuser.me/api/portraits/women/48.jpg",
     meta: "K355 · Nhà máy Hà Nội · Tổ hàn số 4",
     status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+    statusBg: "bg-blue-50 text-[#0047AB] border border-blue-200",
     shift: "Ca chiều",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Trần Thị Mai Anh",
     photo: "https://randomuser.me/api/portraits/women/44.jpg",
     meta: "K922-1 · Nhà máy Cổ Loa · Tổ hàn số 4",
     status: "Đang trực",
-    statusBg: "bg-[#eff6ff] text-[#0047AB] border border-[#bfdbfe]",
+    statusBg: "bg-blue-50 text-[#0047AB] border border-blue-200",
     shift: "Ca sáng",
-    borderColor: "ring-[#16a34a]",
+    borderColor: "ring-emerald-500",
   },
   {
     name: "Nguyễn Văn Minh",
     photo: "https://randomuser.me/api/portraits/men/32.jpg",
     meta: "GEO-01 · Hạ Long Xanh · Tổ hàn số 2",
     status: "Nghỉ ca",
-    statusBg: "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
+    statusBg: "bg-amber-50 text-amber-700 border border-amber-200",
     shift: "Ca chiều",
-    borderColor: "ring-[#f59e0b]",
+    borderColor: "ring-amber-500",
   },
 ];
 
@@ -154,7 +165,7 @@ const WELDER_PRODUCTIVITY = [
     welds: "1.240",
     today: "62",
     passRate: "99,8%",
-    rateColor: "text-[#15803d]",
+    rateColor: "text-emerald-700",
     shift: "Sáng",
   },
   {
@@ -163,7 +174,7 @@ const WELDER_PRODUCTIVITY = [
     welds: "1.180",
     today: "51",
     passRate: "99,7%",
-    rateColor: "text-[#15803d]",
+    rateColor: "text-emerald-700",
     shift: "Chiều",
   },
   {
@@ -172,7 +183,7 @@ const WELDER_PRODUCTIVITY = [
     welds: "980",
     today: "44",
     passRate: "99,5%",
-    rateColor: "text-[#15803d]",
+    rateColor: "text-emerald-700",
     shift: "Sáng",
   },
   {
@@ -181,7 +192,7 @@ const WELDER_PRODUCTIVITY = [
     welds: "860",
     today: "13",
     passRate: "99,1%",
-    rateColor: "text-[#b45309]",
+    rateColor: "text-amber-700",
     shift: "Đêm",
   },
 ];
@@ -218,9 +229,7 @@ export default function PersonnelReportDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-            </svg>
+            <Users size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -240,9 +249,7 @@ export default function PersonnelReportDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
+            <Star size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -260,9 +267,7 @@ export default function PersonnelReportDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-            </svg>
+            <Star size={24} weight="fill" aria-hidden />
           </div>
         </div>
       </div>
@@ -332,41 +337,28 @@ export default function PersonnelReportDashboard() {
                     id: "iso9606",
                     title: "Chứng chỉ thợ hàn\nEN ISO 9606-1",
                     icon: (
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-                        <circle cx="12" cy="8" r="7" />
-                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                      </svg>
+                      <Certificate size={26} className="text-[#0047AB]" aria-hidden />
                     ),
                   },
                   {
                     id: "an-toan",
                     title: "Huấn luyện\nan toàn lao động",
                     icon: (
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        <path d="M9 12l2 2 4-4" />
-                      </svg>
+                      <ShieldCheck size={26} className="text-[#0047AB]" aria-hidden />
                     ),
                   },
                   {
                     id: "ut2",
                     title: "Kiểm định viên\nUT cấp 2",
                     icon: (
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
+                      <MagnifyingGlass size={26} className="text-[#0047AB]" aria-hidden />
                     ),
                   },
                   {
                     id: "tay-nghe",
                     title: "Đánh giá tay nghề\nquý II/2024",
                     icon: (
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                        <rect x="8" y="2" width="8" height="4" rx="1" />
-                        <path d="M9 12h6M9 16h4" />
-                      </svg>
+                      <ClipboardText size={26} className="text-[#0047AB]" aria-hidden />
                     ),
                   },
                 ].map((c) => (
@@ -455,9 +447,7 @@ export default function PersonnelReportDashboard() {
           <div className="rounded-xl border-2 border-[#0047AB]/25 bg-white p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-slate-900">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-100 shadow-2xs">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
-                </svg>
+                <ClipboardText size={16} weight="fill" aria-hidden />
               </span>
               <span>Bảng tin nhanh</span>
             </div>
@@ -465,9 +455,7 @@ export default function PersonnelReportDashboard() {
             <div className="mt-4 flex flex-col gap-3">
               <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
-                  </svg>
+                  <Warning size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
@@ -481,10 +469,7 @@ export default function PersonnelReportDashboard() {
 
               <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="8" r="7" />
-                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                  </svg>
+                  <Certificate size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
@@ -498,9 +483,7 @@ export default function PersonnelReportDashboard() {
 
               <div className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z" />
-                  </svg>
+                  <GraduationCap size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
@@ -596,9 +579,7 @@ export default function PersonnelReportDashboard() {
             </div>
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs font-semibold text-slate-500">Ban Giám đốc TCW</div>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#0047AB" className="opacity-70">
-                <path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2l2-2h4l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V7h12v4z" />
-              </svg>
+              <Train size={20} weight="fill" aria-hidden className="text-[#0047AB] opacity-70" />
             </div>
           </div>
         </div>

@@ -1,6 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Plus,
+  Check,
+  X,
+  Funnel,
+  CaretDown,
+  SlidersHorizontal,
+  ChartLineUp,
+  ChartBar,
+  CalendarCheck,
+  CalendarBlank,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Printer,
+  ClipboardText,
+  Wrench,
+  FileText,
+} from "@/components/icons";
 
 const PROJECTS = [
   "ĐSCT Bắc – Nam",
@@ -606,9 +625,7 @@ export default function OverviewDashboard() {
         <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
           {/* Label icon */}
           <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 lg:pb-2.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-            </svg>
+            <Funnel size={16} weight="fill" aria-hidden />
             <span>Bộ lọc:</span>
             {filterCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white font-mono shadow-xs">
@@ -671,19 +688,7 @@ export default function OverviewDashboard() {
                 <span className="truncate">
                   {filterPickLabel(projects.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {projectFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -733,19 +738,7 @@ export default function OverviewDashboard() {
                 <span className="truncate">
                   {filterPickLabel(personnel.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {personnelFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -795,19 +788,7 @@ export default function OverviewDashboard() {
                 <span className="truncate">
                   {filterPickLabel(machines.length, "Tất cả")}
                 </span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                    machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                  }`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
               </button>
               {machineFilterOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -861,19 +842,7 @@ export default function OverviewDashboard() {
               <span className="truncate">
                 {filterPickLabel(methods.length, "Tất cả")}
               </span>
-              <svg
-                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                  methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                }`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
             </button>
             {methodFilterOpen && (
               <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -923,19 +892,7 @@ export default function OverviewDashboard() {
               <span className="truncate">
                 {filterPickLabel(weldTypes.length, "Tất cả")}
               </span>
-              <svg
-                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                  weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""
-                }`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
             </button>
             {weldTypeFilterOpen && (
               <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
@@ -973,9 +930,7 @@ export default function OverviewDashboard() {
               onClick={handleApplyFilters}
               className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-              </svg>
+              <SlidersHorizontal size={13} weight="fill" aria-hidden />
               Áp dụng
             </button>
 
@@ -1009,9 +964,7 @@ export default function OverviewDashboard() {
             <div className="mt-2.5 text-xs text-slate-500">Toàn thời gian</div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 13h4l3-8 4 14 3-6h4v-2h-3l-3 6-4-14-3 8H3v2z" />
-            </svg>
+            <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -1033,16 +986,14 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9.5 14.5l-2.5-2.5 1.4-1.4 1.1 1.1 4.6-4.6 1.4 1.4z" />
-            </svg>
+            <CalendarCheck size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
         {/* Card 3: Tháng này */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold tracking-wider text-indigo-700 uppercase">
+            <div className="text-xs font-bold tracking-wider text-sky-700 uppercase">
               THÁNG NÀY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
@@ -1051,15 +1002,13 @@ export default function OverviewDashboard() {
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-xs text-indigo-700 font-medium">
+            <div className="mt-2.5 text-xs text-sky-700 font-medium">
               {factor >= 1 ? `↑ ${(12.4 * factor).toFixed(1).replace(".", ",")}%` : `↓ ${(12.4 / factor).toFixed(1).replace(".", ",")}%`}{" "}
               <span className="text-slate-400 font-normal">so với tháng trước</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z" />
-            </svg>
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
+            <ChartBar size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -1080,9 +1029,7 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-            </svg>
+            <CheckCircle size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -1103,9 +1050,7 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.48 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
-            </svg>
+            <XCircle size={24} weight="fill" aria-hidden />
           </div>
         </div>
       </div>
@@ -1203,33 +1148,25 @@ export default function OverviewDashboard() {
               <button
                 type="button"
                 onClick={() => setChartViewMode("daily")}
-                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   chartViewMode === "daily"
                     ? "bg-white text-[#0047AB] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
+                <CalendarBlank size={13} weight="bold" aria-hidden />
                 <span>Ngày</span>
               </button>
               <button
                 type="button"
                 onClick={() => setChartViewMode("cumulative")}
-                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   chartViewMode === "cumulative"
                     ? "bg-white text-[#0047AB] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M3 17l6-6 4 4 8-8" strokeDasharray="3 2" />
-                  <circle cx="21" cy="7" r="2" fill="currentColor" />
-                </svg>
+                <ChartLineUp size={13} weight="bold" aria-hidden />
                 <span>Lũy kế</span>
               </button>
             </div>
@@ -1415,7 +1352,7 @@ export default function OverviewDashboard() {
                               x={chart.targetCumPts[chart.targetCumPts.length - 1].cx - 30}
                               y={Math.max(15, chart.targetCumPts[chart.targetCumPts.length - 1].cy - 8)}
                               textAnchor="middle"
-                              className="fill-white font-bold font-mono text-[9px]"
+                              className="fill-white font-bold font-mono text-[10px]"
                             >
                               MT: {fmt(chart.totalTargetCum)}
                             </text>
@@ -1468,7 +1405,7 @@ export default function OverviewDashboard() {
                               x={chart.cumPts[chart.cumPts.length - 1].cx - 30}
                               y={Math.max(33, chart.cumPts[chart.cumPts.length - 1].cy - 8)}
                               textAnchor="middle"
-                              className="fill-white font-bold font-mono text-[9px]"
+                              className="fill-white font-bold font-mono text-[10px]"
                             >
                               TT: {fmt(chart.totalCum)}
                             </text>
@@ -1773,35 +1710,31 @@ export default function OverviewDashboard() {
                     <div className="flex items-center gap-2 text-xs sm:text-sm">
                       <span className="text-slate-500 text-xs">UT</span>
                       {w.ut ? (
-                        <span className="text-emerald-700 font-bold text-sm">✓</span>
+                        <Check size={15} weight="bold" aria-label="Đạt" className="text-emerald-700" />
                       ) : (
-                        <span className="text-rose-600 font-bold text-sm">✗</span>
+                        <X size={15} weight="bold" aria-label="Không đạt" className="text-rose-600" />
                       )}
                       <span className="text-slate-500 text-xs">Ngoại quan</span>
                       {w.visual ? (
-                        <span className="text-emerald-700 font-bold text-sm">✓</span>
+                        <Check size={15} weight="bold" aria-label="Đạt" className="text-emerald-700" />
                       ) : (
-                        <span className="text-rose-600 font-bold text-sm">✗</span>
+                        <X size={15} weight="bold" aria-label="Không đạt" className="text-rose-600" />
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-[#0047AB]">
                       <button
                         type="button"
-                        className="hover:text-[#00388A] transition-colors cursor-pointer p-1 rounded-md hover:bg-blue-50"
+                        className="hover:text-[#00388A] transition-colors cursor-pointer p-1 rounded-lg hover:bg-blue-50"
                         title="Xem chi tiết"
                       >
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-                        </svg>
+                        <Eye size={17} aria-hidden />
                       </button>
                       <button
                         type="button"
-                        className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer p-1 rounded-md hover:bg-slate-100"
+                        className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer p-1 rounded-lg hover:bg-slate-100"
                         title="In tem"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-                        </svg>
+                        <Printer size={14} weight="fill" aria-hidden />
                       </button>
                     </div>
                   </div>
@@ -1827,63 +1760,31 @@ export default function OverviewDashboard() {
               {
                 label: "Thêm mối hàn mới",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2.2">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
+                  <Plus size={16} weight="bold" aria-hidden />
                 ),
               },
               {
                 label: "Phiếu kiểm tra",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                    <rect x="8" y="2" width="8" height="4" rx="1" />
-                    <path d="M9 12h6M9 16h4" />
-                  </svg>
+                  <ClipboardText size={16} className="text-[#0047AB]" aria-hidden />
                 ),
               },
               {
                 label: "Nhập sản lượng",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                    <rect x="4" y="2" width="16" height="20" rx="2" />
-                    <line x1="8" y1="6" x2="16" y2="6" />
-                    <line x1="8" y1="10" x2="8.01" y2="10" />
-                    <line x1="12" y1="10" x2="12.01" y2="10" />
-                    <line x1="16" y1="10" x2="16.01" y2="10" />
-                    <line x1="8" y1="14" x2="8.01" y2="14" />
-                    <line x1="12" y1="14" x2="12.01" y2="14" />
-                    <line x1="16" y1="14" x2="16.01" y2="14" />
-                  </svg>
+                  <ClipboardText size={16} className="text-[#0047AB]" aria-hidden />
                 ),
               },
               {
                 label: "Tình trạng máy",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                    <rect x="4" y="4" width="16" height="16" rx="2" />
-                    <rect x="9" y="9" width="6" height="6" />
-                    <line x1="9" y1="1" x2="9" y2="4" />
-                    <line x1="15" y1="1" x2="15" y2="4" />
-                    <line x1="9" y1="20" x2="9" y2="23" />
-                    <line x1="15" y1="20" x2="15" y2="23" />
-                    <line x1="20" y1="9" x2="23" y2="9" />
-                    <line x1="20" y1="14" x2="23" y2="14" />
-                    <line x1="1" y1="9" x2="4" y2="9" />
-                    <line x1="1" y1="14" x2="4" y2="14" />
-                  </svg>
+                  <Wrench size={16} className="text-[#0047AB]" aria-hidden />
                 ),
               },
               {
                 label: "Tạo báo cáo",
                 icon: (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10 9 9 9 8 9" />
-                  </svg>
+                  <FileText size={16} className="text-[#0047AB]" aria-hidden />
                 ),
               },
             ].map((action) => (

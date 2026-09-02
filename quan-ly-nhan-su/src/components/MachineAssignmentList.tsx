@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Check } from "@/components/icons";
 import MachineAssignmentFormModal, {
   type MachineAssignmentFormValues,
 } from "@/components/MachineAssignmentFormModal";
@@ -41,7 +42,7 @@ function FilterGroup({
           return (
             <label
               key={opt}
-              className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-xs sm:text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150"
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs sm:text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150"
             >
               <input
                 type="checkbox"
@@ -299,9 +300,7 @@ export default function MachineAssignmentList() {
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Check size={16} weight="bold" aria-hidden className="text-emerald-500" />
           {toast}
         </div>
       )}

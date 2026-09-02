@@ -2,45 +2,54 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import {
+  ShieldCheck,
+  Wrench,
+  Clock,
+  FileText,
+  GearSix,
+  ChartLineUp,
+  Warning,
+} from "@/components/icons";
 
 const MACHINES_RECOMMENDED = [
   {
     id: "k922-1",
     name: "Máy hàn K922-1",
     badge: "Ưu tiên cao",
-    badgeBg: "bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]",
+    badgeBg: "bg-rose-50 text-rose-700 border border-rose-200",
     image: "/may-han/k920.svg",
     plant: "Nhà máy Cổ Loa",
     welds: "8.520 mối",
     hoursSinceMaint: "412 h",
     progressPct: 48,
-    progressColor: "bg-[#f59e0b]",
+    progressColor: "bg-amber-500",
     budget: "6.500.000đ",
   },
   {
     id: "k922-2",
     name: "Máy hàn K922-2",
     badge: "Theo dõi",
-    badgeBg: "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]",
+    badgeBg: "bg-amber-50 text-amber-700 border border-amber-200",
     image: "/may-han/ams60.svg",
     plant: "Hạ Long Xanh",
     welds: "7.840 mối",
     hoursSinceMaint: "355 h",
     progressPct: 35,
-    progressColor: "bg-[#f59e0b]",
+    progressColor: "bg-amber-500",
     budget: "7.800.000đ",
   },
   {
     id: "k920",
     name: "Máy hàn K920",
     badge: "Định kỳ",
-    badgeBg: "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+    badgeBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
     image: "/may-han/geo.svg",
     plant: "Nhà máy Cổ Loa",
     welds: "2.160 mối",
     hoursSinceMaint: "190 h",
     progressPct: 60,
-    progressColor: "bg-[#16a34a]",
+    progressColor: "bg-emerald-500",
     budget: "5.000.000đ",
   },
 ];
@@ -53,7 +62,7 @@ const MACHINE_PERFORMANCE = [
     today: "62",
     errorRate: "0,18%",
     avail: 96,
-    availColor: "bg-[#16a34a]",
+    availColor: "bg-emerald-500",
   },
   {
     code: "K922-2",
@@ -62,7 +71,7 @@ const MACHINE_PERFORMANCE = [
     today: "51",
     errorRate: "0,25%",
     avail: 93,
-    availColor: "bg-[#16a34a]",
+    availColor: "bg-emerald-500",
   },
   {
     code: "K920",
@@ -71,47 +80,26 @@ const MACHINE_PERFORMANCE = [
     today: "13",
     errorRate: "0,31%",
     avail: 88,
-    availColor: "bg-[#f59e0b]",
+    availColor: "bg-amber-500",
   },
 ];
 
 const CALIBRATION_DOCS = [
   {
     title: "Hiệu chuẩn\nmáy K922-1",
-    icon: (
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
-      </svg>
-    ),
+    icon: <ShieldCheck size={26} className="text-[#0047AB]" aria-hidden />,
   },
   {
     title: "Nhật ký bảo trì\ntháng 05/2024",
-    icon: (
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-      </svg>
-    ),
+    icon: <Wrench size={26} className="text-[#0047AB]" aria-hidden />,
   },
   {
     title: "Kiểm định áp lực\nđầu kẹp",
-    icon: (
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 6v6l4 2" />
-      </svg>
-    ),
+    icon: <Clock size={26} className="text-[#0047AB]" aria-hidden />,
   },
   {
     title: "Biên bản thay\nvật tư tiêu hao",
-    icon: (
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="1.8">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="16" y1="13" x2="8" y2="13" />
-        <line x1="16" y1="17" x2="8" y2="17" />
-      </svg>
-    ),
+    icon: <FileText size={26} className="text-[#0047AB]" aria-hidden />,
   },
 ];
 
@@ -136,17 +124,14 @@ export default function MachineReportDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8 2.8l-.1.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-            </svg>
+            <GearSix size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
         {/* Card 2: Tỷ lệ khả dụng bình quân */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold uppercase tracking-wider text-teal-700">
+            <div className="text-xs font-bold uppercase tracking-wider text-sky-700">
               TỶ LỆ KHẢ DỤNG BÌNH QUÂN
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
@@ -156,10 +141,8 @@ export default function MachineReportDashboard() {
               ↑ 1,4% <span className="text-slate-400 font-normal">so với kỳ trước</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 13h4l3-8 4 14 3-6h4v-2h-3l-3 6-4-14-3 8H3v2z" />
-            </svg>
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
+            <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
@@ -179,9 +162,7 @@ export default function MachineReportDashboard() {
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" />
-            </svg>
+            <Wrench size={24} weight="fill" aria-hidden />
           </div>
         </div>
       </div>
@@ -384,10 +365,7 @@ export default function MachineReportDashboard() {
           <div className="rounded-xl border-2 border-[#0047AB]/25 bg-white p-4 sm:p-5 shadow-xs">
             <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-slate-900">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-100 shadow-2xs">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-                </svg>
+                <GearSix size={16} weight="fill" aria-hidden />
               </span>
               <span>Tình trạng thiết bị</span>
             </div>
@@ -395,9 +373,7 @@ export default function MachineReportDashboard() {
             <div className="mt-4 flex flex-col gap-3">
               <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z" />
-                  </svg>
+                  <Clock size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 font-medium">
@@ -411,9 +387,7 @@ export default function MachineReportDashboard() {
 
               <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
-                  </svg>
+                  <Warning size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 font-medium">Số lần dừng máy</div>
@@ -423,9 +397,7 @@ export default function MachineReportDashboard() {
 
               <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shadow-2xs">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" />
-                  </svg>
+                  <Wrench size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 font-medium">

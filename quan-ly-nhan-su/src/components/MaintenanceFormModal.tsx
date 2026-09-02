@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import type { MaintenanceAssignee, MaintenanceEvent } from "@/data/maintenance";
+import { X } from "@/components/icons";
 
 export type MaintenanceFormValues = {
   date: string;
@@ -128,9 +129,7 @@ export default function MaintenanceFormModal({
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <X size={18} weight="bold" aria-hidden />
           </button>
         </div>
 

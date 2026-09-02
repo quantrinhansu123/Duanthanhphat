@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { errorLibrary, type ErrorItem } from "@/data/error-library";
+import { MagnifyingGlass } from "@/components/icons";
 
 const severityStyle: Record<ErrorItem["severity"], string> = {
   "Nghiêm trọng": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
@@ -53,18 +54,7 @@ export default function ErrorLibrary() {
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
