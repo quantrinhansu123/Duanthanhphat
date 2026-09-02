@@ -50,3 +50,12 @@ drop policy if exists "anon_all_tai_lieu" on public.tai_lieu;
 create policy "anon_all_tai_lieu"
   on public.tai_lieu for all to anon
   using (true) with check (true);
+
+-- Chỉ chạy sau lich_su_moi_han.sql.
+drop policy if exists "anon_read_lich_su_moi_han" on public.lich_su_moi_han;
+drop policy if exists "anon_all_lich_su_moi_han" on public.lich_su_moi_han;
+create policy "anon_all_lich_su_moi_han"
+  on public.lich_su_moi_han for all to anon
+  using (true) with check (true);
+
+grant insert, update, delete on public.lich_su_moi_han to anon;

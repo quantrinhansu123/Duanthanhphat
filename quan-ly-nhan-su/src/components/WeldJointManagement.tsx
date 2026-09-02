@@ -18,8 +18,6 @@ export default function WeldJointManagement() {
     if (!q) return weldJoints;
     return weldJoints.filter(
       (row) =>
-        row.trayName.toLowerCase().includes(q) ||
-        row.jointName.toLowerCase().includes(q) ||
         row.method.toLowerCase().includes(q) ||
         row.weldType.toLowerCase().includes(q) ||
         row.certificate.toLowerCase().includes(q),
@@ -44,7 +42,7 @@ export default function WeldJointManagement() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm tên khay, mối hàn, phương pháp, loại mối, chứng chỉ..."
+            placeholder="Tìm phương pháp, loại mối, chứng chỉ..."
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
@@ -52,12 +50,10 @@ export default function WeldJointManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[960px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-16 whitespace-nowrap px-4 py-3 text-center">STT</th>
-                <th className="min-w-[200px] px-3.5 py-3">Tên khay</th>
-                <th className="min-w-[220px] px-3.5 py-3">Tên mối hàn</th>
                 <th className="min-w-[140px] px-3.5 py-3">Phương pháp hàn</th>
                 <th className="min-w-[140px] px-3.5 py-3">Loại mối hàn</th>
                 <th className="min-w-[240px] px-3.5 py-3">Chứng chỉ</th>
@@ -66,7 +62,7 @@ export default function WeldJointManagement() {
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy mối hàn phù hợp</div>
                   </td>
                 </tr>
@@ -77,8 +73,6 @@ export default function WeldJointManagement() {
                     className="hover:bg-slate-50/80 transition-colors duration-150"
                   >
                     <td className="px-4 py-3 text-center font-mono font-medium text-slate-500 text-xs sm:text-sm">{index + 1}</td>
-                    <td className="px-3.5 py-3 font-semibold text-slate-900">{row.trayName}</td>
-                    <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.jointName}</td>
                     <td className="px-3.5 py-3">
                       <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#0047AB] border border-blue-200 shadow-2xs">
                         {row.method}

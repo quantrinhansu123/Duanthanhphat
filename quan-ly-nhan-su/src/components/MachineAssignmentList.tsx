@@ -70,6 +70,7 @@ export default function MachineAssignmentList() {
   const [machinesSel, setMachinesSel] = useState<string[]>([]);
   const [personsSel, setPersonsSel] = useState<string[]>([]);
   const [jointsSel, setJointsSel] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toast, setToast] = useState("");
 
@@ -101,6 +102,13 @@ export default function MachineAssignmentList() {
 
   const hasFilter =
     dateFrom || dateTo || machinesSel.length > 0 || personsSel.length > 0 || jointsSel.length > 0;
+
+  const activeFilterCount =
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0) +
+    machinesSel.length +
+    personsSel.length +
+    jointsSel.length;
 
   const inProgress = filtered.filter((a) => a.status === "Đang thực hiện").length;
   const completed = filtered.filter((a) => a.status === "Hoàn thành").length;
@@ -152,60 +160,95 @@ export default function MachineAssignmentList() {
         </div>
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Từ ngày
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-            />
-          </label>
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Đến ngày
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-            />
-          </label>
-          {hasFilter && (
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom("");
-                setDateTo("");
-                setMachinesSel([]);
-                setPersonsSel([]);
-                setJointsSel([]);
-              }}
-              className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
+      <div className="mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-80 transition-opacity duration-150 cursor-pointer"
+            aria-expanded={filtersOpen}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className={`shrink-0 text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
             >
-              Xóa lọc
-            </button>
-          )}
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc</span>
+            <span className="hidden sm:inline text-xs text-slate-500">Máy · Người phụ trách · Mối hàn</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[10px] font-bold text-white shadow-2xs font-mono tabular-nums">
+                {activeFilterCount} đang lọc
+              </span>
+            )}
+          </button>
+          <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">
+            {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
+          </span>
           <button
             type="button"
             onClick={() => setModal({ mode: "add" })}
-            className="mb-0.5 ml-auto inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
           >
             <span className="text-base leading-none">+</span> Thêm mới
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          <FilterGroup title="Máy" options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
-          <FilterGroup
-            title="Người phụ trách"
-            options={personOptions}
-            selected={personsSel}
-            onChange={setPersonsSel}
-          />
-          <FilterGroup title="Mối hàn" options={jointOptions} selected={jointsSel} onChange={setJointsSel} />
-        </div>
+        {filtersOpen && (
+          <div className="border-t border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3 flex flex-wrap items-end gap-3">
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Từ ngày
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                />
+              </label>
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Đến ngày
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                />
+              </label>
+              {hasFilter && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                    setMachinesSel([]);
+                    setPersonsSel([]);
+                    setJointsSel([]);
+                  }}
+                  className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
+                >
+                  Xóa lọc
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              <FilterGroup title="Máy" options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
+              <FilterGroup
+                title="Người phụ trách"
+                options={personOptions}
+                selected={personsSel}
+                onChange={setPersonsSel}
+              />
+              <FilterGroup title="Mối hàn" options={jointOptions} selected={jointsSel} onChange={setJointsSel} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">

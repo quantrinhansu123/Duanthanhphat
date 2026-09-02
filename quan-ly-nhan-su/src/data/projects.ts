@@ -1,3 +1,11 @@
+import type { ProjectPersonnel } from "./projectPersonnel";
+import type { ProjectWeld } from "./projectWelds";
+
+export type TheoreticalProgressRow = {
+  ngay: string;
+  so_moi_han: number;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -7,6 +15,16 @@ export type Project = {
   machineCount: number;
   status: "Đang triển khai" | "Hoàn thành" | "Tạm dừng";
   startDate: string;
+  personnelIds: string[];
+  machineTypes: string[];
+  weldTypes: string[];
+  /** Tiến độ lý thuyết theo ngày — lưu JSONB trên Supabase (du_an.tien_do_ly_thuyet). */
+  theoreticalProgress?: TheoreticalProgressRow[];
+  /** Nhân sự gán cho dự án (tab con). */
+  projectPersonnel?: ProjectPersonnel[];
+  /** Mối hàn / công việc trong dự án (tab con). */
+  projectWelds?: ProjectWeld[];
+  maDuAn?: string;
 };
 
 export const projects: Project[] = [
@@ -19,6 +37,9 @@ export const projects: Project[] = [
     machineCount: 6,
     status: "Đang triển khai",
     startDate: "2024-01-15",
+    personnelIds: [],
+    machineTypes: [],
+    weldTypes: [],
   },
   {
     id: "2",
@@ -29,6 +50,9 @@ export const projects: Project[] = [
     machineCount: 4,
     status: "Đang triển khai",
     startDate: "2024-02-01",
+    personnelIds: [],
+    machineTypes: [],
+    weldTypes: [],
   },
   {
     id: "3",
@@ -39,6 +63,9 @@ export const projects: Project[] = [
     machineCount: 8,
     status: "Đang triển khai",
     startDate: "2023-11-20",
+    personnelIds: [],
+    machineTypes: [],
+    weldTypes: [],
   },
   {
     id: "4",
@@ -49,6 +76,9 @@ export const projects: Project[] = [
     machineCount: 3,
     status: "Đang triển khai",
     startDate: "2024-03-10",
+    personnelIds: [],
+    machineTypes: [],
+    weldTypes: [],
   },
   {
     id: "5",
@@ -59,5 +89,8 @@ export const projects: Project[] = [
     machineCount: 5,
     status: "Tạm dừng",
     startDate: "2023-09-05",
+    personnelIds: [],
+    machineTypes: [],
+    weldTypes: [],
   },
 ];

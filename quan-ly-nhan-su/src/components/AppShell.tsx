@@ -1,5 +1,6 @@
 "use client";
 
+import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { List, Bell, CaretRight } from "@/components/icons";
@@ -24,11 +25,13 @@ import SystemConfiguration from "@/components/SystemConfiguration";
 import TrainingHistoryLookup from "@/components/TrainingHistoryLookup";
 import TrainingList from "@/components/TrainingList";
 import WelderManagement from "@/components/WelderManagement";
+import WeldingJournalList from "@/components/WeldingJournalList";
 import WeldingHistoryList from "@/components/WeldingHistoryList";
 import WeldJointManagement from "@/components/WeldJointManagement";
 import WeldingTrayList from "@/components/WeldingTrayList";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
+import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 
 const views: Record<string, React.ReactNode> = {
   "ho-so-nhan-su": <EmployeeManagement />,
@@ -49,6 +52,8 @@ const views: Record<string, React.ReactNode> = {
   "bc-nhan-su": <PersonnelReportDashboard />,
   "quan-ly-du-an": <ProjectManagement />,
   "quan-ly-moi-han": <WeldJointManagement />,
+  "nhat-ky-han": <WeldingJournalList />,
+  "quan-ly-may-han": <MachineList />,
   "ban-do": <MapView />,
   "tai-lieu": <DocumentLibrary />,
   "trien-khai": <DeploymentHandoverList />,
@@ -133,7 +138,8 @@ export default function AppShell({ tab }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900">
+    <ReportFilterProvider>
+    <div className="flex h-screen overflow-hidden bg-[#f8fafc] text-[#0f172a]">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block shrink-0">
         <Sidebar
@@ -222,6 +228,7 @@ export default function AppShell({ tab }: AppShellProps) {
         </header>
 
         <div className={`min-h-0 flex-1 ${reportTab ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
+          {reportTab && <GlobalReportFilterBar />}
           {reportTab && <ReportTabBar activeId={current} onNavigate={go} />}
 
           {!reportTab && crumb && (
@@ -282,5 +289,6 @@ export default function AppShell({ tab }: AppShellProps) {
         </div>
       </div>
     </div>
+    </ReportFilterProvider>
   );
 }

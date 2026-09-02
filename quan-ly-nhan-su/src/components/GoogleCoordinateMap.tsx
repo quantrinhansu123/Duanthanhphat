@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader, InfoWindowF } from "@react-google-maps/api";
 import type { MapBaseLayer, MapPoint, MapViewMode } from "@/data/mapPoints";
-import { routeCenter, vietnamCenter, vietnamZoom } from "@/data/mapPoints";
+import { routeCenter, sampleMapMarkers, vietnamCenter, vietnamZoom } from "@/data/mapPoints";
 
 const mapContainerStyle = { width: "100%", height: "100%", minHeight: 420 };
 
@@ -37,6 +37,10 @@ export default function GoogleCoordinateMap({
   const path = useMemo(
     () => points.map((p) => ({ lat: p.latitude, lng: p.longitude })),
     [points],
+  );
+  const markerPoints = useMemo(
+    () => sampleMapMarkers(points, selectedId),
+    [points, selectedId],
   );
 
   const selected = points.find((p) => p.id === selectedId) ?? null;
@@ -145,7 +149,7 @@ export default function GoogleCoordinateMap({
         />
       )}
 
-      {points.map((p) => {
+      {markerPoints.map((p) => {
         const active = p.id === selectedId;
         return (
           <MarkerF

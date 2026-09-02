@@ -4,6 +4,9 @@ export type MapPoint = {
   longitude: number;
   latitude: number;
   chainage: string;
+  note?: string;
+  projectId?: string | null;
+  order?: number;
 };
 
 export type MapViewMode = "vietnam" | "route";
@@ -58,4 +61,14 @@ export function googleOpenRoute(points: MapPoint[]) {
   if (points.length === 0) return googleOpenVietnam();
   const path = points.map((p) => `${p.latitude},${p.longitude}`).join("/");
   return `https://www.google.com/maps/dir/${path}/?hl=vi`;
+}
+
+/** Giới hạn số marker DOM nhưng vẫn giữ toàn bộ điểm cho polyline và tìm kiếm. */
+export function sampleMapMarkers(points: MapPoint[], selectedId?: string | null, limit = 240) {
+  if (points.length <= limit) return points;
+  const step = Math.ceil(points.length / limit);
+  const sampled = points.filter((_, index) => index % step === 0);
+  const selected = selectedId ? points.find((point) => point.id === selectedId) : undefined;
+  if (selected && !sampled.some((point) => point.id === selected.id)) sampled.push(selected);
+  return sampled;
 }

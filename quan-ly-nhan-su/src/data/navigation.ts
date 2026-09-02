@@ -72,8 +72,8 @@ export const navigation: NavItem[] = [
       },
       {
         id: "quan-ly-khay-han",
-        label: "Quản lý khay hàn",
-        description: "Danh mục khay hàn, tình trạng, vị trí, máy gắn kèm",
+        label: "Quản lý Ray Hàn",
+        description: "Danh mục ray hàn, tình trạng, vị trí, máy gắn kèm",
       },
       {
         id: "lich-bao-tri",
@@ -114,7 +114,17 @@ export const navigation: NavItem[] = [
       {
         id: "quan-ly-moi-han",
         label: "Quản lý mối hàn",
-        description: "Danh sách mối hàn theo khay hàn và chứng chỉ liên quan",
+        description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
+      },
+      {
+        id: "nhat-ky-han",
+        label: "Nhật ký hàn",
+        description: "Theo dõi nhật ký hàn theo thời gian, nhân sự, vị trí GPS và tình trạng",
+      },
+      {
+        id: "quan-ly-may-han",
+        label: "Quản lý Máy Hàn",
+        description: "Mã máy, model, nhà máy, trạng thái, khả dụng và số mối hàn",
       },
       {
         id: "ban-do",
@@ -123,7 +133,7 @@ export const navigation: NavItem[] = [
       },
       {
         id: "tai-lieu",
-        label: "Tài liệu PDF",
+        label: "Quản lý Tài liệu",
         description: "Tải lên, xem và tải về tài liệu PDF",
       },
     ],

@@ -30,8 +30,19 @@ function rowToMapPoint(row: ToaDoRow): MapPoint {
     longitude: Number(row.kinh_do),
     latitude: Number(row.vi_do),
     chainage: row.ly_trinh ?? "",
+    note: row.ghi_chu ?? "",
+    projectId: row.du_an_id,
+    order: row.thu_tu,
   };
 }
+
+type MapPointFetchResult = {
+  points: MapPoint[];
+  source: "supabase" | "seed";
+  error?: string;
+};
+
+const mapPointRequests = new Map<string, Promise<MapPointFetchResult>>();
 
 export function hasSupabaseEnv() {
   return Boolean(
@@ -41,21 +52,33 @@ export function hasSupabaseEnv() {
 }
 
 /** Lấy danh sách toạ độ từ Supabase (theo thu_tu, ma_diem). */
-export async function fetchMapPointsFromDb(): Promise<{
-  points: MapPoint[];
-  source: "supabase" | "seed";
-  error?: string;
-}> {
+export async function fetchMapPointsFromDb(options: { limit?: number; force?: boolean } = {}): Promise<MapPointFetchResult> {
+  const { limit, force = false } = options;
+  if (force) mapPointRequests.clear();
+  const cacheKey = limit ? `limit:${limit}` : "all";
+  const cached = mapPointRequests.get(cacheKey);
+  if (cached) return cached;
+
+  const request = fetchMapPoints(limit);
+  mapPointRequests.set(cacheKey, request);
+  const result = await request;
+  if (result.error) mapPointRequests.delete(cacheKey);
+  return result;
+}
+
+async function fetchMapPoints(limit?: number): Promise<MapPointFetchResult> {
   if (!hasSupabaseEnv()) {
     return { points: seedMapPoints, source: "seed", error: "Chưa cấu hình Supabase env" };
   }
 
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("toa_do")
     .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id")
     .order("thu_tu", { ascending: true })
     .order("ma_diem", { ascending: true });
+  if (limit) query = query.limit(limit);
+  const { data, error } = await query;
 
   if (error) {
     return { points: seedMapPoints, source: "seed", error: error.message };

@@ -1,135 +1,140 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
+import { weeklyTrend } from "@/data/qualityReport";
+import { useReportFilters } from "@/contexts/ReportFilterContext";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
-  Funnel,
-  CaretDown,
-  SlidersHorizontal,
-  CheckCircle,
-  XCircle,
-  SealCheck,
-  ArrowsClockwise,
-  ListChecks,
-  Eye,
-  Warning,
-} from "@/components/icons";
-import {
-  defectCategories,
-  inspectionBreakdown,
-  plantQuality,
-  qualityKpis,
-  railTypeQuality,
-  recentDefects,
-  weeklyTrend,
-  welderQuality,
-} from "@/data/qualityReport";
-
-const PROJECTS = [
-  "ĐSCT Bắc – Nam",
-  "Dự án ga Đà Nẵng",
-  "Dự án đường sắt Bắc Nam",
-  "Khu vực depot Hà Nội",
-  "Tuyến metro số 1",
+  countReworkWelds,
+  filterWeldReportRows,
+  formatJournalDateIso,
+  getJournalRowDateIso,
+  groupJournalErrorReasons,
+  groupJournalRows,
+  summarizeJournalRows,
+} from "@/lib/weldReportData";
+const DEFECT_META = [
+  { name: "Lỗi bề mặt", color: "#ef4444", severity: "Cao" as const },
+  { name: "Nứt bề mặt", color: "#dc2626", severity: "Cao" as const },
+  { name: "Rỗ khí", color: "#f59e0b", severity: "Trung bình" as const },
+  { name: "Cháy cạnh", color: "#3b82f6", severity: "Trung bình" as const },
+  { name: "Biến dạng nhiệt", color: "#6366f1", severity: "Thấp" as const },
+  { name: "Khác", color: "#a855f7", severity: "Thấp" as const },
 ];
-
-const PERSONNEL = [
-  "Lê Thị Kim Anh",
-  "Phạm Văn Minh",
-  "Nguyễn Văn Hùng",
-  "Trần Quốc Bảo",
-  "Trần Thị Mai Anh",
-  "Nguyễn Văn Minh",
-];
-
-const MACHINES = ["K922-1", "K922-2", "K920"];
-
-const WELD_METHODS = [
-  { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
-  { value: "ATW", label: "ATW (Hàn nhiệt nhôm)" },
-];
-
-const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
-
-const PROJECT_W: Record<string, number> = {
-  "ĐSCT Bắc – Nam": 0.38,
-  "Dự án ga Đà Nẵng": 0.22,
-  "Dự án đường sắt Bắc Nam": 0.18,
-  "Khu vực depot Hà Nội": 0.12,
-  "Tuyến metro số 1": 0.1,
-};
-
-const MACHINE_W: Record<string, number> = {
-  "K922-1": 0.46,
-  "K922-2": 0.42,
-  "K920": 0.12,
-};
-
-const METHOD_W: Record<string, number> = {
-  FBW: 0.72,
-  ATW: 0.28,
-};
-
-const WELD_TYPE_W: Record<string, number> = {
-  "Sản xuất": 0.85,
-  "Thử nghiệm": 0.1,
-  "Đào tạo": 0.05,
-};
-
-const PERSON_W: Record<string, number> = {
-  "Lê Thị Kim Anh": 0.22,
-  "Phạm Văn Minh": 0.28,
-  "Nguyễn Văn Hùng": 0.26,
-  "Trần Quốc Bảo": 0.24,
-  "Trần Thị Mai Anh": 0.15,
-  "Nguyễn Văn Minh": 0.15,
-};
-
-const CHART_PERIOD_START = "2024-05-01";
-const CHART_PERIOD_END = "2024-05-30";
-
-function sumWeight(map: Record<string, number>, keys: string[]) {
-  return keys.reduce((acc, k) => acc + (map[k] ?? 0), 0);
-}
-
-function filterPickLabel(count: number, defaultText: string) {
-  if (count === 0) return defaultText;
-  return `Đã chọn (${count})`;
-}
 
 function fmt(n: number) {
   return n.toLocaleString("vi-VN");
 }
 
-function KpiCard({
-  label,
-  value,
-  unit,
-  note,
-  noteColor = "text-slate-500",
-  iconBg,
-  labelColor,
-  icon,
+function QualityKpiGrid({
+  totalInspected,
+  passed,
+  failed,
+  rework,
+  passRate,
+  criticalDefects,
 }: {
-  label: string;
-  value: string;
-  unit?: string;
-  note?: string;
-  noteColor?: string;
-  iconBg: string;
-  labelColor: string;
-  icon: React.ReactNode;
+  totalInspected: number;
+  passed: number;
+  failed: number;
+  rework: number;
+  passRate: number;
+  criticalDefects: number;
 }) {
+  const cells = [
+    {
+      label: "Tổng kiểm tra",
+      value: fmt(totalInspected),
+      unit: "mối",
+      note: "Theo nhật ký hàn",
+      labelColor: "text-slate-700",
+      noteColor: "text-slate-500",
+      accent: "bg-slate-50",
+      iconBg: "bg-white text-slate-600 border border-slate-200",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 11l3 3L22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+      ),
+    },
+    {
+      label: "Đạt chuẩn",
+      value: fmt(passed),
+      unit: "mối",
+      note: `${passRate.toLocaleString("vi-VN")}% tỷ lệ đạt`,
+      labelColor: "text-emerald-700",
+      noteColor: "text-[#0047AB]",
+      accent: "bg-emerald-50/40",
+      iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12l3 3 5-6" />
+        </svg>
+      ),
+    },
+    {
+      label: "Không đạt",
+      value: fmt(failed),
+      unit: "mối",
+      note: `${criticalDefects} lỗi nghiêm trọng`,
+      labelColor: "text-rose-700",
+      noteColor: "text-rose-600",
+      accent: "bg-rose-50/40",
+      iconBg: "bg-rose-50 text-rose-700 border border-rose-200",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M15 9l-6 6M9 9l6 6" />
+        </svg>
+      ),
+    },
+    {
+      label: "Sửa / hàn lại",
+      value: fmt(rework),
+      unit: "mối",
+      note: "Nhật ký hàn · có mối liên kết",
+      labelColor: "text-amber-700",
+      noteColor: "text-amber-700",
+      accent: "bg-amber-50/40",
+      iconBg: "bg-amber-50 text-amber-700 border border-amber-200",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+          <path d="M21 3v5h-5" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
-    <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all duration-150">
-      <div className="min-w-0 flex-1">
-        <div className={`text-xs font-bold uppercase tracking-wider ${labelColor}`}>{label}</div>
-        <div className="mt-2 flex items-baseline gap-1.5">
-          <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{value}</span>
-          {unit ? <span className="text-xs font-medium text-slate-400">{unit}</span> : null}
-        </div>
-        {note ? <div className={`mt-2.5 text-xs font-medium ${noteColor}`}>{note}</div> : null}
+    <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
+        {cells.map((cell) => (
+          <div key={cell.label} className={`flex items-start gap-2.5 p-3.5 sm:p-4 ${cell.accent}`}>
+            <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cell.iconBg}`}>
+              {cell.icon}
+            </div>
+            <div className="flex min-w-0 flex-1 items-end justify-between gap-2">
+              <div className="min-w-0">
+                <div className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${cell.labelColor}`}>
+                  {cell.label}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-bold leading-none text-slate-900 font-mono tabular-nums">
+                    {cell.value}
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-400">{cell.unit}</span>
+                </div>
+              </div>
+              <div className={`shrink-0 self-end pb-0.5 text-right text-[11px] font-medium leading-snug ${cell.noteColor}`}>
+                {cell.note}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-      <div className={`flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl ${iconBg}`}>{icon}</div>
     </div>
   );
 }
@@ -175,179 +180,25 @@ const statusStyle = {
 };
 
 export default function QualityReportDashboard() {
-  const [dateFrom, setDateFrom] = useState(CHART_PERIOD_START);
-  const [dateTo, setDateTo] = useState(CHART_PERIOD_END);
-  const [projects, setProjects] = useState<string[]>([]);
-  const [personnel, setPersonnel] = useState<string[]>([]);
-  const [machines, setMachines] = useState<string[]>([]);
-  const [methods, setMethods] = useState<string[]>([]);
-  const [weldTypes, setWeldTypes] = useState<string[]>([]);
+  const { rows, loading, error } = useWeldReportData();
+  const { appliedFilters } = useReportFilters();
 
-  const [appliedFilters, setAppliedFilters] = useState({
-    dateFrom: CHART_PERIOD_START,
-    dateTo: CHART_PERIOD_END,
-    projects: [] as string[],
-    personnel: [] as string[],
-    machines: [] as string[],
-    methods: [] as string[],
-    weldTypes: [] as string[],
-  });
+  const selectedRows = useMemo(
+    () => filterWeldReportRows(rows, appliedFilters),
+    [rows, appliedFilters],
+  );
+  const summary = useMemo(() => summarizeJournalRows(selectedRows), [selectedRows]);
 
-  const [projectFilterOpen, setProjectFilterOpen] = useState(false);
-  const [personnelFilterOpen, setPersonnelFilterOpen] = useState(false);
-  const [machineFilterOpen, setMachineFilterOpen] = useState(false);
-  const [methodFilterOpen, setMethodFilterOpen] = useState(false);
-  const [weldTypeFilterOpen, setWeldTypeFilterOpen] = useState(false);
-
-  const projectRef = useRef<HTMLDivElement>(null);
-  const personnelRef = useRef<HTMLDivElement>(null);
-  const machineRef = useRef<HTMLDivElement>(null);
-  const methodRef = useRef<HTMLDivElement>(null);
-  const weldTypeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (projectRef.current && !projectRef.current.contains(target)) {
-        setProjectFilterOpen(false);
-      }
-      if (personnelRef.current && !personnelRef.current.contains(target)) {
-        setPersonnelFilterOpen(false);
-      }
-      if (machineRef.current && !machineRef.current.contains(target)) {
-        setMachineFilterOpen(false);
-      }
-      if (methodRef.current && !methodRef.current.contains(target)) {
-        setMethodFilterOpen(false);
-      }
-      if (weldTypeRef.current && !weldTypeRef.current.contains(target)) {
-        setWeldTypeFilterOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  function toggleList(
-    type: "projects" | "personnel" | "machines" | "methods" | "weldTypes",
-    item: string
-  ) {
-    if (type === "projects") {
-      setProjects((prev) =>
-        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-      );
-    } else if (type === "personnel") {
-      setPersonnel((prev) =>
-        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-      );
-    } else if (type === "machines") {
-      setMachines((prev) =>
-        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-      );
-    } else if (type === "methods") {
-      setMethods((prev) =>
-        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-      );
-    } else {
-      setWeldTypes((prev) =>
-        prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-      );
-    }
-  }
-
-  function handleApplyFilters() {
-    setAppliedFilters({
-      dateFrom,
-      dateTo,
-      projects,
-      personnel,
-      machines,
-      methods,
-      weldTypes,
-    });
-    setProjectFilterOpen(false);
-    setPersonnelFilterOpen(false);
-    setMachineFilterOpen(false);
-    setMethodFilterOpen(false);
-    setWeldTypeFilterOpen(false);
-  }
-
-  function handleClearFilters() {
-    setDateFrom(CHART_PERIOD_START);
-    setDateTo(CHART_PERIOD_END);
-    setProjects([]);
-    setPersonnel([]);
-    setMachines([]);
-    setMethods([]);
-    setWeldTypes([]);
-    setAppliedFilters({
-      dateFrom: CHART_PERIOD_START,
-      dateTo: CHART_PERIOD_END,
-      projects: [],
-      personnel: [],
-      machines: [],
-      methods: [],
-      weldTypes: [],
-    });
-    setProjectFilterOpen(false);
-    setPersonnelFilterOpen(false);
-    setMachineFilterOpen(false);
-    setMethodFilterOpen(false);
-    setWeldTypeFilterOpen(false);
-  }
-
-  const factor = useMemo(() => {
-    let f = 1;
-    if (appliedFilters.projects.length) {
-      f *= sumWeight(PROJECT_W, appliedFilters.projects);
-    }
-    if (appliedFilters.machines.length) {
-      f *= sumWeight(MACHINE_W, appliedFilters.machines);
-    }
-    if (appliedFilters.personnel.length) {
-      f *= sumWeight(PERSON_W, appliedFilters.personnel);
-    }
-    if (appliedFilters.methods.length) {
-      f *= sumWeight(METHOD_W, appliedFilters.methods);
-    }
-    if (appliedFilters.weldTypes.length) {
-      f *= sumWeight(WELD_TYPE_W, appliedFilters.weldTypes);
-    }
-    if (appliedFilters.dateFrom && appliedFilters.dateTo) {
-      const d1 = new Date(appliedFilters.dateFrom + "T00:00:00");
-      const d2 = new Date(appliedFilters.dateTo + "T00:00:00");
-      const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
-      f *= Math.min(1.2, Math.max(0.08, days / 30));
-    }
-    return Math.max(0.05, Math.min(2.5, f));
-  }, [appliedFilters]);
-
-  const hasFilter =
-    appliedFilters.dateFrom !== CHART_PERIOD_START ||
-    appliedFilters.dateTo !== CHART_PERIOD_END ||
-    appliedFilters.projects.length > 0 ||
-    appliedFilters.personnel.length > 0 ||
-    appliedFilters.machines.length > 0 ||
-    appliedFilters.methods.length > 0 ||
-    appliedFilters.weldTypes.length > 0;
-
-  const filterCount =
-    (appliedFilters.projects.length ? 1 : 0) +
-    (appliedFilters.personnel.length ? 1 : 0) +
-    (appliedFilters.machines.length ? 1 : 0) +
-    (appliedFilters.methods.length ? 1 : 0) +
-    (appliedFilters.weldTypes.length ? 1 : 0) +
-    (appliedFilters.dateFrom !== CHART_PERIOD_START || appliedFilters.dateTo !== CHART_PERIOD_END ? 1 : 0);
-
-  const passed = Math.max(1, Math.round(qualityKpis.passed * factor));
-  const failed = Math.max(0, Math.round(qualityKpis.failed * factor));
-  const rework = Math.max(0, Math.round(qualityKpis.rework * factor));
-  const totalInspected = passed + failed;
-  const passRate = totalInspected > 0 ? Number(((passed / totalInspected) * 100).toFixed(1)) : 98.5;
-  const ndtPassed = Math.max(1, Math.round(qualityKpis.ndtPassed * factor));
-  const visualFailed = Math.max(0, Math.round(qualityKpis.visualFailed * factor));
-  const criticalDefects = Math.max(0, Math.round(qualityKpis.criticalDefects * factor));
-  const openCases = Math.max(0, Math.round(qualityKpis.openCases * factor));
+  const passed = summary.passed;
+  const failed = summary.errors;
+  const rework = useMemo(() => countReworkWelds(selectedRows), [selectedRows]);
+  const totalInspected = summary.total;
+  const passRate = totalInspected > 0 ? Number(((passed / totalInspected) * 100).toFixed(2)) : 0;
+  const errorRows = useMemo(
+    () => selectedRows.filter((row) => row.so_luong_loi > 0),
+    [selectedRows],
+  );
+  const criticalDefects = errorRows.length;
 
   const currentInspectionBreakdown = useMemo(() => [
     { label: "Đạt chuẩn", count: passed, color: "#22a94f" },
@@ -356,11 +207,17 @@ export default function QualityReportDashboard() {
   ], [passed, failed, rework]);
 
   const currentDefectCategories = useMemo(() => {
-    return defectCategories.map((d) => ({
-      ...d,
-      count: Math.max(1, Math.round(d.count * factor)),
+    const reasons = groupJournalErrorReasons(errorRows, DEFECT_META.length);
+    if (reasons.length === 0) {
+      return DEFECT_META.map((defect) => ({ ...defect, count: 0 }));
+    }
+    return reasons.map((reason, index) => ({
+      name: reason.label,
+      count: reason.count,
+      color: DEFECT_META[index % DEFECT_META.length].color,
+      severity: DEFECT_META[index % DEFECT_META.length].severity,
     }));
-  }, [factor]);
+  }, [errorRows]);
 
   const totalDefects = useMemo(() => {
     return currentDefectCategories.reduce((s, d) => s + d.count, 0);
@@ -374,470 +231,84 @@ export default function QualityReportDashboard() {
   const minTrend = useMemo(() => Math.min(...weeklyTrend.map((w) => w.rate)), []);
 
   const currentPlantQuality = useMemo(() => {
-    return plantQuality.map((p) => ({
-      ...p,
-      total: Math.max(1, Math.round(p.total * factor)),
-      failed: Math.max(0, Math.round(p.failed * factor)),
-    }));
-  }, [factor]);
+    return groupJournalRows(selectedRows, (row) => row.du_an)
+      .sort((a, b) => b.total - a.total)
+      .map((project) => ({
+        plant: project.name,
+        total: project.total,
+        failed: project.errors,
+        passRate: project.total > 0 ? Number(((project.passed / project.total) * 100).toFixed(2)) : 0,
+      }));
+  }, [selectedRows]);
 
   const currentRailTypeQuality = useMemo(() => {
-    return railTypeQuality.map((r) => ({
-      ...r,
-      total: Math.max(1, Math.round(r.total * factor)),
-    }));
-  }, [factor]);
+    return groupJournalRows(selectedRows, (row) => row.loai_ray)
+      .sort((a, b) => b.total - a.total)
+      .map((rail) => ({
+        type: rail.name,
+        total: rail.total,
+        passRate: rail.total > 0 ? Number(((rail.passed / rail.total) * 100).toFixed(2)) : 0,
+      }));
+  }, [selectedRows]);
 
   const currentWelderQuality = useMemo(() => {
-    let list = welderQuality;
-    if (appliedFilters.personnel.length) {
-      list = list.filter((w) => appliedFilters.personnel.includes(w.name));
-    }
-    return list.map((w) => ({
-      ...w,
-      total: Math.max(1, Math.round(w.total * factor)),
-      failed: Math.max(0, Math.round(w.failed * factor)),
-    }));
-  }, [appliedFilters.personnel, factor]);
+    return groupJournalRows(selectedRows, (row) => row.ten_tho_han)
+      .sort((a, b) => b.total - a.total)
+      .map((welder) => {
+        const source = welder.rows[0];
+        return {
+          name: welder.name,
+          weldingId: source.ma_nhan_su,
+          total: welder.total,
+          failed: welder.errors,
+          passRate: welder.total > 0 ? Number(((welder.passed / welder.total) * 100).toFixed(2)) : 0,
+        };
+      });
+  }, [selectedRows]);
 
   const currentRecentDefects = useMemo(() => {
-    let list = recentDefects;
-    if (appliedFilters.personnel.length) {
-      list = list.filter((d) => appliedFilters.personnel.includes(d.welder));
+    const defects = [];
+    let sequence = 0;
+    for (const [index, row] of errorRows.entries()) {
+      const meta = DEFECT_META[sequence % DEFECT_META.length];
+      const isoDate = getJournalRowDateIso(row, index);
+      defects.push({
+        id: row.id,
+        date: formatJournalDateIso(isoDate),
+        weldJoint: row.ma_lich_su,
+        defectType: row.nguyen_nhan_loi?.trim() || meta.name,
+        welder: row.ten_tho_han,
+        plant: row.du_an,
+        severity: meta.severity,
+        status:
+          row.moi_han_lien_ket?.trim()
+            ? ("Đã đóng" as const)
+            : sequence % 3 === 0
+              ? ("Đang sửa" as const)
+              : ("Chờ xử lý" as const),
+      });
+      sequence += 1;
     }
-    return list;
-  }, [appliedFilters.personnel]);
+    return defects;
+  }, [errorRows]);
 
   return (
-    <div className="mx-auto w-full max-w-[1568px] px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
-      {/* 1. Filter Bar */}
-      <div className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs flex flex-col gap-3">
-        {/* Row 1: Label + Date Range + Project + Personnel + Machine (stretched full width) */}
-        <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
-          {/* Label icon */}
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 lg:pb-2.5">
-            <Funnel size={16} weight="fill" aria-hidden />
-            <span>Bộ lọc:</span>
-            {filterCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white font-mono shadow-xs">
-                {filterCount}
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-end gap-2.5 sm:gap-3 flex-1 min-w-0">
-            {/* Date from */}
-            <div className="min-w-0 flex-1">
-              <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Từ ngày
-              </span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDateFrom(val);
-                  if (dateTo && val > dateTo) setDateTo(val);
-                }}
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
-              />
-            </div>
-
-            {/* Date to */}
-            <div className="min-w-0 flex-1">
-              <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Đến ngày
-              </span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDateTo(val);
-                  if (dateFrom && val < dateFrom) setDateFrom(val);
-                }}
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
-              />
-            </div>
-
-            {/* Projects dropdown */}
-            <div ref={projectRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
-              <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Theo dự án
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setProjectFilterOpen((v) => !v);
-                  setPersonnelFilterOpen(false);
-                  setMachineFilterOpen(false);
-                  setMethodFilterOpen(false);
-                  setWeldTypeFilterOpen(false);
-                }}
-                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
-              >
-                <span className="truncate">
-                  {filterPickLabel(projects.length, "Tất cả")}
-                </span>
-                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${projectFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
-              </button>
-              {projectFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
-                    <input
-                      type="checkbox"
-                      checked={projects.length === 0 || projects.length === PROJECTS.length}
-                      onChange={() => setProjects([])}
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                    />
-                    <span className="truncate">Tất cả</span>
-                  </label>
-                  {PROJECTS.map((opt) => (
-                    <label
-                      key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={projects.includes(opt)}
-                        onChange={() => toggleList("projects", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                      />
-                      <span className="truncate">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Personnel dropdown */}
-            <div ref={personnelRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
-              <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Theo nhân sự
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setPersonnelFilterOpen((v) => !v);
-                  setProjectFilterOpen(false);
-                  setMachineFilterOpen(false);
-                  setMethodFilterOpen(false);
-                  setWeldTypeFilterOpen(false);
-                }}
-                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
-              >
-                <span className="truncate">
-                  {filterPickLabel(personnel.length, "Tất cả")}
-                </span>
-                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${personnelFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
-              </button>
-              {personnelFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
-                    <input
-                      type="checkbox"
-                      checked={personnel.length === 0 || personnel.length === PERSONNEL.length}
-                      onChange={() => setPersonnel([])}
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                    />
-                    <span className="truncate">Tất cả</span>
-                  </label>
-                  {PERSONNEL.map((opt) => (
-                    <label
-                      key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={personnel.includes(opt)}
-                        onChange={() => toggleList("personnel", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                      />
-                      <span className="truncate">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Machines dropdown */}
-            <div ref={machineRef} className="relative col-span-2 sm:col-span-1 min-w-0 flex-1">
-              <span className="mb-1 block text-xs font-semibold text-slate-600">
-                Theo máy
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setMachineFilterOpen((v) => !v);
-                  setProjectFilterOpen(false);
-                  setPersonnelFilterOpen(false);
-                  setMethodFilterOpen(false);
-                  setWeldTypeFilterOpen(false);
-                }}
-                className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
-              >
-                <span className="truncate">
-                  {filterPickLabel(machines.length, "Tất cả")}
-                </span>
-                <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${machineFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
-              </button>
-              {machineFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                  <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
-                    <input
-                      type="checkbox"
-                      checked={machines.length === 0 || machines.length === MACHINES.length}
-                      onChange={() => setMachines([])}
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                    />
-                    <span className="truncate">Tất cả</span>
-                  </label>
-                  {MACHINES.map((opt) => (
-                    <label
-                      key={opt}
-                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={machines.includes(opt)}
-                        onChange={() => toggleList("machines", opt)}
-                        className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                      />
-                      <span className="truncate">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2: Method + Weld Type + Apply / Clear Action Buttons */}
-        <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 pt-2.5 border-t border-slate-100">
-          {/* Methods dropdown */}
-          <div ref={methodRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[220px]">
-            <span className="mb-1 block text-xs font-semibold text-slate-600">
-              Phương pháp hàn
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMethodFilterOpen((v) => !v);
-                setProjectFilterOpen(false);
-                setPersonnelFilterOpen(false);
-                setMachineFilterOpen(false);
-                setWeldTypeFilterOpen(false);
-              }}
-              className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
-            >
-              <span className="truncate">
-                {filterPickLabel(methods.length, "Tất cả")}
-              </span>
-              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${methodFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
-            </button>
-            {methodFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
-                  <input
-                    type="checkbox"
-                    checked={methods.length === 0 || methods.length === WELD_METHODS.length}
-                    onChange={() => setMethods([])}
-                    className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                  />
-                  <span className="truncate">Tất cả</span>
-                </label>
-                {WELD_METHODS.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={methods.includes(opt.value)}
-                      onChange={() => toggleList("methods", opt.value)}
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                    />
-                    <span className="truncate font-medium">{opt.label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Weld Types dropdown */}
-          <div ref={weldTypeRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[200px]">
-            <span className="mb-1 block text-xs font-semibold text-slate-600">
-              Loại mối hàn
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setWeldTypeFilterOpen((v) => !v);
-                setProjectFilterOpen(false);
-                setPersonnelFilterOpen(false);
-                setMachineFilterOpen(false);
-                setMethodFilterOpen(false);
-              }}
-              className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 cursor-pointer focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden transition-all"
-            >
-              <span className="truncate">
-                {filterPickLabel(weldTypes.length, "Tất cả")}
-              </span>
-              <CaretDown size={14} weight="bold" aria-hidden className={`text-slate-400 shrink-0 transition-transform duration-200 ${weldTypeFilterOpen ? "rotate-180 text-[#0047AB]" : ""}`} />
-            </button>
-            {weldTypeFilterOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
-                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors border-b border-slate-100 pb-2 mb-0.5">
-                  <input
-                    type="checkbox"
-                    checked={weldTypes.length === 0 || weldTypes.length === WELD_TYPES.length}
-                    onChange={() => setWeldTypes([])}
-                    className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                  />
-                  <span className="truncate">Tất cả</span>
-                </label>
-                {WELD_TYPES.map((opt) => (
-                  <label
-                    key={opt}
-                    className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={weldTypes.includes(opt)}
-                      onChange={() => toggleList("weldTypes", opt)}
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
-                    />
-                    <span className="truncate">{opt}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 pt-1 sm:pt-0 sm:ml-auto w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={handleApplyFilters}
-              className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <SlidersHorizontal size={13} weight="fill" aria-hidden />
-              Áp dụng
-            </button>
-
-            {hasFilter && (
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
-              >
-                Xóa lọc
-              </button>
-            )}
-          </div>
-        </div>
+    <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {error
+          ? `Không tải được Supabase: ${error}`
+          : loading
+            ? "Đang tải dữ liệu Supabase…"
+            : `Nhật ký hàn · ${rows.length} bản ghi · Sửa/hàn lại = có Mối hàn liên kết`}
       </div>
-
-      {/* Row 1 — KPI chính */}
-      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Mối hàn đạt chuẩn"
-          value={fmt(passed)}
-          unit="mối"
-          note="↑ 1,2% so tháng trước"
-          noteColor="text-emerald-700"
-          iconBg="bg-emerald-50 text-emerald-700 border border-emerald-200"
-          labelColor="text-emerald-700"
-          icon={
-            <CheckCircle size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="Mối hàn không đạt"
-          value={fmt(failed)}
-          unit="mối"
-          note={`${criticalDefects} lỗi nghiêm trọng`}
-          noteColor="text-rose-700"
-          iconBg="bg-rose-50 text-rose-700 border border-rose-200"
-          labelColor="text-rose-700"
-          icon={
-            <XCircle size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="Tỷ lệ đạt chuẩn"
-          value={passRate.toLocaleString("vi-VN")}
-          unit="%"
-          note={`First-pass ${qualityKpis.firstPassRate}%`}
-          iconBg="bg-blue-50 text-[#0047AB] border border-blue-200/80"
-          labelColor="text-[#0047AB]"
-          icon={
-            <SealCheck size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="Sửa / hàn lại"
-          value={fmt(rework)}
-          unit="mối"
-          note={`TB ${qualityKpis.avgFixHours}h xử lý`}
-          noteColor="text-amber-700"
-          iconBg="bg-amber-50 text-amber-700 border border-amber-200"
-          labelColor="text-amber-700"
-          icon={
-            <ArrowsClockwise size={22} aria-hidden />
-          }
-        />
-      </div>
-
-      {/* Row 2 — KPI bổ sung */}
-      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Tổng kiểm tra"
-          value={fmt(totalInspected)}
-          unit="mối"
-          note="NDT + ngoại quan"
-          iconBg="bg-slate-50 text-slate-700 border border-slate-200"
-          labelColor="text-slate-700"
-          icon={
-            <ListChecks size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="NDT/UT đạt"
-          value={fmt(ndtPassed)}
-          unit="mối"
-          note="Siêu âm & kiểm tra vết nứt"
-          iconBg="bg-cyan-50 text-cyan-700 border border-cyan-200"
-          labelColor="text-cyan-700"
-          icon={
-            <Eye size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="Ngoại quan không đạt"
-          value={fmt(visualFailed)}
-          unit="mối"
-          note="Phát hiện bằng mắt thường"
-          noteColor="text-purple-700"
-          iconBg="bg-purple-50 text-purple-700 border border-purple-200"
-          labelColor="text-purple-700"
-          icon={
-            <Eye size={22} aria-hidden />
-          }
-        />
-        <KpiCard
-          label="Ca đang mở"
-          value={fmt(openCases)}
-          unit="ca"
-          note={`${qualityKpis.closedThisMonth} đã đóng tháng này`}
-          noteColor="text-emerald-700"
-          iconBg="bg-orange-50 text-orange-700 border border-orange-200"
-          labelColor="text-orange-700"
-          icon={
-            <Warning size={22} aria-hidden />
-          }
-        />
-      </div>
+      <QualityKpiGrid
+        totalInspected={totalInspected}
+        passed={passed}
+        failed={failed}
+        rework={rework}
+        passRate={passRate}
+        criticalDefects={criticalDefects}
+      />
 
       {/* Charts row */}
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
@@ -873,7 +344,7 @@ export default function QualityReportDashboard() {
           </div>
           <div className="mt-4 flex flex-col gap-3">
             {currentDefectCategories.map((d) => {
-              const pct = ((d.count / totalDefects) * 100).toFixed(1);
+              const pct = totalDefects > 0 ? ((d.count / totalDefects) * 100).toFixed(1) : "0.0";
               const w = (d.count / maxDefect) * 100;
               return (
                 <div key={d.name} className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">

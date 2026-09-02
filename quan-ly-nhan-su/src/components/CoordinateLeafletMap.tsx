@@ -7,17 +7,23 @@ import type { MapBaseLayer, MapPoint, MapViewMode } from "@/data/mapPoints";
 import {
   googleOpenPoint,
   routeCenter,
+  sampleMapMarkers,
   vietnamBounds,
   vietnamCenter,
   vietnamZoom,
 } from "@/data/mapPoints";
 import "leaflet/dist/leaflet.css";
 
+const pinIconCache = new Map<string, L.DivIcon>();
+
 function makePinIcon(label: string, active: boolean) {
+  const cacheKey = `${label}:${active ? "active" : "normal"}`;
+  const cached = pinIconCache.get(cacheKey);
+  if (cached) return cached;
   const bg = active ? "#dc2626" : "#0047AB";
   const size = active ? 22 : 18;
   const short = label.replace(/^TT0*/, "").slice(-4) || label.replace("TT", "");
-  return L.divIcon({
+  const icon = L.divIcon({
     className: "map-pin-wrap",
     iconSize: [size, size + 6],
     iconAnchor: [size / 2, size + 3],
@@ -27,6 +33,8 @@ function makePinIcon(label: string, active: boolean) {
       <span class="map-pin-tail"></span>
     </div>`,
   });
+  pinIconCache.set(cacheKey, icon);
+  return icon;
 }
 
 function MapReady() {
@@ -56,11 +64,6 @@ function CameraController({
   focusPoint?: MapPoint | null;
 }) {
   const map = useMap();
-
-  useEffect(() => {
-    map.setMaxBounds(vietnamBounds);
-    map.options.maxBoundsViscosity = 0.85;
-  }, [map]);
 
   useEffect(() => {
     if (focusPoint) {
@@ -103,6 +106,10 @@ export default function CoordinateLeafletMap({
     () => points.map((p) => [p.latitude, p.longitude] as [number, number]),
     [points],
   );
+  const markerPoints = useMemo(
+    () => sampleMapMarkers(points, selectedId),
+    [points, selectedId],
+  );
   const focusPoint =
     focusSelected && selectedId ? points.find((p) => p.id === selectedId) ?? null : null;
 
@@ -116,6 +123,8 @@ export default function CoordinateLeafletMap({
       className="leaflet-map-root h-full w-full rounded-xl"
       style={{ height: "100%", width: "100%", minHeight: 420, background: "#c7dff7" }}
       maxBounds={vietnamBounds}
+      maxBoundsViscosity={0.85}
+      preferCanvas
     >
       {baseLayer === "satellite" ? (
         <>
@@ -152,7 +161,7 @@ export default function CoordinateLeafletMap({
         />
       )}
 
-      {points.map((p) => {
+      {markerPoints.map((p) => {
         const active = p.id === selectedId;
         return (
           <Marker

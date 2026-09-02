@@ -40,6 +40,9 @@ create table if not exists public.du_an (
 
 comment on table public.du_an is 'Danh sách dự án';
 
+-- Tiến độ lý thuyết theo ngày (bảng con JSONB): [{ "ngay", "so_moi_han" }]
+-- Migration đầy đủ: supabase/du_an_tien_do_ly_thuyet.sql
+
 -- ------------------------------------------------------------
 -- 3. THIẾT BỊ
 -- ------------------------------------------------------------
