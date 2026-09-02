@@ -7,6 +7,7 @@ export type Employee = {
   department: string;
   position: string;
   weldingTeam: string;
+  certificates: string;
   role: string;
   status: "Hoạt động" | "Khóa";
   photo: string;
@@ -22,6 +23,7 @@ export const employees: Employee[] = [
     department: "Phòng Công nghệ thông tin",
     position: "Kiểm thử viên",
     weldingTeam: "Không áp dụng",
+    certificates: "",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/44.jpg",
@@ -35,6 +37,7 @@ export const employees: Employee[] = [
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
     weldingTeam: "Không áp dụng",
+    certificates: "",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/32.jpg",
@@ -48,6 +51,7 @@ export const employees: Employee[] = [
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
     weldingTeam: "Không áp dụng",
+    certificates: "",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/75.jpg",
@@ -61,6 +65,7 @@ export const employees: Employee[] = [
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
     weldingTeam: "Không áp dụng",
+    certificates: "",
     role: "Quản trị",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/11.jpg",
@@ -74,6 +79,7 @@ export const employees: Employee[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 1",
+    certificates: "Chứng chỉ thợ hàn ray hạng 1 – UIC60, Chứng chỉ ISO 9606 – Welding Qualification",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/65.jpg",
@@ -87,6 +93,7 @@ export const employees: Employee[] = [
     department: "Phòng Sản xuất",
     position: "Tổ trưởng",
     weldingTeam: "Tổ hàn 1",
+    certificates: "Chứng chỉ thợ hàn ray hạng 1 – UIC60, Chứng chỉ thợ hàn ray hạng 2 – P50/P43, Chứng chỉ vận hành máy hàn K920",
     role: "Quản trị",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/52.jpg",
@@ -100,6 +107,7 @@ export const employees: Employee[] = [
     department: "Phòng Nhân sự",
     position: "Chuyên viên nhân sự",
     weldingTeam: "Không áp dụng",
+    certificates: "",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/68.jpg",

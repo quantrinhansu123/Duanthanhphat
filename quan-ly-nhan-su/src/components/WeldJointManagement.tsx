@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { weldJoints, type WeldPurpose } from "@/data/weld-joints";
+import { welders } from "@/data/welders";
 import { MagnifyingGlass } from "@/components/icons";
+import { hasCertificate } from "@/lib/weldingCertificates";
 
 const weldTypeStyle: Record<WeldPurpose, string> = {
   "Thử nghiệm": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
@@ -13,16 +15,27 @@ const weldTypeStyle: Record<WeldPurpose, string> = {
 export default function WeldJointManagement() {
   const [query, setQuery] = useState("");
 
+  const rowsWithPersonnel = useMemo(
+    () => weldJoints.map((row) => ({
+      ...row,
+      qualifiedPersonnel: welders.filter(
+        (welder) => welder.status === "Hoạt động" && hasCertificate(welder.certificates, row.certificate),
+      ),
+    })),
+    [],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return weldJoints;
-    return weldJoints.filter(
+    if (!q) return rowsWithPersonnel;
+    return rowsWithPersonnel.filter(
       (row) =>
         row.method.toLowerCase().includes(q) ||
         row.weldType.toLowerCase().includes(q) ||
-        row.certificate.toLowerCase().includes(q),
+        row.certificate.toLowerCase().includes(q) ||
+        row.qualifiedPersonnel.some((welder) => welder.name.toLowerCase().includes(q)),
     );
-  }, [query]);
+  }, [query, rowsWithPersonnel]);
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
@@ -50,19 +63,20 @@ export default function WeldJointManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[920px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-16 whitespace-nowrap px-4 py-3 text-center">STT</th>
                 <th className="min-w-[140px] px-3.5 py-3">Phương pháp hàn</th>
                 <th className="min-w-[140px] px-3.5 py-3">Loại mối hàn</th>
                 <th className="min-w-[240px] px-3.5 py-3">Chứng chỉ</th>
+                <th className="min-w-[260px] px-3.5 py-3">Nhân sự đủ chứng chỉ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy mối hàn phù hợp</div>
                   </td>
                 </tr>
@@ -87,6 +101,17 @@ export default function WeldJointManagement() {
                       <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-700 shadow-2xs">
                         {row.certificate}
                       </span>
+                    </td>
+                    <td className="px-3.5 py-3">
+                      {row.qualifiedPersonnel.length > 0 ? (
+                        <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={row.qualifiedPersonnel.map((welder) => welder.name).join(", ")}>
+                          {row.qualifiedPersonnel.map((welder) => welder.name).join(", ")}
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                          Chưa có nhân sự đạt chuẩn
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

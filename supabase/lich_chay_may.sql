@@ -93,7 +93,8 @@ comment on column public.thiet_bi.trang_thai is 'Đang làm việc, Sẵn sàng,
 
 -- Tổ hàn của nhân sự, dùng để lọc và tổng hợp báo cáo.
 alter table public.nhan_su
-  add column if not exists to_han text;
+  add column if not exists to_han text,
+  add column if not exists chung_chi text[] not null default '{}';
 
 update public.nhan_su
 set to_han = case
@@ -105,6 +106,39 @@ end
 where nullif(btrim(to_han), '') is null;
 
 comment on column public.nhan_su.to_han is 'Tổ hàn phục vụ phân công và báo cáo sản lượng theo tổ';
+
+update public.nhan_su
+set chung_chi = case
+  when ma_nhan_su ~ '001$' then array[
+    'Chứng chỉ thợ hàn ray hạng 1 – UIC60',
+    'Chứng chỉ ISO 9606 – Welding Qualification'
+  ]
+  when ma_nhan_su ~ '002$' then array[
+    'Chứng chỉ thợ hàn ray hạng 1 – UIC60',
+    'Chứng chỉ thợ hàn ray hạng 2 – P50/P43',
+    'Chứng chỉ vận hành máy hàn K920'
+  ]
+  when ma_nhan_su ~ '003$' then array[
+    'Chứng chỉ thợ hàn ray hạng 1 – UIC60',
+    'Chứng chỉ an toàn lao động nhóm 3'
+  ]
+  when ma_nhan_su ~ '004$' then array[
+    'Chứng chỉ thợ hàn ray hạng 2 – P50/P43',
+    'Chứng chỉ NDT – kiểm tra siêu âm mối hàn'
+  ]
+  when ma_nhan_su ~ '005$' then array[
+    'Chứng chỉ thợ hàn ray hạng 2 – P50/P43',
+    'Chứng chỉ ISO 9606 – Welding Qualification'
+  ]
+  when ma_nhan_su ~ '006$' then array[
+    'Chứng chỉ ISO 9606 – Welding Qualification'
+  ]
+  else '{}'::text[]
+end
+where cardinality(chung_chi) = 0;
+
+comment on column public.nhan_su.chung_chi is
+  'Danh sách chứng chỉ nhân sự; giao diện cho phép chọn nhiều và hiển thị cách nhau bằng dấu phẩy';
 
 -- ------------------------------------------------------------
 -- 2. Lịch chạy máy
@@ -230,10 +264,68 @@ join public.nhan_su ns on ns.employee_id = nk.nguoi_phu_trach;
 -- 3. Gắn máy cho dữ liệu mối hàn
 -- ------------------------------------------------------------
 alter table public.lich_su_moi_han
-  add column if not exists may_id uuid references public.thiet_bi (id) on delete set null;
+  add column if not exists may_id uuid references public.thiet_bi (id) on delete set null,
+  add column if not exists chung_chi_su_dung text;
 
 comment on column public.lich_su_moi_han.may_id is
   'Máy thực hiện mối hàn; dùng để tự động tổng hợp số mối hàn theo máy';
+comment on column public.lich_su_moi_han.chung_chi_su_dung is
+  'Chứng chỉ của nhân sự được sử dụng để đáp ứng chuẩn mối hàn';
+
+create or replace function public.kiem_tra_chung_chi_moi_han()
+returns trigger
+language plpgsql
+as $$
+declare
+  danh_sach_chung_chi text[];
+  chung_chi_bat_buoc text;
+begin
+  select coalesce(chung_chi, '{}'::text[])
+  into danh_sach_chung_chi
+  from public.nhan_su
+  where employee_id = new.tho_han_id;
+
+  chung_chi_bat_buoc = case
+    when upper(new.loai_ray) like '%UIC60%' then
+      'Chứng chỉ thợ hàn ray hạng 1 – UIC60'
+    when upper(new.loai_ray) like '%P50%' or upper(new.loai_ray) like '%P43%' then
+      'Chứng chỉ thợ hàn ray hạng 2 – P50/P43'
+    when new.cong_nghe_han = 'ATW' then
+      'Chứng chỉ thợ hàn ray hạng 1 – UIC60'
+    else
+      'Chứng chỉ ISO 9606 – Welding Qualification'
+  end;
+
+  if new.nguon_du_lieu = 'nhat-ky-han'
+     and nullif(btrim(new.chung_chi_su_dung), '') is null then
+    raise exception 'Nhật ký hàn phải có chứng chỉ sử dụng';
+  end if;
+
+  if new.nguon_du_lieu = 'nhat-ky-han'
+     and btrim(new.chung_chi_su_dung) <> chung_chi_bat_buoc then
+    raise exception 'Mối hàn yêu cầu chứng chỉ %, không phải %',
+      chung_chi_bat_buoc,
+      new.chung_chi_su_dung;
+  end if;
+
+  if nullif(btrim(new.chung_chi_su_dung), '') is not null
+     and not exists (
+       select 1
+       from unnest(danh_sach_chung_chi) as chung_chi
+       where btrim(chung_chi) = btrim(new.chung_chi_su_dung)
+     ) then
+    raise exception 'Nhân sự được chọn không có chứng chỉ %', new.chung_chi_su_dung;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_kiem_tra_chung_chi_moi_han on public.lich_su_moi_han;
+create trigger trg_kiem_tra_chung_chi_moi_han
+  before insert or update of tho_han_id, loai_ray, cong_nghe_han, chung_chi_su_dung, nguon_du_lieu
+  on public.lich_su_moi_han
+  for each row execute function public.kiem_tra_chung_chi_moi_han();
 
 create index if not exists idx_lich_su_moi_han_may
   on public.lich_su_moi_han (may_id);
@@ -264,7 +356,9 @@ select
   tb.id as may_id,
   tb.ma_may,
   tb.ten_may,
-  ns.to_han
+  ns.to_han,
+  ns.chung_chi as chung_chi_nhan_su,
+  ls.chung_chi_su_dung
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
+import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
 
 export const REPORT_MACHINES = [
   "K920-01",
@@ -34,6 +35,8 @@ export type WeldReportRow = {
   ma_may?: string | null;
   ten_may?: string | null;
   to_han?: string | null;
+  chung_chi_nhan_su?: string[] | null;
+  chung_chi_su_dung?: string | null;
 };
 
 export type WeldReportFilters = {
@@ -94,6 +97,11 @@ const REPORT_COLUMNS_WITH_MACHINE = [
   "ten_may",
 ] as const;
 const REPORT_COLUMNS_WITH_TEAM = [...REPORT_COLUMNS_WITH_MACHINE, "to_han"] as const;
+const REPORT_COLUMNS_WITH_CERTIFICATE = [
+  ...REPORT_COLUMNS_WITH_TEAM,
+  "chung_chi_nhan_su",
+  "chung_chi_su_dung",
+] as const;
 
 let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
 
@@ -114,6 +122,7 @@ export type WeldJournalInsert = {
   ghi_chu?: string | null;
   moi_han_lien_ket?: string | null;
   may_id: string;
+  chung_chi_su_dung: string;
 };
 
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
@@ -132,6 +141,7 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
     ghi_chu: payload.ghi_chu?.trim() || null,
     moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
     may_id: payload.may_id,
+    chung_chi_su_dung: payload.chung_chi_su_dung.trim(),
     nguon_du_lieu: "nhat-ky-han",
   });
 
@@ -178,10 +188,24 @@ export function listFailedWeldsInDateRange(
     }));
 }
 
-export function uniqueWelderOptions(rows: WeldReportRow[]) {
-  const map = new Map<string, { id: string; label: string }>();
+export type CertifiedWelderOption = {
+  id: string;
+  label: string;
+  certificates: string[];
+};
+
+export function uniqueWelderOptions(rows: WeldReportRow[]): CertifiedWelderOption[] {
+  const map = new Map<string, CertifiedWelderOption>();
   for (const row of rows) {
-    map.set(row.tho_han_id, { id: row.tho_han_id, label: row.ten_tho_han });
+    const certificates = row.chung_chi_nhan_su?.length
+      ? parseCertificateList(row.chung_chi_nhan_su)
+      : defaultCertificatesForPersonnelCode(row.ma_nhan_su);
+    const existing = map.get(row.tho_han_id);
+    map.set(row.tho_han_id, {
+      id: row.tho_han_id,
+      label: row.ten_tho_han,
+      certificates: Array.from(new Set([...(existing?.certificates ?? []), ...certificates])),
+    });
   }
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
@@ -208,7 +232,7 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
       } catch (firstError) {
         const message = formatSupabaseError(firstError);
         const missingOptionalColumn =
@@ -216,17 +240,23 @@ export function loadWeldReportRows() {
           message.includes("ma_may") ||
           message.includes("ten_may") ||
           message.includes("to_han") ||
+          message.includes("chung_chi_nhan_su") ||
+          message.includes("chung_chi_su_dung") ||
           message.includes("moi_han_lien_ket") ||
           message.includes("column") ||
           message.includes("42703");
         if (!missingOptionalColumn) throw firstError;
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
         } catch {
           try {
-            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
           } catch {
-            return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+            try {
+              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+            } catch {
+              return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+            }
           }
         }
       }

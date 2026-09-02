@@ -59,6 +59,7 @@ create table if not exists public.lich_su_moi_han (
   so_luong_thuc_hien    integer not null,
   so_luong_loi          integer not null default 0,
   tho_han_id            uuid not null references public.nhan_su (employee_id) on delete restrict,
+  chung_chi_su_dung     text,
   nguyen_nhan_loi       text,
   nguon_du_lieu         text,
   dong_nguon            integer,
@@ -87,6 +88,8 @@ comment on column public.lich_su_moi_han.cong_nghe_han is
   'Công nghệ hàn: FBW hoặc ATW';
 comment on column public.lich_su_moi_han.so_luong_loi is
   'Số mối lỗi nằm trong tổng số lượng thực hiện';
+comment on column public.lich_su_moi_han.chung_chi_su_dung is
+  'Chứng chỉ của nhân sự được dùng để đáp ứng chuẩn mối hàn';
 
 create index if not exists idx_lich_su_moi_han_nam
   on public.lich_su_moi_han (nam_thuc_hien);
@@ -186,7 +189,9 @@ select
   ls.nguyen_nhan_loi,
   ls.nguon_du_lieu,
   ls.dong_nguon,
-  ls.ghi_chu
+  ls.ghi_chu,
+  ns.chung_chi as chung_chi_nhan_su,
+  ls.chung_chi_su_dung
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id;

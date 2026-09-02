@@ -15,6 +15,7 @@ create table if not exists public.nhan_su (
   chuc_vu         text,
   don_vi          text,
   to_han          text,
+  chung_chi       text[] not null default '{}', -- nhiều chứng chỉ, giao diện hiển thị cách nhau dấu phẩy
   kinh_nghiem     text,                    -- mô tả / số năm kinh nghiệm
   du_an_tham_gia  text[],                  -- danh sách dự án (text) — hoặc dùng bảng nối bên dưới
   cap_bac         text,
@@ -27,6 +28,7 @@ create table if not exists public.nhan_su (
 
 comment on table public.nhan_su is 'Danh sách nhân sự';
 comment on column public.nhan_su.hinh_anh is 'URL ảnh trên Supabase Storage';
+comment on column public.nhan_su.chung_chi is 'Danh sách chứng chỉ nhân sự được phép sử dụng khi ghép mối hàn';
 
 -- ------------------------------------------------------------
 -- 2. DỰ ÁN

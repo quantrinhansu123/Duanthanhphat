@@ -6,6 +6,7 @@ export type Welder = {
   department: string;
   position: string;
   weldingTeam: string;
+  certificates: string;
   rank: string;
   railTypes: string;
   trainedMachines: string;
@@ -23,6 +24,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 1",
+    certificates: "Chứng chỉ thợ hàn ray hạng 1 – UIC60, Chứng chỉ ISO 9606 – Welding Qualification",
     rank: "Hạng 1",
     railTypes: "UIC60, P50",
     trainedMachines: "K920, AMS60",
@@ -38,6 +40,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Tổ trưởng",
     weldingTeam: "Tổ hàn 1",
+    certificates: "Chứng chỉ thợ hàn ray hạng 1 – UIC60, Chứng chỉ thợ hàn ray hạng 2 – P50/P43, Chứng chỉ vận hành máy hàn K920",
     rank: "Hạng 2",
     railTypes: "UIC60, P43, P50",
     trainedMachines: "K920, K355, AMS60",
@@ -53,6 +56,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 2",
+    certificates: "Chứng chỉ thợ hàn ray hạng 1 – UIC60, Chứng chỉ an toàn lao động nhóm 3",
     rank: "Hạng 1",
     railTypes: "UIC60",
     trainedMachines: "AMS60",
@@ -68,6 +72,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 2",
+    certificates: "Chứng chỉ thợ hàn ray hạng 2 – P50/P43, Chứng chỉ NDT – kiểm tra siêu âm mối hàn",
     rank: "Hạng 2",
     railTypes: "P50, P43",
     trainedMachines: "K920, K355",
@@ -83,6 +88,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 3",
+    certificates: "Chứng chỉ thợ hàn ray hạng 2 – P50/P43, Chứng chỉ ISO 9606 – Welding Qualification",
     rank: "Hạng 3",
     railTypes: "UIC60, P50, P43",
     trainedMachines: "K920, K355, AMS60, GEO",
@@ -98,6 +104,7 @@ export const welders: Welder[] = [
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
     weldingTeam: "Tổ hàn 3",
+    certificates: "Chứng chỉ ISO 9606 – Welding Qualification",
     rank: "Hạng 1",
     railTypes: "P43",
     trainedMachines: "K355",

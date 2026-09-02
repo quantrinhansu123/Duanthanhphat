@@ -16,8 +16,13 @@ import {
   uniqueProjectOptions,
   uniqueReportValues,
   uniqueWelderOptions,
+  type CertifiedWelderOption,
   type WeldReportRow,
 } from "@/lib/weldReportData";
+import {
+  hasCertificate,
+  requiredCertificateForWeld,
+} from "@/lib/weldingCertificates";
 
 const REPORT_PERIOD_START = "2017-01-01";
 const REPORT_PERIOD_END = "2026-12-31";
@@ -41,6 +46,7 @@ type JournalFormValues = {
   result: "Đạt" | "Không đạt";
   nguyen_nhan_loi: string;
   moi_han_lien_ket: string;
+  chung_chi_su_dung: string;
   ghi_chu: string;
 };
 
@@ -60,14 +66,15 @@ function defaultPerformedAt() {
 
 function emptyJournalForm(
   projects: { id: string; label: string }[],
-  welders: { id: string; label: string }[],
+  welders: CertifiedWelderOption[],
   machines: MachineOption[],
 ): JournalFormValues {
+  const certificate = requiredCertificateForWeld("UIC60", "FBW");
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
     du_an_id: projects[0]?.id ?? "",
-    tho_han_id: welders[0]?.id ?? "",
+    tho_han_id: welders.find((welder) => hasCertificate(welder.certificates, certificate))?.id ?? "",
     may_id: machines[0]?.id ?? "",
     loai_ray: "UIC60",
     cong_nghe_han: "FBW",
@@ -75,6 +82,7 @@ function emptyJournalForm(
     result: "Đạt",
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
+    chung_chi_su_dung: certificate,
     ghi_chu: "",
   };
 }
@@ -91,7 +99,7 @@ function JournalFormModal({
 }: {
   open: boolean;
   projects: { id: string; label: string }[];
-  welders: { id: string; label: string }[];
+  welders: CertifiedWelderOption[];
   machines: MachineOption[];
   rows: WeldReportRow[];
   saving: boolean;
@@ -106,6 +114,15 @@ function JournalFormModal({
     () => listFailedWeldsInDateRange(rows, linkDateFrom, linkDateTo),
     [rows, linkDateFrom, linkDateTo],
   );
+  const requiredCertificate = useMemo(
+    () => requiredCertificateForWeld(form.loai_ray, form.cong_nghe_han),
+    [form.loai_ray, form.cong_nghe_han],
+  );
+  const qualifiedWelders = useMemo(
+    () => welders.filter((welder) => hasCertificate(welder.certificates, requiredCertificate)),
+    [welders, requiredCertificate],
+  );
+  const selectedWelder = welders.find((welder) => welder.id === form.tho_han_id);
 
   useEffect(() => {
     if (open) {
@@ -115,6 +132,19 @@ function JournalFormModal({
       setLinkDateTo(range.to);
     }
   }, [open, projects, welders, machines]);
+
+  useEffect(() => {
+    const selectedIsQualified = welders.some(
+      (welder) => welder.id === form.tho_han_id && hasCertificate(welder.certificates, requiredCertificate),
+    );
+    const nextWelderId = selectedIsQualified ? form.tho_han_id : qualifiedWelders[0]?.id ?? "";
+    if (form.chung_chi_su_dung === requiredCertificate && form.tho_han_id === nextWelderId) return;
+    setForm((prev) => ({
+      ...prev,
+      tho_han_id: nextWelderId,
+      chung_chi_su_dung: requiredCertificate,
+    }));
+  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, requiredCertificate, welders]);
 
   useEffect(() => {
     if (!form.moi_han_lien_ket) return;
@@ -143,7 +173,11 @@ function JournalFormModal({
       return;
     }
     if (!form.tho_han_id) {
-      window.alert("Vui lòng chọn nhân sự phụ trách.");
+      window.alert("Không có nhân sự sở hữu chứng chỉ phù hợp với mối hàn này.");
+      return;
+    }
+    if (!selectedWelder || !hasCertificate(selectedWelder.certificates, requiredCertificate)) {
+      window.alert(`Nhân sự được chọn chưa có chứng chỉ: ${requiredCertificate}`);
       return;
     }
     if (!form.may_id) {
@@ -227,16 +261,22 @@ function JournalFormModal({
               onChange={(e) => setForm({ ...form, tho_han_id: e.target.value })}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
             >
+              {qualifiedWelders.length === 0 && (
+                <option value="">Chưa có nhân sự đủ chứng chỉ</option>
+              )}
               {welders.length === 0 ? (
                 <option value="">Chưa có dữ liệu thợ hàn</option>
               ) : (
                 welders.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.label}
+                  <option key={w.id} value={w.id} disabled={!hasCertificate(w.certificates, requiredCertificate)}>
+                    {w.label}{hasCertificate(w.certificates, requiredCertificate) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ"}
                   </option>
                 ))
               )}
             </select>
+            <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+              Chứng chỉ yêu cầu: {requiredCertificate} · {qualifiedWelders.length} nhân sự phù hợp
+            </span>
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -475,6 +515,7 @@ export default function WeldingJournalList() {
         row.ten_tho_han.toLowerCase().includes(q) ||
         row.du_an.toLowerCase().includes(q) ||
         row.ma_lich_su.toLowerCase().includes(q) ||
+        (row.chung_chi_su_dung?.toLowerCase().includes(q) ?? false) ||
         (row.ma_may?.toLowerCase().includes(q) ?? false) ||
         row.id.toLowerCase().includes(q);
       return matchProject && matchResult && matchQuery;
@@ -494,6 +535,7 @@ export default function WeldingJournalList() {
         id: row.id,
         dateTime,
         operator: row.ten_tho_han,
+        certificate: row.chung_chi_su_dung?.trim() || requiredCertificateForWeld(row.loai_ray, row.cong_nghe_han),
         machine: row.ma_may
           ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
           : "Chưa gán máy",
@@ -537,6 +579,7 @@ export default function WeldingJournalList() {
         ghi_chu: values.ghi_chu || null,
         moi_han_lien_ket: values.moi_han_lien_ket || null,
         may_id: values.may_id,
+        chung_chi_su_dung: values.chung_chi_su_dung,
       });
       setFormOpen(false);
       refetch();
@@ -615,12 +658,13 @@ export default function WeldingJournalList() {
         </div>
 
         <div className="table-scroll overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className="w-full min-w-[1220px] border-collapse text-left">
+          <table className="w-full min-w-[1480px] border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">ID</th>
                 <th className="p-2.5 font-semibold">Ngày giờ</th>
                 <th className="p-2.5 font-semibold">Nhân sự phụ trách</th>
+                <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Tên mối hàn</th>
                 <th className="p-2.5 font-semibold">Mối hàn liên kết</th>
@@ -638,6 +682,11 @@ export default function WeldingJournalList() {
                   </td>
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.dateTime}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
+                  <td className="p-2.5">
+                    <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={w.certificate}>
+                      {w.certificate}
+                    </span>
+                  </td>
                   <td className="p-2.5 max-w-[190px]">
                     <span className={`line-clamp-2 text-xs font-semibold ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`} title={w.machine}>
                       {w.machine}
@@ -691,7 +740,7 @@ export default function WeldingJournalList() {
               ))}
               {journalRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-500">
                     Không có nhật ký hàn phù hợp với bộ lọc.
                   </td>
                 </tr>

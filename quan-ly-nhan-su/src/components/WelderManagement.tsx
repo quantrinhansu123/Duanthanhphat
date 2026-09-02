@@ -12,6 +12,7 @@ import {
   SealCheck,
   Sparkle,
 } from "@/components/icons";
+import { parseCertificateList } from "@/lib/weldingCertificates";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -175,6 +176,7 @@ export default function WelderManagement() {
         w.weldingId.toLowerCase().includes(q) ||
         w.email.toLowerCase().includes(q) ||
         w.weldingTeam.toLowerCase().includes(q) ||
+        w.certificates.toLowerCase().includes(q) ||
         w.railTypes.toLowerCase().includes(q) ||
         w.trainedMachines.toLowerCase().includes(q);
       const matchRank = ranksSel.length === 0 || ranksSel.includes(w.rank);
@@ -363,7 +365,7 @@ export default function WelderManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1200px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1480px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
@@ -372,6 +374,7 @@ export default function WelderManagement() {
                 <th className="px-3.5 py-3">Welding ID</th>
                 <th className="px-3.5 py-3">Thợ hàn</th>
                 <th className="px-3.5 py-3">Tổ hàn</th>
+                <th className="min-w-[260px] px-3.5 py-3">Chứng chỉ</th>
                 <th className="px-3.5 py-3">Hạng</th>
                 <th className="px-3.5 py-3">Loại ray</th>
                 <th className="px-3.5 py-3">Máy đã đào tạo</th>
@@ -410,6 +413,15 @@ export default function WelderManagement() {
                     <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#0047AB]">
                       {w.weldingTeam}
                     </span>
+                  </td>
+                  <td className="px-3.5 py-3">
+                    {parseCertificateList(w.certificates).length > 0 ? (
+                      <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={w.certificates}>
+                        {w.certificates}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">Chưa có</span>
+                    )}
                   </td>
                   <td className="px-3.5 py-3">
                     <span
@@ -508,7 +520,7 @@ export default function WelderManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy thợ hàn phù hợp</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>

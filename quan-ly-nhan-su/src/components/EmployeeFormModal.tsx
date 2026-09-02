@@ -4,6 +4,11 @@ import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Employee } from "@/data/employees";
 import { X, WarningCircle } from "@/components/icons";
+import {
+  formatCertificateList,
+  parseCertificateList,
+  WELDING_CERTIFICATE_OPTIONS,
+} from "@/lib/weldingCertificates";
 
 export type EmployeeFormValues = {
   code: string;
@@ -15,6 +20,7 @@ export type EmployeeFormValues = {
   department: string;
   position: string;
   weldingTeam: string;
+  certificates: string;
   role: string;
   status: "Hoạt động" | "Khóa";
   photo: string;
@@ -41,6 +47,7 @@ const empty: EmployeeFormValues = {
   department: "",
   position: "",
   weldingTeam: "Không áp dụng",
+  certificates: "",
   role: "Nhân viên",
   status: "Hoạt động",
   photo: "",
@@ -134,6 +141,7 @@ export default function EmployeeFormModal({
       department: form.department.trim(),
       position: form.position.trim(),
       weldingTeam: form.weldingTeam.trim() || "Không áp dụng",
+      certificates: formatCertificateList(form.certificates),
       role: form.role.trim(),
       photo:
         form.photo ||
@@ -330,6 +338,39 @@ export default function EmployeeFormModal({
                 <option>Chưa phân tổ</option>
               </select>
             </label>
+            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700 sm:col-span-2">
+              Chứng chỉ
+              <input
+                value={form.certificates}
+                onChange={(e) => update("certificates", e.target.value)}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                placeholder="Chọn bên dưới hoặc nhập nhiều chứng chỉ, cách nhau bằng dấu phẩy"
+              />
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {WELDING_CERTIFICATE_OPTIONS.map((certificate) => {
+                  const selected = parseCertificateList(form.certificates).includes(certificate);
+                  return (
+                    <button
+                      key={certificate}
+                      type="button"
+                      onClick={() => {
+                        const current = parseCertificateList(form.certificates);
+                        const next = selected
+                          ? current.filter((item) => item !== certificate)
+                          : [...current, certificate];
+                        update("certificates", next.join(", "));
+                      }}
+                      className={`rounded-full border px-2.5 py-1 text-left text-[11px] font-medium transition-colors ${selected ? "border-blue-300 bg-blue-50 text-[#0047AB]" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}
+                    >
+                      {selected ? "✓ " : "+ "}{certificate}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] font-normal text-slate-500">
+                Có thể chọn nhiều; dữ liệu được lưu và hiển thị cách nhau bằng dấu phẩy.
+              </p>
+            </div>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Vai trò *
               <input

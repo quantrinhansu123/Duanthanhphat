@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { employees as seedEmployees, type Employee } from "@/data/employees";
 import EmployeeFormModal, { type EmployeeFormValues } from "@/components/EmployeeFormModal";
 import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
+import { parseCertificateList } from "@/lib/weldingCertificates";
 
 export default function EmployeeManagement() {
   const [list, setList] = useState<Employee[]>(seedEmployees);
@@ -50,7 +51,8 @@ export default function EmployeeManagement() {
         e.code.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
         e.username.toLowerCase().includes(q) ||
-        e.weldingTeam.toLowerCase().includes(q);
+        e.weldingTeam.toLowerCase().includes(q) ||
+        e.certificates.toLowerCase().includes(q);
       const matchDept = department === "Tất cả phòng" || e.department === department;
       const matchPos = position === "Tất cả chức vụ" || e.position === position;
       const matchTeam = weldingTeam === "Tất cả tổ hàn" || e.weldingTeam === weldingTeam;
@@ -102,6 +104,7 @@ export default function EmployeeManagement() {
       department: values.department,
       position: values.position,
       weldingTeam: values.weldingTeam,
+      certificates: values.certificates,
       role: values.role,
       status: values.status,
       photo: values.photo,
@@ -280,7 +283,7 @@ export default function EmployeeManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto max-h-[calc(100dvh-320px)]">
-          <table className="sticky-thead w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
+          <table className="sticky-thead w-full min-w-[1420px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
@@ -292,6 +295,7 @@ export default function EmployeeManagement() {
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Chức vụ</th>
                 <th className="px-3.5 py-3">Tổ hàn</th>
+                <th className="min-w-[260px] px-3.5 py-3">Chứng chỉ</th>
                 <th className="px-3.5 py-3">Vai trò</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
                 <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
@@ -335,6 +339,15 @@ export default function EmployeeManagement() {
                     <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${e.weldingTeam === "Không áp dụng" ? "border-slate-200 bg-slate-100 text-slate-600" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
                       {e.weldingTeam}
                     </span>
+                  </td>
+                  <td className="px-3.5 py-3">
+                    {parseCertificateList(e.certificates).length > 0 ? (
+                      <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={e.certificates}>
+                        {e.certificates}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">Chưa có</span>
+                    )}
                   </td>
                   <td className="px-3.5 py-3">
                     {e.role === "Quản trị" ? (
@@ -412,7 +425,7 @@ export default function EmployeeManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy nhân viên phù hợp</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>
