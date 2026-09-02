@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChartLineUp,
   Clock,
@@ -12,20 +12,24 @@ import {
   Wrench,
 } from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
+import { machines as machineCatalog } from "@/data/machines";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
-  buildSyntheticDailySeries,
+  loadMachineReportSummary,
+  type MachineReportSummary,
+} from "@/lib/machineRunSchedulesDb";
+import {
   filterWeldReportRows,
   groupWeldRows,
   machineForRow,
   REPORT_MACHINES,
-  summarizeWeldRows,
 } from "@/lib/weldReportData";
 
 const MACHINES_RECOMMENDED = [
   {
-    id: "k922-1",
-    name: "Máy hàn K922-1",
+    id: "k920-01",
+    code: "K920-01",
+    name: "Máy hàn K920-01",
     badge: "Ưu tiên cao",
     badgeBg: "bg-rose-50 text-rose-700 border border-rose-200",
     image: "/may-han/k920.svg",
@@ -37,8 +41,9 @@ const MACHINES_RECOMMENDED = [
     budget: "6.500.000đ",
   },
   {
-    id: "k922-2",
-    name: "Máy hàn K922-2",
+    id: "ams60-03",
+    code: "AMS60-03",
+    name: "Máy hàn AMS60-03",
     badge: "Theo dõi",
     badgeBg: "bg-amber-50 text-amber-700 border border-amber-200",
     image: "/may-han/ams60.svg",
@@ -50,8 +55,9 @@ const MACHINES_RECOMMENDED = [
     budget: "7.800.000đ",
   },
   {
-    id: "k920",
-    name: "Máy hàn K920",
+    id: "k355-02",
+    code: "K355-02",
+    name: "Máy hàn K355-02",
     badge: "Định kỳ",
     badgeBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
     image: "/may-han/geo.svg",
@@ -64,39 +70,9 @@ const MACHINES_RECOMMENDED = [
   },
 ];
 
-const MACHINE_PERFORMANCE = [
-  {
-    code: "K922-1",
-    plant: "Cổ Loa",
-    welds: "8.520",
-    today: "62",
-    errorRate: "0,18%",
-    avail: 96,
-    availColor: "bg-emerald-500",
-  },
-  {
-    code: "K922-2",
-    plant: "Hạ Long Xanh",
-    welds: "7.840",
-    today: "51",
-    errorRate: "0,25%",
-    avail: 93,
-    availColor: "bg-emerald-500",
-  },
-  {
-    code: "K920",
-    plant: "Cổ Loa",
-    welds: "2.160",
-    today: "13",
-    errorRate: "0,31%",
-    avail: 88,
-    availColor: "bg-amber-500",
-  },
-];
-
 const CALIBRATION_DOCS = [
   {
-    title: "Hiệu chuẩn\nmáy K922-1",
+    title: "Hiệu chuẩn\nmáy K920-01",
     icon: <ShieldCheck size={26} className="text-[#0047AB]" aria-hidden />,
   },
   {
@@ -117,14 +93,25 @@ export default function MachineReportDashboard() {
   const { rows, loading, error } = useWeldReportData();
   const { appliedFilters } = useReportFilters();
   const [activeSlide, setActiveSlide] = useState(0);
+  const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
+  const [machineSummaryError, setMachineSummaryError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadMachineReportSummary()
+      .then((result) => {
+        if (active) setMachineSummary(result);
+      })
+      .catch((loadError) => {
+        if (active) setMachineSummaryError(loadError instanceof Error ? loadError.message : "Không tải được số giờ máy");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const selectedRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
     [rows, appliedFilters],
-  );
-  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
-  const today = useMemo(
-    () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
-    [summary.total],
   );
   const machineStats = useMemo(() => {
     const grouped = new Map(groupWeldRows(selectedRows, machineForRow).map((group) => [group.name, group]));
@@ -137,31 +124,54 @@ export default function MachineReportDashboard() {
       };
     });
   }, [selectedRows]);
-  const machinesRecommended = MACHINES_RECOMMENDED.map((machine, index) => ({
+  const machineSummaryByCode = new Map<string, MachineReportSummary>(
+    machineSummary.map((item) => [item.machineCode, item]),
+  );
+  const machineStatsByCode = new Map<string, (typeof machineStats)[number]>(
+    machineStats.map((item) => [item.code, item]),
+  );
+  const machinesRecommended = MACHINES_RECOMMENDED.map((machine) => ({
     ...machine,
-    welds: `${(machineStats[index]?.total ?? 0).toLocaleString("vi-VN")} mối`,
+    welds: `${(machineStatsByCode.get(machine.code)?.total ?? 0).toLocaleString("vi-VN")} mối`,
+    hoursSinceMaint: `${(machineSummaryByCode.get(machine.code)?.operatingHours ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 })} h`,
   }));
-  const machinePerformance = MACHINE_PERFORMANCE.map((machine, index) => {
-    const stat = machineStats[index];
-    const machineToday = summary.total > 0 ? Math.round(today * ((stat?.total ?? 0) / summary.total)) : 0;
+  const machinePerformance = machineCatalog.map((machine) => {
+    const stat = machineStatsByCode.get(machine.code);
+    const report = machineSummaryByCode.get(machine.code);
     const errorRate = stat?.total ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) : "0";
+    const status = report?.status ?? machine.status;
+    const avail = status === "Hoạt động" ? 100 : status === "Bảo trì" ? 50 : 0;
     return {
-      ...machine,
+      code: machine.code,
+      plant: machine.plant,
       welds: (stat?.total ?? 0).toLocaleString("vi-VN"),
-      today: machineToday.toLocaleString("vi-VN"),
+      hours: (report?.operatingHours ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
       errorRate: `${errorRate}%`,
+      avail,
+      availColor: avail >= 80 ? "bg-[#16a34a]" : avail > 0 ? "bg-[#f59e0b]" : "bg-slate-300",
     };
   });
-  const operatingMachines = machineStats.filter((machine) => machine.total > 0).length;
+  const operatingMachines = machineSummary.length > 0
+    ? machineSummary.filter((machine) => machine.status === "Hoạt động").length
+    : machineStats.filter((machine) => machine.total > 0).length;
+  const totalOperatingHours = machineSummary.reduce((total, machine) => total + machine.operatingHours, 0);
+  const averageAvailability = machinePerformance.length > 0
+    ? machinePerformance.reduce((total, machine) => total + machine.avail, 0) / machinePerformance.length
+    : 0;
+  const dataError = error || machineSummaryError;
+  const maintenanceDue = (machineSummary.length > 0 ? machineSummary : machineCatalog)
+    .filter((machine) => machine.status === "Bảo trì" || machine.status === "Hỏng").length;
+  const highPriorityMaintenance = (machineSummary.length > 0 ? machineSummary : machineCatalog)
+    .filter((machine) => machine.status === "Hỏng").length;
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
-      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
-        {error
-          ? `Không tải được Supabase: ${error}`
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${dataError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {dataError
+          ? `Không tải đủ dữ liệu Supabase: ${dataError}`
           : loading
             ? "Đang tải dữ liệu Supabase…"
-            : "Sản lượng lấy từ Supabase · Phân bổ máy và thông số ngày là mô phỏng"}
+            : "Số mối hàn tự động tính từ nhật ký đã chọn máy · Số giờ tự động tính từ lịch chạy máy"}
       </div>
       {/* 1. Top 3 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
@@ -175,7 +185,7 @@ export default function MachineReportDashboard() {
               {operatingMachines}
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
-              ↑ 8,3% <span className="text-slate-400 font-normal">so với tuần trước</span>
+              <span className="text-slate-400 font-normal">Theo trạng thái danh mục máy</span>
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
@@ -190,10 +200,10 @@ export default function MachineReportDashboard() {
               TỶ LỆ KHẢ DỤNG BÌNH QUÂN
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-              92,3%
+              {averageAvailability.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
-              ↑ 1,4% <span className="text-slate-400 font-normal">so với kỳ trước</span>
+              <span className="text-slate-400 font-normal">Tính trên toàn bộ danh mục máy</span>
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
@@ -208,11 +218,11 @@ export default function MachineReportDashboard() {
               MÁY ĐẾN HẠN BẢO TRÌ
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-              3
+              {maintenanceDue}
             </div>
             <div className="mt-2">
               <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-700 shadow-2xs">
-                1 ưu tiên cao
+                {highPriorityMaintenance} ưu tiên cao
               </span>
             </div>
           </div>
@@ -331,7 +341,7 @@ export default function MachineReportDashboard() {
                   <div>Máy</div>
                   <div>Nhà máy</div>
                   <div>Mối hàn</div>
-                  <div>Hôm nay</div>
+                  <div>Giờ chạy</div>
                   <div>Tỷ lệ lỗi</div>
                   <div className="text-right">Khả dụng</div>
                 </div>
@@ -346,7 +356,7 @@ export default function MachineReportDashboard() {
                       </div>
                       <div>{m.plant}</div>
                       <div className="font-mono tabular-nums">{m.welds}</div>
-                      <div className="font-mono tabular-nums">{m.today}</div>
+                      <div className="font-mono tabular-nums">{m.hours}</div>
                       <div className="font-mono tabular-nums">{m.errorRate}</div>
                       <div className="flex items-center justify-end gap-2">
                         <div className="h-1.5 w-[62px] rounded-full bg-slate-100 overflow-hidden">
@@ -432,10 +442,10 @@ export default function MachineReportDashboard() {
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 font-medium">
-                    Tổng giờ vận hành tháng này
+                    Tổng giờ vận hành đã ghi nhận
                   </div>
                   <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-slate-900">
-                    1.284 giờ
+                    {totalOperatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giờ
                   </div>
                 </div>
               </div>
@@ -480,7 +490,7 @@ export default function MachineReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy K922-1
+                    Máy K920-01
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     Nhà máy Cổ Loa
@@ -499,7 +509,7 @@ export default function MachineReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy K922-2
+                    Máy AMS60-03
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     Hạ Long Xanh

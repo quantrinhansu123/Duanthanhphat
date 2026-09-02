@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
-export const REPORT_MACHINES = ["K922-1", "K922-2", "K920"] as const;
+export const REPORT_MACHINES = [
+  "K920-01",
+  "AMS60-03",
+  "K355-02",
+  "GEO-01",
+  "K920-02",
+  "AMS60-01",
+] as const;
 
 export type ReportMachine = (typeof REPORT_MACHINES)[number];
 
@@ -23,6 +30,9 @@ export type WeldReportRow = {
   nguyen_nhan_loi: string | null;
   ghi_chu?: string | null;
   moi_han_lien_ket?: string | null;
+  may_id?: string | null;
+  ma_may?: string | null;
+  ten_may?: string | null;
 };
 
 export type WeldReportFilters = {
@@ -76,6 +86,12 @@ const REPORT_COLUMNS_BASE = [
 ] as const;
 
 const REPORT_COLUMNS_WITH_LINK = [...REPORT_COLUMNS_BASE, "moi_han_lien_ket"] as const;
+const REPORT_COLUMNS_WITH_MACHINE = [
+  ...REPORT_COLUMNS_WITH_LINK,
+  "may_id",
+  "ma_may",
+  "ten_may",
+] as const;
 
 let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
 
@@ -95,6 +111,7 @@ export type WeldJournalInsert = {
   nguyen_nhan_loi?: string | null;
   ghi_chu?: string | null;
   moi_han_lien_ket?: string | null;
+  may_id: string;
 };
 
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
@@ -112,6 +129,7 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
     nguyen_nhan_loi: payload.nguyen_nhan_loi?.trim() || null,
     ghi_chu: payload.ghi_chu?.trim() || null,
     moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
+    may_id: payload.may_id,
     nguon_du_lieu: "nhat-ky-han",
   });
 
@@ -188,15 +206,22 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
       } catch (firstError) {
         const message = formatSupabaseError(firstError);
-        const missingLinkColumn =
+        const missingOptionalColumn =
+          message.includes("may_id") ||
+          message.includes("ma_may") ||
+          message.includes("ten_may") ||
           message.includes("moi_han_lien_ket") ||
           message.includes("column") ||
           message.includes("42703");
-        if (!missingLinkColumn) throw firstError;
-        return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+        if (!missingOptionalColumn) throw firstError;
+        try {
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+        } catch {
+          return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+        }
       }
     })().catch((error) => {
       reportRowsPromise = null;
@@ -207,10 +232,8 @@ export function loadWeldReportRows() {
   return reportRowsPromise;
 }
 
-export function machineForRow(row: WeldReportRow): ReportMachine {
-  if (row.cong_nghe_han === "ATW") return "K920";
-  const numericCode = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? 0);
-  return numericCode % 2 === 0 ? "K922-2" : "K922-1";
+export function machineForRow(row: WeldReportRow): string {
+  return row.ma_may?.trim() || "Chưa gán máy";
 }
 
 export function filterWeldReportRows(rows: WeldReportRow[], filters: WeldReportFilters) {

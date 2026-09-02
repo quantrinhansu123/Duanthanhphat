@@ -87,8 +87,8 @@ export const navigation: NavItem[] = [
       },
       {
         id: "phan-cong-may",
-        label: "Phân công máy",
-        description: "Gán máy theo nhà máy, tổ đội, ca làm việc, thợ vận hành",
+        label: "Lịch chạy máy",
+        description: "Ngày, máy, lý trình, số giờ hoạt động, dự án và người phụ trách",
       },
     ],
   },

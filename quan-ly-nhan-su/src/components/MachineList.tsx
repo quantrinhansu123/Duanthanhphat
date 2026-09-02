@@ -282,7 +282,7 @@ function MachineDetailModal({
                   >
                     Chỉnh sửa
                   </button>
-                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Phân công máy</div>
+                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Lịch chạy máy</div>
                   <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Lên lịch bảo trì</div>
                 </div>
               )}

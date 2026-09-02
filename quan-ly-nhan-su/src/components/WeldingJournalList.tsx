@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { googleOpenPoint } from "@/data/mapPoints";
+import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import {
   filterWeldReportRows,
   formatJournalDateIso,
@@ -32,6 +34,7 @@ type JournalFormValues = {
   performedAt: string;
   du_an_id: string;
   tho_han_id: string;
+  may_id: string;
   loai_ray: string;
   cong_nghe_han: WeldReportRow["cong_nghe_han"];
   loai_moi_han: WeldReportRow["loai_moi_han"];
@@ -58,12 +61,14 @@ function defaultPerformedAt() {
 function emptyJournalForm(
   projects: { id: string; label: string }[],
   welders: { id: string; label: string }[],
+  machines: MachineOption[],
 ): JournalFormValues {
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
     du_an_id: projects[0]?.id ?? "",
     tho_han_id: welders[0]?.id ?? "",
+    may_id: machines[0]?.id ?? "",
     loai_ray: "UIC60",
     cong_nghe_han: "FBW",
     loai_moi_han: "Sản xuất",
@@ -78,6 +83,7 @@ function JournalFormModal({
   open,
   projects,
   welders,
+  machines,
   rows,
   saving,
   onClose,
@@ -86,12 +92,13 @@ function JournalFormModal({
   open: boolean;
   projects: { id: string; label: string }[];
   welders: { id: string; label: string }[];
+  machines: MachineOption[];
   rows: WeldReportRow[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void;
 }) {
-  const [form, setForm] = useState(() => emptyJournalForm(projects, welders));
+  const [form, setForm] = useState(() => emptyJournalForm(projects, welders, machines));
   const [linkDateFrom, setLinkDateFrom] = useState(() => defaultLinkDateRange().from);
   const [linkDateTo, setLinkDateTo] = useState(() => defaultLinkDateRange().to);
 
@@ -102,12 +109,12 @@ function JournalFormModal({
 
   useEffect(() => {
     if (open) {
-      setForm(emptyJournalForm(projects, welders));
+      setForm(emptyJournalForm(projects, welders, machines));
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
     }
-  }, [open, projects, welders]);
+  }, [open, projects, welders, machines]);
 
   useEffect(() => {
     if (!form.moi_han_lien_ket) return;
@@ -137,6 +144,10 @@ function JournalFormModal({
     }
     if (!form.tho_han_id) {
       window.alert("Vui lòng chọn nhân sự phụ trách.");
+      return;
+    }
+    if (!form.may_id) {
+      window.alert("Vui lòng chọn máy thực hiện mối hàn.");
       return;
     }
     if (form.result === "Không đạt" && !form.nguyen_nhan_loi.trim()) {
@@ -245,6 +256,28 @@ function JournalFormModal({
                 ))
               )}
             </select>
+          </label>
+
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Máy thực hiện
+            <select
+              value={form.may_id}
+              onChange={(e) => setForm({ ...form, may_id: e.target.value })}
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+            >
+              {machines.length === 0 ? (
+                <option value="">Chưa có danh mục máy</option>
+              ) : (
+                machines.map((machine) => (
+                  <option key={machine.id} value={machine.id}>
+                    {machine.code} · {machine.name}
+                  </option>
+                ))
+              )}
+            </select>
+            <span className="mt-1 block text-[11px] font-normal text-slate-500">
+              Báo cáo máy sẽ tự cộng mối hàn theo lựa chọn này.
+            </span>
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -372,7 +405,7 @@ function JournalFormModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={saving || projects.length === 0 || welders.length === 0}
+            disabled={saving || projects.length === 0 || welders.length === 0 || machines.length === 0}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs disabled:opacity-60 transition-all duration-150 cursor-pointer"
           >
             {saving ? "Đang lưu…" : "Thêm nhật ký"}
@@ -393,6 +426,22 @@ export default function WeldingJournalList() {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
+  const [machineError, setMachineError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadMachineOptions()
+      .then((options) => {
+        if (active) setMachineOptions(options);
+      })
+      .catch((loadError) => {
+        if (active) setMachineError(loadError instanceof Error ? loadError.message : "Không tải được danh mục máy");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const projectOptions = useMemo(() => uniqueProjectOptions(rows), [rows]);
   const welderOptions = useMemo(() => uniqueWelderOptions(rows), [rows]);
@@ -426,6 +475,7 @@ export default function WeldingJournalList() {
         row.ten_tho_han.toLowerCase().includes(q) ||
         row.du_an.toLowerCase().includes(q) ||
         row.ma_lich_su.toLowerCase().includes(q) ||
+        (row.ma_may?.toLowerCase().includes(q) ?? false) ||
         row.id.toLowerCase().includes(q);
       return matchProject && matchResult && matchQuery;
     });
@@ -444,6 +494,9 @@ export default function WeldingJournalList() {
         id: row.id,
         dateTime,
         operator: row.ten_tho_han,
+        machine: row.ma_may
+          ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
+          : "Chưa gán máy",
         weldName: gpsPoint?.code ?? row.ma_lich_su,
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
@@ -483,6 +536,7 @@ export default function WeldingJournalList() {
         nguyen_nhan_loi: values.result === "Không đạt" ? values.nguyen_nhan_loi : null,
         ghi_chu: values.ghi_chu || null,
         moi_han_lien_ket: values.moi_han_lien_ket || null,
+        may_id: values.may_id,
       });
       setFormOpen(false);
       refetch();
@@ -520,7 +574,7 @@ export default function WeldingJournalList() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm ID, thợ hàn, dự án, mã lịch sử…"
+          placeholder="Tìm ID, thợ hàn, máy, dự án…"
           className="h-10 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
         />
         <select
@@ -567,6 +621,7 @@ export default function WeldingJournalList() {
                 <th className="p-2.5 font-semibold">ID</th>
                 <th className="p-2.5 font-semibold">Ngày giờ</th>
                 <th className="p-2.5 font-semibold">Nhân sự phụ trách</th>
+                <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Tên mối hàn</th>
                 <th className="p-2.5 font-semibold">Mối hàn liên kết</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
@@ -583,6 +638,11 @@ export default function WeldingJournalList() {
                   </td>
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.dateTime}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
+                  <td className="p-2.5 max-w-[190px]">
+                    <span className={`line-clamp-2 text-xs font-semibold ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`} title={w.machine}>
+                      {w.machine}
+                    </span>
+                  </td>
                   <td className="p-2.5 font-mono font-semibold text-[#0047AB]">{w.weldName}</td>
                   <td className="p-2.5 font-mono text-xs text-slate-700 max-w-[160px]">
                     <span className="line-clamp-2" title={w.linkedWeld}>
@@ -631,7 +691,7 @@ export default function WeldingJournalList() {
               ))}
               {journalRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">
                     Không có nhật ký hàn phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -651,11 +711,18 @@ export default function WeldingJournalList() {
         open={formOpen}
         projects={projectOptions}
         welders={welderOptions}
+        machines={machineOptions}
         rows={rows}
         saving={saving}
         onClose={() => !saving && setFormOpen(false)}
         onSubmit={handleCreate}
       />
+
+      {machineError && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Chưa tải được danh mục máy: {machineError}. Hãy chạy supabase/lich_chay_may.sql.
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2">

@@ -1,333 +1,285 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "@/components/icons";
-import MachineAssignmentFormModal, {
-  type MachineAssignmentFormValues,
-} from "@/components/MachineAssignmentFormModal";
+import MachineAssignmentFormModal from "@/components/MachineAssignmentFormModal";
 import {
-  formatAssignmentDate,
-  formatPersons,
-  machineAssignments as seedAssignments,
-  type MachineAssignment,
+  formatChainageRange,
+  formatOperatingHours,
+  formatScheduleDate,
+  type LookupOption,
+  type MachineOption,
+  type MachineRunSchedule,
 } from "@/data/machineAssignments";
-
-const statusStyle: Record<MachineAssignment["status"], string> = {
-  "Đang thực hiện": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
-  "Hoàn thành": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
-  "Tạm dừng": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
-};
-
-function toggleValue(list: string[], value: string) {
-  return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
-}
-
-function FilterGroup({
-  title,
-  options,
-  selected,
-  onChange,
-}: {
-  title: string;
-  options: string[];
-  selected: string[];
-  onChange: (next: string[]) => void;
-}) {
-  return (
-    <div className="min-w-[160px] flex-1 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-xs">
-      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{title}</div>
-      <div className="flex max-h-[140px] flex-col gap-1.5 overflow-y-auto">
-        {options.map((opt) => {
-          const checked = selected.includes(opt);
-          return (
-            <label
-              key={opt}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs sm:text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150"
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => onChange(toggleValue(selected, opt))}
-                className="h-3.5 w-3.5 accent-[#0047AB] rounded cursor-pointer"
-              />
-              <span className={checked ? "font-semibold text-slate-900" : ""}>{opt}</span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+import {
+  deleteMachineRunSchedule,
+  insertMachineRunSchedule,
+  loadMachineRunScheduleBundle,
+  updateMachineRunSchedule,
+  type MachineRunScheduleFormValues,
+} from "@/lib/machineRunSchedulesDb";
 
 type ModalState =
   | { mode: "add" }
-  | { mode: "view" | "edit"; row: MachineAssignment };
+  | { mode: "view" | "edit"; row: MachineRunSchedule };
+
+function createLocalSchedule(
+  values: MachineRunScheduleFormValues,
+  machines: MachineOption[],
+  projects: LookupOption[],
+  personnel: LookupOption[],
+  id = `local-${Date.now()}`,
+): MachineRunSchedule {
+  const machine = machines.find((item) => item.id === values.machineId);
+  const project = projects.find((item) => item.id === values.projectId);
+  const person = personnel.find((item) => item.id === values.personInChargeId);
+  return {
+    id,
+    date: values.date,
+    machineId: values.machineId,
+    machineCode: machine?.code ?? "—",
+    machineName: machine?.name ?? "Máy chưa xác định",
+    chainageFrom: values.chainageFrom,
+    chainageTo: values.chainageTo,
+    operatingHours: values.operatingHours,
+    projectId: values.projectId,
+    projectName: project?.label ?? "Dự án chưa xác định",
+    personInChargeId: values.personInChargeId,
+    personInChargeName: person?.label ?? "Chưa xác định",
+  };
+}
 
 export default function MachineAssignmentList() {
-  const [list, setList] = useState<MachineAssignment[]>(seedAssignments);
+  const [list, setList] = useState<MachineRunSchedule[]>([]);
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [projects, setProjects] = useState<LookupOption[]>([]);
+  const [personnel, setPersonnel] = useState<LookupOption[]>([]);
+  const [source, setSource] = useState<"supabase" | "seed">("seed");
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [machinesSel, setMachinesSel] = useState<string[]>([]);
-  const [personsSel, setPersonsSel] = useState<string[]>([]);
-  const [jointsSel, setJointsSel] = useState<string[]>([]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [machineId, setMachineId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [personId, setPersonId] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toast, setToast] = useState("");
 
-  const machineOptions = useMemo(
-    () => Array.from(new Set(list.map((a) => `${a.machineCode} · ${a.machineName}`))).sort(),
-    [list],
-  );
-  const personOptions = useMemo(
-    () => Array.from(new Set(list.flatMap((a) => a.personsInCharge))).sort(),
-    [list],
-  );
-  const jointOptions = useMemo(
-    () => Array.from(new Set(list.map((a) => a.weldJoint))).sort(),
-    [list],
-  );
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const bundle = await loadMachineRunScheduleBundle();
+    setList(bundle.schedules);
+    setMachines(bundle.machines);
+    setProjects(bundle.projects);
+    setPersonnel(bundle.personnel);
+    setSource(bundle.source);
+    setLoadError(bundle.error ?? "");
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const filtered = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase("vi");
     return list.filter((row) => {
-      const matchFrom = !dateFrom || row.date >= dateFrom;
-      const matchTo = !dateTo || row.date <= dateTo;
-      const machineLabel = `${row.machineCode} · ${row.machineName}`;
-      const matchMachine = machinesSel.length === 0 || machinesSel.includes(machineLabel);
-      const matchPerson =
-        personsSel.length === 0 || row.personsInCharge.some((p) => personsSel.includes(p));
-      const matchJoint = jointsSel.length === 0 || jointsSel.includes(row.weldJoint);
-      return matchFrom && matchTo && matchMachine && matchPerson && matchJoint;
+      if (dateFrom && row.date < dateFrom) return false;
+      if (dateTo && row.date > dateTo) return false;
+      if (machineId && row.machineId !== machineId) return false;
+      if (projectId && row.projectId !== projectId) return false;
+      if (personId && row.personInChargeId !== personId) return false;
+      if (!keyword) return true;
+      return [row.machineCode, row.machineName, row.chainageFrom, row.chainageTo, row.projectName, row.personInChargeName]
+        .some((value) => value.toLocaleLowerCase("vi").includes(keyword));
     });
-  }, [list, dateFrom, dateTo, machinesSel, personsSel, jointsSel]);
+  }, [list, query, dateFrom, dateTo, machineId, projectId, personId]);
 
-  const hasFilter =
-    dateFrom || dateTo || machinesSel.length > 0 || personsSel.length > 0 || jointsSel.length > 0;
+  const machineHours = useMemo(() => {
+    const totals = new Map<string, { label: string; hours: number }>();
+    for (const row of filtered) {
+      const current = totals.get(row.machineId) ?? {
+        label: `${row.machineCode} · ${row.machineName}`,
+        hours: 0,
+      };
+      current.hours += row.operatingHours;
+      totals.set(row.machineId, current);
+    }
+    return Array.from(totals.values()).sort((a, b) => b.hours - a.hours);
+  }, [filtered]);
 
-  const activeFilterCount =
-    (dateFrom ? 1 : 0) +
-    (dateTo ? 1 : 0) +
-    machinesSel.length +
-    personsSel.length +
-    jointsSel.length;
-
-  const inProgress = filtered.filter((a) => a.status === "Đang thực hiện").length;
-  const completed = filtered.filter((a) => a.status === "Hoàn thành").length;
+  const totalHours = filtered.reduce((sum, row) => sum + row.operatingHours, 0);
+  const hasFilter = Boolean(query || dateFrom || dateTo || machineId || projectId || personId);
 
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
   }
 
-  function handleSave(values: MachineAssignmentFormValues) {
-    if (modal?.mode === "edit") {
-      setList((prev) =>
-        prev.map((row) => (row.id === modal.row.id ? { ...modal.row, ...values } : row)),
-      );
-      showToast("Đã cập nhật phân công");
-      return;
+  async function handleSave(values: MachineRunScheduleFormValues) {
+    setSaving(true);
+    try {
+      if (source === "supabase") {
+        if (modal?.mode === "edit") await updateMachineRunSchedule(modal.row.id, values);
+        else await insertMachineRunSchedule(values);
+        await reload();
+      } else if (modal?.mode === "edit") {
+        setList((current) => current.map((row) =>
+          row.id === modal.row.id
+            ? createLocalSchedule(values, machines, projects, personnel, row.id)
+            : row,
+        ));
+      } else {
+        setList((current) => [createLocalSchedule(values, machines, projects, personnel), ...current]);
+      }
+      setModal(null);
+      showToast(modal?.mode === "edit" ? "Đã cập nhật lịch chạy máy" : "Đã thêm lịch chạy máy");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Không thể lưu lịch chạy máy");
+    } finally {
+      setSaving(false);
     }
-    const next: MachineAssignment = {
-      id: `local-${Date.now()}`,
-      ...values,
-    };
-    setList((prev) => [next, ...prev]);
-    showToast("Đã thêm phân công mới");
   }
 
-  function handleDelete(row: MachineAssignment) {
-    if (!window.confirm(`Xóa phân công mối hàn ${row.weldJoint}?`)) return;
-    setList((prev) => prev.filter((r) => r.id !== row.id));
-    showToast("Đã xóa phân công");
+  async function handleDelete(row: MachineRunSchedule) {
+    if (!window.confirm(`Xóa lịch chạy ${row.machineCode} ngày ${formatScheduleDate(row.date)}?`)) return;
+    setSaving(true);
+    try {
+      if (source === "supabase") await deleteMachineRunSchedule(row.id);
+      setList((current) => current.filter((item) => item.id !== row.id));
+      showToast("Đã xóa lịch chạy máy");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Không thể xóa lịch chạy máy");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="mx-auto max-w-[1400px] px-4 pb-8 sm:px-6">
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:text-sm">
+          <div className="font-semibold">Đang hiển thị dữ liệu mẫu</div>
+          <div className="mt-0.5">
+            Hãy chạy file <span className="font-mono">supabase/lich_chay_may.sql</span> để bật lưu dữ liệu thật. {loadError}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 grid gap-3.5 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng phân công</div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold leading-none text-slate-900 font-mono tabular-nums">{filtered.length}</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Lượt chạy</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{filtered.length}</div>
           <div className="mt-1.5 text-xs text-slate-400">Theo bộ lọc hiện tại</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Đang thực hiện</div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold leading-none text-[#0047AB] font-mono tabular-nums">{inProgress}</div>
-          <div className="mt-1.5 text-xs text-slate-400">Ca đang vận hành</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng giờ hoạt động</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-[#0047AB]">
+            {totalHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}
+          </div>
+          <div className="mt-1.5 text-xs text-slate-400">Giờ máy đã ghi nhận</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Hoàn thành</div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold leading-none text-emerald-700 font-mono tabular-nums">{completed}</div>
-          <div className="mt-1.5 text-xs text-slate-400">Mối hàn đã xong</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Máy có hoạt động</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-emerald-700">{machineHours.length}</div>
+          <div className="mt-1.5 text-xs text-slate-400">Trên {machines.length} máy trong danh mục</div>
         </div>
       </div>
 
-      <div className="mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-80 transition-opacity duration-150 cursor-pointer"
-            aria-expanded={filtersOpen}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className={`shrink-0 text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc</span>
-            <span className="hidden sm:inline text-xs text-slate-500">Máy · Người phụ trách · Mối hàn</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[10px] font-bold text-white shadow-2xs font-mono tabular-nums">
-                {activeFilterCount} đang lọc
-              </span>
-            )}
-          </button>
-          <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-            {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
-          </span>
+      <section className="mb-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Số giờ theo máy</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Tự động cộng từ các dòng lịch chạy bên dưới</p>
+          </div>
           <button
             type="button"
             onClick={() => setModal({ mode: "add" })}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#00388A] sm:text-sm"
           >
-            <span className="text-base leading-none">+</span> Thêm mới
+            <span className="text-base leading-none">+</span> Thêm lịch chạy
           </button>
         </div>
-
-        {filtersOpen && (
-          <div className="border-t border-slate-200 bg-slate-50/70 p-4">
-            <div className="mb-3 flex flex-wrap items-end gap-3">
-              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                Từ ngày
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-                />
-              </label>
-              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                Đến ngày
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-                />
-              </label>
-              {hasFilter && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDateFrom("");
-                    setDateTo("");
-                    setMachinesSel([]);
-                    setPersonsSel([]);
-                    setJointsSel([]);
-                  }}
-                  className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
-                >
-                  Xóa lọc
-                </button>
-              )}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {machineHours.map((item) => (
+            <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+              <span className="min-w-0 truncate text-xs font-semibold text-slate-700 sm:text-sm" title={item.label}>{item.label}</span>
+              <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-[#0047AB] sm:text-sm">{formatOperatingHours(item.hours)}</span>
             </div>
+          ))}
+          {!loading && machineHours.length === 0 && <div className="text-sm text-slate-500">Chưa có dữ liệu giờ máy.</div>}
+        </div>
+      </section>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              <FilterGroup title="Máy" options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
-              <FilterGroup
-                title="Người phụ trách"
-                options={personOptions}
-                selected={personsSel}
-                onChange={setPersonsSel}
-              />
-              <FilterGroup title="Mối hàn" options={jointOptions} selected={jointsSel} onChange={setJointsSel} />
-            </div>
-          </div>
-        )}
-      </div>
+      <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Tìm máy, lý trình, dự án…"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm xl:col-span-2"
+          />
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Từ ngày" />
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Đến ngày" />
+          <select value={machineId} onChange={(event) => setMachineId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Lọc theo máy">
+            <option value="">Tất cả máy</option>
+            {machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.code}</option>)}
+          </select>
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Lọc theo dự án">
+            <option value="">Tất cả dự án</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.label}</option>)}
+          </select>
+          <select value={personId} onChange={(event) => setPersonId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm xl:col-start-5" aria-label="Lọc theo người phụ trách">
+            <option value="">Tất cả người phụ trách</option>
+            {personnel.map((person) => <option key={person.id} value={person.id}>{person.label}</option>)}
+          </select>
+          {hasFilter && (
+            <button type="button" onClick={() => { setQuery(""); setDateFrom(""); setDateTo(""); setMachineId(""); setProjectId(""); setPersonId(""); }} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm">
+              Xóa bộ lọc
+            </button>
+          )}
+        </div>
+      </section>
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
-        <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1180px] border-collapse text-left text-xs sm:text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1120px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
-                <th className="px-3.5 py-3">Máy</th>
-                <th className="px-3.5 py-3">Nhà máy</th>
-                <th className="px-3.5 py-3">Ca</th>
-                <th className="min-w-[180px] px-3.5 py-3">Nhân sự phụ trách</th>
-                <th className="px-3.5 py-3">Mối hàn</th>
-                <th className="px-3.5 py-3">Loại ray</th>
-                <th className="px-3.5 py-3">Trạng thái</th>
+                <th className="px-3.5 py-3">Tên máy</th>
+                <th className="px-3.5 py-3">Lý trình</th>
+                <th className="px-3.5 py-3 text-right">Số giờ hoạt động</th>
+                <th className="px-3.5 py-3">Dự án</th>
+                <th className="px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
-                  <td className="px-4 py-3 font-semibold font-mono text-slate-900 text-xs sm:text-sm">{formatAssignmentDate(row.date)}</td>
+                <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
+                  <td className="px-4 py-3 font-mono font-semibold text-slate-900">{formatScheduleDate(row.date)}</td>
                   <td className="px-3.5 py-3">
-                    <div className="font-semibold font-mono text-[#0047AB] text-xs sm:text-sm">{row.machineCode}</div>
+                    <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
                     <div className="mt-0.5 text-xs text-slate-500">{row.machineName}</div>
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.plant}</td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.shift}</td>
+                  <td className="px-3.5 py-3 font-mono text-slate-700">{formatChainageRange(row)}</td>
+                  <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-slate-900">{formatOperatingHours(row.operatingHours)}</td>
+                  <td className="px-3.5 py-3 text-slate-700">{row.projectName}</td>
+                  <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>
                   <td className="px-3.5 py-3">
-                    <div className="font-medium text-slate-900">{formatPersons(row.personsInCharge)}</div>
-                    {row.personsInCharge.length > 1 && (
-                      <div className="mt-0.5 text-xs text-slate-500 font-mono tabular-nums">{row.personsInCharge.length} người</div>
-                    )}
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">{row.weldJoint}</span>
-                  </td>
-                  <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.railType}</td>
-                  <td className="px-3.5 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[row.status]}`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-3.5 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setModal({ mode: "view", row })}
-                        className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-[#0047AB] hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
-                      >
-                        Xem
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setModal({ mode: "edit", row })}
-                        className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(row)}
-                        className="rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors duration-150 cursor-pointer"
-                      >
-                        Xóa
-                      </button>
+                    <div className="flex justify-end gap-1">
+                      <button type="button" onClick={() => setModal({ mode: "view", row })} className="rounded-lg px-2.5 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50">Xem</button>
+                      <button type="button" onClick={() => setModal({ mode: "edit", row })} className="rounded-lg px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-100">Sửa</button>
+                      <button type="button" disabled={saving} onClick={() => void handleDelete(row)} className="rounded-lg px-2.5 py-1.5 font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50">Xóa</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
-                    <div className="text-sm font-semibold text-slate-800">Không có phân công phù hợp bộ lọc</div>
-                  </td>
-                </tr>
-              )}
+              {!loading && filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Chưa có lịch chạy máy phù hợp.</td></tr>}
+              {loading && <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải lịch chạy máy…</td></tr>}
             </tbody>
           </table>
         </div>
@@ -337,8 +289,12 @@ export default function MachineAssignmentList() {
         open={modal !== null}
         mode={modal?.mode ?? "add"}
         initial={modal && modal.mode !== "add" ? modal.row : null}
+        machines={machines}
+        projects={projects}
+        personnel={personnel}
+        saving={saving}
         onClose={() => setModal(null)}
-        onSubmit={handleSave}
+        onSubmit={(values) => void handleSave(values)}
       />
 
       {toast && (

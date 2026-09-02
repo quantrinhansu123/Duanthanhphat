@@ -48,6 +48,7 @@ comment on table public.du_an is 'Danh sách dự án';
 -- ------------------------------------------------------------
 create table if not exists public.thiet_bi (
   id          uuid primary key default gen_random_uuid(),
+  ma_may      text not null unique,
   ten_may     text not null,
   hinh_anh    text,                        -- URL Storage
   trang_thai  text not null default 'Hoạt động'
@@ -63,10 +64,15 @@ comment on table public.thiet_bi is 'Danh mục máy / thiết bị';
 -- ------------------------------------------------------------
 create table if not exists public.nhat_ky_chay_may (
   id                uuid primary key default gen_random_uuid(),
-  du_an             uuid references public.du_an (id) on delete set null,
+  ngay              date not null default current_date,
+  du_an             uuid not null references public.du_an (id) on delete restrict,
   cong_viec         text,
-  may               uuid references public.thiet_bi (id) on delete set null,
-  nguoi_phu_trach   uuid references public.nhan_su (employee_id) on delete set null,
+  may               uuid not null references public.thiet_bi (id) on delete restrict,
+  nguoi_phu_trach   uuid not null references public.nhan_su (employee_id) on delete restrict,
+  ly_trinh_tu       text not null,
+  ly_trinh_den      text not null,
+  so_gio_hoat_dong  numeric(6,2) not null default 0
+                    check (so_gio_hoat_dong >= 0 and so_gio_hoat_dong <= 24),
   nhiem_vu          text,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
@@ -147,6 +153,12 @@ create index if not exists idx_nhat_ky_may
 
 create index if not exists idx_nhat_ky_nguoi_phu_trach
   on public.nhat_ky_chay_may (nguoi_phu_trach);
+
+create index if not exists idx_nhat_ky_chay_may_ngay
+  on public.nhat_ky_chay_may (ngay desc);
+
+create index if not exists idx_nhat_ky_chay_may_may_ngay
+  on public.nhat_ky_chay_may (may, ngay desc);
 
 create index if not exists idx_chung_chi_employee
   on public.chung_chi (employee_id);

@@ -1,144 +1,124 @@
-export type MachineAssignment = {
+export type MachineRunSchedule = {
   id: string;
   date: string; // YYYY-MM-DD
+  machineId: string;
   machineCode: string;
   machineName: string;
-  plant: string;
-  shift: "Ca 1" | "Ca 2" | "Ca 3";
-  personsInCharge: string[];
-  weldJoint: string;
-  railType: string;
-  status: "Đang thực hiện" | "Hoàn thành" | "Tạm dừng";
+  chainageFrom: string;
+  chainageTo: string;
+  operatingHours: number;
+  projectId: string;
+  projectName: string;
+  personInChargeId: string;
+  personInChargeName: string;
 };
 
-export const machineAssignments: MachineAssignment[] = [
+export type MachineOption = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type LookupOption = {
+  id: string;
+  label: string;
+};
+
+export const machineRunSchedules: MachineRunSchedule[] = [
   {
-    id: "1",
-    date: "2026-03-12",
+    id: "seed-1",
+    date: "2026-08-25",
+    machineId: "seed-k920-01",
     machineCode: "K920-01",
     machineName: "Máy hàn aluminothermic K920",
-    plant: "Nhà máy Hà Nội",
-    shift: "Ca 1",
-    personsInCharge: ["Lê Thị Kim Anh", "Phạm Văn Minh"],
-    weldJoint: "MH-HN-2026-0312-01",
-    railType: "UIC60",
-    status: "Hoàn thành",
+    chainageFrom: "Km 0+000",
+    chainageTo: "Km 6+450",
+    operatingHours: 8,
+    projectId: "seed-project-1",
+    projectName: "ĐSCT Bắc – Nam",
+    personInChargeId: "seed-person-2",
+    personInChargeName: "Phạm Văn Minh",
   },
   {
-    id: "2",
-    date: "2026-03-12",
+    id: "seed-2",
+    date: "2026-08-25",
+    machineId: "seed-ams60-03",
     machineCode: "AMS60-03",
     machineName: "Máy hàn đường ray AMS60",
-    plant: "Nhà máy Đà Nẵng",
-    shift: "Ca 2",
-    personsInCharge: ["Phạm Văn Minh"],
-    weldJoint: "MH-DN-2026-0312-04",
-    railType: "UIC60",
-    status: "Đang thực hiện",
+    chainageFrom: "Km 12+200",
+    chainageTo: "Km 18+600",
+    operatingHours: 7.5,
+    projectId: "seed-project-2",
+    projectName: "Dự án ga Đà Nẵng",
+    personInChargeId: "seed-person-3",
+    personInChargeName: "Nguyễn Văn Hùng",
   },
   {
-    id: "3",
-    date: "2026-03-11",
+    id: "seed-3",
+    date: "2026-08-24",
+    machineId: "seed-geo-01",
     machineCode: "GEO-01",
     machineName: "Máy định vị & hàn GEO",
-    plant: "Nhà máy TP.HCM",
-    shift: "Ca 1",
-    personsInCharge: ["Nguyễn Văn Hùng", "Trần Quốc Bảo"],
-    weldJoint: "MH-HCM-2026-0311-02",
-    railType: "P50",
-    status: "Hoàn thành",
+    chainageFrom: "Km 3+100",
+    chainageTo: "Km 7+800",
+    operatingHours: 6,
+    projectId: "seed-project-5",
+    projectName: "Tuyến metro số 1",
+    personInChargeId: "seed-person-1",
+    personInChargeName: "Lê Thị Kim Anh",
   },
   {
-    id: "4",
-    date: "2026-03-11",
+    id: "seed-4",
+    date: "2026-08-24",
+    machineId: "seed-k920-01",
     machineCode: "K920-01",
     machineName: "Máy hàn aluminothermic K920",
-    plant: "Nhà máy Hà Nội",
-    shift: "Ca 3",
-    personsInCharge: ["Trần Quốc Bảo"],
-    weldJoint: "MH-HN-2026-0311-07",
-    railType: "UIC60",
-    status: "Hoàn thành",
+    chainageFrom: "Km 6+450",
+    chainageTo: "Km 11+900",
+    operatingHours: 8.5,
+    projectId: "seed-project-1",
+    projectName: "ĐSCT Bắc – Nam",
+    personInChargeId: "seed-person-4",
+    personInChargeName: "Trần Quốc Bảo",
   },
   {
-    id: "5",
-    date: "2026-03-10",
-    machineCode: "AMS60-01",
-    machineName: "Máy hàn đường ray AMS60 – tổ 1",
-    plant: "Nhà máy Hà Nội",
-    shift: "Ca 2",
-    personsInCharge: ["Lê Thị Kim Anh", "Nguyễn Văn Hùng"],
-    weldJoint: "MH-HN-2026-0310-03",
-    railType: "P43",
-    status: "Tạm dừng",
-  },
-  {
-    id: "6",
-    date: "2026-03-10",
+    id: "seed-5",
+    date: "2026-08-23",
+    machineId: "seed-k355-02",
     machineCode: "K355-02",
     machineName: "Máy hàn di động K355",
-    plant: "Nhà máy Hà Nội",
-    shift: "Ca 1",
-    personsInCharge: ["Phạm Văn Minh"],
-    weldJoint: "MH-HN-2026-0310-01",
-    railType: "P50",
-    status: "Hoàn thành",
+    chainageFrom: "Km 19+300",
+    chainageTo: "Km 24+100",
+    operatingHours: 6.5,
+    projectId: "seed-project-4",
+    projectName: "Khu vực depot Hà Nội",
+    personInChargeId: "seed-person-2",
+    personInChargeName: "Phạm Văn Minh",
   },
   {
-    id: "7",
-    date: "2026-03-09",
-    machineCode: "AMS60-03",
-    machineName: "Máy hàn đường ray AMS60",
-    plant: "Nhà máy Đà Nẵng",
-    shift: "Ca 3",
-    personsInCharge: ["Nguyễn Văn Hùng"],
-    weldJoint: "MH-DN-2026-0309-05",
-    railType: "UIC60",
-    status: "Hoàn thành",
-  },
-  {
-    id: "8",
-    date: "2026-03-09",
+    id: "seed-6",
+    date: "2026-08-22",
+    machineId: "seed-k920-02",
     machineCode: "K920-02",
     machineName: "Máy hàn aluminothermic K920 (dự phòng)",
-    plant: "Nhà máy Đà Nẵng",
-    shift: "Ca 1",
-    personsInCharge: ["Trần Quốc Bảo", "Phạm Văn Minh"],
-    weldJoint: "MH-DN-2026-0309-02",
-    railType: "UIC60",
-    status: "Đang thực hiện",
-  },
-  {
-    id: "9",
-    date: "2026-03-08",
-    machineCode: "GEO-01",
-    machineName: "Máy định vị & hàn GEO",
-    plant: "Nhà máy TP.HCM",
-    shift: "Ca 2",
-    personsInCharge: ["Lê Thị Kim Anh"],
-    weldJoint: "MH-HCM-2026-0308-06",
-    railType: "P50",
-    status: "Hoàn thành",
-  },
-  {
-    id: "10",
-    date: "2026-03-07",
-    machineCode: "K920-01",
-    machineName: "Máy hàn aluminothermic K920",
-    plant: "Nhà máy Hà Nội",
-    shift: "Ca 1",
-    personsInCharge: ["Phạm Văn Minh", "Lê Thị Kim Anh", "Trần Quốc Bảo"],
-    weldJoint: "MH-HN-2026-0307-04",
-    railType: "UIC60",
-    status: "Hoàn thành",
+    chainageFrom: "Km 11+900",
+    chainageTo: "Km 15+200",
+    operatingHours: 5,
+    projectId: "seed-project-1",
+    projectName: "ĐSCT Bắc – Nam",
+    personInChargeId: "seed-person-4",
+    personInChargeName: "Trần Quốc Bảo",
   },
 ];
 
-export function formatAssignmentDate(iso: string) {
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
+export function formatScheduleDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("vi-VN");
 }
 
-export function formatPersons(persons: string[]) {
-  return persons.join(", ");
+export function formatOperatingHours(hours: number) {
+  return `${hours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giờ`;
+}
+
+export function formatChainageRange(row: Pick<MachineRunSchedule, "chainageFrom" | "chainageTo">) {
+  return `${row.chainageFrom} → ${row.chainageTo}`;
 }
