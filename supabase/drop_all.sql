@@ -14,6 +14,7 @@ drop view if exists public.bao_cao_lich_chay_may cascade;
 drop view if exists public.bao_cao_moi_han_theo_du_an cascade;
 drop view if exists public.bao_cao_moi_han_theo_tho cascade;
 drop view if exists public.bao_cao_moi_han_theo_nam cascade;
+drop view if exists public.bao_cao_ke_hoach_moi_han_theo_ngay cascade;
 drop table if exists public.lich_su_moi_han cascade;
 drop table if exists public.tai_lieu cascade;
 drop table if exists public.toa_do cascade;
@@ -28,3 +29,5 @@ drop table if exists public.nhan_su cascade;
 
 -- Function helper (nếu có)
 drop function if exists public.set_updated_at() cascade;
+drop function if exists public.tao_ke_hoach_moi_han_theo_ngay() cascade;
+drop function if exists public.kiem_tra_chung_chi_moi_han() cascade;

@@ -265,12 +265,15 @@ join public.nhan_su ns on ns.employee_id = nk.nguoi_phu_trach;
 -- ------------------------------------------------------------
 alter table public.lich_su_moi_han
   add column if not exists may_id uuid references public.thiet_bi (id) on delete set null,
-  add column if not exists chung_chi_su_dung text;
+  add column if not exists chung_chi_su_dung text,
+  add column if not exists ngay_thuc_hien date;
 
 comment on column public.lich_su_moi_han.may_id is
   'Máy thực hiện mối hàn; dùng để tự động tổng hợp số mối hàn theo máy';
 comment on column public.lich_su_moi_han.chung_chi_su_dung is
   'Chứng chỉ của nhân sự được sử dụng để đáp ứng chuẩn mối hàn';
+comment on column public.lich_su_moi_han.ngay_thuc_hien is
+  'Ngày thực hiện thực tế dùng cho báo cáo sản lượng theo ngày';
 
 create or replace function public.kiem_tra_chung_chi_moi_han()
 returns trigger
@@ -329,6 +332,8 @@ create trigger trg_kiem_tra_chung_chi_moi_han
 
 create index if not exists idx_lich_su_moi_han_may
   on public.lich_su_moi_han (may_id);
+create index if not exists idx_lich_su_moi_han_ngay
+  on public.lich_su_moi_han (ngay_thuc_hien desc);
 
 create or replace view public.bao_cao_moi_han_theo_du_an
 with (security_invoker = true)
@@ -358,7 +363,8 @@ select
   tb.ten_may,
   ns.to_han,
   ns.chung_chi as chung_chi_nhan_su,
-  ls.chung_chi_su_dung
+  ls.chung_chi_su_dung,
+  ls.ngay_thuc_hien
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id
@@ -403,6 +409,7 @@ left join moi_han_may mh on mh.may_id = tb.id;
 -- ------------------------------------------------------------
 alter table public.thiet_bi enable row level security;
 alter table public.nhat_ky_chay_may enable row level security;
+alter table public.nhan_su enable row level security;
 
 drop policy if exists "authenticated_all_thiet_bi" on public.thiet_bi;
 create policy "authenticated_all_thiet_bi"
@@ -424,8 +431,20 @@ create policy "anon_all_nhat_ky_chay_may"
   on public.nhat_ky_chay_may for all to anon
   using (true) with check (true);
 
+drop policy if exists "anon_read_nhan_su_for_welding" on public.nhan_su;
+create policy "anon_read_nhan_su_for_welding"
+  on public.nhan_su for select to anon
+  using (true);
+
+drop policy if exists "anon_update_nhan_su_certificates" on public.nhan_su;
+create policy "anon_update_nhan_su_certificates"
+  on public.nhan_su for update to anon
+  using (true) with check (true);
+
 grant select, insert, update, delete on public.thiet_bi to anon, authenticated;
 grant select, insert, update, delete on public.nhat_ky_chay_may to anon, authenticated;
+grant select on public.nhan_su to anon;
+grant update (chung_chi) on public.nhan_su to anon;
 grant select on public.bao_cao_lich_chay_may to anon, authenticated;
 grant select on public.bao_cao_may to anon, authenticated;
 grant select on public.bao_cao_moi_han_theo_du_an to anon, authenticated;

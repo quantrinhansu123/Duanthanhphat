@@ -11,14 +11,57 @@ import {
   Users,
   SealCheck,
   Sparkle,
+  X,
 } from "@/components/icons";
-import { parseCertificateList } from "@/lib/weldingCertificates";
+import {
+  formatCertificateList,
+  parseCertificateList,
+  WELDING_CERTIFICATE_OPTIONS,
+} from "@/lib/weldingCertificates";
+import {
+  loadPersonnelCertificateRows,
+  updatePersonnelCertificates,
+  type PersonnelCertificateRow,
+} from "@/lib/personnelCertificatesDb";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
   "Hạng 2": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Hạng 3": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
+
+function normalizeName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("vi")
+    .trim();
+}
+
+function personnelRowToWelder(row: PersonnelCertificateRow): Welder {
+  const codeSuffix = row.ma_nhan_su?.match(/\d+$/)?.[0];
+  const seed = seedWelders.find((item) =>
+    normalizeName(item.name) === normalizeName(row.ho_ten) ||
+    (codeSuffix && item.weldingId.endsWith(codeSuffix)),
+  );
+
+  return {
+    id: row.employee_id,
+    weldingId: row.ma_nhan_su?.trim() || seed?.weldingId || "Chưa có mã",
+    name: row.ho_ten,
+    email: seed?.email || "Chưa cập nhật",
+    department: row.don_vi?.trim() || seed?.department || "Chưa cập nhật",
+    position: row.chuc_vu?.trim() || seed?.position || "Thợ hàn",
+    weldingTeam: row.to_han?.trim() || seed?.weldingTeam || "Chưa phân tổ",
+    certificates: formatCertificateList(row.chung_chi),
+    rank: row.cap_bac?.trim() || seed?.rank || "Chưa phân hạng",
+    railTypes: row.loai_ray?.trim() || seed?.railTypes || "Chưa cập nhật",
+    trainedMachines: row.loai_may?.trim() || seed?.trainedMachines || "Chưa cập nhật",
+    experience: row.kinh_nghiem?.trim() || seed?.experience || "Chưa cập nhật",
+    status: seed?.status || "Hoạt động",
+    photo: row.hinh_anh?.trim() || seed?.photo || "https://randomuser.me/api/portraits/lego/1.jpg",
+  };
+}
 
 function toggleValue(list: string[], value: string) {
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -135,6 +178,7 @@ function MultiSelectCombobox({
 
 export default function WelderManagement() {
   const [list, setList] = useState<Welder[]>(seedWelders);
+  const [dataSource, setDataSource] = useState<"supabase" | "seed">("seed");
   const [query, setQuery] = useState("");
   const [ranksSel, setRanksSel] = useState<string[]>([]);
   const [teamsSel, setTeamsSel] = useState<string[]>([]);
@@ -144,6 +188,31 @@ export default function WelderManagement() {
   const [selected, setSelected] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [certificateEditor, setCertificateEditor] = useState<Welder | null>(null);
+  const [certificateDraft, setCertificateDraft] = useState("");
+  const [savingCertificate, setSavingCertificate] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadPersonnelCertificateRows()
+      .then((rows) => {
+        if (!active || rows.length === 0) return;
+        const welderRows = rows.filter((row) => {
+          const position = row.chuc_vu?.toLocaleLowerCase("vi") ?? "";
+          const team = row.to_han?.trim() ?? "";
+          return position.includes("hàn") || (team !== "" && team !== "Chưa phân tổ");
+        });
+        if (welderRows.length === 0) return;
+        setList(welderRows.map(personnelRowToWelder));
+        setDataSource("supabase");
+      })
+      .catch(() => {
+        if (active) setDataSource("seed");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside() {
@@ -476,11 +545,12 @@ export default function WelderManagement() {
                           type="button"
                           className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
-                            showToast(`Sửa thông tin ${w.name}`);
+                            setCertificateEditor(w);
+                            setCertificateDraft(w.certificates);
                             setMenuOpen(null);
                           }}
                         >
-                          Sửa
+                          Sửa chứng chỉ
                         </button>
                         <button
                           type="button"
@@ -530,6 +600,93 @@ export default function WelderManagement() {
           </table>
         </div>
       </div>
+
+      {certificateEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            aria-label="Đóng"
+            onClick={() => setCertificateEditor(null)}
+          />
+          <div role="dialog" aria-modal="true" className="relative z-10 w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Hồ sơ thợ hàn</div>
+                <h2 className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">Chứng chỉ · {certificateEditor.name}</h2>
+              </div>
+              <button type="button" onClick={() => setCertificateEditor(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Đóng">
+                <X size={18} weight="bold" aria-hidden />
+              </button>
+            </div>
+            <div className="px-5 py-5 sm:px-6">
+              <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+                Chứng chỉ
+                <input
+                  value={certificateDraft}
+                  onChange={(event) => setCertificateDraft(event.target.value)}
+                  placeholder="Nhập nhiều chứng chỉ, cách nhau bằng dấu phẩy"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
+                />
+              </label>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {WELDING_CERTIFICATE_OPTIONS.map((certificate) => {
+                  const selectedCertificate = parseCertificateList(certificateDraft).includes(certificate);
+                  return (
+                    <button
+                      key={certificate}
+                      type="button"
+                      onClick={() => {
+                        const current = parseCertificateList(certificateDraft);
+                        setCertificateDraft(
+                          (selectedCertificate
+                            ? current.filter((item) => item !== certificate)
+                            : [...current, certificate]
+                          ).join(", "),
+                        );
+                      }}
+                      className={`rounded-full border px-2.5 py-1.5 text-left text-xs font-medium ${selectedCertificate ? "border-blue-300 bg-blue-50 text-[#0047AB]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {selectedCertificate ? "✓ " : "+ "}{certificate}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Có thể chọn nhiều hoặc nhập thủ công; danh sách được lưu cách nhau bằng dấu phẩy.</p>
+            </div>
+            <div className="flex justify-end gap-2.5 border-t border-slate-200 px-5 py-3.5 sm:px-6">
+              <button type="button" onClick={() => setCertificateEditor(null)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:text-sm">Hủy</button>
+              <button
+                type="button"
+                disabled={savingCertificate}
+                onClick={async () => {
+                  const certificates = formatCertificateList(certificateDraft);
+                  setSavingCertificate(true);
+                  try {
+                    if (dataSource !== "supabase") {
+                      throw new Error("Đang dùng dữ liệu mẫu; chưa thể lưu chứng chỉ vào Supabase.");
+                    }
+                    await updatePersonnelCertificates(
+                      certificateEditor.id,
+                      parseCertificateList(certificates),
+                    );
+                    setList((prev) => prev.map((item) => item.id === certificateEditor.id ? { ...item, certificates } : item));
+                    showToast(`Đã cập nhật chứng chỉ ${certificateEditor.name}`);
+                    setCertificateEditor(null);
+                  } catch (saveError) {
+                    window.alert(saveError instanceof Error ? saveError.message : "Không lưu được chứng chỉ.");
+                  } finally {
+                    setSavingCertificate(false);
+                  }
+                }}
+                className="h-10 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+              >
+                {savingCertificate ? "Đang lưu…" : "Lưu chứng chỉ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">

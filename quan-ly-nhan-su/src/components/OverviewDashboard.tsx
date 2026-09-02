@@ -10,13 +10,13 @@ import {
   XCircle,
 } from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
+import { useProjectsData } from "@/hooks/useProjectsData";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildDailyJournalSeries,
   buildDonutArcs,
-  buildYearlyJournalSeries,
   filterWeldReportRows,
-  formatYearOverYear,
+  getJournalRowDateIso,
   groupJournalErrorReasons,
   groupJournalRows,
   machineForRow,
@@ -83,6 +83,7 @@ function sampleChartLabels(labels: string[], maxCount: number) {
 
 export default function OverviewDashboard() {
   const { rows, loading, error } = useWeldReportData();
+  const { projects } = useProjectsData();
   const { appliedFilters } = useReportFilters();
 
   const [chartViewMode, setChartViewMode] = useState<"daily" | "cumulative">("daily");
@@ -97,7 +98,6 @@ export default function OverviewDashboard() {
     [rows, appliedFilters],
   );
   const summary = useMemo(() => summarizeJournalRows(selectedRows), [selectedRows]);
-  const yearlySeries = useMemo(() => buildYearlyJournalSeries(selectedRows), [selectedRows]);
   const chartDateRange = useMemo(
     () => resolveChartDateRange(appliedFilters.dateFrom, appliedFilters.dateTo),
     [appliedFilters.dateFrom, appliedFilters.dateTo],
@@ -107,26 +107,66 @@ export default function OverviewDashboard() {
     [selectedRows, chartDateRange.from, chartDateRange.to],
   );
   const dailyValues = useMemo(() => dailySeries.map((point) => point.value), [dailySeries]);
-  const currentCalendarYear = new Date().getFullYear();
-  const currentYearPoint = yearlySeries.find((point) => point.year === currentCalendarYear);
-  const previousYearPoint = yearlySeries.find((point) => point.year === currentCalendarYear - 1);
-  const currentYearTotal = currentYearPoint?.value ?? 0;
-  const previousYearTotal = previousYearPoint?.value ?? 0;
-  const yearOverYear = formatYearOverYear(currentYearTotal, previousYearTotal);
+  const selectedProjects = useMemo(
+    () => projects.filter((project) =>
+      appliedFilters.projects.length === 0 || appliedFilters.projects.includes(project.name),
+    ),
+    [appliedFilters.projects, projects],
+  );
+  const dailyTargets = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const project of selectedProjects) {
+      for (const row of project.theoreticalProgress ?? []) {
+        if (row.ngay < chartDateRange.from || row.ngay > chartDateRange.to) continue;
+        byDate.set(row.ngay, (byDate.get(row.ngay) ?? 0) + row.so_moi_han);
+      }
+    }
+    return dailySeries.map((point) => byDate.get(point.date) ?? 0);
+  }, [chartDateRange.from, chartDateRange.to, dailySeries, selectedProjects]);
+  const plannedTarget = useMemo(
+    () => selectedProjects.reduce(
+      (sum, project) => sum + (project.theoreticalProgress ?? []).reduce(
+        (projectSum, row) => row.ngay >= appliedFilters.dateFrom && row.ngay <= appliedFilters.dateTo
+          ? projectSum + row.so_moi_han
+          : projectSum,
+        0,
+      ),
+      0,
+    ),
+    [appliedFilters.dateFrom, appliedFilters.dateTo, selectedProjects],
+  );
+  const todayIso = new Date().toLocaleDateString("en-CA");
+  const yesterdayDate = new Date(`${todayIso}T00:00:00`);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayIso = yesterdayDate.toLocaleDateString("en-CA");
+  const todayTotal = selectedRows.reduce(
+    (sum, row, index) => getJournalRowDateIso(row, index) === todayIso ? sum + row.so_luong_thuc_hien : sum,
+    0,
+  );
+  const yesterdayTotal = selectedRows.reduce(
+    (sum, row, index) => getJournalRowDateIso(row, index) === yesterdayIso ? sum + row.so_luong_thuc_hien : sum,
+    0,
+  );
+  const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0);
   const errorReasonRows = useMemo(() => groupJournalErrorReasons(selectedRows), [selectedRows]);
 
   const total = summary.total;
   const passed = summary.passed;
   const failed = summary.errors;
   const pending = 0;
-  const target = total > 0 ? Math.ceil((total * 1.2) / 100) * 100 : 100;
-  const quota =
-    yearlySeries.length > 0 ? Math.max(1, Math.round(total / yearlySeries.length)) : 0;
+  const target = plannedTarget > 0 ? plannedTarget : total;
+  const plannedDays = selectedProjects.reduce(
+    (sum, project) => sum + (project.theoreticalProgress ?? []).filter(
+      (row) => row.ngay >= appliedFilters.dateFrom && row.ngay <= appliedFilters.dateTo,
+    ).length,
+    0,
+  );
+  const quota = plannedDays > 0 ? plannedTarget / plannedDays : dailySeries.length > 0 ? total / dailySeries.length : 0;
 
-  const progressPct = ((total / target) * 100)
+  const progressPct = (target > 0 ? (total / target) * 100 : 0)
     .toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
     .replace(".", ",");
-  const progressPctNum = (total / target) * 100;
+  const progressPctNum = target > 0 ? (total / target) * 100 : 0;
 
   const chart = useMemo(() => {
     const slice = dailyValues;
@@ -149,14 +189,15 @@ export default function OverviewDashboard() {
         targetCumPts: [],
         targetCumLinePath: "",
         totalTargetCum: 0,
+        targetLinePath: "",
         maxCumVal: 3000,
         dayPoints: [] as ChartDayPoint[],
         maxVal: 100,
-        targetLineY: 108.8,
       };
     }
 
-    const maxVal = Math.max(100, Math.ceil(Math.max(...slice, 1) / 100) * 100);
+    const targetSlice = dailyTargets;
+    const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, 1) / 10) * 10);
     const plotH = 190;
     const padX = 14;
     const plotW = 500 - padX * 2;
@@ -190,13 +231,18 @@ export default function OverviewDashboard() {
     );
     const totalCum = cumValues[cumValues.length - 1] || 0;
 
-    const dailyTargetVal =
-      slice.length > 0 && summary.total > 0
-        ? Math.max(1, Math.round(summary.total / slice.length))
-        : 1;
-    const targetCumValues = slice.map((_, idx) => (idx + 1) * dailyTargetVal);
+    const targetPts = targetSlice.map((value, idx) => {
+      const cx = count === 1 ? 250 : padX + idx * step;
+      const cy = Math.max(6, plotH - (value / maxVal) * plotH);
+      return { cx, cy, val: value };
+    });
+    const targetLinePath = targetPts.length > 0
+      ? `M ${targetPts[0].cx} ${targetPts[0].cy} ${targetPts.slice(1).map((point) => `L ${point.cx} ${point.cy}`).join(" ")}`
+      : "";
+    const targetCumValues = targetSlice.map((_, index) =>
+      targetSlice.slice(0, index + 1).reduce((sum, value) => sum + value, 0),
+    );
     const totalTargetCum = targetCumValues[targetCumValues.length - 1] || 0;
-    const targetLineY = Math.max(6, plotH - (dailyTargetVal / maxVal) * plotH);
 
     const maxCumVal = Math.max(500, Math.ceil(Math.max(totalCum, totalTargetCum, ...cumValues, ...targetCumValues) / 500) * 500);
 
@@ -267,15 +313,6 @@ export default function OverviewDashboard() {
       areaPath = `${top} ${bottom}`;
     }
 
-    const leftAxisLabels = [
-      maxVal,
-      Math.round(maxVal * 0.8),
-      Math.round(maxVal * 0.6),
-      Math.round(maxVal * 0.4),
-      Math.round(maxVal * 0.2),
-      0,
-    ];
-
     const fullLabels = dailySeries.map((point) => viDateShort(point.date));
     const chartLabels = sampleChartLabels(fullLabels, 8);
 
@@ -285,7 +322,7 @@ export default function OverviewDashboard() {
       dateShort: viDateShort(dailySeries[idx]?.date ?? chartDateRange.from),
       dateFull: viDate(dailySeries[idx]?.date ?? chartDateRange.from),
       daily: val,
-      dailyTarget: dailyTargetVal,
+      dailyTarget: targetSlice[idx] ?? 0,
       cumActual: cumValues[idx],
       cumTarget: targetCumValues[idx],
       cx: pts[idx].cx,
@@ -308,12 +345,12 @@ export default function OverviewDashboard() {
       targetCumPts,
       targetCumLinePath,
       totalTargetCum,
+      targetLinePath,
       maxCumVal,
       dayPoints,
       maxVal,
-      targetLineY,
     };
-  }, [chartDateRange, dailySeries, dailyValues, summary.total]);
+  }, [chartDateRange, dailySeries, dailyTargets, dailyValues]);
 
   const selectedDay =
     selectedDayIndex !== null && chart.dayPoints[selectedDayIndex]
@@ -346,9 +383,11 @@ export default function OverviewDashboard() {
   );
 
   const machineRows = useMemo(() => {
-    const currentYearRows = selectedRows.filter((row) => row.nam_thuc_hien === currentCalendarYear);
-    const currentYearByMachine = new Map(
-      groupJournalRows(currentYearRows, machineForRow).map((machine) => [machine.name, machine.total]),
+    const todayRows = selectedRows.filter(
+      (row, index) => getJournalRowDateIso(row, index) === todayIso,
+    );
+    const todayByMachine = new Map(
+      groupJournalRows(todayRows, machineForRow).map((machine) => [machine.name, machine.total]),
     );
 
     return groupJournalRows(selectedRows, machineForRow)
@@ -358,14 +397,14 @@ export default function OverviewDashboard() {
         return {
           code: machine.name,
           total: fmt(machine.total),
-          today: fmt(currentYearByMachine.get(machine.name) ?? 0),
+          today: fmt(todayByMachine.get(machine.name) ?? 0),
           errorRate: pctComma(machine.errors, machine.total),
           availLabel: `${passRate}%`,
           availPct: passRate,
           availColor: passRate >= 90 ? "#15803d" : "#d97706",
         };
       });
-  }, [selectedRows, currentCalendarYear]);
+  }, [selectedRows, todayIso]);
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
@@ -397,34 +436,27 @@ export default function OverviewDashboard() {
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-xs text-slate-500">Toàn thời gian</div>
+            <div className="mt-2.5 text-xs text-slate-500">Trong khoảng ngày đang lọc</div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
         </div>
 
-        {/* Card 2: Năm hiện tại */}
+        {/* Card 2: Hôm nay */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
-              NĂM {currentCalendarYear}
+              HÔM NAY
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {fmt(currentYearTotal)}
+                {fmt(todayTotal)}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
-              {yearOverYear ? (
-                <>
-                  {yearOverYear.up ? "↑" : "↓"} {yearOverYear.formatted}%{" "}
-                  <span className="text-slate-400 font-normal">so với năm {currentCalendarYear - 1}</span>
-                </>
-              ) : (
-                <span className="text-slate-400 font-normal">Chưa có dữ liệu so sánh năm trước</span>
-              )}
+              Hôm qua: <span className="font-mono font-semibold">{fmt(yesterdayTotal)}</span> mối
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -432,28 +464,23 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* Card 3: Năm gần nhất trong kỳ lọc */}
+        {/* Card 3: Ngày gần nhất trong kỳ lọc */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-indigo-700 uppercase">
-              NĂM GẦN NHẤT
+              NGÀY GẦN NHẤT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {fmt(yearlySeries.at(-1)?.value ?? 0)}
+                {fmt(latestDailyPoint?.value ?? 0)}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-indigo-700 font-medium">
-              {yearlySeries.at(-1) ? (
+              {latestDailyPoint ? (
                 <>
-                  Năm <span className="font-semibold font-mono">{yearlySeries.at(-1)!.year}</span>
-                  {yearlySeries.length > 1 ? (
-                    <span className="text-slate-400 font-normal">
-                      {" "}
-                      · TB {fmt(quota)}/năm trong kỳ lọc
-                    </span>
-                  ) : null}
+                  <span className="font-semibold font-mono">{viDate(latestDailyPoint.date)}</span>
+                  <span className="text-slate-400 font-normal"> · TB {quota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}/ngày</span>
                 </>
               ) : (
                 <span className="text-slate-400 font-normal">Chưa có dữ liệu</span>
@@ -561,19 +588,19 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Định mức trung bình/năm</div>
+                <div className="text-xs text-slate-500">Kế hoạch trung bình/ngày</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {quota}
+                    {quota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
                   </span>
-                  <span className="text-xs text-slate-400">mối/năm</span>
+                  <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Năm {currentCalendarYear}</div>
+                <div className="text-xs text-slate-500">Kế hoạch trong kỳ</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-base sm:text-lg font-bold font-mono text-emerald-700">
-                    {fmt(currentYearTotal)}
+                    {fmt(plannedTarget)}
                   </span>
                   <span className="text-xs text-slate-400">mối</span>
                 </div>
@@ -789,11 +816,9 @@ export default function OverviewDashboard() {
                           />
                         )
                       ) : (
-                        <line
-                          x1="0"
-                          y1={chart.targetLineY}
-                          x2="500"
-                          y2={chart.targetLineY}
+                        <path
+                          d={chart.targetLinePath}
+                          fill="none"
                           stroke="#94a3b8"
                           strokeWidth="1.3"
                           strokeDasharray="7 5"
@@ -914,7 +939,7 @@ export default function OverviewDashboard() {
           <div className="mt-3 grid grid-cols-[1fr_0.7fr_0.55fr_0.85fr_0.9fr] gap-x-1 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
             <div>Máy</div>
             <div>Mối hàn</div>
-            <div>Năm nay</div>
+            <div>Hôm nay</div>
             <div>Tỷ lệ lỗi</div>
             <div className="text-right">Tỷ lệ đạt</div>
           </div>

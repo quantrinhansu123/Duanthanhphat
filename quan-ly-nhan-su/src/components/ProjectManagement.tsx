@@ -8,11 +8,11 @@ import { type Project, type TheoreticalProgressRow } from "@/data/projects";
 import { welders } from "@/data/welders";
 import { useProjectsData } from "@/hooks/useProjectsData";
 import {
+  buildDailyWeldPlan,
   deleteDuAn,
   flattenTheoreticalProgress,
   insertDuAn,
-  saveTheoreticalProgress,
-  sumTheoreticalWelds,
+  projectDurationDays,
   updateDuAn,
 } from "@/lib/projectsDb";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
@@ -52,6 +52,10 @@ function emptyProject(): Project {
     machineCount: 0,
     status: "Đang triển khai",
     startDate: today,
+    endDate: today,
+    routeFrom: "",
+    routeTo: "",
+    plannedWeldCount: 0,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
@@ -169,25 +173,11 @@ function TabAddButton({
 function ProjectTheoreticalProgressTab({
   projectName,
   rows,
-  readOnly,
-  onChange,
-  onStartEdit,
 }: {
   projectName: string;
   rows: TheoreticalProgressRow[];
-  readOnly: boolean;
-  onChange: (rows: TheoreticalProgressRow[]) => void;
-  onStartEdit?: (addAction?: () => void) => void;
 }) {
   const total = rows.reduce((sum, row) => sum + row.so_moi_han, 0);
-
-  function updateRow(index: number, patch: Partial<TheoreticalProgressRow>) {
-    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  }
-
-  function removeRow(index: number) {
-    onChange(rows.filter((_, i) => i !== index));
-  }
 
   return (
     <div>
@@ -197,12 +187,9 @@ function ProjectTheoreticalProgressTab({
           <strong className="font-semibold text-[#0047AB] font-mono tabular-nums">{total.toLocaleString("vi-VN")}</strong>{" "}
           mối hàn lý thuyết
         </div>
-        <TabAddButton
-          label="Thêm ngày"
-          readOnly={readOnly}
-          onAdd={() => onChange([...rows, { ngay: new Date().toISOString().slice(0, 10), so_moi_han: 0 }])}
-          onStartEdit={onStartEdit}
-        />
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-[#0047AB]">
+          Tự động tạo từ thông tin dự án
+        </span>
       </div>
       <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-2xs">
         <table className="w-full min-w-[520px] border-collapse text-left text-xs sm:text-sm">
@@ -211,61 +198,26 @@ function ProjectTheoreticalProgressTab({
               <th className="px-3.5 py-2.5">Ngày</th>
               <th className="px-3.5 py-2.5">Dự án</th>
               <th className="px-3.5 py-2.5 text-right">Số mối hàn</th>
-              {!readOnly && <th className="w-12 px-2 py-2.5" aria-label="Xóa" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((row, index) => (
               <tr key={`${row.ngay}-${index}`} className="hover:bg-slate-50/80 transition-colors">
                 <td className="px-3.5 py-2.5">
-                  {readOnly ? (
-                    <span className="font-mono text-slate-900">{viDate(row.ngay)}</span>
-                  ) : (
-                    <input
-                      type="date"
-                      value={row.ngay}
-                      onChange={(e) => updateRow(index, { ngay: e.target.value })}
-                      className="h-9 w-full min-w-[130px] rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
-                    />
-                  )}
+                  <span className="font-mono text-slate-900">{viDate(row.ngay)}</span>
                 </td>
                 <td className="px-3.5 py-2.5 font-medium text-slate-900">{projectName}</td>
                 <td className="px-3.5 py-2.5 text-right">
-                  {readOnly ? (
-                    <span className="font-mono font-semibold tabular-nums text-[#0047AB]">
-                      {row.so_moi_han.toLocaleString("vi-VN")}
-                    </span>
-                  ) : (
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.so_moi_han}
-                      onChange={(e) =>
-                        updateRow(index, { so_moi_han: Math.max(0, Number(e.target.value) || 0) })
-                      }
-                      className="h-9 w-full min-w-[88px] rounded-lg border border-slate-300 bg-white px-2.5 text-right text-xs font-mono text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
-                    />
-                  )}
+                  <span className="font-mono font-semibold tabular-nums text-[#0047AB]">
+                    {row.so_moi_han.toLocaleString("vi-VN")}
+                  </span>
                 </td>
-                {!readOnly && (
-                  <td className="px-2 py-2.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeRow(index)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                      aria-label="Xóa dòng"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                )}
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={readOnly ? 3 : 4} className="px-3 py-8 text-center text-slate-500">
-                  Chưa có tiến độ lý thuyết theo ngày.{" "}
-                  {!readOnly && "Bấm «Thêm ngày» để nhập kế hoạch."}
+                <td colSpan={3} className="px-3 py-8 text-center text-slate-500">
+                  Nhập tổng mối hàn và khoảng ngày tại tab Thông tin để hệ thống tự tạo kế hoạch.
                 </td>
               </tr>
             )}
@@ -288,7 +240,7 @@ function AllTheoreticalProgressTable({
       <div className="border-b border-slate-200 px-4 sm:px-5 py-4">
         <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Tiến độ lý thuyết</h2>
         <p className="mt-1 text-xs sm:text-sm text-slate-500">
-          Bảng con lưu JSONB trên Supabase · cột <code className="font-mono text-[11px]">du_an.tien_do_ly_thuyet</code>
+          Tự động chia tổng mối hàn cho từng ngày trong thời gian dự án
         </p>
       </div>
       <div className="table-scroll overflow-x-auto">
@@ -320,7 +272,7 @@ function AllTheoreticalProgressTable({
             ) : (
               <tr>
                 <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
-                  Chưa có dữ liệu tiến độ lý thuyết. Mở chi tiết dự án → tab «Tiến độ lý thuyết» để nhập.
+                  Chưa có kế hoạch. Mở dự án và nhập tổng mối hàn cùng khoảng thời gian để tự động tạo.
                 </td>
               </tr>
             )}
@@ -354,8 +306,16 @@ function ProjectInfoFields({
     const next = { ...form, ...patch };
     next.staffCount = next.personnelIds.length;
     next.machineCount = next.machineTypes.length;
+    next.theoreticalProgress = buildDailyWeldPlan(
+      next.plannedWeldCount,
+      next.startDate,
+      next.endDate,
+    );
     setForm(next);
   }
+
+  const durationDays = projectDurationDays(form.startDate, form.endDate);
+  const averagePerDay = durationDays > 0 ? form.plannedWeldCount / durationDays : 0;
 
   return (
     <div className="space-y-3.5">
@@ -398,6 +358,82 @@ function ProjectInfoFields({
           className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
+
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Lý trình từ vị trí
+          <input
+            readOnly={readOnly}
+            value={form.routeFrom}
+            onChange={(e) => updateForm({ routeFrom: e.target.value })}
+            placeholder="VD: Km 12+450"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          />
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Đến vị trí
+          <input
+            readOnly={readOnly}
+            value={form.routeTo}
+            onChange={(e) => updateForm({ routeTo: e.target.value })}
+            placeholder="VD: Km 24+900"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Từ ngày
+          <input
+            readOnly={readOnly}
+            type="date"
+            value={form.startDate}
+            onChange={(e) => updateForm({ startDate: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
+          />
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Tới ngày
+          <input
+            readOnly={readOnly}
+            type="date"
+            min={form.startDate}
+            value={form.endDate}
+            onChange={(e) => updateForm({ endDate: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
+          />
+        </label>
+      </div>
+
+      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        Tổng mối hàn dự tính
+        <input
+          readOnly={readOnly}
+          type="number"
+          min={0}
+          step={1}
+          value={form.plannedWeldCount}
+          onChange={(e) => updateForm({ plannedWeldCount: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-3.5">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Số ngày thực hiện</div>
+          <div className="mt-1 font-mono text-xl font-bold text-slate-900">{durationDays}</div>
+        </div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bình quân/ngày</div>
+          <div className="mt-1 font-mono text-xl font-bold text-[#0047AB]">
+            {averagePerDay.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}
+          </div>
+        </div>
+        <p className="col-span-2 text-xs text-slate-600">
+          Khi lưu, hệ thống tự chia {form.plannedWeldCount.toLocaleString("vi-VN")} mối cho {durationDays} ngày; phần dư được cộng từ ngày đầu.
+        </p>
+      </div>
 
       <CheckboxGroup
         label="Nhân sự tham gia"
@@ -449,16 +485,6 @@ function ProjectInfoFields({
             ))}
           </select>
         )}
-      </label>
-      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-        Ngày bắt đầu
-        <input
-          readOnly={readOnly}
-          type="date"
-          value={form.startDate}
-          onChange={(e) => updateForm({ startDate: e.target.value })}
-          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
-        />
       </label>
     </div>
   );
@@ -855,7 +881,6 @@ function ProjectModal({
   mode,
   onClose,
   onSave,
-  onSaveProgress,
   onSavePersonnel,
   onSaveWork,
   onStartEdit,
@@ -864,19 +889,14 @@ function ProjectModal({
   mode: "view" | "edit" | "create";
   onClose: () => void;
   onSave?: (updated: Project) => void;
-  onSaveProgress?: (projectId: string, rows: TheoreticalProgressRow[]) => Promise<void>;
   onSavePersonnel?: (projectId: string, rows: ProjectPersonnel[]) => void;
   onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
 }) {
   const [form, setForm] = useState(project);
-  const [progressRows, setProgressRows] = useState<TheoreticalProgressRow[]>(
-    project.theoreticalProgress ?? [],
-  );
   const [personnelRows, setPersonnelRows] = useState<ProjectPersonnel[]>([]);
   const [workRows, setWorkRows] = useState<ProjectWeld[]>([]);
   const [tab, setTab] = useState<DetailTab>("info");
-  const [savingProgress, setSavingProgress] = useState(false);
   const pendingAddRef = useRef<(() => void) | null>(null);
 
   function requestEdit(addAction?: () => void) {
@@ -907,7 +927,6 @@ function ProjectModal({
       machineTypes: project.machineTypes ?? [],
       weldTypes: project.weldTypes ?? [],
     });
-    setProgressRows(project.theoreticalProgress ?? []);
     setPersonnelRows(project.projectPersonnel ?? getProjectPersonnel(project.id));
     setWorkRows(project.projectWelds ?? getProjectWelds(project.id));
   }, [project]);
@@ -916,7 +935,7 @@ function ProjectModal({
   const isCreate = mode === "create";
   const personnelCount = personnelRows.length;
   const weldCount = workRows.length;
-  const progressCount = progressRows.length;
+  const progressCount = form.theoreticalProgress?.length ?? 0;
 
   const tabs: { id: DetailTab; label: string; count?: number }[] = [
     { id: "info", label: "Thông tin" },
@@ -1007,11 +1026,8 @@ function ProjectModal({
           )}
           {tab === "progress" && (
             <ProjectTheoreticalProgressTab
-              projectName={project.name}
-              rows={progressRows}
-              readOnly={readOnly}
-              onChange={setProgressRows}
-              onStartEdit={requestEdit}
+              projectName={form.name || project.name}
+              rows={form.theoreticalProgress ?? []}
             />
           )}
         </div>
@@ -1036,32 +1052,32 @@ function ProjectModal({
                   window.alert("Vui lòng chọn người phụ trách.");
                   return;
                 }
+                if (!form.routeFrom.trim() || !form.routeTo.trim()) {
+                  window.alert("Vui lòng nhập đầy đủ lý trình từ vị trí tới vị trí.");
+                  return;
+                }
+                if (projectDurationDays(form.startDate, form.endDate) <= 0) {
+                  window.alert("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
+                  return;
+                }
+                if (form.plannedWeldCount <= 0) {
+                  window.alert("Tổng mối hàn dự tính phải lớn hơn 0.");
+                  return;
+                }
                 onSave({
                   ...form,
                   staffCount: form.personnelIds.length,
                   machineCount: form.machineTypes.length,
+                  theoreticalProgress: buildDailyWeldPlan(
+                    form.plannedWeldCount,
+                    form.startDate,
+                    form.endDate,
+                  ),
                 });
               }}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
             >
               {isCreate ? "Thêm dự án" : "Lưu thay đổi"}
-            </button>
-          )}
-          {!readOnly && onSaveProgress && tab === "progress" && project.id && (
-            <button
-              type="button"
-              disabled={savingProgress}
-              onClick={async () => {
-                setSavingProgress(true);
-                try {
-                  await onSaveProgress(project.id, progressRows);
-                } finally {
-                  setSavingProgress(false);
-                }
-              }}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer disabled:opacity-60"
-            >
-              {savingProgress ? "Đang lưu…" : "Lưu tiến độ lý thuyết"}
             </button>
           )}
           {!readOnly && onSavePersonnel && tab === "personnel" && project.id && (
@@ -1104,7 +1120,9 @@ export default function ProjectManagement() {
         !q ||
         p.name.toLowerCase().includes(q) ||
         p.manager.toLowerCase().includes(q) ||
-        p.plant.toLowerCase().includes(q);
+        p.plant.toLowerCase().includes(q) ||
+        p.routeFrom.toLowerCase().includes(q) ||
+        p.routeTo.toLowerCase().includes(q);
       const matchStatus = status === "Tất cả trạng thái" || p.status === status;
       return matchQ && matchStatus;
     });
@@ -1134,6 +1152,11 @@ export default function ProjectManagement() {
       if (source === "supabase") {
         const { project: saved, error: saveError } = await updateDuAn(updated.id, {
           name: updated.name,
+          routeFrom: updated.routeFrom,
+          routeTo: updated.routeTo,
+          startDate: updated.startDate,
+          endDate: updated.endDate,
+          plannedWeldCount: updated.plannedWeldCount,
         });
         if (saveError) {
           window.alert(`Không lưu được: ${saveError}`);
@@ -1168,7 +1191,15 @@ export default function ProjectManagement() {
   function handleCreate(project: Project) {
     void (async () => {
       if (source === "supabase") {
-        const { project: created, error: createError } = await insertDuAn({ name: project.name });
+        const { project: created, error: createError } = await insertDuAn({
+          name: project.name,
+          maDuAn: project.maDuAn,
+          routeFrom: project.routeFrom,
+          routeTo: project.routeTo,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          plannedWeldCount: project.plannedWeldCount,
+        });
         if (createError) {
           window.alert(`Không thêm được: ${createError}`);
           return;
@@ -1179,7 +1210,11 @@ export default function ProjectManagement() {
               ...created,
               ...project,
               id: created.id,
-              theoreticalProgress: [],
+              theoreticalProgress: buildDailyWeldPlan(
+                project.plannedWeldCount,
+                project.startDate,
+                project.endDate,
+              ),
             },
             ...prev,
           ]);
@@ -1187,30 +1222,18 @@ export default function ProjectManagement() {
         await reload();
       } else {
         const id = String(Date.now());
-        setProjects((prev) => [{ ...project, id, theoreticalProgress: [] }, ...prev]);
+        setProjects((prev) => [{
+          ...project,
+          id,
+          theoreticalProgress: buildDailyWeldPlan(
+            project.plannedWeldCount,
+            project.startDate,
+            project.endDate,
+          ),
+        }, ...prev]);
       }
       setModal(null);
     })();
-  }
-
-  async function handleSaveProgress(projectId: string, rows: TheoreticalProgressRow[]) {
-    if (source === "supabase") {
-      const { error: saveError } = await saveTheoreticalProgress(projectId, rows);
-      if (saveError) {
-        window.alert(`Không lưu tiến độ lý thuyết: ${saveError}`);
-        return;
-      }
-      setProjects((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, theoreticalProgress: rows } : p)),
-      );
-      await reload();
-      setModal(null);
-      return;
-    }
-    setProjects((prev) =>
-      prev.map((p) => (p.id === projectId ? { ...p, theoreticalProgress: rows } : p)),
-    );
-    setModal(null);
   }
 
   function handleSavePersonnel(projectId: string, rows: ProjectPersonnel[]) {
@@ -1261,7 +1284,7 @@ export default function ProjectManagement() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm tên dự án, người phụ trách, nhà máy..."
+            placeholder="Tìm tên dự án, người phụ trách, lý trình..."
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
@@ -1286,17 +1309,19 @@ export default function ProjectManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[960px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1440px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Tên dự án</th>
+                <th className="min-w-[190px] px-3.5 py-3">Lý trình</th>
                 <th className="px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3">Nhà máy</th>
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3 text-right">Tổng mối hàn</th>
+                <th className="px-3.5 py-3 text-right">Số ngày</th>
+                <th className="min-w-[190px] px-3.5 py-3">Thời gian dự án</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
-                <th className="px-3.5 py-3">Ngày bắt đầu</th>
                 <th className="w-12 px-2 py-3" aria-label="Thao tác" />
               </tr>
             </thead>
@@ -1304,20 +1329,26 @@ export default function ProjectManagement() {
               {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-semibold text-slate-900">{p.name}</td>
+                  <td className="px-3.5 py-3 font-mono text-xs text-slate-700">
+                    {p.routeFrom} → {p.routeTo}
+                  </td>
                   <td className="px-3.5 py-3 text-slate-700">{p.manager}</td>
                   <td className="px-3.5 py-3 text-slate-700">{p.plant}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.staffCount}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.machineCount}</td>
                   <td className="px-3.5 py-3 text-right font-semibold font-mono tabular-nums text-[#0047AB]">
-                    {sumTheoreticalWelds(p).toLocaleString("vi-VN")}
+                    {p.plannedWeldCount.toLocaleString("vi-VN")}
+                  </td>
+                  <td className="px-3.5 py-3 text-right font-mono font-semibold text-slate-900">
+                    {projectDurationDays(p.startDate, p.endDate)}
+                  </td>
+                  <td className="px-3.5 py-3 font-mono text-xs text-slate-700 whitespace-nowrap">
+                    {viDate(p.startDate)} → {viDate(p.endDate)}
                   </td>
                   <td className="px-3.5 py-3">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[p.status]}`}>
                       {p.status}
                     </span>
-                  </td>
-                  <td className="px-3.5 py-3 text-slate-700 font-mono whitespace-nowrap">
-                    {new Date(p.startDate + "T00:00:00").toLocaleDateString("vi-VN")}
                   </td>
                   <td className="relative px-2 py-3">
                     <button
@@ -1364,7 +1395,7 @@ export default function ProjectManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy dự án phù hợp</div>
                   </td>
                 </tr>
@@ -1388,7 +1419,6 @@ export default function ProjectManagement() {
                 ? handleCreate
                 : undefined
           }
-          onSaveProgress={modal.mode === "edit" ? handleSaveProgress : undefined}
           onSavePersonnel={modal.mode === "edit" ? handleSavePersonnel : undefined}
           onSaveWork={modal.mode === "edit" ? handleSaveWork : undefined}
           onStartEdit={() => setModal((m) => (m ? { ...m, mode: "edit" } : null))}

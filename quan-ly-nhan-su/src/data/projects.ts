@@ -15,6 +15,10 @@ export type Project = {
   machineCount: number;
   status: "Đang triển khai" | "Hoàn thành" | "Tạm dừng";
   startDate: string;
+  endDate: string;
+  routeFrom: string;
+  routeTo: string;
+  plannedWeldCount: number;
   personnelIds: string[];
   machineTypes: string[];
   weldTypes: string[];
@@ -37,6 +41,10 @@ export const projects: Project[] = [
     machineCount: 6,
     status: "Đang triển khai",
     startDate: "2024-01-15",
+    endDate: "2024-02-13",
+    routeFrom: "Km 0+000",
+    routeTo: "Km 15+000",
+    plannedWeldCount: 600,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
@@ -50,6 +58,10 @@ export const projects: Project[] = [
     machineCount: 4,
     status: "Đang triển khai",
     startDate: "2024-02-01",
+    endDate: "2024-02-20",
+    routeFrom: "Km 791+500",
+    routeTo: "Km 804+000",
+    plannedWeldCount: 320,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
@@ -63,6 +75,10 @@ export const projects: Project[] = [
     machineCount: 8,
     status: "Đang triển khai",
     startDate: "2023-11-20",
+    endDate: "2023-12-19",
+    routeFrom: "Km 450+000",
+    routeTo: "Km 472+500",
+    plannedWeldCount: 900,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
@@ -76,6 +92,10 @@ export const projects: Project[] = [
     machineCount: 3,
     status: "Đang triển khai",
     startDate: "2024-03-10",
+    endDate: "2024-03-24",
+    routeFrom: "Km 5+200",
+    routeTo: "Km 11+800",
+    plannedWeldCount: 225,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
@@ -89,6 +109,10 @@ export const projects: Project[] = [
     machineCount: 5,
     status: "Tạm dừng",
     startDate: "2023-09-05",
+    endDate: "2023-10-04",
+    routeFrom: "Km 0+000",
+    routeTo: "Km 19+700",
+    plannedWeldCount: 720,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],

@@ -18,12 +18,18 @@ export type DuAnRow = {
   ma_du_an: string | null;
   du_an: string;
   nguoi_phu_trach: string | null;
+  ly_trinh_tu?: string | null;
+  ly_trinh_den?: string | null;
+  ngay_bat_dau?: string | null;
+  ngay_ket_thuc?: string | null;
+  tong_moi_han_du_kien?: number | null;
   tien_do_ly_thuyet: unknown;
   created_at: string;
   updated_at: string;
 };
 
-const DU_AN_COLUMNS = "id,ma_du_an,du_an,nguoi_phu_trach,tien_do_ly_thuyet,created_at,updated_at";
+const DU_AN_COLUMNS_BASE = "id,ma_du_an,du_an,nguoi_phu_trach,tien_do_ly_thuyet,created_at,updated_at";
+const DU_AN_COLUMNS = `${DU_AN_COLUMNS_BASE},ly_trinh_tu,ly_trinh_den,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
 
 let projectsPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
   null;
@@ -50,7 +56,67 @@ export function normalizeTheoreticalProgress(raw: unknown): TheoreticalProgressR
     .sort((a, b) => a.ngay.localeCompare(b.ngay));
 }
 
+export function projectDurationDays(startDate: string, endDate: string): number {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start) return 0;
+  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function toIsoDateLocal(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Chia đều tổng mối hàn theo số ngày; phần dư được cộng từ ngày đầu tiên. */
+export function buildDailyWeldPlan(
+  totalWelds: number,
+  startDate: string,
+  endDate: string,
+): TheoreticalProgressRow[] {
+  const days = projectDurationDays(startDate, endDate);
+  const total = Math.max(0, Math.round(totalWelds || 0));
+  if (days <= 0 || total <= 0) return [];
+
+  const base = Math.floor(total / days);
+  const remainder = total % days;
+  const start = new Date(`${startDate}T00:00:00`);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + index);
+    return {
+      ngay: toIsoDateLocal(date),
+      so_moi_han: base + (index < remainder ? 1 : 0),
+    };
+  });
+}
+
+function hydrateProjectPlan(project: Project): Project {
+  if (project.theoreticalProgress?.length) return project;
+  return {
+    ...project,
+    theoreticalProgress: buildDailyWeldPlan(
+      project.plannedWeldCount,
+      project.startDate,
+      project.endDate,
+    ),
+  };
+}
+
 export function duAnRowToProject(row: DuAnRow): Project {
+  const existingProgress = normalizeTheoreticalProgress(row.tien_do_ly_thuyet);
+  const startDate = row.ngay_bat_dau?.slice(0, 10) || existingProgress[0]?.ngay || row.created_at.slice(0, 10);
+  const endDate = row.ngay_ket_thuc?.slice(0, 10) || existingProgress.at(-1)?.ngay || startDate;
+  const plannedWeldCount = Math.max(
+    0,
+    Math.round(
+      Number(row.tong_moi_han_du_kien) ||
+        existingProgress.reduce((sum, item) => sum + item.so_moi_han, 0),
+    ),
+  );
   return {
     id: row.id,
     name: row.du_an,
@@ -59,11 +125,18 @@ export function duAnRowToProject(row: DuAnRow): Project {
     staffCount: 0,
     machineCount: 0,
     status: "Đang triển khai",
-    startDate: row.created_at.slice(0, 10),
+    startDate,
+    endDate,
+    routeFrom: row.ly_trinh_tu?.trim() || "Chưa cập nhật",
+    routeTo: row.ly_trinh_den?.trim() || "Chưa cập nhật",
+    plannedWeldCount,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
-    theoreticalProgress: normalizeTheoreticalProgress(row.tien_do_ly_thuyet),
+    theoreticalProgress:
+      existingProgress.length > 0
+        ? existingProgress
+        : buildDailyWeldPlan(plannedWeldCount, startDate, endDate),
     maDuAn: row.ma_du_an ?? undefined,
   };
 }
@@ -101,17 +174,36 @@ export function invalidateProjectsCache() {
 
 async function fetchProjects() {
   if (!hasSupabaseEnv()) {
-    return { projects: seedProjects, source: "seed" as const, error: "Chưa cấu hình Supabase env" };
+    return {
+      projects: seedProjects.map(hydrateProjectPlan),
+      source: "seed" as const,
+      error: "Chưa cấu hình Supabase env",
+    };
   }
 
   const supabase = createClient();
-  const { data, error } = await supabase
+  const primaryResult = await supabase
     .from("du_an")
     .select(DU_AN_COLUMNS)
     .order("du_an", { ascending: true });
+  let data: unknown[] | null = primaryResult.data;
+  let error = primaryResult.error;
+
+  if (error && (error.message.includes("column") || error.code === "42703" || error.code === "PGRST204")) {
+    const fallback = await supabase
+      .from("du_an")
+      .select(DU_AN_COLUMNS_BASE)
+      .order("du_an", { ascending: true });
+    data = fallback.data as unknown[] | null;
+    error = fallback.error;
+  }
 
   if (error) {
-    return { projects: seedProjects, source: "seed" as const, error: error.message };
+    return {
+      projects: seedProjects.map(hydrateProjectPlan),
+      source: "seed" as const,
+      error: error.message,
+    };
   }
 
   if (!data?.length) {
@@ -147,6 +239,11 @@ export async function saveTheoreticalProgress(
 export async function insertDuAn(payload: {
   name: string;
   maDuAn?: string;
+  routeFrom: string;
+  routeTo: string;
+  startDate: string;
+  endDate: string;
+  plannedWeldCount: number;
 }): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
     return { error: "Chưa cấu hình Supabase env" };
@@ -161,7 +258,16 @@ export async function insertDuAn(payload: {
     .insert({
       du_an: name,
       ma_du_an: payload.maDuAn?.trim() || null,
-      tien_do_ly_thuyet: [],
+      ly_trinh_tu: payload.routeFrom.trim(),
+      ly_trinh_den: payload.routeTo.trim(),
+      ngay_bat_dau: payload.startDate,
+      ngay_ket_thuc: payload.endDate,
+      tong_moi_han_du_kien: Math.max(0, Math.round(payload.plannedWeldCount)),
+      tien_do_ly_thuyet: buildDailyWeldPlan(
+        payload.plannedWeldCount,
+        payload.startDate,
+        payload.endDate,
+      ),
     })
     .select(DU_AN_COLUMNS)
     .single();
@@ -173,14 +279,40 @@ export async function insertDuAn(payload: {
 
 export async function updateDuAn(
   projectId: string,
-  patch: { name?: string },
+  patch: {
+    name?: string;
+    routeFrom?: string;
+    routeTo?: string;
+    startDate?: string;
+    endDate?: string;
+    plannedWeldCount?: number;
+  },
 ): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
     return { error: "Chưa cấu hình Supabase env" };
   }
 
-  const body: Record<string, string> = {};
+  const body: Record<string, string | number | TheoreticalProgressRow[]> = {};
   if (patch.name !== undefined) body.du_an = patch.name.trim();
+  if (patch.routeFrom !== undefined) body.ly_trinh_tu = patch.routeFrom.trim();
+  if (patch.routeTo !== undefined) body.ly_trinh_den = patch.routeTo.trim();
+  if (patch.startDate !== undefined) body.ngay_bat_dau = patch.startDate;
+  if (patch.endDate !== undefined) body.ngay_ket_thuc = patch.endDate;
+  if (patch.plannedWeldCount !== undefined) {
+    body.tong_moi_han_du_kien = Math.max(0, Math.round(patch.plannedWeldCount));
+  }
+
+  if (
+    patch.startDate !== undefined &&
+    patch.endDate !== undefined &&
+    patch.plannedWeldCount !== undefined
+  ) {
+    body.tien_do_ly_thuyet = buildDailyWeldPlan(
+      patch.plannedWeldCount,
+      patch.startDate,
+      patch.endDate,
+    );
+  }
 
   if (Object.keys(body).length === 0) {
     return { error: "Không có thay đổi để lưu" };

@@ -53,6 +53,7 @@ create table if not exists public.lich_su_moi_han (
   ma_lich_su            text not null,
   du_an_id              uuid not null references public.du_an (id) on delete restrict,
   nam_thuc_hien         smallint not null,
+  ngay_thuc_hien        date,
   loai_ray              text not null,
   loai_moi_han          text not null,
   cong_nghe_han         text not null,
@@ -90,9 +91,13 @@ comment on column public.lich_su_moi_han.so_luong_loi is
   'Số mối lỗi nằm trong tổng số lượng thực hiện';
 comment on column public.lich_su_moi_han.chung_chi_su_dung is
   'Chứng chỉ của nhân sự được dùng để đáp ứng chuẩn mối hàn';
+comment on column public.lich_su_moi_han.ngay_thuc_hien is
+  'Ngày thực hiện thực tế; dữ liệu lịch sử cũ có thể để trống khi nguồn không cung cấp ngày';
 
 create index if not exists idx_lich_su_moi_han_nam
   on public.lich_su_moi_han (nam_thuc_hien);
+create index if not exists idx_lich_su_moi_han_ngay
+  on public.lich_su_moi_han (ngay_thuc_hien desc);
 create index if not exists idx_lich_su_moi_han_du_an_nam
   on public.lich_su_moi_han (du_an_id, nam_thuc_hien);
 create index if not exists idx_lich_su_moi_han_tho_han_nam
@@ -191,7 +196,8 @@ select
   ls.dong_nguon,
   ls.ghi_chu,
   ns.chung_chi as chung_chi_nhan_su,
-  ls.chung_chi_su_dung
+  ls.chung_chi_su_dung,
+  ls.ngay_thuc_hien
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id;

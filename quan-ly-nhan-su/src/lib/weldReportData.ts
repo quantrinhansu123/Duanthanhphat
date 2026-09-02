@@ -20,6 +20,7 @@ export type WeldReportRow = {
   ma_du_an: string;
   du_an: string;
   nam_thuc_hien: number;
+  ngay_thuc_hien?: string | null;
   loai_ray: string;
   loai_moi_han: "Sản xuất" | "Thử nghiệm" | "Đào tạo";
   cong_nghe_han: "FBW" | "ATW";
@@ -102,6 +103,10 @@ const REPORT_COLUMNS_WITH_CERTIFICATE = [
   "chung_chi_nhan_su",
   "chung_chi_su_dung",
 ] as const;
+const REPORT_COLUMNS_WITH_DATE = [
+  ...REPORT_COLUMNS_WITH_CERTIFICATE,
+  "ngay_thuc_hien",
+] as const;
 
 let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
 
@@ -114,6 +119,7 @@ export type WeldJournalInsert = {
   du_an_id: string;
   tho_han_id: string;
   nam_thuc_hien: number;
+  ngay_thuc_hien: string;
   loai_ray: string;
   loai_moi_han: WeldReportRow["loai_moi_han"];
   cong_nghe_han: WeldReportRow["cong_nghe_han"];
@@ -132,6 +138,7 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
     du_an_id: payload.du_an_id,
     tho_han_id: payload.tho_han_id,
     nam_thuc_hien: payload.nam_thuc_hien,
+    ngay_thuc_hien: payload.ngay_thuc_hien,
     loai_ray: payload.loai_ray.trim(),
     loai_moi_han: payload.loai_moi_han,
     cong_nghe_han: payload.cong_nghe_han,
@@ -158,6 +165,7 @@ export function uniqueProjectOptions(rows: WeldReportRow[]) {
 }
 
 export function getJournalRowDateIso(row: WeldReportRow, index = 0): string {
+  if (row.ngay_thuc_hien) return row.ngay_thuc_hien.slice(0, 10);
   const sequence = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? index + 1);
   const day = String(((sequence * 7) % 28) + 1).padStart(2, "0");
   const month = String(((sequence * 5) % 12) + 1).padStart(2, "0");
@@ -232,7 +240,7 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE);
       } catch (firstError) {
         const message = formatSupabaseError(firstError);
         const missingOptionalColumn =
@@ -242,20 +250,25 @@ export function loadWeldReportRows() {
           message.includes("to_han") ||
           message.includes("chung_chi_nhan_su") ||
           message.includes("chung_chi_su_dung") ||
+          message.includes("ngay_thuc_hien") ||
           message.includes("moi_han_lien_ket") ||
           message.includes("column") ||
           message.includes("42703");
         if (!missingOptionalColumn) throw firstError;
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
         } catch {
           try {
-            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
+            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
           } catch {
             try {
-              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
             } catch {
-              return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+              try {
+                return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+              } catch {
+                return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+              }
             }
           }
         }
@@ -274,11 +287,10 @@ export function machineForRow(row: WeldReportRow): string {
 }
 
 export function filterWeldReportRows(rows: WeldReportRow[], filters: WeldReportFilters) {
-  const fromYear = filters.dateFrom ? Number(filters.dateFrom.slice(0, 4)) : 0;
-  const toYear = filters.dateTo ? Number(filters.dateTo.slice(0, 4)) : 9999;
-
-  return rows.filter((row) => {
-    if (row.nam_thuc_hien < fromYear || row.nam_thuc_hien > toYear) return false;
+  return rows.filter((row, index) => {
+    const performedDate = getJournalRowDateIso(row, index);
+    if (filters.dateFrom && performedDate < filters.dateFrom) return false;
+    if (filters.dateTo && performedDate > filters.dateTo) return false;
     if (filters.projects?.length && !filters.projects.includes(row.du_an)) return false;
     if (filters.personnel?.length && !filters.personnel.includes(row.ten_tho_han)) return false;
     if (filters.machines?.length && !filters.machines.includes(machineForRow(row))) return false;
@@ -513,7 +525,7 @@ export function resolveChartDateRange(
   };
 }
 
-/** Đếm bản ghi nhật ký theo ngày (ngày suy từ mã lịch sử, giống /nhat-ky-han). */
+/** Tổng hợp theo ngày thực hiện thật; dữ liệu cũ thiếu ngày dùng mốc suy từ mã lịch sử. */
 export function buildDailyJournalSeries(
   rows: WeldReportRow[],
   dateFrom: string,
@@ -527,7 +539,7 @@ export function buildDailyJournalSeries(
   rows.forEach((row, index) => {
     const iso = getJournalRowDateIso(row, index);
     if (iso >= dateFrom && iso <= dateTo) {
-      counts.set(iso, (counts.get(iso) ?? 0) + 1);
+      counts.set(iso, (counts.get(iso) ?? 0) + row.so_luong_thuc_hien);
     }
   });
 

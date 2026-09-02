@@ -37,14 +37,23 @@ create table if not exists public.du_an (
   id                uuid primary key default gen_random_uuid(),
   du_an             text not null,         -- tên dự án
   nguoi_phu_trach   uuid references public.nhan_su (employee_id) on delete set null,
+  ly_trinh_tu       text not null default 'Chưa cập nhật',
+  ly_trinh_den      text not null default 'Chưa cập nhật',
+  ngay_bat_dau      date not null default current_date,
+  ngay_ket_thuc     date not null default current_date,
+  tong_moi_han_du_kien integer not null default 0,
+  tien_do_ly_thuyet jsonb not null default '[]'::jsonb,
   created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
+  updated_at        timestamptz not null default now(),
+  constraint du_an_thoi_gian_check check (ngay_ket_thuc >= ngay_bat_dau),
+  constraint du_an_tong_moi_han_check check (tong_moi_han_du_kien >= 0),
+  constraint du_an_tien_do_ly_thuyet_array_check check (jsonb_typeof(tien_do_ly_thuyet) = 'array')
 );
 
 comment on table public.du_an is 'Danh sách dự án';
 
--- Tiến độ lý thuyết theo ngày (bảng con JSONB): [{ "ngay", "so_moi_han" }]
--- Migration đầy đủ: supabase/du_an_tien_do_ly_thuyet.sql
+-- Trigger tự chia tổng mối hàn cho từng ngày nằm trong:
+-- supabase/du_an_tien_do_ly_thuyet.sql
 
 -- ------------------------------------------------------------
 -- 3. THIẾT BỊ

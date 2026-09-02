@@ -6,6 +6,7 @@ import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
+import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
 import {
   filterWeldReportRows,
   formatJournalDateIso,
@@ -468,6 +469,7 @@ export default function WeldingJournalList() {
   const [toast, setToast] = useState("");
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
+  const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -483,8 +485,23 @@ export default function WeldingJournalList() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    loadPersonnelCertificateOptions()
+      .then((options) => {
+        if (active) setPersonnelWelderOptions(options);
+      })
+      .catch(() => {
+        if (active) setPersonnelWelderOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const projectOptions = useMemo(() => uniqueProjectOptions(rows), [rows]);
-  const welderOptions = useMemo(() => uniqueWelderOptions(rows), [rows]);
+  const reportWelderOptions = useMemo(() => uniqueWelderOptions(rows), [rows]);
+  const welderOptions = personnelWelderOptions.length > 0 ? personnelWelderOptions : reportWelderOptions;
 
   const projects = useMemo(
     () => ["Tất cả dự án", ...uniqueReportValues(rows, "du_an")],
@@ -571,6 +588,7 @@ export default function WeldingJournalList() {
         du_an_id: values.du_an_id,
         tho_han_id: values.tho_han_id,
         nam_thuc_hien: year,
+        ngay_thuc_hien: values.performedAt.slice(0, 10),
         loai_ray: values.loai_ray,
         loai_moi_han: values.loai_moi_han,
         cong_nghe_han: values.cong_nghe_han,
