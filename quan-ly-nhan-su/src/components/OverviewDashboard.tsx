@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarBlank,
+  CalendarCheck,
+  ChartBar,
+  ChartLineUp,
+  CheckCircle,
+  XCircle,
+} from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {

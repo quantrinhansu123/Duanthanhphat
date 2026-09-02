@@ -2,6 +2,15 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import {
+  ChartLineUp,
+  Clock,
+  FileText,
+  GearSix,
+  ShieldCheck,
+  Warning,
+  Wrench,
+} from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {

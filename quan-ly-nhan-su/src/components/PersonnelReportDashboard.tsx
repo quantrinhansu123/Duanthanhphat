@@ -2,6 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Certificate,
+  ClipboardText,
+  GraduationCap,
+  MagnifyingGlass,
+  ShieldCheck,
+  Star,
+  Train,
+  Users,
+  Warning,
+} from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {

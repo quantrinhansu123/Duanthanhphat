@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
 import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
 import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { type Project, type TheoreticalProgressRow } from "@/data/projects";
