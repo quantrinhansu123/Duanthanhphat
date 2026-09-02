@@ -33,6 +33,7 @@ export type WeldReportRow = {
   may_id?: string | null;
   ma_may?: string | null;
   ten_may?: string | null;
+  to_han?: string | null;
 };
 
 export type WeldReportFilters = {
@@ -92,6 +93,7 @@ const REPORT_COLUMNS_WITH_MACHINE = [
   "ma_may",
   "ten_may",
 ] as const;
+const REPORT_COLUMNS_WITH_TEAM = [...REPORT_COLUMNS_WITH_MACHINE, "to_han"] as const;
 
 let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
 
@@ -206,21 +208,26 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
       } catch (firstError) {
         const message = formatSupabaseError(firstError);
         const missingOptionalColumn =
           message.includes("may_id") ||
           message.includes("ma_may") ||
           message.includes("ten_may") ||
+          message.includes("to_han") ||
           message.includes("moi_han_lien_ket") ||
           message.includes("column") ||
           message.includes("42703");
         if (!missingOptionalColumn) throw firstError;
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
         } catch {
-          return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+          try {
+            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+          } catch {
+            return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+          }
         }
       }
     })().catch((error) => {

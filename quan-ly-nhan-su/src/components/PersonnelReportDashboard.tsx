@@ -108,9 +108,18 @@ export default function PersonnelReportDashboard() {
   const { appliedFilters } = useReportFilters();
   const [selectedCert, setSelectedCert] = useState<string | null>(null);
   const [certModalTab, setCertModalTab] = useState<"info" | "holders">("info");
-  const selectedRows = useMemo(
+  const [teamFilter, setTeamFilter] = useState("Tất cả tổ hàn");
+  const baseRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
     [rows, appliedFilters],
+  );
+  const teams = useMemo(
+    () => Array.from(new Set(baseRows.map((row) => row.to_han?.trim() || "Chưa phân tổ"))).sort((a, b) => a.localeCompare(b, "vi")),
+    [baseRows],
+  );
+  const selectedRows = useMemo(
+    () => baseRows.filter((row) => teamFilter === "Tất cả tổ hàn" || (row.to_han?.trim() || "Chưa phân tổ") === teamFilter),
+    [baseRows, teamFilter],
   );
   const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
   const welders = useMemo(
@@ -127,7 +136,7 @@ export default function PersonnelReportDashboard() {
     return {
       name: welder.name,
       photo: `https://randomuser.me/api/portraits/men/${PORTRAIT_IDS[index % PORTRAIT_IDS.length]}.jpg`,
-      meta: `${machine} · ${source.ma_nhan_su} · ${source.loai_ray}`,
+      meta: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machine} · ${source.ma_nhan_su}`,
       status: welder.errors > 0 ? "Cần theo dõi" : "Đạt chuẩn",
       statusBg: welder.errors > 0
         ? "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]"
@@ -141,7 +150,7 @@ export default function PersonnelReportDashboard() {
     const passRate = welder.total > 0 ? ((welder.passed / welder.total) * 100) : 0;
     return {
       name: welder.name,
-      teamMachine: `${source.ma_nhan_su} · ${machineForRow(source)}`,
+      teamMachine: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machineForRow(source)}`,
       welds: welder.total.toLocaleString("vi-VN"),
       today: (summary.total > 0 ? Math.round(today * (welder.total / summary.total)) : 0).toLocaleString("vi-VN"),
       passRate: `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`,
@@ -181,6 +190,20 @@ export default function PersonnelReportDashboard() {
           : loading
             ? "Đang tải dữ liệu Supabase…"
             : `Supabase · ${welders.length} thợ hàn · Sản lượng ngày và ca trực là mô phỏng`}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Kiểm soát theo tổ</div>
+          <div className="mt-0.5 text-sm font-semibold text-slate-900">Sản lượng và chất lượng thợ hàn theo tổ</div>
+        </div>
+        <select
+          value={teamFilter}
+          onChange={(event) => setTeamFilter(event.target.value)}
+          className="h-10 min-w-[180px] rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
+        >
+          <option>Tất cả tổ hàn</option>
+          {teams.map((team) => <option key={team}>{team}</option>)}
+        </select>
       </div>
       {/* 1. Top 3 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">

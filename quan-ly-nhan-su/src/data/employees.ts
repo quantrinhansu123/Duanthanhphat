@@ -6,6 +6,7 @@ export type Employee = {
   username: string;
   department: string;
   position: string;
+  weldingTeam: string;
   role: string;
   status: "Hoạt động" | "Khóa";
   photo: string;
@@ -20,6 +21,7 @@ export const employees: Employee[] = [
     username: "thao",
     department: "Phòng Công nghệ thông tin",
     position: "Kiểm thử viên",
+    weldingTeam: "Không áp dụng",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/44.jpg",
@@ -32,6 +34,7 @@ export const employees: Employee[] = [
     username: "tiep",
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
+    weldingTeam: "Không áp dụng",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/32.jpg",
@@ -44,6 +47,7 @@ export const employees: Employee[] = [
     username: "tai",
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
+    weldingTeam: "Không áp dụng",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/75.jpg",
@@ -56,6 +60,7 @@ export const employees: Employee[] = [
     username: "cong",
     department: "Phòng Công nghệ thông tin",
     position: "Lập trình viên",
+    weldingTeam: "Không áp dụng",
     role: "Quản trị",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/11.jpg",
@@ -68,6 +73,7 @@ export const employees: Employee[] = [
     username: "kimanh",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 1",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/65.jpg",
@@ -80,6 +86,7 @@ export const employees: Employee[] = [
     username: "minh",
     department: "Phòng Sản xuất",
     position: "Tổ trưởng",
+    weldingTeam: "Tổ hàn 1",
     role: "Quản trị",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/men/52.jpg",
@@ -92,6 +99,7 @@ export const employees: Employee[] = [
     username: "mai",
     department: "Phòng Nhân sự",
     position: "Chuyên viên nhân sự",
+    weldingTeam: "Không áp dụng",
     role: "Nhân viên",
     status: "Hoạt động",
     photo: "https://randomuser.me/api/portraits/women/68.jpg",

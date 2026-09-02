@@ -118,7 +118,7 @@ export default function GlobalReportFilterBar() {
   return (
     <div className="shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur-md z-20">
       <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-2">
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        <div className={`${filtersOpen ? "overflow-visible" : "overflow-hidden"} rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
@@ -211,7 +211,7 @@ export default function GlobalReportFilterBar() {
                   </svg>
                 </button>
                 {projectFilterOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                     <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                       <input type="checkbox" checked={projects.length === 0 || projects.length === PROJECTS.length} onChange={() => setProjects([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                       <span className="truncate">Tất cả</span>
@@ -245,7 +245,7 @@ export default function GlobalReportFilterBar() {
                   </svg>
                 </button>
                 {personnelFilterOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                     <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                       <input type="checkbox" checked={personnel.length === 0 || personnel.length === PERSONNEL.length} onChange={() => setPersonnel([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                       <span className="truncate">Tất cả</span>
@@ -279,7 +279,7 @@ export default function GlobalReportFilterBar() {
                   </svg>
                 </button>
                 {machineFilterOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                     <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                       <input type="checkbox" checked={machines.length === 0 || machines.length === MACHINES.length} onChange={() => setMachines([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                       <span className="truncate">Tất cả</span>
@@ -316,7 +316,7 @@ export default function GlobalReportFilterBar() {
                 </svg>
               </button>
               {methodFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                   <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                     <input type="checkbox" checked={methods.length === 0 || methods.length === WELD_METHODS.length} onChange={() => setMethods([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                     <span className="truncate">Tất cả</span>
@@ -350,7 +350,7 @@ export default function GlobalReportFilterBar() {
                 </svg>
               </button>
               {weldTypeFilterOpen && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                   <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                     <input type="checkbox" checked={weldTypes.length === 0 || weldTypes.length === WELD_TYPES.length} onChange={() => setWeldTypes([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                     <span className="truncate">Tất cả</span>

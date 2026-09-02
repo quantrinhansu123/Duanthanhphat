@@ -27,7 +27,7 @@ export const navigation: NavItem[] = [
       {
         id: "ho-so-tho-han",
         label: "Hồ sơ thợ hàn",
-        description: "Welding ID, hạng, loại ray được phép hàn, máy đã đào tạo, kinh nghiệm",
+        description: "Welding ID, tổ hàn, hạng, loại ray được phép hàn, máy đã đào tạo, kinh nghiệm",
       },
       {
         id: "lich-su-han",
@@ -68,7 +68,7 @@ export const navigation: NavItem[] = [
       {
         id: "danh-sach-may",
         label: "Danh sách máy hàn",
-        description: "Mã máy, model, nhà máy, trạng thái, khả dụng, số mối hàn",
+        description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",
       },
       {
         id: "quan-ly-khay-han",
@@ -124,7 +124,7 @@ export const navigation: NavItem[] = [
       {
         id: "quan-ly-may-han",
         label: "Quản lý Máy Hàn",
-        description: "Mã máy, model, nhà máy, trạng thái, khả dụng và số mối hàn",
+        description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",
       },
       {
         id: "ban-do",

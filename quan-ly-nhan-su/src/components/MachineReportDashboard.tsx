@@ -22,7 +22,6 @@ import {
   filterWeldReportRows,
   groupWeldRows,
   machineForRow,
-  REPORT_MACHINES,
 } from "@/lib/weldReportData";
 
 const MACHINES_RECOMMENDED = [
@@ -89,12 +88,38 @@ const CALIBRATION_DOCS = [
   },
 ];
 
+type MachineStatus = "Đang làm việc" | "Sẵn sàng" | "Bảo trì" | "Hỏng";
+type MachineStatusFilter = "Tất cả máy" | "Cần bảo trì" | MachineStatus;
+
+const MACHINE_STATUS_OPTIONS: MachineStatusFilter[] = [
+  "Tất cả máy",
+  "Cần bảo trì",
+  "Đang làm việc",
+  "Sẵn sàng",
+  "Bảo trì",
+  "Hỏng",
+];
+
+const MACHINE_STATUS_STYLES: Record<MachineStatus, string> = {
+  "Đang làm việc": "border-blue-200 bg-blue-50 text-[#0047AB]",
+  "Sẵn sàng": "border-emerald-200 bg-emerald-50 text-emerald-700",
+  "Bảo trì": "border-amber-200 bg-amber-50 text-amber-700",
+  "Hỏng": "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+function normalizeMachineStatus(status: string): MachineStatus {
+  if (status === "Đang làm việc" || status === "Bảo trì" || status === "Hỏng") return status;
+  if (status === "Hoạt động") return "Đang làm việc";
+  return "Sẵn sàng";
+}
+
 export default function MachineReportDashboard() {
   const { rows, loading, error } = useWeldReportData();
   const { appliedFilters } = useReportFilters();
   const [activeSlide, setActiveSlide] = useState(0);
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
   const [machineSummaryError, setMachineSummaryError] = useState("");
+  const [machineStatusFilter, setMachineStatusFilter] = useState<MachineStatusFilter>("Tất cả máy");
 
   useEffect(() => {
     let active = true;
@@ -114,15 +139,11 @@ export default function MachineReportDashboard() {
     [rows, appliedFilters],
   );
   const machineStats = useMemo(() => {
-    const grouped = new Map(groupWeldRows(selectedRows, machineForRow).map((group) => [group.name, group]));
-    return REPORT_MACHINES.map((code) => {
-      const group = grouped.get(code);
-      return {
-        code,
-        total: group?.total ?? 0,
-        errors: group?.errors ?? 0,
-      };
-    });
+    return groupWeldRows(selectedRows, machineForRow).map((group) => ({
+      code: group.name,
+      total: group.total,
+      errors: group.errors,
+    }));
   }, [selectedRows]);
   const machineSummaryByCode = new Map<string, MachineReportSummary>(
     machineSummary.map((item) => [item.machineCode, item]),
@@ -135,34 +156,46 @@ export default function MachineReportDashboard() {
     welds: `${(machineStatsByCode.get(machine.code)?.total ?? 0).toLocaleString("vi-VN")} mối`,
     hoursSinceMaint: `${(machineSummaryByCode.get(machine.code)?.operatingHours ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 })} h`,
   }));
-  const machinePerformance = machineCatalog.map((machine) => {
-    const stat = machineStatsByCode.get(machine.code);
-    const report = machineSummaryByCode.get(machine.code);
+  const machineCatalogByCode = new Map(machineCatalog.map((machine) => [machine.code, machine]));
+  const machineCodes = Array.from(new Set([
+    ...machineCatalog.map((machine) => machine.code),
+    ...machineSummary.map((machine) => machine.machineCode),
+  ]));
+  const machinePerformance = machineCodes.map((code) => {
+    const machine = machineCatalogByCode.get(code);
+    const stat = machineStatsByCode.get(code);
+    const report = machineSummaryByCode.get(code);
     const errorRate = stat?.total ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) : "0";
-    const status = report?.status ?? machine.status;
-    const avail = status === "Hoạt động" ? 100 : status === "Bảo trì" ? 50 : 0;
+    const status = normalizeMachineStatus(report?.status ?? machine?.status ?? "Sẵn sàng");
+    const avail = status === "Đang làm việc" || status === "Sẵn sàng" ? 100 : 0;
+    const operatingHours = report?.operatingHours ?? 0;
     return {
-      code: machine.code,
-      plant: machine.plant,
+      code,
+      name: report?.machineName ?? machine?.name ?? code,
+      location: report?.location || machine?.location || "Chưa cập nhật",
       welds: (stat?.total ?? 0).toLocaleString("vi-VN"),
-      hours: (report?.operatingHours ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
+      operatingHours,
+      hours: operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
       errorRate: `${errorRate}%`,
+      status,
       avail,
-      availColor: avail >= 80 ? "bg-[#16a34a]" : avail > 0 ? "bg-[#f59e0b]" : "bg-slate-300",
     };
   });
-  const operatingMachines = machineSummary.length > 0
-    ? machineSummary.filter((machine) => machine.status === "Hoạt động").length
-    : machineStats.filter((machine) => machine.total > 0).length;
+  const filteredMachinePerformance = machinePerformance.filter((machine) => {
+    if (machineStatusFilter === "Tất cả máy") return true;
+    if (machineStatusFilter === "Cần bảo trì") return machine.status === "Bảo trì" || machine.status === "Hỏng";
+    return machine.status === machineStatusFilter;
+  });
+  const maxOperatingHours = Math.max(...filteredMachinePerformance.map((machine) => machine.operatingHours), 1);
+  const operatingMachines = machinePerformance.filter((machine) => machine.status === "Đang làm việc").length;
+  const readyMachines = machinePerformance.filter((machine) => machine.status === "Sẵn sàng").length;
   const totalOperatingHours = machineSummary.reduce((total, machine) => total + machine.operatingHours, 0);
   const averageAvailability = machinePerformance.length > 0
     ? machinePerformance.reduce((total, machine) => total + machine.avail, 0) / machinePerformance.length
     : 0;
   const dataError = error || machineSummaryError;
-  const maintenanceDue = (machineSummary.length > 0 ? machineSummary : machineCatalog)
-    .filter((machine) => machine.status === "Bảo trì" || machine.status === "Hỏng").length;
-  const highPriorityMaintenance = (machineSummary.length > 0 ? machineSummary : machineCatalog)
-    .filter((machine) => machine.status === "Hỏng").length;
+  const maintenanceDue = machinePerformance.filter((machine) => machine.status === "Bảo trì" || machine.status === "Hỏng").length;
+  const highPriorityMaintenance = machinePerformance.filter((machine) => machine.status === "Hỏng").length;
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
@@ -330,23 +363,77 @@ export default function MachineReportDashboard() {
             </div>
           </div>
 
+          {/* Card: Biểu đồ giờ chạy máy */}
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+                  Biểu đồ giờ chạy máy
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Tổng hợp tự động từ các dòng lịch chạy máy
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                Bộ lọc bảo trì máy
+                <select
+                  value={machineStatusFilter}
+                  onChange={(event) => setMachineStatusFilter(event.target.value as MachineStatusFilter)}
+                  className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 outline-hidden transition-colors hover:border-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                >
+                  {MACHINE_STATUS_OPTIONS.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {filteredMachinePerformance.map((machine) => (
+                <div key={machine.code} className="grid grid-cols-[84px_minmax(0,1fr)_64px] items-center gap-3">
+                  <div className="truncate font-mono text-xs font-bold text-[#0047AB]" title={machine.name}>
+                    {machine.code}
+                  </div>
+                  <div className="h-7 overflow-hidden rounded-md bg-slate-100">
+                    <div
+                      className="h-full min-w-0 rounded-md bg-[#0047AB] transition-all"
+                      style={{ width: machine.operatingHours > 0 ? `${Math.max((machine.operatingHours / maxOperatingHours) * 100, 5)}%` : "0%" }}
+                      title={`${machine.code}: ${machine.hours} giờ`}
+                    />
+                  </div>
+                  <div className="text-right font-mono text-xs font-bold tabular-nums text-slate-800">
+                    {machine.hours} giờ
+                  </div>
+                </div>
+              ))}
+              {filteredMachinePerformance.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-xs text-slate-500">
+                  Không có máy phù hợp với bộ lọc.
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Card: Hiệu suất theo máy */}
           <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
-            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              Hiệu suất theo máy
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+                Hiệu suất theo máy
+              </div>
+              <span className="text-xs font-medium text-slate-500">{filteredMachinePerformance.length} máy</span>
             </div>
             <div className="table-scroll overflow-x-auto mt-3.5">
-              <div className="min-w-[520px]">
+              <div className="min-w-[660px]">
                 <div className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <div>Máy</div>
-                  <div>Nhà máy</div>
+                  <div>Vị trí hiện tại</div>
                   <div>Mối hàn</div>
                   <div>Giờ chạy</div>
                   <div>Tỷ lệ lỗi</div>
-                  <div className="text-right">Khả dụng</div>
+                  <div className="text-right">Trạng thái</div>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {machinePerformance.map((m) => (
+                  {filteredMachinePerformance.map((m) => (
                     <div
                       key={m.code}
                       className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
@@ -354,19 +441,13 @@ export default function MachineReportDashboard() {
                       <div className="font-semibold text-[#0047AB] font-mono">
                         {m.code}
                       </div>
-                      <div>{m.plant}</div>
+                      <div className="truncate" title={m.location}>{m.location}</div>
                       <div className="font-mono tabular-nums">{m.welds}</div>
                       <div className="font-mono tabular-nums">{m.hours}</div>
                       <div className="font-mono tabular-nums">{m.errorRate}</div>
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-[62px] rounded-full bg-slate-100 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${m.availColor}`}
-                            style={{ width: `${m.avail}%` }}
-                          />
-                        </div>
-                        <span className="w-[30px] text-right text-xs font-mono font-semibold tabular-nums">
-                          {m.avail}%
+                      <div className="text-right">
+                        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${MACHINE_STATUS_STYLES[m.status]}`}>
+                          {m.status}
                         </span>
                       </div>
                     </div>
@@ -455,8 +536,8 @@ export default function MachineReportDashboard() {
                   <Warning size={18} weight="fill" aria-hidden />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 font-medium">Số lần dừng máy</div>
-                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-slate-900">6 lần</div>
+                  <div className="text-xs text-slate-500 font-medium">Máy sẵn sàng phân công</div>
+                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-slate-900">{readyMachines} máy</div>
                 </div>
               </div>
 
@@ -468,7 +549,7 @@ export default function MachineReportDashboard() {
                   <div className="text-xs text-slate-500 font-medium">
                     Sắp đến hạn bảo trì
                   </div>
-                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-rose-700">3 máy</div>
+                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-rose-700">{maintenanceDue} máy</div>
                 </div>
               </div>
             </div>

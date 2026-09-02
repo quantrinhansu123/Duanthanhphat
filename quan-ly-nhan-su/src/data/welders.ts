@@ -5,6 +5,7 @@ export type Welder = {
   email: string;
   department: string;
   position: string;
+  weldingTeam: string;
   rank: string;
   railTypes: string;
   trainedMachines: string;
@@ -21,6 +22,7 @@ export const welders: Welder[] = [
     email: "anhltk@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 1",
     rank: "Hạng 1",
     railTypes: "UIC60, P50",
     trainedMachines: "K920, AMS60",
@@ -35,6 +37,7 @@ export const welders: Welder[] = [
     email: "minhpv@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Tổ trưởng",
+    weldingTeam: "Tổ hàn 1",
     rank: "Hạng 2",
     railTypes: "UIC60, P43, P50",
     trainedMachines: "K920, K355, AMS60",
@@ -49,6 +52,7 @@ export const welders: Welder[] = [
     email: "hungnv@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 2",
     rank: "Hạng 1",
     railTypes: "UIC60",
     trainedMachines: "AMS60",
@@ -63,6 +67,7 @@ export const welders: Welder[] = [
     email: "baotq@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 2",
     rank: "Hạng 2",
     railTypes: "P50, P43",
     trainedMachines: "K920, K355",
@@ -77,6 +82,7 @@ export const welders: Welder[] = [
     email: "landt@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 3",
     rank: "Hạng 3",
     railTypes: "UIC60, P50, P43",
     trainedMachines: "K920, K355, AMS60, GEO",
@@ -91,6 +97,7 @@ export const welders: Welder[] = [
     email: "thangvd@thanhphat.vn",
     department: "Phòng Sản xuất",
     position: "Thợ hàn",
+    weldingTeam: "Tổ hàn 3",
     rank: "Hạng 1",
     railTypes: "P43",
     trainedMachines: "K355",

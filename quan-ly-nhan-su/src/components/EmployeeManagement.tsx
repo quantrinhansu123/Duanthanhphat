@@ -11,6 +11,7 @@ export default function EmployeeManagement() {
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("Tất cả phòng");
   const [position, setPosition] = useState("Tất cả chức vụ");
+  const [weldingTeam, setWeldingTeam] = useState("Tất cả tổ hàn");
   const [role, setRole] = useState("Tất cả vai trò");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [selected, setSelected] = useState<string[]>([]);
@@ -29,6 +30,10 @@ export default function EmployeeManagement() {
     () => ["Tất cả vai trò", ...Array.from(new Set(list.map((e) => e.role).filter(Boolean)))],
     [list],
   );
+  const weldingTeams = useMemo(
+    () => ["Tất cả tổ hàn", ...Array.from(new Set(list.map((e) => e.weldingTeam).filter(Boolean)))],
+    [list],
+  );
   const statuses = ["Tất cả trạng thái", "Hoạt động", "Khóa"];
 
   const roleSuggestions = useMemo(
@@ -44,14 +49,16 @@ export default function EmployeeManagement() {
         e.name.toLowerCase().includes(q) ||
         e.code.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
-        e.username.toLowerCase().includes(q);
+        e.username.toLowerCase().includes(q) ||
+        e.weldingTeam.toLowerCase().includes(q);
       const matchDept = department === "Tất cả phòng" || e.department === department;
       const matchPos = position === "Tất cả chức vụ" || e.position === position;
+      const matchTeam = weldingTeam === "Tất cả tổ hàn" || e.weldingTeam === weldingTeam;
       const matchRole = role === "Tất cả vai trò" || e.role === role;
       const matchStatus = status === "Tất cả trạng thái" || e.status === status;
-      return matchQ && matchDept && matchPos && matchRole && matchStatus;
+      return matchQ && matchDept && matchPos && matchTeam && matchRole && matchStatus;
     });
-  }, [list, query, department, position, role, status]);
+  }, [list, query, department, position, weldingTeam, role, status]);
 
   const activeCount = list.filter((e) => e.status === "Hoạt động").length;
   const lockedCount = list.filter((e) => e.status === "Khóa").length;
@@ -94,6 +101,7 @@ export default function EmployeeManagement() {
       username: values.username,
       department: values.department,
       position: values.position,
+      weldingTeam: values.weldingTeam,
       role: values.role,
       status: values.status,
       photo: values.photo,
@@ -208,6 +216,13 @@ export default function EmployeeManagement() {
             ))}
           </select>
           <select
+            value={weldingTeam}
+            onChange={(e) => setWeldingTeam(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            {weldingTeams.map((team) => <option key={team}>{team}</option>)}
+          </select>
+          <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
@@ -265,7 +280,7 @@ export default function EmployeeManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto max-h-[calc(100dvh-320px)]">
-          <table className="sticky-thead w-full min-w-[980px] border-collapse text-left text-xs sm:text-sm">
+          <table className="sticky-thead w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
@@ -276,6 +291,7 @@ export default function EmployeeManagement() {
                 <th className="px-3.5 py-3">Tên đăng nhập</th>
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Chức vụ</th>
+                <th className="px-3.5 py-3">Tổ hàn</th>
                 <th className="px-3.5 py-3">Vai trò</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
                 <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
@@ -315,6 +331,11 @@ export default function EmployeeManagement() {
                   <td className="px-3.5 py-3 font-mono text-xs sm:text-sm text-slate-700">{e.username}</td>
                   <td className="px-3.5 py-3 text-slate-700">{e.department}</td>
                   <td className="px-3.5 py-3 text-slate-700">{e.position}</td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${e.weldingTeam === "Không áp dụng" ? "border-slate-200 bg-slate-100 text-slate-600" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+                      {e.weldingTeam}
+                    </span>
+                  </td>
                   <td className="px-3.5 py-3">
                     {e.role === "Quản trị" ? (
                       <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-[#0047AB] shadow-2xs">
@@ -391,7 +412,7 @@ export default function EmployeeManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy nhân viên phù hợp</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>

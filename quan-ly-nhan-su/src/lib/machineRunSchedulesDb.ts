@@ -33,6 +33,7 @@ type MachineReportRow = {
   may_id: string;
   ma_may: string;
   ten_may: string;
+  vi_tri_hien_tai: string | null;
   trang_thai: string;
   so_luot_chay: number | string;
   tong_gio_hoat_dong: number | string;
@@ -44,6 +45,7 @@ export type MachineReportSummary = {
   machineId: string;
   machineCode: string;
   machineName: string;
+  location: string;
   status: string;
   runCount: number;
   operatingHours: number;
@@ -120,15 +122,28 @@ export async function loadMachineOptions(): Promise<MachineOption[]> {
 export async function loadMachineReportSummary(): Promise<MachineReportSummary[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = createClient();
-  const { data, error } = await supabase
+  const result = await supabase
     .from("bao_cao_may")
-    .select("may_id,ma_may,ten_may,trang_thai,so_luot_chay,tong_gio_hoat_dong,tong_moi_han,tong_moi_han_loi")
+    .select("may_id,ma_may,ten_may,trang_thai,so_luot_chay,tong_gio_hoat_dong,tong_moi_han,tong_moi_han_loi,vi_tri_hien_tai")
     .order("ma_may", { ascending: true });
-  if (error) throw new Error(formatSupabaseError(error));
-  return ((data ?? []) as MachineReportRow[]).map((row) => ({
+  let reportRows: MachineReportRow[];
+  if (result.error) {
+    const message = formatSupabaseError(result.error);
+    if (!message.includes("vi_tri_hien_tai")) throw new Error(message);
+    const fallback = await supabase
+      .from("bao_cao_may")
+      .select("may_id,ma_may,ten_may,trang_thai,so_luot_chay,tong_gio_hoat_dong,tong_moi_han,tong_moi_han_loi")
+      .order("ma_may", { ascending: true });
+    if (fallback.error) throw new Error(formatSupabaseError(fallback.error));
+    reportRows = (fallback.data ?? []).map((row) => ({ ...row, vi_tri_hien_tai: null })) as MachineReportRow[];
+  } else {
+    reportRows = (result.data ?? []) as MachineReportRow[];
+  }
+  return reportRows.map((row) => ({
     machineId: row.may_id,
     machineCode: row.ma_may,
     machineName: row.ten_may,
+    location: row.vi_tri_hien_tai ?? "",
     status: row.trang_thai,
     runCount: Number(row.so_luot_chay),
     operatingHours: Number(row.tong_gio_hoat_dong),

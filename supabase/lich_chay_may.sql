@@ -20,14 +20,40 @@ $$;
 -- 1. Danh mục máy
 -- ------------------------------------------------------------
 alter table public.thiet_bi
-  add column if not exists ma_may text;
+  add column if not exists ma_may text,
+  add column if not exists vi_tri_hien_tai text;
 
 update public.thiet_bi
 set ma_may = 'MAY-' || upper(substr(replace(id::text, '-', ''), 1, 8))
 where nullif(btrim(ma_may), '') is null;
 
 alter table public.thiet_bi
-  alter column ma_may set not null;
+  alter column ma_may set not null,
+  alter column vi_tri_hien_tai set default 'Chưa cập nhật';
+
+update public.thiet_bi
+set vi_tri_hien_tai = 'Chưa cập nhật'
+where nullif(btrim(vi_tri_hien_tai), '') is null;
+
+alter table public.thiet_bi
+  alter column vi_tri_hien_tai set not null;
+
+-- Chuẩn hóa trạng thái nghiệp vụ. "Sẵn sàng" nghĩa là không làm việc và không bảo trì.
+alter table public.thiet_bi
+  drop constraint if exists thiet_bi_trang_thai_check;
+
+update public.thiet_bi
+set trang_thai = case
+  when trang_thai = 'Hoạt động' then 'Đang làm việc'
+  when trang_thai = 'Ngừng' then 'Sẵn sàng'
+  when trang_thai in ('Bảo trì', 'Hỏng', 'Đang làm việc', 'Sẵn sàng') then trang_thai
+  else 'Sẵn sàng'
+end;
+
+alter table public.thiet_bi
+  alter column trang_thai set default 'Sẵn sàng',
+  add constraint thiet_bi_trang_thai_check
+    check (trang_thai in ('Đang làm việc', 'Sẵn sàng', 'Bảo trì', 'Hỏng'));
 
 do $$
 begin
@@ -45,19 +71,40 @@ $$;
 
 comment on column public.thiet_bi.ma_may is 'Mã máy duy nhất dùng để liên kết và báo cáo';
 
-insert into public.thiet_bi (ma_may, ten_may, trang_thai, hinh_anh)
+insert into public.thiet_bi (ma_may, ten_may, vi_tri_hien_tai, trang_thai, hinh_anh)
 values
-  ('K920-01', 'Máy hàn aluminothermic K920', 'Hoạt động', '/may-han/k920.svg'),
-  ('AMS60-03', 'Máy hàn đường ray AMS60', 'Hoạt động', '/may-han/ams60.svg'),
-  ('K355-02', 'Máy hàn di động K355', 'Bảo trì', '/may-han/k355.svg'),
-  ('GEO-01', 'Máy định vị & hàn GEO', 'Hoạt động', '/may-han/geo.svg'),
-  ('K920-02', 'Máy hàn aluminothermic K920 (dự phòng)', 'Ngừng', '/may-han/k920.svg'),
-  ('AMS60-01', 'Máy hàn đường ray AMS60 – tổ 1', 'Hỏng', '/may-han/ams60.svg')
+  ('K920-01', 'Máy hàn aluminothermic K920', 'Nhà máy Hà Nội', 'Đang làm việc', '/may-han/k920.svg'),
+  ('AMS60-03', 'Máy hàn đường ray AMS60', 'Nhà máy Đà Nẵng', 'Sẵn sàng', '/may-han/ams60.svg'),
+  ('K355-02', 'Máy hàn di động K355', 'Xưởng bảo trì Hà Nội', 'Bảo trì', '/may-han/k355.svg'),
+  ('GEO-01', 'Máy định vị & hàn GEO', 'Nhà máy TP.HCM', 'Sẵn sàng', '/may-han/geo.svg'),
+  ('K920-02', 'Máy hàn aluminothermic K920 (dự phòng)', 'Kho máy Đà Nẵng', 'Sẵn sàng', '/may-han/k920.svg'),
+  ('AMS60-01', 'Máy hàn đường ray AMS60 – tổ 1', 'Xưởng sửa chữa Hà Nội', 'Hỏng', '/may-han/ams60.svg')
 on conflict (ma_may) do update
 set ten_may = excluded.ten_may,
-    trang_thai = excluded.trang_thai,
+    vi_tri_hien_tai = case
+      when public.thiet_bi.vi_tri_hien_tai = 'Chưa cập nhật' then excluded.vi_tri_hien_tai
+      else public.thiet_bi.vi_tri_hien_tai
+    end,
     hinh_anh = excluded.hinh_anh,
     updated_at = now();
+
+comment on column public.thiet_bi.vi_tri_hien_tai is 'Vị trí hiện tại của máy: nhà máy, công trường hoặc lý trình';
+comment on column public.thiet_bi.trang_thai is 'Đang làm việc, Sẵn sàng, Bảo trì hoặc Hỏng';
+
+-- Tổ hàn của nhân sự, dùng để lọc và tổng hợp báo cáo.
+alter table public.nhan_su
+  add column if not exists to_han text;
+
+update public.nhan_su
+set to_han = case
+  when ma_nhan_su ~ '001$|002$' then 'Tổ hàn 1'
+  when ma_nhan_su ~ '003$|004$' then 'Tổ hàn 2'
+  when ma_nhan_su ~ '005$|006$' then 'Tổ hàn 3'
+  else 'Chưa phân tổ'
+end
+where nullif(btrim(to_han), '') is null;
+
+comment on column public.nhan_su.to_han is 'Tổ hàn phục vụ phân công và báo cáo sản lượng theo tổ';
 
 -- ------------------------------------------------------------
 -- 2. Lịch chạy máy
@@ -172,7 +219,8 @@ select
   ns.ma_nhan_su,
   ns.ho_ten as nguoi_phu_trach,
   nk.created_at,
-  nk.updated_at
+  nk.updated_at,
+  ns.to_han
 from public.nhat_ky_chay_may nk
 join public.thiet_bi tb on tb.id = nk.may
 join public.du_an da on da.id = nk.du_an
@@ -215,7 +263,8 @@ select
   ls.moi_han_lien_ket,
   tb.id as may_id,
   tb.ma_may,
-  tb.ten_may
+  tb.ten_may,
+  ns.to_han
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id
@@ -249,7 +298,8 @@ select
   coalesce(gm.so_luot_chay, 0)::bigint as so_luot_chay,
   coalesce(gm.tong_gio_hoat_dong, 0)::numeric(12,2) as tong_gio_hoat_dong,
   coalesce(mh.tong_moi_han, 0)::bigint as tong_moi_han,
-  coalesce(mh.tong_moi_han_loi, 0)::bigint as tong_moi_han_loi
+  coalesce(mh.tong_moi_han_loi, 0)::bigint as tong_moi_han_loi,
+  tb.vi_tri_hien_tai
 from public.thiet_bi tb
 left join gio_may gm on gm.may_id = tb.id
 left join moi_han_may mh on mh.may_id = tb.id;

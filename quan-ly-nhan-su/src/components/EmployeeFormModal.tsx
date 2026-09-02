@@ -14,6 +14,7 @@ export type EmployeeFormValues = {
   confirmPassword: string;
   department: string;
   position: string;
+  weldingTeam: string;
   role: string;
   status: "Hoạt động" | "Khóa";
   photo: string;
@@ -39,6 +40,7 @@ const empty: EmployeeFormValues = {
   confirmPassword: "",
   department: "",
   position: "",
+  weldingTeam: "Không áp dụng",
   role: "Nhân viên",
   status: "Hoạt động",
   photo: "",
@@ -131,6 +133,7 @@ export default function EmployeeFormModal({
       confirmPassword: form.confirmPassword,
       department: form.department.trim(),
       position: form.position.trim(),
+      weldingTeam: form.weldingTeam.trim() || "Không áp dụng",
       role: form.role.trim(),
       photo:
         form.photo ||
@@ -312,6 +315,20 @@ export default function EmployeeFormModal({
                   <option key={p} value={p} />
                 ))}
               </datalist>
+            </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Tổ hàn
+              <select
+                value={form.weldingTeam}
+                onChange={(e) => update("weldingTeam", e.target.value)}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+              >
+                <option>Không áp dụng</option>
+                <option>Tổ hàn 1</option>
+                <option>Tổ hàn 2</option>
+                <option>Tổ hàn 3</option>
+                <option>Chưa phân tổ</option>
+              </select>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Vai trò *

@@ -14,6 +14,7 @@ create table if not exists public.nhan_su (
   ho_ten          text not null,
   chuc_vu         text,
   don_vi          text,
+  to_han          text,
   kinh_nghiem     text,                    -- mô tả / số năm kinh nghiệm
   du_an_tham_gia  text[],                  -- danh sách dự án (text) — hoặc dùng bảng nối bên dưới
   cap_bac         text,
@@ -50,9 +51,10 @@ create table if not exists public.thiet_bi (
   id          uuid primary key default gen_random_uuid(),
   ma_may      text not null unique,
   ten_may     text not null,
+  vi_tri_hien_tai text not null default 'Chưa cập nhật',
   hinh_anh    text,                        -- URL Storage
-  trang_thai  text not null default 'Hoạt động'
-              check (trang_thai in ('Hoạt động', 'Bảo trì', 'Ngừng', 'Hỏng')),
+  trang_thai  text not null default 'Sẵn sàng'
+              check (trang_thai in ('Đang làm việc', 'Sẵn sàng', 'Bảo trì', 'Hỏng')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );

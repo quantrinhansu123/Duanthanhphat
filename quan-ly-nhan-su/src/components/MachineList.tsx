@@ -9,11 +9,17 @@ import {
 } from "@/data/machine-maintenance-history";
 import { machines as seedMachines, type Machine } from "@/data/machines";
 import { CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import {
+  createMachine as createMachineInDb,
+  deleteMachine as deleteMachineInDb,
+  loadMachineCatalog,
+  updateMachine as updateMachineInDb,
+} from "@/lib/machineCatalogDb";
 
 const statusStyle: Record<Machine["status"], string> = {
-  "Hoạt động": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Đang làm việc": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
+  "Sẵn sàng": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Bảo trì": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
-  Ngừng: "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs",
   Hỏng: "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
 };
 
@@ -30,7 +36,7 @@ const maintStatusStyle: Record<MachineMaintenanceHistoryRow["status"], string> =
   "Chờ xác nhận": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
-const statusOptions: Machine["status"][] = ["Hoạt động", "Bảo trì", "Ngừng", "Hỏng"];
+const statusOptions: Machine["status"][] = ["Đang làm việc", "Sẵn sàng", "Bảo trì", "Hỏng"];
 const modelOptions = ["K920", "AMS60", "K355", "GEO Pro"] as const;
 
 const defaultMachineImage =
@@ -57,7 +63,8 @@ function emptyMachine(): Machine {
     name: "",
     model: "K920",
     plant: "Nhà máy Hà Nội",
-    status: "Hoạt động",
+    location: "",
+    status: "Sẵn sàng",
     available: true,
     weldCount: 0,
     image: imageForModel("K920"),
@@ -124,12 +131,24 @@ function MachineFormFields({
           className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
+      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        Vị trí hiện tại
+        <input
+          value={form.location}
+          onChange={(e) => setForm({ ...form, location: e.target.value })}
+          placeholder="VD: Km 12+300 · Dự án ga Đà Nẵng"
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+        />
+      </label>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Trạng thái
           <select
             value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value as Machine["status"] })}
+            onChange={(e) => {
+              const status = e.target.value as Machine["status"];
+              setForm({ ...form, status, available: status === "Sẵn sàng" });
+            }}
             className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
           >
             {statusOptions.map((s) => (
@@ -137,15 +156,9 @@ function MachineFormFields({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 pt-7 text-xs sm:text-sm font-semibold text-slate-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.available}
-            onChange={(e) => setForm({ ...form, available: e.target.checked })}
-            className="h-4 w-4 rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]/20"
-          />
-          Khả dụng
-        </label>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 sm:mt-6">
+          <strong>Sẵn sàng</strong>: máy không làm việc và không bảo trì, có thể nhận lịch mới.
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -341,19 +354,18 @@ function MachineDetailModal({
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[machine.status]}`}>
                   {machine.status}
                 </span>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    machine.available ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"
-                  }`}
-                >
-                  {machine.available ? "Khả dụng" : "Không khả dụng"}
-                </span>
+                {machine.status === "Sẵn sàng" && (
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
+                    Có thể phân công
+                  </span>
+                )}
               </div>
 
               <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-4 py-1">
                 <DetailRow label="Mã máy" value={<span className="font-mono text-[#0047AB]">{machine.code}</span>} />
                 <DetailRow label="Model" value={machine.model} />
                 <DetailRow label="Nhà máy" value={machine.plant} />
+                <DetailRow label="Vị trí hiện tại" value={machine.location} />
                 <DetailRow label="Số serial" value={<span className="font-mono">{machine.serialNumber}</span>} />
                 <DetailRow label="Năm lắp đặt" value={machine.yearInstalled} />
                 <DetailRow label="Tổ đội" value={machine.team} />
@@ -481,6 +493,10 @@ function MachineFormModal({
       window.alert("Vui lòng nhập mã máy.");
       return;
     }
+    if (!form.location.trim()) {
+      window.alert("Vui lòng nhập vị trí hiện tại của máy.");
+      return;
+    }
     onSave(form);
   }
 
@@ -545,6 +561,8 @@ function MachineFormModal({
 
 export default function MachineList() {
   const [list, setList] = useState(seedMachines);
+  const [source, setSource] = useState<"supabase" | "seed">("seed");
+  const [dataError, setDataError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [plant, setPlant] = useState("Tất cả nhà máy");
@@ -552,6 +570,19 @@ export default function MachineList() {
   const [detail, setDetail] = useState<Machine | null>(null);
   const [detailTab, setDetailTab] = useState<"info" | "history">("info");
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadMachineCatalog().then((result) => {
+      if (!active) return;
+      setList(result.machines);
+      setSource(result.source);
+      setDataError(result.error ?? "");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const plants = useMemo(
     () => ["Tất cả nhà máy", ...Array.from(new Set(list.map((m) => m.plant)))],
@@ -565,14 +596,16 @@ export default function MachineList() {
         !q ||
         m.name.toLowerCase().includes(q) ||
         m.code.toLowerCase().includes(q) ||
-        m.model.toLowerCase().includes(q);
+        m.model.toLowerCase().includes(q) ||
+        m.location.toLowerCase().includes(q);
       const matchStatus = status === "Tất cả trạng thái" || m.status === status;
       const matchPlant = plant === "Tất cả nhà máy" || m.plant === plant;
       return matchQ && matchStatus && matchPlant;
     });
   }, [list, query, status, plant]);
 
-  const running = list.filter((m) => m.status === "Hoạt động").length;
+  const running = list.filter((m) => m.status === "Đang làm việc").length;
+  const ready = list.filter((m) => m.status === "Sẵn sàng").length;
   const maint = list.filter((m) => m.status === "Bảo trì").length;
 
   function openEdit(machine: Machine) {
@@ -586,36 +619,57 @@ export default function MachineList() {
     setDetail(m);
   }
 
-  function handleDelete(machine: Machine) {
+  async function handleDelete(machine: Machine) {
     if (!window.confirm(`Xóa máy "${machine.name}"?`)) return;
-    setList((prev) => prev.filter((m) => m.id !== machine.id));
-    if (activeId === machine.id) {
-      setActiveId(null);
-      setDetail(null);
+    try {
+      if (source === "supabase") await deleteMachineInDb(machine.id);
+      setList((prev) => prev.filter((m) => m.id !== machine.id));
+      if (activeId === machine.id) {
+        setActiveId(null);
+        setDetail(null);
+      }
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Không thể xóa máy");
     }
   }
 
-  function handleSave(updated: Machine) {
-    setList((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    if (detail?.id === updated.id) setDetail(updated);
-    setFormModal(null);
+  async function handleSave(updated: Machine) {
+    try {
+      if (source === "supabase") await updateMachineInDb(updated);
+      setList((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      if (detail?.id === updated.id) setDetail(updated);
+      setFormModal(null);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Không thể cập nhật máy");
+    }
   }
 
-  function handleCreate(machine: Machine) {
-    const id = String(Date.now());
-    setList((prev) => [{ ...machine, id }, ...prev]);
-    setFormModal(null);
+  async function handleCreate(machine: Machine) {
+    try {
+      const created = source === "supabase"
+        ? await createMachineInDb(machine)
+        : { ...machine, id: String(Date.now()) };
+      setList((prev) => [created, ...prev]);
+      setFormModal(null);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Không thể thêm máy");
+    }
   }
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+      {dataError && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 sm:text-sm">
+          {source === "seed" ? "Đang dùng dữ liệu mẫu. " : "Lỗi dữ liệu máy: "}{dataError}
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
         <span>
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{list.length}</strong> máy
         </span>
         <span className="text-slate-300">|</span>
         <span>
-          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{running}</strong> hoạt động · <span className="font-medium text-amber-700 font-mono tabular-nums">{maint}</span> bảo trì
+          <strong className="font-semibold text-[#0047AB] font-mono tabular-nums">{running}</strong> đang làm việc · <span className="font-medium text-emerald-700 font-mono tabular-nums">{ready}</span> sẵn sàng · <span className="font-medium text-amber-700 font-mono tabular-nums">{maint}</span> bảo trì
         </span>
       </div>
 
@@ -644,7 +698,7 @@ export default function MachineList() {
             onChange={(e) => setStatus(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
-            {["Tất cả trạng thái", "Hoạt động", "Bảo trì", "Ngừng", "Hỏng"].map((s) => (
+            {["Tất cả trạng thái", ...statusOptions].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -687,7 +741,7 @@ export default function MachineList() {
                       {m.name}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      <strong className="text-slate-700 font-semibold">{m.model}</strong> · {m.plant} · <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
+                      <strong className="text-slate-700 font-semibold">{m.model}</strong> · {m.location} · <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span
@@ -695,13 +749,11 @@ export default function MachineList() {
                       >
                         {m.status}
                       </span>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          m.available ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs"
-                        }`}
-                      >
-                        {m.available ? "Khả dụng" : "Không khả dụng"}
-                      </span>
+                      {m.status === "Sẵn sàng" && (
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
+                          Có thể phân công
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>

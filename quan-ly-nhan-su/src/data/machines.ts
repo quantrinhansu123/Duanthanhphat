@@ -4,7 +4,8 @@ export type Machine = {
   name: string;
   model: string;
   plant: string;
-  status: "Hoạt động" | "Bảo trì" | "Ngừng" | "Hỏng";
+  location: string;
+  status: "Đang làm việc" | "Sẵn sàng" | "Bảo trì" | "Hỏng";
   available: boolean;
   weldCount: number;
   image: string;
@@ -41,8 +42,9 @@ export const machines: Machine[] = [
     name: "Máy hàn aluminothermic K920",
     model: "K920",
     plant: "Nhà máy Hà Nội",
-    status: "Hoạt động",
-    available: true,
+    location: "Km 0+000 → Km 0+500 · ĐSCT Bắc – Nam",
+    status: "Đang làm việc",
+    available: false,
     weldCount: 1842,
     image: imageForModel("K920"),
     serialNumber: "SN-K920-2019-0041",
@@ -61,7 +63,8 @@ export const machines: Machine[] = [
     name: "Máy hàn đường ray AMS60",
     model: "AMS60",
     plant: "Nhà máy Đà Nẵng",
-    status: "Hoạt động",
+    location: "Bãi máy ga Đà Nẵng",
+    status: "Sẵn sàng",
     available: true,
     weldCount: 1560,
     image: imageForModel("AMS60"),
@@ -81,6 +84,7 @@ export const machines: Machine[] = [
     name: "Máy hàn di động K355",
     model: "K355",
     plant: "Nhà máy Hà Nội",
+    location: "Xưởng bảo trì Hà Nội",
     status: "Bảo trì",
     available: false,
     weldCount: 980,
@@ -101,7 +105,8 @@ export const machines: Machine[] = [
     name: "Máy định vị & hàn GEO",
     model: "GEO Pro",
     plant: "Nhà máy TP.HCM",
-    status: "Hoạt động",
+    location: "Depot Long Bình",
+    status: "Sẵn sàng",
     available: true,
     weldCount: 720,
     image: imageForModel("GEO Pro"),
@@ -121,8 +126,9 @@ export const machines: Machine[] = [
     name: "Máy hàn aluminothermic K920 (dự phòng)",
     model: "K920",
     plant: "Nhà máy Đà Nẵng",
-    status: "Ngừng",
-    available: false,
+    location: "Kho máy Đà Nẵng",
+    status: "Sẵn sàng",
+    available: true,
     weldCount: 430,
     image: imageForModel("K920"),
     serialNumber: "SN-K920-2019-0042",
@@ -141,6 +147,7 @@ export const machines: Machine[] = [
     name: "Máy hàn đường ray AMS60 – tổ 1",
     model: "AMS60",
     plant: "Nhà máy Hà Nội",
+    location: "Xưởng sửa chữa Hà Nội",
     status: "Hỏng",
     available: false,
     weldCount: 2105,

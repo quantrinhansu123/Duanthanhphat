@@ -136,6 +136,7 @@ export default function WelderManagement() {
   const [list, setList] = useState<Welder[]>(seedWelders);
   const [query, setQuery] = useState("");
   const [ranksSel, setRanksSel] = useState<string[]>([]);
+  const [teamsSel, setTeamsSel] = useState<string[]>([]);
   const [railsSel, setRailsSel] = useState<string[]>([]);
   const [machinesSel, setMachinesSel] = useState<string[]>([]);
   const [statusesSel, setStatusesSel] = useState<string[]>([]);
@@ -154,6 +155,7 @@ export default function WelderManagement() {
   }, [menuOpen]);
 
   const rankOptions = useMemo(() => Array.from(new Set(list.map((w) => w.rank))).sort(), [list]);
+  const teamOptions = useMemo(() => Array.from(new Set(list.map((w) => w.weldingTeam))).sort(), [list]);
   const railOptions = useMemo(() => {
     const all = list.flatMap((w) => w.railTypes.split(",").map((s) => s.trim()).filter(Boolean));
     return Array.from(new Set(all)).sort();
@@ -172,18 +174,20 @@ export default function WelderManagement() {
         w.name.toLowerCase().includes(q) ||
         w.weldingId.toLowerCase().includes(q) ||
         w.email.toLowerCase().includes(q) ||
+        w.weldingTeam.toLowerCase().includes(q) ||
         w.railTypes.toLowerCase().includes(q) ||
         w.trainedMachines.toLowerCase().includes(q);
       const matchRank = ranksSel.length === 0 || ranksSel.includes(w.rank);
+      const matchTeam = teamsSel.length === 0 || teamsSel.includes(w.weldingTeam);
       const matchRail =
         railsSel.length === 0 || railsSel.some((r) => w.railTypes.split(",").map((s) => s.trim()).includes(r));
       const matchMachine =
         machinesSel.length === 0 ||
         machinesSel.some((m) => w.trainedMachines.split(",").map((s) => s.trim()).includes(m));
       const matchStatus = statusesSel.length === 0 || statusesSel.includes(w.status);
-      return matchQ && matchRank && matchRail && matchMachine && matchStatus;
+      return matchQ && matchRank && matchTeam && matchRail && matchMachine && matchStatus;
     });
-  }, [list, query, ranksSel, railsSel, machinesSel, statusesSel]);
+  }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel]);
 
   const activeCount = list.filter((w) => w.status === "Hoạt động").length;
   const lockedCount = list.filter((w) => w.status === "Khóa").length;
@@ -207,7 +211,7 @@ export default function WelderManagement() {
   }
 
   const hasFilter =
-    ranksSel.length > 0 || railsSel.length > 0 || machinesSel.length > 0 || statusesSel.length > 0 || query.trim();
+    ranksSel.length > 0 || teamsSel.length > 0 || railsSel.length > 0 || machinesSel.length > 0 || statusesSel.length > 0 || query.trim();
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
@@ -299,6 +303,13 @@ export default function WelderManagement() {
           minWidth="min-w-[130px]"
         />
         <MultiSelectCombobox
+          title="Tổ hàn"
+          options={teamOptions}
+          selected={teamsSel}
+          onChange={setTeamsSel}
+          minWidth="min-w-[140px]"
+        />
+        <MultiSelectCombobox
           title="Loại ray"
           options={railOptions}
           selected={railsSel}
@@ -326,6 +337,7 @@ export default function WelderManagement() {
             onClick={() => {
               setQuery("");
               setRanksSel([]);
+              setTeamsSel([]);
               setRailsSel([]);
               setMachinesSel([]);
               setStatusesSel([]);
@@ -351,7 +363,7 @@ export default function WelderManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1200px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
@@ -359,6 +371,7 @@ export default function WelderManagement() {
                 </th>
                 <th className="px-3.5 py-3">Welding ID</th>
                 <th className="px-3.5 py-3">Thợ hàn</th>
+                <th className="px-3.5 py-3">Tổ hàn</th>
                 <th className="px-3.5 py-3">Hạng</th>
                 <th className="px-3.5 py-3">Loại ray</th>
                 <th className="px-3.5 py-3">Máy đã đào tạo</th>
@@ -392,6 +405,11 @@ export default function WelderManagement() {
                         </div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <span className="inline-flex whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#0047AB]">
+                      {w.weldingTeam}
+                    </span>
                   </td>
                   <td className="px-3.5 py-3">
                     <span
@@ -490,7 +508,7 @@ export default function WelderManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy thợ hàn phù hợp</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>
