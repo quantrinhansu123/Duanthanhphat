@@ -61,7 +61,7 @@ for (const project of projects) {
     .filter(([key]) => key.startsWith(prefix))
     .map(([key, actual]) => ({
       ngay: key.slice(prefix.length),
-      so_moi_han: actual + 1,
+      so_moi_han: actual + 5,
     }))
     .sort((a, b) => a.ngay.localeCompare(b.ngay));
 
@@ -88,7 +88,7 @@ for (const project of projects) {
     .eq("id", project.id);
   if (rangeError) throw rangeError;
 
-  // Ghi đè bằng định mức chính xác: thực tế từng dự án/ngày + 1.
+  // Ghi đè bằng định mức chính xác: thực tế từng dự án/ngày + 5.
   const { error: planError } = await supabase
     .from("du_an")
     .update({ tien_do_ly_thuyet: plan })

@@ -33,27 +33,31 @@ type ReportFilterContextValue = {
   clearFilters: () => void;
 };
 
-const defaultApplied: AppliedReportFilters = {
-  dateFrom: REPORT_PERIOD_START,
-  dateTo: REPORT_PERIOD_END,
-  projects: [],
-  personnel: [],
-  machines: [],
-  methods: [],
-  weldTypes: [],
-};
-
 const ReportFilterContext = createContext<ReportFilterContextValue | null>(null);
 
 export function ReportFilterProvider({ children }: { children: ReactNode }) {
-  const [dateFrom, setDateFrom] = useState(REPORT_PERIOD_START);
-  const [dateTo, setDateTo] = useState(REPORT_PERIOD_END);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [projects, setProjects] = useState<string[]>([]);
   const [personnel, setPersonnel] = useState<string[]>([]);
   const [machines, setMachines] = useState<string[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
   const [weldTypes, setWeldTypes] = useState<string[]>([]);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(defaultApplied);
+
+  // Bộ lọc áp dụng ngay khi chọn — không cần nút "Áp dụng".
+  // Chưa chọn ngày => lấy trọn kỳ báo cáo để các phép tính ngày vẫn hợp lệ.
+  const appliedFilters = useMemo<AppliedReportFilters>(
+    () => ({
+      dateFrom: dateFrom || REPORT_PERIOD_START,
+      dateTo: dateTo || REPORT_PERIOD_END,
+      projects,
+      personnel,
+      machines,
+      methods,
+      weldTypes,
+    }),
+    [dateFrom, dateTo, projects, personnel, machines, methods, weldTypes],
+  );
 
   function toggleList(
     type: "projects" | "personnel" | "machines" | "methods" | "weldTypes",
@@ -83,26 +87,17 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
   }
 
   function applyFilters() {
-    setAppliedFilters({
-      dateFrom,
-      dateTo,
-      projects,
-      personnel,
-      machines,
-      methods,
-      weldTypes,
-    });
+    // Không còn cần thiết — bộ lọc áp dụng ngay khi chọn. Giữ lại cho tương thích.
   }
 
   function clearFilters() {
-    setDateFrom(REPORT_PERIOD_START);
-    setDateTo(REPORT_PERIOD_END);
+    setDateFrom("");
+    setDateTo("");
     setProjects([]);
     setPersonnel([]);
     setMachines([]);
     setMethods([]);
     setWeldTypes([]);
-    setAppliedFilters(defaultApplied);
   }
 
   const hasFilter =

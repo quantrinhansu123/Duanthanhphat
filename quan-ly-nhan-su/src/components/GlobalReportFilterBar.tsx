@@ -26,7 +26,6 @@ export default function GlobalReportFilterBar() {
 
   const {
     filterCount,
-    hasFilter,
     appliedFilters,
     dateFrom,
     dateTo,
@@ -43,8 +42,6 @@ export default function GlobalReportFilterBar() {
     setPersonnel,
     setMethods,
     setWeldTypes,
-    applyFilters,
-    clearFilters,
   } = useReportFilters();
 
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
@@ -96,25 +93,6 @@ export default function GlobalReportFilterBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function closeAllDropdowns() {
-    setProjectFilterOpen(false);
-    setPersonnelFilterOpen(false);
-    setMachineFilterOpen(false);
-    setMethodFilterOpen(false);
-    setWeldTypeFilterOpen(false);
-  }
-
-  function handleApply() {
-    applyFilters();
-    closeAllDropdowns();
-    setFiltersOpen(false);
-  }
-
-  function handleClear() {
-    clearFilters();
-    closeAllDropdowns();
-  }
-
   return (
     <div className="shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur-md z-20">
       <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-2">
@@ -159,10 +137,6 @@ export default function GlobalReportFilterBar() {
           {filtersOpen && (
             <div className="border-t border-slate-200 p-3 sm:p-4 flex flex-col gap-3">
           <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
-            <div className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-900 shrink-0 lg:pb-2.5">
-              <span>Tiêu chí:</span>
-            </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-end gap-2.5 sm:gap-3 flex-1 min-w-0">
               <div className="min-w-0 flex-1">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Từ ngày</span>
@@ -365,27 +339,6 @@ export default function GlobalReportFilterBar() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 pt-1 sm:pt-0 sm:ml-auto w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={handleApply}
-                className="inline-flex items-center justify-center gap-1.5 h-10 flex-1 sm:flex-none rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-                </svg>
-                Áp dụng
-              </button>
-              {hasFilter && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
-                >
-                  Xóa lọc
-                </button>
-              )}
-            </div>
           </div>
             </div>
           )}

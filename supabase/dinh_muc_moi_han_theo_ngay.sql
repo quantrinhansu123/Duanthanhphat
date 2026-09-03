@@ -1,4 +1,4 @@
--- Định mức theo từng dự án/ngày = tổng thực tế của ngày + 1 mối.
+-- Định mức theo từng dự án/ngày = tổng thực tế của ngày + 5 mối.
 -- Dữ liệu được lưu trong du_an.tien_do_ly_thuyet để biểu đồ "Dự kiến" sử dụng trực tiếp.
 
 create or replace function public.dong_bo_dinh_muc_moi_han(p_du_an_id uuid)
@@ -22,13 +22,13 @@ begin
       jsonb_agg(
         jsonb_build_object(
           'ngay', ngay_thuc_hien::text,
-          'so_moi_han', so_luong_thuc_hien + 1
+          'so_moi_han', so_luong_thuc_hien + 5
         )
         order by ngay_thuc_hien
       ),
       '[]'::jsonb
     ),
-    coalesce(sum(so_luong_thuc_hien + 1), 0)::integer,
+    coalesce(sum(so_luong_thuc_hien + 5), 0)::integer,
     min(ngay_thuc_hien),
     max(ngay_thuc_hien)
   into v_tien_do, v_tong_dinh_muc, v_ngay_bat_dau, v_ngay_ket_thuc
@@ -65,7 +65,7 @@ end;
 $$;
 
 comment on function public.dong_bo_dinh_muc_moi_han(uuid) is
-  'Đồng bộ du_an.tien_do_ly_thuyet: định mức mỗi dự án/ngày bằng tổng thực tế + 1 mối';
+  'Đồng bộ du_an.tien_do_ly_thuyet: định mức mỗi dự án/ngày bằng tổng thực tế + 5 mối';
 
 create or replace function public.trg_dong_bo_dinh_muc_sau_insert()
 returns trigger
@@ -151,7 +151,7 @@ begin
 end;
 $$;
 
--- Kiểm tra: mọi dự án/ngày phải có định mức = thực tế + 1.
+-- Kiểm tra: mọi dự án/ngày phải có định mức = thực tế + 5.
 do $$
 begin
   if exists (
@@ -172,9 +172,9 @@ begin
     select 1
     from thuc_te
     full join dinh_muc using (du_an_id, ngay)
-    where dinh_muc.so_moi_han is distinct from thuc_te.so_moi_han + 1
+    where dinh_muc.so_moi_han is distinct from thuc_te.so_moi_han + 5
   ) then
-    raise exception 'Định mức chưa khớp thực tế + 1';
+    raise exception 'Định mức chưa khớp thực tế + 5';
   end if;
 end;
 $$;
