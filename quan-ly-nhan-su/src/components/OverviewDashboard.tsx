@@ -11,6 +11,7 @@ import {
 } from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useProjectsData } from "@/hooks/useProjectsData";
+import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildDailyJournalSeries,
@@ -25,6 +26,7 @@ import {
   resolveChartDateRange,
   summarizeJournalRows,
 } from "@/lib/weldReportData";
+import { filterYearTotals } from "@/lib/tongMoiHanNamDb";
 
 type ChartDayPoint = {
   idx: number;
@@ -89,8 +91,15 @@ export default function OverviewDashboard() {
   const { rows, loading, error } = useWeldReportData();
   const { projects } = useProjectsData();
   const { appliedFilters } = useReportFilters();
+  const {
+    years: yearTotals,
+    byProject: yearByProject,
+    byPersonnel: yearByPersonnel,
+    loading: yearLoading,
+    error: yearError,
+  } = useTongMoiHanNam();
 
-  const [chartViewMode, setChartViewMode] = useState<"daily" | "cumulative">("daily");
+  const [chartViewMode, setChartViewMode] = useState<"daily" | "yearly" | "cumulative">("daily");
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
   const plotScrollRef = useRef<HTMLDivElement>(null);
@@ -163,6 +172,142 @@ export default function OverviewDashboard() {
     }
     return dailySeries.map((point) => byDate.get(point.date) ?? 0);
   }, [chartDateRange.from, chartDateRange.to, dailySeries, selectedProjects]);
+
+  const yearlySeries = useMemo(() => {
+    const emptyYear = (nam: number) => ({
+      nam,
+      tong_moi_han: 0,
+      tong_loi: 0,
+      tong_dat: 0,
+      fbw: 0,
+      atw: 0,
+      loi_fbw: 0,
+      loi_atw: 0,
+      san_xuat: 0,
+      thu_nghiem: 0,
+      dao_tao: 0,
+      loi_san_xuat: 0,
+      loi_thu_nghiem: 0,
+      loi_dao_tao: 0,
+    });
+
+    let baseRows = yearTotals;
+    if (appliedFilters.projects.length > 0) {
+      const names = new Set(appliedFilters.projects);
+      const matched = yearByProject.filter((row) => names.has(row.du_an));
+      const map = new Map<number, ReturnType<typeof emptyYear>>();
+      for (const row of matched) {
+        const current = map.get(row.nam) ?? emptyYear(row.nam);
+        current.tong_moi_han += row.tong_moi_han;
+        current.tong_loi += row.tong_loi;
+        current.tong_dat += row.tong_dat;
+        current.fbw += row.fbw;
+        current.atw += row.atw;
+        current.loi_fbw += row.loi_fbw;
+        current.loi_atw += row.loi_atw;
+        current.san_xuat += row.san_xuat;
+        current.thu_nghiem += row.thu_nghiem;
+        current.dao_tao += row.dao_tao;
+        map.set(row.nam, current);
+      }
+      baseRows = [...map.values()].sort((a, b) => a.nam - b.nam);
+    } else if (appliedFilters.personnel.length > 0) {
+      const names = new Set(appliedFilters.personnel);
+      const matched = yearByPersonnel.filter((row) => names.has(row.ten_tho_han));
+      const map = new Map<number, ReturnType<typeof emptyYear>>();
+      for (const row of matched) {
+        const current = map.get(row.nam) ?? emptyYear(row.nam);
+        current.tong_moi_han += row.tong_moi_han;
+        current.tong_loi += row.tong_loi;
+        current.tong_dat += row.tong_dat;
+        current.fbw += row.fbw;
+        current.atw += row.atw;
+        current.loi_fbw += row.loi_fbw;
+        current.loi_atw += row.loi_atw;
+        current.san_xuat += row.san_xuat;
+        current.thu_nghiem += row.thu_nghiem;
+        current.dao_tao += row.dao_tao;
+        map.set(row.nam, current);
+      }
+      baseRows = [...map.values()].sort((a, b) => a.nam - b.nam);
+    }
+
+    const filtered = filterYearTotals(
+      baseRows,
+      appliedFilters.dateFrom,
+      appliedFilters.dateTo,
+      appliedFilters.methods,
+      appliedFilters.weldTypes,
+    );
+
+    const targetByYear = new Map<string, number>();
+    for (const project of selectedProjects) {
+      for (const row of project.theoreticalProgress ?? []) {
+        if (row.ngay < appliedFilters.dateFrom || row.ngay > appliedFilters.dateTo) continue;
+        const year = row.ngay.slice(0, 4);
+        targetByYear.set(year, (targetByYear.get(year) ?? 0) + row.so_moi_han);
+      }
+    }
+
+    const years = filtered.map((row) => row.year);
+    if (years.length === 0) {
+      const startYear = Number(appliedFilters.dateFrom.slice(0, 4));
+      const endYear = Number(appliedFilters.dateTo.slice(0, 4));
+      if (Number.isFinite(startYear) && Number.isFinite(endYear) && endYear >= startYear) {
+        for (let year = startYear; year <= endYear; year += 1) years.push(String(year));
+      }
+    } else {
+      const startYear = Number(years[0]);
+      const endYear = Number(years[years.length - 1]);
+      const filled: string[] = [];
+      for (let year = startYear; year <= endYear; year += 1) filled.push(String(year));
+      years.splice(0, years.length, ...filled);
+    }
+
+    const byYear = new Map(filtered.map((row) => [row.year, row]));
+    return years.map((year) => {
+      const row = byYear.get(year);
+      return {
+        year,
+        date: `${year}-01-01`,
+        value: row?.value ?? 0,
+        target: targetByYear.get(year) ?? 0,
+        defects: row?.defects ?? 0,
+      };
+    });
+  }, [
+    appliedFilters.dateFrom,
+    appliedFilters.dateTo,
+    appliedFilters.methods,
+    appliedFilters.personnel,
+    appliedFilters.projects,
+    appliedFilters.weldTypes,
+    selectedProjects,
+    yearByPersonnel,
+    yearByProject,
+    yearTotals,
+  ]);
+
+  const chartPeriod = useMemo(() => {
+    if (chartViewMode === "yearly") {
+      return {
+        values: yearlySeries.map((point) => point.value),
+        targets: yearlySeries.map((point) => point.target),
+        labels: yearlySeries.map((point) => point.year),
+        fullLabels: yearlySeries.map((point) => `Năm ${point.year}`),
+        dates: yearlySeries.map((point) => point.date),
+        unitLabel: "năm",
+      };
+    }
+    return {
+      values: dailyValues,
+      targets: dailyTargets,
+      labels: dailySeries.map((point) => viDateShort(point.date)),
+      fullLabels: dailySeries.map((point) => viDate(point.date)),
+      dates: dailySeries.map((point) => point.date),
+      unitLabel: "ngày",
+    };
+  }, [chartViewMode, dailySeries, dailyTargets, dailyValues, yearlySeries]);
   const plannedTarget = useMemo(
     () => selectedProjects.reduce(
       (sum, project) => sum + (project.theoreticalProgress ?? []).reduce(
@@ -209,9 +354,14 @@ export default function OverviewDashboard() {
   const progressPctNum = target > 0 ? (total / target) * 100 : 0;
 
   const chart = useMemo(() => {
-    const slice = dailyValues;
+    // Lũy kế luôn theo ngày; tab Ngày/Năm dùng chartPeriod.
+    const useYearlyBars = chartViewMode === "yearly";
+    const slice = useYearlyBars ? chartPeriod.values : dailyValues;
+    const targetSlice = useYearlyBars ? chartPeriod.targets : dailyTargets;
     const count = slice.length;
-    const chartRangeLabel = `${viDate(chartDateRange.from)} – ${viDate(chartDateRange.to)} · sản lượng/ngày`;
+    const chartRangeLabel = useYearlyBars
+      ? `${appliedFilters.dateFrom.slice(0, 4)} – ${appliedFilters.dateTo.slice(0, 4)} · sản lượng/năm`
+      : `${viDate(chartDateRange.from)} – ${viDate(chartDateRange.to)} · sản lượng/ngày`;
 
     if (count === 0) {
       return {
@@ -238,7 +388,6 @@ export default function OverviewDashboard() {
       };
     }
 
-    const targetSlice = dailyTargets;
     const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, 1) / 10) * 10);
     const plotH = 260;
     const padX = 14;
@@ -384,14 +533,16 @@ export default function OverviewDashboard() {
     const dailyStackBars = makeStackBars(slice, targetSlice, maxVal);
     const cumStackBars = makeStackBars(cumValues, targetCumValues, maxCumVal);
 
-    const fullLabels = dailySeries.map((point) => viDateShort(point.date));
-    const chartLabels = sampleChartLabels(fullLabels, 8);
+    const fullLabels = useYearlyBars ? chartPeriod.labels : dailySeries.map((point) => viDateShort(point.date));
+    const chartLabels = sampleChartLabels(fullLabels, useYearlyBars ? fullLabels.length : 8);
 
     const dayPoints: ChartDayPoint[] = slice.map((val, idx) => ({
       idx,
       dayOffset: idx,
-      dateShort: viDateShort(dailySeries[idx]?.date ?? chartDateRange.from),
-      dateFull: viDate(dailySeries[idx]?.date ?? chartDateRange.from),
+      dateShort: useYearlyBars ? (chartPeriod.labels[idx] ?? "") : viDateShort(dailySeries[idx]?.date ?? chartDateRange.from),
+      dateFull: useYearlyBars
+        ? (chartPeriod.fullLabels[idx] ?? "")
+        : viDate(dailySeries[idx]?.date ?? chartDateRange.from),
       daily: val,
       dailyTarget: targetSlice[idx] ?? 0,
       cumActual: cumValues[idx],
@@ -423,7 +574,7 @@ export default function OverviewDashboard() {
       dayPoints,
       maxVal,
     };
-  }, [chartDateRange, dailySeries, dailyTargets, dailyValues]);
+  }, [appliedFilters.dateFrom, appliedFilters.dateTo, chartDateRange, chartPeriod, chartViewMode, dailySeries, dailyTargets, dailyValues]);
 
   const selectedDay =
     selectedDayIndex !== null && chart.dayPoints[selectedDayIndex]
@@ -435,8 +586,10 @@ export default function OverviewDashboard() {
   }
 
   const chartDayCount = chart.dayPoints.length;
-  // Bề rộng vùng vẽ: mặc định ~44px/ngày, nhân theo mức zoom; luôn tối thiểu lấp đầy khung.
-  const plotWidthPx = Math.round(Math.max(chartDayCount * 44 * chartZoom, 1));
+  // Bề rộng vùng vẽ: mặc định ~44px/ngày (hoặc ~72px/năm), nhân theo mức zoom.
+  const plotWidthPx = Math.round(
+    Math.max(chartDayCount * (chartViewMode === "yearly" ? 72 : 44) * chartZoom, 1),
+  );
 
   // Đường xu hướng nối đỉnh các cột
   const stackBars = chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
@@ -514,12 +667,14 @@ export default function OverviewDashboard() {
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
-      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error || yearError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {error
           ? `Không tải được Supabase: ${error}`
-          : loading
-            ? "Đang tải dữ liệu Supabase…"
-            : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(passed)} đạt · ${fmt(failed)} không đạt · biểu đồ ${dailySeries.length} ngày`}
+          : yearError
+            ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
+            : loading || yearLoading
+              ? "Đang tải dữ liệu Supabase…"
+              : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(passed)} đạt · ${fmt(failed)} không đạt · ${fmt(yearTotals.length)} năm tổng hợp`}
       </div>
 
       {/* 2. Top 5 KPI Cards Row */}
@@ -720,15 +875,19 @@ export default function OverviewDashboard() {
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
           <div className="flex flex-row items-center justify-between gap-2.5">
             <div className="min-w-0 text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              {chartViewMode === "daily" ? "SẢN LƯỢNG HÀN THEO NGÀY" : "SẢN LƯỢNG HÀN THEO LŨY KẾ"}
+              {chartViewMode === "daily"
+                ? "SẢN LƯỢNG HÀN THEO NGÀY"
+                : chartViewMode === "yearly"
+                  ? "SẢN LƯỢNG HÀN THEO NĂM"
+                  : "SẢN LƯỢNG HÀN THEO LŨY KẾ"}
             </div>
 
-            {/* 1 nút chia làm 2: Ngày | Lũy kế */}
+            {/* Ngày | Năm | Lũy kế */}
             <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setChartViewMode("daily")}
-                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   chartViewMode === "daily"
                     ? "bg-white text-[#0047AB] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -739,8 +898,20 @@ export default function OverviewDashboard() {
               </button>
               <button
                 type="button"
+                onClick={() => setChartViewMode("yearly")}
+                className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  chartViewMode === "yearly"
+                    ? "bg-white text-[#0047AB] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <CalendarCheck size={13} weight="bold" aria-hidden />
+                <span>Năm</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setChartViewMode("cumulative")}
-                className={`flex h-7 items-center gap-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                   chartViewMode === "cumulative"
                     ? "bg-white text-[#0047AB] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -769,7 +940,11 @@ export default function OverviewDashboard() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    {chartViewMode === "daily" ? "Số liệu ngày" : "Số liệu lũy kế"}
+                    {chartViewMode === "daily"
+                      ? "Số liệu ngày"
+                      : chartViewMode === "yearly"
+                        ? "Số liệu năm"
+                        : "Số liệu lũy kế"}
                   </p>
                   <p className="text-sm font-bold text-[#0047AB]">{selectedDay.dateFull}</p>
                 </div>
@@ -783,18 +958,7 @@ export default function OverviewDashboard() {
                 </button>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {chartViewMode === "daily" ? (
-                  <>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Sản lượng ngày</p>
-                      <p className="font-mono text-sm font-bold text-[#0047AB] tabular-nums">{fmt(selectedDay.daily)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Mục tiêu ngày</p>
-                      <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.dailyTarget)}</p>
-                    </div>
-                  </>
-                ) : (
+                {chartViewMode === "cumulative" ? (
                   <>
                     <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
                       <p className="text-[10px] text-slate-500">Lũy kế thực tế</p>
@@ -803,6 +967,21 @@ export default function OverviewDashboard() {
                     <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
                       <p className="text-[10px] text-slate-500">Lũy kế mục tiêu</p>
                       <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.cumTarget)}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
+                      <p className="text-[10px] text-slate-500">
+                        {chartViewMode === "yearly" ? "Sản lượng năm" : "Sản lượng ngày"}
+                      </p>
+                      <p className="font-mono text-sm font-bold text-[#0047AB] tabular-nums">{fmt(selectedDay.daily)}</p>
+                    </div>
+                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
+                      <p className="text-[10px] text-slate-500">
+                        {chartViewMode === "yearly" ? "Mục tiêu năm" : "Mục tiêu ngày"}
+                      </p>
+                      <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.dailyTarget)}</p>
                     </div>
                   </>
                 )}
@@ -815,7 +994,7 @@ export default function OverviewDashboard() {
             {/* Trục Y cố định — không cuộn theo biểu đồ */}
             <div className="relative h-[260px] w-10 shrink-0 select-none font-mono text-[11px] font-normal text-slate-900">
               {(() => {
-                const axisMax = chartViewMode === "daily" ? chart.maxVal : chart.maxCumVal;
+                const axisMax = chartViewMode === "cumulative" ? chart.maxCumVal : chart.maxVal;
                 const rows: [number, string][] = [
                   [-7, fmt(axisMax)],
                   [45, fmt(Math.round(axisMax * 0.8))],

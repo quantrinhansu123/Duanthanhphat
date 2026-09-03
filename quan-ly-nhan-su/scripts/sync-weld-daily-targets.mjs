@@ -16,7 +16,13 @@ function loadEnv(filePath) {
   return values;
 }
 
-const env = loadEnv(path.join(appDirectory, ".env"));
+const envPath = [".env.local", ".env"]
+  .map((name) => path.join(appDirectory, name))
+  .find((filePath) => fs.existsSync(filePath));
+if (!envPath) {
+  throw new Error("Thiếu .env.local hoặc .env");
+}
+const env = loadEnv(envPath);
 const supabase = createClient(
   env.NEXT_PUBLIC_SUPABASE_URL,
   env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

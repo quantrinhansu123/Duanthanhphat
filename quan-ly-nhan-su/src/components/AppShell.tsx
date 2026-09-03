@@ -29,6 +29,7 @@ import WeldingJournalList from "@/components/WeldingJournalList";
 import WeldingHistoryList from "@/components/WeldingHistoryList";
 import WeldJointManagement from "@/components/WeldJointManagement";
 import WeldingTrayList from "@/components/WeldingTrayList";
+import YearlyWeldReport from "@/components/YearlyWeldReport";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
@@ -53,6 +54,7 @@ const views: Record<string, React.ReactNode> = {
   "quan-ly-du-an": <ProjectManagement />,
   "quan-ly-moi-han": <WeldJointManagement />,
   "nhat-ky-han": <WeldingJournalList />,
+  "bc-moi-han-theo-nam": <YearlyWeldReport />,
   "quan-ly-may-han": <MachineList />,
   "ban-do": <MapView />,
   "tai-lieu": <DocumentLibrary />,

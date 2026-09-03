@@ -27,6 +27,7 @@ export default function GlobalReportFilterBar() {
   const {
     filterCount,
     appliedFilters,
+    isDirty,
     dateFrom,
     dateTo,
     projects,
@@ -42,6 +43,8 @@ export default function GlobalReportFilterBar() {
     setPersonnel,
     setMethods,
     setWeldTypes,
+    applyFilters,
+    clearFilters,
   } = useReportFilters();
 
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
@@ -135,7 +138,13 @@ export default function GlobalReportFilterBar() {
           </button>
 
           {filtersOpen && (
-            <div className="border-t border-slate-200 p-3 sm:p-4 flex flex-col gap-3">
+            <form
+              className="border-t border-slate-200 p-3 sm:p-4 flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyFilters();
+              }}
+            >
           <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-end gap-2.5 sm:gap-3 flex-1 min-w-0">
               <div className="min-w-0 flex-1">
@@ -339,8 +348,26 @@ export default function GlobalReportFilterBar() {
               )}
             </div>
 
-          </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {isDirty && (
+                <span className="text-[11px] font-medium text-amber-700">Chưa áp dụng · nhấn Enter</span>
+              )}
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Xóa lọc
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer shadow-xs"
+              >
+                Áp dụng (Enter)
+              </button>
             </div>
+          </div>
+            </form>
           )}
         </div>
       </div>

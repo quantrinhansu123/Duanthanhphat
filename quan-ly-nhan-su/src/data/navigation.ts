@@ -122,6 +122,11 @@ export const navigation: NavItem[] = [
         description: "Theo dõi nhật ký hàn theo thời gian, nhân sự, vị trí GPS và tình trạng",
       },
       {
+        id: "bc-moi-han-theo-nam",
+        label: "Báo cáo mối hàn theo năm",
+        description: "Bảng tổng hợp mối hàn, đạt/lỗi, FBW/ATW và loại mối theo từng năm",
+      },
+      {
         id: "quan-ly-may-han",
         label: "Quản lý Máy Hàn",
         description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",

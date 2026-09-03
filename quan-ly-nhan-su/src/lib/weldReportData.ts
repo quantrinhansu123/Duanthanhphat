@@ -196,6 +196,189 @@ export function listFailedWeldsInDateRange(
     }));
 }
 
+export type WeldJournalPageQuery = {
+  page: number;
+  pageSize?: number;
+  query?: string;
+  project?: string;
+  resultFilter?: string;
+};
+
+export type WeldJournalPageResult = {
+  rows: WeldReportRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  passCount: number;
+  failCount: number;
+};
+
+const JOURNAL_PAGE_COLUMNS = [
+  ...REPORT_COLUMNS_WITH_DATE,
+].join(",");
+
+/** Tải 1 trang nhật ký hàn từ Supabase (mặc định 50 dòng). */
+export async function loadWeldJournalPage({
+  page,
+  pageSize = 50,
+  query = "",
+  project = "Tất cả dự án",
+  resultFilter = "Tất cả",
+}: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Chưa cấu hình Supabase. Tạo quan-ly-nhan-su/.env.local với NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+    );
+  }
+
+  const supabase = createClient();
+  const safePage = Math.max(1, page);
+  const from = (safePage - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const q = query.trim();
+
+  let request = supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select(JOURNAL_PAGE_COLUMNS, { count: "exact" })
+    .order("nam_thuc_hien", { ascending: false })
+    .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+    .order("ma_lich_su", { ascending: true });
+
+  if (project && project !== "Tất cả dự án") {
+    request = request.eq("du_an", project);
+  }
+  if (resultFilter === "Đạt") {
+    request = request.eq("so_luong_loi", 0);
+  } else if (resultFilter === "Không đạt") {
+    request = request.gt("so_luong_loi", 0);
+  }
+  if (q) {
+    request = request.or(
+      [
+        `ten_tho_han.ilike.%${q}%`,
+        `du_an.ilike.%${q}%`,
+        `ma_lich_su.ilike.%${q}%`,
+        `chung_chi_su_dung.ilike.%${q}%`,
+        `ma_may.ilike.%${q}%`,
+      ].join(","),
+    );
+  }
+
+  const { data, error, count } = await request.range(from, to);
+  if (error) {
+    // Fallback nếu thiếu cột máy/ngày — bỏ filter or phức tạp
+    const fallback = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select(REPORT_COLUMNS_BASE.join(","), { count: "exact" })
+      .order("nam_thuc_hien", { ascending: false })
+      .order("ma_lich_su", { ascending: true })
+      .range(from, to);
+    if (fallback.error) throw error;
+    const rows = (fallback.data ?? []) as unknown as WeldReportRow[];
+    const summary = summarizeJournalRows(rows);
+    return {
+      rows,
+      total: fallback.count ?? rows.length,
+      page: safePage,
+      pageSize,
+      passCount: summary.passed,
+      failCount: summary.errors,
+    };
+  }
+
+  const rows = (data ?? []) as unknown as WeldReportRow[];
+
+  // Đếm đạt / không đạt trên toàn bộ bộ lọc (head count), không chỉ trang hiện tại.
+  let passCount = 0;
+  let failCount = 0;
+  {
+    let passReq = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("id", { count: "exact", head: true })
+      .eq("so_luong_loi", 0);
+    let failReq = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("id", { count: "exact", head: true })
+      .gt("so_luong_loi", 0);
+    if (project && project !== "Tất cả dự án") {
+      passReq = passReq.eq("du_an", project);
+      failReq = failReq.eq("du_an", project);
+    }
+    if (q) {
+      const orFilter = [
+        `ten_tho_han.ilike.%${q}%`,
+        `du_an.ilike.%${q}%`,
+        `ma_lich_su.ilike.%${q}%`,
+        `chung_chi_su_dung.ilike.%${q}%`,
+        `ma_may.ilike.%${q}%`,
+      ].join(",");
+      passReq = passReq.or(orFilter);
+      failReq = failReq.or(orFilter);
+    }
+    if (resultFilter === "Đạt") {
+      failCount = 0;
+      const passRes = await passReq;
+      passCount = passRes.count ?? 0;
+    } else if (resultFilter === "Không đạt") {
+      passCount = 0;
+      const failRes = await failReq;
+      failCount = failRes.count ?? 0;
+    } else {
+      const [passRes, failRes] = await Promise.all([passReq, failReq]);
+      passCount = passRes.count ?? 0;
+      failCount = failRes.count ?? 0;
+    }
+  }
+
+  return {
+    rows,
+    total: count ?? rows.length,
+    page: safePage,
+    pageSize,
+    passCount,
+    failCount,
+  };
+}
+
+/** Danh sách dự án nhẹ cho filter/form — không cần load toàn bộ nhật ký. */
+export async function loadJournalProjectOptions() {
+  if (!isSupabaseConfigured()) return [] as { id: string; label: string }[];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("du_an")
+    .select("id,du_an")
+    .order("du_an", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.id as string, label: row.du_an as string }));
+}
+
+/** Mối hàn lỗi trong khoảng ngày — query có giới hạn, dùng cho form liên kết. */
+export async function fetchFailedWeldsInDateRange(dateFrom: string, dateTo: string, limit = 200) {
+  if (!isSupabaseConfigured()) return [] as ReturnType<typeof listFailedWeldsInDateRange>;
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ma_lich_su,du_an,ngay_thuc_hien,nam_thuc_hien,so_luong_loi")
+    .gt("so_luong_loi", 0)
+    .gte("ngay_thuc_hien", dateFrom)
+    .lte("ngay_thuc_hien", dateTo)
+    .order("ngay_thuc_hien", { ascending: true })
+    .limit(limit);
+  if (error) {
+    // Fallback khi chưa có cột ngày: dùng list rỗng thay vì kéo cả bảng.
+    return [];
+  }
+  return (data ?? []).map((row) => {
+    const iso = (row.ngay_thuc_hien as string | null)?.slice(0, 10)
+      ?? `${row.nam_thuc_hien}-12-01`;
+    return {
+      value: row.ma_lich_su as string,
+      label: `${row.ma_lich_su} · ${formatJournalDateIso(iso)} · ${row.du_an}`,
+      isoDate: iso,
+    };
+  });
+}
+
 export type CertifiedWelderOption = {
   id: string;
   label: string;
@@ -220,14 +403,22 @@ export function uniqueWelderOptions(rows: WeldReportRow[]): CertifiedWelderOptio
 
 async function fetchWeldReportRows(columns: readonly string[]) {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("bao_cao_moi_han_theo_du_an")
-    .select(columns.join(","))
-    .order("nam_thuc_hien", { ascending: false })
-    .order("ma_lich_su", { ascending: true });
+  const pageSize = 1000;
+  const rows: WeldReportRow[] = [];
 
-  if (error) throw error;
-  return (data ?? []) as unknown as WeldReportRow[];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select(columns.join(","))
+      .order("nam_thuc_hien", { ascending: false })
+      .order("ma_lich_su", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+    const page = (data ?? []) as unknown as WeldReportRow[];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
 }
 
 export function loadWeldReportRows() {

@@ -1,22 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { googleOpenPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
-import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
 import {
-  filterWeldReportRows,
+  fetchFailedWeldsInDateRange,
   formatJournalDateIso,
   getJournalRowDateIso,
   insertWeldJournalEntry,
-  listFailedWeldsInDateRange,
-  summarizeJournalRows,
-  uniqueProjectOptions,
-  uniqueReportValues,
-  uniqueWelderOptions,
+  invalidateWeldReportCache,
+  loadJournalProjectOptions,
+  loadWeldJournalPage,
   type CertifiedWelderOption,
   type WeldReportRow,
 } from "@/lib/weldReportData";
@@ -25,8 +22,7 @@ import {
   requiredCertificateForWeld,
 } from "@/lib/weldingCertificates";
 
-const REPORT_PERIOD_START = "2017-01-01";
-const REPORT_PERIOD_END = "2026-12-31";
+const PAGE_SIZE = 50;
 
 const SYNTHETIC_FAILURE_REASONS = [
   "Rỗ khí trong vùng hàn",
@@ -93,7 +89,6 @@ function JournalFormModal({
   projects,
   welders,
   machines,
-  rows,
   saving,
   onClose,
   onSubmit,
@@ -102,7 +97,6 @@ function JournalFormModal({
   projects: { id: string; label: string }[];
   welders: CertifiedWelderOption[];
   machines: MachineOption[];
-  rows: WeldReportRow[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void;
@@ -110,11 +104,24 @@ function JournalFormModal({
   const [form, setForm] = useState(() => emptyJournalForm(projects, welders, machines));
   const [linkDateFrom, setLinkDateFrom] = useState(() => defaultLinkDateRange().from);
   const [linkDateTo, setLinkDateTo] = useState(() => defaultLinkDateRange().to);
+  const [failedWeldOptions, setFailedWeldOptions] = useState<
+    { value: string; label: string; isoDate: string }[]
+  >([]);
 
-  const failedWeldOptions = useMemo(
-    () => listFailedWeldsInDateRange(rows, linkDateFrom, linkDateTo),
-    [rows, linkDateFrom, linkDateTo],
-  );
+  useEffect(() => {
+    let active = true;
+    fetchFailedWeldsInDateRange(linkDateFrom, linkDateTo)
+      .then((options) => {
+        if (active) setFailedWeldOptions(options);
+      })
+      .catch(() => {
+        if (active) setFailedWeldOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [linkDateFrom, linkDateTo]);
+
   const requiredCertificate = useMemo(
     () => requiredCertificateForWeld(form.loai_ray, form.cong_nghe_han),
     [form.loai_ray, form.cong_nghe_han],
@@ -458,18 +465,34 @@ function JournalFormModal({
 }
 
 export default function WeldingJournalList() {
-  const { rows, loading, error, refetch } = useWeldReportData();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints(30);
 
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [project, setProject] = useState("Tất cả dự án");
   const [resultFilter, setResultFilter] = useState("Tất cả");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<WeldReportRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [passCount, setPassCount] = useState(0);
+  const [failCount, setFailCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
+  const [projectOptions, setProjectOptions] = useState<{ id: string; label: string }[]>([]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppliedQuery(query.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     let active = true;
@@ -499,53 +522,68 @@ export default function WeldingJournalList() {
     };
   }, []);
 
-  const projectOptions = useMemo(() => uniqueProjectOptions(rows), [rows]);
-  const reportWelderOptions = useMemo(() => uniqueWelderOptions(rows), [rows]);
-  const welderOptions = personnelWelderOptions.length > 0 ? personnelWelderOptions : reportWelderOptions;
+  useEffect(() => {
+    let active = true;
+    loadJournalProjectOptions()
+      .then((options) => {
+        if (active) setProjectOptions(options);
+      })
+      .catch(() => {
+        if (active) setProjectOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    loadWeldJournalPage({
+      page,
+      pageSize: PAGE_SIZE,
+      query: appliedQuery,
+      project,
+      resultFilter,
+    })
+      .then((result) => {
+        if (!active) return;
+        setRows(result.rows);
+        setTotal(result.total);
+        setPassCount(result.passCount);
+        setFailCount(result.failCount);
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setRows([]);
+        setTotal(0);
+        setPassCount(0);
+        setFailCount(0);
+        setError(loadError instanceof Error ? loadError.message : "Không tải được nhật ký hàn");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [page, appliedQuery, project, resultFilter, reloadToken]);
+
+  const welderOptions = personnelWelderOptions;
   const projects = useMemo(
-    () => ["Tất cả dự án", ...uniqueReportValues(rows, "du_an")],
-    [rows],
+    () => ["Tất cả dự án", ...projectOptions.map((item) => item.label)],
+    [projectOptions],
   );
 
-  const filteredRows = useMemo(() => {
-    const base = filterWeldReportRows(rows, {
-      dateFrom: REPORT_PERIOD_START,
-      dateTo: REPORT_PERIOD_END,
-      projects: [],
-      personnel: [],
-      machines: [],
-      methods: [],
-      weldTypes: [],
-    });
-
-    const q = query.trim().toLowerCase();
-    return base.filter((row) => {
-      const pass = row.so_luong_loi === 0;
-      const matchProject = project === "Tất cả dự án" || row.du_an === project;
-      const matchResult =
-        resultFilter === "Tất cả" ||
-        (resultFilter === "Đạt" && pass) ||
-        (resultFilter === "Không đạt" && !pass);
-      const matchQuery =
-        !q ||
-        row.ten_tho_han.toLowerCase().includes(q) ||
-        row.du_an.toLowerCase().includes(q) ||
-        row.ma_lich_su.toLowerCase().includes(q) ||
-        (row.chung_chi_su_dung?.toLowerCase().includes(q) ?? false) ||
-        (row.ma_may?.toLowerCase().includes(q) ?? false) ||
-        row.id.toLowerCase().includes(q);
-      return matchProject && matchResult && matchQuery;
-    });
-  }, [rows, query, project, resultFilter]);
-
-  const journalRows = useMemo(() => {
-    return filteredRows.map((row, index) => {
+  const pageRows = useMemo(() => {
+    return rows.map((row, index) => {
       const sequence = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? 0);
+      const absoluteIndex = (page - 1) * PAGE_SIZE + index;
       const gpsPoint = gpsPoints.length
-        ? gpsPoints[(Math.max(sequence, index + 1) - 1) % gpsPoints.length]
+        ? gpsPoints[(Math.max(sequence, absoluteIndex + 1) - 1) % gpsPoints.length]
         : null;
-      const isoDate = getJournalRowDateIso(row, index);
+      const isoDate = getJournalRowDateIso(row, absoluteIndex);
       const dateTime = `${formatJournalDateIso(isoDate)} ${String(7 + (sequence % 10)).padStart(2, "0")}:${String((sequence * 13) % 60).padStart(2, "0")}`;
       const pass = row.so_luong_loi === 0;
       return {
@@ -569,10 +607,25 @@ export default function WeldingJournalList() {
         resultType: pass ? ("pass" as const) : ("fail" as const),
       };
     });
-  }, [filteredRows, gpsPoints]);
+  }, [rows, gpsPoints, page]);
 
-  const passCount = useMemo(() => summarizeJournalRows(filteredRows).passed, [filteredRows]);
-  const failCount = useMemo(() => summarizeJournalRows(filteredRows).errors, [filteredRows]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageFrom = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageTo = Math.min(currentPage * PAGE_SIZE, total);
+
+  useEffect(() => {
+    setPage(1);
+  }, [appliedQuery, project, resultFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const refetch = useCallback(() => {
+    invalidateWeldReportCache();
+    setReloadToken((token) => token + 1);
+  }, []);
 
   function showToast(message: string) {
     setToast(message);
@@ -615,18 +668,18 @@ export default function WeldingJournalList() {
         {error
           ? `Không tải được Supabase: ${error}`
           : loading
-            ? "Đang tải dữ liệu Supabase…"
-            : `Supabase · ${rows.length} dòng lịch sử · ${journalRows.length} bản ghi nhật ký`}
+            ? "Đang tải trang nhật ký…"
+            : `Supabase · trang ${currentPage}/${totalPages} · ${PAGE_SIZE} dòng/trang · tổng ${total.toLocaleString("vi-VN")} bản ghi`}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-600">
         <span>
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{journalRows.length}</strong> bản ghi
+          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{total.toLocaleString("vi-VN")}</strong> bản ghi
         </span>
         <span className="text-slate-300">|</span>
         <span>
-          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount}</strong> đạt ·{" "}
-          <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount}</strong> không đạt
+          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount.toLocaleString("vi-VN")}</strong> đạt ·{" "}
+          <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount.toLocaleString("vi-VN")}</strong> không đạt
         </span>
       </div>
 
@@ -671,7 +724,9 @@ export default function WeldingJournalList() {
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">NHẬT KÝ HÀN</div>
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0047AB]">
-            {gpsLoading ? "Đang ghép GPS…" : `${journalRows.length} bản ghi`}
+            {gpsLoading
+              ? "Đang ghép GPS…"
+              : `${pageFrom}–${pageTo} / ${total.toLocaleString("vi-VN")} · ${PAGE_SIZE}/trang`}
           </span>
         </div>
 
@@ -693,7 +748,7 @@ export default function WeldingJournalList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {journalRows.map((w) => (
+              {pageRows.map((w) => (
                 <tr key={w.id} className="text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors">
                   <td className="p-2.5 truncate font-mono text-xs text-slate-500 max-w-[90px]" title={w.id}>
                     {w.id.slice(0, 8)}
@@ -756,7 +811,7 @@ export default function WeldingJournalList() {
                   </td>
                 </tr>
               ))}
-              {journalRows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-500">
                     Không có nhật ký hàn phù hợp với bộ lọc.
@@ -765,6 +820,34 @@ export default function WeldingJournalList() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className="text-xs text-slate-500">
+            Trang <strong className="font-mono text-slate-800">{currentPage}</strong> /{" "}
+            <strong className="font-mono text-slate-800">{totalPages}</strong>
+            {" · "}
+            Hiển thị <strong className="font-mono text-slate-800">{pageFrom}–{pageTo}</strong> trên{" "}
+            <strong className="font-mono text-slate-800">{total.toLocaleString("vi-VN")}</strong>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={currentPage <= 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Trước
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages || loading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Sau
+            </button>
+          </div>
         </div>
 
         <div className="pt-3 text-xs text-slate-500">
@@ -779,7 +862,6 @@ export default function WeldingJournalList() {
         projects={projectOptions}
         welders={welderOptions}
         machines={machineOptions}
-        rows={rows}
         saving={saving}
         onClose={() => !saving && setFormOpen(false)}
         onSubmit={handleCreate}
