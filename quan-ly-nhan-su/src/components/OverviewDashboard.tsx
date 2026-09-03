@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarBlank,
   CalendarCheck,
@@ -15,6 +15,7 @@ import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildDailyJournalSeries,
   buildDonutArcs,
+  countReworkWelds,
   filterWeldReportRows,
   getJournalRowDateIso,
   groupJournalErrorReasons,
@@ -40,6 +41,9 @@ type ChartDayPoint = {
 };
 
 const PROJECT_COLORS = ["#0047AB", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
+
+const CHART_ZOOM_MIN = 1;
+const CHART_ZOOM_MAX = 8;
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("vi-VN");
@@ -67,8 +71,8 @@ function viDate(iso: string) {
 }
 
 function viDateShort(iso: string) {
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  const [, month, day] = iso.split("-");
+  return `${day}/${month}`;
 }
 
 function sampleChartLabels(labels: string[], maxCount: number) {
@@ -88,10 +92,46 @@ export default function OverviewDashboard() {
 
   const [chartViewMode, setChartViewMode] = useState<"daily" | "cumulative">("daily");
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
+  const [chartZoom, setChartZoom] = useState(1);
+  const plotScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSelectedDayIndex(null);
   }, [appliedFilters, chartViewMode]);
+
+  // Cuộn chuột trên biểu đồ để phóng to / thu nhỏ các cột
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const prevWidth = el.scrollWidth;
+      const anchorRatio =
+        prevWidth > 0 ? (el.scrollLeft + event.offsetX) / prevWidth : 0.5;
+      setChartZoom((current) => {
+        const next = Math.min(
+          CHART_ZOOM_MAX,
+          Math.max(CHART_ZOOM_MIN, +(current * (event.deltaY < 0 ? 1.2 : 1 / 1.2)).toFixed(3)),
+        );
+        if (next !== current) {
+          requestAnimationFrame(() => {
+            const node = plotScrollRef.current;
+            if (node) {
+              node.scrollLeft = anchorRatio * node.scrollWidth - event.offsetX;
+            }
+          });
+        }
+        return next;
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    setChartZoom(1);
+  }, [chartViewMode, appliedFilters]);
 
   const selectedRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
@@ -153,7 +193,7 @@ export default function OverviewDashboard() {
   const total = summary.total;
   const passed = summary.passed;
   const failed = summary.errors;
-  const pending = 0;
+  const rework = countReworkWelds(selectedRows);
   const target = plannedTarget > 0 ? plannedTarget : total;
   const plannedDays = selectedProjects.reduce(
     (sum, project) => sum + (project.theoreticalProgress ?? []).filter(
@@ -181,6 +221,8 @@ export default function OverviewDashboard() {
         linePath: "",
         areaPath: "",
         chartLabels: [],
+        dailyStackBars: [],
+        cumStackBars: [],
         cumBars: [],
         cumPts: [],
         cumLinePath: "",
@@ -198,7 +240,7 @@ export default function OverviewDashboard() {
 
     const targetSlice = dailyTargets;
     const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, 1) / 10) * 10);
-    const plotH = 190;
+    const plotH = 260;
     const padX = 14;
     const plotW = 500 - padX * 2;
     const step = count > 1 ? plotW / (count - 1) : 0;
@@ -313,6 +355,35 @@ export default function OverviewDashboard() {
       areaPath = `${top} ${bottom}`;
     }
 
+    // Cột chồng: 1 cột/ngày, cao = dự kiến. Dưới (xanh) = thực tế, trên (vàng) = phần còn thiếu.
+    // Mỗi ngày chiếm 1 ô rộng bằng nhau (band); cột nằm giữa ô, bề rộng ~46% band để có khe hở.
+    const band = 500 / Math.max(1, count);
+    const stackBarW = Math.min(26, band * 0.46);
+    const makeStackBars = (actualArr: number[], targetArr: number[], axisMax: number) =>
+      actualArr.map((aRaw, idx) => {
+        const a = Math.max(0, aRaw);
+        const t = Math.max(0, targetArr[idx] ?? 0);
+        const cx = band * (idx + 0.5);
+        const px = (v: number) => Math.min(plotH - 4, (v / axisMax) * plotH);
+        const blueH = a > 0 ? Math.max(2, px(a)) : 0;
+        const yellowH = t > a ? Math.max(2, Math.min(px(t) - blueH, plotH - 4 - blueH)) : 0;
+        return {
+          x: cx - stackBarW / 2,
+          w: stackBarW,
+          bandX: band * idx,
+          bandW: band,
+          blueY: plotH - blueH,
+          blueH,
+          yellowY: plotH - blueH - yellowH,
+          yellowH,
+          actual: a,
+          target: t,
+        };
+      });
+
+    const dailyStackBars = makeStackBars(slice, targetSlice, maxVal);
+    const cumStackBars = makeStackBars(cumValues, targetCumValues, maxCumVal);
+
     const fullLabels = dailySeries.map((point) => viDateShort(point.date));
     const chartLabels = sampleChartLabels(fullLabels, 8);
 
@@ -337,6 +408,8 @@ export default function OverviewDashboard() {
       linePath,
       areaPath,
       chartLabels,
+      dailyStackBars,
+      cumStackBars,
       cumBars,
       cumPts,
       cumLinePath,
@@ -361,6 +434,33 @@ export default function OverviewDashboard() {
     setSelectedDayIndex((prev) => (prev === idx ? null : idx));
   }
 
+  const chartDayCount = chart.dayPoints.length;
+  // Bề rộng vùng vẽ: mặc định ~44px/ngày, nhân theo mức zoom; luôn tối thiểu lấp đầy khung.
+  const plotWidthPx = Math.round(Math.max(chartDayCount * 44 * chartZoom, 1));
+
+  // Đường xu hướng nối đỉnh các cột
+  const stackBars = chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
+  const toPath = (pts: { x: number; y: number }[]) =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  // ...theo mức dự kiến (đỉnh cả cột)
+  const trendTops = stackBars
+    .filter((b) => b.target > 0 || b.actual > 0)
+    .map((b) => ({ x: b.x + b.w / 2, y: b.yellowH > 0 ? b.yellowY : b.blueY }));
+  const trendPath = toPath(trendTops);
+  // ...theo thực tế (đỉnh phần xanh)
+  const actualTops = stackBars
+    .filter((b) => b.actual > 0)
+    .map((b) => ({ x: b.x + b.w / 2, y: b.blueY }));
+  const actualTrendPath = toPath(actualTops);
+  function stepZoom(dir: 1 | -1) {
+    setChartZoom((current) =>
+      Math.min(
+        CHART_ZOOM_MAX,
+        Math.max(CHART_ZOOM_MIN, +(current * (dir === 1 ? 1.25 : 1 / 1.25)).toFixed(3)),
+      ),
+    );
+  }
+
   const projectRows = useMemo(() => {
     return groupJournalRows(selectedRows, (row) => row.du_an)
       .sort((a, b) => b.total - a.total)
@@ -378,8 +478,8 @@ export default function OverviewDashboard() {
   );
 
   const statusDonutArcs = useMemo(
-    () => buildDonutArcs([passed, pending, failed]),
-    [passed, pending, failed],
+    () => buildDonutArcs([passed, rework, failed]),
+    [passed, rework, failed],
   );
 
   const machineRows = useMemo(() => {
@@ -408,7 +508,7 @@ export default function OverviewDashboard() {
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
-    { name: "Chờ kiểm tra", color: "#d97706", value: fmt(pending), pct: pctComma(pending, total) },
+    { name: "Hàn lại", color: "#d97706", value: fmt(rework), pct: pctComma(rework, total) },
     { name: "Không đạt", color: "#dc2626", value: fmt(failed), pct: pctComma(failed, total) },
   ];
 
@@ -536,14 +636,14 @@ export default function OverviewDashboard() {
       </div>
 
       {/* 3. Middle Charts Row (Production Progress + Daily Chart + Welds by Plant) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)_minmax(320px,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(280px,330px)_minmax(0,1.9fr)_minmax(280px,0.72fr)] gap-4 items-start xl:items-stretch">
         {/* Box 1: TIẾN ĐỘ SẢN XUẤT */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             TIẾN ĐỘ SẢN XUẤT
           </div>
-          <div className="mt-3.5 flex flex-col sm:flex-row gap-3.5">
-            <div className="w-full sm:w-[214px] shrink-0 text-center">
+          <div className="mt-3.5 flex flex-col gap-4">
+            <div className="w-full text-center">
               <div className="relative mx-auto h-[126px] w-[214px]">
                 <svg viewBox="0 0 200 118" className="h-[126px] w-[214px] block">
                   <path
@@ -577,10 +677,10 @@ export default function OverviewDashboard() {
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col gap-2.5 pt-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-3.5">
               <div>
                 <div className="text-xs text-slate-500">Còn lại</div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
                     {fmt(Math.max(0, target - total))}
                   </span>
@@ -589,7 +689,7 @@ export default function OverviewDashboard() {
               </div>
               <div>
                 <div className="text-xs text-slate-500">Kế hoạch trung bình/ngày</div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
                     {quota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
                   </span>
@@ -598,7 +698,7 @@ export default function OverviewDashboard() {
               </div>
               <div>
                 <div className="text-xs text-slate-500">Kế hoạch trong kỳ</div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-emerald-700">
                     {fmt(plannedTarget)}
                   </span>
@@ -607,8 +707,8 @@ export default function OverviewDashboard() {
               </div>
               <div>
                 <div className="mb-1 text-xs text-slate-500">Trạng thái</div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-700 shadow-2xs">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-700 shadow-2xs">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
                   ĐÚNG TIẾN ĐỘ
                 </div>
               </div>
@@ -618,13 +718,13 @@ export default function OverviewDashboard() {
 
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY / LŨY KẾ */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+          <div className="flex flex-row items-center justify-between gap-2.5">
+            <div className="min-w-0 text-sm sm:text-base font-bold tracking-tight text-slate-900">
               {chartViewMode === "daily" ? "SẢN LƯỢNG HÀN THEO NGÀY" : "SẢN LƯỢNG HÀN THEO LŨY KẾ"}
             </div>
-            
+
             {/* 1 nút chia làm 2: Ngày | Lũy kế */}
-            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+            <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setChartViewMode("daily")}
@@ -653,31 +753,14 @@ export default function OverviewDashboard() {
           </div>
 
           {/* Legend */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <svg width="22" height="8">
-                <line x1="0" y1="4" x2="22" y2="4" stroke="#0047AB" strokeWidth="2" />
-                <circle cx="11" cy="4" r="3" fill="#0047AB" />
-              </svg>
-              <span>{chartViewMode === "daily" ? "Thực tế" : "Lũy kế thực tế"}</span>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3.5 rounded-xs bg-[#3b82f6]" />
+              <span>Thực tế</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="22" height="8">
-                <line
-                  x1="0"
-                  y1="4"
-                  x2="22"
-                  y2="4"
-                  stroke="#94a3b8"
-                  strokeWidth="1.6"
-                  strokeDasharray="5 4"
-                />
-              </svg>
-              <span>{chartViewMode === "daily" ? "Mục tiêu" : "Lũy kế mục tiêu"}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-4 rounded-xs bg-blue-200" />
-              <span>Bình quân 7 ngày</span>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />
+              <span>Dự kiến</span>
             </div>
           </div>
 
@@ -710,14 +793,6 @@ export default function OverviewDashboard() {
                       <p className="text-[10px] text-slate-500">Mục tiêu ngày</p>
                       <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.dailyTarget)}</p>
                     </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Lũy kế thực tế</p>
-                      <p className="font-mono text-sm font-bold text-[#0047AB] tabular-nums">{fmt(selectedDay.cumActual)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Lũy kế mục tiêu</p>
-                      <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.cumTarget)}</p>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -729,148 +804,224 @@ export default function OverviewDashboard() {
                       <p className="text-[10px] text-slate-500">Lũy kế mục tiêu</p>
                       <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.cumTarget)}</p>
                     </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Sản lượng ngày</p>
-                      <p className="font-mono text-sm font-bold text-[#0047AB] tabular-nums">{fmt(selectedDay.daily)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Mục tiêu ngày</p>
-                      <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.dailyTarget)}</p>
-                    </div>
                   </>
                 )}
               </div>
             </div>
-          ) : (
-            <p className="mt-2 text-[10px] text-slate-400 text-center">
-              Click vào từng ngày trên biểu đồ để xem số liệu chi tiết
-            </p>
-          )}
+          ) : null}
 
           {/* Chart Plot */}
           <div className="mt-2 flex">
-            {/* Left Y-axis labels */}
-            <div className="relative h-[190px] w-[46px] shrink-0 text-right text-[11px] font-mono text-slate-400 select-none pr-2">
+            {/* Trục Y cố định — không cuộn theo biểu đồ */}
+            <div className="relative h-[260px] w-10 shrink-0 select-none font-mono text-[11px] font-normal text-slate-900">
               {(() => {
                 const axisMax = chartViewMode === "daily" ? chart.maxVal : chart.maxCumVal;
-                return (
-                  <>
-                    <div className="absolute right-2 -top-1.5">{fmt(axisMax)}</div>
-                    <div className="absolute right-2 top-[31px]">{fmt(Math.round(axisMax * 0.8))}</div>
-                    <div className="absolute right-2 top-[69px]">{fmt(Math.round(axisMax * 0.6))}</div>
-                    <div className="absolute right-2 top-[107px]">{fmt(Math.round(axisMax * 0.4))}</div>
-                    <div className="absolute right-2 top-[145px]">{fmt(Math.round(axisMax * 0.2))}</div>
-                    <div className="absolute right-2 top-[183px]">0</div>
-                  </>
-                );
+                const rows: [number, string][] = [
+                  [-7, fmt(axisMax)],
+                  [45, fmt(Math.round(axisMax * 0.8))],
+                  [97, fmt(Math.round(axisMax * 0.6))],
+                  [149, fmt(Math.round(axisMax * 0.4))],
+                  [201, fmt(Math.round(axisMax * 0.2))],
+                  [253, "0"],
+                ];
+                return rows.map(([top, label]) => (
+                  <span
+                    key={top}
+                    className="absolute left-0 tabular-nums"
+                    style={{ top }}
+                  >
+                    {label}
+                  </span>
+                ));
               })()}
             </div>
 
             {/* SVG Plot */}
             <div className="min-w-0 flex-1">
+              <div
+                ref={plotScrollRef}
+                className="overflow-x-auto overflow-y-hidden"
+                style={{ overscrollBehavior: "contain" }}
+              >
+                <div className="relative" style={{ width: `${plotWidthPx}px`, minWidth: "100%" }}>
               <svg
-                viewBox="0 0 500 190"
+                viewBox="0 0 500 260"
                 preserveAspectRatio="none"
-                className="h-[190px] w-full block overflow-visible"
+                className="h-[260px] w-full block overflow-visible"
               >
                 {/* Horizontal Grid */}
                 <line x1="0" y1="0.5" x2="500" y2="0.5" stroke="#f1f5f9" strokeWidth="1" />
-                <line x1="0" y1="38" x2="500" y2="38" stroke="#f1f5f9" strokeWidth="1" />
-                <line x1="0" y1="76" x2="500" y2="76" stroke="#f1f5f9" strokeWidth="1" />
-                <line x1="0" y1="114" x2="500" y2="114" stroke="#f1f5f9" strokeWidth="1" />
-                <line x1="0" y1="152" x2="500" y2="152" stroke="#f1f5f9" strokeWidth="1" />
-                <line x1="0" y1="189.5" x2="500" y2="189.5" stroke="#cbd5e1" strokeWidth="1" />
+                <line x1="0" y1="52" x2="500" y2="52" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="104" x2="500" y2="104" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="156" x2="500" y2="156" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="208" x2="500" y2="208" stroke="#f1f5f9" strokeWidth="1" />
+                <line x1="0" y1="259.5" x2="500" y2="259.5" stroke="#cbd5e1" strokeWidth="1" />
 
                 {(() => {
-                  const isCum = chartViewMode === "cumulative";
-                  const areaPath = isCum ? chart.cumAreaPath : chart.areaPath;
-                  const bars = isCum ? chart.cumBars : chart.bars;
-                  const linePath = isCum ? chart.cumLinePath : chart.linePath;
-                  const dots = isCum ? chart.cumPts : chart.dots;
+                  const bars =
+                    chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
                   return (
                     <>
-                      {areaPath && (
-                        <path d={areaPath} fill="#eff6ff" opacity="0.9" />
-                      )}
-                      {bars.map((b, i) => (
-                        <rect
-                          key={i}
-                          x={b.x}
-                          y={b.y}
-                          width="5"
-                          height={b.h}
-                          fill={selectedDayIndex === i ? "#0047AB" : "#3b82f6"}
-                          rx="1"
-                          className="transition-colors cursor-pointer"
-                          onClick={() => toggleDaySelection(i)}
-                        />
-                      ))}
-                      {isCum ? (
-                        chart.targetCumLinePath && (
-                          <path
-                            d={chart.targetCumLinePath}
-                            fill="none"
-                            stroke="#94a3b8"
-                            strokeWidth="1.3"
-                            strokeDasharray="7 5"
+                  {bars.map((b, i) => {
+                    const active = selectedDayIndex === i;
+                    return (
+                      <g
+                        key={i}
+                        className="cursor-pointer"
+                        onClick={() => toggleDaySelection(i)}
+                      >
+                        {/* nền bắt click phủ toàn ô chiều cao */}
+                        <rect x={b.bandX} y="0" width={b.bandW} height="260" fill="transparent" />
+                        {active && (
+                          <rect
+                            x={b.bandX}
+                            y="0"
+                            width={b.bandW}
+                            height="260"
+                            fill="#0047AB"
+                            opacity="0.06"
                           />
-                        )
-                      ) : (
-                        <path
-                          d={chart.targetLinePath}
-                          fill="none"
-                          stroke="#94a3b8"
-                          strokeWidth="1.3"
-                          strokeDasharray="7 5"
-                        />
-                      )}
-                      {linePath && (
-                        <path d={linePath} fill="none" stroke="#0047AB" strokeWidth="2" />
-                      )}
-                      {dots.map((p, i) => (
-                        <circle
-                          key={i}
-                          cx={p.cx}
-                          cy={p.cy}
-                          r={selectedDayIndex === i ? 4.5 : 2.8}
-                          fill="#0047AB"
-                          stroke={selectedDayIndex === i ? "#ffffff" : "none"}
-                          strokeWidth={selectedDayIndex === i ? 1.5 : 0}
-                          className="cursor-pointer"
-                          onClick={() => toggleDaySelection(i)}
-                        />
-                      ))}
+                        )}
+                        {b.yellowH > 0 && (
+                          <rect
+                            x={b.x}
+                            y={b.yellowY}
+                            width={b.w}
+                            height={b.yellowH}
+                            fill={active ? "#f59e0b" : "#fcd34d"}
+                            className="transition-colors"
+                          />
+                        )}
+                        {b.blueH > 0 && (
+                          <rect
+                            x={b.x}
+                            y={b.blueY}
+                            width={b.w}
+                            height={b.blueH}
+                            fill={active ? "#0047AB" : "#3b82f6"}
+                            className="transition-colors"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                  {trendPath && (
+                    <>
+                      <path
+                        d={trendPath}
+                        fill="none"
+                        stroke="#fde9c8"
+                        strokeWidth={5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        className="pointer-events-none"
+                      />
+                      <path
+                        d={trendPath}
+                        fill="none"
+                        stroke="#e08e0b"
+                        strokeWidth={2.25}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        className="pointer-events-none"
+                      />
+                    </>
+                  )}
+                  {actualTrendPath && (
+                    <>
+                      <path
+                        d={actualTrendPath}
+                        fill="none"
+                        stroke="#dbeafe"
+                        strokeWidth={5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        className="pointer-events-none"
+                      />
+                      <path
+                        d={actualTrendPath}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth={2.25}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        className="pointer-events-none"
+                      />
+                    </>
+                  )}
                     </>
                   );
                 })()}
-
-                {chart.dayPoints.map((dp) => (
-                  <circle
-                    key={`hit-${dp.idx}`}
-                    cx={dp.cx}
-                    cy={chartViewMode === "daily" ? dp.cy : chart.cumPts[dp.idx]?.cy ?? dp.cumCy}
-                    r="12"
-                    fill="transparent"
-                    className="cursor-pointer"
-                    onClick={() => toggleDaySelection(dp.idx)}
-                  />
-                ))}
               </svg>
-              <div className="flex gap-0.5 overflow-x-auto pt-2 pb-0.5 px-0.5">
+              {trendTops.map((p, i) => (
+                <span
+                  key={`trend-dot-${i}`}
+                  className="pointer-events-none absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[#e08e0b] bg-white"
+                  style={{ left: `${(p.x / 500) * 100}%`, top: `${p.y}px` }}
+                />
+              ))}
+              {actualTops.map((p, i) => (
+                <span
+                  key={`actual-dot-${i}`}
+                  className="pointer-events-none absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[#2563eb] bg-white"
+                  style={{ left: `${(p.x / 500) * 100}%`, top: `${p.y}px` }}
+                />
+              ))}
+              <div className="flex pt-2 pb-0.5">
                 {chart.dayPoints.map((dp) => (
                   <button
                     key={dp.idx}
                     type="button"
                     onClick={() => toggleDaySelection(dp.idx)}
-                    className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-mono transition-colors cursor-pointer ${
+                    className={`min-w-0 flex-1 basis-0 rounded py-0.5 text-center text-[11px] font-mono whitespace-nowrap transition-colors cursor-pointer ${
                       selectedDayIndex === dp.idx
                         ? "bg-[#0047AB] text-white font-semibold"
-                        : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        : "text-slate-900 hover:bg-slate-100"
                     }`}
                   >
                     {dp.dateShort}
                   </button>
                 ))}
+              </div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-end gap-2 text-sm font-medium text-slate-900">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => stepZoom(-1)}
+                    disabled={chartZoom <= CHART_ZOOM_MIN}
+                    className="h-7 w-7 rounded-md border border-slate-300 text-base leading-none text-slate-900 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    aria-label="Thu nhỏ"
+                  >
+                    −
+                  </button>
+                  <span className="w-10 text-center font-mono tabular-nums font-semibold text-slate-900">
+                    {chartZoom.toFixed(1)}×
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => stepZoom(1)}
+                    disabled={chartZoom >= CHART_ZOOM_MAX}
+                    className="h-7 w-7 rounded-md border border-slate-300 text-base leading-none text-slate-900 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    aria-label="Phóng to"
+                  >
+                    +
+                  </button>
+                  {chartZoom !== 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setChartZoom(1)}
+                      className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-50 cursor-pointer"
+                    >
+                      Đặt lại
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

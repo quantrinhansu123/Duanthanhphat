@@ -227,9 +227,13 @@ export default function AppShell({ tab }: AppShellProps) {
           </div>
         </header>
 
-        <div className={`min-h-0 flex-1 ${reportTab ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
-          {reportTab && <GlobalReportFilterBar />}
-          {reportTab && <ReportTabBar activeId={current} onNavigate={go} />}
+        <div className={`min-h-0 flex-1 overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}>
+          {reportTab && (
+            <div className="sticky top-0 z-20 shrink-0">
+              <GlobalReportFilterBar />
+              <ReportTabBar activeId={current} onNavigate={go} />
+            </div>
+          )}
 
           {!reportTab && crumb && (
             <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pt-4 sm:pt-5">
@@ -246,11 +250,7 @@ export default function AppShell({ tab }: AppShellProps) {
           )}
 
           {content ? (
-            reportTab ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
-            ) : (
-              content
-            )
+            content
           ) : current ? (
             <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">

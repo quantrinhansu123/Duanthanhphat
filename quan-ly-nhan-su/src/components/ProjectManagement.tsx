@@ -2,11 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import {
+  formatChainageRange,
+  type MachineRunSchedule,
+} from "@/data/machineAssignments";
 import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
 import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { type Project, type TheoreticalProgressRow } from "@/data/projects";
 import { welders } from "@/data/welders";
 import { useProjectsData } from "@/hooks/useProjectsData";
+import {
+  loadMachineRunScheduleBundle,
+} from "@/lib/machineRunSchedulesDb";
 import {
   buildDailyWeldPlan,
   deleteDuAn,
@@ -35,7 +42,7 @@ const weldStatusStyle: Record<ProjectWeldStatus, string> = {
 
 const statusOptions: Project["status"][] = ["Đang triển khai", "Hoàn thành", "Tạm dừng"];
 
-type DetailTab = "info" | "personnel" | "work" | "progress";
+type DetailTab = "info" | "personnel" | "work" | "progress" | "machines";
 
 function viDate(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString("vi-VN");
@@ -876,6 +883,124 @@ function WeldRow({ row }: { row: ProjectWeld }) {
   );
 }
 
+function useProjectMachineRuns(projectId: string, projectName: string, enabled: boolean) {
+  const [runs, setRuns] = useState<MachineRunSchedule[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!enabled) {
+      setRuns([]);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError("");
+    loadMachineRunScheduleBundle()
+      .then((bundle) => {
+        if (!active) return;
+        const rows = bundle.schedules
+          .filter(
+            (s) =>
+              (projectId && s.projectId === projectId) ||
+              (projectName && s.projectName === projectName),
+          )
+          .sort((a, b) => b.date.localeCompare(a.date));
+        setRuns(rows);
+        if (bundle.error) setError(bundle.error);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Không tải được lịch chạy máy");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId, projectName, enabled]);
+
+  return { runs, loading, error };
+}
+
+function ProjectMachineRunsTab({
+  runs,
+  loading,
+  error,
+}: {
+  runs: MachineRunSchedule[];
+  loading: boolean;
+  error: string;
+}) {
+  const totalHours = runs.reduce((sum, row) => sum + row.operatingHours, 0);
+
+  if (loading) {
+    return <p className="py-8 text-center text-sm text-slate-400">Đang tải lịch chạy máy…</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {error && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {error}
+        </div>
+      )}
+      <p className="text-xs text-slate-500">
+        Dữ liệu lấy từ trang <span className="font-semibold text-slate-700">Quản lý máy móc › Lịch chạy máy</span>.
+        {runs.length > 0 && (
+          <>
+            {" "}Tổng{" "}
+            <span className="font-mono font-semibold tabular-nums text-slate-900">
+              {totalHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+            </span>{" "}
+            giờ trên {runs.length} lượt chạy.
+          </>
+        )}
+      </p>
+
+      {runs.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+          Chưa có lịch chạy máy nào gắn với dự án này.
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] border-collapse text-left text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  <th className="px-3.5 py-2.5">Ngày</th>
+                  <th className="px-3.5 py-2.5">Tên máy</th>
+                  <th className="px-3.5 py-2.5">Lý trình</th>
+                  <th className="px-3.5 py-2.5 text-right">Số giờ</th>
+                  <th className="px-3.5 py-2.5">Người phụ trách</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {runs.map((row) => (
+                  <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                    <td className="px-3.5 py-2.5 whitespace-nowrap font-mono text-slate-700">{viDate(row.date)}</td>
+                    <td className="px-3.5 py-2.5">
+                      <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
+                      <div className="text-xs text-slate-500">{row.machineName}</div>
+                    </td>
+                    <td className="px-3.5 py-2.5 font-mono text-xs text-slate-700 whitespace-nowrap">
+                      {formatChainageRange(row)}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-slate-900">
+                      {row.operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-slate-900 font-medium">{row.personInChargeName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectModal({
   project,
   mode,
@@ -936,6 +1061,7 @@ function ProjectModal({
   const personnelCount = personnelRows.length;
   const weldCount = workRows.length;
   const progressCount = form.theoreticalProgress?.length ?? 0;
+  const machineRuns = useProjectMachineRuns(project.id, project.name, !isCreate);
 
   const tabs: { id: DetailTab; label: string; count?: number }[] = [
     { id: "info", label: "Thông tin" },
@@ -944,6 +1070,7 @@ function ProjectModal({
       : [
           { id: "personnel" as const, label: "Nhân sự", count: personnelCount },
           { id: "work" as const, label: "Công việc", count: weldCount },
+          { id: "machines" as const, label: "Lịch chạy máy", count: machineRuns.runs.length },
           { id: "progress" as const, label: "Tiến độ lý thuyết", count: progressCount },
         ]),
   ];
@@ -1022,6 +1149,13 @@ function ProjectModal({
               readOnly={readOnly}
               onChange={setWorkRows}
               onStartEdit={requestEdit}
+            />
+          )}
+          {tab === "machines" && (
+            <ProjectMachineRunsTab
+              runs={machineRuns.runs}
+              loading={machineRuns.loading}
+              error={machineRuns.error}
             />
           )}
           {tab === "progress" && (
@@ -1108,10 +1242,34 @@ export default function ProjectManagement() {
   const { projects: list, setProjects, loading, error, source, reload } = useProjectsData();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const projectMenuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
 
   const progressRows = useMemo(() => flattenTheoreticalProgress(list), [list]);
+
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    function onDocClick(event: MouseEvent) {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
+        setProjectMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [projectMenuOpen]);
+
+  const projectMenuOptions = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase();
+    return [...list]
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+      .filter((p) => !q || p.name.toLowerCase().includes(q));
+  }, [list, projectSearch]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1124,9 +1282,13 @@ export default function ProjectManagement() {
         p.routeFrom.toLowerCase().includes(q) ||
         p.routeTo.toLowerCase().includes(q);
       const matchStatus = status === "Tất cả trạng thái" || p.status === status;
-      return matchQ && matchStatus;
+      const matchProject = projectFilter.length === 0 || projectFilter.includes(p.id);
+      const matchDate =
+        (!dateFrom || (p.endDate ?? "") >= dateFrom) &&
+        (!dateTo || (p.startDate ?? "") <= dateTo);
+      return matchQ && matchStatus && matchProject && matchDate;
     });
-  }, [list, query, status]);
+  }, [list, query, status, projectFilter, dateFrom, dateTo]);
 
   const activeCount = list.filter((p) => p.status === "Đang triển khai").length;
 
@@ -1298,6 +1460,103 @@ export default function ProjectManagement() {
           <option>Hoàn thành</option>
           <option>Tạm dừng</option>
         </select>
+
+        {/* Lọc theo dự án */}
+        <div ref={projectMenuRef} className="relative w-full sm:w-[220px]">
+          <button
+            type="button"
+            onClick={() => setProjectMenuOpen((v) => !v)}
+            className="flex h-10 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <span className="truncate">
+              {projectFilter.length === 0 ? "Tất cả dự án" : `Đã chọn ${projectFilter.length} dự án`}
+            </span>
+            <svg
+              className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 ${projectMenuOpen ? "rotate-180 text-[#0047AB]" : ""}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {projectMenuOpen && (
+            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 flex max-h-72 flex-col rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="relative mb-1.5">
+                <MagnifyingGlass
+                  aria-hidden
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={14}
+                />
+                <input
+                  autoFocus
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  placeholder="Tìm dự án..."
+                  className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border-b border-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={projectFilter.length === 0}
+                    onChange={() => setProjectFilter([])}
+                    className="h-4 w-4 shrink-0 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                  />
+                  <span className="truncate">Tất cả</span>
+                </label>
+                {projectMenuOptions.length === 0 ? (
+                  <p className="px-2.5 py-3 text-center text-xs text-slate-400">Không tìm thấy dự án</p>
+                ) : (
+                  projectMenuOptions.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={projectFilter.includes(p.id)}
+                        onChange={() =>
+                          setProjectFilter((prev) =>
+                            prev.includes(p.id)
+                              ? prev.filter((x) => x !== p.id)
+                              : [...prev, p.id],
+                          )
+                        }
+                        className="h-4 w-4 shrink-0 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                      />
+                      <span className="truncate">{p.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Lọc theo thời gian dự án */}
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="Từ ngày"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+          />
+          <span className="text-slate-400">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="Đến ngày"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+          />
+        </div>
+
         <button
           type="button"
           onClick={() => setModal({ project: emptyProject(), mode: "create" })}
