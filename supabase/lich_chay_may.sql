@@ -71,21 +71,68 @@ $$;
 
 comment on column public.thiet_bi.ma_may is 'Mã máy duy nhất dùng để liên kết và báo cáo';
 
-insert into public.thiet_bi (ma_may, ten_may, vi_tri_hien_tai, trang_thai, hinh_anh)
+insert into public.thiet_bi (
+  ma_may,
+  ten_may,
+  model,
+  loai_may,
+  vi_tri_hien_tai,
+  trang_thai,
+  hinh_anh,
+  hinh_anh_chi_tiet
+)
 values
-  ('K920-01', 'Máy hàn aluminothermic K920', 'Nhà máy Hà Nội', 'Đang làm việc', '/may-han/k920.svg'),
-  ('AMS60-03', 'Máy hàn đường ray AMS60', 'Nhà máy Đà Nẵng', 'Sẵn sàng', '/may-han/ams60.svg'),
-  ('K355-02', 'Máy hàn di động K355', 'Xưởng bảo trì Hà Nội', 'Bảo trì', '/may-han/k355.svg'),
-  ('GEO-01', 'Máy định vị & hàn GEO', 'Nhà máy TP.HCM', 'Sẵn sàng', '/may-han/geo.svg'),
-  ('K920-02', 'Máy hàn aluminothermic K920 (dự phòng)', 'Kho máy Đà Nẵng', 'Sẵn sàng', '/may-han/k920.svg'),
-  ('AMS60-01', 'Máy hàn đường ray AMS60 – tổ 1', 'Xưởng sửa chữa Hà Nội', 'Hỏng', '/may-han/ams60.svg')
+  (
+    'KCM007-01',
+    'Tổ hợp máy hàn ray lưu động KCM-007 (K922-1)',
+    'KCM-007 (K922-1)',
+    'Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)',
+    'Km 15+200 · Ga Hà Nội',
+    'Đang làm việc',
+    '/may-han/kcm007.jpg',
+    array['/may-han/kcm007.jpg']
+  ),
+  (
+    'UN5-150ZC2-01',
+    'Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6',
+    'UN5-150ZC2-C6',
+    'Máy hàn tiếp xúc đối đầu ray lưu động (On rail / stationary)',
+    'Km 0+500 · Depot ga Hà Nội',
+    'Sẵn sàng',
+    '/may-han/un5-150zc2-c6-main.jpg',
+    array['/may-han/un5-150zc2-c6-main.jpg', '/may-han/un5-150zc2-c6-detail.jpg', '/may-han/un5-150zc2-c6-action.jpg']
+  ),
+  (
+    'KCM007-02',
+    'Tổ hợp máy hàn ray lưu động KCM-007 (K922-1) (Tổ 2)',
+    'KCM-007 (K922-1)',
+    'Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)',
+    'Bãi máy ga Đà Nẵng',
+    'Sẵn sàng',
+    '/may-han/kcm007.jpg',
+    array['/may-han/kcm007.jpg']
+  ),
+  (
+    'UN5-150ZC2-02',
+    'Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6 (Dự phòng)',
+    'UN5-150ZC2-C6',
+    'Máy hàn tiếp xúc đối đầu ray lưu động (On rail / stationary)',
+    'Khu tập kết thiết bị ga Giáp Bát',
+    'Bảo trì',
+    '/may-han/un5-150zc2-c6-main.jpg',
+    array['/may-han/un5-150zc2-c6-main.jpg', '/may-han/un5-150zc2-c6-detail.jpg', '/may-han/un5-150zc2-c6-action.jpg']
+  )
 on conflict (ma_may) do update
 set ten_may = excluded.ten_may,
+    model = excluded.model,
+    loai_may = excluded.loai_may,
     vi_tri_hien_tai = case
       when public.thiet_bi.vi_tri_hien_tai = 'Chưa cập nhật' then excluded.vi_tri_hien_tai
       else public.thiet_bi.vi_tri_hien_tai
     end,
     hinh_anh = excluded.hinh_anh,
+    hinh_anh_chi_tiet = excluded.hinh_anh_chi_tiet,
+    trang_thai = excluded.trang_thai,
     updated_at = now();
 
 comment on column public.thiet_bi.vi_tri_hien_tai is 'Vị trí hiện tại của máy: nhà máy, công trường hoặc lý trình';

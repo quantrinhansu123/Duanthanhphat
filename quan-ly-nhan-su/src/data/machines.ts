@@ -1,165 +1,260 @@
+export type MachineSpecs = {
+  applicationWork?: string;
+  emissionStandard?: string;
+  axes?: number;
+  clampingGradient?: string;
+  speedRoad?: string;
+  speedRail?: string;
+  gauge?: string;
+  weight?: string;
+  dimensions?: string;
+  upsettingForce?: string;
+  clampingForce?: string;
+  weldingStroke?: string;
+  efficiency?: string;
+};
+
 export type Machine = {
   id: string;
   code: string;
   name: string;
   model: string;
+  type: string;
+  nameEn?: string;
+  nameVi?: string;
+  brand: string;
+  manufacturer: string;
   plant: string;
   location: string;
+  currentProject: string;
   status: "Đang làm việc" | "Sẵn sàng" | "Bảo trì" | "Hỏng";
   available: boolean;
   weldCount: number;
   image: string;
+  gallery?: string[];
   serialNumber: string;
   yearInstalled: number;
+  weldingTechnology: string;
+  supportedRails: string;
+  weldingCapacity: string;
   operator: string;
+  personInCharge: string;
   team: string;
   lastMaintenance: string;
   nextMaintenance: string;
   operatingHours: number;
   errorRate: string;
   note: string;
+  specs?: MachineSpecs;
 };
 
-const machineImages: Record<string, string> = {
-  K920:
-    "https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&w=480&h=270&q=80",
-  AMS60:
-    "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=480&h=270&q=80",
-  K355:
-    "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=480&h=270&q=80",
-  "GEO Pro":
-    "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=480&h=270&q=80",
+export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
+
+export const machineModelImages: Record<string, string> = {
+  "KCM-007 (K922-1)": "/may-han/kcm007.jpg",
+  KCM007: "/may-han/kcm007.jpg",
+  "UN5-150ZC2-C6": "/may-han/un5-150zc2-c6-main.jpg",
 };
 
-function imageForModel(model: string) {
-  return machineImages[model] ?? machineImages.K920;
+export function imageForModel(model: string) {
+  return machineModelImages[model] ?? "/may-han/kcm007.jpg";
 }
 
 export const machines: Machine[] = [
   {
     id: "1",
-    code: "K920-01",
-    name: "Máy hàn aluminothermic K920",
-    model: "K920",
-    plant: "Nhà máy Hà Nội",
-    location: "Km 0+000 → Km 0+500 · ĐSCT Bắc – Nam",
+    code: "KCM007-01",
+    name: "Tổ hợp máy hàn ray lưu động KCM-007 (K922-1)",
+    model: "KCM-007 (K922-1)",
+    type: "Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)",
+    nameEn: "Rail Welding Complex / Rail Mobile Flash Butt Welding Machine",
+    nameVi: "Tổ hợp máy hàn ray lưu động gắn trên xe tải",
+    brand: "TCW",
+    manufacturer: "Chengdu Aigre Technology / TCW",
+    plant: "Trung tâm Cơ giới TCW",
+    location: "Km 15+200 · Ga Hà Nội",
+    currentProject: "Dự án ĐSCT Bắc – Nam",
     status: "Đang làm việc",
     available: false,
-    weldCount: 1842,
-    image: imageForModel("K920"),
-    serialNumber: "SN-K920-2019-0041",
-    yearInstalled: 2019,
+    weldCount: 2450,
+    image: "/may-han/kcm007.jpg",
+    gallery: ["/may-han/kcm007.jpg"],
+    serialNumber: "Chờ cập nhật theo hồ sơ bàn giao thiết bị",
+    yearInstalled: 2021,
+    weldingTechnology: "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+    supportedRails: "43 – 75 kg/m · Khổ ray 1.000 mm & 1.435 mm",
+    weldingCapacity: "12 mối/giờ",
     operator: "Phạm Văn Minh",
-    team: "Tổ 1 – Hà Nội",
-    lastMaintenance: "15/03/2026",
-    nextMaintenance: "15/06/2026",
-    operatingHours: 4280,
-    errorRate: "0,18%",
-    note: "Máy chính tuyến Cổ Loa, hoạt động 2 ca/ngày.",
+    personInCharge: "Kỹ sư trưởng TCW",
+    team: "Tổ hàn cơ giới 1",
+    lastMaintenance: "15/02/2026",
+    nextMaintenance: "15/05/2026",
+    operatingHours: 3850,
+    errorRate: "0,15%",
+    note: "Thông số kỹ thuật chuẩn Catalogue chính thức (Trang 6-7). Các thông số vận hành (vị trí, dự án, giờ chạy) là số liệu theo dõi công trường.",
+    specs: {
+      applicationWork: "On rail / road / stationary",
+      emissionStandard: "Euro V",
+      axes: 4,
+      clampingGradient: "3.5%",
+      speedRoad: "80 km/h",
+      speedRail: "25 km/h",
+      gauge: "1.000 mm, 1.435 mm",
+      weight: "35 tấn (ton)",
+      dimensions: "10.000 × 3.200 × 2.500 mm",
+      upsettingForce: "90 ~ 120 kN",
+      clampingForce: "280 kN",
+      weldingStroke: "100 – 120 mm",
+      efficiency: "12 mối/giờ",
+    },
   },
   {
     id: "2",
-    code: "AMS60-03",
-    name: "Máy hàn đường ray AMS60",
-    model: "AMS60",
-    plant: "Nhà máy Đà Nẵng",
-    location: "Bãi máy ga Đà Nẵng",
+    code: "UN5-150ZC2-01",
+    name: "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6",
+    model: "UN5-150ZC2-C6",
+    type: "Máy hàn tiếp xúc đối đầu ray lưu động (On rail / stationary)",
+    nameEn: "Mobile Rail Flash Butt Welding Machine",
+    nameVi: "Máy hàn tiếp xúc đối đầu ray lưu động",
+    brand: "TCW",
+    manufacturer: "Chengdu Aigre Technology",
+    plant: "Nhà máy Hà Nội",
+    location: "Km 0+500 · Depot ga Hà Nội",
+    currentProject: "Tuyến đường sắt đô thị",
     status: "Sẵn sàng",
     available: true,
-    weldCount: 1560,
-    image: imageForModel("AMS60"),
-    serialNumber: "SN-AMS60-2020-0018",
-    yearInstalled: 2020,
-    operator: "Nguyễn Văn Minh",
-    team: "Tổ 2 – Đà Nẵng",
-    lastMaintenance: "02/03/2026",
-    nextMaintenance: "02/05/2026",
-    operatingHours: 3910,
-    errorRate: "0,25%",
-    note: "Đang phục vụ dự án ga Đà Nẵng.",
+    weldCount: 1820,
+    image: "/may-han/un5-150zc2-c6-main.jpg",
+    gallery: [
+      "/may-han/un5-150zc2-c6-main.jpg",
+      "/may-han/un5-150zc2-c6-detail.jpg",
+      "/may-han/un5-150zc2-c6-action.jpg",
+    ],
+    serialNumber: "Chờ cập nhật theo hồ sơ bàn giao thiết bị",
+    yearInstalled: 2022,
+    weldingTechnology: "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+    supportedRails: "43 – 75 kg/m · Khổ ray 1.435 mm",
+    weldingCapacity: "12 mối/giờ",
+    operator: "Nguyễn Văn Hùng",
+    personInCharge: "Kỹ sư TCW - Aigre",
+    team: "Tổ hàn đường sắt 2",
+    lastMaintenance: "20/02/2026",
+    nextMaintenance: "20/05/2026",
+    operatingHours: 2740,
+    errorRate: "0,11%",
+    note: "Thông số kỹ thuật chuẩn Catalogue chính thức (Trang 6-7). Các thông số vận hành (vị trí, dự án, giờ chạy) là số liệu theo dõi công trường.",
+    specs: {
+      applicationWork: "On rail / stationary",
+      emissionStandard: "Euro V",
+      axes: 4,
+      clampingGradient: "5.0%",
+      speedRoad: "— (Không tự hành đường bộ)",
+      speedRail: "20 km/h",
+      gauge: "1.435 mm",
+      weight: "32 tấn (ton)",
+      dimensions: "8.300 × 2.500 × 950 mm",
+      upsettingForce: "90 ~ 120 kN",
+      clampingForce: "280 kN",
+      weldingStroke: "100 – 120 mm",
+      efficiency: "12 mối/giờ",
+    },
   },
   {
     id: "3",
-    code: "K355-02",
-    name: "Máy hàn di động K355",
-    model: "K355",
-    plant: "Nhà máy Hà Nội",
-    location: "Xưởng bảo trì Hà Nội",
-    status: "Bảo trì",
-    available: false,
-    weldCount: 980,
-    image: imageForModel("K355"),
-    serialNumber: "SN-K355-2018-0007",
-    yearInstalled: 2018,
-    operator: "Trần Văn C",
-    team: "Tổ 1 – Hà Nội",
-    lastMaintenance: "20/03/2026",
-    nextMaintenance: "—",
-    operatingHours: 2650,
-    errorRate: "0,31%",
-    note: "Đang thay phớt thủy lực và kiểm tra cảm biến nhiệt.",
+    code: "KCM007-02",
+    name: "Tổ hợp máy hàn ray lưu động KCM-007 (K922-1) (Tổ 2)",
+    model: "KCM-007 (K922-1)",
+    type: "Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)",
+    nameEn: "Rail Welding Complex / Rail Mobile Flash Butt Welding Machine",
+    nameVi: "Tổ hợp máy hàn ray lưu động gắn trên xe tải",
+    brand: "TCW",
+    manufacturer: "Chengdu Aigre Technology / TCW",
+    plant: "Xưởng bảo trì Đà Nẵng",
+    location: "Bãi máy ga Đà Nẵng",
+    currentProject: "Dự án đường sắt Bắc – Nam",
+    status: "Sẵn sàng",
+    available: true,
+    weldCount: 1210,
+    image: "/may-han/kcm007.jpg",
+    gallery: ["/may-han/kcm007.jpg"],
+    serialNumber: "Chờ cập nhật theo hồ sơ bàn giao thiết bị",
+    yearInstalled: 2021,
+    weldingTechnology: "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+    supportedRails: "43 – 75 kg/m · Khổ ray 1.000 mm & 1.435 mm",
+    weldingCapacity: "12 mối/giờ",
+    operator: "Trần Quốc Bảo",
+    personInCharge: "Đội trưởng kỹ thuật máy",
+    team: "Tổ hàn cơ giới 2",
+    lastMaintenance: "02/03/2026",
+    nextMaintenance: "02/06/2026",
+    operatingHours: 1950,
+    errorRate: "0,08%",
+    note: "Thông số kỹ thuật chuẩn Catalogue chính thức (Trang 6-7). Các thông số vận hành (vị trí, dự án, giờ chạy) là số liệu theo dõi công trường.",
+    specs: {
+      applicationWork: "On rail / road / stationary",
+      emissionStandard: "Euro V",
+      axes: 4,
+      clampingGradient: "3.5%",
+      speedRoad: "80 km/h",
+      speedRail: "25 km/h",
+      gauge: "1.000 mm, 1.435 mm",
+      weight: "35 tấn (ton)",
+      dimensions: "10.000 × 3.200 × 2.500 mm",
+      upsettingForce: "90 ~ 120 kN",
+      clampingForce: "280 kN",
+      weldingStroke: "100 – 120 mm",
+      efficiency: "12 mối/giờ",
+    },
   },
   {
     id: "4",
-    code: "GEO-01",
-    name: "Máy định vị & hàn GEO",
-    model: "GEO Pro",
-    plant: "Nhà máy TP.HCM",
-    location: "Depot Long Bình",
-    status: "Sẵn sàng",
-    available: true,
-    weldCount: 720,
-    image: imageForModel("GEO Pro"),
-    serialNumber: "SN-GEO-2021-0003",
-    yearInstalled: 2021,
-    operator: "Lê Thị Kim Anh",
-    team: "Tổ 4 – TP.HCM",
-    lastMaintenance: "10/02/2026",
-    nextMaintenance: "10/05/2026",
-    operatingHours: 1880,
-    errorRate: "0,12%",
-    note: "Máy định vị tích hợp, dùng cho ray cong và ga.",
-  },
-  {
-    id: "5",
-    code: "K920-02",
-    name: "Máy hàn aluminothermic K920 (dự phòng)",
-    model: "K920",
-    plant: "Nhà máy Đà Nẵng",
-    location: "Kho máy Đà Nẵng",
-    status: "Sẵn sàng",
-    available: true,
-    weldCount: 430,
-    image: imageForModel("K920"),
-    serialNumber: "SN-K920-2019-0042",
-    yearInstalled: 2019,
-    operator: "—",
-    team: "Tổ 2 – Đà Nẵng",
-    lastMaintenance: "05/01/2026",
-    nextMaintenance: "Chờ kích hoạt",
-    operatingHours: 980,
-    errorRate: "—",
-    note: "Máy dự phòng, tạm ngừng chờ phân công ca.",
-  },
-  {
-    id: "6",
-    code: "AMS60-01",
-    name: "Máy hàn đường ray AMS60 – tổ 1",
-    model: "AMS60",
-    plant: "Nhà máy Hà Nội",
-    location: "Xưởng sửa chữa Hà Nội",
-    status: "Hỏng",
+    code: "UN5-150ZC2-02",
+    name: "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6 (Dự phòng)",
+    model: "UN5-150ZC2-C6",
+    type: "Máy hàn tiếp xúc đối đầu ray lưu động (On rail / stationary)",
+    nameEn: "Mobile Rail Flash Butt Welding Machine",
+    nameVi: "Máy hàn tiếp xúc đối đầu ray lưu động",
+    brand: "TCW",
+    manufacturer: "Chengdu Aigre Technology",
+    plant: "Xưởng bảo trì Hà Nội",
+    location: "Khu tập kết thiết bị ga Giáp Bát",
+    currentProject: "Dự phòng khẩn cấp & bảo trì",
+    status: "Bảo trì",
     available: false,
-    weldCount: 2105,
-    image: imageForModel("AMS60"),
-    serialNumber: "SN-AMS60-2017-0011",
-    yearInstalled: 2017,
-    operator: "Đỗ Thị Lan",
-    team: "Tổ 1 – Hà Nội",
-    lastMaintenance: "18/03/2026",
-    nextMaintenance: "Chờ linh kiện",
-    operatingHours: 5120,
-    errorRate: "1,2%",
-    note: "Lỗi van an toàn khí, chờ thay thế từ nhà cung cấp.",
+    weldCount: 940,
+    image: "/may-han/un5-150zc2-c6-main.jpg",
+    gallery: [
+      "/may-han/un5-150zc2-c6-main.jpg",
+      "/may-han/un5-150zc2-c6-detail.jpg",
+      "/may-han/un5-150zc2-c6-action.jpg",
+    ],
+    serialNumber: "Chờ cập nhật theo hồ sơ bàn giao thiết bị",
+    yearInstalled: 2022,
+    weldingTechnology: "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+    supportedRails: "43 – 75 kg/m · Khổ ray 1.435 mm",
+    weldingCapacity: "12 mối/giờ",
+    operator: "Vũ Đức Thắng",
+    personInCharge: "Kỹ sư cơ điện TCW",
+    team: "Tổ bảo trì & đại tu thiết bị",
+    lastMaintenance: "10/01/2026",
+    nextMaintenance: "10/04/2026",
+    operatingHours: 1420,
+    errorRate: "0,20%",
+    note: "Thông số kỹ thuật chuẩn Catalogue chính thức (Trang 6-7). Đang trong kỳ kiểm định hệ thống kẹp thủy lực và mạch đo điện áp đối đầu.",
+    specs: {
+      applicationWork: "On rail / stationary",
+      emissionStandard: "Euro V",
+      axes: 4,
+      clampingGradient: "5.0%",
+      speedRoad: "— (Không tự hành đường bộ)",
+      speedRail: "20 km/h",
+      gauge: "1.435 mm",
+      weight: "32 tấn (ton)",
+      dimensions: "8.300 × 2.500 × 950 mm",
+      upsettingForce: "90 ~ 120 kN",
+      clampingForce: "280 kN",
+      weldingStroke: "100 – 120 mm",
+      efficiency: "12 mối/giờ",
+    },
   },
 ];

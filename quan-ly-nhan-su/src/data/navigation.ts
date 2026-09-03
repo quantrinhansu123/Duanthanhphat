@@ -71,11 +71,6 @@ export const navigation: NavItem[] = [
         description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",
       },
       {
-        id: "quan-ly-khay-han",
-        label: "Quản lý Ray Hàn",
-        description: "Danh mục ray hàn, tình trạng, vị trí, máy gắn kèm",
-      },
-      {
         id: "lich-bao-tri",
         label: "Lịch bảo trì",
         description: "Kế hoạch bảo dưỡng, lịch sử sửa chữa, phụ tùng thay thế",

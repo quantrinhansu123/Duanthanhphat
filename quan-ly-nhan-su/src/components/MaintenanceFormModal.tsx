@@ -23,7 +23,7 @@ const assigneeOptions: MaintenanceAssignee[] = [
   { name: "Lê Thị Kim Anh", photo: "https://randomuser.me/api/portraits/women/65.jpg" },
 ];
 
-const machines = ["K920-01", "K920-02", "AMS60-01", "AMS60-03", "K355-02", "GEO-01"];
+const machines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
 
 export { assigneeOptions, machines as maintenanceMachineOptions };
 

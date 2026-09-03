@@ -1,12 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CaretDown, DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import * as XLSX from "xlsx";
 import {
+  CaretDown,
+  DotsThree,
+  DownloadSimple,
+  Export,
+  MagnifyingGlass,
+  PencilSimple,
+  X,
+} from "@/components/icons";
+import {
+  DEFAULT_ACCOUNTING_CODES,
   formatWeldingDate,
-  weldingHistory as seedHistory,
   type WeldingHistoryRecord,
 } from "@/data/weldingHistory";
+import {
+  deleteWeldingHistoryRecord,
+  loadWeldingHistory,
+  quickUpdateAccountingCode,
+  saveWeldingHistoryRecord,
+} from "@/lib/weldingHistoryDb";
 
 const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -16,19 +31,22 @@ const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
 
 const resultOptions: WeldingHistoryRecord["result"][] = ["Đạt", "Không đạt", "Sửa chữa"];
 const shiftOptions: WeldingHistoryRecord["shift"][] = ["Ca 1", "Ca 2", "Ca 3"];
+const defaultMachines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
+const defaultRails = ["UIC60", "50N", "60kg/m", "P50", "P43"];
 
 function emptyRecord(): WeldingHistoryRecord {
   return {
-    id: "",
+    id: `temp-${Date.now()}`,
     date: new Date().toISOString().slice(0, 10),
-    weldingId: "",
-    welderName: "",
+    weldingId: `WH${String(Math.floor(Math.random() * 900) + 100)}`,
+    welderName: "Lê Thị Kim Anh",
     rank: "Hạng 1",
-    weldJoint: "",
-    machine: "",
+    weldJoint: `MH-HN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-01`,
+    machine: "KCM007-01",
     railType: "UIC60",
-    project: "",
+    project: "Dự án đường sắt Bắc Nam",
     shift: "Ca 1",
+    accountingCode: "HT-SX01",
     result: "Đạt",
   };
 }
@@ -60,7 +78,7 @@ function HistoryModal({
   }, [record]);
 
   const title =
-    mode === "view" ? "Chi tiết lịch sử hàn" : mode === "edit" ? "Sửa lịch sử hàn" : "Thêm lịch sử hàn";
+    mode === "view" ? "Chi tiết lịch sử hàn" : mode === "edit" ? "Sửa lịch sử hàn" : "Thêm mối hàn mới";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -73,13 +91,13 @@ function HistoryModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex max-h-[90dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">{title}</div>
             <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">
-              {mode === "create" ? "Bản ghi mới" : form.weldJoint || form.weldingId}
+              {mode === "create" ? "Bản ghi mối hàn mới" : form.weldJoint || form.weldingId}
             </h2>
           </div>
           <button
@@ -95,7 +113,7 @@ function HistoryModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Ngày
+              Ngày hàn
               <input
                 readOnly={readOnly}
                 type="date"
@@ -114,6 +132,7 @@ function HistoryModal({
               />
             </label>
           </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Thợ hàn
@@ -121,11 +140,12 @@ function HistoryModal({
                 readOnly={readOnly}
                 value={form.welderName}
                 onChange={(e) => setForm({ ...form, welderName: e.target.value })}
+                placeholder="Họ tên thợ hàn"
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Hạng
+              Hạng thợ
               <input
                 readOnly={readOnly}
                 value={form.rank}
@@ -134,35 +154,53 @@ function HistoryModal({
               />
             </label>
           </div>
+
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Mối hàn
+            Ký hiệu mối hàn
             <input
               readOnly={readOnly}
               value={form.weldJoint}
               onChange={(e) => setForm({ ...form, weldJoint: e.target.value })}
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
+              placeholder="Ví dụ: MH-HN-2026-0312-01"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono font-bold"
             />
           </label>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Máy
-              <input
-                readOnly={readOnly}
-                value={form.machine}
-                onChange={(e) => setForm({ ...form, machine: e.target.value })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-              />
+              Máy hàn
+              {readOnly ? (
+                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.machine}</div>
+              ) : (
+                <select
+                  value={form.machine}
+                  onChange={(e) => setForm({ ...form, machine: e.target.value })}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer font-mono"
+                >
+                  {defaultMachines.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              )}
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại ray
-              <input
-                readOnly={readOnly}
-                value={form.railType}
-                onChange={(e) => setForm({ ...form, railType: e.target.value })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
-              />
+              {readOnly ? (
+                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.railType}</div>
+              ) : (
+                <select
+                  value={form.railType}
+                  onChange={(e) => setForm({ ...form, railType: e.target.value })}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer font-mono"
+                >
+                  {defaultRails.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              )}
             </label>
           </div>
+
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Dự án
             <input
@@ -172,9 +210,10 @@ function HistoryModal({
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
             />
           </label>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Ca
+              Ca làm việc
               {readOnly ? (
                 <div className="mt-2 text-xs sm:text-sm font-medium text-slate-900">{form.shift}</div>
               ) : (
@@ -189,8 +228,9 @@ function HistoryModal({
                 </select>
               )}
             </label>
+
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Kết quả
+              Kết quả hàn
               {readOnly ? (
                 <div className="mt-2">
                   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[form.result]}`}>
@@ -209,6 +249,48 @@ function HistoryModal({
                 </select>
               )}
             </label>
+          </div>
+
+          {/* Trường Hạch toán được bổ sung */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3.5">
+            <label className="block text-xs sm:text-[13px] font-bold text-[#0047AB]">
+              Mã hạch toán chi phí / Hạng mục
+            </label>
+            <div className="mt-2 flex flex-col sm:flex-row gap-2">
+              <select
+                disabled={readOnly}
+                value={
+                  DEFAULT_ACCOUNTING_CODES.some((o) => o.code === form.accountingCode)
+                    ? form.accountingCode
+                    : "custom"
+                }
+                onChange={(e) => {
+                  if (e.target.value !== "custom") {
+                    setForm({ ...form, accountingCode: e.target.value });
+                  }
+                }}
+                className="h-10 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-800 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer disabled:bg-slate-100"
+              >
+                <option value="">-- Chọn danh mục gợi ý --</option>
+                {DEFAULT_ACCOUNTING_CODES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.code} · {item.label}
+                  </option>
+                ))}
+                <option value="custom">Nhập mã tùy chỉnh...</option>
+              </select>
+
+              <input
+                readOnly={readOnly}
+                value={form.accountingCode}
+                onChange={(e) => setForm({ ...form, accountingCode: e.target.value.toUpperCase() })}
+                placeholder="Mã hạch toán"
+                className="h-10 w-full sm:w-36 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-mono font-bold text-[#0047AB] shadow-2xs outline-hidden read-only:bg-slate-100 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 uppercase"
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Gợi ý: HT-SX01 (Chính tuyến), HT-SX02 (Đường nhánh), HT-TN01 (Thử nghiệm), HT-SC01 (Sửa chữa), HT-M01 (Metro).
+            </p>
           </div>
         </div>
 
@@ -244,30 +326,52 @@ function FilterGroup({
   options,
   selected,
   onChange,
+  onClear,
 }: {
   title: string;
   options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  onClear?: () => void;
 }) {
   return (
-    <div className="min-w-[160px] flex-1 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-2xs">
-      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{title}</div>
-      <div className="flex max-h-[120px] flex-col gap-1.5 overflow-y-auto">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-bold text-slate-700">{title}</span>
+        <div className="flex items-center gap-1.5">
+          {selected.length > 0 && (
+            <>
+              <span className="rounded-full bg-[#0047AB] px-1.5 py-0.2 text-[10px] font-bold text-white font-mono">
+                {selected.length}
+              </span>
+              {onClear && (
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="text-[11px] text-slate-400 hover:text-[#0047AB] cursor-pointer"
+                >
+                  Xóa
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
         {options.map((opt) => {
           const checked = selected.includes(opt);
           return (
             <label
               key={opt}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 text-xs sm:text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors"
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={() => onChange(toggleValue(selected, opt))}
-                className="h-3.5 w-3.5 accent-[#0047AB] cursor-pointer"
+                className="h-3.5 w-3.5 rounded border-slate-300 text-[#0047AB] focus:ring-blue-500 cursor-pointer"
               />
-              <span className={checked ? "font-medium text-slate-900" : ""}>{opt}</span>
+              <span className={checked ? "font-semibold text-[#0047AB]" : ""}>{opt}</span>
             </label>
           );
         })}
@@ -277,7 +381,10 @@ function FilterGroup({
 }
 
 export default function WeldingHistoryList() {
-  const [list, setList] = useState(seedHistory);
+  const [list, setList] = useState<WeldingHistoryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"supabase" | "local" | "seed">("seed");
   const [query, setQuery] = useState("");
   const [welder, setWelder] = useState("Tất cả thợ hàn");
   const [result, setResult] = useState("Tất cả kết quả");
@@ -287,33 +394,73 @@ export default function WeldingHistoryList() {
   const [railsSel, setRailsSel] = useState<string[]>([]);
   const [projectsSel, setProjectsSel] = useState<string[]>([]);
   const [shiftsSel, setShiftsSel] = useState<string[]>([]);
+  const [accountingSel, setAccountingSel] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [modal, setModal] = useState<{
     record: WeldingHistoryRecord;
     mode: "view" | "edit" | "create";
   } | null>(null);
+
+  // Load from Supabase or LocalStorage
+  useEffect(() => {
+    let active = true;
+    async function initData() {
+      setLoading(true);
+      const res = await loadWeldingHistory();
+      if (active) {
+        setList(res.records);
+        setDataSource(res.source);
+        if (res.error) {
+          setLoadError(res.error);
+        } else {
+          setLoadError(null);
+        }
+        setLoading(false);
+      }
+    }
+    initData();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const welderOptions = useMemo(
     () => ["Tất cả thợ hàn", ...Array.from(new Set(list.map((r) => r.welderName))).sort()],
     [list],
   );
   const machineOptions = useMemo(
-    () => Array.from(new Set(list.map((r) => r.machine))).sort(),
+    () => Array.from(new Set([...defaultMachines, ...list.map((r) => r.machine)])).filter(Boolean).sort(),
     [list],
   );
   const railOptions = useMemo(
-    () => Array.from(new Set(list.map((r) => r.railType))).sort(),
+    () => Array.from(new Set([...defaultRails, ...list.map((r) => r.railType)])).filter(Boolean).sort(),
     [list],
   );
   const projectOptions = useMemo(
-    () => Array.from(new Set(list.map((r) => r.project))).sort(),
+    () => Array.from(new Set(list.map((r) => r.project))).filter(Boolean).sort(),
     [list],
   );
   const shiftOptionsFilter = useMemo(
-    () => Array.from(new Set(list.map((r) => r.shift))).sort(),
+    () => Array.from(new Set(list.map((r) => r.shift))).filter(Boolean).sort(),
     [list],
   );
+  const accountingOptions = useMemo(() => {
+    const fromSeeds = DEFAULT_ACCOUNTING_CODES.map((o) => o.code);
+    const fromList = list.map((r) => r.accountingCode).filter(Boolean);
+    return Array.from(new Set([...fromSeeds, ...fromList])).sort();
+  }, [list]);
+
+  // Thống kê theo mã hạch toán
+  const accountingStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of list) {
+      const code = row.accountingCode || "Chưa hạch toán";
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [list]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -325,7 +472,8 @@ export default function WeldingHistoryList() {
           row.welderName.toLowerCase().includes(q) ||
           row.weldJoint.toLowerCase().includes(q) ||
           row.machine.toLowerCase().includes(q) ||
-          row.project.toLowerCase().includes(q);
+          row.project.toLowerCase().includes(q) ||
+          (row.accountingCode && row.accountingCode.toLowerCase().includes(q));
         const matchWelder = welder === "Tất cả thợ hàn" || row.welderName === welder;
         const matchResult = result === "Tất cả kết quả" || row.result === result;
         const matchFrom = !dateFrom || row.date >= dateFrom;
@@ -334,6 +482,7 @@ export default function WeldingHistoryList() {
         const matchRail = railsSel.length === 0 || railsSel.includes(row.railType);
         const matchProject = projectsSel.length === 0 || projectsSel.includes(row.project);
         const matchShift = shiftsSel.length === 0 || shiftsSel.includes(row.shift);
+        const matchAccounting = accountingSel.length === 0 || (row.accountingCode && accountingSel.includes(row.accountingCode));
         return (
           matchQ &&
           matchWelder &&
@@ -343,29 +492,108 @@ export default function WeldingHistoryList() {
           matchMachine &&
           matchRail &&
           matchProject &&
-          matchShift
+          matchShift &&
+          matchAccounting
         );
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [list, query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel]);
+  }, [list, query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
 
-  function handleDelete(record: WeldingHistoryRecord) {
+  async function handleDelete(record: WeldingHistoryRecord) {
     if (!window.confirm(`Xóa bản ghi "${record.weldJoint}"?`)) return;
-    setList((prev) => prev.filter((r) => r.id !== record.id));
+    const res = await deleteWeldingHistoryRecord(record.id, list);
+    if (res.error) {
+      window.alert(`Không thể xóa trên cơ sở dữ liệu Supabase:\n${res.error}\n\nThao tác xóa đã bị hủy để tránh sai lệch dữ liệu.`);
+      setMenuOpen(null);
+      return;
+    }
+    setList(res.records);
     setMenuOpen(null);
   }
 
-  function handleSave(updated: WeldingHistoryRecord) {
-    if (modal?.mode === "create") {
-      const next: WeldingHistoryRecord = {
-        ...updated,
-        id: String(Date.now()),
-      };
-      setList((prev) => [next, ...prev]);
-    } else {
-      setList((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  async function handleSave(updated: WeldingHistoryRecord) {
+    const isNew = modal?.mode === "create";
+    const res = await saveWeldingHistoryRecord(updated, list, isNew);
+    if (res.error) {
+      window.alert(`Không thể lưu vào cơ sở dữ liệu Supabase:\n${res.error}\n\nDữ liệu chưa được lưu. Vui lòng kiểm tra lại thông tin.`);
+      // Giữ form mở để người dùng sửa thông tin hoặc thử lại
+      return;
     }
+    setList(res.records);
     setModal(null);
+  }
+
+  async function handleInlineUpdate(id: string, newCode: string) {
+    const res = await quickUpdateAccountingCode(id, newCode, list);
+    if (res.error) {
+      window.alert(`Không thể lưu mã hạch toán lên Supabase:\n${res.error}`);
+      setInlineEditId(null);
+      return;
+    }
+    setList(res.records);
+    setInlineEditId(null);
+  }
+
+  // Xuất Excel
+  function exportExcel() {
+    const data = filtered.map((r, idx) => ({
+      STT: idx + 1,
+      Ngày: formatWeldingDate(r.date),
+      "Welding ID": r.weldingId,
+      "Thợ hàn": r.welderName,
+      Hạng: r.rank,
+      "Mối hàn": r.weldJoint,
+      "Máy hàn": r.machine,
+      "Loại ray": r.railType,
+      "Dự án": r.project,
+      Ca: r.shift,
+      "Hạch toán": r.accountingCode || "—",
+      "Kết quả": r.result,
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Lịch sử hàn");
+    XLSX.writeFile(wb, `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  // Xuất CSV
+  function exportCsv() {
+    const headers = [
+      "STT",
+      "Ngày",
+      "Welding ID",
+      "Thợ hàn",
+      "Hạng",
+      "Mối hàn",
+      "Máy hàn",
+      "Loại ray",
+      "Dự án",
+      "Ca",
+      "Hạch toán",
+      "Kết quả",
+    ];
+    const rows = filtered.map((r, idx) => [
+      idx + 1,
+      formatWeldingDate(r.date),
+      r.weldingId,
+      `"${r.welderName}"`,
+      r.rank,
+      r.weldJoint,
+      `"${r.machine}"`,
+      r.railType,
+      `"${r.project}"`,
+      r.shift,
+      r.accountingCode || "",
+      r.result,
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const hasFilter =
@@ -377,9 +605,11 @@ export default function WeldingHistoryList() {
     machinesSel.length > 0 ||
     railsSel.length > 0 ||
     projectsSel.length > 0 ||
-    shiftsSel.length > 0;
+    shiftsSel.length > 0 ||
+    accountingSel.length > 0;
+
   const advancedFilterCount =
-    machinesSel.length + railsSel.length + projectsSel.length + shiftsSel.length;
+    machinesSel.length + railsSel.length + projectsSel.length + shiftsSel.length + accountingSel.length;
 
   const statPass = filtered.filter((r) => r.result === "Đạt").length;
   const statFail = filtered.filter((r) => r.result === "Không đạt").length;
@@ -387,23 +617,88 @@ export default function WeldingHistoryList() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
-        <span>
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{list.length}</strong> mối hàn
-        </span>
-        <span className="text-slate-300">|</span>
-        <span>
-          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{statPass}</strong> đạt · <span className="font-semibold text-rose-700 font-mono tabular-nums">{statFail}</span> không đạt · <span className="font-semibold text-amber-700 font-mono tabular-nums">{statRework}</span> sửa chữa
-        </span>
+      {loadError && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 sm:text-sm flex items-center justify-between">
+          <span>Lưu ý tải dữ liệu từ Supabase: {loadError}</span>
+          <button type="button" onClick={() => setLoadError(null)} className="text-amber-700 hover:text-amber-900 cursor-pointer">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {/* Thanh tổng quan & Thống kê Hạch toán */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-1">
+            <span>
+              <strong className="font-semibold text-slate-900 font-mono tabular-nums">{list.length}</strong> mối hàn
+            </span>
+            <span className="text-slate-300">|</span>
+            <span>
+              <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{statPass}</strong> đạt ·{" "}
+              <span className="font-semibold text-rose-700 font-mono tabular-nums">{statFail}</span> không đạt ·{" "}
+              <span className="font-semibold text-amber-700 font-mono tabular-nums">{statRework}</span> sửa chữa
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+              dataSource === "supabase" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-[#0047AB] border border-blue-200"
+            }`}>
+              {dataSource === "supabase" ? "Đã kết nối Supabase" : dataSource === "local" ? "Đang lưu cục bộ" : "Dữ liệu mẫu"}
+            </span>
+          </div>
+        </div>
+
+        {/* Thanh chip thống kê nhanh theo Mã hạch toán */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+          <span className="text-xs font-bold text-[#0047AB] uppercase tracking-wide mr-1">
+            Thống kê Hạch toán:
+          </span>
+          {accountingStats.map(([code, count]) => {
+            const active = accountingSel.includes(code);
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setAccountingSel((prev) => toggleValue(prev, code))}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#0047AB] text-white font-bold ring-2 ring-[#0047AB]/20 shadow-xs"
+                    : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium"
+                }`}
+                title={`Lọc theo mã ${code}`}
+              >
+                <span>{code}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[11px] font-bold tabular-nums ${
+                    active ? "bg-white/30 text-white" : "bg-white text-slate-700 shadow-2xs"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+          {accountingSel.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAccountingSel([])}
+              className="ml-1 text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
+            >
+              Bỏ lọc hạch toán ({accountingSel.length})
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Thanh bộ lọc chính */}
       <div className="mb-3 flex flex-wrap items-end gap-2.5">
         <div className="relative min-w-[240px] flex-1">
           <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm mối hàn, thợ hàn, máy, dự án..."
+            placeholder="Tìm theo mối hàn, thợ hàn, máy, dự án, mã hạch toán..."
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
@@ -443,6 +738,7 @@ export default function WeldingHistoryList() {
             <option key={r}>{r}</option>
           ))}
         </select>
+
         {hasFilter && (
           <button
             type="button"
@@ -456,12 +752,35 @@ export default function WeldingHistoryList() {
               setRailsSel([]);
               setProjectsSel([]);
               setShiftsSel([]);
+              setAccountingSel([]);
             }}
             className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
           >
             Xóa lọc
           </button>
         )}
+
+        {/* Nút Xuất Excel & CSV */}
+        <button
+          type="button"
+          onClick={exportExcel}
+          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
+          title="Xuất bảng dữ liệu ra file Excel"
+        >
+          <DownloadSimple size={16} weight="bold" />
+          <span>Xuất Excel</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={exportCsv}
+          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
+          title="Xuất bảng dữ liệu ra file CSV"
+        >
+          <Export size={16} weight="bold" />
+          <span>CSV</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setModal({ record: emptyRecord(), mode: "create" })}
@@ -471,6 +790,7 @@ export default function WeldingHistoryList() {
         </button>
       </div>
 
+      {/* Khối bộ lọc chi tiết (Collapsible) */}
       <div className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <button
           type="button"
@@ -485,8 +805,8 @@ export default function WeldingHistoryList() {
               aria-hidden
               className={`text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
             />
-            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết</span>
-            <span className="text-xs text-slate-500">Máy · Loại ray · Dự án · Ca</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết &amp; Hạch toán</span>
+            <span className="text-xs text-slate-500">Máy · Loại ray · Dự án · Ca · Mã hạch toán</span>
             {advancedFilterCount > 0 && (
               <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white shadow-2xs font-mono tabular-nums">
                 {advancedFilterCount} đang chọn
@@ -494,20 +814,51 @@ export default function WeldingHistoryList() {
             )}
           </div>
           <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-            {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
+            {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc chi tiết"}
           </span>
         </button>
 
         {filtersOpen && (
           <div className="border-t border-slate-200 p-3.5 bg-slate-50/70">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <FilterGroup title="Máy" options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
-              <FilterGroup title="Loại ray" options={railOptions} selected={railsSel} onChange={setRailsSel} />
-              <FilterGroup title="Dự án" options={projectOptions} selected={projectsSel} onChange={setProjectsSel} />
-              <FilterGroup title="Ca" options={shiftOptionsFilter} selected={shiftsSel} onChange={setShiftsSel} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+              <FilterGroup
+                title="Hạch toán"
+                options={accountingOptions}
+                selected={accountingSel}
+                onChange={setAccountingSel}
+                onClear={() => setAccountingSel([])}
+              />
+              <FilterGroup
+                title="Máy hàn"
+                options={machineOptions}
+                selected={machinesSel}
+                onChange={setMachinesSel}
+                onClear={() => setMachinesSel([])}
+              />
+              <FilterGroup
+                title="Loại ray"
+                options={railOptions}
+                selected={railsSel}
+                onChange={setRailsSel}
+                onClear={() => setRailsSel([])}
+              />
+              <FilterGroup
+                title="Dự án"
+                options={projectOptions}
+                selected={projectsSel}
+                onChange={setProjectsSel}
+                onClear={() => setProjectsSel([])}
+              />
+              <FilterGroup
+                title="Ca"
+                options={shiftOptionsFilter}
+                selected={shiftsSel}
+                onChange={setShiftsSel}
+                onClear={() => setShiftsSel([])}
+              />
             </div>
             {advancedFilterCount > 0 && (
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -515,10 +866,11 @@ export default function WeldingHistoryList() {
                     setRailsSel([]);
                     setProjectsSel([]);
                     setShiftsSel([]);
+                    setAccountingSel([]);
                   }}
-                  className="text-xs font-semibold text-slate-500 hover:text-[#0047AB] cursor-pointer transition-colors"
+                  className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer transition-colors"
                 >
-                  Xóa lọc chi tiết
+                  Xóa toàn bộ lọc chi tiết
                 </button>
               </div>
             )}
@@ -526,9 +878,10 @@ export default function WeldingHistoryList() {
         )}
       </div>
 
+      {/* Bảng dữ liệu chuẩn 12 cột: Ngày | Welding ID | Thợ hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Hạch toán | Kết quả | Thao tác */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1240px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
@@ -540,26 +893,133 @@ export default function WeldingHistoryList() {
                 <th className="px-3.5 py-3">Loại ray</th>
                 <th className="px-3.5 py-3">Dự án</th>
                 <th className="px-3.5 py-3">Ca</th>
+                <th className="px-3.5 py-3">
+                  <div className="flex items-center gap-1 text-[#0047AB]">
+                    <span>Hạch toán</span>
+                    <span className="rounded bg-blue-100 px-1 text-[10px] font-bold">Mới</span>
+                  </div>
+                </th>
                 <th className="px-3.5 py-3">Kết quả</th>
-                <th className="w-12 px-2 py-3" aria-label="Thao tác" />
+                <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {loading && (
+                <tr>
+                  <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
+                    <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-600">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#0047AB] border-t-transparent" />
+                      Đang tải dữ liệu lịch sử mối hàn từ Supabase...
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!loading && filtered.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-medium font-mono text-slate-900">{formatWeldingDate(row.date)}</td>
                   <td className="px-3.5 py-3 font-mono text-xs text-slate-500">{row.weldingId}</td>
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{row.welderName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.rank}</td>
                   <td className="px-3.5 py-3">
-                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">{row.weldJoint}</span>
+                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">
+                      {row.weldJoint}
+                    </span>
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.machine}</td>
+                  <td className="px-3.5 py-3 font-mono text-xs font-bold text-slate-800">{row.machine}</td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.railType}</td>
                   <td className="max-w-[200px] px-3.5 py-3 text-slate-700">
                     <div className="line-clamp-2">{row.project}</div>
                   </td>
                   <td className="px-3.5 py-3 text-slate-700">{row.shift}</td>
+
+                  {/* Cột 10: HẠCH TOÁN với Chỉnh sửa nhanh (inline edit) */}
+                  <td className="px-3.5 py-3">
+                    <div className="relative inline-block">
+                      <button
+                        type="button"
+                        onClick={() => setInlineEditId(inlineEditId === row.id ? null : row.id)}
+                        className="group/btn inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/90 hover:bg-blue-100 px-2.5 py-1 text-xs font-bold font-mono text-[#0047AB] transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                        title="Bấm để đổi nhanh mã hạch toán"
+                      >
+                        <span>{row.accountingCode || "—"}</span>
+                        <PencilSimple
+                          size={12}
+                          weight="bold"
+                          className="text-[#0047AB]/60 group-hover/btn:text-[#0047AB] transition-colors"
+                        />
+                      </button>
+
+                      {/* Dropdown chỉnh sửa nhanh hạch toán tại dòng */}
+                      {inlineEditId === row.id && (
+                        <div className="absolute left-0 top-full z-40 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl animate-in fade-in-50 zoom-in-95 duration-100">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                              Đổi mã hạch toán
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setInlineEditId(null)}
+                              className="text-slate-400 hover:text-slate-600"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                            {DEFAULT_ACCOUNTING_CODES.map((ac) => {
+                              const isCurrent = row.accountingCode === ac.code;
+                              return (
+                                <button
+                                  key={ac.code}
+                                  type="button"
+                                  onClick={() => handleInlineUpdate(row.id, ac.code)}
+                                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors ${
+                                    isCurrent
+                                      ? "bg-[#0047AB] text-white font-bold"
+                                      : "hover:bg-slate-100 text-slate-700"
+                                  }`}
+                                >
+                                  <span className="font-mono">{ac.code}</span>
+                                  <span className={`text-[11px] ${isCurrent ? "text-blue-100" : "text-slate-400"}`}>
+                                    {ac.group}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-100">
+                            <div className="text-[10px] text-slate-500 mb-1 font-semibold">Hoặc nhập mã tùy ý:</div>
+                            <div className="flex gap-1">
+                              <input
+                                type="text"
+                                id={`input-ht-${row.id}`}
+                                defaultValue={row.accountingCode}
+                                placeholder="HT-..."
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
+                                    if (val) handleInlineUpdate(row.id, val);
+                                  }
+                                }}
+                                className="h-8 flex-1 rounded border border-slate-300 px-2 text-xs font-mono font-bold uppercase text-slate-900 outline-hidden focus:border-[#0047AB]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`input-ht-${row.id}`) as HTMLInputElement | null;
+                                  const val = el?.value.trim().toUpperCase();
+                                  if (val) handleInlineUpdate(row.id, val);
+                                }}
+                                className="rounded bg-[#0047AB] px-2.5 py-1 text-xs font-bold text-white hover:bg-[#00388A] cursor-pointer"
+                              >
+                                Lưu
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
                   <td className="px-3.5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[row.result]}`}
@@ -567,7 +1027,8 @@ export default function WeldingHistoryList() {
                       {row.result}
                     </span>
                   </td>
-                  <td className="relative px-2 py-3">
+
+                  <td className="relative px-2 py-3 text-center">
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === row.id ? null : row.id)}
@@ -586,7 +1047,7 @@ export default function WeldingHistoryList() {
                             setMenuOpen(null);
                           }}
                         >
-                          Xem
+                          Xem chi tiết
                         </button>
                         <button
                           type="button"
@@ -610,10 +1071,11 @@ export default function WeldingHistoryList() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử hàn</div>
+                    <div className="mt-1 text-xs text-slate-400">Thử thay đổi từ khóa hoặc thiết lập lại bộ lọc.</div>
                   </td>
                 </tr>
               )}

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { weldingTrays, type WeldingTray } from "@/data/welding-trays";
-import { CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import { CaretRight, MagnifyingGlass } from "@/components/icons";
 
 const statusStyle: Record<WeldingTray["status"], string> = {
   "Sẵn sàng": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",

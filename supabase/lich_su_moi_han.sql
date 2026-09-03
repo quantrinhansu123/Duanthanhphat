@@ -65,6 +65,7 @@ create table if not exists public.lich_su_moi_han (
   nguon_du_lieu         text,
   dong_nguon            integer,
   ghi_chu               text,
+  hach_toan             text,
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
 
@@ -104,6 +105,8 @@ create index if not exists idx_lich_su_moi_han_tho_han_nam
   on public.lich_su_moi_han (tho_han_id, nam_thuc_hien);
 create index if not exists idx_lich_su_moi_han_cong_nghe
   on public.lich_su_moi_han (cong_nghe_han);
+create index if not exists idx_lich_su_moi_han_hach_toan
+  on public.lich_su_moi_han (hach_toan);
 
 drop trigger if exists trg_lich_su_moi_han_updated_at on public.lich_su_moi_han;
 create trigger trg_lich_su_moi_han_updated_at

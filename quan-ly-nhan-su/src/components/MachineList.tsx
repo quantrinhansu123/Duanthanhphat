@@ -37,19 +37,14 @@ const maintStatusStyle: Record<MachineMaintenanceHistoryRow["status"], string> =
 };
 
 const statusOptions: Machine["status"][] = ["Đang làm việc", "Sẵn sàng", "Bảo trì", "Hỏng"];
-const modelOptions = ["K920", "AMS60", "K355", "GEO Pro"] as const;
+const modelOptions = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
 
-const defaultMachineImage =
-  "https://images.unsplash.com/photo-1581092160562-40aa08e78837?auto=format&fit=crop&w=480&h=270&q=80";
+const defaultMachineImage = "/may-han/kcm007.jpg";
 
 const modelImages: Record<string, string> = {
-  K920: defaultMachineImage,
-  AMS60:
-    "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=480&h=270&q=80",
-  K355:
-    "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&w=480&h=270&q=80",
-  "GEO Pro":
-    "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=480&h=270&q=80",
+  "KCM-007 (K922-1)": "/may-han/kcm007.jpg",
+  KCM007: "/may-han/kcm007.jpg",
+  "UN5-150ZC2-C6": "/may-han/un5-150zc2-c6-main.jpg",
 };
 
 function imageForModel(model: string) {
@@ -61,22 +56,48 @@ function emptyMachine(): Machine {
     id: "",
     code: "",
     name: "",
-    model: "K920",
-    plant: "Nhà máy Hà Nội",
+    model: "KCM-007 (K922-1)",
+    type: "Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)",
+    nameEn: "Rail Welding Complex",
+    nameVi: "Tổ hợp máy hàn ray lưu động gắn trên xe tải",
+    brand: "TCW",
+    manufacturer: "Chengdu Aigre Technology / TCW",
+    plant: "Trung tâm Cơ giới TCW",
     location: "",
+    currentProject: "Dự án ĐSCT Bắc – Nam",
     status: "Sẵn sàng",
     available: true,
     weldCount: 0,
-    image: imageForModel("K920"),
-    serialNumber: "",
+    image: imageForModel("KCM007"),
+    gallery: [imageForModel("KCM007")],
+    serialNumber: "Chờ cập nhật theo hồ sơ thiết bị",
     yearInstalled: new Date().getFullYear(),
+    weldingTechnology: "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+    supportedRails: "43 – 75 kg/m · Khổ ray 1.000 mm & 1.435 mm",
+    weldingCapacity: "12 mối/giờ",
     operator: "",
-    team: "",
+    personInCharge: "Kỹ sư trưởng TCW",
+    team: "Tổ hàn cơ giới 1",
     lastMaintenance: "—",
     nextMaintenance: "—",
     operatingHours: 0,
-    errorRate: "—",
+    errorRate: "0,0%",
     note: "",
+    specs: {
+      applicationWork: "On rail / road / stationary",
+      emissionStandard: "Euro V",
+      axes: 4,
+      clampingGradient: "3.5%",
+      speedRoad: "80 km/h",
+      speedRail: "25 km/h",
+      gauge: "1.000 mm, 1.435 mm",
+      weight: "35 tấn (ton)",
+      dimensions: "10.000 × 3.200 × 2.500 mm",
+      upsettingForce: "90 ~ 120 kN",
+      clampingForce: "280 kN",
+      weldingStroke: "100 – 120 mm",
+      efficiency: "12 mối/giờ",
+    },
   };
 }
 
@@ -95,7 +116,7 @@ function MachineFormFields({
           <input
             value={form.code}
             onChange={(e) => setForm({ ...form, code: e.target.value })}
-            placeholder="VD: K920-03"
+            placeholder="VD: KCM007-03"
             className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
           />
         </label>
@@ -105,7 +126,15 @@ function MachineFormFields({
             value={form.model}
             onChange={(e) => {
               const model = e.target.value;
-              setForm({ ...form, model, image: imageForModel(model) });
+              const img = imageForModel(model);
+              setForm({
+                ...form,
+                model,
+                image: img,
+                gallery: model === "UN5-150ZC2-C6"
+                  ? ["/may-han/un5-150zc2-c6-main.jpg", "/may-han/un5-150zc2-c6-detail.jpg", "/may-han/un5-150zc2-c6-action.jpg"]
+                  : ["/may-han/kcm007.jpg"],
+              });
             }}
             className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
           >
@@ -123,23 +152,62 @@ function MachineFormFields({
           className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
-      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-        Nhà máy
-        <input
-          value={form.plant}
-          onChange={(e) => setForm({ ...form, plant: e.target.value })}
-          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-        />
-      </label>
-      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-        Vị trí hiện tại
-        <input
-          value={form.location}
-          onChange={(e) => setForm({ ...form, location: e.target.value })}
-          placeholder="VD: Km 12+300 · Dự án ga Đà Nẵng"
-          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-        />
-      </label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Loại máy
+          <input
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Công nghệ hàn
+          <input
+            value={form.weldingTechnology}
+            onChange={(e) => setForm({ ...form, weldingTechnology: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Loại ray hỗ trợ
+          <input
+            value={form.supportedRails}
+            onChange={(e) => setForm({ ...form, supportedRails: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
+          />
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Năng suất hàn
+          <input
+            value={form.weldingCapacity}
+            onChange={(e) => setForm({ ...form, weldingCapacity: e.target.value })}
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Vị trí hiện tại
+          <input
+            value={form.location}
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            placeholder="VD: Km 15+200 · Ga Hà Nội"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Dự án đang phục vụ
+          <input
+            value={form.currentProject}
+            onChange={(e) => setForm({ ...form, currentProject: e.target.value })}
+            placeholder="VD: Dự án ĐSCT Bắc – Nam"
+            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+          />
+        </label>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Trạng thái
@@ -162,7 +230,7 @@ function MachineFormFields({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Số serial
+          Số serial (Catalogue/Hồ sơ)
           <input
             value={form.serialNumber}
             onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
@@ -170,7 +238,7 @@ function MachineFormFields({
           />
         </label>
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Năm lắp đặt
+          Năm sản xuất / đưa vào sử dụng
           <input
             type="number"
             min={1990}
@@ -183,7 +251,7 @@ function MachineFormFields({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Tổ đội
+          Tổ vận hành
           <input
             value={form.team}
             onChange={(e) => setForm({ ...form, team: e.target.value })}
@@ -191,10 +259,10 @@ function MachineFormFields({
           />
         </label>
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Thợ vận hành
+          Người phụ trách / Vận hành
           <input
-            value={form.operator}
-            onChange={(e) => setForm({ ...form, operator: e.target.value })}
+            value={form.personInCharge}
+            onChange={(e) => setForm({ ...form, personInCharge: e.target.value, operator: e.target.value })}
             className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </label>
@@ -214,7 +282,7 @@ function MachineFormFields({
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-3 border-b border-slate-100 py-2.5 text-xs sm:text-sm last:border-b-0">
+    <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-3 border-b border-slate-100 py-2.5 text-xs sm:text-sm last:border-b-0">
       <div className="font-medium text-slate-500">{label}</div>
       <div className="text-slate-900 font-semibold">{value}</div>
     </div>
@@ -234,11 +302,12 @@ function MachineDetailModal({
 }) {
   const [tab, setTab] = useState<"info" | "history">(initialTab);
   const [menuOpen, setMenuOpen] = useState(false);
-  const showHistoryTab = machine.model === "K920";
-  const history = useMemo(
-    () => (showHistoryTab ? getMachineMaintenanceHistory(machine.code) : []),
-    [machine.code, showHistoryTab],
-  );
+  const [activeImage, setActiveImage] = useState(machine.image);
+  const history = useMemo(() => getMachineMaintenanceHistory(machine.code), [machine.code]);
+
+  useEffect(() => {
+    setActiveImage(machine.image);
+  }, [machine.image]);
 
   useEffect(() => {
     setTab(initialTab);
@@ -252,6 +321,8 @@ function MachineDetailModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const galleryImages = machine.gallery && machine.gallery.length > 0 ? machine.gallery : [machine.image];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <button
@@ -264,12 +335,22 @@ function MachineDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="machine-detail-title"
-        className="relative z-10 flex max-h-[90dvh] w-full max-w-[820px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
           <div className="min-w-0">
-            <div className="text-xs font-bold font-mono uppercase tracking-wider text-[#0047AB]">{machine.code}</div>
-            <h2 id="machine-detail-title" className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold font-mono uppercase tracking-wider text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                {machine.code}
+              </span>
+              <span className="text-xs font-bold text-slate-500 font-mono">
+                {machine.model}
+              </span>
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                {machine.brand}
+              </span>
+            </div>
+            <h2 id="machine-detail-title" className="mt-1 text-base sm:text-lg font-bold text-slate-900">
               {machine.name}
             </h2>
           </div>
@@ -295,8 +376,6 @@ function MachineDetailModal({
                   >
                     Chỉnh sửa
                   </button>
-                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Lịch chạy máy</div>
-                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Lên lịch bảo trì</div>
                 </div>
               )}
             </div>
@@ -311,73 +390,207 @@ function MachineDetailModal({
           </div>
         </div>
 
-        {showHistoryTab && (
-          <div className="flex gap-1 border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
-            <button
-              type="button"
-              onClick={() => setTab("info")}
-              className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
-                tab === "info"
-                  ? "border-[#0047AB] text-[#0047AB]"
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              Thông tin
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("history")}
-              className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
-                tab === "history"
-                  ? "border-[#0047AB] text-[#0047AB]"
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              Lịch sử bảo trì
-              {history.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-bold font-mono text-[#0047AB]">
-                  {history.length}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
+        <div className="flex gap-1 border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => setTab("info")}
+            className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+              tab === "info"
+                ? "border-[#0047AB] text-[#0047AB]"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Hồ sơ & Thông số Catalogue
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("history")}
+            className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+              tab === "history"
+                ? "border-[#0047AB] text-[#0047AB]"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Lịch sử bảo trì
+            {history.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-bold font-mono text-[#0047AB]">
+                {history.length}
+              </span>
+            )}
+          </button>
+        </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
-          {tab === "info" || !showHistoryTab ? (
-            <>
-              <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
-                <Image src={machine.image} alt={machine.name} fill className="object-cover" sizes="780px" />
-              </div>
+          {tab === "info" ? (
+            <div className="space-y-5">
+              <div className="space-y-2.5">
+                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md">
+                  <Image
+                    src={activeImage}
+                    alt={machine.name}
+                    fill
+                    className="object-cover"
+                    sizes="800px"
+                    priority
+                  />
+                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[machine.status]}`}>
+                      {machine.status}
+                    </span>
+                    {machine.status === "Sẵn sàng" && (
+                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/95 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
+                        Có thể phân công
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute bottom-2.5 left-2.5 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-white backdrop-blur-xs font-mono">
+                    {machine.code} · {machine.model}
+                  </div>
+                </div>
 
-              <div className="mb-4 flex flex-wrap gap-2">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[machine.status]}`}>
-                  {machine.status}
-                </span>
-                {machine.status === "Sẵn sàng" && (
-                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
-                    Có thể phân công
-                  </span>
+                {galleryImages.length > 1 && (
+                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                    <span className="text-xs font-semibold text-slate-500 shrink-0">Thư viện ảnh ({galleryImages.length}):</span>
+                    {galleryImages.map((img, idx) => {
+                      const isActive = img === activeImage;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveImage(img)}
+                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
+                            isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30 scale-105" : "border-slate-200 opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <Image src={img} alt={`Góc máy ${idx + 1}`} fill className="object-cover" sizes="80px" />
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-4 py-1">
-                <DetailRow label="Mã máy" value={<span className="font-mono text-[#0047AB]">{machine.code}</span>} />
-                <DetailRow label="Model" value={machine.model} />
-                <DetailRow label="Nhà máy" value={machine.plant} />
-                <DetailRow label="Vị trí hiện tại" value={machine.location} />
-                <DetailRow label="Số serial" value={<span className="font-mono">{machine.serialNumber}</span>} />
-                <DetailRow label="Năm lắp đặt" value={machine.yearInstalled} />
-                <DetailRow label="Tổ đội" value={machine.team} />
-                <DetailRow label="Thợ vận hành" value={machine.operator} />
-                <DetailRow label="Số mối hàn" value={<span className="font-mono tabular-nums">{machine.weldCount.toLocaleString("vi-VN")}</span>} />
-                <DetailRow label="Giờ vận hành" value={<span className="font-mono tabular-nums">{`${machine.operatingHours.toLocaleString("vi-VN")} giờ`}</span>} />
-                <DetailRow label="Tỷ lệ lỗi" value={<span className="font-mono text-rose-700 tabular-nums">{machine.errorRate}</span>} />
-                <DetailRow label="Bảo trì gần nhất" value={<span className="font-mono tabular-nums">{machine.lastMaintenance}</span>} />
-                <DetailRow label="Bảo trì tiếp theo" value={<span className="font-mono tabular-nums">{machine.nextMaintenance}</span>} />
-                <DetailRow label="Ghi chú" value={machine.note} />
+              {/* 1. Hồ sơ máy (đủ 18 trường thông tin) */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                  1. Hồ sơ thiết bị & Vận hành
+                </h3>
+                <div className="divide-y divide-slate-100">
+                  <DetailRow label="Mã máy" value={<span className="font-mono font-bold text-[#0047AB]">{machine.code}</span>} />
+                  <DetailRow label="Tên máy" value={machine.name} />
+                  <DetailRow label="Model" value={<span className="font-mono font-bold text-slate-800">{machine.model}</span>} />
+                  <DetailRow label="Loại máy" value={machine.type} />
+                  <DetailRow label="Serial Number" value={<span className="font-mono text-slate-700">{machine.serialNumber}</span>} />
+                  <DetailRow label="Năm sản xuất / Đưa vào dùng" value={machine.yearInstalled} />
+                  <DetailRow label="Công nghệ hàn" value={<span className="font-semibold text-[#0047AB]">{machine.weldingTechnology}</span>} />
+                  <DetailRow label="Loại ray hỗ trợ" value={<span className="font-mono">{machine.supportedRails}</span>} />
+                  <DetailRow label="Công suất / Năng suất hàn" value={<span className="font-bold text-emerald-700">{machine.weldingCapacity}</span>} />
+                  <DetailRow label="Tổng số giờ hoạt động" value={<span className="font-mono tabular-nums">{`${machine.operatingHours.toLocaleString("vi-VN")} giờ`}</span>} />
+                  <DetailRow label="Tổng số mối hàn" value={<span className="font-mono tabular-nums text-slate-900">{`${machine.weldCount.toLocaleString("vi-VN")} mối`}</span>} />
+                  <DetailRow label="Vị trí hiện tại" value={machine.location} />
+                  <DetailRow label="Dự án đang phục vụ" value={<span className="text-[#0047AB] font-semibold">{machine.currentProject || "—"}</span>} />
+                  <DetailRow label="Người phụ trách" value={machine.personInCharge} />
+                  <DetailRow label="Tổ vận hành" value={`${machine.team} ${machine.operator ? `· Thợ chính: ${machine.operator}` : ""}`} />
+                  <DetailRow label="Bảo trì gần nhất" value={<span className="font-mono">{machine.lastMaintenance}</span>} />
+                  <DetailRow label="Bảo trì tiếp theo" value={<span className="font-mono text-amber-700 font-semibold">{machine.nextMaintenance}</span>} />
+                  <DetailRow label="Trạng thái" value={
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[machine.status]}`}>
+                      {machine.status}
+                    </span>
+                  } />
+                  <DetailRow label="Ghi chú" value={<span className="text-slate-700 leading-relaxed">{machine.note || "—"}</span>} />
+                </div>
               </div>
-            </>
+
+              {/* 2. Thông số kỹ thuật từ Catalogue chính thức (Thanh Phát – Aigre) */}
+              {machine.specs && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-2xs">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                      2. Thông số kỹ thuật chuẩn Catalogue (Thanh Phát – Aigre)
+                    </h3>
+                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-[#0047AB]">
+                      Catalogue Official
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm">
+                    {machine.specs.applicationWork && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Ứng dụng thi công</span>
+                        <span className="font-semibold text-slate-900 text-right">{machine.specs.applicationWork}</span>
+                      </div>
+                    )}
+                    {machine.specs.emissionStandard && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Tiêu chuẩn khí thải</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.emissionStandard}</span>
+                      </div>
+                    )}
+                    {machine.specs.axes !== undefined && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Số trục</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.axes} trục</span>
+                      </div>
+                    )}
+                    {machine.specs.clampingGradient && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Độ dốc kẹp lớn nhất</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.clampingGradient}</span>
+                      </div>
+                    )}
+                    {machine.specs.speedRoad && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Tốc độ chạy đường bộ</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.speedRoad}</span>
+                      </div>
+                    )}
+                    {machine.specs.speedRail && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Tốc độ chạy trên ray</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.speedRail}</span>
+                      </div>
+                    )}
+                    {machine.specs.gauge && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Khổ ray (Gauge)</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.gauge}</span>
+                      </div>
+                    )}
+                    {machine.specs.weight && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Tổng trọng lượng</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.weight}</span>
+                      </div>
+                    )}
+                    {machine.specs.dimensions && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Kích thước DxRxC</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.dimensions}</span>
+                      </div>
+                    )}
+                    {machine.specs.upsettingForce && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Lực ép lớn nhất (Upsetting)</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.upsettingForce}</span>
+                      </div>
+                    )}
+                    {machine.specs.clampingForce && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Lực kẹp định mức (Clamping)</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.clampingForce}</span>
+                      </div>
+                    )}
+                    {machine.specs.weldingStroke && (
+                      <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
+                        <span className="text-slate-500">Hành trình hàn lớn nhất</span>
+                        <span className="font-semibold text-slate-900 font-mono text-right">{machine.specs.weldingStroke}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div>
               <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
@@ -606,12 +819,12 @@ export default function MachineList() {
 
   const running = list.filter((m) => m.status === "Đang làm việc").length;
   const ready = list.filter((m) => m.status === "Sẵn sàng").length;
-  const maint = list.filter((m) => m.status === "Bảo trì").length;
-
   function openEdit(machine: Machine) {
     setDetail(null);
     setFormModal({ machine, mode: "edit" });
   }
+  const maint = list.filter((m) => m.status === "Bảo trì").length;
+
 
   function openDetail(m: Machine, tab: "info" | "history" = "info") {
     setActiveId(m.id);
@@ -622,37 +835,44 @@ export default function MachineList() {
   async function handleDelete(machine: Machine) {
     if (!window.confirm(`Xóa máy "${machine.name}"?`)) return;
     try {
-      if (source === "supabase") await deleteMachineInDb(machine.id);
+      await deleteMachineInDb(machine.id);
       setList((prev) => prev.filter((m) => m.id !== machine.id));
       if (activeId === machine.id) {
         setActiveId(null);
         setDetail(null);
       }
+      setDataError("");
     } catch (error) {
-      setDataError(error instanceof Error ? error.message : "Không thể xóa máy");
+      const msg = error instanceof Error ? error.message : "Không thể xóa máy";
+      setDataError(msg);
+      window.alert(`Lỗi xóa máy trên Supabase:\n${msg}\n\nThao tác xóa đã bị hủy.`);
     }
   }
 
   async function handleSave(updated: Machine) {
     try {
-      if (source === "supabase") await updateMachineInDb(updated);
+      await updateMachineInDb(updated);
       setList((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
       if (detail?.id === updated.id) setDetail(updated);
+      setDataError("");
       setFormModal(null);
     } catch (error) {
-      setDataError(error instanceof Error ? error.message : "Không thể cập nhật máy");
+      const msg = error instanceof Error ? error.message : "Không thể cập nhật máy";
+      setDataError(msg);
+      window.alert(`Lỗi lưu máy lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`);
     }
   }
 
   async function handleCreate(machine: Machine) {
     try {
-      const created = source === "supabase"
-        ? await createMachineInDb(machine)
-        : { ...machine, id: String(Date.now()) };
+      const created = await createMachineInDb(machine);
       setList((prev) => [created, ...prev]);
+      setDataError("");
       setFormModal(null);
     } catch (error) {
-      setDataError(error instanceof Error ? error.message : "Không thể thêm máy");
+      const msg = error instanceof Error ? error.message : "Không thể thêm máy";
+      setDataError(msg);
+      window.alert(`Lỗi thêm máy mới lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`);
     }
   }
 

@@ -3,12 +3,10 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
 
 export const REPORT_MACHINES = [
-  "K920-01",
-  "AMS60-03",
-  "K355-02",
-  "GEO-01",
-  "K920-02",
-  "AMS60-01",
+  "KCM007-01",
+  "UN5-150ZC2-01",
+  "KCM007-02",
+  "UN5-150ZC2-02",
 ] as const;
 
 export type ReportMachine = (typeof REPORT_MACHINES)[number];

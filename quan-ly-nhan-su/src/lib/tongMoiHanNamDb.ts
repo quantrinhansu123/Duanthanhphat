@@ -144,7 +144,7 @@ export function filterYearTotals(
     .map((row) => {
       let actual = row.tong_moi_han;
       let defects = row.tong_loi;
-      let target = row.tong_moi_han; // mặc định; caller có thể gắn định mức riêng
+      const target = row.tong_moi_han; // mặc định; caller có thể gắn định mức riêng
 
       if (methods.length === 1 && methods[0] === "FBW") {
         actual = row.fbw;

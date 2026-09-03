@@ -26,42 +26,42 @@ import {
 
 const MACHINES_RECOMMENDED = [
   {
-    id: "k920-01",
-    code: "K920-01",
-    name: "Máy hàn K920-01",
+    id: "kcm007-01",
+    code: "KCM007-01",
+    name: "Tổ hợp máy hàn KCM007",
     badge: "Ưu tiên cao",
     badgeBg: "bg-rose-50 text-rose-700 border border-rose-200",
-    image: "/may-han/k920.svg",
-    plant: "Nhà máy Cổ Loa",
-    welds: "8.520 mối",
+    image: "/may-han/kcm007.jpg",
+    plant: "Trung tâm Cơ giới TCW",
+    welds: "2.450 mối",
     hoursSinceMaint: "412 h",
     progressPct: 48,
     progressColor: "bg-amber-500",
     budget: "6.500.000đ",
   },
   {
-    id: "ams60-03",
-    code: "AMS60-03",
-    name: "Máy hàn AMS60-03",
+    id: "un5-150zc2-01",
+    code: "UN5-150ZC2-01",
+    name: "Máy hàn UN5-150ZC2-C6",
     badge: "Theo dõi",
     badgeBg: "bg-amber-50 text-amber-700 border border-amber-200",
-    image: "/may-han/ams60.svg",
-    plant: "Hạ Long Xanh",
-    welds: "7.840 mối",
+    image: "/may-han/un5-150zc2-c6-main.jpg",
+    plant: "Nhà máy Hà Nội",
+    welds: "1.820 mối",
     hoursSinceMaint: "355 h",
     progressPct: 35,
     progressColor: "bg-amber-500",
     budget: "7.800.000đ",
   },
   {
-    id: "k355-02",
-    code: "K355-02",
-    name: "Máy hàn K355-02",
+    id: "kcm007-02",
+    code: "KCM007-02",
+    name: "Tổ hợp KCM007 (Tổ 2)",
     badge: "Định kỳ",
     badgeBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    image: "/may-han/geo.svg",
-    plant: "Nhà máy Cổ Loa",
-    welds: "2.160 mối",
+    image: "/may-han/kcm007.jpg",
+    plant: "Xưởng bảo trì Đà Nẵng",
+    welds: "1.210 mối",
     hoursSinceMaint: "190 h",
     progressPct: 60,
     progressColor: "bg-emerald-500",
@@ -71,7 +71,7 @@ const MACHINES_RECOMMENDED = [
 
 const CALIBRATION_DOCS = [
   {
-    title: "Hiệu chuẩn\nmáy K920-01",
+    title: "Hiệu chuẩn\nmáy KCM007-01",
     icon: <ShieldCheck size={26} className="text-[#0047AB]" aria-hidden />,
   },
   {
@@ -571,15 +571,15 @@ export default function MachineReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy K920-01
+                    Máy KCM007-01
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
-                    Nhà máy Cổ Loa
+                    Ga Hà Nội
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-slate-700 font-mono">
-                    15/07/2024
+                    15/05/2026
                   </div>
                   <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
                     Còn 10 ngày
@@ -590,17 +590,17 @@ export default function MachineReportDashboard() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy AMS60-03
+                    Máy UN5-150ZC2-01
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
-                    Hạ Long Xanh
+                    Depot ga Hà Nội
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-slate-700 font-mono">
-                    20/07/2024
+                    20/05/2026
                   </div>
-                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
+                  <div className="mt-0.5 text-xs font-semibold text-amber-700 font-mono">
                     Còn 15 ngày
                   </div>
                 </div>
