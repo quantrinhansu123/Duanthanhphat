@@ -157,18 +157,21 @@ export default function CertificateManagement() {
   const expired = items.filter((c) => c.status === "Hết hạn").length;
 
   function handleAdd(values: CertificateFormValues) {
-    const cert: Certificate = {
-      id: String(Date.now()),
+    const base = {
       title: values.title.trim(),
-      holder: values.holder.trim(),
       issuedAt: formatViDate(values.issuedAt),
       expiresAt: formatViDate(values.expiresAt),
       status: values.status,
-      imageKey: values.imageUrl ? "default" : values.imageKey,
+      imageKey: values.imageUrl ? ("default" as const) : values.imageKey,
       imageUrl: values.imageUrl || undefined,
     };
-    setItems((prev) => [cert, ...prev]);
-    setActiveId(cert.id);
+    const newCerts: Certificate[] = values.holders.map((holder, index) => ({
+      id: String(Date.now() + index),
+      holder: holder.trim(),
+      ...base,
+    }));
+    setItems((prev) => [...newCerts, ...prev]);
+    if (newCerts[0]) setActiveId(newCerts[0].id);
   }
 
   function openDetail(cert: Certificate) {

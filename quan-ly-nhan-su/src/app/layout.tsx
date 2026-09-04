@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { LanguageProvider } from "@/i18n/LanguageProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -33,7 +34,7 @@ export default function RootLayout({
       className={`${inter.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
-        {children}
+        <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>
   );

@@ -5,11 +5,12 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { List, Bell, CaretRight } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
 import DeploymentHandoverList from "@/components/DeploymentHandoverList";
 import DocumentLibrary from "@/components/DocumentLibrary";
-import EmployeeManagement from "@/components/EmployeeManagement";
 import ErrorLibrary from "@/components/ErrorLibrary";
 import MachineAssignmentList from "@/components/MachineAssignmentList";
 import MachineList from "@/components/MachineList";
@@ -35,7 +36,6 @@ import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 
 const views: Record<string, React.ReactNode> = {
-  "ho-so-nhan-su": <EmployeeManagement />,
   "ho-so-tho-han": <WelderManagement />,
   "lich-su-han": <WeldingHistoryList />,
   "khoa-dao-tao": <TrainingList />,
@@ -67,27 +67,26 @@ type AppShellProps = {
   tab?: string;
 };
 
-function useClientClock() {
+function useClientClock(lang: "vi" | "en") {
   const [clock, setClock] = useState<{ time: string; date: string } | null>(null);
 
   useEffect(() => {
+    const locale = lang === "en" ? "en-US" : "vi-VN";
+    const pad = (n: number) => String(n).padStart(2, "0");
     function tick() {
       const now = new Date();
+      const dmy = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+      const weekday = now.toLocaleDateString(locale, { weekday: "long" });
       setClock({
-        time: now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        date: now.toLocaleDateString("vi-VN", {
-          weekday: "long",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        }),
+        time: now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false }),
+        date: `${weekday}, ${dmy}`,
       });
     }
 
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [lang]);
 
   return clock;
 }
@@ -121,7 +120,8 @@ export default function AppShell({ tab }: AppShellProps) {
   const current = activeTab && isValidTab(activeTab) ? activeTab : "";
   const crumb = current ? findNavMeta(current) : null;
   const reportTab = Boolean(current && isReportTab(current));
-  const clock = useClientClock();
+  const { lang } = useLanguage();
+  const clock = useClientClock(lang);
 
   const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
   const content = current ? views[current] : null;
@@ -203,6 +203,7 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="font-semibold font-mono text-slate-900 tabular-nums text-xs sm:text-sm">{clock?.time ?? "--:--"}</div>
               <div className="capitalize text-[11px] sm:text-xs font-medium text-slate-500">{clock?.date ?? "Đang tải..."}</div>
             </div>
+            <LanguageSwitcher />
             <button
               className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#0047AB]/20 focus:outline-hidden"
               type="button"
@@ -241,7 +242,7 @@ export default function AppShell({ tab }: AppShellProps) {
             <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pt-4 sm:pt-5">
               <div className="mb-3.5 sm:mb-4">
                 <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  {crumb.parentEn}
+                  {lang === "en" ? crumb.parentEn : crumb.parent}
                 </div>
                 <h1 className="mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{crumb.title}</h1>
                 {crumb.description ? (
@@ -281,7 +282,7 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-7 text-center shadow-xs">
                 <div className="text-sm font-semibold text-slate-900">Module đang được xây dựng</div>
                 <p className="mt-1 text-xs sm:text-sm text-slate-500">
-                  Các chức năng đã sẵn sàng: Hồ sơ nhân sự, Hồ sơ thợ hàn, Danh sách khóa đào tạo, Quản lý chứng chỉ, Tra cứu lịch sử đào tạo.
+                  Các chức năng đã sẵn sàng: Hồ sơ thợ hàn, Danh sách khóa đào tạo, Quản lý chứng chỉ, Tra cứu lịch sử đào tạo.
                 </p>
               </div>
             </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Icon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { navigation } from "@/data/navigation";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   Users,
   GraduationCap,
@@ -46,6 +47,7 @@ export default function Sidebar({
   onToggle,
   onClose,
 }: SidebarProps) {
+  const { lang, t } = useLanguage();
   const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
@@ -96,7 +98,9 @@ export default function Sidebar({
           {!collapsed && (
             <div className="min-w-0 leading-tight">
               <div className="truncate text-sm font-bold tracking-wider text-white">THÀNH PHÁT</div>
-              <div className="mt-0.5 truncate text-[11px] font-medium text-blue-200/80">Rail &amp; Steel Operations</div>
+              <div className="mt-0.5 truncate text-[11px] font-medium text-blue-200/80">
+                {lang === "en" ? "Rail & Steel Operations" : "Vận hành Đường sắt & Thép"}
+              </div>
             </div>
           )}
         </Link>
@@ -139,7 +143,7 @@ export default function Sidebar({
                       ? "bg-white/[0.12] font-semibold text-white shadow-xs"
                       : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                   } ${collapsed ? "justify-center px-0" : ""}`}
-                  title={`${item.labelEn} – ${item.label}`}
+                  title={lang === "en" ? item.labelEn : item.label}
                 >
                   <span
                     className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg transition-colors duration-150 ${
@@ -153,10 +157,7 @@ export default function Sidebar({
                   {!collapsed && (
                     <>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">{item.label}</span>
-                        <span className="mt-0.5 block truncate text-[11px] font-medium text-blue-200/60">
-                          {item.labelEn}
-                        </span>
+                        <span className="block truncate font-semibold">{lang === "en" ? item.labelEn : item.label}</span>
                       </span>
                       <CaretDown
                         size={14}
@@ -183,7 +184,7 @@ export default function Sidebar({
                               : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                           }`}
                         >
-                          <span className="block text-xs sm:text-[13px] leading-snug">{child.label}</span>
+                          <span className="block text-xs sm:text-[13px] leading-snug">{t(child.label)}</span>
                         </button>
                       );
                     })}

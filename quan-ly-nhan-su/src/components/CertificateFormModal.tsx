@@ -2,11 +2,14 @@
 
 import { useEffect, useId, useState } from "react";
 import type { Certificate, CertificateImageKey } from "@/data/certificates";
+import { welders } from "@/data/welders";
+import WelderMultiSelect from "@/components/WelderMultiSelect";
+import DateField from "@/components/DateField";
 import { X } from "@/components/icons";
 
 export type CertificateFormValues = {
   title: string;
-  holder: string;
+  holders: string[];
   issuedAt: string;
   expiresAt: string;
   status: Certificate["status"];
@@ -34,26 +37,28 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
   const titleId = useId();
   const [form, setForm] = useState<CertificateFormValues>({
     title: "",
-    holder: "",
+    holders: [],
     issuedAt: "",
     expiresAt: "",
     status: "Còn hiệu lực",
     imageKey: "default",
     imageUrl: "",
   });
+  const [holderIds, setHolderIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setForm({
       title: "",
-      holder: "",
+      holders: [],
       issuedAt: "",
       expiresAt: "",
       status: "Còn hiệu lực",
       imageKey: "default",
       imageUrl: "",
     });
+    setHolderIds([]);
     setError("");
   }, [open]);
 
@@ -89,15 +94,16 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
       setError("Nhập tên chứng chỉ.");
       return;
     }
-    if (!form.holder.trim()) {
-      setError("Nhập người sở hữu.");
+    if (holderIds.length === 0) {
+      setError("Chọn ít nhất một người sở hữu.");
       return;
     }
     if (!form.issuedAt || !form.expiresAt) {
       setError("Nhập ngày cấp và ngày hết hạn.");
       return;
     }
-    onSubmit(form);
+    const holders = welders.filter((w) => holderIds.includes(w.id)).map((w) => w.name);
+    onSubmit({ ...form, holders });
     onClose();
   }
 
@@ -142,34 +148,31 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
               placeholder="VD: Chứng chỉ thợ hàn ray hạng 1"
             />
           </label>
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Người sở hữu *
-            <input
-              value={form.holder}
-              onChange={(e) => setForm((f) => ({ ...f, holder: e.target.value }))}
-              className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-              placeholder="VD: Nguyễn Văn A"
+            <WelderMultiSelect
+              selectedIds={holderIds}
+              onChange={setHolderIds}
+              placeholder="Chọn người sở hữu..."
             />
-          </label>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày cấp *
-              <input
-                type="date"
+              <DateField
                 value={form.issuedAt}
-                onChange={(e) => setForm((f) => ({ ...f, issuedAt: e.target.value }))}
-                className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                onChange={(v) => setForm((f) => ({ ...f, issuedAt: v }))}
+                className="mt-1.5"
               />
-            </label>
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            </div>
+            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày hết hạn *
-              <input
-                type="date"
+              <DateField
                 value={form.expiresAt}
-                onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
-                className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                onChange={(v) => setForm((f) => ({ ...f, expiresAt: v }))}
+                className="mt-1.5"
               />
-            </label>
+            </div>
           </div>
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Trạng thái

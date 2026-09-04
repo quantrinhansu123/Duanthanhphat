@@ -4,7 +4,10 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { trainingHistory } from "@/data/trainingHistory";
 import { trainingCourses, type TrainingCourse } from "@/data/trainings";
-import { CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import { welders } from "@/data/welders";
+import WelderMultiSelect from "@/components/WelderMultiSelect";
+import DateField from "@/components/DateField";
+import { CaretRight, Check, MagnifyingGlass, PencilSimple, X } from "@/components/icons";
 
 const resultStyle: Record<string, string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -12,19 +15,209 @@ const resultStyle: Record<string, string> = {
   "Đang học": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
+const DEFAULT_THUMBNAIL =
+  "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=480&h=270&q=80";
+
+function viToISO(value: string) {
+  const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return "";
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+function TrainingFormModal({
+  initial,
+  onClose,
+  onSubmit,
+}: {
+  initial?: TrainingCourse;
+  onClose: () => void;
+  onSubmit: (course: TrainingCourse) => void;
+}) {
+  const isEdit = Boolean(initial);
+  const [form, setForm] = useState({
+    title: initial?.title ?? "",
+    trainer: initial?.trainer ?? "",
+    date: initial ? viToISO(initial.date) : "",
+    duration: initial && initial.duration !== "0:00" ? initial.duration : "",
+    location: initial && initial.location !== "Chưa cập nhật" ? initial.location : "",
+    result: initial?.result ?? "Đạt",
+    description: initial?.description ?? "",
+    topics: initial?.topics.join("\n") ?? "",
+  });
+  const [attendeeIds, setAttendeeIds] = useState<string[]>(
+    initial?.attendees?.map((a) => a.id) ?? [],
+  );
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleSubmit() {
+    if (!form.title.trim() || !form.trainer.trim() || !form.date.trim()) {
+      setError("Vui lòng nhập tên khóa, người đào tạo và ngày đào tạo.");
+      return;
+    }
+    const attendees = welders
+      .filter((w) => attendeeIds.includes(w.id))
+      .map((w) => ({ id: w.id, name: w.name, weldingId: w.weldingId, weldingTeam: w.weldingTeam }));
+    onSubmit({
+      id: initial?.id ?? `local-${Date.now()}`,
+      title: form.title.trim(),
+      trainer: form.trainer.trim(),
+      date: form.date ? new Date(form.date + "T00:00:00").toLocaleDateString("vi-VN") : "",
+      duration: form.duration.trim() || "0:00",
+      participants: attendees.length,
+      result: form.result,
+      thumbnail: initial?.thumbnail ?? DEFAULT_THUMBNAIL,
+      location: form.location.trim() || "Chưa cập nhật",
+      description: form.description.trim(),
+      topics: form.topics
+        .split("\n")
+        .flatMap((line) => line.split(","))
+        .map((t) => t.trim())
+        .filter(Boolean),
+      attendees,
+    });
+  }
+
+  const fieldClass =
+    "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <button type="button" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" aria-label="Đóng" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Đào tạo &amp; chứng chỉ</div>
+            <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">
+              {isEdit ? "Chỉnh sửa khóa đào tạo" : "Thêm khóa đào tạo"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+            aria-label="Đóng"
+          >
+            <X size={18} weight="bold" aria-hidden />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
+          {error && (
+            <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              {error}
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">
+              Tên khóa đào tạo *
+              <input value={form.title} onChange={(e) => set("title", e.target.value)} className={fieldClass} />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Người đào tạo *
+              <input value={form.trainer} onChange={(e) => set("trainer", e.target.value)} className={fieldClass} />
+            </label>
+            <div className="block text-xs font-semibold text-slate-700">
+              Ngày đào tạo *
+              <DateField value={form.date} onChange={(v) => set("date", v)} className="mt-1.5" />
+            </div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Thời lượng
+              <input value={form.duration} onChange={(e) => set("duration", e.target.value)} placeholder="4:00" className={fieldClass} />
+            </label>
+            <div className="block text-xs font-semibold text-slate-700 sm:col-span-2">
+              Học viên
+              <WelderMultiSelect
+                selectedIds={attendeeIds}
+                onChange={setAttendeeIds}
+                placeholder="Chọn học viên..."
+                searchPlaceholder="Tìm thợ hàn..."
+              />
+            </div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Kết quả
+              <select value={form.result} onChange={(e) => set("result", e.target.value)} className={`${fieldClass} cursor-pointer`}>
+                {["Đạt", "Không đạt", "Đang học"].map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Địa điểm
+              <input value={form.location} onChange={(e) => set("location", e.target.value)} className={fieldClass} />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">
+              Mô tả
+              <textarea
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                rows={2}
+                className={`${fieldClass} h-auto py-2`}
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">
+              Nội dung đào tạo (mỗi dòng hoặc cách nhau bằng dấu phẩy)
+              <textarea
+                value={form.topics}
+                onChange={(e) => set("topics", e.target.value)}
+                rows={3}
+                className={`${fieldClass} h-auto py-2`}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all duration-150 cursor-pointer"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all duration-150 cursor-pointer"
+          >
+            {isEdit ? "Lưu thay đổi" : "Lưu khóa đào tạo"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TrainingDetailModal({
   course,
   onClose,
+  onEdit,
 }: {
   course: TrainingCourse;
   onClose: () => void;
+  onEdit: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   const trainees = useMemo(
     () => trainingHistory.filter((r) => r.courseTitle === course.title),
     [course.title],
   );
+  const attendees = course.attendees ?? [];
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -56,22 +249,14 @@ function TrainingDetailModal({
             </h2>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
-                aria-label="Tùy chọn"
-              >
-                <DotsThree size={16} weight="bold" aria-hidden />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
-                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Danh sách học viên</div>
-                  <div className="px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors">Xuất báo cáo</div>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] hover:border-slate-400 transition-colors duration-150 cursor-pointer"
+            >
+              <PencilSimple size={14} weight="bold" aria-hidden />
+              Chỉnh sửa
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -134,11 +319,36 @@ function TrainingDetailModal({
                 Danh sách học viên
               </div>
               <span className="text-xs text-slate-500">
-                {trainees.length > 0 ? `${trainees.length} người` : "Chưa có dữ liệu"}
+                {attendees.length > 0
+                  ? `${attendees.length} người`
+                  : trainees.length > 0
+                    ? `${trainees.length} người`
+                    : "Chưa có dữ liệu"}
               </span>
             </div>
 
-            {trainees.length > 0 ? (
+            {attendees.length > 0 ? (
+              <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[440px] border-collapse text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                      <th className="px-3.5 py-2.5">Họ tên</th>
+                      <th className="px-3.5 py-2.5">Welding ID</th>
+                      <th className="px-3.5 py-2.5">Tổ hàn</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {attendees.map((a) => (
+                      <tr key={a.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                        <td className="px-3.5 py-2.5 font-semibold text-slate-900">{a.name}</td>
+                        <td className="px-3.5 py-2.5 font-mono text-[#0047AB]">{a.weldingId}</td>
+                        <td className="px-3.5 py-2.5 text-slate-700">{a.weldingTeam}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : trainees.length > 0 ? (
               <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full min-w-[520px] border-collapse text-left text-xs sm:text-sm">
                   <thead>
@@ -196,21 +406,43 @@ export default function TrainingList() {
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<TrainingCourse | null>(null);
+  const [courses, setCourses] = useState<TrainingCourse[]>(trainingCourses);
+  const [openAdd, setOpenAdd] = useState(false);
+  const [editing, setEditing] = useState<TrainingCourse | null>(null);
+  const [toast, setToast] = useState("");
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2500);
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return trainingCourses;
-    return trainingCourses.filter(
+    if (!q) return courses;
+    return courses.filter(
       (c) =>
         c.title.toLowerCase().includes(q) ||
         c.trainer.toLowerCase().includes(q) ||
         c.date.includes(q),
     );
-  }, [query]);
+  }, [query, courses]);
 
   function openDetail(course: TrainingCourse) {
     setActiveId(course.id);
     setDetail(course);
+  }
+
+  function handleAdd(course: TrainingCourse) {
+    setCourses((prev) => [course, ...prev]);
+    setOpenAdd(false);
+    showToast(`Đã thêm khóa "${course.title}"`);
+  }
+
+  function handleUpdate(course: TrainingCourse) {
+    setCourses((prev) => prev.map((c) => (c.id === course.id ? course : c)));
+    setEditing(null);
+    setDetail((prev) => (prev && prev.id === course.id ? course : prev));
+    showToast(`Đã cập nhật khóa "${course.title}"`);
   }
 
   return (
@@ -228,6 +460,13 @@ export default function TrainingList() {
         <span className="text-xs sm:text-sm text-slate-500">
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> khóa học
         </span>
+        <button
+          type="button"
+          onClick={() => setOpenAdd(true)}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer whitespace-nowrap"
+        >
+          <span className="text-base leading-none">+</span> Thêm khóa đào tạo
+        </button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
@@ -285,7 +524,30 @@ export default function TrainingList() {
         </ul>
       </div>
 
-      {detail && <TrainingDetailModal course={detail} onClose={() => { setDetail(null); setActiveId(null); }} />}
+      {detail && (
+        <TrainingDetailModal
+          course={detail}
+          onClose={() => { setDetail(null); setActiveId(null); }}
+          onEdit={() => setEditing(detail)}
+        />
+      )}
+
+      {openAdd && <TrainingFormModal onClose={() => setOpenAdd(false)} onSubmit={handleAdd} />}
+
+      {editing && (
+        <TrainingFormModal
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSubmit={handleUpdate}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-xs sm:text-sm font-medium text-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <Check size={16} weight="bold" aria-hidden className="text-emerald-500" />
+          {toast}
+        </div>
+      )}
     </main>
   );
 }

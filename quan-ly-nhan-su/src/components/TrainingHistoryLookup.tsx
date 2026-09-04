@@ -34,6 +34,7 @@ export default function TrainingHistoryLookup() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return trainingHistory.filter((row) => {
+      if (row.personType !== "Thợ hàn") return false;
       const matchQ =
         !q ||
         row.personCode.toLowerCase().includes(q) ||
@@ -68,7 +69,7 @@ export default function TrainingHistoryLookup() {
             onChange={(e) => setPersonType(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
-            {["Tất cả đối tượng", "Nhân sự", "Thợ hàn"].map((t) => (
+            {["Tất cả đối tượng", "Thợ hàn"].map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>

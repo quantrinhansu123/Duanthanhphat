@@ -1,3 +1,10 @@
+export type TrainingAttendee = {
+  id: string;
+  name: string;
+  weldingId: string;
+  weldingTeam: string;
+};
+
 export type TrainingCourse = {
   id: string;
   title: string;
@@ -10,6 +17,7 @@ export type TrainingCourse = {
   location: string;
   description: string;
   topics: string[];
+  attendees?: TrainingAttendee[];
 };
 
 export const trainingCourses: TrainingCourse[] = [

@@ -16,14 +16,9 @@ export const navigation: NavItem[] = [
   {
     id: "nhan-su",
     code: "09",
-    label: "Quản lý nhân sự / thợ hàn",
-    labelEn: "Human Resources",
+    label: "Quản lý thợ hàn",
+    labelEn: "Welder Management",
     children: [
-      {
-        id: "ho-so-nhan-su",
-        label: "Hồ sơ nhân sự",
-        description: "Mã NV, họ tên, chức vụ, đơn vị, kinh nghiệm, dự án tham gia",
-      },
       {
         id: "ho-so-tho-han",
         label: "Hồ sơ thợ hàn",
@@ -55,7 +50,7 @@ export const navigation: NavItem[] = [
       {
         id: "tra-cuu-dao-tao",
         label: "Tra cứu lịch sử đào tạo",
-        description: "Tra cứu lịch sử đào tạo theo nhân sự / thợ hàn",
+        description: "Tra cứu lịch sử đào tạo theo thợ hàn",
       },
     ],
   },
@@ -199,7 +194,7 @@ export const navigation: NavItem[] = [
   },
 ];
 
-export const DEFAULT_TAB = "ho-so-nhan-su";
+export const DEFAULT_TAB = "ho-so-tho-han";
 
 export function allTabIds() {
   return navigation.flatMap((g) => g.children.map((c) => c.id));
