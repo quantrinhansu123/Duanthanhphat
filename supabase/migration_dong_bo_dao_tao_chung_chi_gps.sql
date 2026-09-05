@@ -27,7 +27,12 @@ create table if not exists public.chung_chi_nhom (
 
 comment on table public.chung_chi_nhom is 'Nhóm/loại chứng chỉ chung cho nhiều nhân sự hoặc theo đợt cấp';
 
--- Bổ sung các cột mở rộng cho bảng chung_chi
+-- Bổ sung các cột mở rộng cho bảng chung_chi và chung_chi_nhom
+alter table public.chung_chi_nhom
+  add column if not exists kich_thuoc bigint,
+  add column if not exists source_url text,
+  add column if not exists license text;
+
 alter table public.chung_chi
   add column if not exists nhom_id uuid references public.chung_chi_nhom (id) on delete set null,
   add column if not exists don_vi_cap text,
@@ -36,7 +41,10 @@ alter table public.chung_chi
   add column if not exists ghi_chu text,
   add column if not exists khoa_dao_tao_nguon uuid,
   add column if not exists cloudinary_public_id text,
-  add column if not exists secure_url text;
+  add column if not exists secure_url text,
+  add column if not exists kich_thuoc bigint,
+  add column if not exists source_url text,
+  add column if not exists license text;
 
 create index if not exists idx_chung_chi_nhom_id on public.chung_chi (nhom_id);
 create index if not exists idx_chung_chi_employee_id on public.chung_chi (employee_id);
@@ -160,6 +168,17 @@ begin
     select 1 from information_schema.tables
     where table_schema = 'public' and table_name = 'chung_chi_ho_so'
   ) then
+    -- Xử lý loại bỏ trùng lặp nếu có trước khi tạo index ràng buộc duy nhất
+    delete from public.chung_chi a
+    using public.chung_chi b
+    where a.id > b.id
+      and a.employee_id = b.employee_id
+      and lower(btrim(a.ten_chung_chi)) = lower(btrim(b.ten_chung_chi));
+
+    create unique index if not exists uq_chung_chi_employee_ten
+      on public.chung_chi (employee_id, (lower(btrim(ten_chung_chi))));
+
+    -- Upsert đồng bộ cập nhật dữ liệu thay đổi từ bảng hồ sơ cũ
     insert into public.chung_chi (
       employee_id,
       ten_chung_chi,
@@ -187,11 +206,15 @@ begin
       cchs.ghi_chu
     from public.chung_chi_ho_so cchs
     where cchs.nhan_su_id is not null and nullif(btrim(cchs.ten_chung_chi), '') is not null
-      and not exists (
-        select 1 from public.chung_chi cc
-        where cc.employee_id = cchs.nhan_su_id
-          and lower(btrim(cc.ten_chung_chi)) = lower(btrim(cchs.ten_chung_chi))
-      );
+    on conflict (employee_id, (lower(btrim(ten_chung_chi)))) do update set
+      don_vi_cap = excluded.don_vi_cap,
+      so_chung_chi = excluded.so_chung_chi,
+      may_ap_dung = excluded.may_ap_dung,
+      ngay_cap = excluded.ngay_cap,
+      ngay_het_han = excluded.ngay_het_han,
+      trang_thai = excluded.trang_thai,
+      ghi_chu = coalesce(excluded.ghi_chu, public.chung_chi.ghi_chu),
+      updated_at = now();
   end if;
 end $$;
 
@@ -466,7 +489,10 @@ create or replace function public.them_nhom_chung_chi_cho_nhan_su(
   p_don_vi_cap text default null,
   p_so_chung_chi text default null,
   p_may_ap_dung text default null,
-  p_ghi_chu text default null
+  p_ghi_chu text default null,
+  p_kich_thuoc bigint default null,
+  p_source_url text default null,
+  p_license text default null
 )
 returns uuid
 language plpgsql
@@ -503,13 +529,22 @@ begin
   if v_group_id is null then
     insert into public.chung_chi_nhom (
       ten_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han,
-      file_chung_chi, cloudinary_public_id, secure_url, ghi_chu
+      file_chung_chi, cloudinary_public_id, secure_url, ghi_chu,
+      kich_thuoc, source_url, license
     ) values (
       btrim(p_ten_chung_chi), nullif(btrim(p_don_vi_cap), ''), nullif(btrim(p_may_ap_dung), ''),
       p_ngay_cap, p_ngay_het_han, nullif(btrim(p_file_chung_chi), ''),
       nullif(btrim(p_cloudinary_public_id), ''), nullif(btrim(p_secure_url), ''),
-      nullif(btrim(p_ghi_chu), '')
+      nullif(btrim(p_ghi_chu), ''),
+      p_kich_thuoc, nullif(btrim(p_source_url), ''), nullif(btrim(p_license), '')
     ) returning id into v_group_id;
+  else
+    update public.chung_chi_nhom
+    set kich_thuoc = coalesce(p_kich_thuoc, kich_thuoc),
+        source_url = coalesce(nullif(btrim(p_source_url), ''), source_url),
+        license = coalesce(nullif(btrim(p_license), ''), license),
+        updated_at = now()
+    where id = v_group_id;
   end if;
 
   foreach v_employee_id in array p_employee_ids loop
@@ -527,13 +562,14 @@ begin
       insert into public.chung_chi (
         employee_id, ten_chung_chi, nhom_id, don_vi_cap, so_chung_chi,
         may_ap_dung, ngay_cap, ngay_het_han, file_chung_chi, trang_thai,
-        cloudinary_public_id, secure_url, ghi_chu
+        cloudinary_public_id, secure_url, ghi_chu, kich_thuoc, source_url, license
       ) values (
         v_employee_id, btrim(p_ten_chung_chi), v_group_id, nullif(btrim(p_don_vi_cap), ''),
         nullif(btrim(p_so_chung_chi), ''), nullif(btrim(p_may_ap_dung), ''),
         p_ngay_cap, p_ngay_het_han, nullif(btrim(p_file_chung_chi), ''), p_trang_thai,
         nullif(btrim(p_cloudinary_public_id), ''), nullif(btrim(p_secure_url), ''),
-        nullif(btrim(p_ghi_chu), '')
+        nullif(btrim(p_ghi_chu), ''),
+        p_kich_thuoc, nullif(btrim(p_source_url), ''), nullif(btrim(p_license), '')
       );
     else
       update public.chung_chi
@@ -548,12 +584,105 @@ begin
           cloudinary_public_id = nullif(btrim(p_cloudinary_public_id), ''),
           secure_url = nullif(btrim(p_secure_url), ''),
           ghi_chu = nullif(btrim(p_ghi_chu), ''),
+          kich_thuoc = coalesce(p_kich_thuoc, kich_thuoc),
+          source_url = coalesce(nullif(btrim(p_source_url), ''), source_url),
+          license = coalesce(nullif(btrim(p_license), ''), license),
           updated_at = now()
       where id = v_certificate_id;
     end if;
   end loop;
 
   return v_group_id;
+end;
+$$;
+
+-- RPC đồng bộ danh sách nhân sự sở hữu nhóm chứng chỉ (Thêm mới và xóa/bớt người)
+create or replace function public.dong_bo_nhan_su_nhom_chung_chi(
+  p_nhom_id uuid,
+  p_employee_ids uuid[],
+  p_ten_chung_chi text,
+  p_ngay_cap date default null,
+  p_ngay_het_han date default null,
+  p_file_chung_chi text default null,
+  p_trang_thai text default 'Còn hiệu lực',
+  p_cloudinary_public_id text default null,
+  p_secure_url text default null,
+  p_don_vi_cap text default null,
+  p_so_chung_chi text default null,
+  p_may_ap_dung text default null,
+  p_ghi_chu text default null,
+  p_kich_thuoc bigint default null,
+  p_source_url text default null,
+  p_license text default null
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_emp_id uuid;
+begin
+  if p_nhom_id is null then
+    raise exception 'Mã nhóm chứng chỉ không được để trống';
+  end if;
+  if coalesce(array_length(p_employee_ids, 1), 0) = 0 then
+    raise exception 'Phải chọn ít nhất một nhân sự sở hữu nhóm chứng chỉ';
+  end if;
+
+  -- 1. Cập nhật nhóm
+  update public.chung_chi_nhom
+  set ten_nhom = btrim(p_ten_chung_chi),
+      don_vi_cap = nullif(btrim(p_don_vi_cap), ''),
+      may_ap_dung = nullif(btrim(p_may_ap_dung), ''),
+      ngay_cap = p_ngay_cap,
+      ngay_het_han = p_ngay_het_han,
+      file_chung_chi = nullif(btrim(p_file_chung_chi), ''),
+      cloudinary_public_id = nullif(btrim(p_cloudinary_public_id), ''),
+      secure_url = nullif(btrim(p_secure_url), ''),
+      ghi_chu = nullif(btrim(p_ghi_chu), ''),
+      kich_thuoc = coalesce(p_kich_thuoc, kich_thuoc),
+      source_url = coalesce(nullif(btrim(p_source_url), ''), source_url),
+      license = coalesce(nullif(btrim(p_license), ''), license),
+      updated_at = now()
+  where id = p_nhom_id;
+
+  -- 2. Xóa các chứng chỉ của nhân sự bị loại bỏ khỏi nhóm
+  delete from public.chung_chi
+  where nhom_id = p_nhom_id
+    and not (employee_id = any(p_employee_ids));
+
+  -- 3. Upsert chứng chỉ cho các nhân sự được giữ lại hoặc thêm mới
+  foreach v_emp_id in array p_employee_ids loop
+    insert into public.chung_chi (
+      employee_id, ten_chung_chi, nhom_id, don_vi_cap, so_chung_chi,
+      may_ap_dung, ngay_cap, ngay_het_han, file_chung_chi, trang_thai,
+      cloudinary_public_id, secure_url, ghi_chu, kich_thuoc, source_url, license
+    ) values (
+      v_emp_id, btrim(p_ten_chung_chi), p_nhom_id, nullif(btrim(p_don_vi_cap), ''),
+      nullif(btrim(p_so_chung_chi), ''), nullif(btrim(p_may_ap_dung), ''),
+      p_ngay_cap, p_ngay_het_han, nullif(btrim(p_file_chung_chi), ''), p_trang_thai,
+      nullif(btrim(p_cloudinary_public_id), ''), nullif(btrim(p_secure_url), ''),
+      nullif(btrim(p_ghi_chu), ''),
+      p_kich_thuoc, nullif(btrim(p_source_url), ''), nullif(btrim(p_license), '')
+    )
+    on conflict (employee_id, (lower(btrim(ten_chung_chi)))) do update set
+      nhom_id = p_nhom_id,
+      don_vi_cap = excluded.don_vi_cap,
+      so_chung_chi = excluded.so_chung_chi,
+      may_ap_dung = excluded.may_ap_dung,
+      ngay_cap = excluded.ngay_cap,
+      ngay_het_han = excluded.ngay_het_han,
+      file_chung_chi = excluded.file_chung_chi,
+      trang_thai = excluded.trang_thai,
+      cloudinary_public_id = excluded.cloudinary_public_id,
+      secure_url = excluded.secure_url,
+      ghi_chu = excluded.ghi_chu,
+      kich_thuoc = coalesce(excluded.kich_thuoc, public.chung_chi.kich_thuoc),
+      source_url = coalesce(excluded.source_url, public.chung_chi.source_url),
+      license = coalesce(excluded.license, public.chung_chi.license),
+      updated_at = now();
+  end loop;
+
+  return p_nhom_id;
 end;
 $$;
 
@@ -974,12 +1103,53 @@ as $$
   from totals cross join accounting;
 $$;
 
+-- ------------------------------------------------------------
+-- 10. CẬP NHẬT VIEW BÁO CÁO MỐI HÀN THEO DỰ ÁN (BỔ SUNG HẠCH TOÁN)
+-- ------------------------------------------------------------
+create or replace view public.bao_cao_moi_han_theo_du_an with (security_invoker = true) as
+select
+  ls.id,
+  ls.ma_lich_su,
+  da.id as du_an_id,
+  da.ma_du_an,
+  da.du_an,
+  ls.nam_thuc_hien,
+  ls.loai_ray,
+  ls.loai_moi_han,
+  ls.cong_nghe_han,
+  ls.so_luong_thuc_hien,
+  ls.so_luong_loi,
+  ns.employee_id as tho_han_id,
+  ns.ma_nhan_su,
+  ns.ho_ten as ten_tho_han,
+  ls.nguyen_nhan_loi,
+  ls.nguon_du_lieu,
+  ls.dong_nguon,
+  ls.ghi_chu,
+  ls.moi_han_lien_ket,
+  tb.id as may_id,
+  tb.ma_may,
+  tb.ten_may,
+  ns.to_han,
+  ns.chung_chi as chung_chi_nhan_su,
+  ls.chung_chi_su_dung,
+  ls.ngay_thuc_hien,
+  ls.chung_chi_id,
+  ls.hach_toan
+from public.lich_su_moi_han ls
+join public.du_an da on da.id = ls.du_an_id
+join public.nhan_su ns on ns.employee_id = ls.tho_han_id
+left join public.thiet_bi tb on tb.id = ls.may_id;
+
 revoke execute on function public.them_nhat_ky_han_co_toa_do(
   text, uuid, uuid, smallint, date, text, text, text, integer, text, text, text,
   uuid, text, text, uuid, double precision, double precision, text
 ) from public;
 revoke execute on function public.them_nhom_chung_chi_cho_nhan_su(
-  uuid[], text, date, date, text, text, text, text, text, text, text, text
+  uuid[], text, date, date, text, text, text, text, text, text, text, text, bigint, text, text
+) from public;
+revoke execute on function public.dong_bo_nhan_su_nhom_chung_chi(
+  uuid, uuid[], text, date, date, text, text, text, text, text, text, text, text, bigint, text, text
 ) from public;
 revoke execute on function public.cap_nhat_han_nhom_chung_chi(uuid, text, date) from public;
 revoke execute on function public.luu_khoa_dao_tao_va_cap_chung_chi(
@@ -994,7 +1164,10 @@ grant execute on function public.them_nhat_ky_han_co_toa_do(
   uuid, text, text, uuid, double precision, double precision, text
 ) to anon, authenticated;
 grant execute on function public.them_nhom_chung_chi_cho_nhan_su(
-  uuid[], text, date, date, text, text, text, text, text, text, text, text
+  uuid[], text, date, date, text, text, text, text, text, text, text, text, bigint, text, text
+) to anon, authenticated;
+grant execute on function public.dong_bo_nhan_su_nhom_chung_chi(
+  uuid, uuid[], text, date, date, text, text, text, text, text, text, text, text, bigint, text, text
 ) to anon, authenticated;
 grant execute on function public.cap_nhat_han_nhom_chung_chi(uuid, text, date) to anon, authenticated;
 grant execute on function public.luu_khoa_dao_tao_va_cap_chung_chi(
@@ -1005,6 +1178,7 @@ grant execute on function public.thong_ke_lich_su_moi_han(
 ) to anon, authenticated;
 grant select on public.bao_cao_moi_han_gps to anon, authenticated;
 grant select on public.v_lich_su_moi_han_chi_tiet to anon, authenticated;
+grant select on public.bao_cao_moi_han_theo_du_an to anon, authenticated;
 
 commit;
 

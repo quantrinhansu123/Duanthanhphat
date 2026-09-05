@@ -22,6 +22,7 @@ import {
 } from "@/lib/mapPointsDb";
 import {
   downloadCoordinatesExcelTemplate,
+  exportCoordinatesToExcel,
   parseCoordinatesExcel,
 } from "@/lib/parseCoordinatesExcel";
 
@@ -428,6 +429,14 @@ export default function MapView() {
           className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           Mẫu Excel
+        </button>
+        <button
+          type="button"
+          disabled={!points.length}
+          onClick={() => exportCoordinatesToExcel(points)}
+          className="inline-flex h-10 items-center rounded-lg border border-emerald-600 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+        >
+          Xuất Excel ({points.length})
         </button>
         <button
           type="button"

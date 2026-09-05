@@ -25,16 +25,30 @@ export default function LanguageSwitcher() {
   const updatePosition = () => {
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const menuWidth = 176; // w-44 = 11rem = 176px
-    const top = rect.bottom + 6;
-    // Align right edge of menu with right edge of button, but clamp within window padding
-    let left = rect.right - menuWidth;
-    if (typeof window !== "undefined") {
-      if (left < 8) left = 8;
-      if (left + menuWidth > window.innerWidth - 8) {
-        left = window.innerWidth - menuWidth - 8;
-      }
+    const menuWidth = 176;
+    const menuHeight = 96;
+
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const viewportWidth = vv ? vv.width : (typeof window !== "undefined" ? window.innerWidth : 360);
+    const viewportHeight = vv ? vv.height : (typeof window !== "undefined" ? window.innerHeight : 640);
+    const offsetX = vv ? vv.offsetLeft : 0;
+    const offsetY = vv ? vv.offsetTop : 0;
+
+    // Tính toán chiều ngang: ưu tiên canh theo mép phải của nút, kẹp trong giới hạn viewport
+    let left = rect.right - menuWidth + offsetX;
+    if (left + menuWidth > offsetX + viewportWidth - 8) {
+      left = offsetX + viewportWidth - menuWidth - 8;
     }
+    if (left < offsetX + 8) {
+      left = offsetX + 8;
+    }
+
+    // Tính toán chiều dọc: nếu tràn đáy màn hình thì tự động lật lên trên nút
+    let top = rect.bottom + 6 + offsetY;
+    if (top + menuHeight > offsetY + viewportHeight - 8 && rect.top - menuHeight - 6 >= 8) {
+      top = rect.top - menuHeight - 6 + offsetY;
+    }
+
     setCoords({ top, left });
   };
 
@@ -46,8 +60,10 @@ export default function LanguageSwitcher() {
     function onMouseDown(e: MouseEvent) {
       const target = e.target as Node;
       if (
-        buttonRef.current && !buttonRef.current.contains(target) &&
-        menuRef.current && !menuRef.current.contains(target)
+        buttonRef.current &&
+        !buttonRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
       ) {
         setOpen(false);
       }
@@ -81,12 +97,20 @@ export default function LanguageSwitcher() {
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onScrollOrResize, { passive: true });
     window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", onScrollOrResize);
+      window.visualViewport.addEventListener("scroll", onScrollOrResize);
+    }
 
     return () => {
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onScrollOrResize);
       window.removeEventListener("scroll", onScrollOrResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", onScrollOrResize);
+        window.visualViewport.removeEventListener("scroll", onScrollOrResize);
+      }
     };
   }, [open]);
 
@@ -118,48 +142,52 @@ export default function LanguageSwitcher() {
         />
       </button>
 
-      {open && mounted && createPortal(
-        <ul
-          ref={menuRef}
-          role="listbox"
-          aria-label="Danh sách ngôn ngữ"
-          style={{
-            position: "fixed",
-            top: `${coords.top}px`,
-            left: `${coords.left}px`,
-            width: "176px",
-            zIndex: 9999,
-          }}
-          className="overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl animate-in fade-in-50 zoom-in-95 duration-100 focus:outline-hidden"
-        >
-          {OPTIONS.map((o) => {
-            const selected = o.value === lang;
-            return (
-              <li key={o.value}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  onClick={() => {
-                    setOpen(false);
-                    if (o.value !== lang) setLang(o.value);
-                  }}
-                  className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs sm:text-sm transition-colors cursor-pointer ${
-                    selected
-                      ? "font-semibold text-[#0047AB] bg-blue-50/60"
-                      : "font-medium text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="text-base leading-none">{o.flag}</span>
-                  <span className="flex-1">{o.label}</span>
-                  {selected && <Check size={14} weight="bold" aria-hidden className="text-[#0047AB]" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>,
-        document.body
-      )}
+      {open &&
+        mounted &&
+        createPortal(
+          <ul
+            ref={menuRef}
+            role="listbox"
+            aria-label="Danh sách ngôn ngữ"
+            style={{
+              position: "fixed",
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              width: "176px",
+              zIndex: 9999,
+            }}
+            className="overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl animate-in fade-in-50 zoom-in-95 duration-100 focus:outline-hidden"
+          >
+            {OPTIONS.map((o) => {
+              const selected = o.value === lang;
+              return (
+                <li key={o.value}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => {
+                      setOpen(false);
+                      if (o.value !== lang) setLang(o.value);
+                    }}
+                    className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs sm:text-sm transition-colors cursor-pointer ${
+                      selected
+                        ? "font-semibold text-[#0047AB] bg-blue-50/60"
+                        : "font-medium text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-base leading-none">{o.flag}</span>
+                    <span className="flex-1">{o.label}</span>
+                    {selected && (
+                      <Check size={14} weight="bold" aria-hidden className="text-[#0047AB]" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>,
+          document.body,
+        )}
     </div>
   );
 }

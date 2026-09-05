@@ -15,11 +15,19 @@ import {
   isCertificateAssetReferenced,
   loadCertificateRegistry,
   revokeCertificateRecord,
+  syncGroupCertificates,
   updateCertificateRecord,
   updateGroupExpiry,
   type CertificatePersonnelOption,
 } from "@/lib/certificatesDb";
 import { deleteCloudinaryAsset } from "@/lib/cloudinaryClient";
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
 
 const statusStyle: Record<Certificate["status"], string> = {
   "Còn hiệu lực": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -295,6 +303,31 @@ function CertificateDetailModal({
                 <span className="text-right font-semibold text-slate-800">{cert.machine}</span>
               </div>
             )}
+            {cert.fileSize && (
+              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
+                <span className="text-slate-500">Dung lượng ảnh</span>
+                <span className="text-right font-mono text-slate-800">{formatFileSize(cert.fileSize)}</span>
+              </div>
+            )}
+            {cert.sourceUrl && (
+              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
+                <span className="text-slate-500">Nguồn ảnh</span>
+                <a
+                  href={cert.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-right text-[#0047AB] hover:underline truncate max-w-[280px]"
+                >
+                  {cert.sourceUrl}
+                </a>
+              </div>
+            )}
+            {cert.license && (
+              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
+                <span className="text-slate-500">Bản quyền / Giấy phép</span>
+                <span className="text-right font-medium text-slate-800">{cert.license}</span>
+              </div>
+            )}
             {cert.notes && (
               <div className="flex items-start justify-between gap-4 py-2.5 text-xs sm:text-sm">
                 <span className="shrink-0 text-slate-500">Ghi chú</span>
@@ -398,7 +431,31 @@ export default function CertificateManagement() {
     setSaving(true);
     const previousPublicId = editingCert?.cloudinaryPublicId;
     try {
-      if (values.id) {
+      if (editingCert?.groupId) {
+        // Cập nhật nhóm chứng chỉ: hỗ trợ thêm/bớt người sở hữu và đồng bộ metadata
+        await syncGroupCertificates({
+          groupId: editingCert.groupId,
+          title: values.title,
+          employeeIds: values.holderIds,
+          issuedAt: values.issuedAt,
+          expiresAt: values.expiresAt,
+          status: values.status,
+          imageUrl: values.imageUrl,
+          cloudinaryPublicId: values.cloudinaryPublicId,
+          organization: values.organization,
+          machine: values.machine,
+          certificateNumber: values.certificateNumber,
+          notes: values.notes,
+          fileSize: values.fileSize,
+          sourceUrl: values.sourceUrl,
+          license: values.license,
+        });
+        if (previousPublicId && previousPublicId !== values.cloudinaryPublicId) {
+          const stillReferenced = await isCertificateAssetReferenced(previousPublicId);
+          if (!stillReferenced) await deleteCloudinaryAsset(previousPublicId);
+        }
+        showToast("Đã đồng bộ nhóm chứng chỉ và người sở hữu thành công.");
+      } else if (values.id) {
         // Cập nhật chứng chỉ hiện có
         await updateCertificateRecord({
           id: values.id,
@@ -412,6 +469,9 @@ export default function CertificateManagement() {
           machine: values.machine,
           certificateNumber: values.certificateNumber,
           notes: values.notes,
+          fileSize: values.fileSize,
+          sourceUrl: values.sourceUrl,
+          license: values.license,
         });
         if (previousPublicId && previousPublicId !== values.cloudinaryPublicId) {
           const stillReferenced = await isCertificateAssetReferenced(previousPublicId);
@@ -432,6 +492,9 @@ export default function CertificateManagement() {
           machine: values.machine,
           certificateNumber: values.certificateNumber,
           notes: values.notes,
+          fileSize: values.fileSize,
+          sourceUrl: values.sourceUrl,
+          license: values.license,
         });
         showToast(`Đã thêm chứng chỉ cho ${values.holderIds.length} nhân sự.`);
       }
@@ -660,6 +723,15 @@ export default function CertificateManagement() {
         <CertificateFormModal
           open={formOpen}
           initial={editingCert}
+          initialHolderIds={
+            editingCert?.groupId
+              ? items
+                  .filter((x) => x.groupId === editingCert.groupId && x.employeeId)
+                  .map((x) => x.employeeId!)
+              : editingCert?.employeeId
+                ? [editingCert.employeeId]
+                : []
+          }
           personnel={personnel}
           saving={saving}
           onClose={() => {

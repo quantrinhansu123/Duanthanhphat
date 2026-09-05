@@ -1,13 +1,22 @@
 import * as XLSX from "xlsx";
 import type { NewToaDoInput } from "@/lib/mapPointsDb";
+import type { MapPoint } from "@/data/mapPoints";
 
-const HEADER_ALIASES: Record<keyof Pick<NewToaDoInput, "code" | "longitude" | "latitude" | "chainage" | "note" | "order">, string[]> = {
-  code: ["ma_diem", "mã điểm", "ma diem", "code", "madinh", "điểm", "diem"],
+const HEADER_ALIASES: Record<
+  keyof Pick<
+    NewToaDoInput,
+    "code" | "longitude" | "latitude" | "chainage" | "note" | "order" | "weldCode" | "weldId"
+  >,
+  string[]
+> = {
+  code: ["ma_diem", "mã điểm", "ma diem", "code", "madinh", "điểm", "diem", "point_code"],
   longitude: ["kinh_do", "kinh độ", "kinh do", "longitude", "lon", "lng", "x"],
   latitude: ["vi_do", "vĩ độ", "vi do", "latitude", "lat", "y"],
   chainage: ["ly_trinh", "lý trình", "ly trinh", "chainage", "km"],
   note: ["ghi_chu", "ghi chú", "ghi chu", "note", "mô tả", "mo ta"],
   order: ["thu_tu", "thứ tự", "thu tu", "order", "stt", "no"],
+  weldCode: ["ma_moi_han", "mã mối hàn", "ma moi han", "ma_lich_su", "mã lịch sử", "weld_code", "weldcode"],
+  weldId: ["lich_su_moi_han_id", "mối hàn id", "moi han id", "weld_id", "weldid", "moi_han_id"],
 };
 
 function normalizeHeader(value: unknown): string {
@@ -41,6 +50,8 @@ function mapHeaders(headers: string[]) {
     chainage: find(HEADER_ALIASES.chainage),
     note: find(HEADER_ALIASES.note),
     order: find(HEADER_ALIASES.order),
+    weldCode: find(HEADER_ALIASES.weldCode),
+    weldId: find(HEADER_ALIASES.weldId),
   };
 }
 
@@ -50,7 +61,7 @@ export type ExcelParseResult = {
   sheetName: string;
 };
 
-/** Đọc file Excel/CSV → danh sách toạ độ. */
+/** Đọc file Excel/CSV → danh sách toạ độ (bao gồm ma_moi_han và lich_su_moi_han_id). */
 export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResult> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
@@ -98,6 +109,10 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
       cols.chainage >= 0 ? String(line[cols.chainage] ?? "").trim() : undefined;
     const note = cols.note >= 0 ? String(line[cols.note] ?? "").trim() : undefined;
     const order = cols.order >= 0 ? parseNumber(line[cols.order]) : i;
+    const weldCode =
+      cols.weldCode >= 0 ? String(line[cols.weldCode] ?? "").trim() : undefined;
+    const weldId =
+      cols.weldId >= 0 ? String(line[cols.weldId] ?? "").trim() : undefined;
 
     if (!code) {
       errors.push(`Dòng ${i + 1}: thiếu mã điểm`);
@@ -119,21 +134,77 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
       chainage: chainage || undefined,
       note: note || undefined,
       order: order ?? i,
+      weldCode: weldCode || undefined,
+      weldId: weldId || undefined,
     });
   }
 
   return { rows, errors, sheetName };
 }
 
-/** Tải file Excel mẫu. */
+/** Tải file Excel mẫu bao gồm liên kết mối hàn. */
 export function downloadCoordinatesExcelTemplate() {
   const data = [
-    ["ma_diem", "kinh_do", "vi_do", "ly_trinh", "thu_tu", "ghi_chu"],
-    ["TT0001", 105.8412, 21.0245, "Km0+000.00", 1, ""],
-    ["TT0002", 105.8415, 21.0228, "Km0+025.00", 2, ""],
+    [
+      "ma_diem",
+      "kinh_do",
+      "vi_do",
+      "ly_trinh",
+      "thu_tu",
+      "ghi_chu",
+      "ma_moi_han",
+      "lich_su_moi_han_id",
+    ],
+    ["TT0001", 105.8412, 21.0245, "Km0+000.00", 1, "Mối hàn đầu tuyến", "R4W-030-30-0001", ""],
+    ["TT0002", 105.8415, 21.0228, "Km0+025.00", 2, "Mối hàn tiếp giáp", "", "551f7e85-f16c-4ef0-8780-5c30e48daa88"],
+    ["TT0003", 105.842, 21.021, "Km0+050.00", 3, "Điểm toạ độ độc lập", "", ""],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "toa_do");
-  XLSX.writeFile(wb, "mau-toa-do.xlsx");
+  XLSX.writeFile(wb, "mau-toa-do-gps.xlsx");
 }
+
+/** Xuất danh sách toạ độ GPS kèm thông tin mối hàn ra Excel. */
+export function exportCoordinatesToExcel(
+  points: MapPoint[],
+  filename = "danh-sach-toa-do-gps.xlsx",
+) {
+  const headers = [
+    "ma_diem",
+    "kinh_do",
+    "vi_do",
+    "ly_trinh",
+    "thu_tu",
+    "ghi_chu",
+    "ma_moi_han",
+    "lich_su_moi_han_id",
+    "ten_tho_han",
+    "ten_may",
+    "ten_du_an",
+    "ket_qua_moi_han",
+    "ngay_thuc_hien",
+  ];
+
+  const rows = points.map((p) => [
+    p.code,
+    p.longitude,
+    p.latitude,
+    p.chainage || "",
+    p.order ?? 0,
+    p.note || "",
+    p.weldCode || "",
+    p.weldId || "",
+    p.welderName || "",
+    p.machineName || "",
+    p.projectName || "",
+    p.result || "",
+    p.performedDate || "",
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "toa_do_gps");
+  XLSX.writeFile(wb, filename);
+}
+

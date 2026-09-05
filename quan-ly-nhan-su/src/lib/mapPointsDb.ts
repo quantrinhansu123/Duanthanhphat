@@ -33,6 +33,7 @@ export type NewToaDoInput = {
   note?: string;
   order?: number;
   weldId?: string;
+  weldCode?: string;
 };
 
 function rowToMapPoint(row: ToaDoRow): MapPoint {
@@ -218,15 +219,40 @@ export async function upsertMapPoints(
   if (!hasSupabaseEnv()) return { error: "Chưa cấu hình Supabase" };
   if (!rows.length) return { upserted: 0 };
   const supabase = createClient();
-  const inserts = rows.map((r, idx) => ({
-    ma_diem: r.code.trim().toUpperCase(),
-    kinh_do: r.longitude,
-    vi_do: r.latitude,
-    ly_trinh: r.chainage?.trim() || null,
-    ghi_chu: r.note?.trim() || null,
-    thu_tu: r.order ?? idx + 1,
-    lich_su_moi_han_id: r.weldId || null,
-  }));
+
+  // Tìm mã mối hàn tương ứng nếu có truyền weldCode
+  const weldCodesToLookup = Array.from(
+    new Set(
+      rows
+        .map((r) => r.weldCode?.trim())
+        .filter((c): c is string => Boolean(c)),
+    ),
+  );
+  const weldIdByCode = new Map<string, string>();
+  if (weldCodesToLookup.length > 0) {
+    const { data: matchedWelds } = await supabase
+      .from("lich_su_moi_han")
+      .select("id, ma_lich_su")
+      .in("ma_lich_su", weldCodesToLookup);
+    (matchedWelds ?? []).forEach((w: { id: string; ma_lich_su: string }) => {
+      weldIdByCode.set(w.ma_lich_su.trim().toUpperCase(), w.id);
+    });
+  }
+
+  const inserts = rows.map((r, idx) => {
+    const codeKey = r.weldCode ? r.weldCode.trim().toUpperCase() : "";
+    const resolvedWeldId = r.weldId?.trim() || (codeKey ? weldIdByCode.get(codeKey) : null) || null;
+    return {
+      ma_diem: r.code.trim().toUpperCase(),
+      kinh_do: r.longitude,
+      vi_do: r.latitude,
+      ly_trinh: r.chainage?.trim() || null,
+      ghi_chu: r.note?.trim() || null,
+      thu_tu: r.order ?? idx + 1,
+      lich_su_moi_han_id: resolvedWeldId,
+    };
+  });
+
   const { error, data } = await supabase
     .from("toa_do")
     .upsert(inserts, { onConflict: "ma_diem" })

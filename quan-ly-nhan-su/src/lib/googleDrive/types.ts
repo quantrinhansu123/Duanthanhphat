@@ -10,6 +10,7 @@ export type DriveDocumentItem = {
   webContentLink?: string;
   thumbnailLink?: string;
   appProperties?: Record<string, string>;
+  md5Checksum?: string;
 };
 
 export type ResumableUploadInitRequest = {

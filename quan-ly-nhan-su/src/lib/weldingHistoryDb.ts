@@ -1,11 +1,8 @@
 import {
-  weldingHistory as seedHistory,
   type WeldingHistoryRecord,
 } from "@/data/weldingHistory";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
-
-const LOCAL_STORAGE_KEY = "tp_welding_history_custom_v1";
 
 export interface SupabaseWeldRow {
   id: string;
@@ -42,30 +39,9 @@ export interface ViewWeldHistoryRow {
   ket_qua?: string | null;
 }
 
-function readLocalHistory(): WeldingHistoryRecord[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalHistory(list: WeldingHistoryRecord[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
-  } catch (err) {
-    console.warn("Lỗi lưu LocalStorage cho lịch sử hàn:", err);
-  }
-}
-
 export type WeldingHistoryLoadResult = {
   records: WeldingHistoryRecord[];
-  source: "supabase" | "local" | "seed";
+  source: "supabase";
   error?: string;
 };
 
@@ -205,7 +181,7 @@ export interface WeldingHistoryPageResult {
   records: WeldingHistoryRecord[];
   totalCount: number;
   stats: WeldingHistoryStats;
-  source: "supabase" | "local" | "seed";
+  source: "supabase";
   error?: string;
 }
 
@@ -275,15 +251,18 @@ export async function loadWeldingHistoryPage(
   const toIndex = fromIndex + pageSize - 1;
 
   if (!isSupabaseConfigured()) {
-    const local = readLocalHistory();
-    const sourceRecords = local && local.length > 0 ? local : seedHistory;
-    const { filtered, stats } = filterInMemoryRecords(sourceRecords, params);
-    const paged = filtered.slice(fromIndex, toIndex + 1);
     return {
-      records: paged,
-      totalCount: stats.total,
-      stats,
-      source: local && local.length > 0 ? "local" : "seed",
+      records: [],
+      totalCount: 0,
+      stats: {
+        total: 0,
+        pass: 0,
+        fail: 0,
+        rework: 0,
+        accountingCounts: [],
+      },
+      source: "supabase",
+      error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất của Lịch sử hàn.",
     };
   }
 
@@ -441,15 +420,18 @@ export async function loadWeldingHistoryPage(
   }
 
   if (baseErrorMessage) {
-    const local = readLocalHistory();
-    const sourceRecords = local && local.length > 0 ? local : seedHistory;
-    const { filtered, stats } = filterInMemoryRecords(sourceRecords, params);
     return {
-      records: filtered.slice(fromIndex, toIndex + 1),
-      totalCount: stats.total,
-      stats,
-      source: local && local.length > 0 ? "local" : "seed",
-      error: baseErrorMessage,
+      records: [],
+      totalCount: 0,
+      stats: {
+        total: 0,
+        pass: 0,
+        fail: 0,
+        rework: 0,
+        accountingCounts: [],
+      },
+      source: "supabase",
+      error: `Lỗi kết nối Supabase: ${baseErrorMessage}. Supabase là nguồn dữ liệu duy nhất.`,
     };
   }
 
@@ -469,10 +451,7 @@ export async function exportAllFilteredWeldingHistory(
   params: WeldingHistoryFilterParams = {},
 ): Promise<WeldingHistoryRecord[]> {
   if (!isSupabaseConfigured()) {
-    const local = readLocalHistory();
-    const sourceRecords = local && local.length > 0 ? local : seedHistory;
-    const { filtered } = filterInMemoryRecords(sourceRecords, params);
-    return filtered;
+    throw new Error("Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất của Lịch sử hàn.");
   }
 
   const supabase = createClient();
@@ -764,10 +743,11 @@ export async function saveWeldingHistoryRecord(
         dbError = "Bản ghi chưa có UUID hợp lệ trên Supabase";
       }
     }
+  } else {
+    return { records: currentList, error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất." };
   }
 
-  if (isSupabaseConfigured() && dbError) {
-    // Không ghi LocalStorage nếu lưu lên Supabase thất bại
+  if (dbError) {
     return { records: currentList, error: dbError };
   }
 
@@ -775,7 +755,6 @@ export async function saveWeldingHistoryRecord(
     ? [finalRecord, ...currentList.filter((r) => r.id !== record.id && r.id !== finalRecord.id)]
     : currentList.map((r) => (r.id === record.id ? finalRecord : r));
 
-  writeLocalHistory(nextList);
   return { records: nextList };
 }
 
@@ -786,35 +765,35 @@ export async function quickUpdateAccountingCode(
 ): Promise<{ records: WeldingHistoryRecord[]; error?: string }> {
   let dbError: string | undefined;
 
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = createClient();
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUuid) {
-        const { error } = await supabase
-          .from("lich_su_moi_han")
-          .update({ hach_toan: newCode })
-          .eq("id", id);
-        if (error) {
-          dbError = formatSupabaseError(error);
-        }
-      } else {
-        dbError = "Bản ghi chưa có UUID hợp lệ trên Supabase";
-      }
-    } catch (err: unknown) {
-      dbError = err instanceof Error ? err.message : String(err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { records: currentList, error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất." };
   }
 
-  if (isSupabaseConfigured() && dbError) {
-    // Không ghi LocalStorage nếu cập nhật Supabase thất bại
+  try {
+    const supabase = createClient();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isUuid) {
+      const { error } = await supabase
+        .from("lich_su_moi_han")
+        .update({ hach_toan: newCode })
+        .eq("id", id);
+      if (error) {
+        dbError = formatSupabaseError(error);
+      }
+    } else {
+      dbError = "Bản ghi chưa có UUID hợp lệ trên Supabase";
+    }
+  } catch (err: unknown) {
+    dbError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (dbError) {
     return { records: currentList, error: dbError };
   }
 
   const nextList = currentList.map((r) =>
     r.id === id ? { ...r, accountingCode: newCode } : r,
   );
-  writeLocalHistory(nextList);
   return { records: nextList };
 }
 
@@ -824,27 +803,27 @@ export async function deleteWeldingHistoryRecord(
 ): Promise<{ records: WeldingHistoryRecord[]; error?: string }> {
   let dbError: string | undefined;
 
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = createClient();
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUuid) {
-        const { error } = await supabase.from("lich_su_moi_han").delete().eq("id", id);
-        if (error) dbError = formatSupabaseError(error);
-      } else {
-        dbError = "Bản ghi chưa có UUID hợp lệ trên Supabase";
-      }
-    } catch (err: unknown) {
-      dbError = err instanceof Error ? err.message : String(err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { records: currentList, error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất." };
   }
 
-  if (isSupabaseConfigured() && dbError) {
-    // Không xóa trong LocalStorage nếu xóa Supabase thất bại
+  try {
+    const supabase = createClient();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isUuid) {
+      const { error } = await supabase.from("lich_su_moi_han").delete().eq("id", id);
+      if (error) dbError = formatSupabaseError(error);
+    } else {
+      dbError = "Bản ghi chưa có UUID hợp lệ trên Supabase";
+    }
+  } catch (err: unknown) {
+    dbError = err instanceof Error ? err.message : String(err);
+  }
+
+  if (dbError) {
     return { records: currentList, error: dbError };
   }
 
   const nextList = currentList.filter((r) => r.id !== id);
-  writeLocalHistory(nextList);
   return { records: nextList };
 }

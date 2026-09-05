@@ -142,3 +142,119 @@ export async function deleteDriveDocument(
     return { success: false, error: message };
   }
 }
+
+export type MigrationSummary = {
+  total: number;
+  migrated: number;
+  alreadyExists: number;
+  failed: number;
+};
+
+export type MigrationItemResult = {
+  supabaseId: string;
+  name: string;
+  driveFileId?: string;
+  localMd5?: string;
+  driveMd5?: string;
+  checksumMatched: boolean;
+  status: "migrated" | "already_exists" | "failed";
+  message?: string;
+};
+
+export async function replaceDocumentContentInDrive(
+  fileId: string,
+  file: File,
+  title?: string,
+  description?: string,
+  onProgress?: (percent: number) => void,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!file.name.toLowerCase().endsWith(".pdf") || (file.type && file.type !== "application/pdf")) {
+      return { success: false, error: "Chỉ hỗ trợ tải tài liệu PDF." };
+    }
+    if (file.size <= 0 || file.size > MAX_PDF_BYTES) {
+      return { success: false, error: "Dung lượng PDF phải lớn hơn 0 và không vượt quá 250 MB." };
+    }
+
+    const initRes = await fetch("/api/documents/replace-content", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileId,
+        name: title?.trim() || file.name,
+        description: description?.trim(),
+        fileSize: file.size,
+      }),
+    });
+
+    const initData = await initRes.json();
+    if (!initRes.ok || !initData.uploadUrl) {
+      return { success: false, error: initData.error || "Không thể khởi tạo phiên thay thế file Drive" };
+    }
+
+    const uploadUrl = initData.uploadUrl;
+
+    return await new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", file.type || "application/pdf");
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(percent);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({ success: true });
+        } else {
+          resolve({
+            success: false,
+            error: `Thay thế file Google Drive thất bại (HTTP ${xhr.status}): ${xhr.responseText}`,
+          });
+        }
+      };
+
+      xhr.onerror = () => {
+        resolve({ success: false, error: "Lỗi kết nối mạng trong quá trình thay thế file Drive." });
+      };
+
+      xhr.send(file);
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Lỗi không xác định khi thay thế tệp";
+    return { success: false, error: message };
+  }
+}
+
+export async function migrateDocumentsFromSupabase(): Promise<{
+  success: boolean;
+  summary?: MigrationSummary;
+  items?: MigrationItemResult[];
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch("/api/documents/migrate-from-supabase", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        error: data.error || "Không thể thực hiện di chuyển tài liệu từ Supabase",
+      };
+    }
+    return {
+      success: true,
+      summary: data.summary,
+      items: data.items,
+      message: data.message,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Lỗi kết nối mạng khi di chuyển tài liệu";
+    return { success: false, error: message };
+  }
+}

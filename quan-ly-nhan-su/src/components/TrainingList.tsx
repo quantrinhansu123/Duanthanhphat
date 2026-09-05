@@ -156,6 +156,11 @@ function TrainingFormModal({
     setSaving(false);
 
     if (res.error) {
+      if (cloudinaryPublicId && cloudinaryPublicId !== initial?.cloudinaryPublicId) {
+        await deleteCloudinaryAsset(cloudinaryPublicId);
+        setCloudinaryPublicId(initial?.cloudinaryPublicId ?? "");
+        setThumbnailUrl(initial?.thumbnail ?? DEFAULT_THUMBNAIL);
+      }
       setError(res.error);
       return;
     }
@@ -354,6 +359,16 @@ function TrainingFormModal({
                 selectedIds={attendeeList.map((a) => a.id)}
                 onChange={(ids) => {
                   setAttendeeList((prev) => {
+                    const removedPassed = prev.filter((a) => a.result === "Đạt" && !ids.includes(a.id));
+                    if (removedPassed.length > 0) {
+                      const names = removedPassed
+                        .map((a) => personnel.find((p) => p.id === a.id)?.name || a.id)
+                        .join(", ");
+                      const confirmed = window.confirm(
+                        `Cảnh báo: Bạn đang bỏ chọn học viên đang "Đạt" (${names}). Chứng chỉ cấp sau đào tạo của học viên này sẽ tự động bị thu hồi. Bạn có chắc chắn muốn bỏ chọn không?`,
+                      );
+                      if (!confirmed) return prev;
+                    }
                     const existingMap = new Map(prev.map((a) => [a.id, a.result]));
                     return ids.map((id) => ({
                       id,
@@ -386,6 +401,12 @@ function TrainingFormModal({
                           value={att.result}
                           onChange={(e) => {
                             const newRes = e.target.value as "Đạt" | "Không đạt" | "Đang học";
+                            if (att.result === "Đạt" && newRes !== "Đạt") {
+                              const confirmed = window.confirm(
+                                `Xác nhận thay đổi kết quả: Học viên "${person?.name || att.id}" đang có kết quả "Đạt". Nếu đổi sang "${newRes}", chứng chỉ cấp sau khóa học sẽ tự động bị thu hồi. Bạn có chắc chắn muốn đổi không?`,
+                              );
+                              if (!confirmed) return;
+                            }
                             setAttendeeList((prev) =>
                               prev.map((item) => (item.id === att.id ? { ...item, result: newRes } : item)),
                             );

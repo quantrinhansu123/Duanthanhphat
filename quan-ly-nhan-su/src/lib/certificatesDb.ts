@@ -24,6 +24,9 @@ export type CertificateDbRow = {
   ghi_chu?: string | null;
   cloudinary_public_id?: string | null;
   secure_url?: string | null;
+  kich_thuoc?: number | null;
+  source_url?: string | null;
+  license?: string | null;
 };
 
 export type CertificatePersonnelOption = {
@@ -52,6 +55,9 @@ export type CreatePersonnelCertificateInput = {
   certificateNumber?: string;
   notes?: string;
   nhomId?: string;
+  fileSize?: number;
+  sourceUrl?: string;
+  license?: string;
 };
 
 export type UpdateCertificateInput = {
@@ -66,6 +72,9 @@ export type UpdateCertificateInput = {
   machine?: string;
   certificateNumber?: string;
   notes?: string;
+  fileSize?: number;
+  sourceUrl?: string;
+  license?: string;
 };
 
 const CERTIFICATE_COLUMNS = [
@@ -83,6 +92,9 @@ const CERTIFICATE_COLUMNS = [
   "ghi_chu",
   "cloudinary_public_id",
   "secure_url",
+  "kich_thuoc",
+  "source_url",
+  "license",
 ].join(",");
 
 function normalize(value: string) {
@@ -169,6 +181,9 @@ function dbRowToCertificate(
     machine: row.may_ap_dung || undefined,
     certificateNumber: row.so_chung_chi || undefined,
     notes: row.ghi_chu || undefined,
+    fileSize: row.kich_thuoc ? Number(row.kich_thuoc) : undefined,
+    sourceUrl: row.source_url || undefined,
+    license: row.license || undefined,
   };
 }
 
@@ -269,6 +284,9 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
     p_so_chung_chi: input.certificateNumber?.trim() || null,
     p_may_ap_dung: input.machine?.trim() || null,
     p_ghi_chu: input.notes?.trim() || null,
+    p_kich_thuoc: input.fileSize || null,
+    p_source_url: input.sourceUrl?.trim() || null,
+    p_license: input.license?.trim() || null,
   });
   if (error) throw new Error(formatSupabaseError(error));
 }
@@ -291,7 +309,7 @@ export async function updateCertificateRecord(input: UpdateCertificateInput) {
         ? "Hết hạn"
         : "Còn hiệu lực";
 
-  const updatePayload: Record<string, string | null> = {
+  const updatePayload: Record<string, unknown> = {
     ten_chung_chi: input.title.trim(),
     ngay_het_han: input.expiresAt || null,
     trang_thai: dbStatus,
@@ -311,12 +329,69 @@ export async function updateCertificateRecord(input: UpdateCertificateInput) {
     updatePayload.so_chung_chi = input.certificateNumber.trim() || null;
   }
   if (input.notes !== undefined) updatePayload.ghi_chu = input.notes.trim() || null;
+  if (input.fileSize !== undefined) updatePayload.kich_thuoc = input.fileSize || null;
+  if (input.sourceUrl !== undefined) updatePayload.source_url = input.sourceUrl.trim() || null;
+  if (input.license !== undefined) updatePayload.license = input.license.trim() || null;
 
   const supabase = createClient();
   const { error } = await supabase
     .from("chung_chi")
     .update(updatePayload)
     .eq("id", input.id);
+
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export type SyncGroupCertificatesInput = {
+  groupId: string;
+  title: string;
+  employeeIds: string[];
+  issuedAt?: string;
+  expiresAt?: string;
+  status: Certificate["status"];
+  imageUrl?: string;
+  cloudinaryPublicId?: string;
+  organization?: string;
+  machine?: string;
+  certificateNumber?: string;
+  notes?: string;
+  fileSize?: number;
+  sourceUrl?: string;
+  license?: string;
+};
+
+/** Đồng bộ danh sách người sở hữu và thông tin của nhóm chứng chỉ */
+export async function syncGroupCertificates(input: SyncGroupCertificatesInput) {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  if (input.employeeIds.length === 0) {
+    throw new Error("Nhóm chứng chỉ phải có ít nhất 1 người sở hữu.");
+  }
+
+  const dbStatus: CertificateDbStatus =
+    input.status === "Thu hồi"
+      ? "Thu hồi"
+      : input.status === "Hết hạn"
+        ? "Hết hạn"
+        : "Còn hiệu lực";
+
+  const { error } = await createClient().rpc("dong_bo_nhan_su_nhom_chung_chi", {
+    p_nhom_id: input.groupId,
+    p_ten_chung_chi: input.title.trim(),
+    p_employee_ids: input.employeeIds,
+    p_ngay_cap: input.issuedAt || null,
+    p_ngay_het_han: input.expiresAt || null,
+    p_file_chung_chi: input.imageUrl?.trim() || null,
+    p_trang_thai: dbStatus,
+    p_cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
+    p_secure_url: input.imageUrl?.trim() || null,
+    p_don_vi_cap: input.organization?.trim() || null,
+    p_so_chung_chi: input.certificateNumber?.trim() || null,
+    p_may_ap_dung: input.machine?.trim() || null,
+    p_ghi_chu: input.notes?.trim() || null,
+    p_kich_thuoc: input.fileSize || null,
+    p_source_url: input.sourceUrl?.trim() || null,
+    p_license: input.license?.trim() || null,
+  });
 
   if (error) throw new Error(formatSupabaseError(error));
 }

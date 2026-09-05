@@ -394,7 +394,6 @@ export default function WeldingHistoryList() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"supabase" | "local" | "seed">("seed");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
@@ -464,7 +463,6 @@ export default function WeldingHistoryList() {
     setList(res.records);
     setTotalCount(res.totalCount);
     setStats(res.stats);
-    setDataSource(res.source);
     if (res.error) {
       setLoadError(res.error);
     } else {
@@ -767,10 +765,8 @@ export default function WeldingHistoryList() {
             )}
           </div>
 
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-            dataSource === "supabase" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-[#0047AB] border border-blue-200"
-          }`}>
-            {dataSource === "supabase" ? "Đã kết nối Supabase" : dataSource === "local" ? "Đang lưu cục bộ" : "Dữ liệu mẫu"}
+          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Nguồn dữ liệu: Supabase
           </span>
         </div>
       </div>

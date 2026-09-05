@@ -21,6 +21,8 @@ import {
   loadPersonnelCertificateRows,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -187,6 +189,53 @@ export default function WelderManagement() {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [viewingWelder, setViewingWelder] = useState<Welder | null>(null);
+  const [liveCerts, setLiveCerts] = useState<{
+    id: string;
+    ten_chung_chi: string;
+    ngay_cap: string | null;
+    ngay_het_han: string | null;
+    trang_thai: string;
+    don_vi_cap: string | null;
+    so_chung_chi: string | null;
+    file_chung_chi: string | null;
+    secure_url: string | null;
+  }[]>([]);
+  const [loadingCerts, setLoadingCerts] = useState(false);
+
+  useEffect(() => {
+    if (!viewingWelder) {
+      setLiveCerts([]);
+      return;
+    }
+
+    const welderId = viewingWelder.id;
+    let active = true;
+    async function loadLiveCerts() {
+      if (!isSupabaseConfigured()) return;
+      setLoadingCerts(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("chung_chi")
+          .select("id, ten_chung_chi, ngay_cap, ngay_het_han, trang_thai, don_vi_cap, so_chung_chi, file_chung_chi, secure_url")
+          .eq("employee_id", welderId)
+          .order("created_at", { ascending: false });
+
+        if (active && !error && data) {
+          setLiveCerts(data);
+        }
+      } catch {
+        if (active) setLiveCerts([]);
+      } finally {
+        if (active) setLoadingCerts(false);
+      }
+    }
+
+    void loadLiveCerts();
+    return () => {
+      active = false;
+    };
+  }, [viewingWelder]);
 
   useEffect(() => {
     let active = true;
@@ -682,11 +731,16 @@ export default function WelderManagement() {
                 </div>
               </div>
 
-              {/* Chứng chỉ (Chỉ đọc từ hệ thống) */}
+              {/* Chứng chỉ (Truy vấn trực tiếp public.chung_chi) */}
               <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4">
                 <div className="flex items-center justify-between gap-2 mb-2.5">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                    Chứng chỉ sở hữu (Đồng bộ hệ thống)
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                      Chứng chỉ sở hữu (Truy vấn trực tiếp public.chung_chi)
+                    </span>
+                    {loadingCerts && (
+                      <span className="text-[11px] text-slate-400 italic">Đang tải…</span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -699,17 +753,56 @@ export default function WelderManagement() {
                     Quản lý chứng chỉ →
                   </button>
                 </div>
-                {parseCertificateList(viewingWelder.certificates).length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {parseCertificateList(viewingWelder.certificates).map((c) => (
-                      <span
-                        key={c}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-2xs"
+
+                {liveCerts.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {liveCerts.map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex flex-col justify-between rounded-lg border border-blue-200 bg-white p-2.5 shadow-2xs text-xs"
                       >
-                        <SealCheck size={14} className="text-[#0047AB]" weight="bold" />
-                        {c}
-                      </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-semibold text-slate-900 leading-tight">
+                            {c.ten_chung_chi}
+                          </div>
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                              c.trang_thai === "Còn hiệu lực"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : c.trang_thai === "Sắp hết hạn"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}
+                          >
+                            {c.trang_thai}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-[11px] text-slate-500 space-y-0.5 font-mono">
+                          {c.so_chung_chi && <div>Số CC: {c.so_chung_chi}</div>}
+                          {c.ngay_het_han && <div>Hạn: {c.ngay_het_han.slice(0, 10)}</div>}
+                          {c.don_vi_cap && (
+                            <div className="font-sans text-slate-400 truncate">{c.don_vi_cap}</div>
+                          )}
+                        </div>
+                      </div>
                     ))}
+                  </div>
+                ) : !loadingCerts && parseCertificateList(viewingWelder.certificates).length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {parseCertificateList(viewingWelder.certificates).map((c) => (
+                        <span
+                          key={c}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-2xs"
+                        >
+                          <SealCheck size={14} className="text-[#0047AB]" weight="bold" />
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-[11px] text-slate-400 italic">
+                      (Dữ liệu đọc từ cache nhân sự, chưa có bản ghi độc lập trong bảng public.chung_chi)
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400 italic">Chưa có chứng chỉ nào được ghi nhận cho nhân sự này.</p>

@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { google } from "googleapis";
 import type { DriveDocumentItem } from "./types";
 
@@ -97,7 +98,7 @@ export async function listDriveDocuments(): Promise<DriveDocumentItem[]> {
     const res = await ctx.drive.files.list({
       q: `'${ctx.folderId}' in parents and trashed = false and mimeType = '${DRIVE_PDF_MIME_TYPE}'`,
       fields:
-        "nextPageToken, files(id, name, description, size, mimeType, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink, appProperties)",
+        "nextPageToken, files(id, name, description, size, mimeType, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink, appProperties, md5Checksum)",
       orderBy: "createdTime desc",
       pageSize: 1000,
       pageToken,
@@ -122,6 +123,7 @@ export async function listDriveDocuments(): Promise<DriveDocumentItem[]> {
     webContentLink: f.webContentLink || undefined,
     thumbnailLink: f.thumbnailLink || undefined,
     appProperties: (f.appProperties as Record<string, string>) || undefined,
+    md5Checksum: f.md5Checksum || undefined,
   }));
 }
 
@@ -130,6 +132,7 @@ export async function createResumableUploadSession(params: {
   mimeType: string;
   description?: string;
   fileSize: number;
+  appProperties?: Record<string, string>;
 }): Promise<string> {
   const ctx = getDriveClient();
   if (!ctx) {
@@ -145,11 +148,14 @@ export async function createResumableUploadSession(params: {
     throw new Error("Không thể lấy Google OAuth access token từ Service Account");
   }
 
-  const body = {
+  const body: Record<string, unknown> = {
     name: normalizePdfName(params.name),
     description: normalizeDescription(params.description),
     parents: [ctx.folderId],
   };
+  if (params.appProperties) {
+    body.appProperties = params.appProperties;
+  }
 
   const url =
     "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true";
@@ -178,9 +184,59 @@ export async function createResumableUploadSession(params: {
   return location;
 }
 
+export async function createResumableUpdateSession(
+  fileId: string,
+  params: {
+    name?: string;
+    description?: string;
+    fileSize: number;
+    appProperties?: Record<string, string>;
+  },
+): Promise<string> {
+  const ctx = await assertManagedDriveFile(fileId);
+  if (!Number.isSafeInteger(params.fileSize) || params.fileSize <= 0 || params.fileSize > MAX_DRIVE_DOCUMENT_BYTES) {
+    throw new Error("Dung lượng PDF phải lớn hơn 0 và không vượt quá 250 MB");
+  }
+
+  const { token } = await ctx.auth.getAccessToken();
+  if (!token) {
+    throw new Error("Không thể lấy Google OAuth access token từ Service Account");
+  }
+
+  const body: Record<string, unknown> = {};
+  if (params.name !== undefined) body.name = normalizePdfName(params.name);
+  if (params.description !== undefined) body.description = normalizeDescription(params.description);
+  if (params.appProperties) body.appProperties = params.appProperties;
+
+  const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=resumable&supportsAllDrives=true`;
+
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": DRIVE_PDF_MIME_TYPE,
+      "X-Upload-Content-Length": String(params.fileSize),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Google Drive API error (${response.status}): ${errText}`);
+  }
+
+  const location = response.headers.get("Location");
+  if (!location) {
+    throw new Error("Google Drive không trả về Location URL cho resumable update session");
+  }
+
+  return location;
+}
+
 export async function updateDriveDocument(
   fileId: string,
-  params: { name?: string; description?: string },
+  params: { name?: string; description?: string; appProperties?: Record<string, string> },
 ): Promise<DriveDocumentItem> {
   const ctx = await assertManagedDriveFile(fileId);
 
@@ -189,9 +245,10 @@ export async function updateDriveDocument(
     requestBody: {
       name: params.name === undefined ? undefined : normalizePdfName(params.name),
       description: params.description === undefined ? undefined : normalizeDescription(params.description),
+      appProperties: params.appProperties,
     },
     fields:
-      "id, name, description, size, mimeType, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink",
+      "id, name, description, size, mimeType, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink, appProperties, md5Checksum",
     supportsAllDrives: true,
   });
 
@@ -206,6 +263,9 @@ export async function updateDriveDocument(
     modifiedTime: f.modifiedTime || undefined,
     webViewLink: f.webViewLink || undefined,
     webContentLink: f.webContentLink || undefined,
+    thumbnailLink: f.thumbnailLink || undefined,
+    appProperties: (f.appProperties as Record<string, string>) || undefined,
+    md5Checksum: f.md5Checksum || undefined,
   };
 }
 
@@ -220,4 +280,37 @@ export async function trashDriveDocument(fileId: string): Promise<boolean> {
     supportsAllDrives: true,
   });
   return true;
+}
+
+export async function uploadBufferToDrive(params: {
+  name: string;
+  description?: string;
+  buffer: Buffer;
+  appProperties?: Record<string, string>;
+}): Promise<{ fileId: string; md5Checksum?: string; name: string; size: number }> {
+  const ctx = getDriveClient();
+  if (!ctx) throw new Error("Google Drive chưa được cấu hình");
+
+  const stream = Readable.from(params.buffer);
+  const res = await ctx.drive.files.create({
+    requestBody: {
+      name: normalizePdfName(params.name),
+      description: normalizeDescription(params.description),
+      parents: [ctx.folderId],
+      appProperties: params.appProperties,
+    },
+    media: {
+      mimeType: DRIVE_PDF_MIME_TYPE,
+      body: stream,
+    },
+    fields: "id, name, size, md5Checksum, appProperties",
+    supportsAllDrives: true,
+  });
+
+  return {
+    fileId: res.data.id || "",
+    md5Checksum: res.data.md5Checksum || undefined,
+    name: res.data.name || params.name,
+    size: Number(res.data.size) || params.buffer.length,
+  };
 }

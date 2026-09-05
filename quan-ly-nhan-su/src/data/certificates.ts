@@ -25,6 +25,9 @@ export type Certificate = {
   machine?: string;
   certificateNumber?: string;
   notes?: string;
+  fileSize?: number;
+  sourceUrl?: string;
+  license?: string;
   /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */
   inferred?: boolean;
 };
