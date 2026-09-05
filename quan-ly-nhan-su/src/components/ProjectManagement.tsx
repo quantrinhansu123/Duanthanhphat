@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
 import {
-  formatChainageRange,
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
 import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
@@ -60,8 +59,7 @@ function emptyProject(): Project {
     status: "Đang triển khai",
     startDate: today,
     endDate: today,
-    routeFrom: "",
-    routeTo: "",
+    location: "",
     plannedWeldCount: 0,
     personnelIds: [],
     machineTypes: [],
@@ -366,28 +364,16 @@ function ProjectInfoFields({
         />
       </label>
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Lý trình từ vị trí
-          <input
-            readOnly={readOnly}
-            value={form.routeFrom}
-            onChange={(e) => updateForm({ routeFrom: e.target.value })}
-            placeholder="VD: Km 12+450"
-            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-          />
-        </label>
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Đến vị trí
-          <input
-            readOnly={readOnly}
-            value={form.routeTo}
-            onChange={(e) => updateForm({ routeTo: e.target.value })}
-            placeholder="VD: Km 24+900"
-            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-          />
-        </label>
-      </div>
+      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        Vị trí
+        <input
+          readOnly={readOnly}
+          value={form.location}
+          onChange={(e) => updateForm({ location: e.target.value })}
+          placeholder="VD: Hà Nội"
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+        />
+      </label>
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -970,7 +956,7 @@ function ProjectMachineRunsTab({
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <th className="px-3.5 py-2.5">Ngày</th>
                   <th className="px-3.5 py-2.5">Tên máy</th>
-                  <th className="px-3.5 py-2.5">Lý trình</th>
+                  <th className="px-3.5 py-2.5">Vị trí</th>
                   <th className="px-3.5 py-2.5 text-right">Số giờ</th>
                   <th className="px-3.5 py-2.5">Người phụ trách</th>
                 </tr>
@@ -983,8 +969,8 @@ function ProjectMachineRunsTab({
                       <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
                       <div className="text-xs text-slate-500">{row.machineName}</div>
                     </td>
-                    <td className="px-3.5 py-2.5 font-mono text-xs text-slate-700 whitespace-nowrap">
-                      {formatChainageRange(row)}
+                    <td className="px-3.5 py-2.5 text-xs text-slate-700 whitespace-nowrap">
+                      {row.location}
                     </td>
                     <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-slate-900">
                       {row.operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
@@ -1186,8 +1172,8 @@ function ProjectModal({
                   window.alert("Vui lòng chọn người phụ trách.");
                   return;
                 }
-                if (!form.routeFrom.trim() || !form.routeTo.trim()) {
-                  window.alert("Vui lòng nhập đầy đủ lý trình từ vị trí tới vị trí.");
+                if (!form.location.trim()) {
+                  window.alert("Vui lòng nhập vị trí.");
                   return;
                 }
                 if (projectDurationDays(form.startDate, form.endDate) <= 0) {
@@ -1279,8 +1265,7 @@ export default function ProjectManagement() {
         p.name.toLowerCase().includes(q) ||
         p.manager.toLowerCase().includes(q) ||
         p.plant.toLowerCase().includes(q) ||
-        p.routeFrom.toLowerCase().includes(q) ||
-        p.routeTo.toLowerCase().includes(q);
+        p.location.toLowerCase().includes(q);
       const matchStatus = status === "Tất cả trạng thái" || p.status === status;
       const matchProject = projectFilter.length === 0 || projectFilter.includes(p.id);
       const matchDate =
@@ -1314,8 +1299,7 @@ export default function ProjectManagement() {
       if (source === "supabase") {
         const { project: saved, error: saveError } = await updateDuAn(updated.id, {
           name: updated.name,
-          routeFrom: updated.routeFrom,
-          routeTo: updated.routeTo,
+          location: updated.location,
           startDate: updated.startDate,
           endDate: updated.endDate,
           plannedWeldCount: updated.plannedWeldCount,
@@ -1356,8 +1340,7 @@ export default function ProjectManagement() {
         const { project: created, error: createError } = await insertDuAn({
           name: project.name,
           maDuAn: project.maDuAn,
-          routeFrom: project.routeFrom,
-          routeTo: project.routeTo,
+          location: project.location,
           startDate: project.startDate,
           endDate: project.endDate,
           plannedWeldCount: project.plannedWeldCount,
@@ -1568,13 +1551,12 @@ export default function ProjectManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1440px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1320px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Tên dự án</th>
-                <th className="min-w-[190px] px-3.5 py-3">Lý trình</th>
+                <th className="min-w-[190px] px-3.5 py-3">Vị trí</th>
                 <th className="px-3.5 py-3">Người phụ trách</th>
-                <th className="px-3.5 py-3">Nhà máy</th>
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3 text-right">Tổng mối hàn</th>
@@ -1588,11 +1570,10 @@ export default function ProjectManagement() {
               {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-semibold text-slate-900">{p.name}</td>
-                  <td className="px-3.5 py-3 font-mono text-xs text-slate-700">
-                    {p.routeFrom} → {p.routeTo}
+                  <td className="px-3.5 py-3 text-xs text-slate-700">
+                    {p.location}
                   </td>
                   <td className="px-3.5 py-3 text-slate-700">{p.manager}</td>
-                  <td className="px-3.5 py-3 text-slate-700">{p.plant}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.staffCount}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.machineCount}</td>
                   <td className="px-3.5 py-3 text-right font-semibold font-mono tabular-nums text-[#0047AB]">
@@ -1654,7 +1635,7 @@ export default function ProjectManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy dự án phù hợp</div>
                   </td>
                 </tr>

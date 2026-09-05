@@ -742,6 +742,44 @@ export function buildDailyJournalSeries(
   return points;
 }
 
+export type QuarterlyPassRatePoint = {
+  key: string;
+  label: string;
+  total: number;
+  errors: number;
+  passRate: number;
+};
+
+/** Xu hướng tỷ lệ đạt theo quý, tính từ nhật ký hàn thật (dựa trên ngày thực hiện). */
+export function buildQuarterlyPassRateSeries(
+  rows: WeldReportRow[],
+  quarterCount = 8,
+): QuarterlyPassRatePoint[] {
+  const byQuarter = new Map<string, { year: number; quarter: number; total: number; errors: number }>();
+  rows.forEach((row, index) => {
+    const iso = getJournalRowDateIso(row, index);
+    const year = Number(iso.slice(0, 4)) || row.nam_thuc_hien;
+    const month = Number(iso.slice(5, 7)) || 1;
+    const quarter = Math.floor((month - 1) / 3) + 1;
+    const key = `${year}-Q${quarter}`;
+    const current = byQuarter.get(key) ?? { year, quarter, total: 0, errors: 0 };
+    current.total += row.so_luong_thuc_hien;
+    current.errors += row.so_luong_loi;
+    byQuarter.set(key, current);
+  });
+
+  return Array.from(byQuarter.entries())
+    .sort(([, a], [, b]) => a.year - b.year || a.quarter - b.quarter)
+    .slice(-quarterCount)
+    .map(([key, stats]) => ({
+      key,
+      label: `Q${stats.quarter}/${stats.year}`,
+      total: stats.total,
+      errors: stats.errors,
+      passRate: stats.total > 0 ? Number((((stats.total - stats.errors) / stats.total) * 100).toFixed(2)) : 0,
+    }));
+}
+
 export type DonutArc = {
   dasharray: string;
   transform: string;

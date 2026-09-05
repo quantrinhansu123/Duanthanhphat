@@ -29,8 +29,7 @@ function emptyForm(
   return {
     date: new Date().toISOString().slice(0, 10),
     machineId: machines[0]?.id ?? "",
-    chainageFrom: "",
-    chainageTo: "",
+    location: "",
     operatingHours: 0,
     projectId: projects[0]?.id ?? "",
     personInChargeId: personnel[0]?.id ?? "",
@@ -41,23 +40,10 @@ function fromSchedule(row: MachineRunSchedule): MachineRunScheduleFormValues {
   return {
     date: row.date,
     machineId: row.machineId,
-    chainageFrom: row.chainageFrom,
-    chainageTo: row.chainageTo,
+    location: row.location,
     operatingHours: row.operatingHours,
     projectId: row.projectId,
     personInChargeId: row.personInChargeId,
-  };
-}
-
-function normalizeChainage(value: string) {
-  const match = value.trim().match(/^(?:km\s*)?(\d+)\s*\+\s*(\d{1,3})$/i);
-  if (!match) return null;
-  const kilometers = Number(match[1]);
-  const meters = Number(match[2]);
-  if (!Number.isFinite(kilometers) || meters > 999) return null;
-  return {
-    label: `Km ${kilometers}+${String(meters).padStart(3, "0")}`,
-    meters: kilometers * 1000 + meters,
   };
 }
 
@@ -98,19 +84,14 @@ export default function MachineAssignmentFormModal({
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const from = normalizeChainage(form.chainageFrom);
-    const to = normalizeChainage(form.chainageTo);
+    const location = form.location.trim();
 
     if (!form.date || !form.machineId || !form.projectId || !form.personInChargeId) {
       setError("Vui lòng nhập đầy đủ ngày, máy, dự án và người phụ trách.");
       return;
     }
-    if (!from || !to) {
-      setError("Lý trình phải có dạng Km 12+345.");
-      return;
-    }
-    if (to.meters <= from.meters) {
-      setError("Lý trình đến phải lớn hơn lý trình từ.");
+    if (!location) {
+      setError("Vui lòng nhập vị trí.");
       return;
     }
     if (!Number.isFinite(form.operatingHours) || form.operatingHours <= 0 || form.operatingHours > 24) {
@@ -120,8 +101,7 @@ export default function MachineAssignmentFormModal({
 
     onSubmit({
       ...form,
-      chainageFrom: from.label,
-      chainageTo: to.label,
+      location,
     });
   }
 
@@ -215,31 +195,16 @@ export default function MachineAssignmentFormModal({
             </select>
           </label>
 
-          <fieldset>
-            <legend className="text-xs font-semibold text-slate-700 sm:text-[13px]">Lý trình *</legend>
-            <div className="mt-1.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-500">
-                Từ vị trí
-                <input
-                  readOnly={readOnly}
-                  value={form.chainageFrom}
-                  onChange={(event) => setForm((current) => ({ ...current, chainageFrom: event.target.value }))}
-                  placeholder="Km 0+000"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-500">
-                Đến vị trí
-                <input
-                  readOnly={readOnly}
-                  value={form.chainageTo}
-                  onChange={(event) => setForm((current) => ({ ...current, chainageTo: event.target.value }))}
-                  placeholder="Km 6+450"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-                />
-              </label>
-            </div>
-          </fieldset>
+          <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+            Vị trí *
+            <input
+              readOnly={readOnly}
+              value={form.location}
+              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+              placeholder="VD: Hà Nội"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
+            />
+          </label>
 
           <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
             Dự án *

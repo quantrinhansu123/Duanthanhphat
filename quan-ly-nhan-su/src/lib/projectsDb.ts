@@ -18,8 +18,7 @@ export type DuAnRow = {
   ma_du_an: string | null;
   du_an: string;
   nguoi_phu_trach: string | null;
-  ly_trinh_tu?: string | null;
-  ly_trinh_den?: string | null;
+  vi_tri?: string | null;
   ngay_bat_dau?: string | null;
   ngay_ket_thuc?: string | null;
   tong_moi_han_du_kien?: number | null;
@@ -29,7 +28,7 @@ export type DuAnRow = {
 };
 
 const DU_AN_COLUMNS_BASE = "id,ma_du_an,du_an,nguoi_phu_trach,tien_do_ly_thuyet,created_at,updated_at";
-const DU_AN_COLUMNS = `${DU_AN_COLUMNS_BASE},ly_trinh_tu,ly_trinh_den,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
+const DU_AN_COLUMNS = `${DU_AN_COLUMNS_BASE},vi_tri,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
 
 let projectsPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
   null;
@@ -127,8 +126,7 @@ export function duAnRowToProject(row: DuAnRow): Project {
     status: "Đang triển khai",
     startDate,
     endDate,
-    routeFrom: row.ly_trinh_tu?.trim() || "Chưa cập nhật",
-    routeTo: row.ly_trinh_den?.trim() || "Chưa cập nhật",
+    location: row.vi_tri?.trim() || "Chưa cập nhật",
     plannedWeldCount,
     personnelIds: [],
     machineTypes: [],
@@ -239,8 +237,7 @@ export async function saveTheoreticalProgress(
 export async function insertDuAn(payload: {
   name: string;
   maDuAn?: string;
-  routeFrom: string;
-  routeTo: string;
+  location: string;
   startDate: string;
   endDate: string;
   plannedWeldCount: number;
@@ -258,8 +255,7 @@ export async function insertDuAn(payload: {
     .insert({
       du_an: name,
       ma_du_an: payload.maDuAn?.trim() || null,
-      ly_trinh_tu: payload.routeFrom.trim(),
-      ly_trinh_den: payload.routeTo.trim(),
+      vi_tri: payload.location.trim(),
       ngay_bat_dau: payload.startDate,
       ngay_ket_thuc: payload.endDate,
       tong_moi_han_du_kien: Math.max(0, Math.round(payload.plannedWeldCount)),
@@ -281,8 +277,7 @@ export async function updateDuAn(
   projectId: string,
   patch: {
     name?: string;
-    routeFrom?: string;
-    routeTo?: string;
+    location?: string;
     startDate?: string;
     endDate?: string;
     plannedWeldCount?: number;
@@ -294,8 +289,7 @@ export async function updateDuAn(
 
   const body: Record<string, string | number | TheoreticalProgressRow[]> = {};
   if (patch.name !== undefined) body.du_an = patch.name.trim();
-  if (patch.routeFrom !== undefined) body.ly_trinh_tu = patch.routeFrom.trim();
-  if (patch.routeTo !== undefined) body.ly_trinh_den = patch.routeTo.trim();
+  if (patch.location !== undefined) body.vi_tri = patch.location.trim();
   if (patch.startDate !== undefined) body.ngay_bat_dau = patch.startDate;
   if (patch.endDate !== undefined) body.ngay_ket_thuc = patch.endDate;
   if (patch.plannedWeldCount !== undefined) {

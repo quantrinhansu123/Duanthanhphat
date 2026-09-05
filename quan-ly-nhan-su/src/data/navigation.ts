@@ -83,6 +83,19 @@ export const navigation: NavItem[] = [
     ],
   },
   {
+    id: "moi-han",
+    code: "14",
+    label: "Quản lý mối hàn",
+    labelEn: "Weld Management",
+    children: [
+      {
+        id: "quan-ly-moi-han",
+        label: "Quản lý mối hàn",
+        description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
+      },
+    ],
+  },
+  {
     id: "du-an",
     code: "12",
     label: "Quản lý dự án",
@@ -101,11 +114,6 @@ export const navigation: NavItem[] = [
     label: "Quản lý kỹ thuật",
     labelEn: "Technical Management",
     children: [
-      {
-        id: "quan-ly-moi-han",
-        label: "Quản lý mối hàn",
-        description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
-      },
       {
         id: "nhat-ky-han",
         label: "Nhật ký hàn",

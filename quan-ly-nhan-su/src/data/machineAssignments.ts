@@ -4,8 +4,7 @@ export type MachineRunSchedule = {
   machineId: string;
   machineCode: string;
   machineName: string;
-  chainageFrom: string;
-  chainageTo: string;
+  location: string;
   operatingHours: number;
   projectId: string;
   projectName: string;
@@ -31,8 +30,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "kcm007-01",
     machineCode: "KCM007-01",
     machineName: "Tổ hợp máy hàn KCM007 Rail Welding Complex",
-    chainageFrom: "Km 0+000",
-    chainageTo: "Km 6+450",
+    location: "Hà Nội",
     operatingHours: 8,
     projectId: "seed-project-1",
     projectName: "ĐSCT Bắc – Nam",
@@ -45,8 +43,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "un5-150zc2-01",
     machineCode: "UN5-150ZC2-01",
     machineName: "Máy hàn ray lưu động UN5-150ZC2-C6",
-    chainageFrom: "Km 12+200",
-    chainageTo: "Km 18+600",
+    location: "Đà Nẵng",
     operatingHours: 7.5,
     projectId: "seed-project-2",
     projectName: "Dự án ga Đà Nẵng",
@@ -59,8 +56,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "kcm007-02",
     machineCode: "KCM007-02",
     machineName: "Tổ hợp máy hàn KCM007 Rail Welding Complex (Tổ 2)",
-    chainageFrom: "Km 3+100",
-    chainageTo: "Km 7+800",
+    location: "TP. Hồ Chí Minh",
     operatingHours: 6,
     projectId: "seed-project-5",
     projectName: "Tuyến metro số 1",
@@ -73,8 +69,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "kcm007-01",
     machineCode: "KCM007-01",
     machineName: "Tổ hợp máy hàn KCM007 Rail Welding Complex",
-    chainageFrom: "Km 6+450",
-    chainageTo: "Km 11+900",
+    location: "Hà Nội",
     operatingHours: 8.5,
     projectId: "seed-project-1",
     projectName: "ĐSCT Bắc – Nam",
@@ -87,8 +82,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "un5-150zc2-02",
     machineCode: "UN5-150ZC2-02",
     machineName: "Máy hàn tiếp xúc đối đầu UN5-150ZC2-C6",
-    chainageFrom: "Km 19+300",
-    chainageTo: "Km 24+100",
+    location: "Hà Nội",
     operatingHours: 6.5,
     projectId: "seed-project-4",
     projectName: "Khu vực depot Hà Nội",
@@ -101,8 +95,7 @@ export const machineRunSchedules: MachineRunSchedule[] = [
     machineId: "un5-150zc2-01",
     machineCode: "UN5-150ZC2-01",
     machineName: "Máy hàn ray lưu động UN5-150ZC2-C6",
-    chainageFrom: "Km 11+900",
-    chainageTo: "Km 15+200",
+    location: "Hà Nội",
     operatingHours: 5,
     projectId: "seed-project-1",
     projectName: "ĐSCT Bắc – Nam",
@@ -117,8 +110,4 @@ export function formatScheduleDate(iso: string) {
 
 export function formatOperatingHours(hours: number) {
   return `${hours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giờ`;
-}
-
-export function formatChainageRange(row: Pick<MachineRunSchedule, "chainageFrom" | "chainageTo">) {
-  return `${row.chainageFrom} → ${row.chainageTo}`;
 }

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "@/components/icons";
 import MachineAssignmentFormModal from "@/components/MachineAssignmentFormModal";
 import {
-  formatChainageRange,
   formatOperatingHours,
   formatScheduleDate,
   type LookupOption,
@@ -39,8 +38,7 @@ function createLocalSchedule(
     machineId: values.machineId,
     machineCode: machine?.code ?? "—",
     machineName: machine?.name ?? "Máy chưa xác định",
-    chainageFrom: values.chainageFrom,
-    chainageTo: values.chainageTo,
+    location: values.location,
     operatingHours: values.operatingHours,
     projectId: values.projectId,
     projectName: project?.label ?? "Dự án chưa xác định",
@@ -92,7 +90,7 @@ export default function MachineAssignmentList() {
       if (projectId && row.projectId !== projectId) return false;
       if (personId && row.personInChargeId !== personId) return false;
       if (!keyword) return true;
-      return [row.machineCode, row.machineName, row.chainageFrom, row.chainageTo, row.projectName, row.personInChargeName]
+      return [row.machineCode, row.machineName, row.location, row.projectName, row.personInChargeName]
         .some((value) => value.toLocaleLowerCase("vi").includes(keyword));
     });
   }, [list, query, dateFrom, dateTo, machineId, projectId, personId]);
@@ -218,7 +216,7 @@ export default function MachineAssignmentList() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm máy, lý trình, dự án…"
+            placeholder="Tìm máy, vị trí, dự án…"
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm xl:col-span-2"
           />
           <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Từ ngày" />
@@ -250,7 +248,7 @@ export default function MachineAssignmentList() {
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
                 <th className="px-3.5 py-3">Tên máy</th>
-                <th className="px-3.5 py-3">Lý trình</th>
+                <th className="px-3.5 py-3">Vị trí</th>
                 <th className="px-3.5 py-3 text-right">Số giờ hoạt động</th>
                 <th className="px-3.5 py-3">Dự án</th>
                 <th className="px-3.5 py-3">Người phụ trách</th>
@@ -265,7 +263,7 @@ export default function MachineAssignmentList() {
                     <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
                     <div className="mt-0.5 text-xs text-slate-500">{row.machineName}</div>
                   </td>
-                  <td className="px-3.5 py-3 font-mono text-slate-700">{formatChainageRange(row)}</td>
+                  <td className="px-3.5 py-3 text-slate-700">{row.location}</td>
                   <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-slate-900">{formatOperatingHours(row.operatingHours)}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.projectName}</td>
                   <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>

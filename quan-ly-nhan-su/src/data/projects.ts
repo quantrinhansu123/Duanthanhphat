@@ -16,8 +16,7 @@ export type Project = {
   status: "Đang triển khai" | "Hoàn thành" | "Tạm dừng";
   startDate: string;
   endDate: string;
-  routeFrom: string;
-  routeTo: string;
+  location: string;
   plannedWeldCount: number;
   personnelIds: string[];
   machineTypes: string[];
@@ -42,8 +41,7 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-01-15",
     endDate: "2024-02-13",
-    routeFrom: "Km 0+000",
-    routeTo: "Km 15+000",
+    location: "Hà Nội",
     plannedWeldCount: 600,
     personnelIds: [],
     machineTypes: [],
@@ -59,8 +57,7 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-02-01",
     endDate: "2024-02-20",
-    routeFrom: "Km 791+500",
-    routeTo: "Km 804+000",
+    location: "Đà Nẵng",
     plannedWeldCount: 320,
     personnelIds: [],
     machineTypes: [],
@@ -76,8 +73,7 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2023-11-20",
     endDate: "2023-12-19",
-    routeFrom: "Km 450+000",
-    routeTo: "Km 472+500",
+    location: "Hà Nội",
     plannedWeldCount: 900,
     personnelIds: [],
     machineTypes: [],
@@ -93,8 +89,7 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-03-10",
     endDate: "2024-03-24",
-    routeFrom: "Km 5+200",
-    routeTo: "Km 11+800",
+    location: "Hà Nội",
     plannedWeldCount: 225,
     personnelIds: [],
     machineTypes: [],
@@ -110,8 +105,7 @@ export const projects: Project[] = [
     status: "Tạm dừng",
     startDate: "2023-09-05",
     endDate: "2023-10-04",
-    routeFrom: "Km 0+000",
-    routeTo: "Km 19+700",
+    location: "TP. Hồ Chí Minh",
     plannedWeldCount: 720,
     personnelIds: [],
     machineTypes: [],

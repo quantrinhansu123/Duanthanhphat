@@ -1,11 +1,11 @@
 ﻿"use client";
 
-import { useMemo } from "react";
-import { Warning } from "@/components/icons";
-import { weeklyTrend } from "@/data/qualityReport";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Warning } from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
+  buildQuarterlyPassRateSeries,
   countReworkWelds,
   filterWeldReportRows,
   formatJournalDateIso,
@@ -13,6 +13,7 @@ import {
   groupJournalErrorReasons,
   groupJournalRows,
   summarizeJournalRows,
+  type QuarterlyPassRatePoint,
 } from "@/lib/weldReportData";
 const DEFECT_META = [
   { name: "Lỗi bề mặt", color: "#ef4444", severity: "Cao" as const },
@@ -168,6 +169,160 @@ function DonutChart({ rate }: { rate: number }) {
   );
 }
 
+/** Đường cong mượt qua các điểm bằng Bezier bậc 3 (không vọt lố), dùng chung cho line + area. */
+function buildSmoothLinePath(points: { x: number; y: number }[]) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const midX = (p0.x + p1.x) / 2;
+    d += ` C ${midX} ${p0.y}, ${midX} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+  return d;
+}
+
+function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[300px] items-center justify-center text-xs font-medium text-slate-400">
+        Chưa có dữ liệu để hiển thị xu hướng
+      </div>
+    );
+  }
+
+  const width = 640;
+  const height = 300;
+  const padLeft = 34;
+  const padRight = 34;
+  const padTop = 34;
+  const padBottom = 32;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+
+  const rates = data.map((d) => d.passRate);
+  const rawMin = Math.min(...rates);
+  const rawMax = Math.max(...rates);
+  const span = Math.max(rawMax - rawMin, 0.6);
+  const domainMin = rawMin - span * 0.35;
+  const domainMax = rawMax + span * 0.35;
+
+  const points = data.map((d, i) => ({
+    x: padLeft + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW),
+    y: padTop + (1 - (d.passRate - domainMin) / (domainMax - domainMin)) * plotH,
+  }));
+
+  const linePath = buildSmoothLinePath(points);
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padTop + plotH} L ${points[0].x} ${padTop + plotH} Z`;
+
+  const gridLines = [0.25, 0.5, 0.75].map((t) => padTop + t * plotH);
+
+  const first = data[0].passRate;
+  const last = data[data.length - 1].passRate;
+  const delta = Number((last - first).toFixed(2));
+  const isUp = delta >= 0;
+
+  const active = activeIndex !== null ? data[activeIndex] : null;
+
+  return (
+    <div className="relative">
+      <div
+        title="So với quý đầu tiên trong biểu đồ"
+        className="absolute right-0 top-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold font-mono tabular-nums shadow-2xs"
+        style={{
+          borderColor: isUp ? "#a7f3d0" : "#fecaca",
+          background: isUp ? "#ecfdf5" : "#fef2f2",
+          color: isUp ? "#047857" : "#be123c",
+        }}
+      >
+        {isUp ? <ArrowUp size={12} weight="bold" /> : <ArrowDown size={12} weight="bold" />}
+        {Math.abs(delta).toLocaleString("vi-VN")}% so với quý đầu
+      </div>
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="mt-3 h-[260px] w-full sm:h-[300px]"
+        preserveAspectRatio="none"
+        onMouseLeave={() => setActiveIndex(null)}
+      >
+        <defs>
+          <linearGradient id="qtrTrendFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0047AB" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#0047AB" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {gridLines.map((y, i) => (
+          <line key={i} x1={padLeft} x2={width - padRight} y1={y} y2={y} stroke="#eef2f7" strokeWidth="1" strokeDasharray="4 4" />
+        ))}
+
+        <path d={areaPath} fill="url(#qtrTrendFill)" />
+        <path d={linePath} fill="none" stroke="#0047AB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+        {points.map((p, i) => {
+          const isLast = i === points.length - 1;
+          const isActive = activeIndex === i;
+          return (
+            <g key={data[i].key}>
+              <rect
+                x={p.x - plotW / data.length / 2}
+                y={padTop}
+                width={plotW / data.length}
+                height={plotH}
+                fill="transparent"
+                onMouseEnter={() => setActiveIndex(i)}
+              />
+              {isLast && (
+                <circle cx={p.x} cy={p.y} r="8" fill="#0047AB" fillOpacity="0.15" />
+              )}
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={isActive || isLast ? 4.5 : 3.5}
+                fill="#ffffff"
+                stroke="#0047AB"
+                strokeWidth={isActive || isLast ? 2.5 : 2}
+              />
+              <text
+                x={p.x}
+                y={p.y - 10}
+                textAnchor="middle"
+                className="fill-[#0047AB] font-mono font-bold tabular-nums"
+                style={{ fontSize: 12, opacity: isActive || isLast ? 1 : 0.55 }}
+              >
+                {data[i].passRate.toLocaleString("vi-VN")}%
+              </text>
+              <text
+                x={p.x}
+                y={height - 8}
+                textAnchor="middle"
+                className="fill-slate-500 font-mono font-medium"
+                style={{ fontSize: 12 }}
+              >
+                {data[i].label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {active && (
+        <div className="mt-1 flex items-center justify-center gap-4 text-[11px] font-medium text-slate-500">
+          <span>
+            <span className="font-bold text-slate-900">{active.label}</span> · {fmt(active.total)} mối kiểm tra
+          </span>
+          <span className={active.errors > 0 ? "text-rose-600 font-semibold" : "text-emerald-600 font-semibold"}>
+            {active.errors > 0 ? `${fmt(active.errors)} không đạt` : "Không có lỗi"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const severityStyle = {
   Cao: "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
   "Trung bình": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
@@ -228,8 +383,7 @@ export default function QualityReportDashboard() {
     return Math.max(...currentDefectCategories.map((d) => d.count), 1);
   }, [currentDefectCategories]);
 
-  const maxTrend = useMemo(() => Math.max(...weeklyTrend.map((w) => w.rate)), []);
-  const minTrend = useMemo(() => Math.min(...weeklyTrend.map((w) => w.rate)), []);
+  const quarterlyTrend = useMemo(() => buildQuarterlyPassRateSeries(selectedRows, 8), [selectedRows]);
 
   const currentPlantQuality = useMemo(() => {
     return groupJournalRows(selectedRows, (row) => row.du_an)
@@ -368,22 +522,9 @@ export default function QualityReportDashboard() {
       {/* Trend + plant */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Xu hướng tỷ lệ đạt (8 tuần)</div>
-          <div className="mt-0.5 text-xs text-slate-500">Theo dõi biến động chất lượng theo tuần</div>
-          <div className="mt-4 flex h-[150px] sm:h-[160px] items-end gap-1 sm:gap-2">
-            {weeklyTrend.map((w) => {
-              const h = ((w.rate - minTrend + 0.5) / (maxTrend - minTrend + 1)) * 100;
-              return (
-                <div key={w.week} className="flex flex-1 min-w-0 flex-col items-center gap-1.5">
-                  <span className="text-[11px] font-bold font-mono text-[#0047AB] whitespace-nowrap tabular-nums">{w.rate}%</span>
-                  <div className="w-full max-w-[28px] sm:max-w-none overflow-hidden rounded-t-md bg-blue-50 group" style={{ height: `${Math.max(h, 20)}%` }}>
-                    <div className="h-full w-full bg-[#0047AB] group-hover:bg-[#00388A] transition-colors" />
-                  </div>
-                  <span className="text-xs font-medium font-mono text-slate-500 truncate">{w.week}</span>
-                </div>
-              );
-            })}
-          </div>
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Xu hướng tỷ lệ đạt theo quý</div>
+          <div className="mt-0.5 text-xs text-slate-500">Theo dõi biến động chất lượng qua từng quý</div>
+          <QuarterlyTrendChart data={quarterlyTrend} />
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">

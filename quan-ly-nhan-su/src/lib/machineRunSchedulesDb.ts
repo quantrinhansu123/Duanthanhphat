@@ -16,8 +16,7 @@ type MachineRunScheduleRow = {
   may_id: string;
   ma_may: string;
   ten_may: string;
-  ly_trinh_tu: string;
-  ly_trinh_den: string;
+  vi_tri: string;
   so_gio_hoat_dong: number | string;
   du_an_id: string;
   du_an: string;
@@ -56,8 +55,7 @@ export type MachineReportSummary = {
 export type MachineRunScheduleFormValues = {
   date: string;
   machineId: string;
-  chainageFrom: string;
-  chainageTo: string;
+  location: string;
   operatingHours: number;
   projectId: string;
   personInChargeId: string;
@@ -79,8 +77,7 @@ function rowToSchedule(row: MachineRunScheduleRow): MachineRunSchedule {
     machineId: row.may_id,
     machineCode: row.ma_may,
     machineName: row.ten_may,
-    chainageFrom: row.ly_trinh_tu,
-    chainageTo: row.ly_trinh_den,
+    location: row.vi_tri,
     operatingHours: Number(row.so_gio_hoat_dong),
     projectId: row.du_an_id,
     projectName: row.du_an,
@@ -160,7 +157,7 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
     const [scheduleResult, machineResult, projectResult, personnelResult] = await Promise.all([
       supabase
         .from("bao_cao_lich_chay_may")
-        .select("id,ngay,may_id,ma_may,ten_may,ly_trinh_tu,ly_trinh_den,so_gio_hoat_dong,du_an_id,du_an,nguoi_phu_trach_id,nguoi_phu_trach")
+        .select("id,ngay,may_id,ma_may,ten_may,vi_tri,so_gio_hoat_dong,du_an_id,du_an,nguoi_phu_trach_id,nguoi_phu_trach")
         .order("ngay", { ascending: false })
         .order("ma_may", { ascending: true }),
       supabase.from("thiet_bi").select("id,ma_may,ten_may").order("ma_may", { ascending: true }),
@@ -195,8 +192,7 @@ export async function insertMachineRunSchedule(values: MachineRunScheduleFormVal
   const { error } = await supabase.from("nhat_ky_chay_may").insert({
     ngay: values.date,
     may: values.machineId,
-    ly_trinh_tu: values.chainageFrom.trim(),
-    ly_trinh_den: values.chainageTo.trim(),
+    vi_tri: values.location.trim(),
     so_gio_hoat_dong: values.operatingHours,
     du_an: values.projectId,
     nguoi_phu_trach: values.personInChargeId,
@@ -211,8 +207,7 @@ export async function updateMachineRunSchedule(id: string, values: MachineRunSch
     .update({
       ngay: values.date,
       may: values.machineId,
-      ly_trinh_tu: values.chainageFrom.trim(),
-      ly_trinh_den: values.chainageTo.trim(),
+      vi_tri: values.location.trim(),
       so_gio_hoat_dong: values.operatingHours,
       du_an: values.projectId,
       nguoi_phu_trach: values.personInChargeId,
