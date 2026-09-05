@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
+import { planWeldCodeAssignments } from "@/lib/weldCode";
 import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
 
 export const REPORT_MACHINES = [
@@ -110,6 +111,205 @@ let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
 
 export function invalidateWeldReportCache() {
   reportRowsPromise = null;
+}
+
+/** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo). */
+export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]> {
+  const value = prefix.trim();
+  if (!value || !isSupabaseConfigured()) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ma_lich_su")
+    .ilike("ma_lich_su", `${value}%`)
+    .limit(2000);
+  if (error) throw new Error(formatSupabaseError(error));
+  return (data ?? [])
+    .map((row) => String((row as { ma_lich_su?: string }).ma_lich_su ?? "").trim())
+    .filter(Boolean);
+}
+
+export type WeldCodeSyncResult = {
+  total: number;
+  updated: number;
+  skipped: number;
+};
+
+async function loadAllWeldRowsForCodeSync(): Promise<
+  {
+    id: string;
+    ma_lich_su: string;
+    cong_nghe_han: string;
+    ngay_thuc_hien: string | null;
+    nam_thuc_hien: number;
+    moi_han_lien_ket: string | null;
+  }[]
+> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase.");
+  }
+  const supabase = createClient();
+  const pageSize = 1000;
+  let from = 0;
+  const all: {
+    id: string;
+    ma_lich_su: string;
+    cong_nghe_han: string;
+    ngay_thuc_hien: string | null;
+    nam_thuc_hien: number;
+    moi_han_lien_ket: string | null;
+  }[] = [];
+
+  for (;;) {
+    let result = await supabase
+      .from("lich_su_moi_han")
+      .select("id,ma_lich_su,cong_nghe_han,ngay_thuc_hien,nam_thuc_hien,moi_han_lien_ket")
+      .order("ma_lich_su", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (result.error && formatSupabaseError(result.error).includes("moi_han_lien_ket")) {
+      result = await supabase
+        .from("lich_su_moi_han")
+        .select("id,ma_lich_su,cong_nghe_han,ngay_thuc_hien,nam_thuc_hien")
+        .order("ma_lich_su", { ascending: true })
+        .range(from, from + pageSize - 1);
+    }
+
+    if (result.error) throw new Error(formatSupabaseError(result.error));
+    const chunk = ((result.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      ma_lich_su: String(row.ma_lich_su ?? ""),
+      cong_nghe_han: String(row.cong_nghe_han ?? "FBW"),
+      ngay_thuc_hien: (row.ngay_thuc_hien as string | null) ?? null,
+      nam_thuc_hien: Number(row.nam_thuc_hien),
+      moi_han_lien_ket: (row.moi_han_lien_ket as string | null) ?? null,
+    }));
+    all.push(...chunk);
+    if (chunk.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+async function updateWeldCodesInBatches(
+  updates: { id: string; ma_lich_su: string }[],
+  batchSize = 40,
+  onBatch?: (done: number, total: number) => void,
+) {
+  const supabase = createClient();
+  let done = 0;
+  for (let i = 0; i < updates.length; i += batchSize) {
+    const batch = updates.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(async (item) => {
+        const result = await supabase
+          .from("lich_su_moi_han")
+          .update({ ma_lich_su: item.ma_lich_su })
+          .eq("id", item.id)
+          .select("id");
+        return result;
+      }),
+    );
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) throw new Error(formatSupabaseError(firstError));
+    const updatedCount = results.reduce((sum, result) => sum + (result.data?.length ?? 0), 0);
+    if (updatedCount === 0 && batch.length > 0) {
+      throw new Error(
+        "Không ghi được mã mới (0 dòng cập nhật). Kiểm tra quyền UPDATE trên bảng lich_su_moi_han / RLS.",
+      );
+    }
+    done += batch.length;
+    onBatch?.(done, updates.length);
+  }
+}
+
+/** Đồng bộ toàn bộ mã mối hàn theo chuẩn PHQ + công nghệ + DDMMYY + số TT. */
+export async function syncAllWeldCodes(
+  onProgress?: (message: string) => void,
+): Promise<WeldCodeSyncResult> {
+  const report = (message: string) => onProgress?.(message);
+
+  report("Đang tải danh sách mối hàn…");
+  const rows = await loadAllWeldRowsForCodeSync();
+  if (rows.length === 0) {
+    return { total: 0, updated: 0, skipped: 0 };
+  }
+  report(`Đã tải ${rows.length.toLocaleString("vi-VN")} bản ghi · đang lập mã mới…`);
+
+  const planned = planWeldCodeAssignments(
+    rows.map((row) => ({
+      id: row.id,
+      ma_lich_su: row.ma_lich_su,
+      cong_nghe_han: row.cong_nghe_han,
+      isoDate: row.ngay_thuc_hien?.slice(0, 10) || `${row.nam_thuc_hien}-01-01`,
+    })),
+  );
+
+  const changes = planned.filter((item) => item.oldCode !== item.newCode);
+  if (changes.length === 0) {
+    return { total: rows.length, updated: 0, skipped: rows.length };
+  }
+
+  const codeMap = new Map(changes.map((item) => [item.oldCode, item.newCode]));
+
+  report(`Phase 1/2 · mã tạm (0/${changes.length.toLocaleString("vi-VN")})…`);
+  await updateWeldCodesInBatches(
+    changes.map((item) => ({
+      id: item.id,
+      ma_lich_su: `__SYNC_${item.id.replace(/-/g, "")}`,
+    })),
+    40,
+    (done, total) => report(`Phase 1/2 · mã tạm (${done.toLocaleString("vi-VN")}/${total.toLocaleString("vi-VN")})…`),
+  );
+
+  report(`Phase 2/2 · mã chuẩn (0/${changes.length.toLocaleString("vi-VN")})…`);
+  await updateWeldCodesInBatches(
+    changes.map((item) => ({
+      id: item.id,
+      ma_lich_su: item.newCode,
+    })),
+    40,
+    (done, total) => report(`Phase 2/2 · mã chuẩn (${done.toLocaleString("vi-VN")}/${total.toLocaleString("vi-VN")})…`),
+  );
+
+  const linkUpdates = rows
+    .map((row) => {
+      const linked = row.moi_han_lien_ket?.trim();
+      if (!linked) return null;
+      const nextLinked = codeMap.get(linked);
+      if (!nextLinked || nextLinked === linked) return null;
+      return { id: row.id, moi_han_lien_ket: nextLinked };
+    })
+    .filter((item): item is { id: string; moi_han_lien_ket: string } => Boolean(item));
+
+  if (linkUpdates.length > 0) {
+    report(`Đang cập nhật ${linkUpdates.length.toLocaleString("vi-VN")} mối hàn liên kết…`);
+    const supabase = createClient();
+    for (let i = 0; i < linkUpdates.length; i += 40) {
+      const batch = linkUpdates.slice(i, i + 40);
+      const results = await Promise.all(
+        batch.map((item) =>
+          supabase
+            .from("lich_su_moi_han")
+            .update({ moi_han_lien_ket: item.moi_han_lien_ket })
+            .eq("id", item.id),
+        ),
+      );
+      const firstError = results.find((result) => result.error)?.error;
+      if (firstError) {
+        const message = formatSupabaseError(firstError);
+        if (!message.includes("moi_han_lien_ket")) throw new Error(message);
+      }
+    }
+  }
+
+  report("Hoàn tất đồng bộ");
+  invalidateWeldReportCache();
+  return {
+    total: rows.length,
+    updated: changes.length,
+    skipped: rows.length - changes.length,
+  };
 }
 
 export type WeldJournalInsert = {

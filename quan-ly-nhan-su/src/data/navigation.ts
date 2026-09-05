@@ -72,8 +72,8 @@ export const navigation: NavItem[] = [
       },
       {
         id: "thu-vien-loi",
-        label: "Thư viện lỗi",
-        description: "Danh mục mã lỗi máy móc, mối hàn, cách xử lý và mức độ nghiêm trọng",
+        label: "Thư viện lỗi máy",
+        description: "Danh mục mã lỗi máy móc, vận hành, an toàn — cách xử lý và mức độ nghiêm trọng",
       },
       {
         id: "phan-cong-may",
@@ -92,6 +92,11 @@ export const navigation: NavItem[] = [
         id: "quan-ly-moi-han",
         label: "Quản lý mối hàn",
         description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
+      },
+      {
+        id: "thu-vien-loi-moi-han",
+        label: "Thư viện lỗi mối hàn",
+        description: "Danh mục mã lỗi mối hàn, cách xử lý và mức độ nghiêm trọng",
       },
     ],
   },
@@ -123,11 +128,6 @@ export const navigation: NavItem[] = [
         id: "bc-moi-han-theo-nam",
         label: "Báo cáo mối hàn theo năm",
         description: "Bảng tổng hợp mối hàn, đạt/lỗi, FBW/ATW và loại mối theo từng năm",
-      },
-      {
-        id: "quan-ly-may-han",
-        label: "Quản lý Máy Hàn",
-        description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",
       },
       {
         id: "ban-do",

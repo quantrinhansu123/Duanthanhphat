@@ -12,10 +12,13 @@ import {
   insertWeldJournalEntry,
   invalidateWeldReportCache,
   loadJournalProjectOptions,
+  loadWeldCodesWithPrefix,
   loadWeldJournalPage,
+  syncAllWeldCodes,
   type CertifiedWelderOption,
   type WeldReportRow,
 } from "@/lib/weldReportData";
+import { buildWeldCodePrefix, suggestWeldCode, WELD_CODE_SITE_PREFIX } from "@/lib/weldCode";
 import {
   describeCertificateRequirement,
   eligibleCertificatesForWeld,
@@ -93,6 +96,7 @@ function JournalFormModal({
   projects,
   welders,
   machines,
+  existingCodes,
   saving,
   onClose,
   onSubmit,
@@ -101,6 +105,7 @@ function JournalFormModal({
   projects: { id: string; label: string }[];
   welders: CertifiedWelderOption[];
   machines: MachineOption[];
+  existingCodes: string[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void;
@@ -111,6 +116,7 @@ function JournalFormModal({
   const [failedWeldOptions, setFailedWeldOptions] = useState<
     { value: string; label: string; isoDate: string }[]
   >([]);
+  const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -157,6 +163,34 @@ function JournalFormModal({
   }, [open, projects, welders, machines]);
 
   useEffect(() => {
+    if (!open) return;
+    const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt);
+    if (!prefix) {
+      setPrefixCodes([]);
+      return;
+    }
+    let active = true;
+    loadWeldCodesWithPrefix(prefix)
+      .then((codes) => {
+        if (active) setPrefixCodes(codes);
+      })
+      .catch(() => {
+        if (active) setPrefixCodes([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, form.cong_nghe_han, form.performedAt]);
+
+  useEffect(() => {
+    if (!open) return;
+    const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
+    const nextCode = suggestWeldCode(form.cong_nghe_han, form.performedAt, codes);
+    if (!nextCode || form.ma_lich_su === nextCode) return;
+    setForm((prev) => ({ ...prev, ma_lich_su: nextCode }));
+  }, [open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes]);
+
+  useEffect(() => {
     const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
     const nextWelderId = selectedIsQualified ? form.tho_han_id : qualifiedWelders[0]?.id ?? "";
     const nextWelder = welders.find((welder) => welder.id === nextWelderId);
@@ -193,7 +227,7 @@ function JournalFormModal({
 
   function handleSubmit() {
     if (!form.ma_lich_su.trim()) {
-      window.alert("Vui lòng nhập mã / tên mối hàn.");
+      window.alert("Chưa tạo được mã mối hàn. Kiểm tra ngày thực hiện.");
       return;
     }
     if (!form.du_an_id) {
@@ -256,13 +290,16 @@ function JournalFormModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700 sm:col-span-2">
-              Mã / tên mối hàn
+              Mã mối hàn
               <input
+                readOnly
                 value={form.ma_lich_su}
-                onChange={(e) => setForm({ ...form, ma_lich_su: e.target.value })}
-                placeholder="VD: MH-HN-2026-0401"
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
+                placeholder={`${WELD_CODE_SITE_PREFIX}FBW1208260001`}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
               />
+              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+                Tự tạo: {WELD_CODE_SITE_PREFIX} + công nghệ + ngày/tháng/năm + số TT (VD: {WELD_CODE_SITE_PREFIX}FBW1208260001)
+              </span>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày giờ
@@ -522,6 +559,8 @@ export default function WeldingJournalList() {
   const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncingCodes, setSyncingCodes] = useState(false);
+  const [syncProgress, setSyncProgress] = useState("");
   const [toast, setToast] = useState("");
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -633,7 +672,7 @@ export default function WeldingJournalList() {
       return {
         id: row.id,
         performedDate,
-        operator: `${row.ten_tho_han} · ${row.ma_nhan_su || "Chưa có mã"}`,
+        operator: row.ten_tho_han?.trim() || "—",
         certificate,
         certificateLinked,
         machine: row.ma_may
@@ -675,6 +714,30 @@ export default function WeldingJournalList() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  async function handleSyncAllCodes() {
+    if (syncingCodes || saving) return;
+    const ok = window.confirm(
+      "Đồng bộ toàn bộ mã mối hàn theo chuẩn PHQ + công nghệ + ngày/tháng/năm + số TT?\nThao tác này sẽ ghi đè mã hiện tại trong database.",
+    );
+    if (!ok) return;
+    setSyncingCodes(true);
+    setSyncProgress("Bắt đầu đồng bộ…");
+    try {
+      const result = await syncAllWeldCodes((message) => setSyncProgress(message));
+      refetch();
+      showToast(
+        result.updated === 0
+          ? `Không cần đổi mã · ${result.total.toLocaleString("vi-VN")} bản ghi đã đúng chuẩn`
+          : `Đã đồng bộ ${result.updated.toLocaleString("vi-VN")}/${result.total.toLocaleString("vi-VN")} mã mối hàn`,
+      );
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không thể đồng bộ mã mối hàn");
+    } finally {
+      setSyncingCodes(false);
+      setSyncProgress("");
+    }
   }
 
   async function handleCreate(values: JournalFormValues) {
@@ -758,6 +821,15 @@ export default function WeldingJournalList() {
         </select>
         <button
           type="button"
+          onClick={handleSyncAllCodes}
+          disabled={syncingCodes || saving || loading}
+          title={syncProgress || "Đồng bộ toàn bộ mã mối hàn theo chuẩn PHQ…"}
+          className="inline-flex h-10 max-w-[280px] shrink-0 items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer"
+        >
+          {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
+        </button>
+        <button
+          type="button"
           onClick={() => setFormOpen(true)}
           className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
@@ -784,7 +856,7 @@ export default function WeldingJournalList() {
                 <th className="p-2.5 font-semibold">Nhân sự phụ trách</th>
                 <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
                 <th className="p-2.5 font-semibold">Máy</th>
-                <th className="p-2.5 font-semibold">Tên mối hàn</th>
+                <th className="p-2.5 font-semibold">Mã mối hàn</th>
                 <th className="p-2.5 font-semibold">Mối hàn liên kết</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
                 <th className="p-2.5 font-semibold">Vị trí</th>
@@ -907,6 +979,7 @@ export default function WeldingJournalList() {
         projects={projectOptions}
         welders={welderOptions}
         machines={machineOptions}
+        existingCodes={rows.map((row) => row.ma_lich_su)}
         saving={saving}
         onClose={() => !saving && setFormOpen(false)}
         onSubmit={handleCreate}

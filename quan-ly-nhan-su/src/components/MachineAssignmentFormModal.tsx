@@ -21,6 +21,10 @@ type MachineAssignmentFormModalProps = {
   onSubmit: (values: MachineRunScheduleFormValues) => void;
 };
 
+function formatGpsLocation(latitude: number, longitude: number) {
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
 function emptyForm(
   machines: MachineOption[],
   projects: LookupOption[],
@@ -47,6 +51,13 @@ function fromSchedule(row: MachineRunSchedule): MachineRunScheduleFormValues {
   };
 }
 
+function geoErrorMessage(code?: number) {
+  if (code === 1) return "Bạn đã từ chối quyền truy cập vị trí.";
+  if (code === 2) return "Không lấy được tín hiệu GPS.";
+  if (code === 3) return "Hết thời gian chờ lấy vị trí.";
+  return "Không lấy được vị trí hiện tại.";
+}
+
 export default function MachineAssignmentFormModal({
   open,
   mode,
@@ -64,11 +75,43 @@ export default function MachineAssignmentFormModal({
     emptyForm(machines, projects, personnel),
   );
   const [error, setError] = useState("");
+  const [gpsStatus, setGpsStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [gpsMessage, setGpsMessage] = useState("");
+
+  function applyCurrentLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGpsStatus("error");
+      setGpsMessage("Trình duyệt không hỗ trợ GPS.");
+      return;
+    }
+
+    setGpsStatus("loading");
+    setGpsMessage("Đang lấy vị trí hiện tại…");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = formatGpsLocation(position.coords.latitude, position.coords.longitude);
+        setForm((current) => ({ ...current, location }));
+        setGpsStatus("ok");
+        setGpsMessage("Đã lấy vị trí GPS hiện tại");
+      },
+      (geoError) => {
+        setGpsStatus("error");
+        setGpsMessage(geoErrorMessage(geoError.code));
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    );
+  }
 
   useEffect(() => {
     if (!open) return;
     setForm(initial ? fromSchedule(initial) : emptyForm(machines, projects, personnel));
     setError("");
+    setGpsStatus("idle");
+    setGpsMessage("");
+    if (mode !== "view") {
+      applyCurrentLocation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mở modal / đổi bản ghi
   }, [open, initial, mode, machines, projects, personnel]);
 
   useEffect(() => {
@@ -91,7 +134,7 @@ export default function MachineAssignmentFormModal({
       return;
     }
     if (!location) {
-      setError("Vui lòng nhập vị trí.");
+      setError("Chưa có vị trí GPS. Hãy cho phép truy cập vị trí hoặc bấm Lấy lại.");
       return;
     }
     if (!Number.isFinite(form.operatingHours) || form.operatingHours <= 0 || form.operatingHours > 24) {
@@ -195,16 +238,36 @@ export default function MachineAssignmentFormModal({
             </select>
           </label>
 
-          <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+          <div className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
             Vị trí *
-            <input
-              readOnly={readOnly}
-              value={form.location}
-              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-              placeholder="VD: Hà Nội"
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-            />
-          </label>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                readOnly
+                value={form.location}
+                placeholder={gpsStatus === "loading" ? "Đang lấy GPS…" : "Vĩ độ, kinh độ"}
+                className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-xs text-slate-900 shadow-2xs outline-hidden sm:text-sm"
+              />
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={applyCurrentLocation}
+                  disabled={gpsStatus === "loading"}
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-[#0047AB] shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 sm:text-sm"
+                >
+                  {gpsStatus === "loading" ? "Đang lấy…" : "Lấy lại"}
+                </button>
+              )}
+            </div>
+            {gpsMessage && (
+              <p
+                className={`mt-1.5 text-[11px] font-medium ${
+                  gpsStatus === "error" ? "text-rose-600" : gpsStatus === "ok" ? "text-emerald-700" : "text-slate-500"
+                }`}
+              >
+                {gpsMessage}
+              </p>
+            )}
+          </div>
 
           <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
             Dự án *

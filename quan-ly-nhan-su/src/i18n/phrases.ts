@@ -39,6 +39,8 @@ export const PHRASES: Record<string, string> = {
   "Danh sách máy hàn": "Welding Machines",
   "Lịch bảo trì": "Maintenance Schedule",
   "Thư viện lỗi": "Fault Library",
+  "Thư viện lỗi máy": "Machine Fault Library",
+  "Thư viện lỗi mối hàn": "Weld Fault Library",
   "Lịch chạy máy": "Machine Run Schedule",
   "Danh sách dự án": "Projects",
   "Quản lý mối hàn": "Weld Joint Management",

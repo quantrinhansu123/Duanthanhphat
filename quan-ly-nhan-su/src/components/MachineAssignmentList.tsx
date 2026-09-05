@@ -263,7 +263,7 @@ export default function MachineAssignmentList() {
                     <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
                     <div className="mt-0.5 text-xs text-slate-500">{row.machineName}</div>
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.location}</td>
+                  <td className="px-3.5 py-3 font-mono text-xs text-slate-700">{row.location}</td>
                   <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-slate-900">{formatOperatingHours(row.operatingHours)}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.projectName}</td>
                   <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>

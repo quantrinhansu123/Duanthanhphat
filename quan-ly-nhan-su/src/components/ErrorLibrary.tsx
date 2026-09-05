@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { errorLibrary, type ErrorItem } from "@/data/error-library";
+import { errorLibrary, type ErrorCategory, type ErrorItem } from "@/data/error-library";
 import { MagnifyingGlass } from "@/components/icons";
 
 const severityStyle: Record<ErrorItem["severity"], string> = {
@@ -17,36 +17,54 @@ const categoryStyle: Record<ErrorItem["category"], string> = {
   "An toàn": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
 };
 
-export default function ErrorLibrary() {
+export type ErrorLibraryProps = {
+  /** Chỉ hiện các nhóm này. Mặc định: tất cả. */
+  categories?: ErrorCategory[];
+};
+
+export default function ErrorLibrary({ categories }: ErrorLibraryProps) {
+  const scoped = useMemo(
+    () => (categories?.length ? errorLibrary.filter((e) => categories.includes(e.category)) : errorLibrary),
+    [categories],
+  );
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set(scoped.map((e) => e.category));
+    const ordered: ErrorCategory[] = ["Máy móc", "Mối hàn", "Vận hành", "An toàn"];
+    return ordered.filter((c) => set.has(c));
+  }, [scoped]);
+
+  const showCategoryFilter = categoryOptions.length > 1;
+
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Tất cả nhóm");
   const [severity, setSeverity] = useState("Tất cả mức độ");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return errorLibrary.filter((e) => {
+    return scoped.filter((e) => {
       const matchQ =
         !q ||
         e.code.toLowerCase().includes(q) ||
         e.name.toLowerCase().includes(q) ||
         e.description.toLowerCase().includes(q) ||
         e.solution.toLowerCase().includes(q);
-      const matchCat = category === "Tất cả nhóm" || e.category === category;
+      const matchCat = !showCategoryFilter || category === "Tất cả nhóm" || e.category === category;
       const matchSev = severity === "Tất cả mức độ" || e.severity === severity;
       return matchQ && matchCat && matchSev;
     });
-  }, [query, category, severity]);
+  }, [query, category, severity, scoped, showCategoryFilter]);
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
         <span>
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{errorLibrary.length}</strong> mã lỗi
+          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{scoped.length}</strong> mã lỗi
         </span>
         <span className="text-slate-300">|</span>
         <span>
           <strong className="font-semibold text-rose-700 font-mono tabular-nums">
-            {errorLibrary.filter((e) => e.severity === "Nghiêm trọng").length}
+            {scoped.filter((e) => e.severity === "Nghiêm trọng").length}
           </strong>{" "}
           nghiêm trọng
         </span>
@@ -62,15 +80,17 @@ export default function ErrorLibrary() {
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          {["Tất cả nhóm", "Máy móc", "Mối hàn", "Vận hành", "An toàn"].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
+        {showCategoryFilter && (
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            {["Tất cả nhóm", ...categoryOptions].map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        )}
         <select
           value={severity}
           onChange={(e) => setSeverity(e.target.value)}
