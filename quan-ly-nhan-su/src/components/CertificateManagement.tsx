@@ -5,10 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import CertificateFormModal, {
   type CertificateFormValues,
 } from "@/components/CertificateFormModal";
-import CertificateThumbnail, { resolveCertificateImageUrl } from "@/components/CertificateThumbnail";
+import CertificateThumbnail from "@/components/CertificateThumbnail";
 import type { Certificate } from "@/data/certificates";
 import DateField from "@/components/DateField";
-import { ArrowSquareOut, Check, DotsThree, DownloadSimple, MagnifyingGlass, PencilSimple, Plus, X } from "@/components/icons";
+import { Check, DotsThree, MagnifyingGlass, PencilSimple, Plus, X } from "@/components/icons";
 import {
   createPersonnelCertificates,
   deleteCertificateRecord,
@@ -21,13 +21,6 @@ import {
   type CertificatePersonnelOption,
 } from "@/lib/certificatesDb";
 import { deleteCloudinaryAsset } from "@/lib/cloudinaryClient";
-
-function formatFileSize(bytes?: number): string {
-  if (!bytes || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
 
 const statusStyle: Record<Certificate["status"], string> = {
   "Còn hiệu lực": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -242,29 +235,8 @@ function CertificateDetailModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
-          <div className="relative mb-5 aspect-[16/10] overflow-hidden rounded-xl bg-slate-50 border border-slate-200 shadow-2xs group">
+          <div className="relative mb-5 aspect-[16/10] overflow-hidden rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
             <CertificateThumbnail cert={cert} />
-            <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/25 transition-colors flex items-end justify-end gap-2 p-3">
-              <a
-                href={resolveCertificateImageUrl(cert)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 hover:bg-white text-slate-800 px-3 py-1.5 text-xs font-semibold shadow-md border border-slate-200/80 transition-all cursor-pointer backdrop-blur-xs"
-                title="Mở ảnh kích thước đầy đủ trong tab mới"
-              >
-                <ArrowSquareOut size={14} weight="bold" />
-                Xem ảnh gốc
-              </a>
-              <a
-                href={resolveCertificateImageUrl(cert)}
-                download={`Chung_chi_${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB]/90 hover:bg-[#0047AB] text-white px-3 py-1.5 text-xs font-semibold shadow-md transition-all cursor-pointer backdrop-blur-xs"
-                title="Tải ảnh chứng chỉ về máy"
-              >
-                <DownloadSimple size={14} weight="bold" />
-                Tải ảnh
-              </a>
-            </div>
           </div>
 
           <div className="mb-4 flex items-center justify-between">
@@ -322,31 +294,6 @@ function CertificateDetailModal({
               <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
                 <span className="text-slate-500">Máy / phạm vi áp dụng</span>
                 <span className="text-right font-semibold text-slate-800">{cert.machine}</span>
-              </div>
-            )}
-            {cert.fileSize && (
-              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
-                <span className="text-slate-500">Dung lượng ảnh</span>
-                <span className="text-right font-mono text-slate-800">{formatFileSize(cert.fileSize)}</span>
-              </div>
-            )}
-            {cert.sourceUrl && (
-              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
-                <span className="text-slate-500">Nguồn ảnh</span>
-                <a
-                  href={cert.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-right text-[#0047AB] hover:underline truncate max-w-[280px]"
-                >
-                  {cert.sourceUrl}
-                </a>
-              </div>
-            )}
-            {cert.license && (
-              <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
-                <span className="text-slate-500">Bản quyền / Giấy phép</span>
-                <span className="text-right font-medium text-slate-800">{cert.license}</span>
               </div>
             )}
             {cert.notes && (
@@ -467,9 +414,6 @@ export default function CertificateManagement() {
           machine: values.machine,
           certificateNumber: values.certificateNumber,
           notes: values.notes,
-          fileSize: values.fileSize,
-          sourceUrl: values.sourceUrl,
-          license: values.license,
         });
         if (previousPublicId && previousPublicId !== values.cloudinaryPublicId) {
           const stillReferenced = await isCertificateAssetReferenced(previousPublicId);
@@ -490,9 +434,6 @@ export default function CertificateManagement() {
           machine: values.machine,
           certificateNumber: values.certificateNumber,
           notes: values.notes,
-          fileSize: values.fileSize,
-          sourceUrl: values.sourceUrl,
-          license: values.license,
         });
         if (previousPublicId && previousPublicId !== values.cloudinaryPublicId) {
           const stillReferenced = await isCertificateAssetReferenced(previousPublicId);
@@ -513,9 +454,6 @@ export default function CertificateManagement() {
           machine: values.machine,
           certificateNumber: values.certificateNumber,
           notes: values.notes,
-          fileSize: values.fileSize,
-          sourceUrl: values.sourceUrl,
-          license: values.license,
         });
         showToast(`Đã thêm chứng chỉ cho ${values.holderIds.length} nhân sự.`);
       }

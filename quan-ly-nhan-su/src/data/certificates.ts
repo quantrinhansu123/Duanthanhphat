@@ -25,9 +25,6 @@ export type Certificate = {
   machine?: string;
   certificateNumber?: string;
   notes?: string;
-  fileSize?: number;
-  sourceUrl?: string;
-  license?: string;
   /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */
   inferred?: boolean;
 };
@@ -41,7 +38,6 @@ export const certificates: Certificate[] = [
     expiresAt: "15/06/2027",
     status: "Còn hiệu lực",
     imageKey: "welding-1",
-    imageUrl: "/chung-chi/cert-welding-rail.jpg",
   },
   {
     id: "2",
@@ -51,7 +47,6 @@ export const certificates: Certificate[] = [
     expiresAt: "01/03/2028",
     status: "Còn hiệu lực",
     imageKey: "machine",
-    imageUrl: "/chung-chi/cert-machine-op.jpg",
   },
   {
     id: "3",
@@ -61,7 +56,6 @@ export const certificates: Certificate[] = [
     expiresAt: "20/11/2026",
     status: "Còn hiệu lực",
     imageKey: "ndt",
-    imageUrl: "/chung-chi/cert-ndt-testing.jpg",
   },
   {
     id: "4",
@@ -71,7 +65,6 @@ export const certificates: Certificate[] = [
     expiresAt: "08/09/2026",
     status: "Sắp hết hạn",
     imageKey: "safety",
-    imageUrl: "/chung-chi/cert-safety-work.jpg",
   },
   {
     id: "5",
@@ -81,7 +74,6 @@ export const certificates: Certificate[] = [
     expiresAt: "12/01/2025",
     status: "Hết hạn",
     imageKey: "welding-2",
-    imageUrl: "/chung-chi/cert-welding-rail.jpg",
   },
   {
     id: "6",
@@ -91,6 +83,5 @@ export const certificates: Certificate[] = [
     expiresAt: "30/04/2028",
     status: "Còn hiệu lực",
     imageKey: "iso",
-    imageUrl: "/chung-chi/cert-iso-qual.jpg",
   },
 ];

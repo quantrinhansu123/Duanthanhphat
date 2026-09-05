@@ -23,17 +23,7 @@ export type CertificateFormValues = {
   machine?: string;
   certificateNumber?: string;
   notes?: string;
-  fileSize?: number;
-  sourceUrl?: string;
-  license?: string;
 };
-
-function formatFileSize(bytes?: number): string {
-  if (!bytes || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
 
 const imageKeyOptions: { value: CertificateImageKey; label: string }[] = [
   { value: "welding-1", label: "Thợ hàn hạng 1 (UIC60)" },
@@ -89,8 +79,6 @@ export default function CertificateFormModal({
     machine: "",
     certificateNumber: "",
     notes: "",
-    sourceUrl: "",
-    license: "",
   });
   const [error, setError] = useState("");
 
@@ -116,9 +104,6 @@ export default function CertificateFormModal({
         machine: initial.machine || "",
         certificateNumber: initial.certificateNumber || "",
         notes: initial.notes || "",
-        fileSize: initial.fileSize || undefined,
-        sourceUrl: initial.sourceUrl || "",
-        license: initial.license || "",
       });
     } else {
       setForm({
@@ -134,8 +119,6 @@ export default function CertificateFormModal({
         machine: "",
         certificateNumber: "",
         notes: "",
-        sourceUrl: "",
-        license: "",
       });
     }
     setError("");
@@ -185,7 +168,6 @@ export default function CertificateFormModal({
         ...f,
         imageUrl: res.result?.secure_url || "",
         cloudinaryPublicId: res.result?.public_id || "",
-        fileSize: res.result?.bytes || file.size,
       }));
     } else {
       setError(res.error || "Không tải được ảnh lên Cloudinary. Ảnh cũ được giữ nguyên.");
@@ -197,7 +179,7 @@ export default function CertificateFormModal({
     if (uploadedPublicId && uploadedPublicId !== initial?.cloudinaryPublicId) {
       await deleteCloudinaryAsset(uploadedPublicId);
     }
-    setForm((current) => ({ ...current, imageUrl: "", cloudinaryPublicId: "", fileSize: undefined }));
+    setForm((current) => ({ ...current, imageUrl: "", cloudinaryPublicId: "" }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -471,43 +453,6 @@ export default function CertificateFormModal({
               </div>
             </div>
 
-            {/* Kích thước, Nguồn ảnh và Bản quyền */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-700">
-                <span>Thông tin & Bản quyền ảnh</span>
-                {form.fileSize && (
-                  <span className="font-mono text-[#0047AB] normal-case">
-                    Dung lượng: {formatFileSize(form.fileSize)}
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Nguồn / Link ảnh gốc
-                  </label>
-                  <input
-                    type="url"
-                    value={form.sourceUrl || ""}
-                    onChange={(e) => setForm((f) => ({ ...f, sourceUrl: e.target.value }))}
-                    placeholder="VD: https://images.unsplash.com/... hoặc URL nguồn"
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Giấy phép / Bản quyền
-                  </label>
-                  <input
-                    type="text"
-                    value={form.license || ""}
-                    onChange={(e) => setForm((f) => ({ ...f, license: e.target.value }))}
-                    placeholder="VD: CC BY-SA 4.0, Thanh Phát JSC, v.v."
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5 bg-slate-50/80">
