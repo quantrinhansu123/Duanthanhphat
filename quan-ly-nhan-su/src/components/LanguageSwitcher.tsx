@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown, Check } from "@/components/icons";
 import { useLanguage, type Lang } from "@/i18n/LanguageProvider";
 
@@ -12,25 +13,97 @@ const OPTIONS: { value: Lang; label: string; short: string; flag: string }[] = [
 export default function LanguageSwitcher() {
   const { lang, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    setMounted(true);
+  }, []);
+
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuWidth = 176; // w-44 = 11rem = 176px
+    const top = rect.bottom + 6;
+    // Align right edge of menu with right edge of button, but clamp within window padding
+    let left = rect.right - menuWidth;
+    if (typeof window !== "undefined") {
+      if (left < 8) left = 8;
+      if (left + menuWidth > window.innerWidth - 8) {
+        left = window.innerWidth - menuWidth - 8;
+      }
     }
-    if (open) {
-      document.addEventListener("mousedown", onClick);
-      return () => document.removeEventListener("mousedown", onClick);
+    setCoords({ top, left });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    updatePosition();
+
+    function onMouseDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        menuRef.current && !menuRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("button[role='option']");
+        if (!items || items.length === 0) return;
+        const activeEl = document.activeElement;
+        const index = Array.from(items).findIndex((el) => el === activeEl);
+        if (e.key === "ArrowDown") {
+          const next = index < items.length - 1 ? items[index + 1] : items[0];
+          next.focus();
+        } else {
+          const prev = index > 0 ? items[index - 1] : items[items.length - 1];
+          prev.focus();
+        }
+      }
+    }
+
+    function onScrollOrResize() {
+      updatePosition();
+    }
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onScrollOrResize, { passive: true });
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize);
+    };
   }, [open]);
 
   const active = OPTIONS.find((o) => o.value === lang) ?? OPTIONS[0];
 
   return (
-    <div ref={boxRef} className="relative" data-no-i18n="true">
+    <div className="relative inline-block" data-no-i18n="true">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            if (next) updatePosition();
+            return next;
+          });
+        }}
         className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/20"
         aria-label="Chọn ngôn ngữ"
         aria-haspopup="listbox"
@@ -45,10 +118,19 @@ export default function LanguageSwitcher() {
         />
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <ul
+          ref={menuRef}
           role="listbox"
-          className="absolute right-0 top-[calc(100%+6px)] z-50 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100"
+          aria-label="Danh sách ngôn ngữ"
+          style={{
+            position: "fixed",
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: "176px",
+            zIndex: 9999,
+          }}
+          className="overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl animate-in fade-in-50 zoom-in-95 duration-100 focus:outline-hidden"
         >
           {OPTIONS.map((o) => {
             const selected = o.value === lang;
@@ -62,7 +144,7 @@ export default function LanguageSwitcher() {
                     setOpen(false);
                     if (o.value !== lang) setLang(o.value);
                   }}
-                  className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs sm:text-sm transition-colors ${
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs sm:text-sm transition-colors cursor-pointer ${
                     selected
                       ? "font-semibold text-[#0047AB] bg-blue-50/60"
                       : "font-medium text-slate-700 hover:bg-slate-50"
@@ -75,7 +157,8 @@ export default function LanguageSwitcher() {
               </li>
             );
           })}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   );

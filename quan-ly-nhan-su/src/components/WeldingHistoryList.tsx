@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   CaretDown,
+  CaretLeft,
+  CaretRight,
+  CheckCircle,
+  ClockCounterClockwise,
   DotsThree,
   DownloadSimple,
   Export,
   MagnifyingGlass,
   PencilSimple,
+  WarningCircle,
   X,
 } from "@/components/icons";
 import {
@@ -18,10 +23,14 @@ import {
 } from "@/data/weldingHistory";
 import {
   deleteWeldingHistoryRecord,
-  loadWeldingHistory,
+  exportAllFilteredWeldingHistory,
+  loadWeldingHistoryPage,
   quickUpdateAccountingCode,
   saveWeldingHistoryRecord,
+  type WeldingHistoryFilterParams,
+  type WeldingHistoryStats,
 } from "@/lib/weldingHistoryDb";
+import { createClient } from "@/lib/supabase/client";
 
 const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -383,8 +392,20 @@ function FilterGroup({
 export default function WeldingHistoryList() {
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<"supabase" | "local" | "seed">("seed");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [stats, setStats] = useState<WeldingHistoryStats>({
+    total: 0,
+    pass: 0,
+    fail: 0,
+    rework: 0,
+    accountingCounts: [],
+  });
+
   const [query, setQuery] = useState("");
   const [welder, setWelder] = useState("Tất cả thợ hàn");
   const [result, setResult] = useState("Tất cả kết quả");
@@ -403,32 +424,67 @@ export default function WeldingHistoryList() {
     mode: "view" | "edit" | "create";
   } | null>(null);
 
-  // Load from Supabase or LocalStorage
+  const [allWelders, setAllWelders] = useState<string[]>([]);
+  const [allProjects, setAllProjects] = useState<string[]>([]);
+
+  // Tải danh mục thợ hàn & dự án từ DB
   useEffect(() => {
-    let active = true;
-    async function initData() {
-      setLoading(true);
-      const res = await loadWeldingHistory();
-      if (active) {
-        setList(res.records);
-        setDataSource(res.source);
-        if (res.error) {
-          setLoadError(res.error);
-        } else {
-          setLoadError(null);
-        }
-        setLoading(false);
+    async function loadMaster() {
+      try {
+        const supabase = createClient();
+        const { data: ns } = await supabase.from("nhan_su").select("ho_ten").order("ho_ten");
+        if (ns) setAllWelders(Array.from(new Set(ns.map((n: { ho_ten?: string }) => n.ho_ten).filter((x): x is string => Boolean(x)))));
+        const { data: da } = await supabase.from("du_an").select("du_an").order("du_an");
+        if (da) setAllProjects(Array.from(new Set(da.map((d: { du_an?: string }) => d.du_an).filter((x): x is string => Boolean(x)))));
+      } catch {
+        /* ignore */
       }
     }
-    initData();
-    return () => {
-      active = false;
-    };
+    loadMaster();
   }, []);
 
+  // Tải dữ liệu trang từ server
+  const fetchData = useCallback(async (p = page, ps = pageSize) => {
+    setLoading(true);
+    const filterParams: WeldingHistoryFilterParams = {
+      page: p,
+      pageSize: ps,
+      query,
+      welder,
+      result,
+      dateFrom,
+      dateTo,
+      machines: machinesSel,
+      rails: railsSel,
+      projects: projectsSel,
+      shifts: shiftsSel,
+      accountingCodes: accountingSel,
+    };
+    const res = await loadWeldingHistoryPage(filterParams);
+    setList(res.records);
+    setTotalCount(res.totalCount);
+    setStats(res.stats);
+    setDataSource(res.source);
+    if (res.error) {
+      setLoadError(res.error);
+    } else {
+      setLoadError(null);
+    }
+    setLoading(false);
+  }, [page, pageSize, query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
+
+  useEffect(() => {
+    fetchData(page, pageSize);
+  }, [fetchData, page, pageSize]);
+
+  // Khi bộ lọc thay đổi, quay về trang 1
+  useEffect(() => {
+    setPage(1);
+  }, [query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, pageSize]);
+
   const welderOptions = useMemo(
-    () => ["Tất cả thợ hàn", ...Array.from(new Set(list.map((r) => r.welderName))).sort()],
-    [list],
+    () => ["Tất cả thợ hàn", ...Array.from(new Set([...allWelders, ...list.map((r) => r.welderName)])).filter(Boolean).sort()],
+    [allWelders, list],
   );
   const machineOptions = useMemo(
     () => Array.from(new Set([...defaultMachines, ...list.map((r) => r.machine)])).filter(Boolean).sort(),
@@ -439,65 +495,19 @@ export default function WeldingHistoryList() {
     [list],
   );
   const projectOptions = useMemo(
-    () => Array.from(new Set(list.map((r) => r.project))).filter(Boolean).sort(),
-    [list],
+    () => Array.from(new Set([...allProjects, ...list.map((r) => r.project)])).filter(Boolean).sort(),
+    [allProjects, list],
   );
   const shiftOptionsFilter = useMemo(
-    () => Array.from(new Set(list.map((r) => r.shift))).filter(Boolean).sort(),
+    () => Array.from(new Set([...shiftOptions, ...list.map((r) => r.shift)])).filter(Boolean).sort(),
     [list],
   );
   const accountingOptions = useMemo(() => {
     const fromSeeds = DEFAULT_ACCOUNTING_CODES.map((o) => o.code);
+    const fromStats = stats.accountingCounts.map(([code]) => code);
     const fromList = list.map((r) => r.accountingCode).filter(Boolean);
-    return Array.from(new Set([...fromSeeds, ...fromList])).sort();
-  }, [list]);
-
-  // Thống kê theo mã hạch toán
-  const accountingStats = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of list) {
-      const code = row.accountingCode || "Chưa hạch toán";
-      counts.set(code, (counts.get(code) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [list]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return list
-      .filter((row) => {
-        const matchQ =
-          !q ||
-          row.weldingId.toLowerCase().includes(q) ||
-          row.welderName.toLowerCase().includes(q) ||
-          row.weldJoint.toLowerCase().includes(q) ||
-          row.machine.toLowerCase().includes(q) ||
-          row.project.toLowerCase().includes(q) ||
-          (row.accountingCode && row.accountingCode.toLowerCase().includes(q));
-        const matchWelder = welder === "Tất cả thợ hàn" || row.welderName === welder;
-        const matchResult = result === "Tất cả kết quả" || row.result === result;
-        const matchFrom = !dateFrom || row.date >= dateFrom;
-        const matchTo = !dateTo || row.date <= dateTo;
-        const matchMachine = machinesSel.length === 0 || machinesSel.includes(row.machine);
-        const matchRail = railsSel.length === 0 || railsSel.includes(row.railType);
-        const matchProject = projectsSel.length === 0 || projectsSel.includes(row.project);
-        const matchShift = shiftsSel.length === 0 || shiftsSel.includes(row.shift);
-        const matchAccounting = accountingSel.length === 0 || (row.accountingCode && accountingSel.includes(row.accountingCode));
-        return (
-          matchQ &&
-          matchWelder &&
-          matchResult &&
-          matchFrom &&
-          matchTo &&
-          matchMachine &&
-          matchRail &&
-          matchProject &&
-          matchShift &&
-          matchAccounting
-        );
-      })
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [list, query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
+    return Array.from(new Set([...fromSeeds, ...fromStats, ...fromList])).sort();
+  }, [list, stats.accountingCounts]);
 
   async function handleDelete(record: WeldingHistoryRecord) {
     if (!window.confirm(`Xóa bản ghi "${record.weldJoint}"?`)) return;
@@ -507,7 +517,7 @@ export default function WeldingHistoryList() {
       setMenuOpen(null);
       return;
     }
-    setList(res.records);
+    await fetchData(page, pageSize);
     setMenuOpen(null);
   }
 
@@ -516,10 +526,9 @@ export default function WeldingHistoryList() {
     const res = await saveWeldingHistoryRecord(updated, list, isNew);
     if (res.error) {
       window.alert(`Không thể lưu vào cơ sở dữ liệu Supabase:\n${res.error}\n\nDữ liệu chưa được lưu. Vui lòng kiểm tra lại thông tin.`);
-      // Giữ form mở để người dùng sửa thông tin hoặc thử lại
       return;
     }
-    setList(res.records);
+    await fetchData(page, pageSize);
     setModal(null);
   }
 
@@ -530,70 +539,110 @@ export default function WeldingHistoryList() {
       setInlineEditId(null);
       return;
     }
-    setList(res.records);
+    await fetchData(page, pageSize);
     setInlineEditId(null);
   }
 
-  // Xuất Excel
-  function exportExcel() {
-    const data = filtered.map((r, idx) => ({
-      STT: idx + 1,
-      Ngày: formatWeldingDate(r.date),
-      "Welding ID": r.weldingId,
-      "Thợ hàn": r.welderName,
-      Hạng: r.rank,
-      "Mối hàn": r.weldJoint,
-      "Máy hàn": r.machine,
-      "Loại ray": r.railType,
-      "Dự án": r.project,
-      Ca: r.shift,
-      "Hạch toán": r.accountingCode || "—",
-      "Kết quả": r.result,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Lịch sử hàn");
-    XLSX.writeFile(wb, `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  // Xuất toàn bộ dữ liệu đã lọc ra Excel
+  async function exportExcel() {
+    try {
+      setExporting(true);
+      const allRows = await exportAllFilteredWeldingHistory({
+        query,
+        welder,
+        result,
+        dateFrom,
+        dateTo,
+        machines: machinesSel,
+        rails: railsSel,
+        projects: projectsSel,
+        shifts: shiftsSel,
+        accountingCodes: accountingSel,
+      });
+
+      const data = allRows.map((r, idx) => ({
+        STT: idx + 1,
+        Ngày: formatWeldingDate(r.date),
+        "Welding ID": r.weldingId,
+        "Thợ hàn": r.welderName,
+        Hạng: r.rank,
+        "Mối hàn": r.weldJoint,
+        "Máy hàn": r.machine,
+        "Loại ray": r.railType,
+        "Dự án": r.project,
+        Ca: r.shift,
+        "Hạch toán": r.accountingCode || "—",
+        "Kết quả": r.result,
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Lịch sử hàn");
+      XLSX.writeFile(wb, `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      window.alert("Lỗi xuất Excel: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(false);
+    }
   }
 
-  // Xuất CSV
-  function exportCsv() {
-    const headers = [
-      "STT",
-      "Ngày",
-      "Welding ID",
-      "Thợ hàn",
-      "Hạng",
-      "Mối hàn",
-      "Máy hàn",
-      "Loại ray",
-      "Dự án",
-      "Ca",
-      "Hạch toán",
-      "Kết quả",
-    ];
-    const rows = filtered.map((r, idx) => [
-      idx + 1,
-      formatWeldingDate(r.date),
-      r.weldingId,
-      `"${r.welderName}"`,
-      r.rank,
-      r.weldJoint,
-      `"${r.machine}"`,
-      r.railType,
-      `"${r.project}"`,
-      r.shift,
-      r.accountingCode || "",
-      r.result,
-    ]);
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Xuất toàn bộ dữ liệu đã lọc ra CSV
+  async function exportCsv() {
+    try {
+      setExporting(true);
+      const allRows = await exportAllFilteredWeldingHistory({
+        query,
+        welder,
+        result,
+        dateFrom,
+        dateTo,
+        machines: machinesSel,
+        rails: railsSel,
+        projects: projectsSel,
+        shifts: shiftsSel,
+        accountingCodes: accountingSel,
+      });
+
+      const headers = [
+        "STT",
+        "Ngày",
+        "Welding ID",
+        "Thợ hàn",
+        "Hạng",
+        "Mối hàn",
+        "Máy hàn",
+        "Loại ray",
+        "Dự án",
+        "Ca",
+        "Hạch toán",
+        "Kết quả",
+      ];
+      const rows = allRows.map((r, idx) => [
+        idx + 1,
+        formatWeldingDate(r.date),
+        r.weldingId,
+        `"${r.welderName}"`,
+        r.rank,
+        r.weldJoint,
+        `"${r.machine}"`,
+        r.railType,
+        `"${r.project}"`,
+        r.shift,
+        r.accountingCode || "",
+        r.result,
+      ]);
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert("Lỗi xuất CSV: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(false);
+    }
   }
 
   const hasFilter =
@@ -611,10 +660,6 @@ export default function WeldingHistoryList() {
   const advancedFilterCount =
     machinesSel.length + railsSel.length + projectsSel.length + shiftsSel.length + accountingSel.length;
 
-  const statPass = filtered.filter((r) => r.result === "Đạt").length;
-  const statFail = filtered.filter((r) => r.result === "Không đạt").length;
-  const statRework = filtered.filter((r) => r.result === "Sửa chữa").length;
-
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
       {loadError && (
@@ -625,69 +670,108 @@ export default function WeldingHistoryList() {
           </button>
         </div>
       )}
-      {/* Thanh tổng quan & Thống kê Hạch toán */}
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-slate-600">
-          <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-1">
-            <span>
-              <strong className="font-semibold text-slate-900 font-mono tabular-nums">{list.length}</strong> mối hàn
-            </span>
-            <span className="text-slate-300">|</span>
-            <span>
-              <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{statPass}</strong> đạt ·{" "}
-              <span className="font-semibold text-rose-700 font-mono tabular-nums">{statFail}</span> không đạt ·{" "}
-              <span className="font-semibold text-amber-700 font-mono tabular-nums">{statRework}</span> sửa chữa
-            </span>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
-              dataSource === "supabase" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-[#0047AB] border border-blue-200"
-            }`}>
-              {dataSource === "supabase" ? "Đã kết nối Supabase" : dataSource === "local" ? "Đang lưu cục bộ" : "Dữ liệu mẫu"}
-            </span>
+      {/* 4 thẻ KPI thống kê to rõ ràng nổi bật theo Ảnh 12 */}
+      <div className="mb-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng mối hàn</span>
+            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-[#0047AB]">Bộ lọc</span>
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono tabular-nums">
+            {stats.total.toLocaleString("vi-VN")}
+          </div>
+          <div className="mt-1 text-xs text-slate-500 font-medium">Khớp danh sách theo bộ lọc</div>
+        </div>
+
+        <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Đạt chuẩn</span>
+            <CheckCircle size={18} weight="fill" className="text-emerald-600" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-emerald-700 font-mono tabular-nums">
+            {stats.pass.toLocaleString("vi-VN")}
+          </div>
+          <div className="mt-1 text-xs text-emerald-600 font-medium">
+            {stats.total > 0 ? ((stats.pass / stats.total) * 100).toFixed(1) : "0"}% tổng sản lượng
           </div>
         </div>
 
-        {/* Thanh chip thống kê nhanh theo Mã hạch toán */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
-          <span className="text-xs font-bold text-[#0047AB] uppercase tracking-wide mr-1">
-            Thống kê Hạch toán:
-          </span>
-          {accountingStats.map(([code, count]) => {
-            const active = accountingSel.includes(code);
-            return (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setAccountingSel((prev) => toggleValue(prev, code))}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-all cursor-pointer ${
-                  active
-                    ? "bg-[#0047AB] text-white font-bold ring-2 ring-[#0047AB]/20 shadow-xs"
-                    : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium"
-                }`}
-                title={`Lọc theo mã ${code}`}
-              >
-                <span>{code}</span>
-                <span
-                  className={`rounded-full px-1.5 py-0.2 text-[11px] font-bold tabular-nums ${
-                    active ? "bg-white/30 text-white" : "bg-white text-slate-700 shadow-2xs"
+        <div className="rounded-xl border border-rose-200/80 bg-gradient-to-br from-white to-rose-50/40 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-700">Không đạt</span>
+            <WarningCircle size={18} weight="fill" className="text-rose-600" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-rose-700 font-mono tabular-nums">
+            {stats.fail.toLocaleString("vi-VN")}
+          </div>
+          <div className="mt-1 text-xs text-rose-600 font-medium">
+            {stats.total > 0 ? ((stats.fail / stats.total) * 100).toFixed(1) : "0"}% tỷ lệ lỗi
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-amber-200/80 bg-gradient-to-br from-white to-amber-50/40 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Sửa chữa / Gia công</span>
+            <ClockCounterClockwise size={18} weight="bold" className="text-amber-600" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-amber-700 font-mono tabular-nums">
+            {stats.rework.toLocaleString("vi-VN")}
+          </div>
+          <div className="mt-1 text-xs text-amber-600 font-medium">
+            {stats.total > 0 ? ((stats.rework / stats.total) * 100).toFixed(1) : "0"}% cần xử lý
+          </div>
+        </div>
+      </div>
+
+      {/* Thanh chip thống kê Hạch toán & Nguồn dữ liệu */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-bold text-[#0047AB] uppercase tracking-wide mr-1">
+              Thống kê Hạch toán:
+            </span>
+            {stats.accountingCounts.map(([code, count]) => {
+              const active = accountingSel.includes(code);
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setAccountingSel((prev) => toggleValue(prev, code))}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-all cursor-pointer ${
+                    active
+                      ? "bg-[#0047AB] text-white font-bold ring-2 ring-[#0047AB]/20 shadow-xs"
+                      : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium"
                   }`}
+                  title={`Lọc theo mã ${code}`}
                 >
-                  {count}
-                </span>
+                  <span>{code}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[11px] font-bold tabular-nums ${
+                      active ? "bg-white/30 text-white" : "bg-white text-slate-700 shadow-2xs"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {accountingSel.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAccountingSel([])}
+                className="ml-1 text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
+              >
+                Bỏ lọc ({accountingSel.length})
               </button>
-            );
-          })}
-          {accountingSel.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setAccountingSel([])}
-              className="ml-1 text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
-            >
-              Bỏ lọc hạch toán ({accountingSel.length})
-            </button>
-          )}
+            )}
+          </div>
+
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+            dataSource === "supabase" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-[#0047AB] border border-blue-200"
+          }`}>
+            {dataSource === "supabase" ? "Đã kết nối Supabase" : dataSource === "local" ? "Đang lưu cục bộ" : "Dữ liệu mẫu"}
+          </span>
         </div>
       </div>
 
@@ -764,21 +848,23 @@ export default function WeldingHistoryList() {
         <button
           type="button"
           onClick={exportExcel}
-          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
-          title="Xuất bảng dữ liệu ra file Excel"
+          disabled={exporting}
+          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-800 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
+          title="Xuất toàn bộ bảng dữ liệu đã lọc ra file Excel"
         >
           <DownloadSimple size={16} weight="bold" />
-          <span>Xuất Excel</span>
+          <span>{exporting ? "Đang xuất..." : "Xuất Excel"}</span>
         </button>
 
         <button
           type="button"
           onClick={exportCsv}
-          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
-          title="Xuất bảng dữ liệu ra file CSV"
+          disabled={exporting}
+          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
+          title="Xuất toàn bộ bảng dữ liệu đã lọc ra file CSV"
         >
           <Export size={16} weight="bold" />
-          <span>CSV</span>
+          <span>{exporting ? "Đang xuất..." : "CSV"}</span>
         </button>
 
         <button
@@ -914,7 +1000,7 @@ export default function WeldingHistoryList() {
                   </td>
                 </tr>
               )}
-              {!loading && filtered.map((row) => (
+              {!loading && list.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-medium font-mono text-slate-900">{formatWeldingDate(row.date)}</td>
                   <td className="px-3.5 py-3 font-mono text-xs text-slate-500">{row.weldingId}</td>
@@ -1071,7 +1157,7 @@ export default function WeldingHistoryList() {
                   </td>
                 </tr>
               ))}
-              {!loading && filtered.length === 0 && (
+              {!loading && list.length === 0 && (
                 <tr>
                   <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử hàn</div>
@@ -1081,6 +1167,102 @@ export default function WeldingHistoryList() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Phân trang Server-side */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs text-xs sm:text-sm">
+        <div className="flex items-center gap-2 text-slate-600">
+          <span>
+            Hiển thị{" "}
+            <strong className="font-semibold text-slate-900 font-mono tabular-nums">
+              {totalCount > 0 ? (page - 1) * pageSize + 1 : 0} – {Math.min(page * pageSize, totalCount)}
+            </strong>{" "}
+            trong tổng số{" "}
+            <strong className="font-semibold text-slate-900 font-mono tabular-nums">{totalCount}</strong> mối hàn
+          </span>
+          <span className="text-slate-300">|</span>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span>Hiển thị:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-hidden focus:border-[#0047AB] cursor-pointer"
+            >
+              <option value={25}>25 dòng/trang</option>
+              <option value={50}>50 dòng/trang</option>
+              <option value={100}>100 dòng/trang</option>
+            </select>
+          </label>
+        </div>
+
+        {/* Nút chuyển trang */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            <CaretLeft size={14} weight="bold" />
+            <span>Trước</span>
+          </button>
+
+          <div className="flex items-center gap-1 px-1">
+            {(() => {
+              const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+              const pages: (number | string)[] = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (page > 3) pages.push("...");
+                const start = Math.max(2, page - 1);
+                const end = Math.min(totalPages - 1, page + 1);
+                for (let i = start; i <= end; i++) pages.push(i);
+                if (page < totalPages - 2) pages.push("...");
+                pages.push(totalPages);
+              }
+
+              return pages.map((p, idx) => {
+                if (typeof p === "string") {
+                  return (
+                    <span key={`dots-${idx}`} className="px-1 text-slate-400">
+                      ...
+                    </span>
+                  );
+                }
+                const isCurrent = p === page;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPage(p)}
+                    className={`h-8 min-w-[32px] rounded-lg px-2 text-xs font-mono font-bold transition-all cursor-pointer ${
+                      isCurrent
+                        ? "bg-[#0047AB] text-white shadow-xs"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              });
+            })()}
+          </div>
+
+          <button
+            type="button"
+            disabled={page >= Math.ceil(totalCount / pageSize)}
+            onClick={() => setPage((p) => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            <span>Sau</span>
+            <CaretRight size={14} weight="bold" />
+          </button>
         </div>
       </div>
 

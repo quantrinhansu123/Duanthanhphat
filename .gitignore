@@ -3,3 +3,8 @@ Desktop.ini
 .DS_Store
 node_modules/
 .thumbnail
+*.pdf
+*.xlsx
+**/.env
+**/.env.*
+!**/.env.example

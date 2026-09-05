@@ -144,10 +144,9 @@ export default function CoordinateLeafletMap({
         </>
       ) : (
         <TileLayer
-          key="carto-road"
-          attribution='&copy; OpenStreetMap &copy; CARTO'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
+          key="osm-road"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           maxZoom={19}
         />
       )}
@@ -167,24 +166,51 @@ export default function CoordinateLeafletMap({
           <Marker
             key={p.id}
             position={[p.latitude, p.longitude]}
-            icon={makePinIcon(p.code, active)}
+            icon={makePinIcon(p.weldCode || p.code, active)}
             zIndexOffset={active ? 1000 : 0}
             eventHandlers={{ click: () => onSelect?.(p.id) }}
           >
             <Popup>
-              <div className="min-w-[160px] text-[13px] leading-snug">
-                <div className="text-sm font-bold text-slate-900">{p.code}</div>
-                <div className="mt-1 font-medium text-slate-700">{p.chainage}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  Lon {p.longitude}
-                  <br />
-                  Lat {p.latitude}
+              <div className="min-w-[190px] text-[13px] leading-snug">
+                <div className="flex items-center justify-between gap-1 border-b border-slate-200 pb-1 mb-1.5">
+                  <span className="font-bold text-[#0047AB]">{p.code}</span>
+                  {p.weldCode ? (
+                    <span
+                      className={`inline-flex rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                        p.result === "Đạt" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                      }`}
+                    >
+                      {p.result || "Đạt"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-500">
+                      Chưa liên kết
+                    </span>
+                  )}
                 </div>
+
+                {p.weldCode && (
+                  <div className="mb-1.5 space-y-0.5 text-xs text-slate-700">
+                    <div>Mối hàn: <strong className="font-mono text-slate-900">{p.weldCode}</strong></div>
+                    {p.welderName && <div>Thợ hàn: <strong>{p.welderName}</strong></div>}
+                    {p.machineName && <div>Máy: <span className="text-slate-600">{p.machineName}</span></div>}
+                    {p.projectName && <div>Dự án: <span className="text-slate-600">{p.projectName}</span></div>}
+                    {p.performedDate && <div>Ngày: <span className="font-mono text-slate-600">{p.performedDate}</span></div>}
+                  </div>
+                )}
+
+                <div className="text-xs text-slate-600">
+                  {p.chainage && <div>Lý trình: <strong>{p.chainage}</strong></div>}
+                  <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                    {p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}
+                  </div>
+                </div>
+
                 <a
                   href={googleOpenPoint(p.latitude, p.longitude)}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-block text-xs font-semibold text-[#0047AB]"
+                  className="mt-2 inline-block text-xs font-semibold text-[#0047AB] hover:underline"
                 >
                   Mở trên Google Maps →
                 </a>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { googleOpenPoint } from "@/data/mapPoints";
+import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
@@ -41,6 +41,10 @@ type JournalFormValues = {
   moi_han_lien_ket: string;
   chung_chi_su_dung: string;
   ghi_chu: string;
+  toa_do_id: string;
+  ly_trinh: string;
+  kinh_do: string;
+  vi_do: string;
 };
 
 function defaultLinkDateRange() {
@@ -88,6 +92,10 @@ function emptyJournalForm(
       ? eligibleCertificatesForWeld(welder.certificates, context)[0] ?? ""
       : "",
     ghi_chu: "",
+    toa_do_id: "",
+    ly_trinh: "",
+    kinh_do: "",
+    vi_do: "",
   };
 }
 
@@ -98,6 +106,7 @@ function JournalFormModal({
   machines,
   existingCodes,
   saving,
+  unlinkedGpsPoints = [],
   onClose,
   onSubmit,
 }: {
@@ -107,6 +116,7 @@ function JournalFormModal({
   machines: MachineOption[];
   existingCodes: string[];
   saving: boolean;
+  unlinkedGpsPoints?: MapPoint[];
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void;
 }) {
@@ -508,6 +518,75 @@ function JournalFormModal({
             </label>
           )}
 
+          {/* Tọa độ GPS */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+              Vị trí & Tọa độ GPS (Tùy chọn)
+            </div>
+            {unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
+              <div className="mt-2.5">
+                <label className="block text-xs font-semibold text-slate-600">
+                  Gán điểm GPS có sẵn (chưa liên kết)
+                  <select
+                    value={form.toa_do_id}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const pt = unlinkedGpsPoints.find((p) => p.id === id);
+                      if (pt) {
+                        setForm((prev) => ({
+                          ...prev,
+                          toa_do_id: id,
+                          ly_trinh: pt.chainage || prev.ly_trinh,
+                          kinh_do: String(pt.longitude),
+                          vi_do: String(pt.latitude),
+                        }));
+                      } else {
+                        setForm((prev) => ({ ...prev, toa_do_id: "" }));
+                      }
+                    }}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                  >
+                    <option value="">— Nhập mới hoặc không gán điểm có sẵn —</option>
+                    {unlinkedGpsPoints.map((pt) => (
+                      <option key={pt.id} value={pt.id}>
+                        {pt.code} ({pt.chainage}) — {pt.latitude.toFixed(5)}, {pt.longitude.toFixed(5)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label className="block text-xs font-semibold text-slate-600">
+                Lý trình
+                <input
+                  value={form.ly_trinh}
+                  onChange={(e) => setForm({ ...form, ly_trinh: e.target.value })}
+                  placeholder="Km0+250.00"
+                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Kinh độ (lon)
+                <input
+                  value={form.kinh_do}
+                  onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
+                  placeholder="105.8427"
+                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Vĩ độ (lat)
+                <input
+                  value={form.vi_do}
+                  onChange={(e) => setForm({ ...form, vi_do: e.target.value })}
+                  placeholder="21.0160"
+                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                />
+              </label>
+            </div>
+          </div>
+
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Ghi chú
             <textarea
@@ -543,7 +622,7 @@ function JournalFormModal({
 }
 
 export default function WeldingJournalList() {
-  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints(500);
+  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -657,11 +736,22 @@ export default function WeldingJournalList() {
   );
 
   const pageRows = useMemo(() => {
+    const gpsByWeldId = new Map(
+      gpsPoints.filter((point) => point.weldId).map((point) => [point.weldId!, point]),
+    );
     const gpsByWeldCode = new Map(
+      gpsPoints.filter((point) => point.weldCode).map((point) => [point.weldCode!.trim().toLocaleLowerCase("vi"), point]),
+    );
+    const gpsByPointCode = new Map(
       gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
     );
     return rows.map((row) => {
-      const gpsPoint = gpsByWeldCode.get(row.ma_lich_su.trim().toLocaleLowerCase("vi")) ?? null;
+      const codeKey = row.ma_lich_su.trim().toLocaleLowerCase("vi");
+      const gpsPoint =
+        gpsByWeldId.get(row.id) ??
+        gpsByWeldCode.get(codeKey) ??
+        gpsByPointCode.get(codeKey) ??
+        null;
       const isoDate = row.ngay_thuc_hien?.slice(0, 10) ?? "";
       const performedDate = isoDate ? formatJournalDateIso(isoDate) : `Chỉ có năm ${row.nam_thuc_hien}`;
       const pass = row.so_luong_loi === 0;
@@ -744,6 +834,8 @@ export default function WeldingJournalList() {
     setSaving(true);
     try {
       const year = Number(values.performedAt.slice(0, 4)) || new Date().getFullYear();
+      const kinhDoNum = values.kinh_do ? Number(values.kinh_do.replace(",", ".")) : null;
+      const viDoNum = values.vi_do ? Number(values.vi_do.replace(",", ".")) : null;
       await insertWeldJournalEntry({
         ma_lich_su: values.ma_lich_su,
         du_an_id: values.du_an_id,
@@ -759,6 +851,11 @@ export default function WeldingJournalList() {
         moi_han_lien_ket: values.moi_han_lien_ket || null,
         may_id: values.may_id,
         chung_chi_su_dung: values.chung_chi_su_dung,
+        hach_toan: "HT-SX01",
+        toa_do_id: values.toa_do_id || null,
+        kinh_do: isNaN(kinhDoNum as number) ? null : kinhDoNum,
+        vi_do: isNaN(viDoNum as number) ? null : viDoNum,
+        ly_trinh: values.ly_trinh || null,
       });
       setFormOpen(false);
       refetch();
@@ -893,17 +990,29 @@ export default function WeldingJournalList() {
                       {w.project}
                     </span>
                   </td>
-                  <td className="p-2.5 max-w-[180px]">
+                  <td className="p-2.5 max-w-[200px]">
                     {w.mapUrl ? (
-                      <a
-                        href={w.mapUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={w.location}
-                        className="line-clamp-2 text-xs font-medium text-[#0047AB] hover:underline"
-                      >
-                        {w.location}
-                      </a>
+                      <div className="flex flex-col gap-1">
+                        <a
+                          href={w.mapUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={w.location}
+                          className="line-clamp-1 text-xs font-medium text-[#0047AB] hover:underline"
+                        >
+                          {w.location}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.history.pushState(null, "", `/ban-do?weldId=${w.id}`);
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                        >
+                          📍 Xem trên bản đồ
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-400">{w.location}</span>
                     )}
@@ -969,8 +1078,8 @@ export default function WeldingJournalList() {
 
         <div className="pt-3 text-xs text-slate-500">
           {gpsError
-            ? `GPS dự phòng: ${gpsError}`
-            : "Mã mối hàn, ngày và nhân sự lấy trực tiếp từ Supabase; GPS chỉ hiện khi mã điểm trùng chính xác mã mối hàn."}
+            ? `GPS: ${gpsError}`
+            : "Mã mối hàn, ngày, nhân sự và tọa độ GPS đồng bộ trực tiếp từ Supabase qua khóa ngoại và view bao_cao_moi_han_gps."}
         </div>
       </div>
 
@@ -981,6 +1090,7 @@ export default function WeldingJournalList() {
         machines={machineOptions}
         existingCodes={rows.map((row) => row.ma_lich_su)}
         saving={saving}
+        unlinkedGpsPoints={gpsPoints.filter((p) => !p.isLinked && !p.weldId)}
         onClose={() => !saving && setFormOpen(false)}
         onSubmit={handleCreate}
       />

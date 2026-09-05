@@ -37,13 +37,20 @@ export async function loadPersonnelCertificateRows(): Promise<PersonnelCertifica
   if (!isSupabaseConfigured()) return [];
 
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("nhan_su")
-    .select(PERSONNEL_CERTIFICATE_COLUMNS)
-    .order("ho_ten", { ascending: true });
-
-  if (error) throw new Error(formatSupabaseError(error));
-  return (data ?? []) as unknown as PersonnelCertificateRow[];
+  const rows: PersonnelCertificateRow[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("nhan_su")
+      .select(PERSONNEL_CERTIFICATE_COLUMNS)
+      .order("ho_ten", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(formatSupabaseError(error));
+    const page = (data ?? []) as unknown as PersonnelCertificateRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
 export async function loadPersonnelCertificateOptions(): Promise<CertifiedWelderOption[]> {

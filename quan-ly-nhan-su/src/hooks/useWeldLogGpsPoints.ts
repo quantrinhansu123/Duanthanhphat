@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { MapPoint } from "@/data/mapPoints";
 import { fetchMapPointsFromDb } from "@/lib/mapPointsDb";
 
-export function useWeldLogGpsPoints(limit = 30) {
+export function useWeldLogGpsPoints(limit?: number) {
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

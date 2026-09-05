@@ -111,7 +111,6 @@ export default function MachineAssignmentFormModal({
     if (mode !== "view") {
       applyCurrentLocation();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mở modal / đổi bản ghi
   }, [open, initial, mode, machines, projects, personnel]);
 
   useEffect(() => {

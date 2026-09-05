@@ -161,22 +161,27 @@ async function loadAllWeldRowsForCodeSync(): Promise<
   }[] = [];
 
   for (;;) {
-    let result = await supabase
+    let rows: Array<Record<string, unknown>> = [];
+    const result = await supabase
       .from("lich_su_moi_han")
       .select("id,ma_lich_su,cong_nghe_han,ngay_thuc_hien,nam_thuc_hien,moi_han_lien_ket")
       .order("ma_lich_su", { ascending: true })
       .range(from, from + pageSize - 1);
 
     if (result.error && formatSupabaseError(result.error).includes("moi_han_lien_ket")) {
-      result = await supabase
+      const fallbackResult = await supabase
         .from("lich_su_moi_han")
         .select("id,ma_lich_su,cong_nghe_han,ngay_thuc_hien,nam_thuc_hien")
         .order("ma_lich_su", { ascending: true })
         .range(from, from + pageSize - 1);
+      if (fallbackResult.error) throw new Error(formatSupabaseError(fallbackResult.error));
+      rows = (fallbackResult.data ?? []) as Array<Record<string, unknown>>;
+    } else {
+      if (result.error) throw new Error(formatSupabaseError(result.error));
+      rows = (result.data ?? []) as Array<Record<string, unknown>>;
     }
 
-    if (result.error) throw new Error(formatSupabaseError(result.error));
-    const chunk = ((result.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    const chunk = rows.map((row) => ({
       id: String(row.id),
       ma_lich_su: String(row.ma_lich_su ?? ""),
       cong_nghe_han: String(row.cong_nghe_han ?? "FBW"),
@@ -327,11 +332,18 @@ export type WeldJournalInsert = {
   moi_han_lien_ket?: string | null;
   may_id: string;
   chung_chi_su_dung: string;
+  hach_toan?: string | null;
+  toa_do_id?: string | null;
+  kinh_do?: number | null;
+  vi_do?: number | null;
+  ly_trinh?: string | null;
 };
 
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
   const supabase = createClient();
-  const { error } = await supabase.rpc("them_nhat_ky_han_lien_ket", {
+
+  // Try them_nhat_ky_han_co_toa_do RPC first (atomic transaction with GPS)
+  const rpcRes = await supabase.rpc("them_nhat_ky_han_co_toa_do", {
     p_ma_lich_su: payload.ma_lich_su.trim(),
     p_du_an_id: payload.du_an_id,
     p_tho_han_id: payload.tho_han_id,
@@ -346,9 +358,15 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
     p_moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
     p_may_id: payload.may_id,
     p_chung_chi_su_dung: payload.chung_chi_su_dung.trim(),
+    p_hach_toan: payload.hach_toan?.trim() || "HT-SX01",
+    p_toa_do_id: payload.toa_do_id || null,
+    p_kinh_do: payload.kinh_do ?? null,
+    p_vi_do: payload.vi_do ?? null,
+    p_ly_trinh: payload.ly_trinh?.trim() || null,
   });
 
-  if (error) throw new Error(formatSupabaseError(error));
+  if (rpcRes.error) throw new Error(formatSupabaseError(rpcRes.error));
+
   invalidateWeldReportCache();
 }
 
@@ -880,18 +898,22 @@ function toIsoDateLocal(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-/** Rút gọn khoảng ngày cho biểu đồ (tối đa 31 ngày, kết thúc tại hôm nay hoặc dateTo). */
+/** Rút gọn khoảng ngày cho biểu đồ (tối đa 31 ngày, kết thúc tại ngày có dữ liệu mới nhất hoặc dateTo). */
 export function resolveChartDateRange(
   dateFrom: string,
   dateTo: string,
   maxDays = CHART_MAX_DAYS,
+  latestDataDate?: string,
 ) {
-  const start = new Date(`${dateFrom}T00:00:00`);
-  const end = new Date(`${dateTo}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  let endIso = dateTo;
+  if (!endIso || endIso.trim() === "") {
+    endIso = latestDataDate || toIsoDateLocal(new Date());
+  }
 
-  let effectiveEnd = end.getTime() > today.getTime() ? today : end;
+  const start = new Date(`${dateFrom}T00:00:00`);
+  const end = new Date(`${endIso}T00:00:00`);
+
+  let effectiveEnd = end;
   if (effectiveEnd.getTime() < start.getTime()) effectiveEnd = start;
 
   const totalDays =

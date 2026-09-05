@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   Certificate,
   ClipboardText,
@@ -13,12 +14,12 @@ import {
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
-  buildSyntheticDailySeries,
   filterWeldReportRows,
   groupWeldRows,
   machineForRow,
-  summarizeWeldRows,
 } from "@/lib/weldReportData";
+import { loadCertificateRegistry } from "@/lib/certificatesDb";
+import type { Certificate as CertificateType } from "@/data/certificates";
 
 const PORTRAIT_IDS = [32, 52, 36, 22, 48, 44];
 
@@ -26,6 +27,49 @@ export default function PersonnelReportDashboard() {
   const { rows, loading, error } = useWeldReportData();
   const { appliedFilters } = useReportFilters();
   const [teamFilter, setTeamFilter] = useState("Tất cả tổ hàn");
+  const [certList, setCertList] = useState<CertificateType[]>([]);
+  const [certError, setCertError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadCertificateRegistry()
+      .then((res) => {
+        if (active) {
+          setCertList(res.certificates);
+          setCertError("");
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (active) setCertError(loadError instanceof Error ? loadError.message : "Không tải được chứng chỉ");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const expiringCertificates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return certList
+      .map((c) => {
+        if (!c.expiresAt || c.expiresAt === "—") {
+          return { ...c, daysRemaining: null, statusLabel: "Chưa cập nhật" };
+        }
+        const parts = c.expiresAt.split("/");
+        if (parts.length !== 3) {
+          return { ...c, daysRemaining: null, statusLabel: "Chưa cập nhật" };
+        }
+        const expDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
+        const days = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+        if (days < 0) {
+          return { ...c, daysRemaining: days, statusLabel: "Hết hạn" };
+        }
+        return { ...c, daysRemaining: days, statusLabel: `Còn ${days} ngày` };
+      })
+      .filter((c) => c.statusLabel === "Hết hạn" || (c.daysRemaining !== null && c.daysRemaining <= 90))
+      .sort((a, b) => (a.daysRemaining ?? 9999) - (b.daysRemaining ?? 9999));
+  }, [certList]);
   const baseRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
     [rows, appliedFilters],
@@ -38,15 +82,26 @@ export default function PersonnelReportDashboard() {
     () => baseRows.filter((row) => teamFilter === "Tất cả tổ hàn" || (row.to_han?.trim() || "Chưa phân tổ") === teamFilter),
     [baseRows, teamFilter],
   );
-  const summary = useMemo(() => summarizeWeldRows(selectedRows), [selectedRows]);
   const welders = useMemo(
     () => groupWeldRows(selectedRows, (row) => row.ten_tho_han).sort((a, b) => b.total - a.total),
     [selectedRows],
   );
-  const today = useMemo(
-    () => buildSyntheticDailySeries(summary.total, summary.total).at(-1) ?? 0,
-    [summary.total],
-  );
+  const latestDateVolumeByWelder = useMemo(() => {
+    const dates = selectedRows
+      .map((r) => r.ngay_thuc_hien)
+      .filter((d): d is string => Boolean(d))
+      .sort();
+    const latestDate = dates.at(-1);
+    const map = new Map<string, number>();
+    if (!latestDate) return map;
+    for (const r of selectedRows) {
+      if (r.ngay_thuc_hien === latestDate) {
+        map.set(r.ten_tho_han, (map.get(r.ten_tho_han) ?? 0) + (r.so_luong_thuc_hien || 0));
+      }
+    }
+    return map;
+  }, [selectedRows]);
+
   const activeWelders = welders.map((welder, index) => {
     const source = welder.rows[0];
     const machine = machineForRow(source);
@@ -65,11 +120,12 @@ export default function PersonnelReportDashboard() {
   const welderProductivity = welders.map((welder, index) => {
     const source = welder.rows[0];
     const passRate = welder.total > 0 ? ((welder.passed / welder.total) * 100) : 0;
+    const todayVolume = latestDateVolumeByWelder.get(welder.name) ?? 0;
     return {
       name: welder.name,
       teamMachine: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machineForRow(source)}`,
       welds: welder.total.toLocaleString("vi-VN"),
-      today: (summary.total > 0 ? Math.round(today * (welder.total / summary.total)) : 0).toLocaleString("vi-VN"),
+      today: todayVolume.toLocaleString("vi-VN"),
       passRate: `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`,
       rateColor: passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
       shift: ["Sáng", "Chiều", "Đêm"][index % 3],
@@ -84,7 +140,7 @@ export default function PersonnelReportDashboard() {
           ? `Không tải được Supabase: ${error}`
           : loading
             ? "Đang tải dữ liệu Supabase…"
-            : `Supabase · ${welders.length} thợ hàn · Sản lượng ngày và ca trực là mô phỏng`}
+            : `Supabase · ${welders.length} thợ hàn · Dữ liệu thực tế`}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
         <div>
@@ -248,10 +304,10 @@ export default function PersonnelReportDashboard() {
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
-                    Ca 2 · Tổ 1 thiếu 1 thợ hàn hạng 1
+                    {welders.length} nhân sự có dữ liệu hàn trong bộ lọc
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500 font-medium">
-                    2 phút trước
+                    Đồng bộ từ Nhật ký hàn
                   </div>
                 </div>
               </div>
@@ -262,10 +318,12 @@ export default function PersonnelReportDashboard() {
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
-                    3 chứng chỉ sắp hết hạn trong tuần này
+                    {certError
+                      ? "Không tải được dữ liệu chứng chỉ"
+                      : `${expiringCertificates.length} chứng chỉ hết hạn hoặc sắp hết hạn`}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500 font-medium">
-                    1 giờ trước
+                    Trong 90 ngày tới
                   </div>
                 </div>
               </div>
@@ -276,10 +334,10 @@ export default function PersonnelReportDashboard() {
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-semibold leading-snug text-slate-900">
-                    Khóa tái huấn luyện PCCC ngày 15/03
+                    {certList.length} hồ sơ chứng chỉ đã được đồng bộ
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500 font-medium">
-                    Hôm nay
+                    Dữ liệu trực tiếp từ hệ thống chứng chỉ
                   </div>
                 </div>
               </div>
@@ -295,66 +353,58 @@ export default function PersonnelReportDashboard() {
 
           {/* Card: Chứng chỉ sắp hết hạn */}
           <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
-            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              Chứng chỉ sắp hết hạn
+            <div className="flex items-center justify-between">
+              <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+                Hết hạn / sắp hết hạn
+              </div>
+              <Link
+                href="/chung-chi"
+                className="text-xs font-semibold text-[#0047AB] hover:underline"
+              >
+                Xem tất cả
+              </Link>
             </div>
             <div className="mt-3.5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    {welders[0]?.name ?? "—"}
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    EN ISO 9606-1
-                  </div>
+              {certError ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {certError}
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    15/07/2024
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
-                    Còn 10 ngày
-                  </div>
+              ) : expiringCertificates.length === 0 ? (
+                <div className="text-xs text-slate-400 py-2">
+                  Hiện không có chứng chỉ nào sắp hết hạn trong 90 ngày tới.
                 </div>
-              </div>
-
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    {welders[1]?.name ?? "—"}
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    Huấn luyện an toàn
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    20/07/2024
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
-                    Còn 15 ngày
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    {welders[2]?.name ?? "—"}
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    Kiểm định UT cấp 2
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    05/08/2024
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-amber-700 font-mono">
-                    Còn 31 ngày
-                  </div>
-                </div>
-              </div>
+              ) : (
+                expiringCertificates.slice(0, 6).map((cert) => (
+                  <Link
+                    key={cert.id}
+                    href={`/chung-chi?employeeId=${cert.employeeId}&certificateId=${cert.id}`}
+                    className="group flex items-start justify-between gap-2 hover:bg-slate-50 p-1.5 -mx-1.5 rounded-lg transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs sm:text-sm font-semibold text-[#0047AB] group-hover:underline">
+                        {cert.holder}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500 truncate" title={cert.title}>
+                        {cert.title}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs text-slate-700 font-mono">
+                        {cert.expiresAt}
+                      </div>
+                      <div
+                        className={`mt-0.5 text-xs font-semibold font-mono ${
+                          cert.statusLabel === "Hết hạn"
+                            ? "text-rose-700"
+                            : "text-amber-700"
+                        }`}
+                      >
+                        {cert.statusLabel}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
 

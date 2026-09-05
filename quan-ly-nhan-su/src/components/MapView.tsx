@@ -88,6 +88,39 @@ export default function MapView() {
   }, [reload]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || points.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const weldId = params.get("weldId");
+    const pointId = params.get("pointId");
+    if (weldId) {
+      const match = points.find(
+        (p) =>
+          p.weldId === weldId ||
+          p.id === weldId ||
+          p.weldCode?.trim().toLowerCase() === weldId.trim().toLowerCase(),
+      );
+      if (match) {
+        setSelectedId(match.id);
+        setFocusSelected(true);
+        setMode("route");
+        return;
+      }
+    }
+    if (pointId) {
+      const match = points.find(
+        (p) =>
+          p.id === pointId ||
+          p.code.trim().toLowerCase() === pointId.trim().toLowerCase(),
+      );
+      if (match) {
+        setSelectedId(match.id);
+        setFocusSelected(true);
+        setMode("route");
+      }
+    }
+  }, [points]);
+
+  useEffect(() => {
     if (!mapFullscreen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMapFullscreen(false);
@@ -546,9 +579,24 @@ export default function MapView() {
             )}
           </div>
           {selected && (
-            <div className="border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
-              Đã chọn: <strong className="text-slate-900">{selected.code}</strong> · {selected.chainage}{" "}
-              · {selected.latitude}, {selected.longitude}
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600 flex flex-wrap items-center gap-2">
+              <span>Đã chọn: <strong className="text-slate-900">{selected.code}</strong> · {selected.chainage} · {selected.latitude}, {selected.longitude}</span>
+              {selected.weldCode ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-100 px-2 py-0.5 font-medium text-[#0047AB]">
+                  Mối hàn: <strong>{selected.weldCode}</strong>
+                  {selected.welderName && ` · Thợ: ${selected.welderName}`}
+                  {selected.machineName && ` · Máy: ${selected.machineName}`}
+                  {selected.result && (
+                    <span className={`ml-1 font-bold ${selected.result === "Đạt" ? "text-emerald-700" : "text-rose-600"}`}>
+                      ({selected.result})
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="rounded bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  Chưa liên kết nhật ký hàn
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -562,16 +610,17 @@ export default function MapView() {
             <table className="w-full border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2.5">Mã</th>
+                  <th className="px-3 py-2.5">Mã điểm</th>
+                  <th className="px-3 py-2.5">Mối hàn / Thợ</th>
                   <th className="px-3 py-2.5">Lý trình</th>
-                  <th className="px-3 py-2.5">Lon / Lat</th>
+                  <th className="px-3 py-2.5">Tọa độ</th>
                   <th className="px-2 py-2.5" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
                       Chưa có điểm. Bấm <strong>Seed 14 điểm HN</strong> hoặc <strong>+ Thêm toạ độ</strong>.
                     </td>
                   </tr>
@@ -587,7 +636,19 @@ export default function MapView() {
                         active ? "bg-blue-50" : "hover:bg-slate-50"
                       }`}
                     >
-                      <td className="px-3 py-2.5 font-semibold text-slate-900">{p.code}</td>
+                      <td className="px-3 py-2.5 font-semibold text-slate-900">
+                        {p.code}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs">
+                        {p.weldCode ? (
+                          <div>
+                            <span className="font-semibold text-[#0047AB]">{p.weldCode}</span>
+                            {p.welderName && <div className="text-slate-500">{p.welderName}</div>}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">Chưa liên kết</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-slate-700">{p.chainage}</td>
                       <td className="px-3 py-2.5 text-xs text-slate-500">
                         {p.longitude}
@@ -614,7 +675,7 @@ export default function MapView() {
                 })}
                 {filtered.length > visibleListPoints.length && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-3 text-center text-xs text-[#64748b]">
+                    <td colSpan={5} className="px-4 py-3 text-center text-xs text-[#64748b]">
                       Đang giới hạn {POINT_LIST_RENDER_LIMIT} dòng để tải nhanh. Dùng ô tìm kiếm để mở điểm khác.
                     </td>
                   </tr>

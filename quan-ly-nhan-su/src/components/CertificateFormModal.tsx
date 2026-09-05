@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import Image from "next/image";
 import type { Certificate, CertificateImageKey } from "@/data/certificates";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
-import { X } from "@/components/icons";
+import { UploadSimple, X } from "@/components/icons";
 import type { CertificatePersonnelOption } from "@/lib/certificatesDb";
+import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 
 export type CertificateFormValues = {
+  id?: string;
   title: string;
   holderIds: string[];
   issuedAt: string;
@@ -15,6 +18,11 @@ export type CertificateFormValues = {
   status: Certificate["status"];
   imageKey: CertificateImageKey;
   imageUrl: string;
+  cloudinaryPublicId?: string;
+  organization?: string;
+  machine?: string;
+  certificateNumber?: string;
+  notes?: string;
 };
 
 const imageKeyOptions: { value: CertificateImageKey; label: string }[] = [
@@ -29,20 +37,33 @@ const imageKeyOptions: { value: CertificateImageKey; label: string }[] = [
 
 type CertificateFormModalProps = {
   open: boolean;
+  initial?: Certificate | null;
   personnel: CertificatePersonnelOption[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (values: CertificateFormValues) => void;
 };
 
+function viToISO(value?: string) {
+  if (!value || value === "—") return "";
+  const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return value;
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
 export default function CertificateFormModal({
   open,
+  initial,
   personnel,
   saving,
   onClose,
   onSubmit,
 }: CertificateFormModalProps) {
   const titleId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
+
   const [form, setForm] = useState<CertificateFormValues>({
     title: "",
     holderIds: [],
@@ -51,191 +72,394 @@ export default function CertificateFormModal({
     status: "Còn hiệu lực",
     imageKey: "default",
     imageUrl: "",
+    cloudinaryPublicId: "",
+    organization: "",
+    machine: "",
+    certificateNumber: "",
+    notes: "",
   });
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    setForm({
-      title: "",
-      holderIds: [],
-      issuedAt: "",
-      expiresAt: "",
-      status: "Còn hiệu lực",
-      imageKey: "default",
-      imageUrl: "",
-    });
+    if (initial) {
+      setForm({
+        id: initial.id.startsWith("personnel:") ? undefined : initial.id,
+        title: initial.title,
+        holderIds: initial.employeeId ? [initial.employeeId] : [],
+        issuedAt: viToISO(initial.issuedAt),
+        expiresAt: viToISO(initial.expiresAt),
+        status: initial.status === "Chưa cập nhật" ? "Còn hiệu lực" : initial.status,
+        imageKey: initial.imageKey,
+        imageUrl: initial.imageUrl || "",
+        cloudinaryPublicId: initial.cloudinaryPublicId || "",
+        organization: initial.organization || "",
+        machine: initial.machine || "",
+        certificateNumber: initial.certificateNumber || "",
+        notes: initial.notes || "",
+      });
+    } else {
+      setForm({
+        title: "",
+        holderIds: [],
+        issuedAt: "",
+        expiresAt: "",
+        status: "Còn hiệu lực",
+        imageKey: "default",
+        imageUrl: "",
+        cloudinaryPublicId: "",
+        organization: "",
+        machine: "",
+        certificateNumber: "",
+        notes: "",
+      });
+    }
     setError("");
-  }, [open]);
+  }, [open, initial]);
+
+  const handleClose = useCallback(async () => {
+    if (saving || uploadingImg) return;
+    const uploadedPublicId = form.cloudinaryPublicId?.trim();
+    if (uploadedPublicId && uploadedPublicId !== initial?.cloudinaryPublicId) {
+      await deleteCloudinaryAsset(uploadedPublicId);
+    }
+    onClose();
+  }, [form.cloudinaryPublicId, initial?.cloudinaryPublicId, onClose, saving, uploadingImg]);
 
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !saving && !uploadingImg) void handleClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [handleClose, open, saving, uploadingImg]);
 
   if (!open) return null;
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError("Vui lòng chọn file ảnh (JPG, PNG, SVG).");
+      setError("Vui lòng chọn file ảnh (JPG, PNG, WebP).");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm((f) => ({ ...f, imageUrl: String(reader.result) }));
-      setError("");
-    };
-    reader.readAsDataURL(file);
+
+    setUploadingImg(true);
+    setError("");
+
+    // Upload có chữ ký lên Cloudinary
+    const res = await uploadToCloudinary(file, "thanhphat/certificates");
+    setUploadingImg(false);
+
+    if (res.result) {
+      const previousUploadedPublicId = form.cloudinaryPublicId?.trim();
+      if (previousUploadedPublicId && previousUploadedPublicId !== initial?.cloudinaryPublicId) {
+        await deleteCloudinaryAsset(previousUploadedPublicId);
+      }
+      setForm((f) => ({
+        ...f,
+        imageUrl: res.result?.secure_url || "",
+        cloudinaryPublicId: res.result?.public_id || "",
+      }));
+    } else {
+      setError(res.error || "Không tải được ảnh lên Cloudinary. Ảnh cũ được giữ nguyên.");
+    }
+  }
+
+  async function removeImage() {
+    const uploadedPublicId = form.cloudinaryPublicId?.trim();
+    if (uploadedPublicId && uploadedPublicId !== initial?.cloudinaryPublicId) {
+      await deleteCloudinaryAsset(uploadedPublicId);
+    }
+    setForm((current) => ({ ...current, imageUrl: "", cloudinaryPublicId: "" }));
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim()) {
-      setError("Nhập tên chứng chỉ.");
+    setError("");
+    const title = form.title.trim();
+    if (!title) {
+      setError("Vui lòng nhập tên chứng chỉ.");
       return;
     }
     if (form.holderIds.length === 0) {
-      setError("Chọn ít nhất một người sở hữu.");
+      setError("Chọn ít nhất một nhân sự sở hữu chứng chỉ.");
       return;
     }
-    if (!form.issuedAt || !form.expiresAt) {
-      setError("Nhập ngày cấp và ngày hết hạn.");
+
+    if (form.issuedAt && form.expiresAt && form.expiresAt < form.issuedAt) {
+      setError("Ngày hết hạn phải từ ngày cấp trở đi.");
       return;
     }
-    onSubmit(form);
+
+    onSubmit({
+      ...form,
+      title,
+    });
   }
 
+  const isEdit = Boolean(initial && !initial.id.startsWith("personnel:"));
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      role="presentation"
+    >
       <button
         type="button"
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
         aria-label="Đóng"
-        onClick={onClose}
+        onClick={() => void handleClose()}
       />
+
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 flex max-h-[90dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[620px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
-          <h2 id={titleId} className="text-base sm:text-lg font-bold text-slate-900">
-            Thêm chứng chỉ mới
-          </h2>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+              Hồ sơ năng lực
+            </div>
+            <h2 id={titleId} className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">
+              {isEdit ? "Chỉnh sửa chứng chỉ" : "Thêm chứng chỉ cho nhân sự"}
+            </h2>
+          </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => void handleClose()}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng"
           >
             <X size={18} weight="bold" aria-hidden />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
-          {error && (
-            <div className="rounded-lg bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-rose-700 shadow-2xs">{error}</div>
-          )}
 
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Tên chứng chỉ *
-            <input
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-              placeholder="VD: Chứng chỉ thợ hàn ray hạng 1"
-            />
-          </label>
-          <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Người sở hữu *
-            <WelderMultiSelect
-              selectedIds={form.holderIds}
-              onChange={(holderIds) => setForm((current) => ({ ...current, holderIds }))}
-              options={personnel.map((person) => ({
-                id: person.id,
-                name: person.name,
-                weldingId: person.code,
-                weldingTeam: person.team,
-              }))}
-              placeholder="Chọn người sở hữu..."
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Ngày cấp *
-              <DateField
-                value={form.issuedAt}
-                onChange={(v) => setForm((f) => ({ ...f, issuedAt: v }))}
-                className="mt-1.5"
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-4">
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs sm:text-sm text-rose-700">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Tên chứng chỉ <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="VD: Chứng chỉ hàn nhôm nhiệt đường ray EN ISO 9606-1"
+                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </div>
-            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Ngày hết hạn *
-              <DateField
-                value={form.expiresAt}
-                onChange={(v) => setForm((f) => ({ ...f, expiresAt: v }))}
-                className="mt-1.5"
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                {isEdit ? "Người sở hữu" : "Người sở hữu (có thể chọn nhiều nhân sự)"} <span className="text-rose-500">*</span>
+              </label>
+              <div className="mt-1">
+                <WelderMultiSelect
+                  selectedIds={form.holderIds}
+                  onChange={(holderIds) => setForm((f) => ({ ...f, holderIds }))}
+                  options={personnel.map((person) => ({
+                    id: person.id,
+                    name: person.name,
+                    weldingId: person.code,
+                    weldingTeam: person.team,
+                  }))}
+                  placeholder="Chọn nhân sự..."
+                  searchPlaceholder="Tìm nhân sự theo tên hoặc mã..."
+                  disabled={isEdit}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Ngày cấp
+                </label>
+                <div className="mt-1">
+                  <DateField
+                    value={form.issuedAt}
+                    onChange={(issuedAt) => setForm((f) => ({ ...f, issuedAt }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Ngày hết hạn
+                </label>
+                <div className="mt-1">
+                  <DateField
+                    value={form.expiresAt}
+                    onChange={(expiresAt) => setForm((f) => ({ ...f, expiresAt }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Trạng thái
+                </label>
+                <select
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      status: e.target.value as Certificate["status"],
+                    }))
+                  }
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                >
+                  <option value="Còn hiệu lực">Còn hiệu lực</option>
+                  <option value="Sắp hết hạn">Sắp hết hạn</option>
+                  <option value="Hết hạn">Hết hạn</option>
+                  <option value="Thu hồi">Thu hồi</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Biểu mẫu hiển thị
+                </label>
+                <select
+                  value={form.imageKey}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      imageKey: e.target.value as CertificateImageKey,
+                    }))
+                  }
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                >
+                  {imageKeyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Đơn vị cấp
+                </label>
+                <input
+                  type="text"
+                  value={form.organization || ""}
+                  onChange={(e) => setForm((f) => ({ ...f, organization: e.target.value }))}
+                  placeholder="VD: Trung tâm đào tạo đường sắt"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Số chứng chỉ
+                </label>
+                <input
+                  type="text"
+                  value={form.certificateNumber || ""}
+                  onChange={(e) => setForm((f) => ({ ...f, certificateNumber: e.target.value }))}
+                  placeholder="VD: CC-2026-001"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Máy / phạm vi áp dụng
+              </label>
+              <input
+                type="text"
+                value={form.machine || ""}
+                onChange={(e) => setForm((f) => ({ ...f, machine: e.target.value }))}
+                placeholder="VD: KCM-007, UN5-150ZC2-C6"
+                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Ghi chú
+              </label>
+              <textarea
+                rows={2}
+                value={form.notes || ""}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
+            </div>
+
+            {/* Upload ảnh chứng chỉ lên Cloudinary */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Ảnh chứng chỉ (tải trực tiếp lên Cloudinary)
+              </label>
+              <div className="mt-2 flex items-center gap-4">
+                {form.imageUrl ? (
+                  <div className="relative h-20 w-32 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    <Image src={form.imageUrl} alt="Chứng chỉ" fill className="object-cover" />
+                  </div>
+                ) : null}
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFile}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImg}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    <UploadSimple size={14} weight="bold" />
+                    {uploadingImg ? "Đang tải ảnh lên Cloudinary..." : form.imageUrl ? "Thay đổi ảnh" : "Tải ảnh chứng chỉ lên"}
+                  </button>
+                  {form.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => void removeImage()}
+                      className="text-left text-xs text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Gỡ ảnh
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Trạng thái
-            <select
-              value={form.status}
-              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as Certificate["status"] }))}
-              className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-            >
-              <option>Còn hiệu lực</option>
-              <option>Sắp hết hạn</option>
-              <option>Hết hạn</option>
-            </select>
-          </label>
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Mẫu ảnh chứng chỉ
-            <select
-              value={form.imageKey}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, imageKey: e.target.value as CertificateImageKey, imageUrl: "" }))
-              }
-              className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-            >
-              {imageKeyOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Hoặc tải ảnh chứng chỉ
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFile}
-              className="mt-1.5 block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0047AB] file:cursor-pointer hover:file:bg-blue-100 file:transition-colors shadow-2xs"
-            />
-          </label>
-          <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 pt-4">
+
+          <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5 bg-slate-50/80">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => void handleClose()}
               disabled={saving}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
             >
               Hủy
             </button>
             <button
               type="submit"
-              disabled={saving || personnel.length === 0}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+              disabled={saving || uploadingImg}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-[#00388A] cursor-pointer disabled:opacity-50"
             >
-              {saving ? "Đang lưu…" : "Lưu chứng chỉ"}
+              {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Lưu chứng chỉ"}
             </button>
           </div>
         </form>
@@ -243,11 +467,3 @@ export default function CertificateFormModal({
     </div>
   );
 }
-
-function formatViDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("vi-VN");
-}
-
-export { formatViDate };

@@ -17,8 +17,14 @@ export type Certificate = {
   expiresAt: string;
   status: "Còn hiệu lực" | "Sắp hết hạn" | "Hết hạn" | "Thu hồi" | "Chưa cập nhật";
   imageKey: CertificateImageKey;
-  /** Ảnh upload tùy chọn (data URL) */
+  /** Ảnh chứng chỉ đã lưu bền vững. */
   imageUrl?: string;
+  cloudinaryPublicId?: string;
+  groupId?: string;
+  organization?: string;
+  machine?: string;
+  certificateNumber?: string;
+  notes?: string;
   /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */
   inferred?: boolean;
 };

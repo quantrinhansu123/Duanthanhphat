@@ -7,6 +7,14 @@ export type MapPoint = {
   note?: string;
   projectId?: string | null;
   order?: number;
+  weldId?: string | null;
+  weldCode?: string | null;
+  welderName?: string | null;
+  machineName?: string | null;
+  projectName?: string | null;
+  result?: string | null;
+  performedDate?: string | null;
+  isLinked?: boolean;
 };
 
 export type MapViewMode = "vietnam" | "route";

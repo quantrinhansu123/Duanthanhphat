@@ -91,15 +91,15 @@ export default function Sidebar({
             }
             onClose?.();
           }}
-          className="flex items-center gap-3 min-w-0 cursor-pointer focus:outline-hidden"
+          className="flex items-center gap-3 min-w-0 cursor-pointer focus:outline-hidden group"
           title="Về trang chủ Thành Phát"
         >
-          <div className="relative h-10 w-10 flex-none overflow-hidden rounded-full">
-            <Image src="/logo.png" alt="Thành Phát" fill className="object-cover" sizes="40px" />
+          <div className="relative h-11 w-11 sm:h-12 sm:w-12 flex-none overflow-hidden rounded-full ring-2 ring-blue-400/30 shadow-md transition-transform duration-200 group-hover:scale-105">
+            <Image src="/logo.png" alt="Thành Phát" fill className="object-cover" sizes="48px" />
           </div>
           {!collapsed && (
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-bold tracking-wider text-white">THÀNH PHÁT</div>
+              <div className="truncate text-[15px] font-extrabold tracking-wider text-white">THÀNH PHÁT</div>
               <div className="mt-0.5 truncate text-[11px] font-medium text-blue-200/80">
                 {lang === "en" ? "Rail & Steel Operations" : "Vận hành Đường sắt & Thép"}
               </div>

@@ -39,6 +39,7 @@ export {
   DotsSixVertical,
   PencilSimple,
   TrashSimple,
+  TrashSimple as Trash,
   Eye,
   EyeSlash,
   Lock,

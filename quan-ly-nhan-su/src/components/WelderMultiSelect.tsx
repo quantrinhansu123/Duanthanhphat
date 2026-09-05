@@ -17,6 +17,7 @@ type WelderMultiSelectProps = {
   options?: WelderSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
+  disabled?: boolean;
 };
 
 export default function WelderMultiSelect({
@@ -25,6 +26,7 @@ export default function WelderMultiSelect({
   options: suppliedOptions,
   placeholder = "Chọn thợ hàn...",
   searchPlaceholder = "Tìm thợ hàn...",
+  disabled = false,
 }: WelderMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -64,10 +66,11 @@ export default function WelderMultiSelect({
     <div ref={boxRef} className="relative mt-1.5">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
         className={`flex h-10 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-xs sm:text-sm font-medium outline-hidden transition-all duration-150 cursor-pointer ${
           open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : "border-slate-300 hover:border-slate-400"
-        } ${selectedIds.length > 0 ? "text-slate-900" : "text-slate-400"}`}
+        } ${selectedIds.length > 0 ? "text-slate-900" : "text-slate-400"} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70`}
       >
         <span className="truncate">
           {selectedIds.length > 0 ? `Đã chọn ${selectedIds.length} người` : placeholder}
@@ -80,7 +83,7 @@ export default function WelderMultiSelect({
         />
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 flex max-h-72 flex-col rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
           <div className="relative mb-1.5">
             <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
@@ -134,14 +137,16 @@ export default function WelderMultiSelect({
                 className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-medium text-[#0047AB]"
               >
                 {w.name}
-                <button
-                  type="button"
-                  onClick={() => toggle(w.id)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-blue-100"
-                  aria-label={`Bỏ ${w.name}`}
-                >
-                  <X size={10} weight="bold" aria-hidden />
-                </button>
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => toggle(w.id)}
+                    className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-blue-100"
+                    aria-label={`Bỏ ${w.name}`}
+                  >
+                    <X size={10} weight="bold" aria-hidden />
+                  </button>
+                )}
               </span>
             ))}
         </div>

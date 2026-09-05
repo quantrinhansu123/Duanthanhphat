@@ -26,7 +26,7 @@ function ThumbFrame({
 }
 
 export default function CertificateThumbnail({ cert, className = "" }: CertificateThumbnailProps) {
-  if (cert.imageUrl?.startsWith("data:")) {
+  if (cert.imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={cert.imageUrl} alt={cert.title} className={`h-full w-full object-cover ${className}`} />

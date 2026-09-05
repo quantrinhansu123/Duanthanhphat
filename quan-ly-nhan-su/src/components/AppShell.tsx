@@ -17,6 +17,7 @@ import MachineList from "@/components/MachineList";
 import MachineReportDashboard from "@/components/MachineReportDashboard";
 import MaintenanceCalendar from "@/components/MaintenanceCalendar";
 import MapView from "@/components/MapView";
+import HomeDashboard from "@/components/HomeDashboard";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import PersonnelReportDashboard from "@/components/PersonnelReportDashboard";
 import ProjectManagement from "@/components/ProjectManagement";
@@ -287,7 +288,7 @@ export default function AppShell({ tab }: AppShellProps) {
               </div>
             </div>
           ) : (
-            <div className="min-h-full w-full" />
+            <HomeDashboard onNavigate={go} />
           )}
         </div>
       </div>

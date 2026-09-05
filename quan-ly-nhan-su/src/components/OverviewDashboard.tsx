@@ -23,6 +23,8 @@ import {
   groupJournalRows,
   machineForRow,
   REPORT_MACHINES,
+  REPORT_PERIOD_END,
+  REPORT_PERIOD_START,
   resolveChartDateRange,
   summarizeJournalRows,
 } from "@/lib/weldReportData";
@@ -147,15 +149,42 @@ export default function OverviewDashboard() {
     [rows, appliedFilters],
   );
   const summary = useMemo(() => summarizeJournalRows(selectedRows), [selectedRows]);
-  const chartDateRange = useMemo(
-    () => resolveChartDateRange(appliedFilters.dateFrom, appliedFilters.dateTo),
-    [appliedFilters.dateFrom, appliedFilters.dateTo],
-  );
+
+  // Tìm ngày có dữ liệu mới nhất trong danh sách đã lọc
+  const latestDataDate = useMemo(() => {
+    let maxDate = "";
+    selectedRows.forEach((r, i) => {
+      const iso = getJournalRowDateIso(r, i);
+      if (iso && iso > maxDate) maxDate = iso;
+    });
+    return maxDate;
+  }, [selectedRows]);
+
+  const chartDateRange = useMemo(() => {
+    const usesDefaultPeriod =
+      appliedFilters.dateFrom === REPORT_PERIOD_START && appliedFilters.dateTo === REPORT_PERIOD_END;
+    return resolveChartDateRange(
+      appliedFilters.dateFrom,
+      usesDefaultPeriod ? "" : appliedFilters.dateTo,
+      31,
+      latestDataDate,
+    );
+  }, [appliedFilters.dateFrom, appliedFilters.dateTo, latestDataDate]);
   const dailySeries = useMemo(
     () => buildDailyJournalSeries(selectedRows, chartDateRange.from, chartDateRange.to),
     [selectedRows, chartDateRange.from, chartDateRange.to],
   );
   const dailyValues = useMemo(() => dailySeries.map((point) => point.value), [dailySeries]);
+
+  // Tự động cuộn sang phải để hiển thị dữ liệu mới nhất ngay sau render
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    if (!el) return;
+    const t = setTimeout(() => {
+      el.scrollLeft = el.scrollWidth;
+    }, 60);
+    return () => clearTimeout(t);
+  }, [dailySeries, chartViewMode, chartZoom, chartDateRange]);
   const selectedProjects = useMemo(
     () => projects.filter((project) =>
       appliedFilters.projects.length === 0 || appliedFilters.projects.includes(project.name),
@@ -1023,6 +1052,15 @@ export default function OverviewDashboard() {
                 style={{ overscrollBehavior: "contain" }}
               >
                 <div className="relative" style={{ width: `${plotWidthPx}px`, minWidth: "100%" }}>
+              {chartDayCount === 0 || (chartViewMode !== "yearly" && dailySeries.length > 0 && dailySeries.every((p) => p.value === 0 && (!dailyTargets || dailyTargets.every((t) => t === 0)))) ? (
+                <div className="flex h-[260px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
+                  <div className="text-sm font-semibold text-slate-700">Chưa có dữ liệu sản lượng trong khoảng thời gian này</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Khoảng hiển thị: {chart.chartRangeLabel}. Vui lòng chọn khoảng ngày khác hoặc điều chỉnh bộ lọc.
+                  </div>
+                </div>
+              ) : (
+                <>
               <svg
                 viewBox="0 0 500 260"
                 preserveAspectRatio="none"
@@ -1166,6 +1204,8 @@ export default function OverviewDashboard() {
                   </button>
                 ))}
               </div>
+                </>
+              )}
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-end gap-2 text-sm font-medium text-slate-900">

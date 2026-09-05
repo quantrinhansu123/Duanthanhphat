@@ -16,11 +16,9 @@ import {
 import {
   formatCertificateList,
   parseCertificateList,
-  WELDING_CERTIFICATE_OPTIONS,
 } from "@/lib/weldingCertificates";
 import {
   loadPersonnelCertificateRows,
-  updatePersonnelCertificates,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 
@@ -178,7 +176,7 @@ function MultiSelectCombobox({
 
 export default function WelderManagement() {
   const [list, setList] = useState<Welder[]>(seedWelders);
-  const [dataSource, setDataSource] = useState<"supabase" | "seed">("seed");
+  const [_dataSource, setDataSource] = useState<"supabase" | "seed">("seed");
   const [query, setQuery] = useState("");
   const [ranksSel, setRanksSel] = useState<string[]>([]);
   const [teamsSel, setTeamsSel] = useState<string[]>([]);
@@ -188,9 +186,7 @@ export default function WelderManagement() {
   const [selected, setSelected] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [toast, setToast] = useState("");
-  const [certificateEditor, setCertificateEditor] = useState<Welder | null>(null);
-  const [certificateDraft, setCertificateDraft] = useState("");
-  const [savingCertificate, setSavingCertificate] = useState(false);
+  const [viewingWelder, setViewingWelder] = useState<Welder | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -285,7 +281,7 @@ export default function WelderManagement() {
     ranksSel.length > 0 || teamsSel.length > 0 || railsSel.length > 0 || machinesSel.length > 0 || statusesSel.length > 0 || query.trim();
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div className="mb-5 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="flex items-start justify-between gap-3">
@@ -434,28 +430,28 @@ export default function WelderManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1480px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-10 px-4 py-3">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Chọn tất cả" className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer" />
                 </th>
-                <th className="px-3.5 py-3">Welding ID</th>
-                <th className="px-3.5 py-3">Thợ hàn</th>
-                <th className="px-3.5 py-3">Tổ hàn</th>
-                <th className="min-w-[260px] px-3.5 py-3">Chứng chỉ</th>
-                <th className="px-3.5 py-3">Hạng</th>
-                <th className="px-3.5 py-3">Loại ray</th>
-                <th className="px-3.5 py-3">Máy đã đào tạo</th>
-                <th className="px-3.5 py-3">Kinh nghiệm</th>
-                <th className="px-3.5 py-3">Trạng thái</th>
-                <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
+                <th className="w-28 px-3.5 py-3">Welding ID</th>
+                <th className="min-w-[200px] px-3.5 py-3">Thợ hàn</th>
+                <th className="w-36 px-3.5 py-3">Tổ hàn</th>
+                <th className="w-28 px-3.5 py-3">Hạng</th>
+                <th className="w-28 px-3.5 py-3">Trạng thái</th>
+                <th className="w-24 px-2 py-3 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((w) => (
-                <tr key={w.id} className="hover:bg-slate-50/80 transition-colors duration-150">
-                  <td className="px-4 py-3">
+                <tr
+                  key={w.id}
+                  onClick={() => setViewingWelder(w)}
+                  className="hover:bg-slate-50/80 transition-colors duration-150 cursor-pointer"
+                >
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selected.includes(w.id)}
@@ -484,15 +480,6 @@ export default function WelderManagement() {
                     </span>
                   </td>
                   <td className="px-3.5 py-3">
-                    {parseCertificateList(w.certificates).length > 0 ? (
-                      <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={w.certificates}>
-                        {w.certificates}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Chưa có</span>
-                    )}
-                  </td>
-                  <td className="px-3.5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         rankStyle[w.rank] ?? "bg-slate-100 border border-slate-200 text-slate-700 shadow-2xs"
@@ -501,9 +488,6 @@ export default function WelderManagement() {
                       {w.rank}
                     </span>
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{w.railTypes}</td>
-                  <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{w.trainedMachines}</td>
-                  <td className="px-3.5 py-3 text-slate-700">{w.experience}</td>
                   <td className="px-3.5 py-3">
                     {w.status === "Hoạt động" ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
@@ -517,40 +501,49 @@ export default function WelderManagement() {
                       </span>
                     )}
                   </td>
-                  <td className="relative px-2 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(menuOpen === w.id ? null : w.id);
-                      }}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
-                      aria-label="Tùy chọn"
-                    >
-                      <DotsThree size={16} weight="bold" aria-hidden />
-                    </button>
+                  <td className="relative px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewingWelder(w)}
+                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer transition-colors"
+                      >
+                        Xem
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(menuOpen === w.id ? null : w.id);
+                        }}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+                        aria-label="Tùy chọn"
+                      >
+                        <DotsThree size={16} weight="bold" aria-hidden />
+                      </button>
+                    </div>
                     {menuOpen === w.id && (
-                      <div className="absolute right-2 top-10 z-30 w-36 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
+                      <div className="absolute right-2 top-10 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
                         <button
                           type="button"
                           className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
-                            showToast(`${w.name} · ${w.weldingId} · ${w.rank}`);
+                            setViewingWelder(w);
                             setMenuOpen(null);
                           }}
                         >
-                          Xem
+                          Xem hồ sơ chi tiết
                         </button>
                         <button
                           type="button"
                           className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
-                            setCertificateEditor(w);
-                            setCertificateDraft(w.certificates);
+                            window.history.pushState(null, "", `/chung-chi?employeeId=${w.id}`);
+                            window.dispatchEvent(new PopStateEvent("popstate"));
                             setMenuOpen(null);
                           }}
                         >
-                          Sửa chứng chỉ
+                          Quản lý chứng chỉ
                         </button>
                         <button
                           type="button"
@@ -590,7 +583,7 @@ export default function WelderManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy thợ hàn phù hợp</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
                   </td>
@@ -601,87 +594,147 @@ export default function WelderManagement() {
         </div>
       </div>
 
-      {certificateEditor && (
+      {viewingWelder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
           <button
             type="button"
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
             aria-label="Đóng"
-            onClick={() => setCertificateEditor(null)}
+            onClick={() => setViewingWelder(null)}
           />
-          <div role="dialog" aria-modal="true" className="relative z-10 w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Hồ sơ thợ hàn</div>
-                <h2 className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">Chứng chỉ · {certificateEditor.name}</h2>
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-[680px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-150"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-6 py-4">
+              <div className="flex items-center gap-4">
+                <div className="relative h-14 w-14 flex-none overflow-hidden rounded-full bg-white ring-2 ring-blue-100 shadow-xs">
+                  <Image src={viewingWelder.photo} alt={viewingWelder.name} fill className="object-cover" sizes="56px" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900">{viewingWelder.name}</h2>
+                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+                      {viewingWelder.weldingId}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {viewingWelder.position} · {viewingWelder.department}
+                  </div>
+                </div>
               </div>
-              <button type="button" onClick={() => setCertificateEditor(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Đóng">
+              <button
+                type="button"
+                onClick={() => setViewingWelder(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                aria-label="Đóng"
+              >
                 <X size={18} weight="bold" aria-hidden />
               </button>
             </div>
-            <div className="px-5 py-5 sm:px-6">
-              <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
-                Chứng chỉ
-                <input
-                  value={certificateDraft}
-                  onChange={(event) => setCertificateDraft(event.target.value)}
-                  placeholder="Nhập nhiều chứng chỉ, cách nhau bằng dấu phẩy"
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-                />
-              </label>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {WELDING_CERTIFICATE_OPTIONS.map((certificate) => {
-                  const selectedCertificate = parseCertificateList(certificateDraft).includes(certificate);
-                  return (
-                    <button
-                      key={certificate}
-                      type="button"
-                      onClick={() => {
-                        const current = parseCertificateList(certificateDraft);
-                        setCertificateDraft(
-                          (selectedCertificate
-                            ? current.filter((item) => item !== certificate)
-                            : [...current, certificate]
-                          ).join(", "),
-                        );
-                      }}
-                      className={`rounded-full border px-2.5 py-1.5 text-left text-xs font-medium ${selectedCertificate ? "border-blue-300 bg-blue-50 text-[#0047AB]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-                    >
-                      {selectedCertificate ? "✓ " : "+ "}{certificate}
-                    </button>
-                  );
-                })}
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổ hàn</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{viewingWelder.weldingTeam}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Hạng thợ</div>
+                  <div className="mt-1">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${rankStyle[viewingWelder.rank] ?? "bg-slate-100 text-slate-700"}`}>
+                      {viewingWelder.rank}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái</div>
+                  <div className="mt-1">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${viewingWelder.status === "Hoạt động" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${viewingWelder.status === "Hoạt động" ? "bg-emerald-500" : "bg-rose-500"}`} />
+                      {viewingWelder.status}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <p className="mt-2 text-xs text-slate-500">Có thể chọn nhiều hoặc nhập thủ công; danh sách được lưu cách nhau bằng dấu phẩy.</p>
+
+              {/* Thông tin đơn vị & kinh nghiệm */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 p-3.5">
+                  <div className="text-xs font-bold text-slate-700 mb-1.5">Đơn vị & Vị trí</div>
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <div><span className="text-slate-400">Đơn vị:</span> <strong className="text-slate-800">{viewingWelder.department}</strong></div>
+                    <div><span className="text-slate-400">Chức vụ:</span> <strong className="text-slate-800">{viewingWelder.position}</strong></div>
+                    <div><span className="text-slate-400">Email:</span> {viewingWelder.email}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-3.5">
+                  <div className="text-xs font-bold text-slate-700 mb-1.5">Kinh nghiệm & Chuyên môn</div>
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <div><span className="text-slate-400">Kinh nghiệm:</span> <strong className="text-slate-800">{viewingWelder.experience}</strong></div>
+                    <div><span className="text-slate-400">Loại ray:</span> <code className="bg-slate-100 px-1 py-0.5 rounded text-[#0047AB] font-mono">{viewingWelder.railTypes}</code></div>
+                    <div><span className="text-slate-400">Máy đã đào tạo:</span> <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800 font-mono">{viewingWelder.trainedMachines}</code></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chứng chỉ (Chỉ đọc từ hệ thống) */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                    Chứng chỉ sở hữu (Đồng bộ hệ thống)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.history.pushState(null, "", `/chung-chi?employeeId=${viewingWelder.id}`);
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }}
+                    className="text-xs font-semibold text-[#0047AB] hover:underline cursor-pointer"
+                  >
+                    Quản lý chứng chỉ →
+                  </button>
+                </div>
+                {parseCertificateList(viewingWelder.certificates).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {parseCertificateList(viewingWelder.certificates).map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-2xs"
+                      >
+                        <SealCheck size={14} className="text-[#0047AB]" weight="bold" />
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Chưa có chứng chỉ nào được ghi nhận cho nhân sự này.</p>
+                )}
+              </div>
             </div>
-            <div className="flex justify-end gap-2.5 border-t border-slate-200 px-5 py-3.5 sm:px-6">
-              <button type="button" onClick={() => setCertificateEditor(null)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:text-sm">Hủy</button>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2.5 border-t border-slate-200 bg-slate-50/50 px-6 py-3.5">
               <button
                 type="button"
-                disabled={savingCertificate}
-                onClick={async () => {
-                  const certificates = formatCertificateList(certificateDraft);
-                  setSavingCertificate(true);
-                  try {
-                    if (dataSource !== "supabase") {
-                      throw new Error("Đang dùng dữ liệu mẫu; chưa thể lưu chứng chỉ vào Supabase.");
-                    }
-                    await updatePersonnelCertificates(
-                      certificateEditor.id,
-                      parseCertificateList(certificates),
-                    );
-                    setList((prev) => prev.map((item) => item.id === certificateEditor.id ? { ...item, certificates } : item));
-                    showToast(`Đã cập nhật chứng chỉ ${certificateEditor.name}`);
-                    setCertificateEditor(null);
-                  } catch (saveError) {
-                    window.alert(saveError instanceof Error ? saveError.message : "Không lưu được chứng chỉ.");
-                  } finally {
-                    setSavingCertificate(false);
-                  }
-                }}
-                className="h-10 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                onClick={() => setViewingWelder(null)}
+                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer"
               >
-                {savingCertificate ? "Đang lưu…" : "Lưu chứng chỉ"}
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.history.pushState(null, "", `/chung-chi?employeeId=${viewingWelder.id}`);
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }}
+                className="h-10 rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] shadow-xs cursor-pointer"
+              >
+                Mở hồ sơ chứng chỉ
               </button>
             </div>
           </div>
