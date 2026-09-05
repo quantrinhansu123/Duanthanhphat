@@ -5,13 +5,20 @@ import CertificateFormModal, {
   type CertificateFormValues,
 } from "@/components/CertificateFormModal";
 import CertificateThumbnail from "@/components/CertificateThumbnail";
-import { certificates as seedCertificates, type Certificate } from "@/data/certificates";
+import type { Certificate } from "@/data/certificates";
 import { CaretRight, DotsThree, MagnifyingGlass, Plus, X } from "@/components/icons";
+import {
+  createPersonnelCertificates,
+  loadCertificateRegistry,
+  type CertificatePersonnelOption,
+} from "@/lib/certificatesDb";
 
 const statusStyle: Record<Certificate["status"], string> = {
   "Còn hiệu lực": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Sắp hết hạn": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
   "Hết hạn": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
+  "Thu hồi": "bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs",
+  "Chưa cập nhật": "bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs",
 };
 
 function CertificateDetailModal({
@@ -97,7 +104,10 @@ function CertificateDetailModal({
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-4 py-1">
             <div className="flex items-center justify-between py-2.5 text-xs sm:text-sm">
               <span className="text-slate-500">Người sở hữu</span>
-              <span className="font-semibold text-slate-900">{cert.holder}</span>
+              <span className="text-right font-semibold text-slate-900">
+                {cert.holder}
+                {cert.employeeCode && <span className="ml-1.5 font-mono text-xs text-[#0047AB]">{cert.employeeCode}</span>}
+              </span>
             </div>
             <div className="flex items-center justify-between py-2.5 text-xs sm:text-sm">
               <span className="text-slate-500">Tên chứng chỉ</span>
@@ -133,12 +143,36 @@ function CertificateDetailModal({
 }
 
 export default function CertificateManagement() {
-  const [items, setItems] = useState<Certificate[]>(seedCertificates);
+  const [items, setItems] = useState<Certificate[]>([]);
+  const [personnel, setPersonnel] = useState<CertificatePersonnelOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Certificate | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+
+  async function reloadRegistry() {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const registry = await loadCertificateRegistry();
+      setItems(registry.certificates);
+      setPersonnel(registry.personnel);
+    } catch (error) {
+      setItems([]);
+      setPersonnel([]);
+      setLoadError(error instanceof Error ? error.message : "Không tải được chứng chỉ từ Supabase");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void reloadRegistry();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -154,24 +188,27 @@ export default function CertificateManagement() {
 
   const validCount = items.filter((c) => c.status === "Còn hiệu lực").length;
   const expiring = items.filter((c) => c.status === "Sắp hết hạn").length;
-  const expired = items.filter((c) => c.status === "Hết hạn").length;
+  const expired = items.filter((c) => c.status === "Hết hạn" || c.status === "Thu hồi").length;
+  const missingProfile = items.filter((c) => c.status === "Chưa cập nhật").length;
 
-  function handleAdd(values: CertificateFormValues) {
-    const base = {
-      title: values.title.trim(),
-      issuedAt: formatViDate(values.issuedAt),
-      expiresAt: formatViDate(values.expiresAt),
-      status: values.status,
-      imageKey: values.imageUrl ? ("default" as const) : values.imageKey,
-      imageUrl: values.imageUrl || undefined,
-    };
-    const newCerts: Certificate[] = values.holders.map((holder, index) => ({
-      id: String(Date.now() + index),
-      holder: holder.trim(),
-      ...base,
-    }));
-    setItems((prev) => [...newCerts, ...prev]);
-    if (newCerts[0]) setActiveId(newCerts[0].id);
+  async function handleAdd(values: CertificateFormValues) {
+    setSaving(true);
+    try {
+      await createPersonnelCertificates({
+        title: values.title,
+        employeeIds: values.holderIds,
+        issuedAt: values.issuedAt,
+        expiresAt: values.expiresAt,
+        status: values.status,
+        imageUrl: values.imageUrl,
+      });
+      await reloadRegistry();
+      setFormOpen(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Không thể lưu chứng chỉ vào Supabase");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openDetail(cert: Certificate) {
@@ -181,13 +218,20 @@ export default function CertificateManagement() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+      <div className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${loadError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+        {loadError
+          ? `Không tải được liên kết chứng chỉ - nhân sự: ${loadError}`
+          : loading
+            ? "Đang tải chứng chỉ và nhân sự từ Supabase…"
+            : `Supabase · ${personnel.length} nhân sự · liên kết bằng employee_id`}
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
         <span>
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{items.length}</strong> chứng chỉ
         </span>
         <span className="text-slate-300">|</span>
         <span>
-          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{validCount}</strong> hiệu lực · <span className="font-medium text-amber-700 font-mono tabular-nums">{expiring}</span> sắp hết hạn · <span className="font-medium text-rose-700 font-mono tabular-nums">{expired}</span> hết hạn
+          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{validCount}</strong> hiệu lực · <span className="font-medium text-amber-700 font-mono tabular-nums">{expiring}</span> sắp hết hạn · <span className="font-medium text-rose-700 font-mono tabular-nums">{expired}</span> hết hạn/thu hồi · <span className="font-medium text-slate-600 font-mono tabular-nums">{missingProfile}</span> thiếu ngày hiệu lực
         </span>
       </div>
 
@@ -207,7 +251,7 @@ export default function CertificateManagement() {
             onChange={(e) => setStatus(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
-            {["Tất cả trạng thái", "Còn hiệu lực", "Sắp hết hạn", "Hết hạn"].map((s) => (
+            {["Tất cả trạng thái", "Còn hiệu lực", "Sắp hết hạn", "Hết hạn", "Thu hồi", "Chưa cập nhật"].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -253,7 +297,9 @@ export default function CertificateManagement() {
                       {cert.title}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      <strong className="text-slate-700 font-semibold">{cert.holder}</strong> · Cấp {cert.issuedAt} · Hết hạn {cert.expiresAt}
+                      <strong className="text-slate-700 font-semibold">{cert.holder}</strong>
+                      {cert.employeeCode && <span className="ml-1 font-mono text-[#0047AB]">{cert.employeeCode}</span>}
+                      {" · "}Cấp {cert.issuedAt} · Hết hạn {cert.expiresAt}
                     </div>
                     <div className="mt-2">
                       <span
@@ -285,16 +331,11 @@ export default function CertificateManagement() {
 
       <CertificateFormModal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        personnel={personnel}
+        saving={saving}
+        onClose={() => !saving && setFormOpen(false)}
         onSubmit={handleAdd}
       />
     </main>
   );
-}
-
-function formatViDate(iso: string): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return iso;
-  return `${d}/${m}/${y}`;
 }

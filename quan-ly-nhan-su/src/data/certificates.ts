@@ -11,12 +11,16 @@ export type Certificate = {
   id: string;
   title: string;
   holder: string;
+  employeeId?: string;
+  employeeCode?: string;
   issuedAt: string;
   expiresAt: string;
-  status: "Còn hiệu lực" | "Sắp hết hạn" | "Hết hạn";
+  status: "Còn hiệu lực" | "Sắp hết hạn" | "Hết hạn" | "Thu hồi" | "Chưa cập nhật";
   imageKey: CertificateImageKey;
   /** Ảnh upload tùy chọn (data URL) */
   imageUrl?: string;
+  /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */
+  inferred?: boolean;
 };
 
 export const certificates: Certificate[] = [

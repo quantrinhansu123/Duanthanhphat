@@ -131,26 +131,24 @@ export type WeldJournalInsert = {
 
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
   const supabase = createClient();
-  const { error } = await supabase.from("lich_su_moi_han").insert({
-    ma_lich_su: payload.ma_lich_su.trim(),
-    du_an_id: payload.du_an_id,
-    tho_han_id: payload.tho_han_id,
-    nam_thuc_hien: payload.nam_thuc_hien,
-    ngay_thuc_hien: payload.ngay_thuc_hien,
-    loai_ray: payload.loai_ray.trim(),
-    loai_moi_han: payload.loai_moi_han,
-    cong_nghe_han: payload.cong_nghe_han,
-    so_luong_thuc_hien: 1,
-    so_luong_loi: payload.so_luong_loi,
-    nguyen_nhan_loi: payload.nguyen_nhan_loi?.trim() || null,
-    ghi_chu: payload.ghi_chu?.trim() || null,
-    moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
-    may_id: payload.may_id,
-    chung_chi_su_dung: payload.chung_chi_su_dung.trim(),
-    nguon_du_lieu: "nhat-ky-han",
+  const { error } = await supabase.rpc("them_nhat_ky_han_lien_ket", {
+    p_ma_lich_su: payload.ma_lich_su.trim(),
+    p_du_an_id: payload.du_an_id,
+    p_tho_han_id: payload.tho_han_id,
+    p_nam_thuc_hien: payload.nam_thuc_hien,
+    p_ngay_thuc_hien: payload.ngay_thuc_hien,
+    p_loai_ray: payload.loai_ray.trim(),
+    p_loai_moi_han: payload.loai_moi_han,
+    p_cong_nghe_han: payload.cong_nghe_han,
+    p_so_luong_loi: payload.so_luong_loi,
+    p_nguyen_nhan_loi: payload.nguyen_nhan_loi?.trim() || null,
+    p_ghi_chu: payload.ghi_chu?.trim() || null,
+    p_moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
+    p_may_id: payload.may_id,
+    p_chung_chi_su_dung: payload.chung_chi_su_dung.trim(),
   });
 
-  if (error) throw error;
+  if (error) throw new Error(formatSupabaseError(error));
   invalidateWeldReportCache();
 }
 
@@ -254,6 +252,7 @@ export async function loadWeldJournalPage({
     request = request.or(
       [
         `ten_tho_han.ilike.%${q}%`,
+        `ma_nhan_su.ilike.%${q}%`,
         `du_an.ilike.%${q}%`,
         `ma_lich_su.ilike.%${q}%`,
         `chung_chi_su_dung.ilike.%${q}%`,
@@ -305,6 +304,7 @@ export async function loadWeldJournalPage({
     if (q) {
       const orFilter = [
         `ten_tho_han.ilike.%${q}%`,
+        `ma_nhan_su.ilike.%${q}%`,
         `du_an.ilike.%${q}%`,
         `ma_lich_su.ilike.%${q}%`,
         `chung_chi_su_dung.ilike.%${q}%`,

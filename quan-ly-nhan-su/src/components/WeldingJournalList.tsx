@@ -9,7 +9,6 @@ import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
 import {
   fetchFailedWeldsInDateRange,
   formatJournalDateIso,
-  getJournalRowDateIso,
   insertWeldJournalEntry,
   invalidateWeldReportCache,
   loadJournalProjectOptions,
@@ -18,18 +17,12 @@ import {
   type WeldReportRow,
 } from "@/lib/weldReportData";
 import {
+  describeCertificateRequirement,
+  eligibleCertificatesForWeld,
   hasCertificate,
-  requiredCertificateForWeld,
 } from "@/lib/weldingCertificates";
 
 const PAGE_SIZE = 50;
-
-const SYNTHETIC_FAILURE_REASONS = [
-  "Rỗ khí trong vùng hàn",
-  "Lệch tim ray vượt dung sai",
-  "Nứt bề mặt sau khi nguội",
-  "Không đạt kiểm tra siêu âm",
-];
 
 type JournalFormValues = {
   ma_lich_su: string;
@@ -66,20 +59,31 @@ function emptyJournalForm(
   welders: CertifiedWelderOption[],
   machines: MachineOption[],
 ): JournalFormValues {
-  const certificate = requiredCertificateForWeld("UIC60", "FBW");
+  const machine = machines[0];
+  const context = {
+    railType: "UIC60",
+    method: "FBW" as const,
+    machineCode: machine?.code,
+    machineName: machine?.name,
+  };
+  const welder = welders.find(
+    (item) => eligibleCertificatesForWeld(item.certificates, context).length > 0,
+  );
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
     du_an_id: projects[0]?.id ?? "",
-    tho_han_id: welders.find((welder) => hasCertificate(welder.certificates, certificate))?.id ?? "",
-    may_id: machines[0]?.id ?? "",
+    tho_han_id: welder?.id ?? "",
+    may_id: machine?.id ?? "",
     loai_ray: "UIC60",
     cong_nghe_han: "FBW",
     loai_moi_han: "Sản xuất",
     result: "Đạt",
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
-    chung_chi_su_dung: certificate,
+    chung_chi_su_dung: welder
+      ? eligibleCertificatesForWeld(welder.certificates, context)[0] ?? ""
+      : "",
     ghi_chu: "",
   };
 }
@@ -122,15 +126,26 @@ function JournalFormModal({
     };
   }, [linkDateFrom, linkDateTo]);
 
-  const requiredCertificate = useMemo(
-    () => requiredCertificateForWeld(form.loai_ray, form.cong_nghe_han),
-    [form.loai_ray, form.cong_nghe_han],
+  const selectedMachine = machines.find((machine) => machine.id === form.may_id);
+  const qualificationContext = useMemo(
+    () => ({
+      railType: form.loai_ray,
+      method: form.cong_nghe_han,
+      machineCode: selectedMachine?.code,
+      machineName: selectedMachine?.name,
+    }),
+    [form.loai_ray, form.cong_nghe_han, selectedMachine?.code, selectedMachine?.name],
   );
   const qualifiedWelders = useMemo(
-    () => welders.filter((welder) => hasCertificate(welder.certificates, requiredCertificate)),
-    [welders, requiredCertificate],
+    () => welders.filter(
+      (welder) => eligibleCertificatesForWeld(welder.certificates, qualificationContext).length > 0,
+    ),
+    [welders, qualificationContext],
   );
   const selectedWelder = welders.find((welder) => welder.id === form.tho_han_id);
+  const selectedEligibleCertificates = selectedWelder
+    ? eligibleCertificatesForWeld(selectedWelder.certificates, qualificationContext)
+    : [];
 
   useEffect(() => {
     if (open) {
@@ -142,17 +157,22 @@ function JournalFormModal({
   }, [open, projects, welders, machines]);
 
   useEffect(() => {
-    const selectedIsQualified = welders.some(
-      (welder) => welder.id === form.tho_han_id && hasCertificate(welder.certificates, requiredCertificate),
-    );
+    const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
     const nextWelderId = selectedIsQualified ? form.tho_han_id : qualifiedWelders[0]?.id ?? "";
-    if (form.chung_chi_su_dung === requiredCertificate && form.tho_han_id === nextWelderId) return;
+    const nextWelder = welders.find((welder) => welder.id === nextWelderId);
+    const eligibleCertificates = nextWelder
+      ? eligibleCertificatesForWeld(nextWelder.certificates, qualificationContext)
+      : [];
+    const nextCertificate = eligibleCertificates.includes(form.chung_chi_su_dung)
+      ? form.chung_chi_su_dung
+      : eligibleCertificates[0] ?? "";
+    if (form.chung_chi_su_dung === nextCertificate && form.tho_han_id === nextWelderId) return;
     setForm((prev) => ({
       ...prev,
       tho_han_id: nextWelderId,
-      chung_chi_su_dung: requiredCertificate,
+      chung_chi_su_dung: nextCertificate,
     }));
-  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, requiredCertificate, welders]);
+  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, qualificationContext, welders]);
 
   useEffect(() => {
     if (!form.moi_han_lien_ket) return;
@@ -184,8 +204,12 @@ function JournalFormModal({
       window.alert("Không có nhân sự sở hữu chứng chỉ phù hợp với mối hàn này.");
       return;
     }
-    if (!selectedWelder || !hasCertificate(selectedWelder.certificates, requiredCertificate)) {
-      window.alert(`Nhân sự được chọn chưa có chứng chỉ: ${requiredCertificate}`);
+    if (!selectedWelder || selectedEligibleCertificates.length === 0) {
+      window.alert(`Nhân sự được chọn chưa có ${describeCertificateRequirement(qualificationContext)}.`);
+      return;
+    }
+    if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
+      window.alert("Vui lòng chọn đúng chứng chỉ của nhân sự được sử dụng cho mối hàn.");
       return;
     }
     if (!form.may_id) {
@@ -276,15 +300,32 @@ function JournalFormModal({
                 <option value="">Chưa có dữ liệu thợ hàn</option>
               ) : (
                 welders.map((w) => (
-                  <option key={w.id} value={w.id} disabled={!hasCertificate(w.certificates, requiredCertificate)}>
-                    {w.label}{hasCertificate(w.certificates, requiredCertificate) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ"}
+                  <option key={w.id} value={w.id} disabled={!qualifiedWelders.some((item) => item.id === w.id)}>
+                    {w.label}{qualifiedWelders.some((item) => item.id === w.id) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ"}
                   </option>
                 ))
               )}
             </select>
             <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
-              Chứng chỉ yêu cầu: {requiredCertificate} · {qualifiedWelders.length} nhân sự phù hợp
+              Yêu cầu: {describeCertificateRequirement(qualificationContext)} · {qualifiedWelders.length} nhân sự phù hợp
             </span>
+          </label>
+
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Chứng chỉ sử dụng
+            <select
+              value={form.chung_chi_su_dung}
+              onChange={(e) => setForm({ ...form, chung_chi_su_dung: e.target.value })}
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+            >
+              {selectedEligibleCertificates.length === 0 ? (
+                <option value="">Chưa có chứng chỉ phù hợp</option>
+              ) : (
+                selectedEligibleCertificates.map((certificate) => (
+                  <option key={certificate} value={certificate}>{certificate}</option>
+                ))
+              )}
+            </select>
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -465,7 +506,7 @@ function JournalFormModal({
 }
 
 export default function WeldingJournalList() {
-  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints(30);
+  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints(500);
 
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -577,37 +618,41 @@ export default function WeldingJournalList() {
   );
 
   const pageRows = useMemo(() => {
-    return rows.map((row, index) => {
-      const sequence = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? 0);
-      const absoluteIndex = (page - 1) * PAGE_SIZE + index;
-      const gpsPoint = gpsPoints.length
-        ? gpsPoints[(Math.max(sequence, absoluteIndex + 1) - 1) % gpsPoints.length]
-        : null;
-      const isoDate = getJournalRowDateIso(row, absoluteIndex);
-      const dateTime = `${formatJournalDateIso(isoDate)} ${String(7 + (sequence % 10)).padStart(2, "0")}:${String((sequence * 13) % 60).padStart(2, "0")}`;
+    const gpsByWeldCode = new Map(
+      gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
+    );
+    return rows.map((row) => {
+      const gpsPoint = gpsByWeldCode.get(row.ma_lich_su.trim().toLocaleLowerCase("vi")) ?? null;
+      const isoDate = row.ngay_thuc_hien?.slice(0, 10) ?? "";
+      const performedDate = isoDate ? formatJournalDateIso(isoDate) : `Chỉ có năm ${row.nam_thuc_hien}`;
       const pass = row.so_luong_loi === 0;
+      const certificate = row.chung_chi_su_dung?.trim() || "Chưa ghi chứng chỉ sử dụng";
+      const certificateLinked = row.chung_chi_su_dung
+        ? hasCertificate(row.chung_chi_nhan_su, row.chung_chi_su_dung)
+        : false;
       return {
         id: row.id,
-        dateTime,
-        operator: row.ten_tho_han,
-        certificate: row.chung_chi_su_dung?.trim() || requiredCertificateForWeld(row.loai_ray, row.cong_nghe_han),
+        performedDate,
+        operator: `${row.ten_tho_han} · ${row.ma_nhan_su || "Chưa có mã"}`,
+        certificate,
+        certificateLinked,
         machine: row.ma_may
           ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
           : "Chưa gán máy",
-        weldName: gpsPoint?.code ?? row.ma_lich_su,
+        weldName: row.ma_lich_su,
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
         location: gpsPoint
           ? `${gpsPoint.chainage} · ${gpsPoint.latitude.toFixed(6)}, ${gpsPoint.longitude.toFixed(6)}`
-          : "Chưa có GPS",
+          : "Chưa liên kết GPS",
         mapUrl: gpsPoint ? googleOpenPoint(gpsPoint.latitude, gpsPoint.longitude) : "",
         failureReason: pass
           ? "—"
-          : row.nguyen_nhan_loi?.trim() || SYNTHETIC_FAILURE_REASONS[sequence % SYNTHETIC_FAILURE_REASONS.length],
+          : row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân",
         resultType: pass ? ("pass" as const) : ("fail" as const),
       };
     });
-  }, [rows, gpsPoints, page]);
+  }, [rows, gpsPoints]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -735,7 +780,7 @@ export default function WeldingJournalList() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">ID</th>
-                <th className="p-2.5 font-semibold">Ngày giờ</th>
+                <th className="p-2.5 font-semibold">Ngày thực hiện</th>
                 <th className="p-2.5 font-semibold">Nhân sự phụ trách</th>
                 <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
                 <th className="p-2.5 font-semibold">Máy</th>
@@ -753,10 +798,10 @@ export default function WeldingJournalList() {
                   <td className="p-2.5 truncate font-mono text-xs text-slate-500 max-w-[90px]" title={w.id}>
                     {w.id.slice(0, 8)}
                   </td>
-                  <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.dateTime}</td>
+                  <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
                   <td className="p-2.5">
-                    <span className="line-clamp-2 text-xs leading-relaxed text-slate-700" title={w.certificate}>
+                    <span className={`line-clamp-2 text-xs leading-relaxed ${w.certificateLinked ? "text-emerald-700" : "text-amber-700"}`} title={w.certificate}>
                       {w.certificate}
                     </span>
                   </td>
@@ -853,7 +898,7 @@ export default function WeldingJournalList() {
         <div className="pt-3 text-xs text-slate-500">
           {gpsError
             ? `GPS dự phòng: ${gpsError}`
-            : "Tên mối hàn và vị trí lấy từ GPS theo thứ tự điểm; ngày giờ được mô phỏng từ năm thực hiện."}
+            : "Mã mối hàn, ngày và nhân sự lấy trực tiếp từ Supabase; GPS chỉ hiện khi mã điểm trùng chính xác mã mối hàn."}
         </div>
       </div>
 

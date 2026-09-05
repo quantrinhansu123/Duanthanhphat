@@ -60,6 +60,7 @@ create table if not exists public.lich_su_moi_han (
   so_luong_thuc_hien    integer not null,
   so_luong_loi          integer not null default 0,
   tho_han_id            uuid not null references public.nhan_su (employee_id) on delete restrict,
+  chung_chi_id           uuid references public.chung_chi (id) on delete restrict,
   chung_chi_su_dung     text,
   nguyen_nhan_loi       text,
   nguon_du_lieu         text,
@@ -92,6 +93,8 @@ comment on column public.lich_su_moi_han.so_luong_loi is
   'Số mối lỗi nằm trong tổng số lượng thực hiện';
 comment on column public.lich_su_moi_han.chung_chi_su_dung is
   'Chứng chỉ của nhân sự được dùng để đáp ứng chuẩn mối hàn';
+comment on column public.lich_su_moi_han.chung_chi_id is
+  'Hồ sơ chứng chỉ cụ thể của nhân sự được dùng cho mối hàn';
 comment on column public.lich_su_moi_han.ngay_thuc_hien is
   'Ngày thực hiện thực tế; dữ liệu lịch sử cũ có thể để trống khi nguồn không cung cấp ngày';
 
@@ -107,6 +110,8 @@ create index if not exists idx_lich_su_moi_han_cong_nghe
   on public.lich_su_moi_han (cong_nghe_han);
 create index if not exists idx_lich_su_moi_han_hach_toan
   on public.lich_su_moi_han (hach_toan);
+create index if not exists idx_lich_su_moi_han_chung_chi
+  on public.lich_su_moi_han (chung_chi_id);
 
 drop trigger if exists trg_lich_su_moi_han_updated_at on public.lich_su_moi_han;
 create trigger trg_lich_su_moi_han_updated_at
@@ -200,7 +205,8 @@ select
   ls.ghi_chu,
   ns.chung_chi as chung_chi_nhan_su,
   ls.chung_chi_su_dung,
-  ls.ngay_thuc_hien
+  ls.ngay_thuc_hien,
+  ls.chung_chi_id
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id;

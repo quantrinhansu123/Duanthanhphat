@@ -312,6 +312,7 @@ join public.nhan_su ns on ns.employee_id = nk.nguoi_phu_trach;
 -- ------------------------------------------------------------
 alter table public.lich_su_moi_han
   add column if not exists may_id uuid references public.thiet_bi (id) on delete set null,
+  add column if not exists chung_chi_id uuid references public.chung_chi (id) on delete restrict,
   add column if not exists chung_chi_su_dung text,
   add column if not exists ngay_thuc_hien date;
 
@@ -327,44 +328,53 @@ returns trigger
 language plpgsql
 as $$
 declare
-  danh_sach_chung_chi text[];
-  chung_chi_bat_buoc text;
+  machine_code text;
+  certificate_name text := lower(coalesce(new.chung_chi_su_dung, ''));
 begin
-  select coalesce(chung_chi, '{}'::text[])
-  into danh_sach_chung_chi
-  from public.nhan_su
-  where employee_id = new.tho_han_id;
-
-  chung_chi_bat_buoc = case
-    when upper(new.loai_ray) like '%UIC60%' then
-      'Chứng chỉ thợ hàn ray hạng 1 – UIC60'
-    when upper(new.loai_ray) like '%P50%' or upper(new.loai_ray) like '%P43%' then
-      'Chứng chỉ thợ hàn ray hạng 2 – P50/P43'
-    when new.cong_nghe_han = 'ATW' then
-      'Chứng chỉ thợ hàn ray hạng 1 – UIC60'
-    else
-      'Chứng chỉ ISO 9606 – Welding Qualification'
-  end;
-
-  if new.nguon_du_lieu = 'nhat-ky-han'
-     and nullif(btrim(new.chung_chi_su_dung), '') is null then
-    raise exception 'Nhật ký hàn phải có chứng chỉ sử dụng';
+  if new.nguon_du_lieu <> 'nhat-ky-han' then
+    return new;
   end if;
 
-  if new.nguon_du_lieu = 'nhat-ky-han'
-     and btrim(new.chung_chi_su_dung) <> chung_chi_bat_buoc then
-    raise exception 'Mối hàn yêu cầu chứng chỉ %, không phải %',
-      chung_chi_bat_buoc,
-      new.chung_chi_su_dung;
+  if nullif(btrim(new.chung_chi_su_dung), '') is null or new.chung_chi_id is null then
+    raise exception 'Nhật ký hàn phải liên kết một hồ sơ chứng chỉ';
   end if;
 
-  if nullif(btrim(new.chung_chi_su_dung), '') is not null
-     and not exists (
-       select 1
-       from unnest(danh_sach_chung_chi) as chung_chi
-       where btrim(chung_chi) = btrim(new.chung_chi_su_dung)
-     ) then
-    raise exception 'Nhân sự được chọn không có chứng chỉ %', new.chung_chi_su_dung;
+  if not exists (
+    select 1 from public.chung_chi cc
+    where cc.id = new.chung_chi_id
+      and cc.employee_id = new.tho_han_id
+      and cc.trang_thai = 'Còn hiệu lực'
+      and (cc.ngay_het_han is null or cc.ngay_het_han >= current_date)
+      and lower(btrim(cc.ten_chung_chi)) = lower(btrim(new.chung_chi_su_dung))
+  ) then
+    raise exception 'Chứng chỉ không thuộc nhân sự được chọn hoặc đã bị thu hồi';
+  end if;
+
+  select lower(coalesce(tb.ma_may, '')) into machine_code
+  from public.thiet_bi tb where tb.id = new.may_id;
+
+  if new.cong_nghe_han = 'ATW' then
+    if certificate_name not like '%thermit%'
+       and certificate_name not like '%aluminothermic%'
+       and certificate_name not like '%nhôm nhiệt%'
+       and certificate_name not like '%hạng 1%'
+       and certificate_name not like '%hạng 2%' then
+      raise exception 'ATW yêu cầu chứng chỉ hàn nhôm nhiệt (Thermit/Railtech)';
+    end if;
+  elsif machine_code like '%un5%' then
+    if certificate_name not like '%un5%' then
+      raise exception 'Máy UN5 yêu cầu chứng chỉ vận hành máy hàn UN5';
+    end if;
+  elsif machine_code like '%kcm%' or machine_code like '%k922%' or machine_code like '%k920%' then
+    if certificate_name not like '%k922%'
+       and certificate_name not like '%k920%'
+       and certificate_name not like '%kcm%' then
+      raise exception 'Máy KCM yêu cầu chứng chỉ vận hành K922-1/KCM';
+    end if;
+  elsif certificate_name not like '%flash-butt%'
+        and certificate_name not like '%vận hành máy hàn%'
+        and certificate_name not like '%iso 9606%' then
+    raise exception 'FBW yêu cầu chứng chỉ vận hành hàn đối đầu';
   end if;
 
   return new;
@@ -373,7 +383,8 @@ $$;
 
 drop trigger if exists trg_kiem_tra_chung_chi_moi_han on public.lich_su_moi_han;
 create trigger trg_kiem_tra_chung_chi_moi_han
-  before insert or update of tho_han_id, loai_ray, cong_nghe_han, chung_chi_su_dung, nguon_du_lieu
+  before insert or update of tho_han_id, may_id, loai_ray, cong_nghe_han,
+    chung_chi_id, chung_chi_su_dung, nguon_du_lieu
   on public.lich_su_moi_han
   for each row execute function public.kiem_tra_chung_chi_moi_han();
 
@@ -411,7 +422,8 @@ select
   ns.to_han,
   ns.chung_chi as chung_chi_nhan_su,
   ls.chung_chi_su_dung,
-  ls.ngay_thuc_hien
+  ls.ngay_thuc_hien,
+  ls.chung_chi_id
 from public.lich_su_moi_han ls
 join public.du_an da on da.id = ls.du_an_id
 join public.nhan_su ns on ns.employee_id = ls.tho_han_id

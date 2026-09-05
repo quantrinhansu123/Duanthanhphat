@@ -4,9 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { welders } from "@/data/welders";
 import { CaretDown, MagnifyingGlass, X } from "@/components/icons";
 
+export type WelderSelectOption = {
+  id: string;
+  name: string;
+  weldingId: string;
+  weldingTeam: string;
+};
+
 type WelderMultiSelectProps = {
   selectedIds: string[];
   onChange: (next: string[]) => void;
+  options?: WelderSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
 };
@@ -14,6 +22,7 @@ type WelderMultiSelectProps = {
 export default function WelderMultiSelect({
   selectedIds,
   onChange,
+  options: suppliedOptions,
   placeholder = "Chọn thợ hàn...",
   searchPlaceholder = "Tìm thợ hàn...",
 }: WelderMultiSelectProps) {
@@ -32,16 +41,17 @@ export default function WelderMultiSelect({
   }, [open]);
 
   const q = search.trim().toLowerCase();
+  const sourceOptions = suppliedOptions ?? welders;
   const options = useMemo(
     () =>
-      welders.filter(
+      sourceOptions.filter(
         (w) =>
           !q ||
           w.name.toLowerCase().includes(q) ||
           w.weldingId.toLowerCase().includes(q) ||
           w.weldingTeam.toLowerCase().includes(q),
       ),
-    [q],
+    [q, sourceOptions],
   );
 
   const selectedSet = new Set(selectedIds);
@@ -116,7 +126,7 @@ export default function WelderMultiSelect({
 
       {selectedIds.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {welders
+          {sourceOptions
             .filter((w) => selectedSet.has(w.id))
             .map((w) => (
               <span

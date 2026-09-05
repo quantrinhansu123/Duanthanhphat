@@ -2,14 +2,14 @@
 
 import { useEffect, useId, useState } from "react";
 import type { Certificate, CertificateImageKey } from "@/data/certificates";
-import { welders } from "@/data/welders";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
 import { X } from "@/components/icons";
+import type { CertificatePersonnelOption } from "@/lib/certificatesDb";
 
 export type CertificateFormValues = {
   title: string;
-  holders: string[];
+  holderIds: string[];
   issuedAt: string;
   expiresAt: string;
   status: Certificate["status"];
@@ -29,36 +29,42 @@ const imageKeyOptions: { value: CertificateImageKey; label: string }[] = [
 
 type CertificateFormModalProps = {
   open: boolean;
+  personnel: CertificatePersonnelOption[];
+  saving: boolean;
   onClose: () => void;
   onSubmit: (values: CertificateFormValues) => void;
 };
 
-export default function CertificateFormModal({ open, onClose, onSubmit }: CertificateFormModalProps) {
+export default function CertificateFormModal({
+  open,
+  personnel,
+  saving,
+  onClose,
+  onSubmit,
+}: CertificateFormModalProps) {
   const titleId = useId();
   const [form, setForm] = useState<CertificateFormValues>({
     title: "",
-    holders: [],
+    holderIds: [],
     issuedAt: "",
     expiresAt: "",
     status: "Còn hiệu lực",
     imageKey: "default",
     imageUrl: "",
   });
-  const [holderIds, setHolderIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setForm({
       title: "",
-      holders: [],
+      holderIds: [],
       issuedAt: "",
       expiresAt: "",
       status: "Còn hiệu lực",
       imageKey: "default",
       imageUrl: "",
     });
-    setHolderIds([]);
     setError("");
   }, [open]);
 
@@ -94,7 +100,7 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
       setError("Nhập tên chứng chỉ.");
       return;
     }
-    if (holderIds.length === 0) {
+    if (form.holderIds.length === 0) {
       setError("Chọn ít nhất một người sở hữu.");
       return;
     }
@@ -102,9 +108,7 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
       setError("Nhập ngày cấp và ngày hết hạn.");
       return;
     }
-    const holders = welders.filter((w) => holderIds.includes(w.id)).map((w) => w.name);
-    onSubmit({ ...form, holders });
-    onClose();
+    onSubmit(form);
   }
 
   return (
@@ -151,8 +155,14 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
           <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Người sở hữu *
             <WelderMultiSelect
-              selectedIds={holderIds}
-              onChange={setHolderIds}
+              selectedIds={form.holderIds}
+              onChange={(holderIds) => setForm((current) => ({ ...current, holderIds }))}
+              options={personnel.map((person) => ({
+                id: person.id,
+                name: person.name,
+                weldingId: person.code,
+                weldingTeam: person.team,
+              }))}
               placeholder="Chọn người sở hữu..."
             />
           </div>
@@ -215,15 +225,17 @@ export default function CertificateFormModal({ open, onClose, onSubmit }: Certif
             <button
               type="button"
               onClick={onClose}
+              disabled={saving}
               className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
             >
               Hủy
             </button>
             <button
               type="submit"
+              disabled={saving || personnel.length === 0}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
             >
-              Lưu chứng chỉ
+              {saving ? "Đang lưu…" : "Lưu chứng chỉ"}
             </button>
           </div>
         </form>
