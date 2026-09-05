@@ -43,11 +43,6 @@ export const navigation: NavItem[] = [
         description: "Ngày đào tạo, nội dung, người đào tạo, học viên, kết quả",
       },
       {
-        id: "chung-chi",
-        label: "Quản lý chứng chỉ",
-        description: "Ngày cấp, ngày hết hạn, file đính kèm chứng chỉ",
-      },
-      {
         id: "tra-cuu-dao-tao",
         label: "Tra cứu lịch sử đào tạo",
         description: "Tra cứu lịch sử đào tạo theo thợ hàn",
@@ -116,9 +111,14 @@ export const navigation: NavItem[] = [
   {
     id: "ky-thuat",
     code: "13",
-    label: "Quản lý kỹ thuật",
-    labelEn: "Technical Management",
+    label: "Quản lý chất lượng",
+    labelEn: "Quality Management",
     children: [
+      {
+        id: "chung-chi",
+        label: "Chứng chỉ quản lý chất lượng",
+        description: "Quản lý chứng chỉ ISO và hồ sơ chất lượng theo nhân sự, ngày cấp và ngày hết hạn",
+      },
       {
         id: "nhat-ky-han",
         label: "Nhật ký hàn",
@@ -136,7 +136,7 @@ export const navigation: NavItem[] = [
       },
       {
         id: "tai-lieu",
-        label: "Quản lý Tài liệu",
+        label: "Quản lý tài liệu",
         description: "Tải lên, xem và tải về tài liệu PDF",
       },
     ],
