@@ -5,154 +5,125 @@ import type { Certificate } from "@/data/certificates";
 type CertificateThumbnailProps = {
   cert: Certificate;
   className?: string;
+  showLogo?: boolean;
 };
 
-function ThumbFrame({
-  children,
-  bg,
-  border,
-}: {
-  children: React.ReactNode;
-  bg: string;
-  border: string;
-}) {
-  return (
-    <svg viewBox="0 0 140 88" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
-      <rect width="140" height="88" fill={bg} />
-      <rect x="4" y="4" width="132" height="80" rx="3" fill="#fff" stroke={border} strokeWidth="1.5" />
-      {children}
-    </svg>
-  );
+/**
+ * Lựa chọn ảnh chứng chỉ sắc nét, chân thực theo loại chứng chỉ và mã máy.
+ */
+export function resolveCertificateImageUrl(cert?: {
+  title?: string;
+  imageKey?: string;
+  imageUrl?: string;
+}): string {
+  if (cert?.imageUrl && cert.imageUrl.trim()) {
+    return cert.imageUrl.trim();
+  }
+  const title = (cert?.title || "").toLowerCase();
+  const key = cert?.imageKey || "";
+
+  // 1. Máy hàn (K922, K920, UN5, vận hành máy)
+  if (
+    key === "machine" ||
+    title.includes("k922") ||
+    title.includes("k920") ||
+    title.includes("un5") ||
+    title.includes("van hanh") ||
+    title.includes("vận hành")
+  ) {
+    return "/chung-chi/cert-machine-op.jpg";
+  }
+
+  // 2. Hàn nhôm nhiệt (Railtech, Thermit, Aluminothermic)
+  if (
+    title.includes("thermit") ||
+    title.includes("railtech") ||
+    title.includes("aluminothermic") ||
+    title.includes("nhom nhiet") ||
+    title.includes("nhôm nhiệt")
+  ) {
+    return "/chung-chi/cert-thermit-rail.jpg";
+  }
+
+  // 3. NDT kiểm tra siêu âm mối hàn
+  if (
+    key === "ndt" ||
+    title.includes("ndt") ||
+    title.includes("sieu am") ||
+    title.includes("siêu âm")
+  ) {
+    return "/chung-chi/cert-ndt-testing.jpg";
+  }
+
+  // 4. An toàn lao động
+  if (
+    key === "safety" ||
+    title.includes("an toan") ||
+    title.includes("an toàn") ||
+    title.includes("nhom 3") ||
+    title.includes("nhóm 3")
+  ) {
+    return "/chung-chi/cert-safety-work.jpg";
+  }
+
+  // 5. ISO 9606
+  if (key === "iso" || title.includes("iso")) {
+    return "/chung-chi/cert-iso-qual.jpg";
+  }
+
+  // 6. Thợ hàn ray, hàn Flash-Butt, UIC60, P50, P43
+  if (
+    key === "welding-1" ||
+    key === "welding-2" ||
+    title.includes("tho han") ||
+    title.includes("thợ hàn") ||
+    title.includes("uic") ||
+    title.includes("p50") ||
+    title.includes("p43") ||
+    title.includes("flash")
+  ) {
+    return "/chung-chi/cert-welding-rail.jpg";
+  }
+
+  return "/chung-chi/cert-welding-rail.jpg";
 }
 
-export default function CertificateThumbnail({ cert, className = "" }: CertificateThumbnailProps) {
-  if (cert.imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={cert.imageUrl} alt={cert.title} className={`h-full w-full object-cover ${className}`} />
-    );
-  }
-
-  const key = cert.imageKey;
-
-  if (key === "welding-1") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#eef4ff" border="#c9a227">
-          <circle cx="70" cy="22" r="10" fill="none" stroke="#c9a227" strokeWidth="1.2" />
-          <text x="70" y="40" textAnchor="middle" fontSize="7" fill="#0f172a" fontWeight="700">
-            CHỨNG CHỈ
-          </text>
-          <text x="70" y="50" textAnchor="middle" fontSize="5" fill="#0047AB">
-            THỢ HÀN HẠNG 1
-          </text>
-          <text x="70" y="62" textAnchor="middle" fontSize="5.5" fill="#334155">
-            UIC60
-          </text>
-          <rect x="48" y="68" width="44" height="8" rx="2" fill="#0047AB" opacity="0.15" />
-        </ThumbFrame>
-      </div>
-    );
-  }
-
-  if (key === "machine") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#0a254f" border="#c9a227">
-          <text x="70" y="38" textAnchor="middle" fontSize="6.5" fill="#fff" fontWeight="700">
-            MÁY HÀN K920
-          </text>
-          <text x="70" y="50" textAnchor="middle" fontSize="5" fill="#93b4e8">
-            Vận hành máy
-          </text>
-          <circle cx="70" cy="68" r="10" fill="none" stroke="#c9a227" strokeWidth="1.2" />
-          <text x="70" y="70" textAnchor="middle" fontSize="5" fill="#c9a227" fontWeight="700">
-            OK
-          </text>
-        </ThumbFrame>
-      </div>
-    );
-  }
-
-  if (key === "ndt") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#faf8f2" border="#1e3a5f">
-          <text x="70" y="36" textAnchor="middle" fontSize="6.5" fill="#1e3a5f" fontWeight="700">
-            NDT · UT
-          </text>
-          <text x="70" y="48" textAnchor="middle" fontSize="5" fill="#b8860b">
-            Kiểm tra siêu âm
-          </text>
-          <rect x="55" y="58" width="30" height="14" rx="2" fill="#1e3a5f" />
-          <text x="70" y="68" textAnchor="middle" fontSize="5.5" fill="#fff" fontWeight="700">
-            NDT
-          </text>
-        </ThumbFrame>
-      </div>
-    );
-  }
-
-  if (key === "safety") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#fff7ed" border="#ea580c">
-          <polygon points="70,18 78,34 95,34 82,44 87,60 70,51 53,60 58,44 45,34 62,34" fill="#ea580c" />
-          <text x="70" y="72" textAnchor="middle" fontSize="5.5" fill="#9a3412" fontWeight="700">
-            AN TOÀN LĐ
-          </text>
-        </ThumbFrame>
-      </div>
-    );
-  }
-
-  if (key === "welding-2") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#f0fdf4" border="#15803d">
-          <text x="70" y="38" textAnchor="middle" fontSize="6.5" fill="#14532d" fontWeight="700">
-            CHỨNG CHỈ
-          </text>
-          <text x="70" y="50" textAnchor="middle" fontSize="5" fill="#15803d">
-            THỢ HÀN HẠNG 2
-          </text>
-          <text x="70" y="62" textAnchor="middle" fontSize="5.5" fill="#166534">
-            P50 / P43
-          </text>
-        </ThumbFrame>
-      </div>
-    );
-  }
-
-  if (key === "iso") {
-    return (
-      <div className={`h-full w-full ${className}`}>
-        <ThumbFrame bg="#f8fafc" border="#0f172a">
-          <text x="70" y="36" textAnchor="middle" fontSize="5" fill="#64748b" letterSpacing="1">
-            ISO 9606
-          </text>
-          <text x="70" y="50" textAnchor="middle" fontSize="6" fill="#0f172a" fontWeight="700">
-            Welding
-          </text>
-          <rect x="50" y="58" width="40" height="12" rx="2" fill="#eef4ff" stroke="#0047AB" strokeWidth="0.8" />
-          <text x="70" y="67" textAnchor="middle" fontSize="5" fill="#0047AB" fontWeight="700">
-            ISO
-          </text>
-        </ThumbFrame>
-      </div>
-    );
-  }
+export default function CertificateThumbnail({
+  cert,
+  className = "",
+  showLogo = true,
+}: CertificateThumbnailProps) {
+  const imgSrc = resolveCertificateImageUrl(cert);
 
   return (
-    <div className={`h-full w-full ${className}`}>
-      <ThumbFrame bg="#eef2f8" border="#0047AB">
-        <text x="70" y="40" textAnchor="middle" fontSize="6" fill="#0047AB" fontWeight="700">
-          CHỨNG CHỈ
-        </text>
-        <text x="70" y="54" textAnchor="middle" fontSize="5" fill="#64748b">
-          Thành Phát
-        </text>
-      </ThumbFrame>
+    <div className={`relative h-full w-full overflow-hidden select-none bg-slate-100 group ${className}`}>
+      {/* Ảnh chứng chỉ sắc nét chuẩn quốc tế */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imgSrc}
+        alt={cert.title}
+        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-103"
+        loading="lazy"
+      />
+
+      {/* Logo và thương hiệu Thành Phát chính thức trên chứng chỉ */}
+      {showLogo && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-md bg-white/95 backdrop-blur-md px-2 py-0.5 shadow-xs border border-amber-300/50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Thành Phát" className="h-4 w-4 object-contain" />
+          <span className="text-[10px] font-extrabold text-[#0047AB] tracking-wide uppercase font-sans">
+            Thành Phát
+          </span>
+        </div>
+      )}
+
+      {/* Nhãn số hiệu chứng chỉ hoặc tên người sở hữu ở góc dưới */}
+      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-md bg-slate-950/80 backdrop-blur-xs px-2 py-0.5 text-[10px] font-mono text-white/95 shadow-xs">
+        <span className="text-amber-400 font-bold">★</span>
+        <span className="truncate max-w-[130px]">
+          {cert.certificateNumber || cert.holder || "CHỨNG NHẬN"}
+        </span>
+      </div>
     </div>
   );
 }

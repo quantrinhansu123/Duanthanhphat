@@ -23,6 +23,7 @@ import {
 } from "@/lib/personnelCertificatesDb";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { resolveCertificateImageUrl } from "@/components/CertificateThumbnail";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -756,36 +757,56 @@ export default function WelderManagement() {
 
                 {liveCerts.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {liveCerts.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex flex-col justify-between rounded-lg border border-blue-200 bg-white p-2.5 shadow-2xs text-xs"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="font-semibold text-slate-900 leading-tight">
-                            {c.ten_chung_chi}
+                    {liveCerts.map((c) => {
+                      const thumbUrl = resolveCertificateImageUrl({
+                        title: c.ten_chung_chi,
+                        imageUrl: c.secure_url || c.file_chung_chi || undefined,
+                      });
+                      return (
+                        <div
+                          key={c.id}
+                          className="flex gap-3 rounded-xl border border-blue-200/90 bg-white p-2.5 shadow-2xs text-xs hover:border-[#0047AB]/40 transition-all"
+                        >
+                          <div className="relative h-18 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={thumbUrl}
+                              alt={c.ten_chung_chi}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                            <div className="absolute top-1 left-1 flex items-center gap-1 rounded bg-white/95 px-1 py-0.2 shadow-2xs border border-amber-300/60">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src="/logo.png" alt="Thành Phát" className="h-2.5 w-2.5 object-contain" />
+                              <span className="text-[8px] font-extrabold text-[#0047AB] uppercase">TP</span>
+                            </div>
                           </div>
-                          <span
-                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                              c.trang_thai === "Còn hiệu lực"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : c.trang_thai === "Sắp hết hạn"
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                  : "bg-rose-50 text-rose-700 border border-rose-200"
-                            }`}
-                          >
-                            {c.trang_thai}
-                          </span>
+
+                          <div className="flex flex-1 flex-col justify-between min-w-0">
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div className="font-semibold text-slate-900 leading-tight line-clamp-2">
+                                {c.ten_chung_chi}
+                              </div>
+                              <span
+                                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  c.trang_thai === "Còn hiệu lực"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : c.trang_thai === "Sắp hết hạn"
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}
+                              >
+                                {c.trang_thai}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-500 space-y-0.5 font-mono">
+                              {c.so_chung_chi && <div>Số: {c.so_chung_chi}</div>}
+                              {c.ngay_het_han && <div>Hạn: {c.ngay_het_han.slice(0, 10)}</div>}
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-2 text-[11px] text-slate-500 space-y-0.5 font-mono">
-                          {c.so_chung_chi && <div>Số CC: {c.so_chung_chi}</div>}
-                          {c.ngay_het_han && <div>Hạn: {c.ngay_het_han.slice(0, 10)}</div>}
-                          {c.don_vi_cap && (
-                            <div className="font-sans text-slate-400 truncate">{c.don_vi_cap}</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : !loadingCerts && parseCertificateList(viewingWelder.certificates).length > 0 ? (
                   <div className="space-y-2">

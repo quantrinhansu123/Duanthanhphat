@@ -5,10 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import CertificateFormModal, {
   type CertificateFormValues,
 } from "@/components/CertificateFormModal";
-import CertificateThumbnail from "@/components/CertificateThumbnail";
+import CertificateThumbnail, { resolveCertificateImageUrl } from "@/components/CertificateThumbnail";
 import type { Certificate } from "@/data/certificates";
 import DateField from "@/components/DateField";
-import { Check, DotsThree, MagnifyingGlass, PencilSimple, Plus, X } from "@/components/icons";
+import { ArrowSquareOut, Check, DotsThree, DownloadSimple, MagnifyingGlass, PencilSimple, Plus, X } from "@/components/icons";
 import {
   createPersonnelCertificates,
   deleteCertificateRecord,
@@ -242,8 +242,29 @@ function CertificateDetailModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
-          <div className="relative mb-5 aspect-[16/10] overflow-hidden rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
+          <div className="relative mb-5 aspect-[16/10] overflow-hidden rounded-xl bg-slate-50 border border-slate-200 shadow-2xs group">
             <CertificateThumbnail cert={cert} />
+            <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/25 transition-colors flex items-end justify-end gap-2 p-3">
+              <a
+                href={resolveCertificateImageUrl(cert)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 hover:bg-white text-slate-800 px-3 py-1.5 text-xs font-semibold shadow-md border border-slate-200/80 transition-all cursor-pointer backdrop-blur-xs"
+                title="Mở ảnh kích thước đầy đủ trong tab mới"
+              >
+                <ArrowSquareOut size={14} weight="bold" />
+                Xem ảnh gốc
+              </a>
+              <a
+                href={resolveCertificateImageUrl(cert)}
+                download={`Chung_chi_${cert.title.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB]/90 hover:bg-[#0047AB] text-white px-3 py-1.5 text-xs font-semibold shadow-md transition-all cursor-pointer backdrop-blur-xs"
+                title="Tải ảnh chứng chỉ về máy"
+              >
+                <DownloadSimple size={14} weight="bold" />
+                Tải ảnh
+              </a>
+            </div>
           </div>
 
           <div className="mb-4 flex items-center justify-between">
