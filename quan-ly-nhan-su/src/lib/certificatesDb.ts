@@ -77,7 +77,7 @@ export type UpdateCertificateInput = {
   license?: string;
 };
 
-const CERTIFICATE_COLUMNS = [
+const CERTIFICATE_BASE_COLUMNS = [
   "id",
   "ten_chung_chi",
   "ngay_cap",
@@ -92,10 +92,18 @@ const CERTIFICATE_COLUMNS = [
   "ghi_chu",
   "cloudinary_public_id",
   "secure_url",
+].join(",");
+
+const CERTIFICATE_EXTENDED_COLUMNS = [
+  CERTIFICATE_BASE_COLUMNS,
   "kich_thuoc",
   "source_url",
   "license",
 ].join(",");
+
+/** Cache kiểm tra DB hiện tại có chứa các cột mở rộng (kich_thuoc, source_url, license) hay chưa */
+let supportsExtendedColumns: boolean | null = null;
+
 
 function normalize(value: string) {
   return value
@@ -199,14 +207,40 @@ export async function loadCertificateRegistry(): Promise<CertificateRegistry> {
     (async () => {
       const rows: CertificateDbRow[] = [];
       const pageSize = 1000;
+      let queryColumns =
+        supportsExtendedColumns === false
+          ? CERTIFICATE_BASE_COLUMNS
+          : CERTIFICATE_EXTENDED_COLUMNS;
+
       for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await supabase
+        let res = await supabase
           .from("chung_chi")
-          .select(CERTIFICATE_COLUMNS)
+          .select(queryColumns)
           .order("created_at", { ascending: false })
           .range(offset, offset + pageSize - 1);
-        if (error) throw new Error(formatSupabaseError(error));
-        const page = (data ?? []) as unknown as CertificateDbRow[];
+
+        if (
+          res.error &&
+          queryColumns !== CERTIFICATE_BASE_COLUMNS &&
+          (res.error.message?.includes("kich_thuoc") ||
+            res.error.message?.includes("does not exist") ||
+            res.error.message?.includes("schema cache") ||
+            res.error.code === "42703" ||
+            res.error.code === "PGRST204")
+        ) {
+          supportsExtendedColumns = false;
+          queryColumns = CERTIFICATE_BASE_COLUMNS;
+          res = await supabase
+            .from("chung_chi")
+            .select(queryColumns)
+            .order("created_at", { ascending: false })
+            .range(offset, offset + pageSize - 1);
+        } else if (!res.error && supportsExtendedColumns === null) {
+          supportsExtendedColumns = true;
+        }
+
+        if (res.error) throw new Error(formatSupabaseError(res.error));
+        const page = (res.data ?? []) as unknown as CertificateDbRow[];
         rows.push(...page);
         if (page.length < pageSize) break;
       }
@@ -271,7 +305,7 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
         ? "Hết hạn"
         : "Còn hiệu lực";
 
-  const { error } = await createClient().rpc("them_nhom_chung_chi_cho_nhan_su", {
+  const baseParams = {
     p_employee_ids: input.employeeIds,
     p_ten_chung_chi: input.title.trim(),
     p_ngay_cap: input.issuedAt || null,
@@ -284,10 +318,28 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
     p_so_chung_chi: input.certificateNumber?.trim() || null,
     p_may_ap_dung: input.machine?.trim() || null,
     p_ghi_chu: input.notes?.trim() || null,
-    p_kich_thuoc: input.fileSize || null,
-    p_source_url: input.sourceUrl?.trim() || null,
-    p_license: input.license?.trim() || null,
-  });
+  };
+
+  const client = createClient();
+  if (supportsExtendedColumns !== false) {
+    const { error } = await client.rpc("them_nhom_chung_chi_cho_nhan_su", {
+      ...baseParams,
+      p_kich_thuoc: input.fileSize || null,
+      p_source_url: input.sourceUrl?.trim() || null,
+      p_license: input.license?.trim() || null,
+    });
+    if (!error) return;
+    if (
+      error.code !== "PGRST202" &&
+      !error.message?.includes("p_kich_thuoc") &&
+      !error.message?.includes("schema cache")
+    ) {
+      throw new Error(formatSupabaseError(error));
+    }
+    supportsExtendedColumns = false;
+  }
+
+  const { error } = await client.rpc("them_nhom_chung_chi_cho_nhan_su", baseParams);
   if (error) throw new Error(formatSupabaseError(error));
 }
 
@@ -329,15 +381,36 @@ export async function updateCertificateRecord(input: UpdateCertificateInput) {
     updatePayload.so_chung_chi = input.certificateNumber.trim() || null;
   }
   if (input.notes !== undefined) updatePayload.ghi_chu = input.notes.trim() || null;
-  if (input.fileSize !== undefined) updatePayload.kich_thuoc = input.fileSize || null;
-  if (input.sourceUrl !== undefined) updatePayload.source_url = input.sourceUrl.trim() || null;
-  if (input.license !== undefined) updatePayload.license = input.license.trim() || null;
+  if (supportsExtendedColumns !== false) {
+    if (input.fileSize !== undefined) updatePayload.kich_thuoc = input.fileSize || null;
+    if (input.sourceUrl !== undefined) updatePayload.source_url = input.sourceUrl.trim() || null;
+    if (input.license !== undefined) updatePayload.license = input.license.trim() || null;
+  }
 
   const supabase = createClient();
-  const { error } = await supabase
+  let { error } = await supabase
     .from("chung_chi")
     .update(updatePayload)
     .eq("id", input.id);
+
+  if (
+    error &&
+    (error.message?.includes("kich_thuoc") ||
+      error.message?.includes("does not exist") ||
+      error.message?.includes("schema cache") ||
+      error.code === "PGRST204" ||
+      error.code === "42703")
+  ) {
+    supportsExtendedColumns = false;
+    delete updatePayload.kich_thuoc;
+    delete updatePayload.source_url;
+    delete updatePayload.license;
+    const retry = await supabase
+      .from("chung_chi")
+      .update(updatePayload)
+      .eq("id", input.id);
+    error = retry.error;
+  }
 
   if (error) throw new Error(formatSupabaseError(error));
 }
@@ -374,7 +447,10 @@ export async function syncGroupCertificates(input: SyncGroupCertificatesInput) {
         ? "Hết hạn"
         : "Còn hiệu lực";
 
-  const { error } = await createClient().rpc("dong_bo_nhan_su_nhom_chung_chi", {
+  const client = createClient();
+
+  // 1. Thử gọi RPC đồng bộ mới nếu đã chạy migration
+  const rpcResult = await client.rpc("dong_bo_nhan_su_nhom_chung_chi", {
     p_nhom_id: input.groupId,
     p_ten_chung_chi: input.title.trim(),
     p_employee_ids: input.employeeIds,
@@ -393,7 +469,89 @@ export async function syncGroupCertificates(input: SyncGroupCertificatesInput) {
     p_license: input.license?.trim() || null,
   });
 
-  if (error) throw new Error(formatSupabaseError(error));
+  if (!rpcResult.error) return;
+
+  // 2. Nếu DB chưa có RPC (chưa chạy migration), thực hiện đồng bộ an toàn qua PostgREST client-side
+  if (rpcResult.error.code === "PGRST202" || rpcResult.error.message?.includes("schema cache")) {
+    const groupUpdate: Record<string, unknown> = {
+      ten_nhom: input.title.trim(),
+      don_vi_cap: input.organization?.trim() || null,
+      may_ap_dung: input.machine?.trim() || null,
+      ngay_cap: input.issuedAt || null,
+      ngay_het_han: input.expiresAt || null,
+      file_chung_chi: input.imageUrl?.trim() || null,
+      cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
+      secure_url: input.imageUrl?.trim() || null,
+      ghi_chu: input.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    await client.from("chung_chi_nhom").update(groupUpdate).eq("id", input.groupId);
+
+    const { data: currentCerts } = await client
+      .from("chung_chi")
+      .select("id, employee_id")
+      .eq("nhom_id", input.groupId);
+
+    const existingEmpIds = new Set((currentCerts || []).map((c) => c.employee_id));
+    const targetEmpIds = new Set(input.employeeIds);
+
+    // Xóa nhân sự bị gỡ khỏi nhóm
+    const toDeleteIds = (currentCerts || [])
+      .filter((c) => !targetEmpIds.has(c.employee_id))
+      .map((c) => c.id);
+    if (toDeleteIds.length > 0) {
+      await client.from("chung_chi").delete().in("id", toDeleteIds);
+    }
+
+    // Cập nhật nhân sự giữ lại
+    const toUpdateIds = (currentCerts || [])
+      .filter((c) => targetEmpIds.has(c.employee_id))
+      .map((c) => c.id);
+    if (toUpdateIds.length > 0) {
+      await client
+        .from("chung_chi")
+        .update({
+          ten_chung_chi: input.title.trim(),
+          ngay_cap: input.issuedAt || null,
+          ngay_het_han: input.expiresAt || null,
+          file_chung_chi: input.imageUrl?.trim() || null,
+          trang_thai: dbStatus,
+          cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
+          secure_url: input.imageUrl?.trim() || null,
+          don_vi_cap: input.organization?.trim() || null,
+          so_chung_chi: input.certificateNumber?.trim() || null,
+          may_ap_dung: input.machine?.trim() || null,
+          ghi_chu: input.notes?.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", toUpdateIds);
+    }
+
+    // Thêm nhân sự mới vào nhóm
+    const toAddEmpIds = input.employeeIds.filter((empId) => !existingEmpIds.has(empId));
+    if (toAddEmpIds.length > 0) {
+      const newRows = toAddEmpIds.map((empId) => ({
+        nhom_id: input.groupId,
+        employee_id: empId,
+        ten_chung_chi: input.title.trim(),
+        ngay_cap: input.issuedAt || null,
+        ngay_het_han: input.expiresAt || null,
+        file_chung_chi: input.imageUrl?.trim() || null,
+        trang_thai: dbStatus,
+        cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
+        secure_url: input.imageUrl?.trim() || null,
+        don_vi_cap: input.organization?.trim() || null,
+        so_chung_chi: input.certificateNumber?.trim() || null,
+        may_ap_dung: input.machine?.trim() || null,
+        ghi_chu: input.notes?.trim() || null,
+      }));
+      await client.from("chung_chi").insert(newRows);
+    }
+
+    return;
+  }
+
+  throw new Error(formatSupabaseError(rpcResult.error));
 }
 
 /** Cập nhật hạn cho toàn bộ người có cùng chứng chỉ / cùng nhóm */
