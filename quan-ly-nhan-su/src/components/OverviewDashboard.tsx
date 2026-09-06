@@ -28,6 +28,7 @@ import {
   resolveChartDateRange,
   summarizeJournalRows,
 } from "@/lib/weldReportData";
+import { projectDurationDays } from "@/lib/projectsDb";
 import { filterYearTotals } from "@/lib/tongMoiHanNamDb";
 
 type ChartDayPoint = {
@@ -53,13 +54,33 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString("vi-VN");
 }
 
+function formatPctNumber(n: number) {
+  return n.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 function pctComma(n: number, total: number) {
   if (!total) return "0%";
-  return (
-    ((n / total) * 100)
-      .toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-      .replace(".", ",") + "%"
+  return `${formatPctNumber((n / total) * 100)}%`;
+}
+
+/** Kế hoạch mối hàn của 1 dự án trong khoảng [from, to], có fallback theo tỷ lệ ngày. */
+function planWeldsInRange(
+  project: { startDate: string; endDate: string; plannedWeldCount: number; theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
+  from: string,
+  to: string,
+) {
+  const daily = (project.theoreticalProgress ?? []).reduce(
+    (sum, row) => (row.ngay >= from && row.ngay <= to ? sum + row.so_moi_han : sum),
+    0,
   );
+  if (daily > 0) return daily;
+
+  const overlapStart = project.startDate > from ? project.startDate : from;
+  const overlapEnd = project.endDate < to ? project.endDate : to;
+  const overlapDays = projectDurationDays(overlapStart, overlapEnd);
+  const totalDays = projectDurationDays(project.startDate, project.endDate);
+  if (overlapDays <= 0 || totalDays <= 0 || project.plannedWeldCount <= 0) return 0;
+  return Math.round(project.plannedWeldCount * (overlapDays / totalDays));
 }
 
 function gaugeDash(pctVal: number) {
@@ -347,15 +368,19 @@ export default function OverviewDashboard() {
   }, [chartViewMode, dailySeries, dailyTargets, dailyValues, yearlySeries]);
   const plannedTarget = useMemo(
     () => selectedProjects.reduce(
-      (sum, project) => sum + (project.theoreticalProgress ?? []).reduce(
-        (projectSum, row) => row.ngay >= appliedFilters.dateFrom && row.ngay <= appliedFilters.dateTo
-          ? projectSum + row.so_moi_han
-          : projectSum,
-        0,
-      ),
+      (sum, project) => sum + planWeldsInRange(project, appliedFilters.dateFrom, appliedFilters.dateTo),
       0,
     ),
     [appliedFilters.dateFrom, appliedFilters.dateTo, selectedProjects],
+  );
+  // Kế hoạch đến hôm nay (hoặc đến dateTo nếu kỳ đã kết thúc) — dùng cho % tiến độ.
+  const asOfDate = todayIso < appliedFilters.dateTo ? todayIso : appliedFilters.dateTo;
+  const plannedToDate = useMemo(
+    () => selectedProjects.reduce(
+      (sum, project) => sum + planWeldsInRange(project, appliedFilters.dateFrom, asOfDate),
+      0,
+    ),
+    [appliedFilters.dateFrom, asOfDate, selectedProjects],
   );
   const yesterdayDate = new Date(`${todayIso}T00:00:00`);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
@@ -375,19 +400,73 @@ export default function OverviewDashboard() {
   const passed = summary.passed;
   const failed = summary.errors;
   const rework = countReworkWelds(selectedRows);
-  const target = plannedTarget > 0 ? plannedTarget : total;
-  const plannedDays = selectedProjects.reduce(
-    (sum, project) => sum + (project.theoreticalProgress ?? []).filter(
-      (row) => row.ngay >= appliedFilters.dateFrom && row.ngay <= appliedFilters.dateTo,
-    ).length,
-    0,
-  );
+
+  // Chỉ đếm mối hàn thuộc dự án có kế hoạch và nằm trong thời gian dự án —
+  // tránh so toàn bộ lịch sử với kế hoạch ngắn → % hàng nghìn.
+  const progressActual = useMemo(() => {
+    if (selectedProjects.length === 0) return total;
+    const projectByKey = new Map<string, (typeof selectedProjects)[number]>();
+    for (const project of selectedProjects) {
+      projectByKey.set(project.id, project);
+      projectByKey.set(project.name, project);
+    }
+    let count = 0;
+    selectedRows.forEach((row, index) => {
+      const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
+      if (!project) return;
+      const iso = getJournalRowDateIso(row, index);
+      if (iso) {
+        if (iso < project.startDate || iso > project.endDate) return;
+        if (iso < appliedFilters.dateFrom || iso > asOfDate) return;
+      } else {
+        const year = String(row.nam_thuc_hien);
+        const startYear = project.startDate.slice(0, 4);
+        const endYear = project.endDate.slice(0, 4);
+        if (year < startYear || year > endYear) return;
+      }
+      count += 1;
+    });
+    return count;
+  }, [appliedFilters.dateFrom, asOfDate, selectedProjects, selectedRows, total]);
+
+  const target = plannedToDate > 0 ? plannedToDate : plannedTarget > 0 ? plannedTarget : progressActual;
+  const plannedDaySet = useMemo(() => {
+    const days = new Set<string>();
+    for (const project of selectedProjects) {
+      for (const row of project.theoreticalProgress ?? []) {
+        if (row.ngay >= appliedFilters.dateFrom && row.ngay <= appliedFilters.dateTo) {
+          days.add(row.ngay);
+        }
+      }
+      if ((project.theoreticalProgress ?? []).length === 0 && project.plannedWeldCount > 0) {
+        const overlapStart = project.startDate > appliedFilters.dateFrom ? project.startDate : appliedFilters.dateFrom;
+        const overlapEnd = project.endDate < appliedFilters.dateTo ? project.endDate : appliedFilters.dateTo;
+        const count = projectDurationDays(overlapStart, overlapEnd);
+        if (count > 0) {
+          const start = new Date(`${overlapStart}T00:00:00`);
+          for (let i = 0; i < count; i += 1) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            days.add(localIsoDate(d));
+          }
+        }
+      }
+    }
+    return days;
+  }, [appliedFilters.dateFrom, appliedFilters.dateTo, selectedProjects]);
+  const plannedDays = plannedDaySet.size;
   const quota = plannedDays > 0 ? plannedTarget / plannedDays : dailySeries.length > 0 ? total / dailySeries.length : 0;
 
-  const progressPct = (target > 0 ? (total / target) * 100 : 0)
-    .toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-    .replace(".", ",");
-  const progressPctNum = target > 0 ? (total / target) * 100 : 0;
+  const progressPctNum = target > 0 ? (progressActual / target) * 100 : 0;
+  const progressPct = formatPctNumber(progressPctNum);
+  const progressStatus =
+    target <= 0
+      ? { label: "CHƯA CÓ KẾ HOẠCH", tone: "slate" as const }
+      : progressPctNum >= 100
+        ? { label: "VƯỢT TIẾN ĐỘ", tone: "emerald" as const }
+        : progressPctNum >= 90
+          ? { label: "ĐÚNG TIẾN ĐỘ", tone: "emerald" as const }
+          : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const };
 
   const chart = useMemo(() => {
     // Lũy kế luôn theo ngày; tab Ngày/Năm dùng chartPeriod.
@@ -861,10 +940,10 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <div className="mt-2 text-lg sm:text-xl font-bold font-mono text-slate-900 tracking-tight">
-                {fmt(total)} / {fmt(target)}
+                {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Mục tiêu: {fmt(target)} mối
+                Mục tiêu đến {viDate(asOfDate)}: {fmt(target)} mối
               </div>
             </div>
 
@@ -873,7 +952,7 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Còn lại</div>
                 <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {fmt(Math.max(0, target - total))}
+                    {fmt(Math.max(0, target - progressActual))}
                   </span>
                   <span className="text-xs text-slate-400">mối</span>
                 </div>
@@ -898,9 +977,25 @@ export default function OverviewDashboard() {
               </div>
               <div>
                 <div className="mb-1 text-xs text-slate-500">Trạng thái</div>
-                <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold tracking-wide text-emerald-700 shadow-2xs">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  ĐÚNG TIẾN ĐỘ
+                <div
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold tracking-wide shadow-2xs ${
+                    progressStatus.tone === "emerald"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : progressStatus.tone === "amber"
+                        ? "bg-amber-50 border-amber-200 text-amber-800"
+                        : "bg-slate-50 border-slate-200 text-slate-600"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                      progressStatus.tone === "emerald"
+                        ? "bg-emerald-500"
+                        : progressStatus.tone === "amber"
+                          ? "bg-amber-500"
+                          : "bg-slate-400"
+                    }`}
+                  />
+                  {progressStatus.label}
                 </div>
               </div>
             </div>

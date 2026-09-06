@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -389,7 +389,7 @@ export default function BulkImportList() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 pb-8 sm:px-6">
+    <main className="w-full px-4 pb-8 sm:px-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-1">
           {tabs.map((item) => (

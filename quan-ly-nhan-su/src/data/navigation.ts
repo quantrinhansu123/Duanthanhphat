@@ -51,6 +51,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Training date, curriculum, trainer, attendees, evaluation results",
       },
       {
+        id: "chung-chi",
+        label: "Quản lý chứng chỉ",
+        labelEn: "Certificate Management",
+        description: "Ngày cấp, ngày hết hạn, file đính kèm chứng chỉ theo thợ hàn",
+        descriptionEn: "Issue date, expiry date, and attached certificate files by welder",
+      },
+      {
         id: "tra-cuu-dao-tao",
         label: "Tra cứu lịch sử đào tạo",
         labelEn: "Training History Lookup",
@@ -139,7 +146,7 @@ export const navigation: NavItem[] = [
     labelEn: "Quality Management",
     children: [
       {
-        id: "chung-chi",
+        id: "chung-chi-cong-ty",
         label: "Chứng chỉ ISO/TCVN & QLCL",
         labelEn: "Company Quality & ISO Certificates",
         description: "Chứng chỉ ISO/TCVN và hồ sơ quản lý chất lượng của Công ty Thành Phát.",

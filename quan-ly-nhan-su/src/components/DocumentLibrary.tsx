@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MagnifyingGlass, X } from "@/components/icons";
@@ -218,7 +218,7 @@ export default function DocumentLibrary() {
     "mt-1 block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-[11px] file:font-semibold file:text-[#0047AB] hover:file:bg-blue-100 file:transition-colors";
 
   return (
-    <main className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {!configured && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-[#0047AB] shadow-xs">
           <strong>Lưu ý cấu hình Google Drive:</strong> {configNotice || "Cần cấu hình OAuth Google Drive và thư mục đích trên máy chủ."}
@@ -577,21 +577,13 @@ export default function DocumentLibrary() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (doc.webViewLink) {
-                            window.open(doc.webViewLink, "_blank", "noopener,noreferrer");
-                          } else {
-                            setViewer(doc);
-                          }
-                        }}
-                        className="rounded px-2.5 py-1 text-xs font-semibold text-[#0047AB] bg-blue-50 hover:bg-blue-100 cursor-pointer border border-blue-200"
+                        onClick={() => setViewer(doc)}
+                        className="rounded px-2.5 py-1 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#00388A] cursor-pointer"
                       >
                         Xem
                       </button>
                       <a
-                        href={doc.webContentLink || doc.webViewLink || "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/api/documents/${doc.id}?download=1`}
                         className="inline-block rounded px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 cursor-pointer border border-emerald-200"
                       >
                         Tải về
@@ -632,17 +624,11 @@ export default function DocumentLibrary() {
               </button>
             </div>
             <div className="flex-1 bg-slate-100">
-              {viewer.webViewLink ? (
-                <iframe
-                  src={viewer.webViewLink.replace("/view", "/preview")}
-                  className="h-full w-full border-0"
-                  title={viewer.name}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-slate-400 text-sm">
-                  Không có liên kết xem trước từ Google Drive.
-                </div>
-              )}
+              <iframe
+                src={`/api/documents/${viewer.id}`}
+                className="h-full w-full border-0"
+                title={viewer.name}
+              />
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "@/components/icons";
@@ -156,7 +156,7 @@ export default function MachineAssignmentList() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 pb-8 sm:px-6">
+    <main className="w-full px-4 pb-8 sm:px-6">
       {loadError && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:text-sm">
           <div className="font-semibold">Đang hiển thị dữ liệu mẫu</div>

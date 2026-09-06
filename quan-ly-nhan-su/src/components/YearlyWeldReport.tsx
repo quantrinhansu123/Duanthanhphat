@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
@@ -229,7 +229,7 @@ export default function YearlyWeldReport() {
     view === "nam" ? years.length : view === "du-an" ? byProject.length : byPersonnel.length;
 
   return (
-    <main className="mx-auto max-w-[1568px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div
         className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${
           error

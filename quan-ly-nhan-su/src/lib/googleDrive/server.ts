@@ -35,13 +35,24 @@ export function isGoogleDriveConfigured(): boolean {
 }
 
 function getDriveCredentials(): DriveCredentials | null {
-  const clientId = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN?.trim();
-  const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL?.trim();
-  let privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.trim();
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim();
-  const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID?.trim();
+  const strip = (value?: string | null) => {
+    const trimmed = value?.trim() ?? "";
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  };
+
+  const clientId = strip(process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID);
+  const clientSecret = strip(process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET);
+  const refreshToken = strip(process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN);
+  const clientEmail = strip(process.env.GOOGLE_DRIVE_CLIENT_EMAIL);
+  let privateKey = strip(process.env.GOOGLE_DRIVE_PRIVATE_KEY);
+  const folderId = strip(process.env.GOOGLE_DRIVE_FOLDER_ID);
+  const sharedDriveId = strip(process.env.GOOGLE_SHARED_DRIVE_ID) || undefined;
 
   if (!folderId) {
     return null;
@@ -353,6 +364,41 @@ export async function trashDriveDocument(fileId: string): Promise<boolean> {
     supportsAllDrives: true,
   });
   return true;
+}
+
+/** Lấy metadata + nội dung PDF để xem/tải qua API nội bộ (không cần đăng nhập Google trên trình duyệt). */
+export async function getDriveDocumentBuffer(fileId: string): Promise<{
+  name: string;
+  mimeType: string;
+  size?: number;
+  buffer: Buffer;
+}> {
+  const ctx = await assertManagedDriveFile(fileId);
+
+  const meta = await ctx.drive.files.get({
+    fileId,
+    fields: "id,name,mimeType,size",
+    supportsAllDrives: true,
+  });
+
+  const media = await ctx.drive.files.get(
+    {
+      fileId,
+      alt: "media",
+      supportsAllDrives: true,
+    },
+    { responseType: "arraybuffer" },
+  );
+
+  const raw = media.data as ArrayBuffer | Buffer | Uint8Array;
+  const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+
+  return {
+    name: meta.data.name || `${fileId}.pdf`,
+    mimeType: meta.data.mimeType || DRIVE_PDF_MIME_TYPE,
+    size: meta.data.size ? Number(meta.data.size) : buffer.byteLength,
+    buffer,
+  };
 }
 
 export async function uploadBufferToDrive(params: {

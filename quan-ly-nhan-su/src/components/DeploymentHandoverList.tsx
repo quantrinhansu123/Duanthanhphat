@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { deploymentItems, type DeploymentItem } from "@/data/deploymentItems";
@@ -28,7 +28,7 @@ export default function DeploymentHandoverList() {
   const handedOver = deploymentItems.filter((r) => r.status === "Đã bàn giao").length;
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
         <span>
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{deploymentItems.length}</strong> hạng mục

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import Image from "next/image";
@@ -9,6 +9,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
+import CompanyCertificateManagement from "@/components/CompanyCertificateManagement";
 import ComplianceStandardsList from "@/components/ComplianceStandardsList";
 import DeploymentHandoverList from "@/components/DeploymentHandoverList";
 import DocumentLibrary from "@/components/DocumentLibrary";
@@ -42,6 +43,7 @@ const views: Record<string, React.ReactNode> = {
   "lich-su-han": <WeldingHistoryList />,
   "khoa-dao-tao": <TrainingList />,
   "chung-chi": <CertificateManagement />,
+  "chung-chi-cong-ty": <CompanyCertificateManagement />,
   "tieu-chuan-tcvn": <ComplianceStandardsList />,
   "tra-cuu-dao-tao": <TrainingHistoryLookup />,
   "danh-sach-may": <MachineList />,
@@ -200,7 +202,7 @@ export default function AppShell({ tab }: AppShellProps) {
               </>
             ) : (
               <span className="truncate font-semibold text-slate-800 text-xs sm:text-sm">
-                {lang === "en" ? "Operations & HR Management System" : "Hệ thống Quản lý Vận hành & Nhân sự"}
+                {lang === "en" ? "Rail Welding Management System" : "Hệ thống Quản lý hàn ray"}
               </span>
             )}
           </div>
@@ -246,7 +248,7 @@ export default function AppShell({ tab }: AppShellProps) {
           )}
 
           {!reportTab && crumb && (
-            <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pt-4 sm:pt-5">
+            <div className="w-full px-4 sm:px-6 pt-4 sm:pt-5">
               <div className="mb-3.5 sm:mb-4">
                 <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
                   {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
@@ -266,7 +268,7 @@ export default function AppShell({ tab }: AppShellProps) {
           {content ? (
             content
           ) : current ? (
-            <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
+            <div className="w-full px-4 sm:px-6 pb-8">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {(group?.children ?? []).map((child) => {
                   const active = child.id === current;

@@ -1,9 +1,11 @@
-"use client";
+﻿"use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { welders as seedWelders, type Welder } from "@/data/welders";
 import type { Certificate } from "@/data/certificates";
+import type { Machine } from "@/data/machines";
 import {
   MagnifyingGlass,
   CaretDown,
@@ -12,15 +14,23 @@ import {
   Sparkle,
   X,
   Plus,
+  PencilSimple,
+  Trash,
 } from "@/components/icons";
 import {
   formatCertificateList,
   parseCertificateList,
 } from "@/lib/weldingCertificates";
 import {
+  deletePersonnel,
   loadPersonnelCertificateRows,
+  parseTrainedMachineTokens,
+  personTrainedOnMachine,
+  upsertPersonnel,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
+import { loadMachineCatalog } from "@/lib/machineCatalogDb";
+import WelderFormModal, { type WelderFormValues } from "@/components/WelderFormModal";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -210,7 +220,8 @@ export default function WelderManagement() {
 
   const [list, setList] = useState<Welder[]>(seedWelders);
   const [selected, setSelected] = useState<string[]>([]);
-  const [selectedWelder, setSelectedWelder] = useState<Welder | null>(seedWelders[0] || null);
+  const [selectedWelder, setSelectedWelder] = useState<Welder | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [query, setQuery] = useState("");
   const [ranksSel, setRanksSel] = useState<string[]>([]);
@@ -219,12 +230,17 @@ export default function WelderManagement() {
   const [machinesSel, setMachinesSel] = useState<string[]>([]);
   const [statusesSel, setStatusesSel] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingWelder, setEditingWelder] = useState<Welder | null>(null);
+  const [savingWelder, setSavingWelder] = useState(false);
 
   // All welding journal rows for performance metrics
   const [allWeldRows, setAllWeldRows] = useState<WeldReportRow[]>([]);
   // Google Drive documents
   const [driveDocs, setDriveDocs] = useState<DriveDocumentItem[]>([]);
   const [loadingDrive, setLoadingDrive] = useState(false);
+  const [driveError, setDriveError] = useState("");
+  const [driveConfigured, setDriveConfigured] = useState(true);
   // Live certificates from Supabase
   const [liveCerts, setLiveCerts] = useState<
     Array<{
@@ -262,26 +278,148 @@ export default function WelderManagement() {
   }
 
   // Load welders from Supabase
+  async function reloadWelders() {
+    try {
+      const rows = await loadPersonnelCertificateRows();
+      if (rows.length === 0) return;
+      const welderRows = rows.filter((row) => {
+        const position = row.chuc_vu?.toLocaleLowerCase("vi") ?? "";
+        const team = row.to_han?.trim() ?? "";
+        return position.includes("hàn") || (team !== "" && team !== "Chưa phân tổ");
+      });
+      if (welderRows.length === 0) return;
+      const mapped = welderRows.map(personnelRowToWelder);
+      setList(mapped);
+      setSelectedWelder((prev) => {
+        if (!prev) return null;
+        return mapped.find((item) => item.id === prev.id) ?? null;
+      });
+      setSelected((prev) => prev.filter((id) => mapped.some((item) => item.id === id)));
+    } catch {
+      // giữ danh sách hiện tại nếu tải lỗi
+    }
+  }
+
+  useEffect(() => {
+    void reloadWelders();
+  }, []);
+
+  const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
+
   useEffect(() => {
     let active = true;
-    loadPersonnelCertificateRows()
-      .then((rows) => {
-        if (!active || rows.length === 0) return;
-        const welderRows = rows.filter((row) => {
-          const position = row.chuc_vu?.toLocaleLowerCase("vi") ?? "";
-          const team = row.to_han?.trim() ?? "";
-          return position.includes("hàn") || (team !== "" && team !== "Chưa phân tổ");
-        });
-        if (welderRows.length === 0) return;
-        const mapped = welderRows.map(personnelRowToWelder);
-        setList(mapped);
-        setSelectedWelder((prev) => prev ?? mapped[0]);
+    loadMachineCatalog()
+      .then((result) => {
+        if (!active) return;
+        setMachineCatalog(result.machines);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setMachineCatalog([]);
+      });
     return () => {
       active = false;
     };
   }, []);
+
+  const linkedTrainedMachines = useMemo(() => {
+    if (!selectedWelder) return [] as { token: string; machine?: Machine }[];
+    const tokens = parseTrainedMachineTokens(
+      selectedWelder.trainedMachines === "Chưa cập nhật" ? "" : selectedWelder.trainedMachines,
+    );
+    return tokens.map((token) => {
+      const machine = machineCatalog.find((m) =>
+        personTrainedOnMachine(token, { code: m.code, model: m.model }),
+      );
+      return { token, machine };
+    });
+  }, [selectedWelder, machineCatalog]);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setProfileOpen(false);
+    }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [profileOpen]);
+
+  function openWelderProfile(welder: Welder) {
+    setSelectedWelder(welder);
+    setProfileOpen(true);
+  }
+
+  function closeWelderProfile() {
+    setProfileOpen(false);
+  }
+
+  function openCreateWelder() {
+    setEditingWelder(null);
+    setFormOpen(true);
+  }
+
+  function openEditWelder(welder: Welder) {
+    setEditingWelder(welder);
+    setFormOpen(true);
+  }
+
+  async function handleSaveWelder(values: WelderFormValues) {
+    setSavingWelder(true);
+    try {
+      const row = await upsertPersonnel({
+        employeeId: values.id,
+        maNhanSu: values.weldingId,
+        hoTen: values.name,
+        chucVu: values.position || "Thợ hàn",
+        donVi: values.department,
+        toHan: values.weldingTeam,
+        capBac: values.rank,
+        loaiRay: values.railTypes,
+        loaiMay: values.trainedMachines,
+        kinhNghiem: values.experience,
+        hinhAnh: values.photo,
+      });
+      const saved = { ...personnelRowToWelder(row), status: values.status };
+      setList((prev) => {
+        const without = prev.filter((item) => item.id !== saved.id);
+        return [...without, saved].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+      });
+      setSelectedWelder((prev) => (prev?.id === saved.id ? saved : prev));
+      setFormOpen(false);
+      setEditingWelder(null);
+      showToast(values.id ? (isEn ? "Welder updated." : "Đã cập nhật thợ hàn.") : (isEn ? "Welder added." : "Đã thêm thợ hàn."));
+      void reloadWelders();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : (isEn ? "Failed to save welder" : "Không lưu được thợ hàn"));
+    } finally {
+      setSavingWelder(false);
+    }
+  }
+
+  async function handleDeleteWelder(welder: Welder) {
+    const ok = window.confirm(
+      isEn
+        ? `Delete welder "${welder.name}" (${welder.weldingId})? This cannot be undone.`
+        : `Xóa thợ hàn "${welder.name}" (${welder.weldingId})? Thao tác không thể hoàn tác.`,
+    );
+    if (!ok) return;
+    try {
+      await deletePersonnel(welder.id);
+      setList((prev) => prev.filter((item) => item.id !== welder.id));
+      setSelected((prev) => prev.filter((id) => id !== welder.id));
+      if (selectedWelder?.id === welder.id) {
+        setSelectedWelder(null);
+        setProfileOpen(false);
+      }
+      showToast(isEn ? "Welder deleted." : "Đã xóa thợ hàn.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : (isEn ? "Failed to delete welder" : "Không xóa được thợ hàn"));
+    }
+  }
 
   // Load all weld rows for metrics
   useEffect(() => {
@@ -293,11 +431,16 @@ export default function WelderManagement() {
   // Load Google Drive documents
   const reloadDriveDocs = async () => {
     setLoadingDrive(true);
+    setDriveError("");
     try {
       const res = await fetchDriveDocuments();
+      setDriveConfigured(res.configured !== false);
       setDriveDocs(res.items || []);
-    } catch {
+      if (res.error) setDriveError(res.error);
+      else if (res.message && res.configured === false) setDriveError(res.message);
+    } catch (err: unknown) {
       setDriveDocs([]);
+      setDriveError(err instanceof Error ? err.message : "Không tải được tài liệu Google Drive");
     } finally {
       setLoadingDrive(false);
     }
@@ -483,9 +626,13 @@ export default function WelderManagement() {
       showToast("Đã tải tài liệu PDF lên Google Drive hồ sơ thợ hàn thành công");
       setUploadTitle("");
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (res.item) {
+        setDriveDocs((prev) => [res.item!, ...prev.filter((d) => d.id !== res.item!.id)]);
+      }
       void reloadDriveDocs();
     } else {
       window.alert(res.error || "Tải lên thất bại");
+      setDriveError(res.error || "Tải lên thất bại");
     }
   }
 
@@ -518,7 +665,7 @@ export default function WelderManagement() {
   }
 
   return (
-    <div className="mx-auto max-w-[1568px] px-4 sm:px-6 pb-16">
+    <div className="w-full px-4 sm:px-6 pb-16">
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold shadow-xl animate-in fade-in slide-in-from-bottom-5">
@@ -526,22 +673,7 @@ export default function WelderManagement() {
         </div>
       )}
 
-      {/* Header - Image 16 / 17 exact */}
-      <div className="mb-6">
-        <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-          {isEn ? "WELDER MANAGEMENT" : "QUẢN LÝ THỢ HÀN"}
-        </div>
-        <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-slate-900">
-          {isEn ? "Welder Profiles & Qualifications" : "Hồ sơ thợ hàn"}
-        </h1>
-        <p className="mt-1 text-sm text-slate-600 max-w-4xl">
-          {isEn
-            ? "Welding ID, team, qualification grade, permissible rail types, trained machinery, and field experience."
-            : "Welding ID, tổ hàn, hạng, loại ray được phép hàn, máy đã đào tạo, kinh nghiệm"}
-        </p>
-      </div>
-
-      {/* 3 KPI Cards - Image 16 / 17 exact */}
+      {/* 3 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex items-center justify-between">
           <div>
@@ -632,7 +764,7 @@ export default function WelderManagement() {
           </span>
           <button
             type="button"
-            onClick={() => showToast(isEn ? "Add welder feature" : "Mở form thêm thợ hàn")}
+            onClick={openCreateWelder}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-xs transition-colors cursor-pointer"
           >
             <Plus size={16} weight="bold" />
@@ -641,8 +773,7 @@ export default function WelderManagement() {
         </div>
       </div>
 
-      {/* Main Table of Welders */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs mb-10">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs mb-6">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse">
             <thead>
@@ -658,7 +789,6 @@ export default function WelderManagement() {
                     className="h-4 w-4 accent-[#0047AB] rounded"
                   />
                 </th>
-                <th className="p-3 whitespace-nowrap">Welding ID</th>
                 <th className="p-3 min-w-[200px]">{isEn ? "Welder Name & Title" : "Thợ hàn"}</th>
                 <th className="p-3 whitespace-nowrap">{isEn ? "Team" : "Tổ hàn"}</th>
                 <th className="p-3 whitespace-nowrap">{isEn ? "Grade" : "Phân hạng"}</th>
@@ -668,11 +798,11 @@ export default function WelderManagement() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((w) => {
-                const isCurrent = selectedWelder?.id === w.id;
+                const isCurrent = profileOpen && selectedWelder?.id === w.id;
                 return (
                   <tr
                     key={w.id}
-                    onClick={() => setSelectedWelder(w)}
+                    onClick={() => openWelderProfile(w)}
                     className={`transition-colors cursor-pointer ${
                       isCurrent
                         ? "bg-blue-50/70 border-l-4 border-l-[#0047AB]"
@@ -690,10 +820,6 @@ export default function WelderManagement() {
                         }}
                         className="h-4 w-4 accent-[#0047AB] rounded"
                       />
-                    </td>
-
-                    <td className="p-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">
-                      {w.weldingId}
                     </td>
 
                     <td className="p-3">
@@ -739,17 +865,35 @@ export default function WelderManagement() {
                     </td>
 
                     <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWelder(w)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
-                          isCurrent
-                            ? "bg-[#0047AB] text-white"
-                            : "bg-white border border-slate-300 text-slate-700 hover:border-[#0047AB] hover:text-[#0047AB]"
-                        }`}
-                      >
-                        {isCurrent ? "Đang chọn" : "Xem hồ sơ"}
-                      </button>
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openWelderProfile(w)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                            isCurrent
+                              ? "bg-[#0047AB] text-white"
+                              : "bg-white border border-slate-300 text-slate-700 hover:border-[#0047AB] hover:text-[#0047AB]"
+                          }`}
+                        >
+                          {isEn ? "View" : "Xem"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditWelder(w)}
+                          className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-[#0047AB] hover:text-[#0047AB] cursor-pointer"
+                          title={isEn ? "Edit" : "Sửa"}
+                        >
+                          <PencilSimple size={15} weight="bold" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteWelder(w)}
+                          className="rounded-lg border border-rose-200 bg-white p-1.5 text-rose-500 hover:bg-rose-50 cursor-pointer"
+                          title={isEn ? "Delete" : "Xóa"}
+                        >
+                          <Trash size={15} weight="bold" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -767,363 +911,355 @@ export default function WelderManagement() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 11-POINT COMPREHENSIVE WELDER PROFILE PANEL (Image 16 & 17)              */}
-      {/* ========================================================================= */}
-      {selectedWelder && (
-        <div id="welder-profile-panel" className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-md">
-          {/* Header Banner */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-none overflow-hidden rounded-2xl bg-slate-100 ring-2 ring-[#0047AB]/30 shadow-md">
-                <Image src={selectedWelder.photo} alt={selectedWelder.name} fill className="object-cover" sizes="80px" />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
+      {/* Right drawer: welder profile */}
+      {profileOpen && selectedWelder && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
+            aria-label={isEn ? "Close" : "Đóng"}
+            onClick={closeWelderProfile}
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welder-profile-title"
+            className="relative z-10 flex h-full w-full max-w-[560px] xl:max-w-[640px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-200"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3.5">
+                <div className="relative h-14 w-14 flex-none overflow-hidden rounded-2xl bg-slate-100 ring-2 ring-[#0047AB]/25 shadow-sm">
+                  <Image src={selectedWelder.photo} alt={selectedWelder.name} fill className="object-cover" sizes="56px" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
+                    {isEn ? "Welder profile" : "Hồ sơ thợ hàn"}
+                  </div>
+                  <h2 id="welder-profile-title" className="truncate text-lg font-bold text-slate-900">
                     {selectedWelder.name}
                   </h2>
-                  <span className="font-mono text-sm font-bold text-[#0047AB] bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-0.5">
-                    {selectedWelder.weldingId}
-                  </span>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold ${selectedWelder.status === "Hoạt động" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${selectedWelder.status === "Hoạt động" ? "bg-emerald-500" : "bg-rose-500"}`} />
-                    {selectedWelder.status}
-                  </span>
-                </div>
-                <div className="text-xs sm:text-sm text-slate-500 mt-1">
-                  {selectedWelder.position} · {selectedWelder.department} · {selectedWelder.email}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <div className="text-xs text-slate-400 font-medium">Hồ sơ thợ hàn số hóa</div>
-                <div className="text-xs font-bold text-slate-700 mt-0.5">Chuẩn TCVN 13965-1/2:2024</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid of Sections 1 to 5 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
-            {/* 2. Tổ hàn & Hạng thợ */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                2. Tổ hàn & Phân hạng
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-bold text-[#0047AB]">
-                  {selectedWelder.weldingTeam}
-                </span>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${rankStyle[selectedWelder.rank] || "bg-slate-100 text-slate-700"}`}>
-                  {selectedWelder.rank}
-                </span>
-              </div>
-            </div>
-
-            {/* 3. Loại ray được phép hàn */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                3. Loại ray được phép hàn
-              </div>
-              <div className="mt-2 font-mono font-bold text-[#0047AB] text-sm">
-                {selectedWelder.railTypes}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">Ray tiêu chuẩn đường sắt</div>
-            </div>
-
-            {/* 4. Máy đã đào tạo */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                4. Máy đã đào tạo & Vận hành
-              </div>
-              <div className="mt-2 font-mono font-bold text-slate-800 text-sm">
-                {selectedWelder.trainedMachines}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">Tổ hợp máy hàn ray di động</div>
-            </div>
-
-            {/* 5. Kinh nghiệm */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                5. Kinh nghiệm làm việc
-              </div>
-              <div className="mt-2 font-bold text-slate-800 text-sm">
-                {selectedWelder.experience}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">Thi công đường sắt đô thị & quốc gia</div>
-            </div>
-          </div>
-
-          {/* Section 6: Các chứng chỉ cá nhân (Personal Certificates) */}
-          <div className="rounded-2xl border border-blue-200 bg-blue-50/30 p-5 mb-6">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  6. Danh sách chứng chỉ cá nhân của thợ hàn
-                </span>
-                <span className="ml-2 text-xs text-slate-500 font-medium">
-                  (Thuộc hồ sơ thợ hàn, không thuộc QLCL công ty)
-                </span>
-              </div>
-            </div>
-
-            {liveCerts.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {liveCerts.map((cert) => (
-                  <div key={cert.id} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-bold text-slate-900 text-xs sm:text-sm leading-snug line-clamp-2">
-                          {cert.ten_chung_chi}
-                        </h4>
-                        <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${cert.trang_thai === "Còn hiệu lực" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                          {cert.trang_thai}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-600 space-y-0.5 font-mono">
-                        <div>Số: <strong className="text-slate-800">{cert.so_chung_chi || "—"}</strong></div>
-                        <div>Đơn vị: <span className="text-slate-700">{cert.don_vi_cap || "—"}</span></div>
-                        <div>Hạn: <span className="text-slate-700">{cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "—"}</span></div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCertThumbnailItem({
-                            id: cert.id,
-                            title: cert.ten_chung_chi,
-                            holder: selectedWelder.name,
-                            certificateNumber: cert.so_chung_chi || "Chưa cập nhật",
-                            issuedAt: cert.ngay_cap ? formatDate(cert.ngay_cap) : "Chưa cập nhật",
-                            expiresAt: cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "Chưa cập nhật",
-                            status: (cert.trang_thai as Certificate["status"]) || "Chưa cập nhật",
-                            imageKey: imageKeyForTitle(cert.ten_chung_chi),
-                            imageUrl: cert.secure_url || undefined,
-                            machine: selectedWelder.trainedMachines,
-                          });
-                        }}
-                        className="text-xs font-bold text-[#0047AB] hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        🔍 Xem mẫu chứng nhận
-                      </button>
-                    </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 border border-blue-200 rounded-md px-2 py-0.5">
+                      {selectedWelder.weldingId}
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold ${selectedWelder.status === "Hoạt động" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${selectedWelder.status === "Hoạt động" ? "bg-emerald-500" : "bg-rose-500"}`} />
+                      {selectedWelder.status}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {parseCertificateList(selectedWelder.certificates).map((certTitle, idx) => (
-                  <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
-                          {certTitle}
-                        </h4>
-                        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                          Chưa cập nhật
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-600 space-y-0.5 font-mono">
-                        <div>Số: <strong className="text-slate-800">—</strong></div>
-                        <div>Đơn vị: <span className="text-slate-700">—</span></div>
-                        <div>Hạn: <span className="text-slate-700">—</span></div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCertThumbnailItem({
-                            id: `cert-gen-${idx}`,
-                            title: certTitle,
-                            holder: selectedWelder.name,
-                            certificateNumber: "Chưa cập nhật",
-                            issuedAt: "Chưa cập nhật",
-                            expiresAt: "Chưa cập nhật",
-                            status: "Chưa cập nhật",
-                            imageKey: imageKeyForTitle(certTitle),
-                            machine: selectedWelder.trainedMachines,
-                          });
-                        }}
-                        className="text-xs font-bold text-[#0047AB] hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        🔍 Xem mẫu chứng nhận
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Section 7, 8, 9, 10: Năng lực hàn, Mối hàn, Tỷ lệ đạt & Khuyết tật */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* 7 & 8: Hồ sơ đào tạo & Các mối hàn đã thực hiện */}
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                  7. Hồ sơ đào tạo và nâng cao năng lực
                 </div>
-                {parseCertificateList(selectedWelder.certificates).length > 0 ? (
-                  <ul className="space-y-2 text-xs sm:text-sm text-slate-700">
-                    {parseCertificateList(selectedWelder.certificates).map((title) => (
-                      <li key={title} className="flex items-start gap-2">
-                        <span className="text-[#0047AB] mt-0.5">•</span>
-                        <span>{title}</span>
-                      </li>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => openEditWelder(selectedWelder)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-[#0047AB] cursor-pointer"
+                  aria-label={isEn ? "Edit" : "Sửa"}
+                  title={isEn ? "Edit" : "Sửa"}
+                >
+                  <PencilSimple size={16} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteWelder(selectedWelder)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                  aria-label={isEn ? "Delete" : "Xóa"}
+                  title={isEn ? "Delete" : "Xóa"}
+                >
+                  <Trash size={16} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={closeWelderProfile}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                  aria-label={isEn ? "Close" : "Đóng"}
+                >
+                  <X size={18} weight="bold" />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-5">
+              <div className="text-xs sm:text-sm text-slate-500">
+                {selectedWelder.position} · {selectedWelder.department} · {selectedWelder.email}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    2. Tổ hàn & Phân hạng
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-bold text-[#0047AB]">
+                      {selectedWelder.weldingTeam}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${rankStyle[selectedWelder.rank] || "bg-slate-100 text-slate-700"}`}>
+                      {selectedWelder.rank}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    3. Loại ray được phép hàn
+                  </div>
+                  <div className="mt-2 font-mono font-bold text-[#0047AB] text-sm">
+                    {selectedWelder.railTypes}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    4. Máy đã đào tạo
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Liên kết với mục{" "}
+                    <Link
+                      href="/danh-sach-may"
+                      className="font-semibold text-[#0047AB] underline underline-offset-2 hover:text-blue-800"
+                    >
+                      Nhân sự đã đào tạo
+                    </Link>{" "}
+                    trong Danh sách máy
+                  </p>
+                  <div className="mt-2.5">
+                    {linkedTrainedMachines.length === 0 ? (
+                      <div className="font-mono font-bold text-slate-500 text-sm">Chưa cập nhật</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {linkedTrainedMachines.map(({ token, machine }) =>
+                          machine ? (
+                            <Link
+                              key={`${machine.id}-${token}`}
+                              href={`/danh-sach-may?may=${encodeURIComponent(machine.code)}&tab=personnel`}
+                              className="inline-flex max-w-full items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 p-1.5 pr-2.5 text-left hover:bg-blue-100 hover:border-[#0047AB] transition-colors"
+                              title={`${machine.name} · mở tab Nhân sự đã đào tạo`}
+                            >
+                              <span className="relative h-9 w-14 flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                                <Image
+                                  src={machine.weldingUnit?.coverImage || machine.image || "/may-han/kcm007.jpg"}
+                                  alt={machine.name}
+                                  fill
+                                  className="object-cover"
+                                  sizes="56px"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-bold text-slate-900 leading-snug">
+                                  {machine.name}
+                                </span>
+                                <span className="block truncate font-mono text-[11px] font-semibold text-[#0047AB]">
+                                  {machine.code}
+                                </span>
+                              </span>
+                            </Link>
+                          ) : (
+                            <span
+                              key={token}
+                              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold font-mono text-slate-700"
+                              title="Chưa khớp mã máy trong danh sách máy"
+                            >
+                              {token}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    5. Kinh nghiệm
+                  </div>
+                  <div className="mt-2 font-bold text-slate-800 text-sm">
+                    {selectedWelder.experience}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/30 p-4">
+                <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
+                  6. Chứng chỉ cá nhân
+                </div>
+                {liveCerts.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {liveCerts.map((cert) => (
+                      <div key={cert.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
+                            {cert.ten_chung_chi}
+                          </h4>
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${cert.trang_thai === "Còn hiệu lực" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                            {cert.trang_thai}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-[11px] text-slate-600 space-y-0.5 font-mono">
+                          <div>Số: <strong className="text-slate-800">{cert.so_chung_chi || "—"}</strong></div>
+                          <div>Hạn: {cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "—"}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCertThumbnailItem({
+                              id: cert.id,
+                              title: cert.ten_chung_chi,
+                              holder: selectedWelder.name,
+                              certificateNumber: cert.so_chung_chi || "Chưa cập nhật",
+                              issuedAt: cert.ngay_cap ? formatDate(cert.ngay_cap) : "Chưa cập nhật",
+                              expiresAt: cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "Chưa cập nhật",
+                              status: (cert.trang_thai as Certificate["status"]) || "Chưa cập nhật",
+                              imageKey: imageKeyForTitle(cert.ten_chung_chi),
+                              imageUrl: cert.secure_url || undefined,
+                              machine: selectedWelder.trainedMachines,
+                            });
+                          }}
+                          className="mt-2 text-xs font-bold text-[#0047AB] hover:underline cursor-pointer"
+                        >
+                          Xem mẫu chứng nhận
+                        </button>
+                      </div>
                     ))}
-                  </ul>
-                ) : (
-                  <div className="text-xs text-slate-500 italic">Chưa có hồ sơ đào tạo được liên kết.</div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                  8. Hồ sơ các mối hàn gần đây
-                </div>
-                {welderPerformance.recentWelds.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-slate-400 font-semibold">
-                          <th className="pb-1.5">Mã mối</th>
-                          <th className="pb-1.5">Dự án</th>
-                          <th className="pb-1.5">Ngày</th>
-                          <th className="pb-1.5 text-right">Kết quả</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {welderPerformance.recentWelds.map((rw) => (
-                          <tr key={rw.id}>
-                            <td className="py-2 font-mono font-bold text-[#0047AB]">{rw.ma_lich_su}</td>
-                            <td className="py-2 text-slate-600 truncate max-w-[120px]">{rw.du_an}</td>
-                            <td className="py-2 text-slate-500 font-mono">{rw.ngay_thuc_hien?.slice(0, 10) || rw.nam_thuc_hien}</td>
-                            <td className="py-2 text-right">
-                              {rw.so_luong_loi === 0 ? (
-                                <span className="text-emerald-700 font-bold">Đạt</span>
-                              ) : (
-                                <span className="text-rose-700 font-bold">Lỗi</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  </div>
+                ) : parseCertificateList(selectedWelder.certificates).length > 0 ? (
+                  <div className="space-y-2.5">
+                    {parseCertificateList(selectedWelder.certificates).map((certTitle, idx) => (
+                      <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
+                        <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{certTitle}</h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCertThumbnailItem({
+                              id: `cert-gen-${idx}`,
+                              title: certTitle,
+                              holder: selectedWelder.name,
+                              certificateNumber: "Chưa cập nhật",
+                              issuedAt: "Chưa cập nhật",
+                              expiresAt: "Chưa cập nhật",
+                              status: "Chưa cập nhật",
+                              imageKey: imageKeyForTitle(certTitle),
+                              machine: selectedWelder.trainedMachines,
+                            });
+                          }}
+                          className="mt-2 text-xs font-bold text-[#0047AB] hover:underline cursor-pointer"
+                        >
+                          Xem mẫu chứng nhận
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-500 italic">Chưa có bản ghi mối hàn trong kỳ.</div>
+                  <div className="text-xs text-slate-500 italic">Chưa có chứng chỉ.</div>
                 )}
               </div>
-            </div>
 
-            {/* 9 & 10: Số mối hàn đạt/không đạt & Các khuyết tật đã ghi nhận */}
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
-                  9. Thống kê số lượng mối hàn đạt / không đạt
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3">
+                  9. Thống kê mối hàn
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-                    <div className="text-[11px] font-semibold text-slate-500">Tổng thực hiện</div>
-                    <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+                    <div className="text-[10px] font-semibold text-slate-500">Tổng</div>
+                    <div className="text-xl font-bold font-mono text-slate-900 mt-0.5">
                       {welderPerformance.total.toLocaleString("vi-VN")}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-emerald-50/60 p-3 border border-emerald-100">
-                    <div className="text-[11px] font-semibold text-emerald-800">Đạt chuẩn</div>
-                    <div className="text-2xl font-bold font-mono text-emerald-700 mt-1">
+                  <div className="rounded-xl bg-emerald-50/60 p-2.5 border border-emerald-100">
+                    <div className="text-[10px] font-semibold text-emerald-800">Đạt</div>
+                    <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
                       {welderPerformance.passed.toLocaleString("vi-VN")}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-rose-50/60 p-3 border border-rose-100">
-                    <div className="text-[11px] font-semibold text-rose-800">Không đạt</div>
-                    <div className="text-2xl font-bold font-mono text-rose-700 mt-1">
+                  <div className="rounded-xl bg-rose-50/60 p-2.5 border border-rose-100">
+                    <div className="text-[10px] font-semibold text-rose-800">Lỗi</div>
+                    <div className="text-xl font-bold font-mono text-rose-700 mt-0.5">
                       {welderPerformance.failed.toLocaleString("vi-VN")}
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-4">
+                <div className="mt-3">
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>Tỷ lệ đạt chuẩn:</span>
+                    <span>Tỷ lệ đạt</span>
                     <span className="text-[#0047AB] font-mono">{welderPerformance.passRate}%</span>
                   </div>
-                  <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                      className="h-full bg-emerald-500 rounded-full"
                       style={{ width: `${welderPerformance.passRate}%` }}
                     />
                   </div>
                 </div>
               </div>
 
-              {/* 10: Khuyết tật ghi nhận */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                  10. Khuyết tật mối hàn ghi nhận (NDT & Lỗi sử dụng)
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  8. Mối hàn gần đây
+                </div>
+                {welderPerformance.recentWelds.length > 0 ? (
+                  <div className="space-y-2">
+                    {welderPerformance.recentWelds.map((rw) => (
+                      <div key={rw.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
+                        <div className="min-w-0">
+                          <div className="font-mono text-xs font-bold text-[#0047AB] truncate">{rw.ma_lich_su}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{rw.du_an}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono text-[11px] text-slate-400">
+                            {rw.ngay_thuc_hien?.slice(0, 10) || rw.nam_thuc_hien}
+                          </div>
+                          {rw.so_luong_loi === 0 ? (
+                            <span className="text-[11px] font-bold text-emerald-700">Đạt</span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-rose-700">Lỗi</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">Chưa có bản ghi mối hàn.</div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  10. Khuyết tật ghi nhận
                 </div>
                 {welderPerformance.defects.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="flex flex-wrap gap-2">
                     {welderPerformance.defects.map((df, i) => (
                       <span
                         key={i}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800"
                       >
                         <span className="font-mono font-bold">{df.code}</span>
-                        <span className="text-[11px] font-normal text-rose-600">({df.count} lần)</span>
+                        <span className="text-[11px] font-normal text-rose-600">({df.count})</span>
                       </span>
                     ))}
                   </div>
                 ) : (
                   <div className="text-xs text-emerald-700 font-semibold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                    ✓ Không ghi nhận lỗi khuyết tật nào trong quá trình kiểm tra NDT.
+                    Không ghi nhận lỗi khuyết tật.
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* ========================================================================= */}
-          {/* Section 11: Danh sách tài liệu hồ sơ (Google Drive PDF)                   */}
-          {/* ========================================================================= */}
-          <div className="rounded-2xl border border-slate-300 bg-slate-50/50 p-5 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  11. Danh sách tài liệu hồ sơ thợ hàn (Google Drive PDF)
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Tài liệu PDF được lưu trữ bảo mật trên Google Drive, phân loại theo đúng hồ sơ nhân sự của {selectedWelder.name}.
-                </p>
-              </div>
+              <div className="rounded-2xl border border-slate-300 bg-slate-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">11. Tài liệu hồ sơ</h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Google Drive PDF</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => reloadDriveDocs()}
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Làm mới
+                  </button>
+                </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => reloadDriveDocs()}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-                >
-                  🔄 {isEn ? "Refresh Drive" : "Làm mới"}
-                </button>
-              </div>
-            </div>
-
-            {/* Upload PDF to Drive Form */}
-            <form onSubmit={handleUploadDriveDoc} className="rounded-xl border border-blue-200 bg-white p-4 mb-5 shadow-2xs space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                + Tải tài liệu PDF mới vào hồ sơ thợ hàn
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs sm:text-sm">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Chọn tệp PDF *
-                  </label>
+                <form onSubmit={handleUploadDriveDoc} className="rounded-xl border border-blue-200 bg-white p-3 mb-3 space-y-2.5">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1131,174 +1267,94 @@ export default function WelderManagement() {
                     required
                     className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0047AB] hover:file:bg-blue-100 cursor-pointer"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Tên hiển thị tài liệu
-                  </label>
                   <input
                     type="text"
                     value={uploadTitle}
                     onChange={(e) => setUploadTitle(e.target.value)}
-                    placeholder="VD: Chứng chỉ hàn nhiệt nhôm L2..."
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                    placeholder="Tên hiển thị tài liệu"
+                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Loại tài liệu
-                  </label>
                   <select
                     value={uploadDocType}
                     onChange={(e) => setUploadDocType(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB]"
                   >
-                    <option value="certificate">Chứng chỉ (Certificate)</option>
-                    <option value="training">Đào tạo & Nâng cao năng lực (Training)</option>
-                    <option value="welding_record">Hồ sơ hàn & Nhật ký (Welding Record)</option>
-                    <option value="permit">Giấy phép hàn (Permit)</option>
-                    <option value="other">Khác (Other)</option>
+                    <option value="certificate">Chứng chỉ</option>
+                    <option value="training">Đào tạo</option>
+                    <option value="welding_record">Hồ sơ hàn</option>
+                    <option value="permit">Giấy phép hàn</option>
+                    <option value="other">Khác</option>
                   </select>
+                  <button
+                    type="submit"
+                    disabled={uploadingDoc || !driveConfigured}
+                    className="w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-50 px-3 py-2 text-xs font-bold text-white cursor-pointer"
+                  >
+                    {uploadingDoc ? `Đang tải… ${uploadProgress ?? 0}%` : "Tải lên Drive"}
+                  </button>
+                </form>
+
+                {driveError ? (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    {driveError}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {loadingDrive ? (
+                    <div className="text-xs text-slate-500 py-4 text-center">Đang tải tài liệu…</div>
+                  ) : welderDriveDocs.length === 0 ? (
+                    <div className="text-xs text-slate-500 py-4 text-center">Chưa có tài liệu PDF.</div>
+                  ) : (
+                    welderDriveDocs.map((doc) => {
+                      const viewUrl = `/api/documents/${doc.id}`;
+                      const downloadUrl = `/api/documents/${doc.id}?download=1`;
+                      return (
+                      <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="font-bold text-slate-900 text-xs line-clamp-2">{doc.name}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-500 font-mono">
+                          <span>{doc.appProperties?.documentType || "certificate"}</span>
+                          <span>{formatDate(doc.createdTime)}</span>
+                          <span>{formatFileSize(doc.size)}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setPdfPreviewItem(doc)}
+                            className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer"
+                          >
+                            Xem
+                          </button>
+                          <a
+                            href={downloadUrl}
+                            className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700"
+                          >
+                            Tải về
+                          </a>
+                          <a
+                            href={doc.webViewLink || viewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700"
+                          >
+                            Mở Drive
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDriveDoc(doc.id)}
+                            className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-700 cursor-pointer"
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-
-              <div className="flex items-center justify-between pt-1">
-                {uploadProgress !== null ? (
-                  <div className="flex items-center gap-2 text-xs text-[#0047AB] font-semibold">
-                    <span>Đang tải lên Drive... {uploadProgress}%</span>
-                    <div className="w-24 h-2 rounded-full bg-blue-100 overflow-hidden">
-                      <div className="h-full bg-[#0047AB]" style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-slate-400 italic">
-                    Tệp được tự động gắn nhãn employeeId: {selectedWelder.id.slice(0, 8)}...
-                  </span>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={uploadingDoc}
-                  className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-50 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors cursor-pointer"
-                >
-                  {uploadingDoc ? "Đang tải lên…" : "Tải lên Drive"}
-                </button>
-              </div>
-            </form>
-
-            {/* Table of PDF Documents */}
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-600">
-                    <th className="p-3">{isEn ? "Document Name" : "Tên tài liệu"}</th>
-                    <th className="p-3 whitespace-nowrap">{isEn ? "Type" : "Loại tài liệu"}</th>
-                    <th className="p-3 whitespace-nowrap">{isEn ? "Upload Date" : "Ngày tải"}</th>
-                    <th className="p-3 whitespace-nowrap">{isEn ? "Size" : "Dung lượng"}</th>
-                    <th className="p-3 text-right whitespace-nowrap">{isEn ? "Action" : "Thao tác"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {welderDriveDocs.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">📄</span>
-                          <span className="font-bold text-slate-900 line-clamp-1">{doc.name}</span>
-                        </div>
-                        {doc.description && (
-                          <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 pl-6">
-                            {doc.description}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="p-3 whitespace-nowrap">
-                        <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700 font-mono">
-                          {doc.appProperties?.documentType || "certificate"}
-                        </span>
-                      </td>
-
-                      <td className="p-3 whitespace-nowrap font-mono text-xs text-slate-500">
-                        {formatDate(doc.createdTime)}
-                      </td>
-
-                      <td className="p-3 whitespace-nowrap font-mono text-xs text-slate-600">
-                        {formatFileSize(doc.size)}
-                      </td>
-
-                      <td className="p-3 text-right whitespace-nowrap space-x-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setPdfPreviewItem(doc)}
-                          className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-bold text-[#0047AB] hover:bg-blue-100 cursor-pointer shadow-2xs"
-                        >
-                          👁️ {isEn ? "Preview" : "Xem trước"}
-                        </button>
-
-                        <a
-                          href={doc.webContentLink || doc.webViewLink || "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer shadow-2xs"
-                        >
-                          ⬇️ {isEn ? "Download" : "Tải về"}
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReplacingDocId(doc.id);
-                            replaceInputRef.current?.click();
-                          }}
-                          className="rounded-lg bg-amber-50 border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 cursor-pointer shadow-2xs"
-                        >
-                          🔄 {isEn ? "Replace" : "Thay tệp"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingDoc(doc);
-                            setEditDocName(doc.name);
-                          }}
-                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
-                        >
-                          ✏️ {isEn ? "Edit" : "Sửa"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteDriveDoc(doc.id)}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer shadow-2xs"
-                        >
-                          🗑️ {isEn ? "Trash" : "Xóa"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {loadingDrive ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-500">
-                        {isEn ? "Loading documents from Google Drive..." : "Đang tải tài liệu từ Google Drive..."}
-                      </td>
-                    </tr>
-                  ) : welderDriveDocs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-500">
-                        {isEn
-                          ? "No PDF documents found in Google Drive for this welder."
-                          : "Chưa có tài liệu PDF nào trong Google Drive của thợ hàn này."}
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
             </div>
-          </div>
+          </aside>
         </div>
       )}
 
@@ -1316,7 +1372,7 @@ export default function WelderManagement() {
         }}
       />
 
-      {/* PDF Viewer Modal via Iframe preview (webViewLink.replace('/view', '/preview')) */}
+      {/* PDF Viewer Modal — xem qua proxy /api/documents/:id */}
       {pdfPreviewItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
           <div className="relative z-10 flex h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -1327,12 +1383,18 @@ export default function WelderManagement() {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={pdfPreviewItem.webContentLink || pdfPreviewItem.webViewLink}
+                  href={`/api/documents/${pdfPreviewItem.id}?download=1`}
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                >
+                  Tải về
+                </a>
+                <a
+                  href={pdfPreviewItem.webViewLink || `/api/documents/${pdfPreviewItem.id}`}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
-                  Mở trên Google Drive ↗
+                  Mở tab mới ↗
                 </a>
                 <button
                   type="button"
@@ -1345,17 +1407,11 @@ export default function WelderManagement() {
             </div>
 
             <div className="flex-1 bg-slate-100">
-              {pdfPreviewItem.webViewLink ? (
-                <iframe
-                  src={pdfPreviewItem.webViewLink.replace("/view", "/preview")}
-                  className="h-full w-full border-0"
-                  title={pdfPreviewItem.name}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-slate-400 text-sm">
-                  Không có liên kết xem trước từ Google Drive.
-                </div>
-              )}
+              <iframe
+                src={`/api/documents/${pdfPreviewItem.id}`}
+                className="h-full w-full border-0"
+                title={pdfPreviewItem.name}
+              />
             </div>
           </div>
         </div>
@@ -1464,6 +1520,19 @@ export default function WelderManagement() {
           </div>
         </div>
       )}
+
+      <WelderFormModal
+        open={formOpen}
+        initial={editingWelder}
+        saving={savingWelder}
+        isEn={isEn}
+        onClose={() => {
+          if (savingWelder) return;
+          setFormOpen(false);
+          setEditingWelder(null);
+        }}
+        onSubmit={handleSaveWelder}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -169,7 +169,7 @@ export default function ComplianceStandardsList() {
   }
 
   return (
-    <div className="mx-auto max-w-[1568px] px-4 sm:px-6 pb-12">
+    <div className="w-full px-4 sm:px-6 pb-12">
       {/* Header */}
       <div className="mb-6">
         <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">

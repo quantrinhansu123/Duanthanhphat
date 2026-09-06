@@ -75,3 +75,130 @@ export async function updatePersonnelCertificates(employeeId: string, certificat
 
   if (error) throw new Error(formatSupabaseError(error));
 }
+
+/** Gán / cập nhật danh sách máy đã đào tạo (loai_may) cho nhân sự. */
+export async function updatePersonnelTrainedMachines(employeeId: string, trainedMachines: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể lưu máy đã đào tạo.");
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("nhan_su")
+    .update({ loai_may: trainedMachines.trim() || null })
+    .eq("employee_id", employeeId);
+
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export type PersonnelUpsertInput = {
+  employeeId?: string;
+  maNhanSu: string;
+  hoTen: string;
+  chucVu?: string;
+  donVi?: string;
+  toHan?: string;
+  capBac?: string;
+  loaiRay?: string;
+  loaiMay?: string;
+  kinhNghiem?: string;
+  hinhAnh?: string;
+};
+
+function toNullable(value?: string) {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || null;
+}
+
+export async function upsertPersonnel(input: PersonnelUpsertInput): Promise<PersonnelCertificateRow> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể lưu hồ sơ thợ hàn.");
+  }
+
+  const hoTen = input.hoTen.trim();
+  const maNhanSu = input.maNhanSu.trim();
+  if (!hoTen) throw new Error("Vui lòng nhập họ tên thợ hàn.");
+  if (!maNhanSu) throw new Error("Vui lòng nhập mã Welding ID.");
+
+  const payload = {
+    ma_nhan_su: maNhanSu,
+    ho_ten: hoTen,
+    chuc_vu: toNullable(input.chucVu) ?? "Thợ hàn",
+    don_vi: toNullable(input.donVi),
+    to_han: toNullable(input.toHan),
+    cap_bac: toNullable(input.capBac),
+    loai_ray: toNullable(input.loaiRay),
+    loai_may: toNullable(input.loaiMay),
+    kinh_nghiem: toNullable(input.kinhNghiem),
+    hinh_anh: toNullable(input.hinhAnh),
+  };
+
+  const supabase = createClient();
+  const employeeId = input.employeeId?.trim() || crypto.randomUUID();
+
+  if (input.employeeId?.trim()) {
+    const { data, error } = await supabase
+      .from("nhan_su")
+      .update(payload)
+      .eq("employee_id", employeeId)
+      .select(PERSONNEL_CERTIFICATE_COLUMNS)
+      .single();
+    if (error) throw new Error(formatSupabaseError(error));
+    return data as unknown as PersonnelCertificateRow;
+  }
+
+  const { data, error } = await supabase
+    .from("nhan_su")
+    .insert({ employee_id: employeeId, ...payload })
+    .select(PERSONNEL_CERTIFICATE_COLUMNS)
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return data as unknown as PersonnelCertificateRow;
+}
+
+export async function deletePersonnel(employeeId: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể xóa hồ sơ thợ hàn.");
+  }
+  if (!employeeId.trim()) throw new Error("Thiếu mã nhân sự để xóa.");
+
+  const supabase = createClient();
+  const { error } = await supabase.from("nhan_su").delete().eq("employee_id", employeeId);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export function parseTrainedMachineTokens(value?: string | null): string[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(/[,;|/]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function personTrainedOnMachine(
+  loaiMay: string | null | undefined,
+  machine: { code: string; model?: string },
+): boolean {
+  const tokens = parseTrainedMachineTokens(loaiMay).map((t) => t.toLowerCase());
+  if (tokens.length === 0) return false;
+  const code = machine.code.trim().toLowerCase();
+  const model = machine.model?.trim().toLowerCase() ?? "";
+  const modelKey = model.replace(/\(.*?\)/g, "").trim();
+  return tokens.some((token) => {
+    if (!token || token === "chưa cập nhật") return false;
+    if (token === code || (model && token === model) || (modelKey && token === modelKey)) return true;
+    if (code.includes(token) || token.includes(code)) return true;
+    if (modelKey && (modelKey.includes(token) || token.includes(modelKey))) return true;
+    return false;
+  });
+}
+
+export function appendTrainedMachineToken(existing: string | null | undefined, token: string): string {
+  const next = token.trim();
+  const current = parseTrainedMachineTokens(existing);
+  if (!next) return current.join(", ");
+  if (current.some((item) => item.toLowerCase() === next.toLowerCase())) {
+    return current.join(", ");
+  }
+  return [...current, next].join(", ");
+}

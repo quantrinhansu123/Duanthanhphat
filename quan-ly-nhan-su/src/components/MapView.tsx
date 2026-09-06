@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import dynamic from "next/dynamic";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -292,7 +292,7 @@ export default function MapView() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-6 pb-8">
+    <main className="w-full px-6 pb-8">
       {useGoogle ? (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           <strong>Google Maps:</strong> marker + đường tuyến từ bảng <code className="rounded bg-white px-1">toa_do</code>.

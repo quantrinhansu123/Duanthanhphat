@@ -177,15 +177,7 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
   if (!isSupabaseReady()) return [];
   const supabase = createClient();
   const pageSize = 1000;
-  const rows: {
-    id: string;
-    ten_nhom: string;
-    ma_nhom: string | null;
-    don_vi_cap: string | null;
-    may_ap_dung: string | null;
-    ngay_cap: string | null;
-    ngay_het_han: string | null;
-  }[] = [];
+  const byId = new Map<string, CertificateGroupOption>();
 
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
@@ -195,19 +187,46 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const page = data ?? [];
-    rows.push(...page);
+    for (const r of page) {
+      byId.set(r.id, {
+        id: r.id,
+        name: r.ten_nhom,
+        code: r.ma_nhom ?? undefined,
+        issuer: r.don_vi_cap ?? undefined,
+        machine: r.may_ap_dung ?? undefined,
+        issueDate: r.ngay_cap ?? undefined,
+        expiryDate: r.ngay_het_han ?? undefined,
+      });
+    }
     if (page.length < pageSize) break;
   }
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.ten_nhom,
-    code: r.ma_nhom ?? undefined,
-    issuer: r.don_vi_cap ?? undefined,
-    machine: r.may_ap_dung ?? undefined,
-    issueDate: r.ngay_cap ?? undefined,
-    expiryDate: r.ngay_het_han ?? undefined,
-  }));
+  // Bổ sung nhóm đang dùng trên trang Chứng chỉ (bảng chung_chi)
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("chung_chi")
+      .select("nhom_id, ten_chung_chi, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han")
+      .not("nhom_id", "is", null)
+      .order("ten_chung_chi", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    for (const r of page) {
+      const id = r.nhom_id as string;
+      if (!id || byId.has(id)) continue;
+      byId.set(id, {
+        id,
+        name: r.ten_chung_chi,
+        issuer: r.don_vi_cap ?? undefined,
+        machine: r.may_ap_dung ?? undefined,
+        issueDate: r.ngay_cap ?? undefined,
+        expiryDate: r.ngay_het_han ?? undefined,
+      });
+    }
+    if (page.length < pageSize) break;
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, "vi"));
 }
 
 export async function fetchTrainingPersonnelOptions(): Promise<TrainingPersonnelOption[]> {

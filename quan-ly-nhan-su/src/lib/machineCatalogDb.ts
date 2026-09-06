@@ -104,10 +104,19 @@ function rowToMachine(row: MachineCatalogRow): Machine {
   const overrides = readLocalOverrides();
   const local = overrides[row.ma_may] || overrides[row.id];
   const seed = seedMachines.find((m) => m.code === row.ma_may);
-  const status = normalizeStatus(row.trang_thai);
-  const code = row.ma_may;
+  const status = normalizeStatus(row.trang_thai || "Sẵn sàng");
+  const code = (row.ma_may || "").trim() || `MAY-${row.id.slice(0, 8)}`;
   const model = determineModel(code, row.model || local?.model || seed?.model);
   const safeImage = resolveSafeImage(row.hinh_anh || local?.image || seed?.image, code);
+
+  const weldCountRaw =
+    row.tong_moi_han !== null && row.tong_moi_han !== undefined
+      ? Number(row.tong_moi_han)
+      : local?.weldCount ?? seed?.weldCount ?? 0;
+  const operatingHoursRaw =
+    row.gio_hoat_dong !== null && row.gio_hoat_dong !== undefined
+      ? Number(row.gio_hoat_dong)
+      : local?.operatingHours ?? seed?.operatingHours ?? 0;
 
   return {
     id: row.id,
@@ -133,10 +142,7 @@ function rowToMachine(row: MachineCatalogRow): Machine {
     currentProject: row.du_an_hien_tai || local?.currentProject || seed?.currentProject || "",
     status,
     available: status === "Sẵn sàng",
-    weldCount:
-      row.tong_moi_han !== null && row.tong_moi_han !== undefined
-        ? Number(row.tong_moi_han)
-        : local?.weldCount ?? seed?.weldCount ?? 0,
+    weldCount: Number.isFinite(weldCountRaw) ? weldCountRaw : 0,
     image: safeImage,
     gallery:
       (row.hinh_anh_chi_tiet && row.hinh_anh_chi_tiet.length > 0
@@ -193,10 +199,7 @@ function rowToMachine(row: MachineCatalogRow): Machine {
       local?.nextMaintenance ||
       seed?.nextMaintenance ||
       "—",
-    operatingHours:
-      row.gio_hoat_dong !== null && row.gio_hoat_dong !== undefined
-        ? Number(row.gio_hoat_dong)
-        : local?.operatingHours ?? seed?.operatingHours ?? 0,
+    operatingHours: Number.isFinite(operatingHoursRaw) ? operatingHoursRaw : 0,
     errorRate: local?.errorRate || seed?.errorRate || "—",
     note: row.ghi_chu || local?.note || seed?.note || "",
     specs: (row.thong_so as Machine["specs"]) || local?.specs || seed?.specs,
@@ -263,11 +266,23 @@ export async function loadMachineCatalog(): Promise<{
 
     // If Supabase returned rows
     if (rows.length > 0) {
-      const mapped = rows.map(rowToMachine);
-      return {
-        machines: mapped,
-        source: "supabase",
-      };
+      try {
+        const mapped = rows.map(rowToMachine).filter((m) => Boolean(m.code));
+        if (mapped.length > 0) {
+          return {
+            machines: mapped,
+            source: "supabase",
+          };
+        }
+      } catch (mapError) {
+        const overrides = readLocalOverrides();
+        const merged = seedMachines.map((m) => overrides[m.code] || m);
+        return {
+          machines: merged,
+          source: "seed",
+          error: mapError instanceof Error ? mapError.message : "Lỗi ánh xạ dữ liệu máy",
+        };
+      }
     }
 
     // If table is completely empty, use seeds

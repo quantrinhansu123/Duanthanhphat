@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
@@ -1003,7 +1003,7 @@ export default function WeldingJournalList() {
   }
 
   return (
-    <main className="mx-auto max-w-[1568px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {error
           ? `Không tải được Supabase: ${error}`

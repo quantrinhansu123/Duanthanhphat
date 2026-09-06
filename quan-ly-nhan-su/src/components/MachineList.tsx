@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -30,6 +30,15 @@ import {
   updateMachine as updateMachineInDb,
 } from "@/lib/machineCatalogDb";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import {
+  appendTrainedMachineToken,
+  loadPersonnelCertificateRows,
+  personTrainedOnMachine,
+  updatePersonnelTrainedMachines,
+  type PersonnelCertificateRow,
+} from "@/lib/personnelCertificatesDb";
+
+type DetailTab = "welding" | "transport" | "history" | "personnel";
 
 const statusStyle: Record<Machine["status"], string> = {
   "Đang làm việc": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -430,7 +439,7 @@ function ImageUploader({
 }
 
 // -----------------------------------------------------------------------------
-// MachineDetailModal: Hiển thị chi tiết theo 3 tab (Máy hàn / Xe / Lịch sử bảo trì)
+// MachineDetailModal: Máy hàn / Xe / Bảo trì / Nhân sự đã đào tạo
 // -----------------------------------------------------------------------------
 function MachineDetailModal({
   machine,
@@ -441,10 +450,22 @@ function MachineDetailModal({
   machine: Machine;
   onClose: () => void;
   onEdit: () => void;
-  initialTab?: "welding" | "transport" | "history";
+  initialTab?: DetailTab;
 }) {
-  const [tab, setTab] = useState<"welding" | "transport" | "history">(initialTab);
+  const [tab, setTab] = useState<DetailTab>(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab, machine.id]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [personnelRows, setPersonnelRows] = useState<PersonnelCertificateRow[]>([]);
+  const [personnelLoading, setPersonnelLoading] = useState(false);
+  const [personnelError, setPersonnelError] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [personSearch, setPersonSearch] = useState("");
+  const [personSuggestOpen, setPersonSuggestOpen] = useState(false);
+  const [savingPersonnel, setSavingPersonnel] = useState(false);
 
   // Welding images
   const weldingCover = machine.weldingUnit?.coverImage || machine.image || defaultMachineImage;
@@ -466,6 +487,61 @@ function MachineDetailModal({
 
   const history = useMemo(() => getMachineMaintenanceHistory(machine.code), [machine.code]);
 
+  const trainedPersonnel = useMemo(
+    () =>
+      personnelRows.filter((row) =>
+        personTrainedOnMachine(row.loai_may, { code: machine.code, model: machine.model }),
+      ),
+    [personnelRows, machine.code, machine.model],
+  );
+
+  const availablePersonnel = useMemo(
+    () =>
+      personnelRows.filter(
+        (row) => !personTrainedOnMachine(row.loai_may, { code: machine.code, model: machine.model }),
+      ),
+    [personnelRows, machine.code, machine.model],
+  );
+
+  const personnelSuggestions = useMemo(() => {
+    const q = personSearch.trim().toLowerCase();
+    const pool = availablePersonnel;
+    if (!q) return pool.slice(0, 8);
+    return pool
+      .filter((person) => {
+        const haystack = [
+          person.ho_ten,
+          person.ma_nhan_su || "",
+          person.chuc_vu || "",
+          person.to_han || "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 10);
+  }, [availablePersonnel, personSearch]);
+
+  const selectedPersonLabel = useMemo(() => {
+    const person = personnelRows.find((row) => row.employee_id === selectedEmployeeId);
+    if (!person) return "";
+    return `${person.ma_nhan_su || "—"} · ${person.ho_ten}`;
+  }, [personnelRows, selectedEmployeeId]);
+
+  async function refreshPersonnel() {
+    setPersonnelLoading(true);
+    setPersonnelError("");
+    try {
+      const rows = await loadPersonnelCertificateRows();
+      setPersonnelRows(rows);
+    } catch (error) {
+      setPersonnelError(error instanceof Error ? error.message : "Không tải được danh sách nhân sự");
+      setPersonnelRows([]);
+    } finally {
+      setPersonnelLoading(false);
+    }
+  }
+
   useEffect(() => {
     setActiveWeldingImg(weldingCover);
   }, [weldingCover]);
@@ -482,11 +558,55 @@ function MachineDetailModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    if (tab !== "personnel") return;
+    let active = true;
+    setPersonnelLoading(true);
+    setPersonnelError("");
+    loadPersonnelCertificateRows()
+      .then((rows) => {
+        if (!active) return;
+        setPersonnelRows(rows);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setPersonnelError(error instanceof Error ? error.message : "Không tải được danh sách nhân sự");
+        setPersonnelRows([]);
+      })
+      .finally(() => {
+        if (active) setPersonnelLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tab, machine.code]);
+
+  async function handleAddTrainedPersonnel() {
+    if (!selectedEmployeeId) return;
+    const person = personnelRows.find((row) => row.employee_id === selectedEmployeeId);
+    if (!person) return;
+    setSavingPersonnel(true);
+    setPersonnelError("");
+    try {
+      const next = appendTrainedMachineToken(person.loai_may, machine.code);
+      await updatePersonnelTrainedMachines(person.employee_id, next);
+      await refreshPersonnel();
+      setSelectedEmployeeId("");
+      setPersonSearch("");
+      setPersonSuggestOpen(false);
+      setAddOpen(false);
+    } catch (error) {
+      setPersonnelError(error instanceof Error ? error.message : "Không thể thêm nhân sự");
+    } finally {
+      setSavingPersonnel(false);
+    }
+  }
+
   const weldingUnit = machine.weldingUnit;
   const transportUnit = machine.transportUnit;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <button
         type="button"
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
@@ -497,7 +617,7 @@ function MachineDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="machine-detail-title"
-        className="relative z-10 flex max-h-[92dvh] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-150"
+        className="relative z-10 flex max-h-[94dvh] w-full max-w-[1320px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
         {/* Header tổ hợp */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
@@ -559,12 +679,12 @@ function MachineDetailModal({
           </div>
         </div>
 
-        {/* Tab Selection: 1. Máy hàn | 2. Phương tiện vận chuyển | 3. Lịch sử bảo trì */}
-        <div className="flex gap-1 border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
+        {/* Tab Selection */}
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
           <button
             type="button"
             onClick={() => setTab("welding")}
-            className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
               tab === "welding"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -575,7 +695,7 @@ function MachineDetailModal({
           <button
             type="button"
             onClick={() => setTab("transport")}
-            className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
               tab === "transport"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -586,7 +706,7 @@ function MachineDetailModal({
           <button
             type="button"
             onClick={() => setTab("history")}
-            className={`border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
               tab === "history"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -599,6 +719,22 @@ function MachineDetailModal({
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("personnel")}
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+              tab === "personnel"
+                ? "border-[#0047AB] text-[#0047AB] bg-white"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            👥 Nhân sự đã được đào tạo
+            {trainedPersonnel.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold font-mono text-emerald-700">
+                {trainedPersonnel.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Nội dung các Tab */}
@@ -607,28 +743,28 @@ function MachineDetailModal({
             <div className="space-y-5">
               {/* Ảnh máy hàn */}
               <div className="space-y-2.5">
-                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md">
+                <div className="relative mx-auto h-[180px] w-full max-w-[420px] overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md sm:h-[200px]">
                   <Image
                     src={activeWeldingImg}
                     alt={weldingUnit?.name || machine.name}
                     fill
                     className="object-cover"
-                    sizes="850px"
+                    sizes="420px"
                     priority
                   />
-                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur-xs font-mono">
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-xs font-mono">
                       {weldingUnit?.code || machine.code}
                     </span>
                   </div>
-                  <div className="absolute bottom-2.5 left-2.5 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-white backdrop-blur-xs font-mono">
+                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/80 px-2 py-0.5 text-[11px] text-white backdrop-blur-xs font-mono">
                     Đầu hàn: {weldingUnit?.model || machine.model}
                   </div>
                 </div>
 
                 {weldingGallery.length > 1 && (
-                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
-                    <span className="text-xs font-semibold text-slate-500 shrink-0">Thư viện ảnh máy ({weldingGallery.length}):</span>
+                  <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
+                    <span className="text-xs font-semibold text-slate-500 shrink-0">Thư viện ({weldingGallery.length}):</span>
                     {weldingGallery.map((img, idx) => {
                       const isActive = img === activeWeldingImg;
                       return (
@@ -636,11 +772,11 @@ function MachineDetailModal({
                           key={idx}
                           type="button"
                           onClick={() => setActiveWeldingImg(img)}
-                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
-                            isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30 scale-105" : "border-slate-200 opacity-70 hover:opacity-100"
+                          className={`relative h-11 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
+                            isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30" : "border-slate-200 opacity-70 hover:opacity-100"
                           }`}
                         >
-                          <Image src={img} alt={`Góc máy ${idx + 1}`} fill className="object-cover" sizes="80px" />
+                          <Image src={img} alt={`Góc máy ${idx + 1}`} fill className="object-cover" sizes="64px" />
                         </button>
                       );
                     })}
@@ -721,14 +857,14 @@ function MachineDetailModal({
             <div className="space-y-5">
               {/* Ảnh phương tiện vận chuyển */}
               <div className="space-y-2.5">
-                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-md">
+                <div className="relative mx-auto h-[180px] w-full max-w-[420px] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-md sm:h-[200px]">
                   {activeTransportImg ? (
                     <Image
                       src={activeTransportImg}
                       alt={transportUnit?.name || "Phương tiện vận chuyển"}
                       fill
                       className="object-cover"
-                      sizes="850px"
+                      sizes="420px"
                       priority
                     />
                   ) : (
@@ -736,24 +872,24 @@ function MachineDetailModal({
                       Chưa cập nhật ảnh phương tiện
                     </div>
                   )}
-                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur-xs font-mono">
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-xs font-mono">
                       {transportUnit?.code || "Chưa cập nhật"}
                     </span>
                     {transportUnit?.plateNumber && (
-                      <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-400/95 px-2.5 py-0.5 text-xs font-bold text-slate-900 font-mono shadow-2xs">
+                      <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-400/95 px-2 py-0.5 text-[11px] font-bold text-slate-900 font-mono shadow-2xs">
                         {transportUnit.plateNumber}
                       </span>
                     )}
                   </div>
-                  <div className="absolute bottom-2.5 left-2.5 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-white backdrop-blur-xs font-mono">
+                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/80 px-2 py-0.5 text-[11px] text-white backdrop-blur-xs font-mono">
                     {transportUnit?.model || "Chưa cập nhật model"}
                   </div>
                 </div>
 
                 {transportGallery.length > 1 && (
-                  <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
-                    <span className="text-xs font-semibold text-slate-500 shrink-0">Thư viện ảnh xe ({transportGallery.length}):</span>
+                  <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
+                    <span className="text-xs font-semibold text-slate-500 shrink-0">Thư viện ({transportGallery.length}):</span>
                     {transportGallery.map((img, idx) => {
                       const isActive = img === activeTransportImg;
                       return (
@@ -761,11 +897,11 @@ function MachineDetailModal({
                           key={idx}
                           type="button"
                           onClick={() => setActiveTransportImg(img)}
-                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
-                            isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30 scale-105" : "border-slate-200 opacity-70 hover:opacity-100"
+                          className={`relative h-11 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
+                            isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30" : "border-slate-200 opacity-70 hover:opacity-100"
                           }`}
                         >
-                          <Image src={img} alt={`Góc xe ${idx + 1}`} fill className="object-cover" sizes="80px" />
+                          <Image src={img} alt={`Góc xe ${idx + 1}`} fill className="object-cover" sizes="64px" />
                         </button>
                       );
                     })}
@@ -894,6 +1030,161 @@ function MachineDetailModal({
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 px-4 py-12 text-center text-xs sm:text-sm text-slate-500">
                   Chưa có lịch sử bảo trì cho máy này.
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "personnel" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs sm:text-sm text-slate-500">
+                  Nhân sự có{" "}
+                  <span className="font-mono font-semibold text-[#0047AB]">{machine.code}</span> trong mục đào tạo máy
+                  ·{" "}
+                  <strong className="font-semibold text-slate-900 font-mono tabular-nums">
+                    {trainedPersonnel.length}
+                  </strong>{" "}
+                  người
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddOpen((v) => !v);
+                    setSelectedEmployeeId("");
+                    setPersonSearch("");
+                    setPersonSuggestOpen(false);
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
+                >
+                  <Plus size={14} weight="bold" /> Thêm mới
+                </button>
+              </div>
+
+              {addOpen && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5 space-y-2.5">
+                  <div className="text-xs font-semibold text-slate-700">
+                    Gõ tên / mã nhân sự để hiện gợi ý từ mục Hồ sơ nhân sự
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={personSearch}
+                        onChange={(e) => {
+                          setPersonSearch(e.target.value);
+                          setSelectedEmployeeId("");
+                          setPersonSuggestOpen(true);
+                        }}
+                        onFocus={() => setPersonSuggestOpen(true)}
+                        onBlur={() => {
+                          // Delay để kịp click gợi ý
+                          window.setTimeout(() => setPersonSuggestOpen(false), 150);
+                        }}
+                        placeholder="Nhập tên thợ hàn, mã NS…"
+                        className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                        autoComplete="off"
+                      />
+                      {personSuggestOpen && personnelSuggestions.length > 0 && (
+                        <ul className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                          {personnelSuggestions.map((person) => (
+                            <li key={person.employee_id}>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setSelectedEmployeeId(person.employee_id);
+                                  setPersonSearch(`${person.ma_nhan_su || "—"} · ${person.ho_ten}`);
+                                  setPersonSuggestOpen(false);
+                                }}
+                                className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-blue-50 cursor-pointer"
+                              >
+                                <span className="text-xs sm:text-sm font-semibold text-slate-900">
+                                  {person.ho_ten}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-mono">
+                                  {person.ma_nhan_su || "—"}
+                                  {person.chuc_vu ? ` · ${person.chuc_vu}` : ""}
+                                  {person.to_han ? ` · ${person.to_han}` : ""}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {personSuggestOpen && personSearch.trim() && personnelSuggestions.length === 0 && (
+                        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-500 shadow-lg">
+                          Không tìm thấy nhân sự phù hợp
+                        </div>
+                      )}
+                      {selectedEmployeeId && selectedPersonLabel && (
+                        <div className="mt-1.5 text-[11px] font-medium text-emerald-700">
+                          Đã chọn: {selectedPersonLabel}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!selectedEmployeeId || savingPersonnel}
+                      onClick={handleAddTrainedPersonnel}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-50 px-4 text-xs sm:text-sm font-semibold text-white cursor-pointer"
+                    >
+                      {savingPersonnel ? "Đang lưu…" : "Gắn máy này"}
+                    </button>
+                  </div>
+                  {availablePersonnel.length === 0 && !personnelLoading && (
+                    <div className="text-xs text-slate-500">
+                      Tất cả nhân sự trong danh mục đã được gắn máy này, hoặc chưa có dữ liệu nhân sự.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {personnelError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                  {personnelError}
+                </div>
+              )}
+
+              {personnelLoading ? (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-12 text-center text-xs sm:text-sm text-slate-500">
+                  Đang tải danh sách nhân sự…
+                </div>
+              ) : trainedPersonnel.length > 0 ? (
+                <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-xs sm:text-sm whitespace-nowrap">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                        <th className="px-3.5 py-2.5">Mã NS</th>
+                        <th className="px-3.5 py-2.5">Họ tên</th>
+                        <th className="px-3.5 py-2.5">Chức vụ</th>
+                        <th className="px-3.5 py-2.5">Tổ hàn</th>
+                        <th className="px-3.5 py-2.5">Cấp bậc</th>
+                        <th className="px-3.5 py-2.5">Máy đã đào tạo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {trainedPersonnel.map((person) => (
+                        <tr key={person.employee_id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-3.5 py-3 font-mono font-semibold text-[#0047AB]">
+                            {person.ma_nhan_su || "—"}
+                          </td>
+                          <td className="px-3.5 py-3 font-semibold text-slate-900">{person.ho_ten}</td>
+                          <td className="px-3.5 py-3 text-slate-700">{person.chuc_vu || "—"}</td>
+                          <td className="px-3.5 py-3 text-slate-700">{person.to_han || "—"}</td>
+                          <td className="px-3.5 py-3 font-mono text-slate-700">{person.cap_bac || "—"}</td>
+                          <td className="px-3.5 py-3 text-slate-700 max-w-[280px] truncate" title={person.loai_may || ""}>
+                            {person.loai_may || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-12 text-center text-xs sm:text-sm text-slate-500">
+                  Chưa có nhân sự nào được gắn đào tạo máy này.
+                  <div className="mt-1">Bấm <strong>Thêm mới</strong> để chọn từ mục nhân sự.</div>
                 </div>
               )}
             </div>
@@ -1598,16 +1889,53 @@ export default function MachineList() {
   const [plant, setPlant] = useState("Tất cả nhà máy");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Machine | null>(null);
-  const [detailTab, setDetailTab] = useState<"welding" | "transport" | "history">("welding");
+  const [detailTab, setDetailTab] = useState<DetailTab>("welding");
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    setCatalogLoading(true);
     loadMachineCatalog().then((result) => {
       if (!active) return;
-      setList(result.machines);
-      setSource(result.source);
+      // Không thay bằng mảng rỗng nếu Supabase trả về bất thường
+      if (result.machines.length > 0) {
+        setList(result.machines);
+        setSource(result.source);
+      } else if (result.source === "seed") {
+        setList(seedMachines);
+        setSource("seed");
+      }
       setDataError(result.error ?? "");
+      setCatalogLoading(false);
+
+      const params = new URLSearchParams(window.location.search);
+      const mayCode = params.get("may")?.trim();
+      const tabRaw = params.get("tab")?.trim().toLowerCase();
+      const openTab: DetailTab =
+        tabRaw === "personnel" || tabRaw === "nhan-su"
+          ? "personnel"
+          : tabRaw === "history"
+            ? "history"
+            : tabRaw === "transport"
+              ? "transport"
+              : "welding";
+      if (mayCode) {
+        const pool = result.machines.length > 0 ? result.machines : seedMachines;
+        const match = pool.find(
+          (m) => m.code.toLowerCase() === mayCode.toLowerCase() || m.id === mayCode,
+        );
+        if (match) {
+          // Chỉ mở chi tiết — không set query để tránh lọc mất danh sách
+          setActiveId(match.id);
+          setDetail(match);
+          setDetailTab(openTab);
+        }
+      }
+    }).catch((error) => {
+      if (!active) return;
+      setCatalogLoading(false);
+      setDataError(error instanceof Error ? error.message : "Không tải được danh sách máy");
     });
     return () => {
       active = false;
@@ -1644,7 +1972,7 @@ export default function MachineList() {
     setFormModal({ machine, mode: "edit" });
   }
 
-  function openDetail(m: Machine, tab: "welding" | "transport" | "history" = "welding") {
+  function openDetail(m: Machine, tab: DetailTab = "welding") {
     setActiveId(m.id);
     setDetailTab(tab);
     setDetail(m);
@@ -1708,10 +2036,15 @@ export default function MachineList() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {dataError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 sm:text-sm">
           {source === "seed" ? "Đang dùng dữ liệu mẫu. " : "Lỗi dữ liệu máy: "}{dataError}
+        </div>
+      )}
+      {catalogLoading && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs font-medium text-[#0047AB] sm:text-sm">
+          Đang đồng bộ danh sách máy từ Supabase…
         </div>
       )}
       <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
@@ -1780,8 +2113,8 @@ export default function MachineList() {
                     </span>
                   )}
 
-                  <div className="relative h-[76px] w-[130px] sm:h-[80px] sm:w-[144px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
-                    <Image src={m.image} alt={m.name} fill className="object-cover" sizes="144px" />
+                  <div className="relative h-[56px] w-[96px] sm:h-[64px] sm:w-[112px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
+                    <Image src={m.image} alt={m.name} fill className="object-cover" sizes="112px" />
                     <span className="absolute bottom-1 right-1 rounded bg-slate-900/85 px-1.5 py-0.5 text-[11px] font-bold font-mono text-white tracking-wide">
                       {m.code}
                     </span>

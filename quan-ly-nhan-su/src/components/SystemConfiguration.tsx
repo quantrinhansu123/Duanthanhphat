@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
@@ -516,7 +516,7 @@ export default function SystemConfiguration() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 gap-1">
         {tabs.map((t) => (
           <button

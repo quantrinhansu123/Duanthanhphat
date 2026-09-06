@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED_SERVICE_PATHS = ["/api/documents", "/api/cloudinary", "/api/quality-metadata"];
-
 function constantTimeEqual(left: string, right: string): boolean {
   const maxLength = Math.max(left.length, right.length);
   let mismatch = left.length ^ right.length;
@@ -22,17 +20,10 @@ function unauthorized(request: NextRequest) {
 export function proxy(request: NextRequest) {
   const expectedUser = process.env.APP_BASIC_AUTH_USER?.trim();
   const expectedPassword = process.env.APP_BASIC_AUTH_PASSWORD;
-  const isProtectedService = PROTECTED_SERVICE_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path),
-  );
 
+  // Basic Auth là tùy chọn: chưa cấu hình thì cho qua (kể cả API Drive/Cloudinary).
+  // Khi đã cấu hình thì bắt buộc đăng nhập cho toàn app, gồm API lưu trữ.
   if (!expectedUser || !expectedPassword) {
-    if (isProtectedService) {
-      return NextResponse.json(
-        { error: "API lưu trữ đang bị khóa vì chưa cấu hình APP_BASIC_AUTH_USER và APP_BASIC_AUTH_PASSWORD." },
-        { status: 503 },
-      );
-    }
     return NextResponse.next();
   }
 

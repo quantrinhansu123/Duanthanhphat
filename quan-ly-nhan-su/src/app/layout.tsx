@@ -18,8 +18,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Quản lý nhân sự · Thành Phát",
-  description: "Trang quản lý tài khoản nhân viên Công ty Thành Phát",
+  title: "Hệ thống Quản lý hàn ray · Thành Phát",
+  description: "Hệ thống Quản lý hàn ray — Rail Welding Management System",
 };
 
 export default function RootLayout({

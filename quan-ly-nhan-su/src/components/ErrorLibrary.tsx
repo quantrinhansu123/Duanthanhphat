@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -81,7 +81,7 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
   // ---------------------------------------------------------------------------
   if (isNdtMode) {
     return (
-      <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+      <main className="w-full px-4 sm:px-6 pb-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900">
@@ -156,7 +156,7 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
   };
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {/* Thống kê đầu trang */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm text-slate-600">
         <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2">

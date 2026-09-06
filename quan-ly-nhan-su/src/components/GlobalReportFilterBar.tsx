@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { REPORT_MACHINES, REPORT_PERIOD_END, REPORT_PERIOD_START, uniqueReportValues } from "@/lib/weldReportData";
-
-const MACHINES = [...REPORT_MACHINES];
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -21,8 +20,29 @@ function filterPickLabel(count: number, defaultText: string) {
 
 export default function GlobalReportFilterBar() {
   const { rows } = useWeldReportData();
+  const [dbMachines, setDbMachines] = useState<string[]>([]);
   const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
   const PERSONNEL = useMemo(() => uniqueReportValues(rows, "ten_tho_han"), [rows]);
+  const MACHINES = useMemo(() => {
+    const fromRows = uniqueReportValues(rows, "ma_may");
+    const merged = Array.from(new Set([...dbMachines, ...fromRows, ...REPORT_MACHINES]));
+    return merged.filter(Boolean).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [dbMachines, rows]);
+
+  useEffect(() => {
+    let active = true;
+    loadMachineOptions()
+      .then((options) => {
+        if (!active) return;
+        setDbMachines(options.map((m) => m.code).filter(Boolean));
+      })
+      .catch(() => {
+        if (active) setDbMachines([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const {
     filterCount,

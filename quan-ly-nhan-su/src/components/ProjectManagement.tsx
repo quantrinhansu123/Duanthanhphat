@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
@@ -1398,7 +1398,7 @@ export default function ProjectManagement() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {(error || source === "seed") && (
         <div
           className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${

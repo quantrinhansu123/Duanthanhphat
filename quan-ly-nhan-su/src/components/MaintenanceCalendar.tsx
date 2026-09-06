@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
@@ -163,7 +163,7 @@ export default function MaintenanceCalendar() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button

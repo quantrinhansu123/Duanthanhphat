@@ -14,8 +14,25 @@ import {
   ClockCounterClockwise,
   GearSix,
   Lightning,
-  ArrowRight,
   ShieldCheck,
+  IdentificationCard,
+  MagnifyingGlass,
+  CalendarCheck,
+  Bug,
+  ListChecks,
+  Certificate,
+  SealCheck,
+  ClipboardText,
+  FileText,
+  ChartLineUp,
+  MapTrifold,
+  Files,
+  Gauge,
+  ChartPieSlice,
+  ChartLine,
+  UploadSimple,
+  Flag,
+  Cube,
 } from "@/components/icons";
 
 const groupIcons: Record<string, Icon> = {
@@ -30,17 +47,105 @@ const groupIcons: Record<string, Icon> = {
   "quan-tri": GearSix,
 };
 
-const groupColorClasses: Record<string, { bg: string; text: string; border: string; badge: string }> = {
-  "nhan-su": { bg: "bg-blue-50/80", text: "text-[#0047AB]", border: "border-blue-200", badge: "bg-blue-100/70 text-[#0047AB]" },
-  "dao-tao": { bg: "bg-indigo-50/80", text: "text-indigo-700", border: "border-indigo-200", badge: "bg-indigo-100/70 text-indigo-700" },
-  "may-moc": { bg: "bg-amber-50/80", text: "text-amber-700", border: "border-amber-200", badge: "bg-amber-100/70 text-amber-700" },
-  "moi-han": { bg: "bg-orange-50/80", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100/70 text-orange-700" },
-  "du-an": { bg: "bg-teal-50/80", text: "text-teal-700", border: "border-teal-200", badge: "bg-teal-100/70 text-teal-700" },
-  "ky-thuat": { bg: "bg-cyan-50/80", text: "text-cyan-700", border: "border-cyan-200", badge: "bg-cyan-100/70 text-cyan-700" },
-  "bao-cao": { bg: "bg-emerald-50/80", text: "text-emerald-700", border: "border-emerald-200", badge: "bg-emerald-100/70 text-emerald-700" },
-  "du-lieu-lich-su": { bg: "bg-purple-50/80", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100/70 text-purple-700" },
-  "quan-tri": { bg: "bg-slate-100/80", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-200/70 text-slate-700" },
+const childIcons: Record<string, Icon> = {
+  "ho-so-tho-han": IdentificationCard,
+  "lich-su-han": ClockCounterClockwise,
+  "khoa-dao-tao": GraduationCap,
+  "tra-cuu-dao-tao": MagnifyingGlass,
+  "danh-sach-may": Cube,
+  "lich-bao-tri": CalendarCheck,
+  "thu-vien-loi": Bug,
+  "phan-cong-may": ListChecks,
+  "quan-ly-moi-han": Lightning,
+  "thu-vien-loi-moi-han": Bug,
+  "quan-ly-du-an": Buildings,
+  "chung-chi": Certificate,
+  "chung-chi-cong-ty": SealCheck,
+  "tieu-chuan-tcvn": ClipboardText,
+  "nhat-ky-han": FileText,
+  "bc-moi-han-theo-nam": ChartLineUp,
+  "ban-do": MapTrifold,
+  "tai-lieu": Files,
+  "bc-tong-quan": Gauge,
+  "bc-chat-luong": ChartPieSlice,
+  "bc-may-moc": ChartLine,
+  "bc-nhan-su": Users,
+  "nhap-hang-loat": UploadSimple,
+  "cau-hinh": GearSix,
+  "trien-khai": Flag,
 };
+
+/** Icon nền đặc + chữ trắng — tông chuyên nghiệp theo phân hệ */
+const groupThemes: Record<
+  string,
+  { iconBg: string; iconShadow: string; badge: string; ring: string; soft: string }
+> = {
+  "nhan-su": {
+    iconBg: "bg-[#0047AB]",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(0,71,171,0.55)]",
+    badge: "bg-[#0047AB]/10 text-[#0047AB]",
+    ring: "hover:border-[#0047AB]/35 hover:ring-[#0047AB]/15",
+    soft: "group-hover/card:bg-blue-50",
+  },
+  "dao-tao": {
+    iconBg: "bg-indigo-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(79,70,229,0.5)]",
+    badge: "bg-indigo-50 text-indigo-700",
+    ring: "hover:border-indigo-300 hover:ring-indigo-100",
+    soft: "group-hover/card:bg-indigo-50",
+  },
+  "may-moc": {
+    iconBg: "bg-amber-500",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(245,158,11,0.5)]",
+    badge: "bg-amber-50 text-amber-700",
+    ring: "hover:border-amber-300 hover:ring-amber-100",
+    soft: "group-hover/card:bg-amber-50",
+  },
+  "moi-han": {
+    iconBg: "bg-orange-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(234,88,12,0.5)]",
+    badge: "bg-orange-50 text-orange-700",
+    ring: "hover:border-orange-300 hover:ring-orange-100",
+    soft: "group-hover/card:bg-orange-50",
+  },
+  "du-an": {
+    iconBg: "bg-teal-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(13,148,136,0.5)]",
+    badge: "bg-teal-50 text-teal-700",
+    ring: "hover:border-teal-300 hover:ring-teal-100",
+    soft: "group-hover/card:bg-teal-50",
+  },
+  "ky-thuat": {
+    iconBg: "bg-cyan-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(8,145,178,0.5)]",
+    badge: "bg-cyan-50 text-cyan-700",
+    ring: "hover:border-cyan-300 hover:ring-cyan-100",
+    soft: "group-hover/card:bg-cyan-50",
+  },
+  "bao-cao": {
+    iconBg: "bg-emerald-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(5,150,105,0.5)]",
+    badge: "bg-emerald-50 text-emerald-700",
+    ring: "hover:border-emerald-300 hover:ring-emerald-100",
+    soft: "group-hover/card:bg-emerald-50",
+  },
+  "du-lieu-lich-su": {
+    iconBg: "bg-violet-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(124,58,237,0.5)]",
+    badge: "bg-violet-50 text-violet-700",
+    ring: "hover:border-violet-300 hover:ring-violet-100",
+    soft: "group-hover/card:bg-violet-50",
+  },
+  "quan-tri": {
+    iconBg: "bg-slate-700",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(51,65,85,0.5)]",
+    badge: "bg-slate-100 text-slate-700",
+    ring: "hover:border-slate-400 hover:ring-slate-100",
+    soft: "group-hover/card:bg-slate-50",
+  },
+};
+
+const defaultTheme = groupThemes["nhan-su"];
 
 type HomeDashboardProps = {
   onNavigate: (tabId: string) => void;
@@ -48,16 +153,15 @@ type HomeDashboardProps = {
 
 export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
   const { lang } = useLanguage();
+  const totalChildren = navigation.reduce((sum, g) => sum + g.children.length, 0);
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-12 pt-2 animate-in fade-in duration-200">
-      {/* Hero Header Section */}
       <div className="relative mb-8 sm:mb-10 overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white via-[#f0f5ff]/60 to-white p-6 sm:p-10 shadow-xs">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#0047AB]/5 blur-3xl pointer-events-none" />
         <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
         <div className="relative flex flex-col items-center text-center">
-          {/* Central Big Logo (128px ~ 112-144px range) */}
           <div className="relative mb-4 flex h-32 w-32 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-4 ring-[#0047AB]/10 transition-transform duration-300 hover:scale-105">
             <div className="relative h-full w-full overflow-hidden rounded-xl">
               <Image
@@ -83,11 +187,11 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
           <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-900">
             {lang === "en" ? (
               <>
-                <span className="text-[#0047AB]">THANH PHAT</span> MANAGEMENT SYSTEM
+                <span className="text-[#0047AB]">Rail Welding</span> Management System
               </>
             ) : (
               <>
-                HỆ THỐNG QUẢN LÝ <span className="text-[#0047AB]">THÀNH PHÁT</span>
+                Hệ thống Quản lý <span className="text-[#0047AB]">hàn ray</span>
               </>
             )}
           </h1>
@@ -98,121 +202,110 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
               : "Nền tảng Quản trị Nhân sự, Đào tạo Chứng chỉ, Nhật ký GPS & Báo cáo Vận hành Hàn Ray Đường sắt Toàn diện"}
           </p>
 
-          {/* Quick Metrics Bar */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-slate-600">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <Users size={16} className="text-[#0047AB]" weight="bold" />
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#0047AB] text-white shadow-sm">
+                <Users size={12} weight="bold" />
+              </span>
               <span>{lang === "en" ? "Welder Management & Certificates" : "Quản lý Thợ hàn & Chứng chỉ"}</span>
             </div>
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <Wrench size={16} className="text-emerald-600" weight="bold" />
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm">
+                <Wrench size={12} weight="bold" />
+              </span>
               <span>{lang === "en" ? "FBW/ATW Rail Welding Monitoring" : "Giám sát Máy hàn Ray FBW/ATW"}</span>
             </div>
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <Path size={16} className="text-amber-600" weight="bold" />
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-500 text-white shadow-sm">
+                <Path size={12} weight="bold" />
+              </span>
               <span>{lang === "en" ? "GPS Coordinates & Chainage Sync" : "Đồng bộ Tọa độ GPS & Lý trình"}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Dynamic Navigation Menu Blocks (4/3/2/1 Columns) */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-            {lang === "en" ? "System Modules & Functions" : "Danh mục chức năng"}
+            {lang === "en" ? "Quick access" : "Truy cập nhanh"}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
+          <p className="mt-0.5 text-xs sm:text-sm text-slate-500">
             {lang === "en"
-              ? "Quick access to operational and administrative subsystems"
-              : "Truy cập nhanh các phân hệ vận hành và quản trị của hệ thống"}
+              ? "Open any function from the icon cards below"
+              : "Chọn thẻ icon bên dưới để mở từng hạng mục chức năng"}
           </p>
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-          {navigation.length} {lang === "en" ? "subsystems" : "phân hệ"}
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
+          {totalChildren} {lang === "en" ? "functions" : "hạng mục"}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+      <div className="flex flex-col gap-8 sm:gap-10">
         {navigation.map((group) => {
-          const IconComp = groupIcons[group.id] ?? Path;
-          const colors = groupColorClasses[group.id] ?? {
-            bg: "bg-blue-50/80",
-            text: "text-[#0047AB]",
-            border: "border-blue-200",
-            badge: "bg-blue-100 text-[#0047AB]",
-          };
+          const GroupIcon = groupIcons[group.id] ?? Path;
+          const theme = groupThemes[group.id] ?? defaultTheme;
 
           return (
-            <div
-              key={group.id}
-              className="group flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-            >
-              <div>
-                {/* Header of Block */}
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${colors.bg} ${colors.text} ring-1 ${colors.border}`}
-                    >
-                      <IconComp size={22} weight="duotone" aria-hidden />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900 group-hover:text-[#0047AB] transition-colors">
-                        {lang === "en" ? group.labelEn : group.label}
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-400">
-                        {lang === "en" ? `Code ${group.code}` : `Mã ${group.code}`}
-                      </div>
-                    </div>
-                  </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${colors.badge}`}>
-                    {group.children.length}
-                  </span>
+            <section key={group.id} aria-labelledby={`home-group-${group.id}`}>
+              <div className="mb-3.5 flex items-center gap-3">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${theme.iconBg} ${theme.iconShadow}`}
+                >
+                  <GroupIcon size={18} weight="bold" aria-hidden />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <h3
+                    id={`home-group-${group.id}`}
+                    className="truncate text-sm sm:text-base font-bold tracking-tight text-slate-900"
+                  >
+                    {lang === "en" ? group.labelEn : group.label}
+                  </h3>
+                  <p className="text-[11px] font-medium text-slate-400">
+                    {lang === "en" ? `Code ${group.code}` : `Mã ${group.code}`}
+                    {" · "}
+                    {group.children.length} {lang === "en" ? "items" : "hạng mục"}
+                  </p>
+                </div>
+              </div>
 
-                {/* List of sub-features */}
-                <div className="mt-3 space-y-1.5">
-                  {group.children.map((child) => (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+                {group.children.map((child) => {
+                  const ChildIcon = childIcons[child.id] ?? GroupIcon;
+                  const title = lang === "en" ? child.labelEn : child.label;
+                  const desc =
+                    lang === "en"
+                      ? child.descriptionEn || child.description
+                      : child.description;
+
+                  return (
                     <button
                       key={child.id}
                       type="button"
                       onClick={() => onNavigate(child.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onNavigate(child.id);
-                        }
-                      }}
-                      tabIndex={0}
-                      className="group/item flex w-full items-start justify-between gap-2 rounded-xl p-2.5 text-left transition-colors duration-150 hover:bg-slate-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0047AB]/20"
+                      title={desc || title}
+                      className={`group/card flex flex-col items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3 py-5 sm:px-4 sm:py-6 text-center shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.18)] hover:ring-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 ${theme.ring}`}
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs sm:text-sm font-semibold text-slate-800 group-hover/item:text-[#0047AB] transition-colors">
-                          {lang === "en" ? child.labelEn : child.label}
-                        </div>
-                        {(child.description || child.descriptionEn) && (
-                          <div className="mt-0.5 line-clamp-1 text-[11px] sm:text-xs text-slate-400 font-normal leading-relaxed">
-                            {lang === "en" ? (child.descriptionEn || child.description) : child.description}
-                          </div>
+                      <span
+                        className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg} ${theme.iconShadow} ${theme.soft}`}
+                      >
+                        <ChildIcon size={28} weight="bold" aria-hidden />
+                      </span>
+                      <span className="flex w-full flex-col items-center gap-1">
+                        <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
+                          {title}
+                        </span>
+                        {desc && (
+                          <span className="line-clamp-2 text-[10px] sm:text-[11px] leading-relaxed text-slate-400 font-medium">
+                            {desc}
+                          </span>
                         )}
-                      </div>
-                      <ArrowRight
-                        size={14}
-                        weight="bold"
-                        className="mt-1 text-slate-300 transition-transform duration-150 group-hover/item:translate-x-0.5 group-hover/item:text-[#0047AB] shrink-0"
-                      />
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-
-              {/* Bottom Card Summary */}
-              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Nhấp chức năng để mở</span>
-                <span className="font-mono text-slate-300">#{group.id}</span>
-              </div>
-            </div>
+            </section>
           );
         })}
       </div>

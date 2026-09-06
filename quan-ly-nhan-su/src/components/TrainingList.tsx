@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -308,23 +308,70 @@ function TrainingFormModal({
             </div>
           </div>
 
-          {/* Chọn chứng chỉ cấp sau đào tạo */}
+          {/* Chọn chứng chỉ cấp sau đào tạo — tickbox từ danh mục Chứng chỉ */}
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
               Chứng chỉ cấp sau đào tạo (Tự động cấp cho học viên Đạt)
             </label>
-            <select
-              className={fieldClass}
-              value={form.certGroupId}
-              onChange={(e) => set("certGroupId", e.target.value)}
-            >
-              <option value="">-- Không cấp hoặc chưa gán nhóm chứng chỉ --</option>
-              {certGroups.map((cg) => (
-                <option key={cg.id} value={cg.id}>
-                  {cg.name} {cg.issuer ? `(${cg.issuer})` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1.5 max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-white">
+              <label className="flex cursor-pointer items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={!form.certGroupId}
+                  onChange={() => set("certGroupId", "")}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0047AB]"
+                />
+                <span className="text-xs sm:text-sm text-slate-600">
+                  Không cấp chứng chỉ sau khóa học
+                </span>
+              </label>
+              {certGroups.length === 0 ? (
+                <div className="px-3 py-4 text-xs text-slate-400">
+                  Chưa có chứng chỉ trong danh mục. Thêm tại{" "}
+                  <Link href="/chung-chi" className="font-semibold text-[#0047AB] hover:underline">
+                    Quản lý chứng chỉ
+                  </Link>
+                  .
+                </div>
+              ) : (
+                certGroups.map((cg) => {
+                  const checked = form.certGroupId === cg.id;
+                  return (
+                    <label
+                      key={cg.id}
+                      className={`flex cursor-pointer items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 last:border-b-0 hover:bg-slate-50 ${
+                        checked ? "bg-blue-50/70" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => set("certGroupId", checked ? "" : cg.id)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0047AB]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs sm:text-sm font-semibold text-slate-900">
+                          {cg.name}
+                        </span>
+                        {(cg.issuer || cg.code || cg.machine) && (
+                          <span className="mt-0.5 block text-[11px] text-slate-500">
+                            {[cg.code, cg.issuer, cg.machine].filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {form.certGroupId && (
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Đã chọn:{" "}
+                <strong className="text-[#0047AB]">
+                  {certGroups.find((cg) => cg.id === form.certGroupId)?.name || "—"}
+                </strong>
+              </p>
+            )}
           </div>
 
           <div>
@@ -727,7 +774,7 @@ export default function TrainingList() {
   }
 
   return (
-    <main className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-xl">
           <Check size={16} weight="bold" className="text-emerald-400" />

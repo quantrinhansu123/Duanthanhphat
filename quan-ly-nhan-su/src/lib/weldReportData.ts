@@ -915,10 +915,14 @@ export function groupJournalRows(
   }));
 }
 
-export function uniqueReportValues(rows: WeldReportRow[], field: "du_an" | "ten_tho_han" | "loai_ray") {
-  return Array.from(new Set(rows.map((row) => row[field]))).sort((a, b) =>
-    a.localeCompare(b, "vi"),
-  );
+export function uniqueReportValues(rows: WeldReportRow[], field: "du_an" | "ten_tho_han" | "loai_ray" | "ma_may") {
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => (field === "ma_may" ? row.ma_may?.trim() || "" : row[field]))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "vi"));
 }
 
 export function groupWeldRows(

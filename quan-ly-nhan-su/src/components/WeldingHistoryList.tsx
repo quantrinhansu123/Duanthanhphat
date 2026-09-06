@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
@@ -12,7 +12,6 @@ import {
   DownloadSimple,
   Export,
   MagnifyingGlass,
-  PencilSimple,
   WarningCircle,
   X,
 } from "@/components/icons";
@@ -25,7 +24,6 @@ import {
   deleteWeldingHistoryRecord,
   exportAllFilteredWeldingHistory,
   loadWeldingHistoryPage,
-  quickUpdateAccountingCode,
   saveWeldingHistoryRecord,
   type WeldingHistoryFilterParams,
   type WeldingHistoryStats,
@@ -426,7 +424,6 @@ export default function WeldingHistoryList() {
   const [accountingSel, setAccountingSel] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
-  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [modal, setModal] = useState<{
     record: WeldingHistoryRecord;
     mode: "view" | "edit" | "create";
@@ -537,17 +534,6 @@ export default function WeldingHistoryList() {
     }
     await fetchData(page, pageSize);
     setModal(null);
-  }
-
-  async function handleInlineUpdate(id: string, newCode: string) {
-    const res = await quickUpdateAccountingCode(id, newCode, list);
-    if (res.error) {
-      window.alert(`Không thể lưu mã hạch toán lên Supabase:\n${res.error}`);
-      setInlineEditId(null);
-      return;
-    }
-    await fetchData(page, pageSize);
-    setInlineEditId(null);
   }
 
   // Xuất toàn bộ dữ liệu đã lọc ra Excel
@@ -668,7 +654,7 @@ export default function WeldingHistoryList() {
     machinesSel.length + railsSel.length + projectsSel.length + shiftsSel.length + accountingSel.length;
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 sm:px-6 pb-8">
+    <main className="w-full px-4 sm:px-6 pb-8">
       {loadError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 sm:text-sm flex items-center justify-between">
           <span>Lưu ý tải dữ liệu từ Supabase: {loadError}</span>
@@ -970,10 +956,10 @@ export default function WeldingHistoryList() {
         )}
       </div>
 
-      {/* Bảng dữ liệu chuẩn 12 cột: Ngày | Welding ID | Thợ hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Hạch toán | Kết quả | Thao tác */}
+      {/* Bảng: Ngày | Welding ID | Thợ hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Kết quả | Thao tác */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1240px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-max min-w-full border-collapse text-left text-xs sm:text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
@@ -985,12 +971,6 @@ export default function WeldingHistoryList() {
                 <th className="px-3.5 py-3">Loại ray</th>
                 <th className="px-3.5 py-3">Dự án</th>
                 <th className="px-3.5 py-3">Ca</th>
-                <th className="px-3.5 py-3">
-                  <div className="flex items-center gap-1 text-[#0047AB]">
-                    <span>Hạch toán</span>
-                    <span className="rounded bg-blue-100 px-1 text-[10px] font-bold">Mới</span>
-                  </div>
-                </th>
                 <th className="px-3.5 py-3">Kết quả</th>
                 <th className="w-12 px-2 py-3 text-center" aria-label="Thao tác" />
               </tr>
@@ -998,7 +978,7 @@ export default function WeldingHistoryList() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
                     <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-600">
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#0047AB] border-t-transparent" />
                       Đang tải dữ liệu lịch sử mối hàn từ Supabase...
@@ -1019,99 +999,8 @@ export default function WeldingHistoryList() {
                   </td>
                   <td className="px-3.5 py-3 font-mono text-xs font-bold text-slate-800">{row.machine}</td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.railType}</td>
-                  <td className="max-w-[200px] px-3.5 py-3 text-slate-700">
-                    <div className="line-clamp-2">{row.project}</div>
-                  </td>
+                  <td className="px-3.5 py-3 text-slate-700">{row.project}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.shift}</td>
-
-                  {/* Cột 10: HẠCH TOÁN với Chỉnh sửa nhanh (inline edit) */}
-                  <td className="px-3.5 py-3">
-                    <div className="relative inline-block">
-                      <button
-                        type="button"
-                        onClick={() => setInlineEditId(inlineEditId === row.id ? null : row.id)}
-                        className="group/btn inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/90 hover:bg-blue-100 px-2.5 py-1 text-xs font-bold font-mono text-[#0047AB] transition-all cursor-pointer shadow-2xs hover:shadow-xs"
-                        title="Bấm để đổi nhanh mã hạch toán"
-                      >
-                        <span>{row.accountingCode || "—"}</span>
-                        <PencilSimple
-                          size={12}
-                          weight="bold"
-                          className="text-[#0047AB]/60 group-hover/btn:text-[#0047AB] transition-colors"
-                        />
-                      </button>
-
-                      {/* Dropdown chỉnh sửa nhanh hạch toán tại dòng */}
-                      {inlineEditId === row.id && (
-                        <div className="absolute left-0 top-full z-40 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl animate-in fade-in-50 zoom-in-95 duration-100">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                              Đổi mã hạch toán
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setInlineEditId(null)}
-                              className="text-slate-400 hover:text-slate-600"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                          <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
-                            {DEFAULT_ACCOUNTING_CODES.map((ac) => {
-                              const isCurrent = row.accountingCode === ac.code;
-                              return (
-                                <button
-                                  key={ac.code}
-                                  type="button"
-                                  onClick={() => handleInlineUpdate(row.id, ac.code)}
-                                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors ${
-                                    isCurrent
-                                      ? "bg-[#0047AB] text-white font-bold"
-                                      : "hover:bg-slate-100 text-slate-700"
-                                  }`}
-                                >
-                                  <span className="font-mono">{ac.code}</span>
-                                  <span className={`text-[11px] ${isCurrent ? "text-blue-100" : "text-slate-400"}`}>
-                                    {ac.group}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-slate-100">
-                            <div className="text-[10px] text-slate-500 mb-1 font-semibold">Hoặc nhập mã tùy ý:</div>
-                            <div className="flex gap-1">
-                              <input
-                                type="text"
-                                id={`input-ht-${row.id}`}
-                                defaultValue={row.accountingCode}
-                                placeholder="HT-..."
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    const val = (e.target as HTMLInputElement).value.trim().toUpperCase();
-                                    if (val) handleInlineUpdate(row.id, val);
-                                  }
-                                }}
-                                className="h-8 flex-1 rounded border border-slate-300 px-2 text-xs font-mono font-bold uppercase text-slate-900 outline-hidden focus:border-[#0047AB]"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const el = document.getElementById(`input-ht-${row.id}`) as HTMLInputElement | null;
-                                  const val = el?.value.trim().toUpperCase();
-                                  if (val) handleInlineUpdate(row.id, val);
-                                }}
-                                className="rounded bg-[#0047AB] px-2.5 py-1 text-xs font-bold text-white hover:bg-[#00388A] cursor-pointer"
-                              >
-                                Lưu
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
                   <td className="px-3.5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[row.result]}`}
@@ -1119,7 +1008,6 @@ export default function WeldingHistoryList() {
                       {row.result}
                     </span>
                   </td>
-
                   <td className="relative px-2 py-3 text-center">
                     <button
                       type="button"
@@ -1165,7 +1053,7 @@ export default function WeldingHistoryList() {
               ))}
               {!loading && list.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử hàn</div>
                     <div className="mt-1 text-xs text-slate-400">Thử thay đổi từ khóa hoặc thiết lập lại bộ lọc.</div>
                   </td>

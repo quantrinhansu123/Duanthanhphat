@@ -101,7 +101,7 @@ export default function Sidebar({
             <div className="min-w-0 leading-tight">
               <div className="truncate text-[15px] font-extrabold tracking-wider text-white">THÀNH PHÁT</div>
               <div className="mt-0.5 truncate text-[11px] font-medium text-blue-200/80">
-                {lang === "en" ? "Rail & Steel Operations" : "Vận hành Đường sắt & Thép"}
+                {lang === "en" ? "Rail Welding Management System" : "Hệ thống Quản lý hàn ray"}
               </div>
             </div>
           )}

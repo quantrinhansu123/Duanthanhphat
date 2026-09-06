@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChartLineUp,
@@ -22,51 +23,6 @@ import {
   groupWeldRows,
   machineForRow,
 } from "@/lib/weldReportData";
-
-const MACHINES_RECOMMENDED = [
-  {
-    id: "kcm007-01",
-    code: "KCM007-01",
-    name: "Tổ hợp máy hàn KCM007",
-    badge: "Ưu tiên cao",
-    badgeBg: "bg-rose-50 text-rose-700 border border-rose-200",
-    image: "/may-han/kcm007.jpg",
-    plant: "Trung tâm Cơ giới TCW",
-    welds: "2.450 mối",
-    hoursSinceMaint: "412 h",
-    progressPct: 48,
-    progressColor: "bg-amber-500",
-    budget: "6.500.000đ",
-  },
-  {
-    id: "un5-150zc2-01",
-    code: "UN5-150ZC2-01",
-    name: "Máy hàn UN5-150ZC2-C6",
-    badge: "Theo dõi",
-    badgeBg: "bg-amber-50 text-amber-700 border border-amber-200",
-    image: "/may-han/un5-150zc2-c6-main.jpg",
-    plant: "Nhà máy Hà Nội",
-    welds: "1.820 mối",
-    hoursSinceMaint: "355 h",
-    progressPct: 35,
-    progressColor: "bg-amber-500",
-    budget: "7.800.000đ",
-  },
-  {
-    id: "kcm007-02",
-    code: "KCM007-02",
-    name: "Tổ hợp KCM007 (Tổ 2)",
-    badge: "Định kỳ",
-    badgeBg: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    image: "/may-han/kcm007.jpg",
-    plant: "Xưởng bảo trì Đà Nẵng",
-    welds: "1.210 mối",
-    hoursSinceMaint: "190 h",
-    progressPct: 60,
-    progressColor: "bg-emerald-500",
-    budget: "5.000.000đ",
-  },
-];
 
 type MachineStatus = "Đang làm việc" | "Sẵn sàng" | "Bảo trì" | "Hỏng";
 type MachineStatusFilter = "Tất cả máy" | "Cần bảo trì" | MachineStatus;
@@ -97,6 +53,43 @@ function normalizeMachineStatus(status: string): MachineStatus {
 function isUnassignedProject(project?: string | null) {
   const value = project?.trim() ?? "";
   return !value || value === "—" || value === "-";
+}
+
+function machineDetailHref(code: string) {
+  return `/danh-sach-may?may=${encodeURIComponent(code)}`;
+}
+
+/** Parse DD/MM/YYYY hoặc ISO → timestamp; invalid → Infinity. */
+function parseMaintenanceDate(value?: string | null): number {
+  const raw = value?.trim() ?? "";
+  if (!raw || raw === "—") return Number.POSITIVE_INFINITY;
+  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) {
+    const day = Number(dmy[1]);
+    const month = Number(dmy[2]);
+    const year = Number(dmy[3]);
+    return new Date(year, month - 1, day).getTime();
+  }
+  const iso = Date.parse(raw);
+  return Number.isFinite(iso) ? iso : Number.POSITIVE_INFINITY;
+}
+
+function daysUntil(value?: string | null): number | null {
+  const ts = parseMaintenanceDate(value);
+  if (!Number.isFinite(ts)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((ts - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function maintenanceBadge(status: MachineStatus): { label: string; badgeBg: string; progressColor: string; progressPct: number } {
+  if (status === "Hỏng") {
+    return { label: "Ưu tiên cao", badgeBg: "bg-rose-50 text-rose-700 border border-rose-200", progressColor: "bg-rose-500", progressPct: 90 };
+  }
+  if (status === "Bảo trì") {
+    return { label: "Đang bảo trì", badgeBg: "bg-amber-50 text-amber-700 border border-amber-200", progressColor: "bg-amber-500", progressPct: 55 };
+  }
+  return { label: "Theo dõi", badgeBg: "bg-amber-50 text-amber-700 border border-amber-200", progressColor: "bg-amber-500", progressPct: 35 };
 }
 
 export default function MachineReportDashboard() {
@@ -138,43 +131,91 @@ export default function MachineReportDashboard() {
       errors: group.errors,
     }));
   }, [selectedRows]);
-  const machineSummaryByCode = new Map<string, MachineReportSummary>(
-    machineSummary.map((item) => [item.machineCode, item]),
+  const machineSummaryByCode = useMemo(
+    () => new Map<string, MachineReportSummary>(machineSummary.map((item) => [item.machineCode, item])),
+    [machineSummary],
   );
-  const machineStatsByCode = new Map<string, (typeof machineStats)[number]>(
-    machineStats.map((item) => [item.code, item]),
+  const machineStatsByCode = useMemo(
+    () => new Map<string, (typeof machineStats)[number]>(machineStats.map((item) => [item.code, item])),
+    [machineStats],
   );
-  const machinesRecommended = MACHINES_RECOMMENDED.map((machine) => ({
-    ...machine,
-    welds: `${(machineStatsByCode.get(machine.code)?.total ?? 0).toLocaleString("vi-VN")} mối`,
-    hoursSinceMaint: `${(machineSummaryByCode.get(machine.code)?.operatingHours ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 2 })} h`,
-  }));
-  const machineCatalogByCode = new Map(machineCatalog.map((machine) => [machine.code, machine]));
-  const machineCodes = Array.from(new Set([
-    ...machineCatalog.map((machine) => machine.code),
-    ...machineSummary.map((machine) => machine.machineCode),
-  ]));
-  const machinePerformance = machineCodes.map((code) => {
-    const machine = machineCatalogByCode.get(code);
-    const stat = machineStatsByCode.get(code);
-    const report = machineSummaryByCode.get(code);
-    const errorRate = stat?.total ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) : "0";
-    const status = normalizeMachineStatus(report?.status ?? machine?.status ?? "Sẵn sàng");
-    const currentProject = machine?.currentProject ?? "";
-    const operatingHours = report?.operatingHours ?? 0;
-    return {
-      code,
-      name: report?.machineName ?? machine?.name ?? code,
-      location: report?.location || machine?.location || "Chưa cập nhật",
-      currentProject,
-      welds: (stat?.total ?? 0).toLocaleString("vi-VN"),
-      operatingHours,
-      hours: operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
-      errorRate: `${errorRate}%`,
-      status,
-    };
-  });
+
+  /** Chỉ sổ theo danh sách máy trong DB (thiet_bi). */
+  const machinePerformance = useMemo(() => {
+    return machineCatalog.map((machine) => {
+      const code = machine.code;
+      const stat = machineStatsByCode.get(code);
+      const report = machineSummaryByCode.get(code);
+      const errorRate = stat?.total
+        ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })
+        : "0";
+      const status = normalizeMachineStatus(report?.status ?? machine.status ?? "Sẵn sàng");
+      const operatingHours = report?.operatingHours ?? machine.operatingHours ?? 0;
+      return {
+        code,
+        name: report?.machineName ?? machine.name ?? code,
+        location: report?.location || machine.location || "Chưa cập nhật",
+        currentProject: machine.currentProject ?? "",
+        image: machine.image,
+        plant: machine.plant || machine.location || "Chưa cập nhật",
+        nextMaintenance: machine.nextMaintenance,
+        welds: (stat?.total ?? machine.weldCount ?? 0).toLocaleString("vi-VN"),
+        weldTotal: stat?.total ?? machine.weldCount ?? 0,
+        operatingHours,
+        hours: operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
+        errorRate: `${errorRate}%`,
+        status,
+      };
+    });
+  }, [machineCatalog, machineStatsByCode, machineSummaryByCode]);
+
+  const machinesRecommended = useMemo(() => {
+    const candidates = machinePerformance
+      .filter((m) => m.status === "Bảo trì" || m.status === "Hỏng" || m.operatingHours >= 200)
+      .sort((a, b) => {
+        const priority = (s: MachineStatus) => (s === "Hỏng" ? 0 : s === "Bảo trì" ? 1 : 2);
+        const byStatus = priority(a.status) - priority(b.status);
+        if (byStatus !== 0) return byStatus;
+        return b.operatingHours - a.operatingHours;
+      })
+      .slice(0, 6);
+
+    return candidates.map((machine) => {
+      const badge = maintenanceBadge(machine.status);
+      return {
+        id: machine.code,
+        code: machine.code,
+        name: machine.name,
+        badge: badge.label,
+        badgeBg: badge.badgeBg,
+        image: machine.image || "/may-han/kcm007.jpg",
+        plant: machine.plant,
+        welds: `${machine.welds} mối`,
+        hoursSinceMaint: `${machine.hours} h`,
+        progressPct: badge.progressPct,
+        progressColor: badge.progressColor,
+      };
+    });
+  }, [machinePerformance]);
+
+  const upcomingMaintenance = useMemo(() => {
+    return [...machinePerformance]
+      .filter((m) => m.nextMaintenance && m.nextMaintenance !== "—")
+      .sort((a, b) => parseMaintenanceDate(a.nextMaintenance) - parseMaintenanceDate(b.nextMaintenance))
+      .slice(0, 5)
+      .map((m) => ({
+        code: m.code,
+        name: m.name,
+        location: m.location,
+        date: m.nextMaintenance,
+        daysLeft: daysUntil(m.nextMaintenance),
+      }));
+  }, [machinePerformance]);
+
   const filteredMachinePerformance = machinePerformance.filter((machine) => {
+    if (appliedFilters.machines.length > 0 && !appliedFilters.machines.includes(machine.code)) {
+      return false;
+    }
     if (machineStatusFilter === "Tất cả máy") return true;
     if (machineStatusFilter === "Cần bảo trì") return machine.status === "Bảo trì" || machine.status === "Hỏng";
     return machine.status === machineStatusFilter;
@@ -288,14 +329,19 @@ export default function MachineReportDashboard() {
               <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
                 Máy được đề xuất bảo trì
               </div>
-              <button type="button" className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline cursor-pointer">
+              <Link href="/danh-sach-may" className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline">
                 Xem tất cả →
-              </button>
+              </Link>
             </div>
 
             <div className="mt-3.5 flex items-center gap-2.5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 flex-1 min-w-0">
-                {machinesRecommended.map((m) => (
+                {machinesRecommended.length === 0 && (
+                  <div className="col-span-full rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-xs text-slate-500">
+                    Không có máy cần đề xuất bảo trì từ danh mục hiện tại.
+                  </div>
+                )}
+                {machinesRecommended.slice(activeSlide, activeSlide + 3).map((m) => (
                   <div
                     key={m.id}
                     className="rounded-xl border border-slate-200 overflow-hidden bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between"
@@ -317,13 +363,17 @@ export default function MachineReportDashboard() {
                       </span>
                     </div>
                     <div className="p-3.5">
-                      <div className="text-sm font-bold text-slate-900">
+                      <Link
+                        href={machineDetailHref(m.code)}
+                        className="text-sm font-bold text-[#0047AB] hover:underline"
+                      >
                         {m.name}
-                      </div>
+                      </Link>
+                      <div className="mt-0.5 font-mono text-xs text-slate-500">{m.code}</div>
                       <div className="mt-1 text-xs text-slate-500 leading-relaxed">
                         {m.plant} · {m.welds}
                         <br />
-                        Giờ chạy từ lần bảo trì: <span className="font-mono text-slate-700 font-medium">{m.hoursSinceMaint}</span>
+                        Giờ chạy: <span className="font-mono text-slate-700 font-medium">{m.hoursSinceMaint}</span>
                       </div>
                       <div className="mt-2.5 flex items-center gap-2">
                         <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
@@ -336,18 +386,12 @@ export default function MachineReportDashboard() {
                           {m.progressPct}%
                         </span>
                       </div>
-                      <div className="mt-2 text-xs text-slate-600">
-                        Dự toán{" "}
-                        <span className="font-bold text-slate-900 font-mono">
-                          {m.budget}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-3 w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2 text-center text-xs font-semibold text-white transition-all cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-blue-500"
+                      <Link
+                        href={machineDetailHref(m.code)}
+                        className="mt-3 block w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2 text-center text-xs font-semibold text-white transition-all shadow-xs focus-visible:ring-2 focus-visible:ring-blue-500"
                       >
-                        Lên lịch bảo trì
-                      </button>
+                        Xem máy / lên lịch
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -365,8 +409,8 @@ export default function MachineReportDashboard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveSlide((v) => Math.min(machinesRecommended.length - 1, v + 1))}
-                  disabled={activeSlide >= machinesRecommended.length - 1}
+                  onClick={() => setActiveSlide((v) => Math.min(Math.max(machinesRecommended.length - 3, 0), v + 1))}
+                  disabled={activeSlide >= Math.max(machinesRecommended.length - 3, 0)}
                   className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-[#0047AB] hover:text-[#0047AB] hover:bg-blue-50 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                   aria-label="Next"
                 >
@@ -404,9 +448,13 @@ export default function MachineReportDashboard() {
             <div className="mt-4 space-y-3">
               {filteredMachinePerformance.map((machine) => (
                 <div key={machine.code} className="grid grid-cols-[84px_minmax(0,1fr)_64px] items-center gap-3">
-                  <div className="truncate font-mono text-xs font-bold text-[#0047AB]" title={machine.name}>
+                  <Link
+                    href={machineDetailHref(machine.code)}
+                    className="truncate font-mono text-xs font-bold text-[#0047AB] hover:underline"
+                    title={machine.name}
+                  >
                     {machine.code}
-                  </div>
+                  </Link>
                   <div className="h-7 overflow-hidden rounded-md bg-slate-100">
                     <div
                       className="h-full min-w-0 rounded-md bg-[#0047AB] transition-all"
@@ -451,9 +499,13 @@ export default function MachineReportDashboard() {
                       key={m.code}
                       className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                     >
-                      <div className="font-semibold text-[#0047AB] font-mono">
+                      <Link
+                        href={machineDetailHref(m.code)}
+                        className="font-semibold text-[#0047AB] font-mono hover:underline"
+                        title={m.name}
+                      >
                         {m.code}
-                      </div>
+                      </Link>
                       <div className="truncate" title={m.location}>{m.location}</div>
                       <div className="font-mono tabular-nums">{m.welds}</div>
                       <div className="font-mono tabular-nums">{m.hours}</div>
@@ -469,9 +521,9 @@ export default function MachineReportDashboard() {
               </div>
             </div>
             <div className="flex items-center justify-between pt-3 text-xs sm:text-sm text-[#0047AB] font-semibold">
-              <button type="button" className="hover:underline cursor-pointer">
+              <Link href="/danh-sach-may" className="hover:underline">
                 Xem toàn bộ máy
-              </button>
+              </Link>
               <span className="text-slate-400">→</span>
             </div>
           </div>
@@ -526,12 +578,12 @@ export default function MachineReportDashboard() {
               </div>
             </div>
 
-            <button
-              type="button"
-              className="mt-4 w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2.5 text-center text-xs sm:text-sm font-semibold text-white transition-all duration-150 cursor-pointer shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+            <Link
+              href="/lich-bao-tri"
+              className="mt-4 block w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2.5 text-center text-xs sm:text-sm font-semibold text-white transition-all duration-150 shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               Tạo lệnh bảo trì
-            </button>
+            </Link>
           </div>
 
           {/* Card: Lịch bảo trì sắp tới */}
@@ -540,62 +592,44 @@ export default function MachineReportDashboard() {
               Lịch bảo trì sắp tới
             </div>
             <div className="mt-3.5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy KCM007-01
+              {upcomingMaintenance.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-xs text-slate-500">
+                  Chưa có lịch bảo trì trong danh mục máy.
+                </div>
+              )}
+              {upcomingMaintenance.map((item) => (
+                <div key={item.code} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={machineDetailHref(item.code)}
+                      className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline"
+                    >
+                      {item.code}
+                    </Link>
+                    <div className="mt-0.5 text-xs text-slate-500 truncate" title={item.location}>
+                      {item.location}
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    Ga Hà Nội
+                  <div className="text-right">
+                    <div className="text-xs text-slate-700 font-mono">
+                      {item.date}
+                    </div>
+                    <div
+                      className={`mt-0.5 text-xs font-semibold font-mono ${
+                        item.daysLeft != null && item.daysLeft <= 14
+                          ? "text-rose-700"
+                          : "text-amber-700"
+                      }`}
+                    >
+                      {item.daysLeft == null
+                        ? "—"
+                        : item.daysLeft < 0
+                          ? `Quá ${Math.abs(item.daysLeft)} ngày`
+                          : `Còn ${item.daysLeft} ngày`}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    15/05/2026
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-rose-700 font-mono">
-                    Còn 10 ngày
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Máy UN5-150ZC2-01
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    Depot ga Hà Nội
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    20/05/2026
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-amber-700 font-mono">
-                    Còn 15 ngày
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-semibold text-[#0047AB]">
-                    Hiệu chuẩn máy UT
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-500">
-                    Tổ kiểm tra chất lượng
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-700 font-mono">
-                    05/08/2024
-                  </div>
-                  <div className="mt-0.5 text-xs font-semibold text-amber-700 font-mono">
-                    Còn 31 ngày
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
