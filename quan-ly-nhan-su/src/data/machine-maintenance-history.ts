@@ -201,11 +201,14 @@ function fromCalendarEvent(e: MaintenanceEvent): MachineMaintenanceHistoryRow {
   };
 }
 
-export function getMachineMaintenanceHistory(machineCode: string): MachineMaintenanceHistoryRow[] {
+export function getMachineMaintenanceHistory(
+  machineCode: string,
+  savedEvents: MaintenanceEvent[] = [],
+): MachineMaintenanceHistoryRow[] {
   // Map legacy machine codes if requested
   const resolvedCode = legacyCodeMap[machineCode] || machineCode;
 
-  const calendar = maintenanceEvents
+  const calendar = [...maintenanceEvents, ...savedEvents]
     .filter((e) => e.machine === machineCode || e.machine === resolvedCode)
     .map(fromCalendarEvent);
 

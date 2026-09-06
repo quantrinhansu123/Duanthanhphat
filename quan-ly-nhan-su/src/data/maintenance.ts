@@ -3,6 +3,13 @@ export type MaintenanceAssignee = {
   photo: string;
 };
 
+export type MaintenanceImageAsset = {
+  publicId: string;
+  secureUrl: string;
+  name: string;
+  bytes?: number;
+};
+
 export type MaintenanceEvent = {
   id: string;
   date: string; // YYYY-MM-DD
@@ -15,6 +22,8 @@ export type MaintenanceEvent = {
   assignees: MaintenanceAssignee[];
   note?: string;
   images?: string[];
+  imageAssets?: MaintenanceImageAsset[];
+  persisted?: boolean;
 };
 
 export const maintenanceEvents: MaintenanceEvent[] = [

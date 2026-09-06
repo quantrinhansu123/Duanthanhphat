@@ -1,13 +1,13 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MaintenanceFormModal, {
-  assigneeOptions,
   type MaintenanceFormValues,
 } from "@/components/MaintenanceFormModal";
 import { maintenanceEvents as seedEvents, type MaintenanceEvent } from "@/data/maintenance";
 import { Check } from "@/components/icons";
+import { loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
@@ -41,7 +41,7 @@ function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent
       {visible.map((a, i) => (
         <div
           key={a.name}
-          className="relative overflow-hidden rounded-full ring-2 ring-white shadow-2xs"
+          className="relative flex items-center justify-center overflow-hidden rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 ring-2 ring-white shadow-2xs"
           style={{
             width: size,
             height: size,
@@ -50,7 +50,11 @@ function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent
           }}
           title={a.name}
         >
-          <Image src={a.photo} alt={a.name} fill className="object-cover" sizes={`${size}px`} />
+          {a.photo ? (
+            <Image src={a.photo} alt={a.name} fill className="object-cover" sizes={`${size}px`} />
+          ) : (
+            a.name.split(" ").at(-1)?.slice(0, 1).toUpperCase()
+          )}
         </div>
       ))}
       {extra > 0 && (
@@ -66,12 +70,28 @@ function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent
 }
 
 export default function MaintenanceCalendar() {
-  const today = new Date(2026, 7, 27); // Aug 27, 2026
+  const today = useMemo(() => new Date(), []);
   const [events, setEvents] = useState<MaintenanceEvent[]>(seedEvents);
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(toKey(today.getFullYear(), today.getMonth(), today.getDate()));
   const [openAdd, setOpenAdd] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<MaintenanceEvent | null>(null);
+  const [dataError, setDataError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void loadMaintenanceEvents().then((result) => {
+      if (!active) return;
+      setEvents(result.events);
+      setDataError(result.error ?? "");
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -140,30 +160,28 @@ export default function MaintenanceCalendar() {
     window.setTimeout(() => setToast(""), 2500);
   }
 
-  function handleAdd(values: MaintenanceFormValues) {
-    const assignees = assigneeOptions.filter((a) => values.assigneeNames.includes(a.name));
-
-    const next: MaintenanceEvent = {
-      id: `local-${Date.now()}`,
-      date: values.date,
-      time: values.time,
-      durationMin: values.durationMin,
-      title: values.title.trim(),
-      machine: values.machine,
-      type: values.type,
-      status: values.status,
-      assignees,
-    };
-
-    setEvents((prev) => [...prev, next]);
+  async function handleSave(values: MaintenanceFormValues) {
+    const saved = await saveMaintenanceEvent({
+      id: editingEvent?.persisted ? editingEvent.id : undefined,
+      ...values,
+    });
+    setEvents((current) => {
+      if (!editingEvent) return [saved, ...current];
+      return current.map((event) => event.id === editingEvent.id ? saved : event);
+    });
     setSelected(values.date);
     const [y, m] = values.date.split("-").map(Number);
     setCursor(new Date(y, m - 1, 1));
-    showToast("Đã thêm lịch bảo trì");
+    showToast(editingEvent ? "Đã cập nhật lịch bảo trì" : "Đã thêm lịch bảo trì");
   }
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
+      {dataError && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 sm:text-sm">
+          Chưa tải được dữ liệu bảo trì từ Supabase: {dataError}. Hãy chạy migration lịch sử bảo trì mới.
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
@@ -205,11 +223,14 @@ export default function MaintenanceCalendar() {
           ))}
         </div>
         <span className="ml-auto text-xs sm:text-sm text-slate-500">
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{monthEvents.length}</strong> lịch trong tháng
+          {loading ? "Đang tải..." : <><strong className="font-semibold text-slate-900 font-mono tabular-nums">{monthEvents.length}</strong> lịch trong tháng</>}
         </span>
         <button
           type="button"
-          onClick={() => setOpenAdd(true)}
+          onClick={() => {
+            setEditingEvent(null);
+            setOpenAdd(true);
+          }}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm mới
@@ -322,6 +343,34 @@ export default function MaintenanceCalendar() {
                     </div>
                     <AssigneeAvatars assignees={e.assignees} size={30} />
                   </div>
+                  {e.note && (
+                    <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-relaxed text-slate-600">
+                      <span className="font-semibold text-slate-700">Ghi chú:</span> {e.note}
+                    </div>
+                  )}
+                  {e.images?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {e.images.map((imageUrl, imageIndex) => (
+                        <a key={`${e.id}-image-${imageIndex}`} href={imageUrl} target="_blank" rel="noreferrer" className="relative h-12 w-16 overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                          <Image src={imageUrl} alt={`Ảnh bảo trì ${imageIndex + 1}`} fill className="object-cover" sizes="64px" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                  {e.persisted && (
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingEvent(e);
+                          setOpenAdd(true);
+                        }}
+                        className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Sửa
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -336,9 +385,13 @@ export default function MaintenanceCalendar() {
 
       <MaintenanceFormModal
         open={openAdd}
-        onClose={() => setOpenAdd(false)}
-        onSubmit={handleAdd}
+        onClose={() => {
+          setOpenAdd(false);
+          setEditingEvent(null);
+        }}
+        onSubmit={handleSave}
         defaultDate={selected}
+        initialEvent={editingEvent}
       />
 
       {toast && (

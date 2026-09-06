@@ -7,6 +7,7 @@ import {
   getMachineMaintenanceHistory,
   type MachineMaintenanceHistoryRow,
 } from "@/data/machine-maintenance-history";
+import type { MaintenanceEvent } from "@/data/maintenance";
 import {
   machines as seedMachines,
   type Machine,
@@ -30,6 +31,7 @@ import {
   updateMachine as updateMachineInDb,
 } from "@/lib/machineCatalogDb";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
 import {
   appendTrainedMachineToken,
   loadPersonnelCertificateRows,
@@ -485,7 +487,37 @@ function MachineDetailModal({
       : [];
   const [activeTransportImg, setActiveTransportImg] = useState(transportCover);
 
-  const history = useMemo(() => getMachineMaintenanceHistory(machine.code), [machine.code]);
+  const [savedMaintenance, setSavedMaintenance] = useState<MaintenanceEvent[]>([]);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(true);
+  const [maintenanceError, setMaintenanceError] = useState("");
+  const history = useMemo(
+    () => getMachineMaintenanceHistory(machine.code, savedMaintenance),
+    [machine.code, savedMaintenance],
+  );
+
+  useEffect(() => {
+    let active = true;
+    setSavedMaintenance([]);
+    setMaintenanceLoading(true);
+    setMaintenanceError("");
+    void loadMachineMaintenanceEvents(machine.code)
+      .then((events) => {
+        if (active) setSavedMaintenance(events);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMaintenanceError(
+            error instanceof Error ? error.message : "Không thể tải lịch sử bảo trì.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setMaintenanceLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [machine.code]);
 
   const trainedPersonnel = useMemo(
     () =>
@@ -981,9 +1013,19 @@ function MachineDetailModal({
             <div>
               <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs sm:text-sm text-slate-500">
-                  <strong className="font-semibold text-slate-900 font-mono tabular-nums">{history.length}</strong> lần bảo trì · sắp xếp mới nhất trước
+                  {maintenanceLoading ? (
+                    "Đang tải lịch sử bảo trì..."
+                  ) : (
+                    <><strong className="font-semibold text-slate-900 font-mono tabular-nums">{history.length}</strong> lần bảo trì · sắp xếp mới nhất trước</>
+                  )}
                 </div>
               </div>
+
+              {maintenanceError && (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Chưa tải được dữ liệu bảo trì từ Supabase: {maintenanceError}
+                </div>
+              )}
 
               {history.length > 0 ? (
                 <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
