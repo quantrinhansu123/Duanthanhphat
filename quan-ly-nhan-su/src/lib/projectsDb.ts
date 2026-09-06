@@ -105,7 +105,7 @@ function hydrateProjectPlan(project: Project): Project {
   };
 }
 
-export function duAnRowToProject(row: DuAnRow): Project {
+export function duAnRowToProject(row: DuAnRow, managerName = ""): Project {
   const existingProgress = normalizeTheoreticalProgress(row.tien_do_ly_thuyet);
   const startDate = row.ngay_bat_dau?.slice(0, 10) || existingProgress[0]?.ngay || row.created_at.slice(0, 10);
   const endDate = row.ngay_ket_thuc?.slice(0, 10) || existingProgress.at(-1)?.ngay || startDate;
@@ -119,7 +119,8 @@ export function duAnRowToProject(row: DuAnRow): Project {
   return {
     id: row.id,
     name: row.du_an,
-    manager: row.nguoi_phu_trach ?? "",
+    manager: managerName,
+    managerId: row.nguoi_phu_trach ?? undefined,
     plant: "",
     staffCount: 0,
     machineCount: 0,
@@ -189,12 +190,12 @@ async function fetchProjects() {
   let error = primaryResult.error;
 
   if (error && (error.message.includes("column") || error.code === "42703" || error.code === "PGRST204")) {
-    const fallback = await supabase
+    const legacyFallback = await supabase
       .from("du_an")
       .select(DU_AN_COLUMNS_BASE)
       .order("du_an", { ascending: true });
-    data = fallback.data as unknown[] | null;
-    error = fallback.error;
+    data = legacyFallback.data as unknown[] | null;
+    error = legacyFallback.error;
   }
 
   if (error) {
@@ -209,8 +210,17 @@ async function fetchProjects() {
     return { projects: [], source: "supabase" as const };
   }
 
+  const { data: personnelRows } = await supabase
+    .from("nhan_su")
+    .select("employee_id,ho_ten");
+  const managerNames = new Map(
+    (personnelRows ?? []).map((person) => [String(person.employee_id), String(person.ho_ten ?? "")]),
+  );
+
   return {
-    projects: (data as DuAnRow[]).map(duAnRowToProject),
+    projects: (data as DuAnRow[]).map((row) =>
+      duAnRowToProject(row, row.nguoi_phu_trach ? managerNames.get(row.nguoi_phu_trach) ?? "" : ""),
+    ),
     source: "supabase" as const,
   };
 }
@@ -238,6 +248,8 @@ export async function saveTheoreticalProgress(
 export async function insertDuAn(payload: {
   name: string;
   maDuAn?: string;
+  manager: string;
+  managerId?: string;
   location: string;
   startDate: string;
   endDate: string;
@@ -256,6 +268,7 @@ export async function insertDuAn(payload: {
     .insert({
       du_an: name,
       ma_du_an: payload.maDuAn?.trim() || null,
+      nguoi_phu_trach: payload.managerId || null,
       vi_tri: payload.location.trim(),
       ngay_bat_dau: payload.startDate,
       ngay_ket_thuc: payload.endDate,
@@ -271,13 +284,15 @@ export async function insertDuAn(payload: {
 
   if (error) return { error: error.message };
   invalidateProjectsCache();
-  return { project: duAnRowToProject(data as DuAnRow) };
+  return { project: duAnRowToProject(data as DuAnRow, payload.manager.trim()) };
 }
 
 export async function updateDuAn(
   projectId: string,
   patch: {
     name?: string;
+    manager?: string;
+    managerId?: string;
     location?: string;
     startDate?: string;
     endDate?: string;
@@ -288,8 +303,9 @@ export async function updateDuAn(
     return { error: "Chưa cấu hình Supabase env" };
   }
 
-  const body: Record<string, string | number | TheoreticalProgressRow[]> = {};
+  const body: Record<string, string | number | TheoreticalProgressRow[] | null> = {};
   if (patch.name !== undefined) body.du_an = patch.name.trim();
+  if (patch.managerId !== undefined) body.nguoi_phu_trach = patch.managerId || null;
   if (patch.location !== undefined) body.vi_tri = patch.location.trim();
   if (patch.startDate !== undefined) body.ngay_bat_dau = patch.startDate;
   if (patch.endDate !== undefined) body.ngay_ket_thuc = patch.endDate;
@@ -323,7 +339,7 @@ export async function updateDuAn(
 
   if (error) return { error: error.message };
   invalidateProjectsCache();
-  return { project: duAnRowToProject(data as DuAnRow) };
+  return { project: duAnRowToProject(data as DuAnRow, patch.manager?.trim() ?? "") };
 }
 
 export async function deleteDuAn(projectId: string): Promise<{ error?: string }> {

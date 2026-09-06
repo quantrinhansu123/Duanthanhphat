@@ -75,3 +75,48 @@ export async function loadMachineFaultLibrary(): Promise<{
     };
   }
 }
+
+export type CreateMachineFaultInput = {
+  section: MachineFaultSection;
+  symptom: string;
+  probableCause: string;
+  remedy: string;
+  sourceReference?: string;
+  order?: number;
+};
+
+export async function createMachineFault(input: CreateMachineFaultInput): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể thêm lỗi thiết bị.");
+  }
+  const symptom = input.symptom.trim();
+  const probableCause = input.probableCause.trim();
+  const remedy = input.remedy.trim();
+  if (!symptom || !probableCause || !remedy) {
+    throw new Error("Vui lòng nhập đủ triệu chứng, nguyên nhân và cách khắc phục.");
+  }
+
+  const supabase = createClient();
+  let order = input.order;
+  if (!order || order < 1) {
+    const { data, error } = await supabase
+      .from("thu_vien_loi_thiet_bi")
+      .select("stt")
+      .eq("nhom", input.section)
+      .order("stt", { ascending: false })
+      .limit(1);
+    if (error) throw new Error(formatSupabaseError(error));
+    order = Number(data?.[0]?.stt ?? 0) + 1;
+  }
+
+  const { error } = await supabase.from("thu_vien_loi_thiet_bi").insert({
+    id: `mf-custom-${crypto.randomUUID()}`,
+    nhom: input.section,
+    stt: order,
+    trieu_chung: symptom,
+    nguyen_nhan_khac_phuc: [{ nguyen_nhan: probableCause, khac_phuc: remedy }],
+    nguon_bang: input.sourceReference?.trim() || "Bổ sung vận hành",
+    active: true,
+  });
+  if (error) throw new Error(formatSupabaseError(error));
+}

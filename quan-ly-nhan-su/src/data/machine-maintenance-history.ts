@@ -10,6 +10,7 @@ export type MachineMaintenanceHistoryRow = {
   durationMin: number;
   assignees: string[];
   note?: string;
+  images?: string[];
 };
 
 /** Lịch sử bảo trì lưu trữ (quá khứ) */
@@ -195,6 +196,8 @@ function fromCalendarEvent(e: MaintenanceEvent): MachineMaintenanceHistoryRow {
     status: e.status,
     durationMin: e.durationMin,
     assignees: e.assignees.map((a) => a.name),
+    note: e.note,
+    images: e.images,
   };
 }
 

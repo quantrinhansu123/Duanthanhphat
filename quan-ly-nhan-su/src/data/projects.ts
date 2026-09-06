@@ -10,6 +10,7 @@ export type Project = {
   id: string;
   name: string;
   manager: string;
+  managerId?: string;
   plant: string;
   staffCount: number;
   machineCount: number;

@@ -74,6 +74,27 @@ type LiveCertRow = {
   file_chung_chi: string | null;
 };
 
+function liveCertificateStatus(cert: Pick<LiveCertRow, "trang_thai" | "ngay_het_han">): Certificate["status"] {
+  if (cert.trang_thai === "Thu hồi") return "Thu hồi";
+  if (!cert.ngay_het_han) return "Chưa cập nhật";
+
+  const expiry = new Date(`${cert.ngay_het_han.slice(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (!Number.isFinite(expiry.getTime())) return "Chưa cập nhật";
+  if (expiry.getTime() < today.getTime()) return "Hết hạn";
+
+  const warningDate = new Date(today);
+  warningDate.setDate(warningDate.getDate() + 90);
+  return expiry.getTime() <= warningDate.getTime() ? "Sắp hết hạn" : "Còn hiệu lực";
+}
+
+function liveCertificateStatusClass(status: Certificate["status"]) {
+  if (status === "Còn hiệu lực") return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  if (status === "Sắp hết hạn") return "bg-amber-50 text-amber-700 border border-amber-200";
+  return "bg-rose-50 text-rose-700 border border-rose-200";
+}
+
 const LIVE_CERT_SELECT =
   "id, ten_chung_chi, ngay_cap, ngay_het_han, trang_thai, don_vi_cap, so_chung_chi, secure_url, file_chung_chi";
 
@@ -673,7 +694,7 @@ export default function WelderManagement() {
       number: cert.so_chung_chi || "",
       issuedAt: cert.ngay_cap?.slice(0, 10) || "",
       expiresAt: cert.ngay_het_han?.slice(0, 10) || "",
-      status: (cert.trang_thai as Certificate["status"]) || "Còn hiệu lực",
+      status: liveCertificateStatus(cert),
       organization: cert.don_vi_cap || "",
     });
   }
@@ -692,7 +713,7 @@ export default function WelderManagement() {
       certificateNumber: cert.so_chung_chi || "Chưa cập nhật",
       issuedAt: cert.ngay_cap ? formatDate(cert.ngay_cap) : "Chưa cập nhật",
       expiresAt: cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "Chưa cập nhật",
-      status: (cert.trang_thai as Certificate["status"]) || "Chưa cập nhật",
+      status: liveCertificateStatus(cert),
       imageKey: imageKeyForTitle(cert.ten_chung_chi),
       imageUrl: cert.secure_url || undefined,
       machine: selectedWelder.trainedMachines,
@@ -882,9 +903,9 @@ export default function WelderManagement() {
     );
   }, [allWeldRows, list]);
   const machineOptions = useMemo(() => {
-    const all = list.flatMap((w) => w.trainedMachines.split(",").map((s) => s.trim()).filter(Boolean));
-    return Array.from(new Set(all)).sort();
-  }, [list]);
+    return Array.from(new Set(machineCatalog.map((machine) => machine.code.trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "vi"));
+  }, [machineCatalog]);
   const statusOptions = ["Hoạt động", "Khóa"];
 
   const selectedRailTypes = useMemo(() => {
@@ -939,12 +960,17 @@ export default function WelderManagement() {
       const matchTeam = teamsSel.length === 0 || teamsSel.includes(w.weldingTeam);
       const matchRail =
         railsSel.length === 0 || railsSel.some((r) => w.railTypes.split(",").map((s) => s.trim()).includes(r));
-      const matchMachine =
-        machinesSel.length === 0 || machinesSel.some((m) => w.trainedMachines.split(",").map((s) => s.trim()).includes(m));
+      const matchMachine = machinesSel.length === 0 || machinesSel.some((code) => {
+        const machine = machineCatalog.find((item) => item.code === code);
+        return personTrainedOnMachine(w.trainedMachines, {
+          code,
+          model: machine?.model,
+        });
+      });
       const matchStatus = statusesSel.length === 0 || statusesSel.includes(w.status);
       return matchQ && matchRank && matchTeam && matchRail && matchMachine && matchStatus;
     });
-  }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel]);
+  }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel, machineCatalog]);
 
   const stats = useMemo(() => {
     const total = list.length;
@@ -1620,14 +1646,15 @@ export default function WelderManagement() {
                       const driveFile = findDriveFileForCert(cert);
                       const hasFile = Boolean(driveFile);
                       const isUploading = uploadingCertId === cert.id;
+                      const computedStatus = liveCertificateStatus(cert);
                       return (
                       <div key={cert.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
                             {cert.ten_chung_chi}
                           </h4>
-                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${cert.trang_thai === "Còn hiệu lực" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                            {cert.trang_thai}
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${liveCertificateStatusClass(computedStatus)}`}>
+                            {computedStatus}
                           </span>
                         </div>
                         <div className="mt-2 text-[11px] text-slate-600 space-y-0.5 font-mono">

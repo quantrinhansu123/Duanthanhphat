@@ -17,8 +17,9 @@ import {
   type CertificateGroupOption,
   type DbTrainingCourse,
   type TrainingPersonnelOption,
+  type TrainingAsset,
 } from "@/lib/trainingDb";
-import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import { deleteCloudinaryAsset, uploadCloudinaryAsset } from "@/lib/cloudinaryClient";
 
 const resultStyle: Record<string, string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -52,7 +53,7 @@ function TrainingFormModal({
   const isEdit = Boolean(initial);
   const [form, setForm] = useState({
     title: initial?.title ?? "",
-    trainerId: initial?.trainerId ?? "",
+    trainerName: initial?.trainer === "Chưa chỉ định" ? "" : initial?.trainer ?? "",
     date: initial ? viToISO(initial.date) : "",
     duration: initial && initial.duration !== "0:00" ? initial.duration : "",
     location: initial && initial.location !== "Chưa cập nhật" ? initial.location : "",
@@ -64,6 +65,7 @@ function TrainingFormModal({
 
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnail ?? DEFAULT_THUMBNAIL);
   const [cloudinaryPublicId, setCloudinaryPublicId] = useState(initial?.cloudinaryPublicId ?? "");
+  const [assets, setAssets] = useState<TrainingAsset[]>(initial?.assets ?? []);
   const [uploadingImg, setUploadingImg] = useState(false);
 
   const [attendeeList, setAttendeeList] = useState<{
@@ -79,11 +81,14 @@ function TrainingFormModal({
 
   const handleClose = useCallback(async () => {
     if (saving || uploadingImg) return;
-    if (cloudinaryPublicId && cloudinaryPublicId !== initial?.cloudinaryPublicId) {
-      await deleteCloudinaryAsset(cloudinaryPublicId);
+    const initialIds = new Set((initial?.assets ?? []).map((asset) => asset.publicId));
+    for (const asset of assets) {
+      if (!initialIds.has(asset.publicId)) {
+        await deleteCloudinaryAsset(asset.publicId, asset.resourceType);
+      }
     }
     onClose();
-  }, [cloudinaryPublicId, initial?.cloudinaryPublicId, onClose, saving, uploadingImg]);
+  }, [assets, initial?.assets, onClose, saving, uploadingImg]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -97,26 +102,38 @@ function TrainingFormModal({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleAssetUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
 
     setUploadingImg(true);
     setError("");
-
-    // Thử tải lên Cloudinary có chữ ký
-    const uploadRes = await uploadToCloudinary(file, "thanhphat/trainings");
-    setUploadingImg(false);
-
-    if (uploadRes.result) {
-      if (cloudinaryPublicId && cloudinaryPublicId !== initial?.cloudinaryPublicId) {
-        await deleteCloudinaryAsset(cloudinaryPublicId);
+    const uploaded: TrainingAsset[] = [];
+    const errors: string[] = [];
+    for (const file of files) {
+      const uploadRes = await uploadCloudinaryAsset(file, "thanhphat/trainings");
+      if (!uploadRes.result) {
+        errors.push(`${file.name}: ${uploadRes.error || "Không tải được"}`);
+        continue;
       }
-      setThumbnailUrl(uploadRes.result.secure_url);
-      setCloudinaryPublicId(uploadRes.result.public_id);
-    } else {
-      setError(uploadRes.error || "Không tải được ảnh lên Cloudinary. Ảnh cũ được giữ nguyên.");
+      const asset: TrainingAsset = {
+        publicId: uploadRes.result.public_id,
+        secureUrl: uploadRes.result.secure_url,
+        resourceType: uploadRes.result.resource_type || (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw"),
+        name: file.name,
+        mimeType: file.type || undefined,
+        bytes: uploadRes.result.bytes ?? file.size,
+      };
+      uploaded.push(asset);
+      if (asset.resourceType === "image" && thumbnailUrl === DEFAULT_THUMBNAIL) {
+        setThumbnailUrl(asset.secureUrl);
+        setCloudinaryPublicId(asset.publicId);
+      }
     }
+    setAssets((current) => [...current, ...uploaded]);
+    setUploadingImg(false);
+    e.target.value = "";
+    if (errors.length) setError(errors.join("\n"));
   }
 
   async function handleSubmit() {
@@ -141,7 +158,7 @@ function TrainingFormModal({
       duration: form.duration.trim(),
       location: form.location.trim(),
       description: form.description.trim(),
-      trainerId: form.trainerId || undefined,
+      trainerName: form.trainerName.trim() || undefined,
       result: form.result,
       thumbnail: thumbnailUrl,
       cloudinaryPublicId,
@@ -151,16 +168,12 @@ function TrainingFormModal({
         employeeId: a.id,
         result: a.result,
       })),
+      assets,
     });
 
     setSaving(false);
 
     if (res.error) {
-      if (cloudinaryPublicId && cloudinaryPublicId !== initial?.cloudinaryPublicId) {
-        await deleteCloudinaryAsset(cloudinaryPublicId);
-        setCloudinaryPublicId(initial?.cloudinaryPublicId ?? "");
-        setThumbnailUrl(initial?.thumbnail ?? DEFAULT_THUMBNAIL);
-      }
       setError(res.error);
       return;
     }
@@ -168,6 +181,12 @@ function TrainingFormModal({
     if (initial?.cloudinaryPublicId && initial.cloudinaryPublicId !== cloudinaryPublicId) {
       const stillReferenced = await isTrainingAssetReferenced(initial.cloudinaryPublicId);
       if (!stillReferenced) await deleteCloudinaryAsset(initial.cloudinaryPublicId);
+    }
+    const retainedAssetIds = new Set(assets.map((asset) => asset.publicId));
+    for (const removedAsset of initial?.assets ?? []) {
+      if (retainedAssetIds.has(removedAsset.publicId)) continue;
+      const stillReferenced = await isTrainingAssetReferenced(removedAsset.publicId);
+      if (!stillReferenced) await deleteCloudinaryAsset(removedAsset.publicId, removedAsset.resourceType);
     }
 
     onSubmitSuccess();
@@ -209,9 +228,9 @@ function TrainingFormModal({
             </div>
           )}
 
-          {/* Ảnh đại diện khóa học */}
+          {/* Ảnh đại diện, tài liệu và video khóa học */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ảnh đại diện khóa học</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ảnh, tài liệu &amp; video khóa học</label>
             <div className="mt-2 flex items-center gap-4">
               <div className="relative h-24 w-40 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-2xs">
                 <Image src={thumbnailUrl} alt="Thumbnail" fill className="object-cover" />
@@ -220,8 +239,9 @@ function TrainingFormModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                  multiple
+                  onChange={handleAssetUpload}
                   className="hidden"
                 />
                 <button
@@ -231,14 +251,11 @@ function TrainingFormModal({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs disabled:opacity-50"
                 >
                   <UploadSimple size={14} weight="bold" />
-                  {uploadingImg ? "Đang tải ảnh..." : "Thay đổi ảnh"}
+                  {uploadingImg ? "Đang tải các tệp..." : "Thêm nhiều tệp"}
                 </button>
                 <button
                   type="button"
                   onClick={async () => {
-                    if (cloudinaryPublicId && cloudinaryPublicId !== initial?.cloudinaryPublicId) {
-                      await deleteCloudinaryAsset(cloudinaryPublicId);
-                    }
                     setThumbnailUrl(DEFAULT_THUMBNAIL);
                     setCloudinaryPublicId("");
                   }}
@@ -248,6 +265,33 @@ function TrainingFormModal({
                 </button>
               </div>
             </div>
+            {assets.length > 0 && (
+              <div className="mt-3 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                {assets.map((asset) => (
+                  <div key={asset.publicId} className="flex items-center justify-between gap-3 rounded-md bg-white px-2.5 py-2 text-xs">
+                    <a href={asset.secureUrl} target="_blank" rel="noreferrer" className="min-w-0 truncate font-medium text-[#0047AB] hover:underline">
+                      {asset.name}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const existingAsset = initial?.assets.some((item) => item.publicId === asset.publicId);
+                        if (!existingAsset) await deleteCloudinaryAsset(asset.publicId, asset.resourceType);
+                        setAssets((current) => current.filter((item) => item.publicId !== asset.publicId));
+                        if (cloudinaryPublicId === asset.publicId) {
+                          setThumbnailUrl(DEFAULT_THUMBNAIL);
+                          setCloudinaryPublicId("");
+                        }
+                      }}
+                      className="shrink-0 font-semibold text-rose-600 hover:underline"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-1.5 text-[11px] text-slate-500">Chọn nhiều ảnh, video hoặc tài liệu trong một lần.</p>
           </div>
 
           <div>
@@ -264,18 +308,13 @@ function TrainingFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Người đào tạo</label>
-              <select
+              <input
+                type="text"
                 className={fieldClass}
-                value={form.trainerId}
-                onChange={(e) => set("trainerId", e.target.value)}
-              >
-                <option value="">-- Chưa chỉ định --</option>
-                {personnel.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name} · {person.code}
-                  </option>
-                ))}
-              </select>
+                value={form.trainerName}
+                onChange={(e) => set("trainerName", e.target.value)}
+                placeholder="Gõ tên người đào tạo"
+              />
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ngày đào tạo *</label>
@@ -610,6 +649,28 @@ function TrainingDetailModal({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {course.assets.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                Tài liệu &amp; video ({course.assets.length})
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
+                {course.assets.map((asset) => (
+                  <a
+                    key={asset.publicId}
+                    href={asset.secureUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs hover:bg-blue-50"
+                  >
+                    <span className="min-w-0 truncate font-semibold text-[#0047AB]">{asset.name}</span>
+                    <span className="shrink-0 uppercase text-slate-400">{asset.resourceType}</span>
+                  </a>
+                ))}
+              </div>
             </div>
           )}
 

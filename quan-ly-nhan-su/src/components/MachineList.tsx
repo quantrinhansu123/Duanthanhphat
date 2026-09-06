@@ -987,7 +987,7 @@ function MachineDetailModal({
 
               {history.length > 0 ? (
                 <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[680px] border-collapse text-left text-xs sm:text-sm">
+                  <table className="w-full min-w-[1080px] border-collapse text-left text-xs sm:text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                         <th className="px-3.5 py-2.5">Ngày</th>
@@ -996,7 +996,9 @@ function MachineDetailModal({
                         <th className="px-3.5 py-2.5">Loại</th>
                         <th className="px-3.5 py-2.5">Trạng thái</th>
                         <th className="px-3.5 py-2.5">Thời lượng</th>
-                        <th className="min-w-[160px] px-3.5 py-2.5">Nhân sự</th>
+                        <th className="min-w-[180px] px-3.5 py-2.5">Nhân sự sửa chữa</th>
+                        <th className="min-w-[240px] px-3.5 py-2.5">Ghi chú</th>
+                        <th className="min-w-[150px] px-3.5 py-2.5">Ảnh</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1008,7 +1010,6 @@ function MachineDetailModal({
                           <td className="whitespace-nowrap px-3.5 py-3 tabular-nums font-mono text-slate-700">{row.time}</td>
                           <td className="px-3.5 py-3">
                             <div className="font-semibold text-slate-900">{row.title}</div>
-                            {row.note && <div className="mt-0.5 text-xs text-slate-500">{row.note}</div>}
                           </td>
                           <td className="px-3.5 py-3">
                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintTypeStyle[row.type]}`}>
@@ -1022,6 +1023,29 @@ function MachineDetailModal({
                           </td>
                           <td className="whitespace-nowrap px-3.5 py-3 font-mono text-slate-700 tabular-nums">{row.durationMin} phút</td>
                           <td className="px-3.5 py-3 text-xs sm:text-sm text-slate-700">{row.assignees.join(", ")}</td>
+                          <td className="px-3.5 py-3 text-xs leading-relaxed text-slate-600">
+                            {row.note || "—"}
+                          </td>
+                          <td className="px-3.5 py-3">
+                            {row.images?.length ? (
+                              <div className="flex max-w-[190px] flex-wrap gap-1.5">
+                                {row.images.map((imageUrl, index) => (
+                                  <a
+                                    key={`${row.id}-image-${index}`}
+                                    href={imageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="relative block h-10 w-14 overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                                    title={`Ảnh bảo trì ${index + 1}`}
+                                  >
+                                    <Image src={imageUrl} alt={`Ảnh bảo trì ${index + 1}`} fill className="object-cover" sizes="56px" />
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">Chưa có ảnh</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

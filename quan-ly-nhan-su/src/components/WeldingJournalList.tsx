@@ -17,9 +17,11 @@ import {
   loadJournalProjectOptions,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
+  resolveWeldTestStatus,
   syncAllWeldCodes,
   type CertifiedWelderOption,
   type WeldReportRow,
+  type WeldTestStatus,
 } from "@/lib/weldReportData";
 import { buildWeldCodePrefix, suggestWeldCode, WELD_CODE_SITE_PREFIX } from "@/lib/weldCode";
 import {
@@ -40,7 +42,7 @@ type JournalFormValues = {
   loai_ray: string;
   cong_nghe_han: WeldReportRow["cong_nghe_han"];
   loai_moi_han: WeldReportRow["loai_moi_han"];
-  result: "Đạt" | "Không đạt";
+  result: WeldTestStatus;
   ma_khuyet_tat: string[];
   nguyen_nhan_loi: string;
   moi_han_lien_ket: string;
@@ -51,6 +53,10 @@ type JournalFormValues = {
   kinh_do: string;
   vi_do: string;
 };
+
+function isInternalTrainingProject(label: string) {
+  return label.trim().toLocaleLowerCase("vi") === "đào tạo nội bộ";
+}
 
 function defaultLinkDateRange() {
   const now = new Date();
@@ -72,6 +78,8 @@ function emptyJournalForm(
   machines: MachineOption[],
 ): JournalFormValues {
   const machine = machines[0];
+  const project = projects[0];
+  const isInternalTraining = isInternalTrainingProject(project?.label ?? "");
   const context = {
     railType: "UIC60",
     method: "FBW" as const,
@@ -84,13 +92,13 @@ function emptyJournalForm(
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
-    du_an_id: projects[0]?.id ?? "",
+    du_an_id: project?.id ?? "",
     tho_han_id: welder?.id ?? "",
     may_id: machine?.id ?? "",
     loai_ray: "UIC60",
     cong_nghe_han: "FBW",
-    loai_moi_han: "Sản xuất",
-    result: "Đạt",
+    loai_moi_han: isInternalTraining ? "Đào tạo" : "Sản xuất",
+    result: isInternalTraining ? "Không thí nghiệm" : "Chờ thí nghiệm",
     ma_khuyet_tat: [],
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
@@ -332,14 +340,16 @@ function JournalFormModal({
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Kết quả
+              Tình trạng thí nghiệm
               <select
                 value={form.result}
                 onChange={(e) => setForm({ ...form, result: e.target.value as JournalFormValues["result"] })}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
               >
+                <option>Chờ thí nghiệm</option>
                 <option>Đạt</option>
                 <option>Không đạt</option>
+                <option>Không thí nghiệm</option>
               </select>
             </label>
           </div>
@@ -390,7 +400,26 @@ function JournalFormModal({
             Dự án
             <select
               value={form.du_an_id}
-              onChange={(e) => setForm({ ...form, du_an_id: e.target.value })}
+              onChange={(e) => {
+                const projectId = e.target.value;
+                const internalTraining = isInternalTrainingProject(
+                  projects.find((project) => project.id === projectId)?.label ?? "",
+                );
+                setForm((current) => ({
+                  ...current,
+                  du_an_id: projectId,
+                  loai_moi_han: internalTraining
+                    ? "Đào tạo"
+                    : current.loai_moi_han === "Đào tạo"
+                      ? "Sản xuất"
+                      : current.loai_moi_han,
+                  result: internalTraining
+                    ? "Không thí nghiệm"
+                    : current.result === "Không thí nghiệm"
+                      ? "Chờ thí nghiệm"
+                      : current.result,
+                }));
+              }}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
             >
               {projects.length === 0 ? (
@@ -693,6 +722,14 @@ export default function WeldingJournalList() {
   const [projectOptions, setProjectOptions] = useState<{ id: string; label: string }[]>([]);
 
   useEffect(() => {
+    const initialQuery = new URLSearchParams(window.location.search).get("query")?.trim() || "";
+    if (initialQuery) {
+      setQuery(initialQuery);
+      setAppliedQuery(initialQuery);
+    }
+  }, []);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setAppliedQuery(query.trim());
     }, 300);
@@ -801,6 +838,7 @@ export default function WeldingJournalList() {
       const isoDate = row.ngay_thuc_hien?.slice(0, 10) ?? "";
       const performedDate = isoDate ? formatJournalDateIso(isoDate) : `Chỉ có năm ${row.nam_thuc_hien}`;
       const pass = row.so_luong_loi === 0;
+      const testStatus = resolveWeldTestStatus(row);
       const certificate = row.chung_chi_su_dung?.trim() || "Chưa ghi chứng chỉ sử dụng";
       const certificateLinked = row.chung_chi_su_dung
         ? hasCertificate(row.chung_chi_nhan_su, row.chung_chi_su_dung)
@@ -827,6 +865,7 @@ export default function WeldingJournalList() {
             ? `${row.ma_khuyet_tat.join(", ")}${row.nguyen_nhan_loi ? ` · ${row.nguyen_nhan_loi}` : ""}`
             : (row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân"),
         resultType: pass ? ("pass" as const) : ("fail" as const),
+        testStatus,
       };
     });
   }, [rows, gpsPoints]);
@@ -907,7 +946,7 @@ export default function WeldingJournalList() {
           "Kinh độ": gpsPoint?.longitude ?? "",
           "Mã khuyết tật": row.ma_khuyet_tat?.join(", ") || "",
           "Lý do không đạt": row.nguyen_nhan_loi?.trim() || "",
-          "Kết quả": row.so_luong_loi === 0 ? "Đạt" : "Không đạt",
+          "Tình trạng thí nghiệm": resolveWeldTestStatus(row),
           "Ghi chú": row.ghi_chu?.trim() || "",
         };
       });
@@ -979,6 +1018,7 @@ export default function WeldingJournalList() {
         cong_nghe_han: values.cong_nghe_han,
         so_luong_loi: values.result === "Không đạt" ? 1 : 0,
         ma_khuyet_tat: values.result === "Không đạt" ? values.ma_khuyet_tat : [],
+        tinh_trang_thi_nghiem: values.result,
         nguyen_nhan_loi: values.result === "Không đạt"
           ? (values.nguyen_nhan_loi.trim() || values.ma_khuyet_tat.join(", "))
           : null,
@@ -1048,8 +1088,10 @@ export default function WeldingJournalList() {
           className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
         >
           <option>Tất cả</option>
+          <option>Chờ thí nghiệm</option>
           <option>Đạt</option>
           <option>Không đạt</option>
+          <option>Không thí nghiệm</option>
         </select>
         <button
           type="button"
@@ -1168,17 +1210,26 @@ export default function WeldingJournalList() {
                     {w.failureReason}
                   </td>
                   <td className="p-2.5 whitespace-nowrap">
-                    {w.resultType === "pass" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        Đạt
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-2xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                        Không đạt
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold shadow-2xs ${
+                      w.testStatus === "Đạt"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : w.testStatus === "Không đạt"
+                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          : w.testStatus === "Không thí nghiệm"
+                            ? "border-slate-200 bg-slate-50 text-slate-600"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${
+                        w.testStatus === "Đạt"
+                          ? "bg-emerald-500"
+                          : w.testStatus === "Không đạt"
+                            ? "bg-rose-500"
+                            : w.testStatus === "Không thí nghiệm"
+                              ? "bg-slate-400"
+                              : "bg-amber-500"
+                      }`} />
+                      {w.testStatus}
+                    </span>
                   </td>
                 </tr>
               ))}

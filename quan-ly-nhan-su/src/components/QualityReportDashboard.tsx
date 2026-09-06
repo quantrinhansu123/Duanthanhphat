@@ -527,7 +527,7 @@ export default function QualityReportDashboard() {
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Chất lượng theo nhà máy</div>
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Chất lượng theo dự án</div>
           <div className="mt-0.5 text-xs text-slate-500">Tỷ lệ đạt và số mối không đạt</div>
           <div className="mt-4 flex flex-col gap-3.5">
             {currentPlantQuality.map((p) => (
@@ -618,7 +618,7 @@ export default function QualityReportDashboard() {
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Mối hàn</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Loại lỗi</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Thợ hàn</th>
-                <th className="px-3.5 py-2.5 whitespace-nowrap">Nhà máy</th>
+                <th className="px-3.5 py-2.5 whitespace-nowrap">Dự án</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Mức độ</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Trạng thái</th>
               </tr>

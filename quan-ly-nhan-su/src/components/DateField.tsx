@@ -43,17 +43,30 @@ function formatVi(value: string) {
   return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : "";
 }
 
+function manualToISO(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return toISO(date);
+}
+
 export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy", className = "" }: DateFieldProps) {
   const { lang } = useLanguage();
   const WEEKDAYS = lang === "en" ? WEEKDAYS_EN : WEEKDAYS_VI;
   const MONTHS = lang === "en" ? MONTHS_EN : MONTHS_VI;
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => parseISO(value) ?? new Date());
+  const [inputValue, setInputValue] = useState(() => formatVi(value));
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const parsed = parseISO(value);
     if (parsed) setViewDate(parsed);
+    setInputValue(formatVi(value));
   }, [value]);
 
   useEffect(() => {
@@ -84,22 +97,47 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
   const todayISO = toISO(new Date());
 
   function pick(day: number) {
-    onChange(toISO(new Date(year, month, day)));
+    const next = toISO(new Date(year, month, day));
+    onChange(next);
+    setInputValue(formatVi(next));
     setOpen(false);
   }
 
   return (
     <div ref={boxRef} className={`relative ${className}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`flex h-10 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-xs sm:text-sm outline-hidden transition-all duration-150 cursor-pointer ${
+      <div
+        className={`flex h-10 w-full items-center rounded-lg border bg-white text-xs sm:text-sm outline-hidden transition-all duration-150 ${
           open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : "border-slate-300 hover:border-slate-400"
-        } ${value ? "text-slate-900" : "text-slate-400"}`}
+        }`}
       >
-        <span>{value ? formatVi(value) : placeholder}</span>
-        <CalendarBlank size={15} weight="regular" aria-hidden className="shrink-0 text-slate-400" />
-      </button>
+        <input
+          value={inputValue}
+          onChange={(event) => {
+            const nextText = event.target.value;
+            setInputValue(nextText);
+            if (!nextText.trim()) onChange("");
+            const nextIso = manualToISO(nextText);
+            if (nextIso) onChange(nextIso);
+          }}
+          onBlur={() => {
+            if (!inputValue.trim()) return;
+            const nextIso = manualToISO(inputValue);
+            setInputValue(nextIso ? formatVi(nextIso) : formatVi(value));
+          }}
+          placeholder={placeholder}
+          inputMode="numeric"
+          className="h-full min-w-0 flex-1 bg-transparent px-3 text-slate-900 outline-hidden placeholder:text-slate-400"
+          aria-label={placeholder}
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex h-full w-10 shrink-0 items-center justify-center text-slate-400 hover:text-[#0047AB]"
+          aria-label="Mở lịch"
+        >
+          <CalendarBlank size={15} weight="regular" aria-hidden />
+        </button>
+      </div>
 
       {open && (
         <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-[248px] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg animate-in fade-in-50 duration-150">

@@ -1,4 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
+import type { CloudinaryResourceType } from "@/lib/cloudinaryClient";
+
+export type TrainingAsset = {
+  publicId: string;
+  secureUrl: string;
+  resourceType: CloudinaryResourceType;
+  name: string;
+  mimeType?: string;
+  bytes?: number;
+};
 
 export type DbTrainingAttendee = {
   id: string; // employee_id
@@ -28,6 +38,7 @@ export type DbTrainingCourse = {
   certificateGroupName?: string | null;
   topics: string[];
   attendees?: DbTrainingAttendee[];
+  assets: TrainingAsset[];
 };
 
 export type CertificateGroupOption = {
@@ -67,6 +78,7 @@ export type SaveTrainingCourseInput = {
     result: "Đạt" | "Không đạt" | "Đang học";
     status?: "Hoàn thành" | "Đang học" | "Không hoàn thành";
   }[];
+  assets?: TrainingAsset[];
 };
 
 interface RawCourseListRow {
@@ -82,6 +94,8 @@ interface RawCourseListRow {
   nhom_chung_chi_id?: string | null;
   topics?: string[] | null;
   nguoi_dao_tao?: string | null;
+  nguoi_dao_tao_ten?: string | null;
+  tai_lieu?: unknown;
 }
 
 interface RawAttendeeRow {
@@ -93,6 +107,42 @@ interface RawAttendeeRow {
 }
 
 type RawCourseDetailRow = RawCourseListRow;
+
+const COURSE_COLUMNS_BASE = `
+  id,
+  ten_khoa_hoc,
+  ngay,
+  thoi_luong,
+  dia_diem,
+  mo_ta,
+  ket_qua,
+  hinh_anh,
+  cloudinary_public_id,
+  topics,
+  nhom_chung_chi_id,
+  nguoi_dao_tao
+`;
+const COURSE_COLUMNS_WITH_ASSETS = `${COURSE_COLUMNS_BASE},nguoi_dao_tao_ten,tai_lieu`;
+
+function parseTrainingAssets(value: unknown): TrainingAsset[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const publicId = String(row.publicId ?? row.public_id ?? "").trim();
+    const secureUrl = String(row.secureUrl ?? row.secure_url ?? "").trim();
+    const resourceType = String(row.resourceType ?? row.resource_type ?? "raw");
+    if (!publicId || !secureUrl || !["image", "video", "raw"].includes(resourceType)) return [];
+    return [{
+      publicId,
+      secureUrl,
+      resourceType: resourceType as CloudinaryResourceType,
+      name: String(row.name ?? row.original_filename ?? publicId.split("/").at(-1) ?? "Tài liệu"),
+      mimeType: row.mimeType ? String(row.mimeType) : undefined,
+      bytes: Number.isFinite(Number(row.bytes)) ? Number(row.bytes) : undefined,
+    }];
+  });
+}
 
 export function isSupabaseReady() {
   return Boolean(
@@ -107,26 +157,24 @@ async function fetchAllCourseRows(): Promise<RawCourseListRow[]> {
   const rows: RawCourseListRow[] = [];
 
   for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
+    const primary = await supabase
       .from("dao_tao")
-      .select(`
-        id,
-        ten_khoa_hoc,
-        ngay,
-        thoi_luong,
-        dia_diem,
-        mo_ta,
-        ket_qua,
-        hinh_anh,
-        cloudinary_public_id,
-        topics,
-        nhom_chung_chi_id,
-        nguoi_dao_tao
-      `)
+      .select(COURSE_COLUMNS_WITH_ASSETS)
       .order("ngay", { ascending: false, nullsFirst: false })
       .range(offset, offset + pageSize - 1);
+    let data: RawCourseListRow[] | null = primary.data as unknown as RawCourseListRow[] | null;
+    let error = primary.error;
+    if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
+      const fallback = await supabase
+        .from("dao_tao")
+        .select(COURSE_COLUMNS_BASE)
+        .order("ngay", { ascending: false, nullsFirst: false })
+        .range(offset, offset + pageSize - 1);
+      data = fallback.data as unknown as RawCourseListRow[] | null;
+      error = fallback.error;
+    }
     if (error) throw new Error(error.message);
-    const page = (data ?? []) as unknown as RawCourseListRow[];
+    const page = data ?? [];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
@@ -295,7 +343,7 @@ export async function fetchTrainingCourses(): Promise<{
     return {
       id: row.id,
       title: row.ten_khoa_hoc,
-      trainer: trainer?.name ?? "Chưa chỉ định",
+      trainer: row.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       trainerId: trainer?.id,
       date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
       duration: row.thoi_luong || "0:00",
@@ -311,6 +359,7 @@ export async function fetchTrainingCourses(): Promise<{
       certificateGroupName: certificateGroup?.name,
       topics: row.topics || [],
       attendees: [],
+      assets: parseTrainingAssets(row.tai_lieu),
     };
   });
 
@@ -324,28 +373,27 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
   if (!isSupabaseReady()) return { error: "Chưa cấu hình Supabase" };
 
   const supabase = createClient();
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("dao_tao")
-    .select(`
-      id,
-      ten_khoa_hoc,
-      ngay,
-      thoi_luong,
-      dia_diem,
-      mo_ta,
-      ket_qua,
-      hinh_anh,
-      cloudinary_public_id,
-      topics,
-      nhom_chung_chi_id,
-      nguoi_dao_tao
-    `)
+    .select(COURSE_COLUMNS_WITH_ASSETS)
     .eq("id", courseId)
     .single();
+  let data: RawCourseDetailRow | null = primary.data as unknown as RawCourseDetailRow | null;
+  let error = primary.error;
+
+  if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
+    const fallback = await supabase
+      .from("dao_tao")
+      .select(COURSE_COLUMNS_BASE)
+      .eq("id", courseId)
+      .single();
+    data = fallback.data as unknown as RawCourseDetailRow | null;
+    error = fallback.error;
+  }
 
   if (error || !data) return { error: error?.message || "Không tìm thấy khóa đào tạo" };
 
-  const row = data as unknown as RawCourseDetailRow;
+  const row = data;
   let rawAttendees: RawAttendeeRow[];
   let personnel: TrainingPersonnelOption[];
   let certificateGroups: CertificateGroupOption[];
@@ -405,7 +453,7 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
   const course: DbTrainingCourse = {
     id: row.id,
     title: row.ten_khoa_hoc,
-    trainer: trainer?.name ?? "Chưa chỉ định",
+    trainer: row.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
     trainerId: trainer?.id,
     date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
     duration: row.thoi_luong || "0:00",
@@ -421,6 +469,7 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
     certificateGroupName: certificateGroup?.name,
     topics: row.topics || [],
     attendees,
+    assets: parseTrainingAssets(row.tai_lieu),
   };
 
   return { course };
@@ -446,7 +495,7 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
       (a.result === "Đạt" ? "Hoàn thành" : a.result === "Không đạt" ? "Không hoàn thành" : "Đang học"),
   }));
 
-  const { data, error } = await supabase.rpc("luu_khoa_dao_tao_va_cap_chung_chi", {
+  const rpcParams = {
     p_dao_tao_id: input.id || null,
     p_ten_khoa_hoc: input.title.trim(),
     p_ngay: input.date || null,
@@ -461,7 +510,23 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
     p_nhom_chung_chi_id: input.certificateGroupId || null,
     p_topics: input.topics || [],
     p_hoc_vien: formattedAttendees,
+  };
+
+  const v2 = await supabase.rpc("luu_khoa_dao_tao_va_cap_chung_chi_v2", {
+    ...rpcParams,
+    p_nguoi_dao_tao_ten: input.trainerName?.trim() || null,
+    p_tai_lieu: input.assets ?? [],
   });
+
+  if (!v2.error) return { id: v2.data as string };
+  if (v2.error.code !== "PGRST202") return { error: v2.error.message };
+  if (input.trainerName?.trim() || input.assets?.length) {
+    return {
+      error: "Cần chạy migration_20260906_tai_lieu_khoa_dao_tao.sql trên Supabase để lưu người đào tạo và nhiều tài liệu/video.",
+    };
+  }
+
+  const { data, error } = await supabase.rpc("luu_khoa_dao_tao_va_cap_chung_chi", rpcParams);
 
   if (error) {
     return { error: error.message };
@@ -484,11 +549,35 @@ export async function deleteTrainingCourse(courseId: string): Promise<{
 
 export async function isTrainingAssetReferenced(publicId: string): Promise<boolean> {
   if (!isSupabaseReady() || !publicId.trim()) return true;
-  const { data, error } = await createClient()
+  const supabase = createClient();
+  const { data, error } = await supabase
     .from("dao_tao")
     .select("id")
     .eq("cloudinary_public_id", publicId)
     .limit(1);
   if (error) return true;
-  return Boolean(data?.length);
+  if (data?.length) return true;
+
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const attachments = await supabase
+      .from("dao_tao")
+      .select("tai_lieu")
+      .range(offset, offset + pageSize - 1);
+    if (attachments.error) {
+      if (
+        attachments.error.code === "42703" ||
+        attachments.error.code === "PGRST204" ||
+        attachments.error.message.includes("column")
+      ) {
+        return false;
+      }
+      return true;
+    }
+    const page = attachments.data ?? [];
+    if (page.some((row) => parseTrainingAssets(row.tai_lieu).some((asset) => asset.publicId === publicId))) {
+      return true;
+    }
+    if (page.length < pageSize) return false;
+  }
 }

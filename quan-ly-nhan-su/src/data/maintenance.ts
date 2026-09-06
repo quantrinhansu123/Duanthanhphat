@@ -13,6 +13,8 @@ export type MaintenanceEvent = {
   type: "Bảo dưỡng" | "Sửa chữa" | "Kiểm định" | "Thay phụ tùng";
   status: "Đã xong" | "Đang làm" | "Chờ xác nhận";
   assignees: MaintenanceAssignee[];
+  note?: string;
+  images?: string[];
 };
 
 export const maintenanceEvents: MaintenanceEvent[] = [

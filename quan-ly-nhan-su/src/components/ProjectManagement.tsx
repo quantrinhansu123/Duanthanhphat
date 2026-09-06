@@ -22,6 +22,10 @@ import {
   updateDuAn,
 } from "@/lib/projectsDb";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
+import {
+  loadPersonnelCertificateRows,
+  type PersonnelCertificateRow,
+} from "@/lib/personnelCertificatesDb";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
@@ -54,6 +58,7 @@ function emptyProject(): Project {
     id: "",
     name: "",
     manager: "",
+    managerId: undefined,
     plant: "",
     staffCount: 0,
     machineCount: 0,
@@ -304,11 +309,14 @@ function ProjectInfoFields({
   form,
   setForm,
   readOnly,
+  personnelOptions,
 }: {
   form: Project;
   setForm: (p: Project) => void;
   readOnly: boolean;
+  personnelOptions: PersonnelCertificateRow[];
 }) {
+  const [managerSuggestionsOpen, setManagerSuggestionsOpen] = useState(false);
   function updateForm(patch: Partial<Project>) {
     const next = { ...form, ...patch };
     next.staffCount = next.personnelIds.length;
@@ -323,6 +331,18 @@ function ProjectInfoFields({
 
   const durationDays = projectDurationDays(form.startDate, form.endDate);
   const averagePerDay = durationDays > 0 ? form.plannedWeldCount / durationDays : 0;
+  const managerSuggestions = useMemo(() => {
+    const query = form.manager.trim().toLocaleLowerCase("vi");
+    return personnelOptions
+      .filter((person) => {
+        const position = person.chuc_vu?.trim().toLocaleLowerCase("vi") ?? "";
+        if (position && !position.includes("thợ hàn") && !position.includes("tổ trưởng")) return false;
+        if (!query) return true;
+        return [person.ho_ten, person.ma_nhan_su || "", person.chuc_vu || ""]
+          .some((value) => value.toLocaleLowerCase("vi").includes(query));
+      })
+      .slice(0, 12);
+  }, [form.manager, personnelOptions]);
 
   return (
     <div className="space-y-3.5">
@@ -342,18 +362,46 @@ function ProjectInfoFields({
             {form.manager || <span className="text-slate-400">Chưa chọn</span>}
           </div>
         ) : (
-          <select
-            value={form.manager}
-            onChange={(e) => updateForm({ manager: e.target.value })}
-            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
-            <option value="">— Chọn thợ hàn —</option>
-            {activeWelders.map((w) => (
-              <option key={w.id} value={w.name}>
-                {w.name} · {w.weldingId} · {w.position}
-              </option>
-            ))}
-          </select>
+          <div className="relative mt-1.5">
+            <input
+              value={form.manager}
+              onChange={(e) => {
+                updateForm({ manager: e.target.value, managerId: undefined });
+                setManagerSuggestionsOpen(true);
+              }}
+              onFocus={() => setManagerSuggestionsOpen(true)}
+              onBlur={() => window.setTimeout(() => setManagerSuggestionsOpen(false), 150)}
+              placeholder="Gõ tên hoặc mã nhân sự để chọn"
+              autoComplete="off"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150"
+            />
+            {managerSuggestionsOpen && (
+              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                {managerSuggestions.length > 0 ? managerSuggestions.map((person) => (
+                  <button
+                    key={person.employee_id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      updateForm({ manager: person.ho_ten, managerId: person.employee_id });
+                      setManagerSuggestionsOpen(false);
+                    }}
+                    className="block w-full px-3 py-2 text-left hover:bg-blue-50"
+                  >
+                    <span className="block text-sm font-semibold text-slate-900">{person.ho_ten}</span>
+                    <span className="mt-0.5 block text-[11px] font-normal text-slate-500">
+                      {[person.ma_nhan_su, person.chuc_vu, person.to_han].filter(Boolean).join(" · ") || "Nhân sự"}
+                    </span>
+                  </button>
+                )) : (
+                  <div className="px-3 py-2 text-xs font-normal text-slate-500">Không tìm thấy nhân sự phù hợp</div>
+                )}
+              </div>
+            )}
+            {form.managerId && (
+              <div className="mt-1 text-[11px] font-medium text-emerald-700">Đã liên kết hồ sơ nhân sự</div>
+            )}
+          </div>
         )}
       </label>
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -996,6 +1044,7 @@ function ProjectModal({
   onSavePersonnel,
   onSaveWork,
   onStartEdit,
+  personnelOptions,
 }: {
   project: Project;
   mode: "view" | "edit" | "create";
@@ -1004,6 +1053,7 @@ function ProjectModal({
   onSavePersonnel?: (projectId: string, rows: ProjectPersonnel[]) => void;
   onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
+  personnelOptions: PersonnelCertificateRow[];
 }) {
   const [form, setForm] = useState(project);
   const [personnelRows, setPersonnelRows] = useState<ProjectPersonnel[]>([]);
@@ -1121,7 +1171,14 @@ function ProjectModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
-          {tab === "info" && <ProjectInfoFields form={form} setForm={setForm} readOnly={readOnly} />}
+          {tab === "info" && (
+            <ProjectInfoFields
+              form={form}
+              setForm={setForm}
+              readOnly={readOnly}
+              personnelOptions={personnelOptions}
+            />
+          )}
           {tab === "personnel" && (
             <ProjectPersonnelTab
               projectId={project.id}
@@ -1173,6 +1230,10 @@ function ProjectModal({
                 }
                 if (!form.manager.trim()) {
                   window.alert("Vui lòng chọn người phụ trách.");
+                  return;
+                }
+                if (!form.managerId) {
+                  window.alert("Vui lòng chọn người phụ trách từ danh sách gợi ý nhân sự.");
                   return;
                 }
                 if (!form.location.trim()) {
@@ -1241,6 +1302,21 @@ export default function ProjectManagement() {
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
+  const [personnelOptions, setPersonnelOptions] = useState<PersonnelCertificateRow[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    loadPersonnelCertificateRows()
+      .then((rows) => {
+        if (active) setPersonnelOptions(rows);
+      })
+      .catch(() => {
+        if (active) setPersonnelOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const progressRows = useMemo(() => flattenTheoreticalProgress(list), [list]);
 
@@ -1304,6 +1380,8 @@ export default function ProjectManagement() {
       if (source === "supabase") {
         const { project: saved, error: saveError } = await updateDuAn(updated.id, {
           name: updated.name,
+          manager: updated.manager,
+          managerId: updated.managerId,
           location: updated.location,
           startDate: updated.startDate,
           endDate: updated.endDate,
@@ -1346,6 +1424,8 @@ export default function ProjectManagement() {
         const { project: created, error: createError } = await insertDuAn({
           name: project.name,
           maDuAn: project.maDuAn,
+          manager: project.manager,
+          managerId: project.managerId,
           location: project.location,
           startDate: project.startDate,
           endDate: project.endDate,
@@ -1668,6 +1748,7 @@ export default function ProjectManagement() {
           onSavePersonnel={modal.mode === "edit" ? handleSavePersonnel : undefined}
           onSaveWork={modal.mode === "edit" ? handleSaveWork : undefined}
           onStartEdit={() => setModal((m) => (m ? { ...m, mode: "edit" } : null))}
+          personnelOptions={personnelOptions}
         />
       )}
     </main>

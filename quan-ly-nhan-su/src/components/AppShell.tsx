@@ -58,7 +58,7 @@ const views: Record<string, React.ReactNode> = {
   "bc-nhan-su": <PersonnelReportDashboard />,
   "quan-ly-du-an": <ProjectManagement />,
   "quan-ly-moi-han": <WeldJointManagement />,
-  "thu-vien-loi-moi-han": <ErrorLibrary mode="combined" />,
+  "thu-vien-loi-moi-han": <ErrorLibrary mode="ndt" />,
   "nhat-ky-han": <WeldingJournalList />,
   "bc-moi-han-theo-nam": <YearlyWeldReport />,
   "ban-do": <MapView />,

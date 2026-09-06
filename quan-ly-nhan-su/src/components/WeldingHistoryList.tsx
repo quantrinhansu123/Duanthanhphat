@@ -966,7 +966,7 @@ export default function WeldingHistoryList() {
                 <th className="px-3.5 py-3">Welding ID</th>
                 <th className="px-3.5 py-3">Thợ hàn</th>
                 <th className="px-3.5 py-3">Hạng</th>
-                <th className="px-3.5 py-3">Mối hàn</th>
+                <th className="px-3.5 py-3">Mã mối hàn</th>
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3">Loại ray</th>
                 <th className="px-3.5 py-3">Dự án</th>
@@ -993,9 +993,17 @@ export default function WeldingHistoryList() {
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{row.welderName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.rank}</td>
                   <td className="px-3.5 py-3">
-                    <span className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.history.pushState(null, "", `/nhat-ky-han?query=${encodeURIComponent(row.weldJoint)}`);
+                        window.dispatchEvent(new PopStateEvent("popstate"));
+                      }}
+                      className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs hover:bg-blue-100 hover:underline"
+                      title="Mở mối hàn trong Nhật ký hàn"
+                    >
                       {row.weldJoint}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-3.5 py-3 font-mono text-xs font-bold text-slate-800">{row.machine}</td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.railType}</td>

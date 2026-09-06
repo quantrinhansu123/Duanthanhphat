@@ -133,7 +133,7 @@ export default function MachineAssignmentFormModal({
       return;
     }
     if (!location) {
-      setError("Chưa có vị trí GPS. Hãy cho phép truy cập vị trí hoặc bấm Lấy lại.");
+      setError("Vui lòng nhập vị trí hoặc lấy tọa độ GPS hiện tại.");
       return;
     }
     if (!Number.isFinite(form.operatingHours) || form.operatingHours <= 0 || form.operatingHours > 24) {
@@ -241,10 +241,11 @@ export default function MachineAssignmentFormModal({
             Vị trí *
             <div className="mt-1.5 flex gap-2">
               <input
-                readOnly
+                readOnly={readOnly}
                 value={form.location}
-                placeholder={gpsStatus === "loading" ? "Đang lấy GPS…" : "Vĩ độ, kinh độ"}
-                className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 font-mono text-xs text-slate-900 shadow-2xs outline-hidden sm:text-sm"
+                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                placeholder={gpsStatus === "loading" ? "Đang lấy GPS…" : "Nhập địa điểm hoặc vĩ độ, kinh độ"}
+                className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
               />
               {!readOnly && (
                 <button

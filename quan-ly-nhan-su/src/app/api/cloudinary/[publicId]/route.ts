@@ -5,7 +5,7 @@ type RouteParams = {
   params: Promise<{ publicId: string }>;
 };
 
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
   const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
@@ -27,7 +27,9 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     if (!/^thanhphat\/(certificates|trainings|machines|vehicles)\/[A-Za-z0-9_.-]+$/.test(decodedId)) {
       return NextResponse.json({ error: "Cloudinary public ID không hợp lệ." }, { status: 400 });
     }
-    const result = await cloudinary.uploader.destroy(decodedId);
+    const requestedType = req.nextUrl.searchParams.get("resourceType");
+    const resourceType = requestedType === "video" || requestedType === "raw" ? requestedType : "image";
+    const result = await cloudinary.uploader.destroy(decodedId, { resource_type: resourceType });
     return NextResponse.json({ result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Lỗi xóa asset Cloudinary";
