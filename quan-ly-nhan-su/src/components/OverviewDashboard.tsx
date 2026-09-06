@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Buildings,
   CalendarBlank,
   CalendarCheck,
   ChartBar,
@@ -118,9 +119,12 @@ function sampleChartLabels(labels: string[], maxCount: number) {
 }
 
 export default function OverviewDashboard() {
-  const { rows, loading, error } = useWeldReportData();
-  const { projects } = useProjectsData();
   const { appliedFilters } = useReportFilters();
+  const { rows, loading, error } = useWeldReportData(
+    appliedFilters.dateFrom,
+    appliedFilters.dateTo,
+  );
+  const { projects, loading: projectsLoading, error: projectsError } = useProjectsData();
   const {
     years: yearTotals,
     byProject: yearByProject,
@@ -730,19 +734,56 @@ export default function OverviewDashboard() {
   }
 
   const projectRows = useMemo(() => {
-    return groupJournalRows(selectedRows, (row) => row.du_an)
-      .sort((a, b) => b.total - a.total)
-      .map((row, index) => ({
-        name: row.name,
-        count: row.total,
-        share: total > 0 ? row.total / total : 0,
-        color: PROJECT_COLORS[index % PROJECT_COLORS.length],
-      }));
-  }, [selectedRows, total]);
+    const weldByName = new Map(
+      groupJournalRows(selectedRows, (row) => row.du_an.trim() || "Chưa gắn dự án").map((row) => [
+        row.name,
+        row,
+      ]),
+    );
 
-  const projectDonutArcs = useMemo(
-    () => buildDonutArcs(projectRows.map((row) => row.count)),
-    [projectRows],
+    const fromDuAn = selectedProjects.map((project, index) => {
+      const weld = weldByName.get(project.name);
+      return {
+        id: project.id,
+        name: project.name,
+        maDuAn: project.maDuAn || "",
+        location: project.location || "",
+        status: project.status,
+        planned: project.plannedWeldCount,
+        count: weld?.total ?? 0,
+        passed: weld?.passed ?? 0,
+        errors: weld?.errors ?? 0,
+        color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+        fromTable: true,
+      };
+    });
+
+    const known = new Set(fromDuAn.map((row) => row.name));
+    const orphans = [...weldByName.entries()]
+      .filter(([name]) => name && !known.has(name))
+      .map(([name, weld], index) => ({
+        id: `journal-${name}`,
+        name,
+        maDuAn: "",
+        location: "",
+        status: "Từ nhật ký hàn",
+        planned: 0,
+        count: weld.total,
+        passed: weld.passed,
+        errors: weld.errors,
+        color: PROJECT_COLORS[(fromDuAn.length + index) % PROJECT_COLORS.length],
+        fromTable: false,
+      }));
+
+    return [...fromDuAn, ...orphans].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, "vi"),
+    );
+  }, [selectedProjects, selectedRows]);
+
+  const projectCount = selectedProjects.length;
+  const plannedWeldsAll = useMemo(
+    () => selectedProjects.reduce((sum, project) => sum + (project.plannedWeldCount || 0), 0),
+    [selectedProjects],
   );
 
   const statusDonutArcs = useMemo(
@@ -782,18 +823,41 @@ export default function OverviewDashboard() {
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
-      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error || yearError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
+      <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${error || yearError || projectsError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {error
           ? `Không tải được Supabase: ${error}`
-          : yearError
-            ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
-            : loading || yearLoading
-              ? "Đang tải dữ liệu Supabase…"
-              : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(passed)} đạt · ${fmt(failed)} không đạt · ${fmt(yearTotals.length)} năm tổng hợp`}
+          : projectsError
+            ? `Dự án: ${projectsError}`
+            : yearError
+              ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
+              : loading || yearLoading || projectsLoading
+                ? "Đang tải dữ liệu Supabase…"
+                : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(projectCount)} dự án (bảng Dự án) · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`}
       </div>
 
-      {/* 2. Top 5 KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      {/* Top KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        {/* Card: Dự án */}
+        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-bold tracking-wider text-violet-700 uppercase">
+              DỰ ÁN
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
+                {fmt(projectCount)}
+              </div>
+              <div className="text-xs font-medium text-slate-400">dự án</div>
+            </div>
+            <div className="mt-2.5 text-xs text-violet-700 font-medium">
+              KH dự kiến: <span className="font-mono font-semibold">{fmt(plannedWeldsAll)}</span> mối
+            </div>
+          </div>
+          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-200">
+            <Buildings size={24} weight="fill" aria-hidden />
+          </div>
+        </div>
+
         {/* Card 1: Tổng mối hàn */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
@@ -905,10 +969,10 @@ export default function OverviewDashboard() {
         </div>
       </div>
 
-      {/* 3. Middle Charts Row (Production Progress + Daily Chart + Welds by Plant) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(280px,330px)_minmax(0,1.9fr)_minmax(280px,0.72fr)] gap-4 items-start xl:items-stretch">
+      {/* Middle Charts Row — 3 bảng cùng hàng */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         {/* Box 1: TIẾN ĐỘ SẢN XUẤT */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs flex flex-col min-w-0">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             TIẾN ĐỘ SẢN XUẤT
           </div>
@@ -1003,7 +1067,7 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY / LŨY KẾ */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
           <div className="flex flex-row items-center justify-between gap-2.5">
             <div className="min-w-0 text-sm sm:text-base font-bold tracking-tight text-slate-900">
               {chartViewMode === "daily"
@@ -1348,60 +1412,193 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* Box 3: DỰ ÁN */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
-          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-            DỰ ÁN
+        {/* Box 3: MỐI HÀN THEO DỰ ÁN */}
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              MỐI HÀN THEO DỰ ÁN
+            </div>
+            <div className="text-[11px] font-semibold text-slate-500">
+              <span className="font-mono text-[#0047AB]">{fmt(projectRows.length)}</span> dự án
+            </div>
           </div>
-          <div className="mt-3.5 flex justify-center">
-            <div className="relative h-[126px] w-[126px]">
-              <svg viewBox="0 0 140 140" className="h-[126px] w-[126px] block">
-                <circle cx="70" cy="70" r="52" fill="none" stroke="#f1f5f9" strokeWidth="20" />
-                {projectDonutArcs.map((arc, index) => (
-                  <circle
-                    key={projectRows[index]?.name ?? index}
-                    cx="70"
-                    cy="70"
-                    r="52"
-                    fill="none"
-                    stroke={projectRows[index]?.color ?? "#cbd5e1"}
-                    strokeWidth="20"
-                    strokeDasharray={arc.dasharray}
-                    transform={arc.transform}
-                  />
-                ))}
-              </svg>
-              <div className="absolute top-[46px] left-0 right-0 text-center text-lg sm:text-xl font-bold font-mono text-slate-900 leading-none tabular-nums">
-                {fmt(total)}
-              </div>
-              <div className="absolute top-[66px] left-0 right-0 text-center text-xs text-slate-500 font-medium">
-                Tổng
-              </div>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Báo cáo sản lượng theo dự án trong kỳ lọc
+          </p>
+
+          <div className="mt-3 flex-1 min-h-0">
+            <div className="grid grid-cols-[1fr_0.55fr_0.55fr_0.7fr] gap-x-1.5 border-b border-slate-100 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <div>Dự án</div>
+              <div className="text-right">KH</div>
+              <div className="text-right">TH</div>
+              <div className="text-right">Tỷ lệ</div>
+            </div>
+            <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-100">
+              {projectRows.length > 0 ? (
+                projectRows.map((row) => {
+                  const rate = row.count > 0 ? Math.round((row.passed / row.count) * 100) : 0;
+                  const progress =
+                    row.planned > 0 ? Math.min(100, Math.round((row.count / row.planned) * 100)) : rate;
+                  return (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[1fr_0.55fr_0.55fr_0.7fr] gap-x-1.5 items-center py-2.5 text-xs text-slate-700 hover:bg-slate-50/60 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-start gap-1.5">
+                          <span
+                            className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: row.color }}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 leading-snug line-clamp-2" title={row.name}>
+                              {row.name}
+                            </div>
+                            <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-[#0047AB]"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right font-mono tabular-nums text-slate-600">{fmt(row.planned)}</div>
+                      <div className="text-right font-mono font-bold tabular-nums text-[#0047AB]">{fmt(row.count)}</div>
+                      <div className="text-right font-mono tabular-nums text-emerald-700">{rate}%</div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-10 text-center text-sm text-slate-500">
+                  Chưa có dữ liệu mối hàn theo dự án.
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2">
-            {projectRows.length > 0 ? (
-              projectRows.map((row) => (
-                <div key={row.name} className="flex items-center gap-2 text-xs sm:text-sm">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: row.color }}
-                  />
-                  <span className="flex-1 min-w-0 line-clamp-2 break-words text-slate-700 font-medium leading-snug" title={row.name}>
-                    {row.name}
-                  </span>
-                  <span className="font-mono text-xs text-slate-500 tabular-nums">{fmt(row.count)}</span>
-                </div>
-              ))
-            ) : (
-              <div className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu dự án</div>
-            )}
+          <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-600">
+            <span>
+              KH: <strong className="font-mono text-slate-900">{fmt(plannedWeldsAll)}</strong>
+            </span>
+            <span>
+              TH:{" "}
+              <strong className="font-mono text-[#0047AB]">
+                {fmt(projectRows.reduce((sum, row) => sum + row.count, 0))}
+              </strong>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* 4. 3-column Grid: Máy, Lỗi hàn, Trạng thái */}
+      {/* Chi tiết mối hàn theo dự án */}
+      <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              MỐI HÀN THEO DỰ ÁN — CHI TIẾT
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Nguồn bảng Dự án · ghép sản lượng từ nhật ký hàn trong kỳ lọc
+            </p>
+          </div>
+          <div className="text-xs font-semibold text-slate-600">
+            <span className="font-mono text-[#0047AB]">{fmt(projectCount)}</span> dự án ·{" "}
+            <span className="font-mono text-[#0047AB]">{fmt(projectRows.reduce((s, r) => s + r.count, 0))}</span> mối
+          </div>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+          <div className="table-scroll overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  <th className="w-12 px-3.5 py-2.5">#</th>
+                  <th className="min-w-[280px] px-3.5 py-2.5">Tên dự án</th>
+                  <th className="min-w-[110px] px-3.5 py-2.5">Mã</th>
+                  <th className="min-w-[120px] px-3.5 py-2.5">Trạng thái</th>
+                  <th className="px-3.5 py-2.5 text-right">KH dự kiến</th>
+                  <th className="px-3.5 py-2.5 text-right">Thực hiện</th>
+                  <th className="px-3.5 py-2.5 text-right">Đạt</th>
+                  <th className="px-3.5 py-2.5 text-right">Lỗi</th>
+                  <th className="min-w-[120px] px-3.5 py-2.5">Tỷ lệ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {projectRows.map((row, index) => {
+                  const rate = row.count > 0 ? Math.round((row.passed / row.count) * 100) : 0;
+                  return (
+                    <tr key={row.id} className="align-top hover:bg-slate-50/80 transition-colors">
+                      <td className="px-3.5 py-3 font-mono text-slate-400">{index + 1}</td>
+                      <td className="px-3.5 py-3">
+                        <div className="flex items-start gap-2">
+                          <span
+                            className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ background: row.color }}
+                          />
+                          <div>
+                            <div className="font-semibold text-slate-900 leading-snug break-words whitespace-normal">
+                              {row.name}
+                            </div>
+                            {row.location && row.location !== "here" ? (
+                              <div className="mt-0.5 text-[11px] text-slate-500">{row.location}</div>
+                            ) : null}
+                            {!row.fromTable ? (
+                              <div className="mt-0.5 text-[11px] text-amber-700">Chỉ có trong nhật ký hàn</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3.5 py-3 font-mono text-slate-600">
+                        {row.maDuAn || "—"}
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-700">
+                        {fmt(row.planned)}
+                      </td>
+                      <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-[#0047AB]">
+                        {fmt(row.count)}
+                      </td>
+                      <td className="px-3.5 py-3 text-right font-mono tabular-nums text-emerald-700">
+                        {fmt(row.passed)}
+                      </td>
+                      <td className="px-3.5 py-3 text-right font-mono tabular-nums text-rose-700">
+                        {fmt(row.errors)}
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-500"
+                              style={{ width: `${rate}%` }}
+                            />
+                          </div>
+                          <span className="w-10 text-right font-mono text-[11px] tabular-nums text-slate-600">
+                            {rate}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {projectRows.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
+                      Chưa có dự án trong bảng Dự án / kỳ lọc hiện tại.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* 3-column Grid: Máy, Lỗi hàn, Trạng thái */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
         {/* Card 1: Mối hàn theo máy */}
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs min-w-0">

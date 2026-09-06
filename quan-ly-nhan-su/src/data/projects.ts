@@ -21,6 +21,7 @@ export type Project = {
   personnelIds: string[];
   machineTypes: string[];
   weldTypes: string[];
+  railTypes: string[];
   /** Tiến độ lý thuyết theo ngày — lưu JSONB trên Supabase (du_an.tien_do_ly_thuyet). */
   theoreticalProgress?: TheoreticalProgressRow[];
   /** Nhân sự gán cho dự án (tab con). */
@@ -41,11 +42,12 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-01-15",
     endDate: "2024-02-13",
-    location: "Hà Nội",
+    location: "here",
     plannedWeldCount: 600,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   },
   {
     id: "2",
@@ -57,11 +59,12 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-02-01",
     endDate: "2024-02-20",
-    location: "Đà Nẵng",
+    location: "here",
     plannedWeldCount: 320,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   },
   {
     id: "3",
@@ -73,11 +76,12 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2023-11-20",
     endDate: "2023-12-19",
-    location: "Hà Nội",
+    location: "here",
     plannedWeldCount: 900,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   },
   {
     id: "4",
@@ -89,11 +93,12 @@ export const projects: Project[] = [
     status: "Đang triển khai",
     startDate: "2024-03-10",
     endDate: "2024-03-24",
-    location: "Hà Nội",
+    location: "here",
     plannedWeldCount: 225,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   },
   {
     id: "5",
@@ -105,10 +110,11 @@ export const projects: Project[] = [
     status: "Tạm dừng",
     startDate: "2023-09-05",
     endDate: "2023-10-04",
-    location: "TP. Hồ Chí Minh",
+    location: "here",
     plannedWeldCount: 720,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   },
 ];

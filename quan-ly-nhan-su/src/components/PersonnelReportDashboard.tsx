@@ -24,8 +24,11 @@ import type { Certificate as CertificateType } from "@/data/certificates";
 const PORTRAIT_IDS = [32, 52, 36, 22, 48, 44];
 
 export default function PersonnelReportDashboard() {
-  const { rows, loading, error } = useWeldReportData();
   const { appliedFilters } = useReportFilters();
+  const { rows, loading, error } = useWeldReportData(
+    appliedFilters.dateFrom,
+    appliedFilters.dateTo,
+  );
   const [teamFilter, setTeamFilter] = useState("Tất cả tổ hàn");
   const [certList, setCertList] = useState<CertificateType[]>([]);
   const [certError, setCertError] = useState("");

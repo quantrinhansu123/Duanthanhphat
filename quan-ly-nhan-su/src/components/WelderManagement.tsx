@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { welders as seedWelders, type Welder } from "@/data/welders";
 import type { Certificate } from "@/data/certificates";
 import type { Machine } from "@/data/machines";
+import { sharedCatalogs } from "@/data/systemConfig";
 import {
   MagnifyingGlass,
   CaretDown,
@@ -34,7 +35,7 @@ import WelderFormModal, { type WelderFormValues } from "@/components/WelderFormM
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { loadWeldReportRows, type WeldReportRow } from "@/lib/weldReportData";
+import { loadWeldReportRows, uniqueReportValues, type WeldReportRow } from "@/lib/weldReportData";
 import {
   fetchDriveDocuments,
   uploadDocumentToDrive,
@@ -44,7 +45,16 @@ import {
   type DriveDocumentItem,
 } from "@/lib/driveDocumentsClient";
 import CertificateThumbnail from "@/components/CertificateThumbnail";
-import { imageKeyForTitle } from "@/lib/certificatesDb";
+import {
+  createPersonnelCertificates,
+  deleteCertificateRecord,
+  imageKeyForTitle,
+  updateCertificateRecord,
+} from "@/lib/certificatesDb";
+import {
+  fetchCertificateGroups,
+  type CertificateGroupOption,
+} from "@/lib/trainingDb";
 
 const rankStyle: Record<string, string> = {
   "Hạng 1": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -52,6 +62,33 @@ const rankStyle: Record<string, string> = {
   "Hạng 3": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
+type LiveCertRow = {
+  id: string;
+  ten_chung_chi: string;
+  ngay_cap: string | null;
+  ngay_het_han: string | null;
+  trang_thai: string;
+  don_vi_cap: string | null;
+  so_chung_chi: string | null;
+  secure_url: string | null;
+  file_chung_chi: string | null;
+};
+
+const LIVE_CERT_SELECT =
+  "id, ten_chung_chi, ngay_cap, ngay_het_han, trang_thai, don_vi_cap, so_chung_chi, secure_url, file_chung_chi";
+
+function extractDriveFileId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed) && !trimmed.includes("/") && !trimmed.includes(":")) {
+    return trimmed;
+  }
+  const proxy = trimmed.match(/\/api\/documents\/([^/?#]+)/);
+  if (proxy?.[1]) return decodeURIComponent(proxy[1]);
+  if (trimmed.startsWith("drive:")) return trimmed.slice(6).trim() || null;
+  return null;
+}
 function normalizeName(value: string) {
   return value
     .normalize("NFD")
@@ -242,20 +279,30 @@ export default function WelderManagement() {
   const [driveError, setDriveError] = useState("");
   const [driveConfigured, setDriveConfigured] = useState(true);
   // Live certificates from Supabase
-  const [liveCerts, setLiveCerts] = useState<
-    Array<{
-      id: string;
-      ten_chung_chi: string;
-      ngay_cap: string | null;
-      ngay_het_han: string | null;
-      trang_thai: string;
-      don_vi_cap: string | null;
-      so_chung_chi: string | null;
-      secure_url: string | null;
-    }>
-  >([]);
+  const [liveCerts, setLiveCerts] = useState<LiveCertRow[]>([]);
 
-  // Preview Modal state
+  // Thêm chứng chỉ từ danh mục
+  const [showAddCert, setShowAddCert] = useState(false);
+  const [certGroups, setCertGroups] = useState<CertificateGroupOption[]>([]);
+  const [certGroupsLoading, setCertGroupsLoading] = useState(false);
+  const [selectedCertGroupIds, setSelectedCertGroupIds] = useState<string[]>([]);
+  const [savingCerts, setSavingCerts] = useState(false);
+
+  // Sửa / tải file chứng chỉ cá nhân
+  const [editingLiveCert, setEditingLiveCert] = useState<LiveCertRow | null>(null);
+  const [editCertForm, setEditCertForm] = useState({
+    title: "",
+    number: "",
+    issuedAt: "",
+    expiresAt: "",
+    status: "Còn hiệu lực" as Certificate["status"],
+    organization: "",
+  });
+  const [savingEditCert, setSavingEditCert] = useState(false);
+  const [uploadingCertId, setUploadingCertId] = useState<string | null>(null);
+  const [certUploadProgress, setCertUploadProgress] = useState<number | null>(null);
+  const certFileInputRef = useRef<HTMLInputElement>(null);
+  const certUploadTargetRef = useRef<LiveCertRow | null>(null);  // Preview Modal state
   const [pdfPreviewItem, setPdfPreviewItem] = useState<DriveDocumentItem | null>(null);
   const [certThumbnailItem, setCertThumbnailItem] = useState<Certificate | null>(null);
 
@@ -264,6 +311,7 @@ export default function WelderManagement() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadDocType, setUploadDocType] = useState<string>("certificate");
   const [uploadTitle, setUploadTitle] = useState("");
+  const [showUploadForm, setShowUploadForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drive edit meta / replace state
@@ -355,6 +403,13 @@ export default function WelderManagement() {
 
   function closeWelderProfile() {
     setProfileOpen(false);
+    setShowUploadForm(false);
+    setShowAddCert(false);
+    setSelectedCertGroupIds([]);
+    setEditingLiveCert(null);
+    setUploadingCertId(null);
+    setCertUploadProgress(null);
+    certUploadTargetRef.current = null;
   }
 
   function openCreateWelder() {
@@ -451,49 +506,411 @@ export default function WelderManagement() {
   }, []);
 
   // Load Supabase certificates for selected welder
-  useEffect(() => {
-    if (!selectedWelder) {
+  async function reloadLiveCerts(welderId: string) {
+    if (!isSupabaseConfigured()) {
       setLiveCerts([]);
       return;
     }
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("chung_chi")
+        .select(LIVE_CERT_SELECT)
+        .eq("employee_id", welderId)
+        .order("created_at", { ascending: false });
+      if (!error && data) setLiveCerts(data as LiveCertRow[]);
+      else setLiveCerts([]);
+    } catch {
+      setLiveCerts([]);
+    }
+  }
 
+  useEffect(() => {
+    if (!selectedWelder) {
+      setLiveCerts([]);
+      setShowAddCert(false);
+      setSelectedCertGroupIds([]);
+      setEditingLiveCert(null);
+      return;
+    }
     const welderId = selectedWelder.id;
     let active = true;
-    async function loadCerts() {
-      if (!isSupabaseConfigured()) return;
+    void (async () => {
+      if (!isSupabaseConfigured()) {
+        if (active) setLiveCerts([]);
+        return;
+      }
       try {
         const supabase = createClient();
         const { data, error } = await supabase
           .from("chung_chi")
-          .select("id, ten_chung_chi, ngay_cap, ngay_het_han, trang_thai, don_vi_cap, so_chung_chi, secure_url")
+          .select(LIVE_CERT_SELECT)
           .eq("employee_id", welderId)
           .order("created_at", { ascending: false });
-
-        if (active && !error && data) {
-          setLiveCerts(data);
-        }
+        if (!active) return;
+        setLiveCerts(!error && data ? (data as LiveCertRow[]) : []);
       } catch {
         if (active) setLiveCerts([]);
       }
-    }
-
-    void loadCerts();
+    })();
     return () => {
       active = false;
     };
   }, [selectedWelder]);
 
-  const rankOptions = useMemo(() => Array.from(new Set(list.map((w) => w.rank))).sort(), [list]);
-  const teamOptions = useMemo(() => Array.from(new Set(list.map((w) => w.weldingTeam))).sort(), [list]);
+  async function openAddCertPanel() {
+    setShowAddCert(true);
+    setSelectedCertGroupIds([]);
+    setCertGroupsLoading(true);
+    try {
+      const groups = await fetchCertificateGroups();
+      setCertGroups(groups);
+    } catch {
+      setCertGroups([]);
+    } finally {
+      setCertGroupsLoading(false);
+    }
+  }
+
+  function toggleCertGroup(id: string) {
+    setSelectedCertGroupIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  async function handleAddSelectedCertificates() {
+    if (!selectedWelder || selectedCertGroupIds.length === 0) return;
+    setSavingCerts(true);
+    try {
+      const owned = new Set(
+        [
+          ...liveCerts.map((c) => c.ten_chung_chi),
+          ...parseCertificateList(selectedWelder.certificates),
+        ].map((t) => t.toLocaleLowerCase("vi").trim()),
+      );
+      const toAdd = certGroups.filter(
+        (g) =>
+          selectedCertGroupIds.includes(g.id) &&
+          !owned.has(g.name.toLocaleLowerCase("vi").trim()),
+      );
+      if (toAdd.length === 0) {
+        showToast(isEn ? "Selected certificates already assigned." : "Các chứng chỉ đã chọn đã có trên hồ sơ.");
+        setShowAddCert(false);
+        setSelectedCertGroupIds([]);
+        return;
+      }
+      for (const group of toAdd) {
+        await createPersonnelCertificates({
+          title: group.name,
+          employeeIds: [selectedWelder.id],
+          issuedAt: group.issueDate || "",
+          expiresAt: group.expiryDate || "",
+          status: "Còn hiệu lực",
+          organization: group.issuer,
+          machine: group.machine,
+          certificateNumber: group.code,
+        });
+      }
+      await reloadLiveCerts(selectedWelder.id);
+      await reloadWelders();
+      setShowAddCert(false);
+      setSelectedCertGroupIds([]);
+      showToast(
+        isEn
+          ? `Added ${toAdd.length} certificate(s).`
+          : `Đã thêm ${toAdd.length} chứng chỉ.`,
+      );
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to add certificates"
+            : "Không thêm được chứng chỉ",
+      );
+    } finally {
+      setSavingCerts(false);
+    }
+  }
+
+  function findDriveFileForCert(cert: LiveCertRow): DriveDocumentItem | null {
+    const fromField = extractDriveFileId(cert.file_chung_chi);
+    if (fromField) {
+      const byId = driveDocs.find((d) => d.id === fromField);
+      if (byId) return byId;
+      return {
+        id: fromField,
+        name: `${cert.ten_chung_chi}.pdf`,
+        description: cert.ten_chung_chi,
+        size: 0,
+        mimeType: "application/pdf",
+        createdTime: new Date().toISOString(),
+      };
+    }
+    return (
+      driveDocs.find((d) => {
+        const props = d.appProperties || {};
+        return props.certificateId === cert.id || props.source === cert.id;
+      }) ?? null
+    );
+  }
+
+  function openEditLiveCert(cert: LiveCertRow) {
+    setEditingLiveCert(cert);
+    setEditCertForm({
+      title: cert.ten_chung_chi,
+      number: cert.so_chung_chi || "",
+      issuedAt: cert.ngay_cap?.slice(0, 10) || "",
+      expiresAt: cert.ngay_het_han?.slice(0, 10) || "",
+      status: (cert.trang_thai as Certificate["status"]) || "Còn hiệu lực",
+      organization: cert.don_vi_cap || "",
+    });
+  }
+
+  function viewLiveCert(cert: LiveCertRow) {
+    const driveFile = findDriveFileForCert(cert);
+    if (driveFile) {
+      setPdfPreviewItem(driveFile);
+      return;
+    }
+    if (!selectedWelder) return;
+    setCertThumbnailItem({
+      id: cert.id,
+      title: cert.ten_chung_chi,
+      holder: selectedWelder.name,
+      certificateNumber: cert.so_chung_chi || "Chưa cập nhật",
+      issuedAt: cert.ngay_cap ? formatDate(cert.ngay_cap) : "Chưa cập nhật",
+      expiresAt: cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "Chưa cập nhật",
+      status: (cert.trang_thai as Certificate["status"]) || "Chưa cập nhật",
+      imageKey: imageKeyForTitle(cert.ten_chung_chi),
+      imageUrl: cert.secure_url || undefined,
+      machine: selectedWelder.trainedMachines,
+    });
+  }
+
+  async function handleSaveEditLiveCert() {
+    if (!editingLiveCert || !selectedWelder) return;
+    if (!editCertForm.title.trim()) {
+      window.alert(isEn ? "Please enter certificate title." : "Vui lòng nhập tên chứng chỉ.");
+      return;
+    }
+    setSavingEditCert(true);
+    try {
+      await updateCertificateRecord({
+        id: editingLiveCert.id,
+        title: editCertForm.title.trim(),
+        issuedAt: editCertForm.issuedAt,
+        expiresAt: editCertForm.expiresAt,
+        status: editCertForm.status,
+        organization: editCertForm.organization.trim(),
+        certificateNumber: editCertForm.number.trim(),
+      });
+      await reloadLiveCerts(selectedWelder.id);
+      await reloadWelders();
+      setEditingLiveCert(null);
+      showToast(isEn ? "Certificate updated." : "Đã cập nhật chứng chỉ.");
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to update certificate"
+            : "Không cập nhật được chứng chỉ",
+      );
+    } finally {
+      setSavingEditCert(false);
+    }
+  }
+
+  async function handleDeleteLiveCert(cert: LiveCertRow) {
+    if (!selectedWelder) return;
+    const ok = window.confirm(
+      isEn
+        ? `Delete certificate "${cert.ten_chung_chi}"?`
+        : `Xóa chứng chỉ "${cert.ten_chung_chi}" khỏi hồ sơ này?`,
+    );
+    if (!ok) return;
+    try {
+      const driveFile = findDriveFileForCert(cert);
+      await deleteCertificateRecord(cert.id);
+      if (driveFile?.id) {
+        await deleteDriveDocument(driveFile.id);
+        setDriveDocs((prev) => prev.filter((d) => d.id !== driveFile.id));
+      }
+      await reloadLiveCerts(selectedWelder.id);
+      await reloadWelders();
+      if (editingLiveCert?.id === cert.id) setEditingLiveCert(null);
+      showToast(isEn ? "Certificate deleted." : "Đã xóa chứng chỉ.");
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to delete certificate"
+            : "Không xóa được chứng chỉ",
+      );
+    }
+  }
+
+  function triggerCertFileUpload(cert: LiveCertRow) {
+    certUploadTargetRef.current = cert;
+    if (certFileInputRef.current) {
+      certFileInputRef.current.value = "";
+      certFileInputRef.current.click();
+    }
+  }
+
+  async function handleCertFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const cert = certUploadTargetRef.current;
+    if (!file || !cert || !selectedWelder) return;
+
+    setUploadingCertId(cert.id);
+    setCertUploadProgress(0);
+    let newlyUploadedFileId: string | undefined;
+
+    try {
+      const existing = findDriveFileForCert(cert);
+      if (existing?.id) {
+        const replaced = await replaceDocumentContentInDrive(
+          existing.id,
+          file,
+          `${cert.ten_chung_chi}.pdf`,
+          `Chứng chỉ ${cert.ten_chung_chi} · ${selectedWelder.name}`,
+          setCertUploadProgress,
+        );
+        if (!replaced.success) throw new Error(replaced.error || "Không thay thế được file trên Drive.");
+        await updateCertificateRecord({
+          id: cert.id,
+          title: cert.ten_chung_chi,
+          issuedAt: cert.ngay_cap || "",
+          expiresAt: cert.ngay_het_han || "",
+          status: (cert.trang_thai as Certificate["status"]) || "Còn hiệu lực",
+          imageUrl: `/api/documents/${existing.id}`,
+          organization: cert.don_vi_cap || undefined,
+          certificateNumber: cert.so_chung_chi || undefined,
+        });
+        showToast(isEn ? "Certificate PDF replaced on Drive." : "Đã thay file PDF trên Google Drive.");
+      } else {
+        const upload = await uploadDocumentToDrive(
+          file,
+          `${selectedWelder.weldingId}_${cert.ten_chung_chi}.pdf`,
+          `Chứng chỉ cá nhân · ${selectedWelder.name} (${selectedWelder.weldingId}) · ${cert.ten_chung_chi}`,
+          setCertUploadProgress,
+          {
+            entityType: "personnel_certificate",
+            documentType: "certificate",
+            certificateId: cert.id,
+            employeeId: selectedWelder.id,
+            weldingId: selectedWelder.weldingId,
+            source: cert.id,
+          },
+        );
+        if (!upload.success) throw new Error(upload.error || "Không tải được PDF lên Google Drive.");
+        const uploaded = upload.item;
+        if (!uploaded?.id) throw new Error("Drive chưa trả về mã tệp để liên kết.");
+        newlyUploadedFileId = uploaded.id;
+        await updateCertificateRecord({
+          id: cert.id,
+          title: cert.ten_chung_chi,
+          issuedAt: cert.ngay_cap || "",
+          expiresAt: cert.ngay_het_han || "",
+          status: (cert.trang_thai as Certificate["status"]) || "Còn hiệu lực",
+          imageUrl: `/api/documents/${uploaded.id}`,
+          organization: cert.don_vi_cap || undefined,
+          certificateNumber: cert.so_chung_chi || undefined,
+        });
+        setDriveDocs((prev) => [uploaded, ...prev.filter((d) => d.id !== uploaded.id)]);
+        showToast(isEn ? "Certificate PDF uploaded to Drive." : "Đã tải PDF chứng chỉ lên Google Drive.");
+      }
+      await reloadLiveCerts(selectedWelder.id);
+      void reloadDriveDocs();
+    } catch (error) {
+      if (newlyUploadedFileId) await deleteDriveDocument(newlyUploadedFileId);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to upload certificate file"
+            : "Không tải được file chứng chỉ",
+      );
+    } finally {
+      setUploadingCertId(null);
+      setCertUploadProgress(null);
+      certUploadTargetRef.current = null;
+      if (certFileInputRef.current) certFileInputRef.current.value = "";
+    }
+  }
+
+  const ownedCertNames = useMemo(() => {    const names = new Set<string>();
+    for (const c of liveCerts) names.add(c.ten_chung_chi.toLocaleLowerCase("vi").trim());
+    if (selectedWelder) {
+      for (const t of parseCertificateList(selectedWelder.certificates)) {
+        names.add(t.toLocaleLowerCase("vi").trim());
+      }
+    }
+    return names;
+  }, [liveCerts, selectedWelder]);
+
+  const availableCertGroups = useMemo(
+    () => certGroups.filter((g) => !ownedCertNames.has(g.name.toLocaleLowerCase("vi").trim())),
+    [certGroups, ownedCertNames],
+  );
+
+  const rankOptions = useMemo(() => Array.from(new Set(list.map((w) => w.rank))).sort(), [list]);  const teamOptions = useMemo(() => Array.from(new Set(list.map((w) => w.weldingTeam))).sort(), [list]);
   const railOptions = useMemo(() => {
-    const all = list.flatMap((w) => w.railTypes.split(",").map((s) => s.trim()).filter(Boolean));
-    return Array.from(new Set(all)).sort();
-  }, [list]);
+    const catalog = sharedCatalogs
+      .filter((item) => item.group === "Loại ray" && item.active)
+      .map((item) => item.code);
+    const fromJournal = uniqueReportValues(allWeldRows, "loai_ray");
+    const fromWelders = list.flatMap((w) =>
+      w.railTypes.split(/[,;|/]+/).map((s) => s.trim()).filter((s) => s && s !== "Chưa cập nhật"),
+    );
+    return Array.from(new Set([...catalog, ...fromJournal, ...fromWelders])).sort((a, b) =>
+      a.localeCompare(b, "vi"),
+    );
+  }, [allWeldRows, list]);
   const machineOptions = useMemo(() => {
     const all = list.flatMap((w) => w.trainedMachines.split(",").map((s) => s.trim()).filter(Boolean));
     return Array.from(new Set(all)).sort();
   }, [list]);
   const statusOptions = ["Hoạt động", "Khóa"];
+
+  const selectedRailTypes = useMemo(() => {
+    if (!selectedWelder) return [] as string[];
+    return parseTrainedMachineTokens(
+      selectedWelder.railTypes === "Chưa cập nhật" ? "" : selectedWelder.railTypes,
+    );
+  }, [selectedWelder]);
+
+  async function handleUpdateRailTypes(next: string[]) {
+    if (!selectedWelder) return;
+    const railTypes = next.join(", ");
+    try {
+      const row = await upsertPersonnel({
+        employeeId: selectedWelder.id,
+        maNhanSu: selectedWelder.weldingId === "Chưa có mã" ? "" : selectedWelder.weldingId,
+        hoTen: selectedWelder.name,
+        chucVu: selectedWelder.position,
+        donVi: selectedWelder.department === "Chưa cập nhật" ? "" : selectedWelder.department,
+        toHan: selectedWelder.weldingTeam === "Chưa phân tổ" ? "" : selectedWelder.weldingTeam,
+        capBac: selectedWelder.rank === "Chưa phân hạng" ? "" : selectedWelder.rank,
+        loaiRay: railTypes,
+        loaiMay: selectedWelder.trainedMachines === "Chưa cập nhật" ? "" : selectedWelder.trainedMachines,
+        kinhNghiem: selectedWelder.experience === "Chưa cập nhật" ? "" : selectedWelder.experience,
+        hinhAnh: selectedWelder.photo?.startsWith("http") ? selectedWelder.photo : "",
+      });
+      const saved = { ...personnelRowToWelder(row), status: selectedWelder.status };
+      setList((prev) => {
+        const without = prev.filter((item) => item.id !== saved.id);
+        return [...without, saved].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+      });
+      setSelectedWelder(saved);
+      showToast(isEn ? "Rail types updated." : "Đã cập nhật loại ray.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : (isEn ? "Failed to update rail types" : "Không cập nhật được loại ray"));
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -625,6 +1042,7 @@ export default function WelderManagement() {
     if (res.success) {
       showToast("Đã tải tài liệu PDF lên Google Drive hồ sơ thợ hàn thành công");
       setUploadTitle("");
+      setShowUploadForm(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (res.item) {
         setDriveDocs((prev) => [res.item!, ...prev.filter((d) => d.id !== res.item!.id)]);
@@ -924,7 +1342,7 @@ export default function WelderManagement() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="welder-profile-title"
-            className="relative z-10 flex h-full w-full max-w-[560px] xl:max-w-[640px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-200"
+            className="relative z-10 flex h-full w-full max-w-[1120px] xl:max-w-[1280px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-200"
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
               <div className="flex min-w-0 items-center gap-3.5">
@@ -1000,12 +1418,16 @@ export default function WelderManagement() {
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
                     3. Loại ray được phép hàn
                   </div>
-                  <div className="mt-2 font-mono font-bold text-[#0047AB] text-sm">
-                    {selectedWelder.railTypes}
-                  </div>
+                  <MultiSelectCombobox
+                    title={isEn ? "Rail type" : "Loại ray"}
+                    options={railOptions}
+                    selected={selectedRailTypes}
+                    onChange={(next) => void handleUpdateRailTypes(next)}
+                    minWidth="min-w-0 w-full"
+                  />
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
@@ -1079,12 +1501,115 @@ export default function WelderManagement() {
               </div>
 
               <div className="rounded-2xl border border-blue-200 bg-blue-50/30 p-4">
-                <div className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
-                  6. Chứng chỉ cá nhân
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
+                    6. Chứng chỉ cá nhân
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (showAddCert) {
+                        setShowAddCert(false);
+                        setSelectedCertGroupIds([]);
+                      } else {
+                        void openAddCertPanel();
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer"
+                  >
+                    <Plus size={12} weight="bold" />
+                    {showAddCert ? (isEn ? "Close" : "Đóng") : isEn ? "Add" : "Thêm"}
+                  </button>
                 </div>
+
+                {showAddCert && (
+                  <div className="mb-3 rounded-xl border border-blue-200 bg-white p-3 shadow-2xs">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      {isEn ? "Select from certificate catalog" : "Chọn từ danh sách Chứng chỉ"}
+                    </div>
+                    {certGroupsLoading ? (
+                      <div className="py-4 text-center text-xs text-slate-500">
+                        {isEn ? "Loading…" : "Đang tải danh mục…"}
+                      </div>
+                    ) : availableCertGroups.length === 0 ? (
+                      <div className="py-3 text-xs text-slate-500">
+                        {certGroups.length === 0 ? (
+                          <>
+                            {isEn ? "No certificates in catalog. Add at " : "Chưa có chứng chỉ trong danh mục. Thêm tại "}
+                            <Link href="/chung-chi" className="font-semibold text-[#0047AB] hover:underline">
+                              {isEn ? "Certificate management" : "Quản lý chứng chỉ"}
+                            </Link>
+                            .
+                          </>
+                        ) : (
+                          isEn ? "All catalog certificates are already assigned." : "Tất cả chứng chỉ trong danh mục đã được gán."
+                        )}
+                      </div>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                        {availableCertGroups.map((cg) => {
+                          const checked = selectedCertGroupIds.includes(cg.id);
+                          return (
+                            <label
+                              key={cg.id}
+                              className={`flex cursor-pointer items-start gap-2.5 px-3 py-2.5 hover:bg-slate-50 ${
+                                checked ? "bg-blue-50/70" : ""
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleCertGroup(cg.id)}
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[#0047AB]"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-xs sm:text-sm font-semibold text-slate-900">
+                                  {cg.name}
+                                </span>
+                                {(cg.issuer || cg.code || cg.machine) && (
+                                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                                    {[cg.code, cg.issuer, cg.machine].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {selectedCertGroupIds.length > 0 && (
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {isEn
+                            ? `${selectedCertGroupIds.length} selected`
+                            : `Đã chọn ${selectedCertGroupIds.length}`}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={savingCerts}
+                          onClick={() => void handleAddSelectedCertificates()}
+                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-[11px] font-bold text-white cursor-pointer disabled:opacity-50"
+                        >
+                          {savingCerts
+                            ? isEn
+                              ? "Saving…"
+                              : "Đang lưu…"
+                            : isEn
+                              ? "Confirm add"
+                              : "Xác nhận thêm"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {liveCerts.length > 0 ? (
                   <div className="space-y-2.5">
-                    {liveCerts.map((cert) => (
+                    {liveCerts.map((cert) => {
+                      const driveFile = findDriveFileForCert(cert);
+                      const hasFile = Boolean(driveFile);
+                      const isUploading = uploadingCertId === cert.id;
+                      return (
                       <div key={cert.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
@@ -1097,35 +1622,142 @@ export default function WelderManagement() {
                         <div className="mt-2 text-[11px] text-slate-600 space-y-0.5 font-mono">
                           <div>Số: <strong className="text-slate-800">{cert.so_chung_chi || "—"}</strong></div>
                           <div>Hạn: {cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "—"}</div>
+                          {hasFile && (
+                            <div className="text-emerald-700 font-semibold">PDF trên Google Drive</div>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCertThumbnailItem({
-                              id: cert.id,
-                              title: cert.ten_chung_chi,
-                              holder: selectedWelder.name,
-                              certificateNumber: cert.so_chung_chi || "Chưa cập nhật",
-                              issuedAt: cert.ngay_cap ? formatDate(cert.ngay_cap) : "Chưa cập nhật",
-                              expiresAt: cert.ngay_het_han ? formatDate(cert.ngay_het_han) : "Chưa cập nhật",
-                              status: (cert.trang_thai as Certificate["status"]) || "Chưa cập nhật",
-                              imageKey: imageKeyForTitle(cert.ten_chung_chi),
-                              imageUrl: cert.secure_url || undefined,
-                              machine: selectedWelder.trainedMachines,
-                            });
-                          }}
-                          className="mt-2 text-xs font-bold text-[#0047AB] hover:underline cursor-pointer"
-                        >
-                          Xem mẫu chứng nhận
-                        </button>
+
+                        {editingLiveCert?.id === cert.id ? (
+                          <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-2.5">
+                            <input
+                              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                              value={editCertForm.title}
+                              onChange={(e) => setEditCertForm((f) => ({ ...f, title: e.target.value }))}
+                              placeholder={isEn ? "Certificate title" : "Tên chứng chỉ"}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                                value={editCertForm.number}
+                                onChange={(e) => setEditCertForm((f) => ({ ...f, number: e.target.value }))}
+                                placeholder={isEn ? "Number" : "Số chứng chỉ"}
+                              />
+                              <input
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                                value={editCertForm.organization}
+                                onChange={(e) => setEditCertForm((f) => ({ ...f, organization: e.target.value }))}
+                                placeholder={isEn ? "Issuer" : "Đơn vị cấp"}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="text-[10px] font-semibold text-slate-500">
+                                {isEn ? "Issued" : "Ngày cấp"}
+                                <input
+                                  type="date"
+                                  className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                                  value={editCertForm.issuedAt}
+                                  onChange={(e) => setEditCertForm((f) => ({ ...f, issuedAt: e.target.value }))}
+                                />
+                              </label>
+                              <label className="text-[10px] font-semibold text-slate-500">
+                                {isEn ? "Expires" : "Hết hạn"}
+                                <input
+                                  type="date"
+                                  className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                                  value={editCertForm.expiresAt}
+                                  onChange={(e) => setEditCertForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                                />
+                              </label>
+                            </div>
+                            <select
+                              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                              value={editCertForm.status}
+                              onChange={(e) =>
+                                setEditCertForm((f) => ({
+                                  ...f,
+                                  status: e.target.value as Certificate["status"],
+                                }))
+                              }
+                            >
+                              <option value="Còn hiệu lực">Còn hiệu lực</option>
+                              <option value="Sắp hết hạn">Sắp hết hạn</option>
+                              <option value="Hết hạn">Hết hạn</option>
+                              <option value="Thu hồi">Thu hồi</option>
+                            </select>
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={savingEditCert}
+                                onClick={() => setEditingLiveCert(null)}
+                                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer"
+                              >
+                                {isEn ? "Cancel" : "Hủy"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={savingEditCert}
+                                onClick={() => void handleSaveEditLiveCert()}
+                                className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer disabled:opacity-50"
+                              >
+                                {savingEditCert ? (isEn ? "Saving…" : "Đang lưu…") : isEn ? "Save" : "Lưu"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => viewLiveCert(cert)}
+                              className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer"
+                            >
+                              {isEn ? "View" : "Xem"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditLiveCert(cert)}
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                            >
+                              {isEn ? "Edit" : "Sửa"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteLiveCert(cert)}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 cursor-pointer"
+                            >
+                              {isEn ? "Delete" : "Xóa"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isUploading || !driveConfigured}
+                              onClick={() => triggerCertFileUpload(cert)}
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer disabled:opacity-50"
+                            >
+                              {isUploading
+                                ? `${isEn ? "Uploading" : "Đang tải"} ${certUploadProgress ?? 0}%`
+                                : hasFile
+                                  ? isEn
+                                    ? "Replace file"
+                                    : "Đổi file"
+                                  : isEn
+                                    ? "Upload file"
+                                    : "Tải file"}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : parseCertificateList(selectedWelder.certificates).length > 0 ? (
                   <div className="space-y-2.5">
                     {parseCertificateList(selectedWelder.certificates).map((certTitle, idx) => (
                       <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
                         <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{certTitle}</h4>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {isEn
+                            ? "Legacy entry — use Add to create an editable certificate record."
+                            : "Bản ghi cũ — dùng Thêm để tạo hồ sơ chứng chỉ có thể sửa / tải file."}
+                        </p>
                         <button
                           type="button"
                           onClick={() => {
@@ -1141,9 +1773,9 @@ export default function WelderManagement() {
                               machine: selectedWelder.trainedMachines,
                             });
                           }}
-                          className="mt-2 text-xs font-bold text-[#0047AB] hover:underline cursor-pointer"
+                          className="mt-2 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer"
                         >
-                          Xem mẫu chứng nhận
+                          {isEn ? "View" : "Xem"}
                         </button>
                       </div>
                     ))}
@@ -1151,9 +1783,7 @@ export default function WelderManagement() {
                 ) : (
                   <div className="text-xs text-slate-500 italic">Chưa có chứng chỉ.</div>
                 )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              </div>              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3">
                   9. Thống kê mối hàn
                 </div>
@@ -1221,78 +1851,70 @@ export default function WelderManagement() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
-                  10. Khuyết tật ghi nhận
-                </div>
-                {welderPerformance.defects.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {welderPerformance.defects.map((df, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800"
-                      >
-                        <span className="font-mono font-bold">{df.code}</span>
-                        <span className="text-[11px] font-normal text-rose-600">({df.count})</span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-emerald-700 font-semibold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                    Không ghi nhận lỗi khuyết tật.
-                  </div>
-                )}
-              </div>
-
               <div className="rounded-2xl border border-slate-300 bg-slate-50/50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">11. Tài liệu hồ sơ</h3>
+                    <h3 className="text-sm font-bold text-slate-900">10. Tài liệu hồ sơ</h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">Google Drive PDF</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => reloadDriveDocs()}
-                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-                  >
-                    Làm mới
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => reloadDriveDocs()}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Làm mới
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUploadForm((v) => !v)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1.5 text-[11px] font-bold text-white cursor-pointer"
+                    >
+                      <Plus size={12} weight="bold" />
+                      {showUploadForm ? "Đóng" : "Thêm mới"}
+                    </button>
+                  </div>
                 </div>
 
-                <form onSubmit={handleUploadDriveDoc} className="rounded-xl border border-blue-200 bg-white p-3 mb-3 space-y-2.5">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    required
-                    className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0047AB] hover:file:bg-blue-100 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={uploadTitle}
-                    onChange={(e) => setUploadTitle(e.target.value)}
-                    placeholder="Tên hiển thị tài liệu"
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
-                  />
-                  <select
-                    value={uploadDocType}
-                    onChange={(e) => setUploadDocType(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB]"
+                {showUploadForm ? (
+                  <form
+                    onSubmit={handleUploadDriveDoc}
+                    className="mb-3 flex flex-nowrap items-center gap-2 overflow-x-auto rounded-xl border border-blue-200 bg-white p-2"
                   >
-                    <option value="certificate">Chứng chỉ</option>
-                    <option value="training">Đào tạo</option>
-                    <option value="welding_record">Hồ sơ hàn</option>
-                    <option value="permit">Giấy phép hàn</option>
-                    <option value="other">Khác</option>
-                  </select>
-                  <button
-                    type="submit"
-                    disabled={uploadingDoc || !driveConfigured}
-                    className="w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-50 px-3 py-2 text-xs font-bold text-white cursor-pointer"
-                  >
-                    {uploadingDoc ? `Đang tải… ${uploadProgress ?? 0}%` : "Tải lên Drive"}
-                  </button>
-                </form>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      required
+                      className="min-w-[160px] flex-1 text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-[#0047AB] hover:file:bg-blue-100 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      placeholder="Tên hiển thị"
+                      className="h-8 w-40 shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                    />
+                    <select
+                      value={uploadDocType}
+                      onChange={(e) => setUploadDocType(e.target.value)}
+                      className="h-8 w-32 shrink-0 rounded-lg border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB]"
+                    >
+                      <option value="certificate">Chứng chỉ</option>
+                      <option value="training">Đào tạo</option>
+                      <option value="welding_record">Hồ sơ hàn</option>
+                      <option value="permit">Giấy phép hàn</option>
+                      <option value="other">Khác</option>
+                    </select>
+                    <button
+                      type="submit"
+                      disabled={uploadingDoc || !driveConfigured}
+                      className="h-8 shrink-0 rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-50 px-3 text-xs font-bold text-white cursor-pointer whitespace-nowrap"
+                    >
+                      {uploadingDoc ? `Đang tải… ${uploadProgress ?? 0}%` : "Tải lên"}
+                    </button>
+                  </form>
+                ) : null}
 
                 {driveError ? (
                   <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
@@ -1300,7 +1922,7 @@ export default function WelderManagement() {
                   </div>
                 ) : null}
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {loadingDrive ? (
                     <div className="text-xs text-slate-500 py-4 text-center">Đang tải tài liệu…</div>
                   ) : welderDriveDocs.length === 0 ? (
@@ -1310,44 +1932,53 @@ export default function WelderManagement() {
                       const viewUrl = `/api/documents/${doc.id}`;
                       const downloadUrl = `/api/documents/${doc.id}?download=1`;
                       return (
-                      <div key={doc.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                        <div className="font-bold text-slate-900 text-xs line-clamp-2">{doc.name}</div>
-                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-500 font-mono">
-                          <span>{doc.appProperties?.documentType || "certificate"}</span>
-                          <span>{formatDate(doc.createdTime)}</span>
-                          <span>{formatFileSize(doc.size)}</span>
+                        <div
+                          key={doc.id}
+                          className="flex flex-nowrap items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1 truncate text-xs font-bold text-slate-900" title={doc.name}>
+                            {doc.name}
+                          </div>
+                          <span className="shrink-0 font-mono text-[11px] text-slate-500">
+                            {doc.appProperties?.documentType || "certificate"}
+                          </span>
+                          <span className="shrink-0 font-mono text-[11px] text-slate-400">
+                            {formatDate(doc.createdTime)}
+                          </span>
+                          <span className="shrink-0 font-mono text-[11px] text-slate-400">
+                            {formatFileSize(doc.size)}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setPdfPreviewItem(doc)}
+                              className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2 py-1 text-[11px] font-bold text-white cursor-pointer"
+                            >
+                              Xem
+                            </button>
+                            <a
+                              href={downloadUrl}
+                              className="rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-bold text-emerald-700"
+                            >
+                              Tải về
+                            </a>
+                            <a
+                              href={doc.webViewLink || viewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700"
+                            >
+                              Drive
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDriveDoc(doc.id)}
+                              className="rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-[11px] font-bold text-rose-700 cursor-pointer"
+                            >
+                              Xóa
+                            </button>
+                          </div>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setPdfPreviewItem(doc)}
-                            className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer"
-                          >
-                            Xem
-                          </button>
-                          <a
-                            href={downloadUrl}
-                            className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700"
-                          >
-                            Tải về
-                          </a>
-                          <a
-                            href={doc.webViewLink || viewUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700"
-                          >
-                            Mở Drive
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDriveDoc(doc.id)}
-                            className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-700 cursor-pointer"
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      </div>
                       );
                     })
                   )}
@@ -1372,47 +2003,54 @@ export default function WelderManagement() {
         }}
       />
 
-      {/* PDF Viewer Modal — xem qua proxy /api/documents/:id */}
-      {pdfPreviewItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative z-10 flex h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-3.5 bg-slate-50">
-              <div className="flex items-center gap-2 truncate pr-4">
-                <span className="text-lg">📄</span>
-                <span className="font-bold text-slate-900 truncate text-sm sm:text-base">{pdfPreviewItem.name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={`/api/documents/${pdfPreviewItem.id}?download=1`}
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-                >
-                  Tải về
-                </a>
-                <a
-                  href={pdfPreviewItem.webViewLink || `/api/documents/${pdfPreviewItem.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-                >
-                  Mở tab mới ↗
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setPdfPreviewItem(null)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+      {/* Hidden file input — tải PDF chứng chỉ cá nhân lên Drive */}
+      <input
+        ref={certFileInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => void handleCertFileSelected(e)}
+      />
 
-            <div className="flex-1 bg-slate-100">
-              <iframe
-                src={`/api/documents/${pdfPreviewItem.id}`}
-                className="h-full w-full border-0"
-                title={pdfPreviewItem.name}
-              />
+      {/* PDF Viewer Modal — full màn hình, xem qua proxy /api/documents/:id */}
+      {pdfPreviewItem && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white animate-in fade-in duration-150">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-3.5 bg-slate-50">
+            <div className="flex items-center gap-2 truncate pr-4 min-w-0">
+              <span className="text-lg shrink-0">📄</span>
+              <span className="font-bold text-slate-900 truncate text-sm sm:text-base">{pdfPreviewItem.name}</span>
             </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href={`/api/documents/${pdfPreviewItem.id}?download=1`}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+              >
+                Tải về
+              </a>
+              <a
+                href={pdfPreviewItem.webViewLink || `/api/documents/${pdfPreviewItem.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                Mở tab mới ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => setPdfPreviewItem(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 bg-slate-100">
+            <iframe
+              src={`/api/documents/${pdfPreviewItem.id}`}
+              className="h-full w-full border-0"
+              title={pdfPreviewItem.name}
+            />
           </div>
         </div>
       )}
@@ -1526,6 +2164,7 @@ export default function WelderManagement() {
         initial={editingWelder}
         saving={savingWelder}
         isEn={isEn}
+        railOptions={railOptions}
         onClose={() => {
           if (savingWelder) return;
           setFormOpen(false);

@@ -93,8 +93,11 @@ function maintenanceBadge(status: MachineStatus): { label: string; badgeBg: stri
 }
 
 export default function MachineReportDashboard() {
-  const { rows, loading, error } = useWeldReportData();
   const { appliedFilters } = useReportFilters();
+  const { rows, loading, error } = useWeldReportData(
+    appliedFilters.dateFrom,
+    appliedFilters.dateTo,
+  );
   const [activeSlide, setActiveSlide] = useState(0);
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>(seedMachines);

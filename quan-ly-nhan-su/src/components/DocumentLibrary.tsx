@@ -604,32 +604,25 @@ export default function DocumentLibrary() {
         </div>
       </div>
 
-      {/* Modal viewer nội bộ dự phòng nếu cần */}
+      {/* Modal viewer — full màn hình */}
       {viewer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
-          <button
-            type="button"
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-            onClick={() => setViewer(null)}
-          />
-          <div className="relative z-10 flex h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-3">
-              <div className="font-bold text-slate-900 truncate pr-4">{viewer.name}</div>
-              <button
-                type="button"
-                onClick={() => setViewer(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex-1 bg-slate-100">
-              <iframe
-                src={`/api/documents/${viewer.id}`}
-                className="h-full w-full border-0"
-                title={viewer.name}
-              />
-            </div>
+        <div className="fixed inset-0 z-50 flex flex-col bg-white animate-in fade-in duration-150">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-3 bg-slate-50">
+            <div className="font-bold text-slate-900 truncate pr-4 min-w-0">{viewer.name}</div>
+            <button
+              type="button"
+              onClick={() => setViewer(null)}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer shrink-0"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 bg-slate-100">
+            <iframe
+              src={`/api/documents/${viewer.id}`}
+              className="h-full w-full border-0"
+              title={viewer.name}
+            />
           </div>
         </div>
       )}

@@ -112,10 +112,10 @@ const REPORT_COLUMNS_WITH_DEFECT = [
   "ma_khuyet_tat",
 ] as const;
 
-let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
+const reportRowsPromises = new Map<string, Promise<WeldReportRow[]>>();
 
 export function invalidateWeldReportCache() {
-  reportRowsPromise = null;
+  reportRowsPromises.clear();
 }
 
 /** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo). */
@@ -753,15 +753,29 @@ export function uniqueWelderOptions(rows: WeldReportRow[]): CertifiedWelderOptio
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
-async function fetchWeldReportRows(columns: readonly string[]) {
+async function fetchWeldReportRows(
+  columns: readonly string[],
+  dateFrom?: string,
+  dateTo?: string,
+) {
   const supabase = createClient();
   const pageSize = 1000;
   const rows: WeldReportRow[] = [];
 
   for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select(columns.join(","))
+      .select(columns.join(","));
+
+    if (columns.includes("ngay_thuc_hien")) {
+      if (dateFrom) query = query.gte("ngay_thuc_hien", dateFrom);
+      if (dateTo) query = query.lte("ngay_thuc_hien", dateTo);
+    } else {
+      if (dateFrom) query = query.gte("nam_thuc_hien", Number(dateFrom.slice(0, 4)));
+      if (dateTo) query = query.lte("nam_thuc_hien", Number(dateTo.slice(0, 4)));
+    }
+
+    const { data, error } = await query
       .order("nam_thuc_hien", { ascending: false })
       .order("ma_lich_su", { ascending: true })
       .range(offset, offset + pageSize - 1);
@@ -773,9 +787,12 @@ async function fetchWeldReportRows(columns: readonly string[]) {
   }
 }
 
-export function loadWeldReportRows() {
-  if (!reportRowsPromise) {
-    reportRowsPromise = (async () => {
+export function loadWeldReportRows(dateFrom?: string, dateTo?: string) {
+  const cacheKey = `${dateFrom ?? ""}\0${dateTo ?? ""}`;
+  const cached = reportRowsPromises.get(cacheKey);
+  if (cached) return cached;
+
+  const request = (async () => {
       if (!isSupabaseConfigured()) {
         throw new Error(
           "Chưa cấu hình Supabase. Tạo quan-ly-nhan-su/.env.local với NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_ANON_KEY, rồi khởi động lại npm run dev.",
@@ -783,10 +800,10 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT, dateFrom, dateTo);
       } catch {
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE);
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE, dateFrom, dateTo);
         } catch (firstError) {
           const message = formatSupabaseError(firstError);
           const missingOptionalColumn =
@@ -803,18 +820,18 @@ export function loadWeldReportRows() {
             message.includes("42703");
           if (!missingOptionalColumn) throw firstError;
           try {
-            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
+            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE, dateFrom, dateTo);
           } catch {
             try {
-              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
+              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM, dateFrom, dateTo);
             } catch {
               try {
-                return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
+                return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE, dateFrom, dateTo);
               } catch {
                 try {
-                  return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+                  return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK, dateFrom, dateTo);
                 } catch {
-                  return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+                  return fetchWeldReportRows(REPORT_COLUMNS_BASE, dateFrom, dateTo);
                 }
               }
             }
@@ -822,12 +839,12 @@ export function loadWeldReportRows() {
         }
       }
     })().catch((error) => {
-      reportRowsPromise = null;
+      reportRowsPromises.delete(cacheKey);
       throw new Error(formatSupabaseError(error));
     });
-  }
 
-  return reportRowsPromise;
+  reportRowsPromises.set(cacheKey, request);
+  return request;
 }
 
 export function machineForRow(row: WeldReportRow): string {

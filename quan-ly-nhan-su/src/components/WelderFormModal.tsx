@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Welder } from "@/data/welders";
 import type { Machine } from "@/data/machines";
+import { sharedCatalogs } from "@/data/systemConfig";
 import { X } from "@/components/icons";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import {
   parseTrainedMachineTokens,
   personTrainedOnMachine,
 } from "@/lib/personnelCertificatesDb";
+
+const CATALOG_RAIL_TYPES = sharedCatalogs
+  .filter((item) => item.group === "Loại ray" && item.active)
+  .map((item) => item.code);
 
 export type WelderFormValues = {
   id?: string;
@@ -47,6 +52,8 @@ type WelderFormModalProps = {
   initial?: Welder | null;
   saving?: boolean;
   isEn?: boolean;
+  /** Loại ray từ Quản lý mối hàn / danh mục Loại ray */
+  railOptions?: string[];
   onClose: () => void;
   onSubmit: (values: WelderFormValues) => void | Promise<void>;
 };
@@ -56,6 +63,7 @@ export default function WelderFormModal({
   initial,
   saving,
   isEn,
+  railOptions,
   onClose,
   onSubmit,
 }: WelderFormModalProps) {
@@ -63,6 +71,18 @@ export default function WelderFormModal({
   const [error, setError] = useState("");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
+
+  const selectedRailTypes = useMemo(
+    () => parseTrainedMachineTokens(form.railTypes),
+    [form.railTypes],
+  );
+
+  const railTypeChoices = useMemo(() => {
+    const fromProp = (railOptions ?? []).map((v) => v.trim()).filter(Boolean);
+    return Array.from(new Set([...CATALOG_RAIL_TYPES, ...fromProp, ...selectedRailTypes])).sort((a, b) =>
+      a.localeCompare(b, "vi"),
+    );
+  }, [railOptions, selectedRailTypes]);
 
   useEffect(() => {
     if (!open) return;
@@ -139,6 +159,14 @@ export default function WelderFormModal({
       .map((m) => m.code);
     const orphans = [...next].filter((token) => !machines.some((m) => m.code === token));
     set("trainedMachines", [...ordered, ...orphans].join(", "));
+  }
+
+  function toggleRailType(code: string) {
+    const next = new Set(selectedRailTypes);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    const ordered = railTypeChoices.filter((item) => next.has(item));
+    set("railTypes", ordered.join(", "));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -238,12 +266,35 @@ export default function WelderFormModal({
             <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
               {isEn ? "Allowed rail types" : "Loại ray được phép hàn"}
             </label>
-            <input
-              className={fieldClass}
-              value={form.railTypes}
-              onChange={(e) => set("railTypes", e.target.value)}
-              placeholder="UIC60, P50"
-            />
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {isEn ? "From Rail type catalog / Weld joint management" : "Từ danh mục Loại ray · Quản lý mối hàn"}
+            </p>
+            <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
+              {railTypeChoices.map((rail) => {
+                const checked = selectedRailTypes.includes(rail);
+                return (
+                  <label
+                    key={rail}
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs sm:text-sm transition-colors ${
+                      checked ? "bg-blue-50 border border-blue-200" : "hover:bg-slate-50 border border-transparent"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleRailType(rail)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]"
+                    />
+                    <span className="font-mono font-bold text-[#0047AB]">{rail}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {selectedRailTypes.length > 0 && (
+              <div className="mt-1.5 text-[11px] text-slate-500 font-mono">
+                {selectedRailTypes.join(", ")}
+              </div>
+            )}
           </div>
 
           <div>

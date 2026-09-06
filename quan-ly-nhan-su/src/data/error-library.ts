@@ -242,7 +242,7 @@ export const machineFaultLibrary: MachineFault[] = [
   {
     id: "mf-bom4-01",
     section: "Bơm",
-    order: 1,
+    order: 6,
     symptom: "Rò rỉ chất lỏng vận hành trong các khớp nối của mạch thủy lực và thiết bị thủy lực",
     cases: [{ probableCause: "Các mối nối không kín khít", remedy: "Siết chặt các đai ốc" }],
     sourceReference: "Bảng 4: Bơm",
@@ -251,7 +251,7 @@ export const machineFaultLibrary: MachineFault[] = [
   {
     id: "mf-bom4-02",
     section: "Bơm",
-    order: 2,
+    order: 7,
     symptom: "Tiếng ồn gia tăng trong quá trình vận hành máy bơm",
     cases: [
       {
@@ -259,12 +259,8 @@ export const machineFaultLibrary: MachineFault[] = [
         remedy: "Kiểm tra ống hút bị tắc nghẽn (có vật lạ) của ống hút và rửa sạch",
       },
       {
-        probableCause: "Kiểm tra xem các trục bơm có bị lệch (gãy) và kiểm tra động cơ truyền động",
-        remedy: "Giảm tốc độ động cơ truyền động (khi tăng tốc độ quay)",
-      },
-      {
-        probableCause: "Kiểm tra xem các trục bơm có bị lệch (gãy) và kiểm tra động cơ truyền động",
-        remedy: "Kiểm tra và căn chỉnh lệch trục không quá 0,2 mm và góc gãy các trục không quá 30′",
+        probableCause: "Các trục bơm bị lệch (gãy) / động cơ truyền động",
+        remedy: "Giảm tốc độ động cơ truyền động (khi tăng tốc độ quay); kiểm tra và căn chỉnh lệch trục không quá 0,2 mm và góc gãy các trục không quá 30′",
       },
     ],
     sourceReference: "Bảng 4: Bơm",
@@ -273,7 +269,7 @@ export const machineFaultLibrary: MachineFault[] = [
   {
     id: "mf-bom4-03",
     section: "Bơm",
-    order: 3,
+    order: 8,
     symptom: "Máy bơm hút không khí, có tiếng ồn và rung khi máy bơm đang chạy",
     cases: [
       { probableCause: "Mức chất lỏng vận hành trong đường hút thấp", remedy: "Đổ đầy lượng chất lỏng vận hành cần thiết" },
@@ -290,7 +286,7 @@ export const machineFaultLibrary: MachineFault[] = [
   {
     id: "mf-bom4-04",
     section: "Bơm",
-    order: 4,
+    order: 9,
     symptom: "Máy bơm phát triển không đủ áp suất",
     cases: [{
       probableCause: "Tắc nghẽn van an toàn khiến van an toàn không thể đóng hoàn toàn",
@@ -303,7 +299,7 @@ export const machineFaultLibrary: MachineFault[] = [
     id: "mf-mh-01",
     section: "Máy hàn",
     order: 1,
-    symptom: "Phần má hàn⁷ di động di chuyển với tốc độ không đều và bị giật cục",
+    symptom: "Phần má hàn di động di chuyển với tốc độ không đều và bị giật cục",
     cases: [{
       probableCause: "Có bọt khí trong hệ thống thủy lực. Dấu hiệu có thể nhận biết là sự thay đổi áp suất trong hệ thống thủy lực mặc dù không có dầu",
       remedy: "Đặt áp suất trong hệ thống thủy lực thành 1,5...1,0MPa, nới lỏng đai ốc nắp vặn của các ống nối với các khoang bên trái của xi lanh trong vài lượt. Xả dầu cho đến khi nó ngừng xủi bọt.",
@@ -318,11 +314,11 @@ export const machineFaultLibrary: MachineFault[] = [
     symptom: "Khi bật công tắc SA7 phần má hàn di động di chuyển với những cú giật theo chu kỳ theo một trình tự nhất định.",
     cases: [
       {
-        probableCause: "Sự mất căn chỉnh của các thanh ép của máy hàn do việc kẹp các ray có độ dày khác nhau hoặc có các dấu ấn (vết lồi) nổi lên;",
+        probableCause: "Sự mất căn chỉnh của các thanh ép của máy hàn do việc kẹp các ray có độ dày khác nhau hoặc có các dấu ấn (vết lồi) nổi lên",
         remedy: "Thay thế ray, loại bỏ các vết lồi hoặc mác nhà sản xuất trên bụng ray",
       },
       {
-        probableCause: "Các đế và bàn hạn vị⁸ không thẳng, dẫn đến sự mất căn chỉnh của các phần đoạn trong quá trình kẹp.",
+        probableCause: "Các đế và bàn hạn vị không thẳng, dẫn đến sự mất căn chỉnh của các phần đoạn trong quá trình kẹp",
         remedy: "Căn chỉnh bàn đế và hạn vị bằng thước thẳng",
       },
     ],
@@ -347,9 +343,9 @@ export const machineFaultLibrary: MachineFault[] = [
     order: 4,
     symptom: "Hàn xung không ổn định trong quá trình hàn.",
     cases: [
-      { probableCause: "Độ nhạy cao trong mạch điều chỉnh tốc độ;", remedy: "Giảm độ nhạy bằng cách điều chỉnh các dòng điện I1, I2, I3;" },
-      { probableCause: "Điện trở ngắn mạch quá mức;", remedy: "Làm sạch tất cả các bề mặt tiếp xúc của mạch phụ của máy hàn;" },
-      { probableCause: "Tiếp xúc kém với ray.", remedy: "Làm sạch ray." },
+      { probableCause: "Độ nhạy cao trong mạch điều chỉnh tốc độ", remedy: "Giảm độ nhạy bằng cách điều chỉnh các dòng điện I1, I2, I3" },
+      { probableCause: "Điện trở ngắn mạch quá mức", remedy: "Làm sạch tất cả các bề mặt tiếp xúc của mạch phụ của máy hàn" },
+      { probableCause: "Tiếp xúc kém với ray", remedy: "Làm sạch ray" },
     ],
     sourceReference: "Bảng 5: Máy hàn",
     active: true,
@@ -372,8 +368,8 @@ export const machineFaultLibrary: MachineFault[] = [
     order: 6,
     symptom: "Thời gian tiếp xúc với ray quá lâu (làm nóng do điện trở).",
     cases: [
-      { probableCause: "Độ nhạy thấp trong mạch điều chỉnh;", remedy: "Tăng độ nhạy bằng cách điều chỉnh các dòng điện I1, I2, I3;" },
-      { probableCause: "Thời gian tiếp xúc lâu có thể do điện trở ngắn mạch tăng của máy hàn.", remedy: "Làm sạch các tiếp điểm đóng-mở trong mạch của máy hàn." },
+      { probableCause: "Độ nhạy thấp trong mạch điều chỉnh", remedy: "Tăng độ nhạy bằng cách điều chỉnh các dòng điện I1, I2, I3" },
+      { probableCause: "Thời gian tiếp xúc lâu có thể do điện trở ngắn mạch tăng của máy hàn", remedy: "Làm sạch các tiếp điểm đóng-mở trong mạch của máy hàn" },
     ],
     sourceReference: "Bảng 5: Máy hàn",
     active: true,
@@ -385,10 +381,10 @@ export const machineFaultLibrary: MachineFault[] = [
     symptom: "Giá trị ép nhỏ hơn giá trị cài đặt.",
     cases: [
       {
-        probableCause: "Áp suất dầu trong hệ thống thủy lực thấp hơn giá trị cài đặt, gây trượt ray trong quá trình ép do lực kẹp không đủ;",
-        remedy: "Kiểm tra áp suất dầu trong hệ thống thủy lực;",
+        probableCause: "Áp suất dầu trong hệ thống thủy lực thấp hơn giá trị cài đặt, gây trượt ray trong quá trình ép do lực kẹp không đủ",
+        remedy: "Kiểm tra áp suất dầu trong hệ thống thủy lực",
       },
-      { probableCause: "Đơn vị đo không được điều chỉnh.", remedy: "Cài đặt đơn vị đo đến giá trị mong muốn." },
+      { probableCause: "Đơn vị đo không được điều chỉnh", remedy: "Cài đặt đơn vị đo đến giá trị mong muốn" },
     ],
     sourceReference: "Bảng 5: Máy hàn",
     active: true,
@@ -400,12 +396,12 @@ export const machineFaultLibrary: MachineFault[] = [
     symptom: "Dòng không tải tăng đột ngột khi các máy biến áp hàn được bật.",
     cases: [
       {
-        probableCause: "Kết nối sai (đảo ngược) các cuộn dây sơ cấp của các máy biến áp;",
-        remedy: "Kiểm tra lại kết nối của các cuộn dây sơ cấp. Dấu hiệu của kết nối đúng là không có điện áp giữa các đế của cặp phân đoạn bên trái;",
+        probableCause: "Kết nối sai (đảo ngược) các cuộn dây sơ cấp của các máy biến áp",
+        remedy: "Kiểm tra lại kết nối của các cuộn dây sơ cấp. Dấu hiệu của kết nối đúng là không có điện áp giữa các đế của cặp phân đoạn bên trái",
       },
       {
-        probableCause: "Hỏng cách điện giữa mạch phụ và thân máy.",
-        remedy: "Tháo dỡ mạch phụ, khắc phục sự cố hỏng cách điện.",
+        probableCause: "Hỏng cách điện giữa mạch phụ và thân máy",
+        remedy: "Tháo dỡ mạch phụ, khắc phục sự cố hỏng cách điện",
       },
     ],
     sourceReference: "Bảng 5: Máy hàn",

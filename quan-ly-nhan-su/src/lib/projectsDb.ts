@@ -126,11 +126,12 @@ export function duAnRowToProject(row: DuAnRow): Project {
     status: "Đang triển khai",
     startDate,
     endDate,
-    location: row.vi_tri?.trim() || "Chưa cập nhật",
+    location: row.vi_tri?.trim() || "here",
     plannedWeldCount,
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
     theoreticalProgress:
       existingProgress.length > 0
         ? existingProgress

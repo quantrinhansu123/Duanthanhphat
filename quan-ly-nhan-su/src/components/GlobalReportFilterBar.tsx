@@ -19,7 +19,11 @@ function filterPickLabel(count: number, defaultText: string) {
 }
 
 export default function GlobalReportFilterBar() {
-  const { rows } = useWeldReportData();
+  const reportFilters = useReportFilters();
+  const { rows } = useWeldReportData(
+    reportFilters.appliedFilters.dateFrom,
+    reportFilters.appliedFilters.dateTo,
+  );
   const [dbMachines, setDbMachines] = useState<string[]>([]);
   const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
   const PERSONNEL = useMemo(() => uniqueReportValues(rows, "ten_tho_han"), [rows]);
@@ -65,7 +69,7 @@ export default function GlobalReportFilterBar() {
     setWeldTypes,
     applyFilters,
     clearFilters,
-  } = useReportFilters();
+  } = reportFilters;
 
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
   const [personnelFilterOpen, setPersonnelFilterOpen] = useState(false);

@@ -62,6 +62,24 @@ const EMPTY_DRAFT: DraftFilters = {
   weldTypes: [],
 };
 
+function currentMonthDraft(now = new Date()): DraftFilters {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const monthText = String(month).padStart(2, "0");
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return {
+    ...EMPTY_DRAFT,
+    dateFrom: `${year}-${monthText}-01`,
+    dateTo: `${year}-${monthText}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
 function yearStart(year: string | number) {
   return `${year}-01-01`;
 }
@@ -122,8 +140,8 @@ function sameFilters(a: AppliedReportFilters, b: AppliedReportFilters) {
 const ReportFilterContext = createContext<ReportFilterContextValue | null>(null);
 
 export function ReportFilterProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<DraftFilters>(EMPTY_DRAFT);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(EMPTY_DRAFT));
+  const [draft, setDraft] = useState<DraftFilters>(currentMonthDraft);
+  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(draft));
   const [appliedPeriodMode, setAppliedPeriodMode] = useState<ReportPeriodMode>("day");
 
   const setPeriodMode = useCallback((mode: ReportPeriodMode) => {

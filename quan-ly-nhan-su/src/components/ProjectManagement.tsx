@@ -25,6 +25,7 @@ import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
+const RAIL_TYPES = ["UIC60", "P50", "P43", "50N"] as const;
 const activeWelders = welders.filter((w) => w.status === "Hoạt động");
 
 const statusStyle: Record<Project["status"], string> = {
@@ -64,6 +65,7 @@ function emptyProject(): Project {
     personnelIds: [],
     machineTypes: [],
     weldTypes: [],
+    railTypes: [],
   };
 }
 
@@ -355,23 +357,13 @@ function ProjectInfoFields({
         )}
       </label>
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-        Nhà máy
-        <input
-          readOnly={readOnly}
-          value={form.plant}
-          onChange={(e) => updateForm({ plant: e.target.value })}
-          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-        />
-      </label>
-
-      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
         Vị trí
         <input
           readOnly={readOnly}
           value={form.location}
           onChange={(e) => updateForm({ location: e.target.value })}
-          placeholder="VD: Hà Nội"
-          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          placeholder="VD: Hà Nội · Km 12+450"
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
 
@@ -447,6 +439,15 @@ function ProjectInfoFields({
         options={MACHINE_TYPES}
         selected={form.machineTypes}
         onChange={(machineTypes) => updateForm({ machineTypes })}
+        readOnly={readOnly}
+      />
+
+      <CheckboxGroup
+        label="Loại ray"
+        hint="Chọn các loại ray áp dụng cho dự án"
+        options={[...RAIL_TYPES]}
+        selected={form.railTypes}
+        onChange={(railTypes) => updateForm({ railTypes })}
         readOnly={readOnly}
       />
 
@@ -1034,9 +1035,11 @@ function ProjectModal({
     setTab("info");
     setForm({
       ...project,
+      location: project.location?.trim() || "",
       personnelIds: project.personnelIds ?? [],
       machineTypes: project.machineTypes ?? [],
       weldTypes: project.weldTypes ?? [],
+      railTypes: project.railTypes ?? [],
     });
     setPersonnelRows(project.projectPersonnel ?? getProjectPersonnel(project.id));
     setWorkRows(project.projectWelds ?? getProjectWelds(project.id));
@@ -1186,6 +1189,8 @@ function ProjectModal({
                 }
                 onSave({
                   ...form,
+                  location: form.location.trim(),
+                  plant: "",
                   staffCount: form.personnelIds.length,
                   machineCount: form.machineTypes.length,
                   theoreticalProgress: buildDailyWeldPlan(
@@ -1315,11 +1320,12 @@ export default function ProjectManagement() {
                 ? {
                     ...updated,
                     ...saved,
-                    plant: updated.plant,
+                    plant: "",
                     status: updated.status,
                     personnelIds: updated.personnelIds,
                     machineTypes: updated.machineTypes,
                     weldTypes: updated.weldTypes,
+                    railTypes: updated.railTypes ?? [],
                     staffCount: updated.staffCount,
                     machineCount: updated.machineCount,
                   }

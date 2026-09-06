@@ -241,8 +241,8 @@ export async function loadCertificateRegistry(): Promise<CertificateRegistry> {
  */
 export async function createPersonnelCertificates(input: CreatePersonnelCertificateInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase nên không thể lưu chứng chỉ.");
-  if (input.imageUrl && !input.imageUrl.startsWith("https://")) {
-    throw new Error("Ảnh chứng chỉ phải là URL HTTPS đã tải lên Cloudinary.");
+  if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
+    throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
 
   if (input.issuedAt && input.expiresAt && input.expiresAt < input.issuedAt) {
@@ -276,8 +276,8 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
 /** Cập nhật chi tiết 1 chứng chỉ */
 export async function updateCertificateRecord(input: UpdateCertificateInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
-  if (input.imageUrl && !input.imageUrl.startsWith("https://")) {
-    throw new Error("Ảnh chứng chỉ phải là URL HTTPS đã tải lên Cloudinary.");
+  if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
+    throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
 
   if (input.issuedAt && input.expiresAt && input.expiresAt < input.issuedAt) {
