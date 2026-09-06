@@ -7,7 +7,8 @@
     "dev": "next dev --webpack -p 3010",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

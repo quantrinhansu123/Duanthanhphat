@@ -143,24 +143,6 @@ export async function deleteDriveDocument(
   }
 }
 
-export type MigrationSummary = {
-  total: number;
-  migrated: number;
-  alreadyExists: number;
-  failed: number;
-};
-
-export type MigrationItemResult = {
-  supabaseId: string;
-  name: string;
-  driveFileId?: string;
-  localMd5?: string;
-  driveMd5?: string;
-  checksumMatched: boolean;
-  status: "migrated" | "already_exists" | "failed";
-  message?: string;
-};
-
 export async function replaceDocumentContentInDrive(
   fileId: string,
   file: File,
@@ -227,34 +209,6 @@ export async function replaceDocumentContentInDrive(
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Lỗi không xác định khi thay thế tệp";
-    return { success: false, error: message };
-  }
-}
-
-export async function migrateDocumentsFromSupabase(): Promise<{
-  success: boolean;
-  summary?: MigrationSummary;
-  items?: MigrationItemResult[];
-  message?: string;
-  error?: string;
-}> {
-  try {
-    const res = await fetch("/api/documents/migrate-from-supabase", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
-      return {
-        success: false,
-        error: data.error || "Không thể thực hiện di chuyển tài liệu từ Supabase",
-      };
-    }
-    return {
-      success: true,
-      summary: data.summary,
-      items: data.items,
-      message: data.message,
-    };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Lỗi kết nối mạng khi di chuyển tài liệu";
     return { success: false, error: message };
   }
 }

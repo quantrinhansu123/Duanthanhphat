@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
   isGoogleDriveConfigured,
   listDriveDocuments,
 } from "@/lib/googleDrive/server";
@@ -10,8 +11,7 @@ export async function GET() {
       {
         configured: false,
         items: [],
-        message:
-          "Google Drive chưa được cấu hình. Vui lòng thêm GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID.",
+        message: GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
       },
       { status: 200 },
     );

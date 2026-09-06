@@ -5,13 +5,10 @@ import { MagnifyingGlass, X } from "@/components/icons";
 import {
   deleteDriveDocument,
   fetchDriveDocuments,
-  migrateDocumentsFromSupabase,
   replaceDocumentContentInDrive,
   updateDriveDocumentMeta,
   uploadDocumentToDrive,
   type DriveDocumentItem,
-  type MigrationItemResult,
-  type MigrationSummary,
 } from "@/lib/driveDocumentsClient";
 
 function formatFileSize(bytes: number): string {
@@ -56,13 +53,6 @@ export default function DocumentLibrary() {
   const [replacingDoc, setReplacingDoc] = useState<DriveDocumentItem | null>(null);
   const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
-
-  // Di chuyển tài liệu từ Supabase sang Google Drive
-  const [migrating, setMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<{
-    summary?: MigrationSummary;
-    items?: MigrationItemResult[];
-  } | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -163,37 +153,6 @@ export default function DocumentLibrary() {
     await reload();
   }
 
-  async function handleMigrate() {
-    if (
-      !confirm(
-        "Bắt đầu di chuyển tất cả tài liệu từ Supabase Storage sang Google Drive và đối chiếu MD5 checksum?",
-      )
-    ) {
-      return;
-    }
-
-    setMigrating(true);
-    setErrorMsg(null);
-    setStatusMsg(null);
-
-    const res = await migrateDocumentsFromSupabase();
-    setMigrating(false);
-
-    if (!res.success) {
-      setErrorMsg(res.error || "Di chuyển tài liệu thất bại.");
-      return;
-    }
-
-    setMigrationResult({
-      summary: res.summary,
-      items: res.items,
-    });
-    setStatusMsg(
-      `Di chuyển hoàn tất: ${res.summary?.migrated || 0} tệp mới, ${res.summary?.alreadyExists || 0} đã có, ${res.summary?.failed || 0} lỗi.`,
-    );
-    await reload();
-  }
-
   async function handleDelete(doc: DriveDocumentItem) {
     if (!confirm(`Chuyển tài liệu "${doc.name}" vào thùng rác Google Drive?`)) return;
     setSaving(true);
@@ -262,7 +221,7 @@ export default function DocumentLibrary() {
     <main className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
       {!configured && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-[#0047AB] shadow-xs">
-          <strong>Lưu ý cấu hình Google Drive:</strong> {configNotice || "Cần cấu hình GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID trên máy chủ để đồng bộ trực tiếp với Google Drive."}
+          <strong>Lưu ý cấu hình Google Drive:</strong> {configNotice || "Cần cấu hình OAuth Google Drive và thư mục đích trên máy chủ."}
         </div>
       )}
 
@@ -313,14 +272,6 @@ export default function DocumentLibrary() {
           className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer"
         >
           {showForm ? "Đóng form" : "Tải PDF lên"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleMigrate()}
-          disabled={migrating || loading}
-          className="rounded-lg border border-sky-300 bg-sky-50 hover:bg-sky-100 px-3.5 py-2 text-xs sm:text-sm font-semibold text-sky-800 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-        >
-          {migrating ? "Đang di chuyển…" : "Di chuyển từ Supabase"}
         </button>
         <button
           type="button"
@@ -554,127 +505,6 @@ export default function DocumentLibrary() {
         </div>
       )}
 
-      {/* Modal kết quả di chuyển từ Supabase */}
-      {migrationResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-            onClick={() => setMigrationResult(null)}
-          />
-          <div className="relative z-10 flex h-[85vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-3.5 bg-slate-50">
-              <div>
-                <div className="font-bold text-slate-900">
-                  Báo cáo di chuyển tài liệu Supabase → Google Drive
-                </div>
-                <div className="text-xs text-slate-500 mt-0.5">
-                  Đã đối chiếu mã băm MD5 và lưu vết appProperties
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMigrationResult(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Thống kê nhanh */}
-            <div className="grid grid-cols-4 gap-3 p-4 bg-white border-b border-slate-200 text-center">
-              <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-200">
-                <div className="text-xs text-slate-500">Tổng tài liệu</div>
-                <div className="text-lg font-bold text-slate-900 font-mono">
-                  {migrationResult.summary?.total ?? 0}
-                </div>
-              </div>
-              <div className="rounded-lg bg-emerald-50 p-2.5 border border-emerald-200">
-                <div className="text-xs text-emerald-700">Mới chuyển</div>
-                <div className="text-lg font-bold text-emerald-700 font-mono">
-                  {migrationResult.summary?.migrated ?? 0}
-                </div>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-200">
-                <div className="text-xs text-[#0047AB]">Đã có sẵn</div>
-                <div className="text-lg font-bold text-[#0047AB] font-mono">
-                  {migrationResult.summary?.alreadyExists ?? 0}
-                </div>
-              </div>
-              <div className="rounded-lg bg-rose-50 p-2.5 border border-rose-200">
-                <div className="text-xs text-rose-700">Thất bại</div>
-                <div className="text-lg font-bold text-rose-700 font-mono">
-                  {migrationResult.summary?.failed ?? 0}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-600 uppercase font-semibold">
-                    <th className="py-2 px-3">Tên tài liệu</th>
-                    <th className="py-2 px-3">Supabase MD5</th>
-                    <th className="py-2 px-3">Drive MD5</th>
-                    <th className="py-2 px-3 w-32 text-center">Khớp Checksum</th>
-                    <th className="py-2 px-3 w-28 text-right">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {migrationResult.items?.map((it, idx) => (
-                    <tr key={it.supabaseId || idx} className="hover:bg-slate-50/70">
-                      <td className="py-2 px-3">
-                        <div className="font-semibold text-slate-900">{it.name}</div>
-                        {it.message && (
-                          <div className="text-[11px] text-slate-400">{it.message}</div>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-slate-500">
-                        {it.localMd5 ? it.localMd5.slice(0, 10) + "…" : "—"}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-slate-500">
-                        {it.driveMd5 ? it.driveMd5.slice(0, 10) + "…" : "—"}
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        {it.checksumMatched ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                            ✓ Khớp MD5
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                            Chưa khớp / N/A
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        {it.status === "migrated" && (
-                          <span className="font-semibold text-emerald-600">Đã chuyển</span>
-                        )}
-                        {it.status === "already_exists" && (
-                          <span className="font-semibold text-[#0047AB]">Đã có sẵn</span>
-                        )}
-                        {it.status === "failed" && (
-                          <span className="font-semibold text-rose-600">Lỗi</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end p-3 border-t border-slate-200 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setMigrationResult(null)}
-                className="rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm px-4 py-2 font-semibold cursor-pointer"
-              >
-                Đóng báo cáo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Bảng danh sách tài liệu */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
@@ -700,11 +530,6 @@ export default function DocumentLibrary() {
                     <td className="px-4 py-3.5">
                       <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                         <span>{doc.name}</span>
-                        {doc.appProperties?.source === "supabase_migration" && (
-                          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
-                            Supabase → Drive
-                          </span>
-                        )}
                         {doc.appProperties?.last_replaced_at && (
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                             Đã thay tệp

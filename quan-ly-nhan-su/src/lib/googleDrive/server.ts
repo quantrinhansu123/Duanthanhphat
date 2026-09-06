@@ -4,51 +4,133 @@ import type { DriveDocumentItem } from "./types";
 
 export const MAX_DRIVE_DOCUMENT_BYTES = 250 * 1024 * 1024;
 export const DRIVE_PDF_MIME_TYPE = "application/pdf";
+export const GOOGLE_DRIVE_CONFIGURATION_MESSAGE =
+  "Google Drive chưa được cấu hình. Hãy thêm GOOGLE_DRIVE_FOLDER_ID và bộ biến OAuth hoặc Service Account.";
+
+type OAuthDriveCredentials = {
+  authMode: "oauth";
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  folderId: string;
+  sharedDriveId?: string;
+};
+
+type ServiceAccountDriveCredentials = {
+  authMode: "service_account";
+  clientEmail: string;
+  privateKey: string;
+  folderId: string;
+  sharedDriveId?: string;
+};
+
+type DriveCredentials = OAuthDriveCredentials | ServiceAccountDriveCredentials;
 
 export function isValidDriveFileId(value: string): boolean {
   return /^[A-Za-z0-9_-]{10,200}$/.test(value);
 }
 
 export function isGoogleDriveConfigured(): boolean {
-  const email = process.env.GOOGLE_DRIVE_CLIENT_EMAIL?.trim();
-  const key = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.trim();
-  const folder = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim();
-  return Boolean(email && key && folder);
+  return getDriveCredentials() !== null;
 }
 
-function getDriveCredentials() {
+function getDriveCredentials(): DriveCredentials | null {
+  const clientId = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN?.trim();
   const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL?.trim();
   let privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.trim();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim();
   const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID?.trim();
 
-  if (!clientEmail || !privateKey || !folderId) {
+  if (!folderId) {
     return null;
   }
+
+  const hasAnyOAuthCredential = Boolean(clientId || clientSecret || refreshToken);
+  if (hasAnyOAuthCredential) {
+    if (!clientId || !clientSecret || !refreshToken) return null;
+    return {
+      authMode: "oauth",
+      clientId,
+      clientSecret,
+      refreshToken,
+      folderId,
+      sharedDriveId,
+    };
+  }
+
+  if (!clientEmail || !privateKey) return null;
 
   if (privateKey.includes("\\n")) {
     privateKey = privateKey.replace(/\\n/g, "\n");
   }
 
-  return { clientEmail, privateKey, folderId, sharedDriveId };
+  return {
+    authMode: "service_account",
+    clientEmail,
+    privateKey,
+    folderId,
+    sharedDriveId,
+  };
 }
 
 export function getDriveClient() {
   const creds = getDriveCredentials();
   if (!creds) return null;
 
-  const auth = new google.auth.JWT({
-    email: creds.clientEmail,
-    key: creds.privateKey,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
+  const auth =
+    creds.authMode === "oauth"
+      ? new google.auth.OAuth2(creds.clientId, creds.clientSecret)
+      : new google.auth.JWT({
+          email: creds.clientEmail,
+          key: creds.privateKey,
+          scopes: ["https://www.googleapis.com/auth/drive"],
+        });
+
+  if (creds.authMode === "oauth") {
+    auth.setCredentials({ refresh_token: creds.refreshToken });
+  }
 
   return {
     drive: google.drive({ version: "v3", auth }),
     folderId: creds.folderId,
     sharedDriveId: creds.sharedDriveId,
+    authMode: creds.authMode,
     auth,
   };
+}
+
+async function getVerifiedDriveContext() {
+  const ctx = getDriveClient();
+  if (!ctx) throw new Error("Chưa cấu hình Google Drive env");
+
+  const folder = await ctx.drive.files.get({
+    fileId: ctx.folderId,
+    fields: "id,mimeType,trashed,driveId,capabilities(canAddChildren)",
+    supportsAllDrives: true,
+  });
+
+  if (folder.data.trashed || folder.data.mimeType !== "application/vnd.google-apps.folder") {
+    throw new Error("GOOGLE_DRIVE_FOLDER_ID không trỏ tới một thư mục Google Drive hợp lệ");
+  }
+
+  const detectedSharedDriveId = folder.data.driveId || undefined;
+  if (ctx.authMode === "service_account" && !detectedSharedDriveId) {
+    throw new Error(
+      "Thư mục đang nằm trong My Drive. Service Account không có dung lượng lưu trữ; hãy dùng một thư mục trong Shared Drive.",
+    );
+  }
+
+  if (ctx.sharedDriveId && ctx.sharedDriveId !== detectedSharedDriveId) {
+    throw new Error("GOOGLE_SHARED_DRIVE_ID không khớp với Shared Drive chứa thư mục tài liệu");
+  }
+
+  if (!folder.data.capabilities?.canAddChildren) {
+    throw new Error("Tài khoản Google chưa có quyền thêm tài liệu vào thư mục được cấu hình");
+  }
+
+  return { ...ctx, sharedDriveId: detectedSharedDriveId };
 }
 
 export function normalizePdfName(value: string): string {
@@ -67,8 +149,7 @@ function normalizeDescription(value?: string): string {
 }
 
 async function assertManagedDriveFile(fileId: string) {
-  const ctx = getDriveClient();
-  if (!ctx) throw new Error("Chưa cấu hình Google Drive env");
+  const ctx = await getVerifiedDriveContext();
   const res = await ctx.drive.files.get({
     fileId,
     fields: "id, parents, trashed, mimeType",
@@ -85,12 +166,7 @@ async function assertManagedDriveFile(fileId: string) {
 }
 
 export async function listDriveDocuments(): Promise<DriveDocumentItem[]> {
-  const ctx = getDriveClient();
-  if (!ctx) {
-    throw new Error(
-      "Chưa cấu hình biến môi trường GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID.",
-    );
-  }
+  const ctx = await getVerifiedDriveContext();
 
   const files = [];
   let pageToken: string | undefined;
@@ -134,10 +210,7 @@ export async function createResumableUploadSession(params: {
   fileSize: number;
   appProperties?: Record<string, string>;
 }): Promise<string> {
-  const ctx = getDriveClient();
-  if (!ctx) {
-    throw new Error("Chưa cấu hình Google Drive env");
-  }
+  const ctx = await getVerifiedDriveContext();
   if (params.mimeType !== DRIVE_PDF_MIME_TYPE) throw new Error("Chỉ hỗ trợ tải tài liệu PDF");
   if (!Number.isSafeInteger(params.fileSize) || params.fileSize <= 0 || params.fileSize > MAX_DRIVE_DOCUMENT_BYTES) {
     throw new Error("Dung lượng PDF phải lớn hơn 0 và không vượt quá 250 MB");
@@ -145,7 +218,7 @@ export async function createResumableUploadSession(params: {
 
   const { token } = await ctx.auth.getAccessToken();
   if (!token) {
-    throw new Error("Không thể lấy Google OAuth access token từ Service Account");
+    throw new Error("Không thể lấy Google OAuth access token");
   }
 
   const body: Record<string, unknown> = {
@@ -200,7 +273,7 @@ export async function createResumableUpdateSession(
 
   const { token } = await ctx.auth.getAccessToken();
   if (!token) {
-    throw new Error("Không thể lấy Google OAuth access token từ Service Account");
+    throw new Error("Không thể lấy Google OAuth access token");
   }
 
   const body: Record<string, unknown> = {};
@@ -288,8 +361,7 @@ export async function uploadBufferToDrive(params: {
   buffer: Buffer;
   appProperties?: Record<string, string>;
 }): Promise<{ fileId: string; md5Checksum?: string; name: string; size: number }> {
-  const ctx = getDriveClient();
-  if (!ctx) throw new Error("Google Drive chưa được cấu hình");
+  const ctx = await getVerifiedDriveContext();
 
   const stream = Readable.from(params.buffer);
   const res = await ctx.drive.files.create({

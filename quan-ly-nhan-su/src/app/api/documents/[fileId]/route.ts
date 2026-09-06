@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
   isValidDriveFileId,
   isGoogleDriveConfigured,
   trashDriveDocument,
@@ -13,7 +14,7 @@ type RouteParams = {
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json(
-      { error: "Google Drive chưa được cấu hình." },
+      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
       { status: 503 },
     );
   }
@@ -43,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json(
-      { error: "Google Drive chưa được cấu hình." },
+      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
       { status: 503 },
     );
   }

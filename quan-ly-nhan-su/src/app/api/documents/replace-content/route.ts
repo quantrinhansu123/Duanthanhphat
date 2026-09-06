@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createResumableUpdateSession,
+  GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
   isValidDriveFileId,
   isGoogleDriveConfigured,
   MAX_DRIVE_DOCUMENT_BYTES,
@@ -9,7 +10,7 @@ import {
 export async function POST(req: NextRequest) {
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json(
-      { error: "Google Drive chưa được cấu hình các biến môi trường cần thiết." },
+      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
       { status: 503 },
     );
   }
