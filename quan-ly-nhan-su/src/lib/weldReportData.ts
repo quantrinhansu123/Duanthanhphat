@@ -37,6 +37,7 @@ export type WeldReportRow = {
   to_han?: string | null;
   chung_chi_nhan_su?: string[] | null;
   chung_chi_su_dung?: string | null;
+  ma_khuyet_tat?: string[] | null;
 };
 
 export type WeldReportFilters = {
@@ -105,6 +106,10 @@ const REPORT_COLUMNS_WITH_CERTIFICATE = [
 const REPORT_COLUMNS_WITH_DATE = [
   ...REPORT_COLUMNS_WITH_CERTIFICATE,
   "ngay_thuc_hien",
+] as const;
+const REPORT_COLUMNS_WITH_DEFECT = [
+  ...REPORT_COLUMNS_WITH_DATE,
+  "ma_khuyet_tat",
 ] as const;
 
 let reportRowsPromise: Promise<WeldReportRow[]> | null = null;
@@ -337,13 +342,13 @@ export type WeldJournalInsert = {
   kinh_do?: number | null;
   vi_do?: number | null;
   ly_trinh?: string | null;
+  ma_khuyet_tat?: string[] | null;
 };
 
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
   const supabase = createClient();
 
-  // Try them_nhat_ky_han_co_toa_do RPC first (atomic transaction with GPS)
-  const rpcRes = await supabase.rpc("them_nhat_ky_han_co_toa_do", {
+  const rpcParams = {
     p_ma_lich_su: payload.ma_lich_su.trim(),
     p_du_an_id: payload.du_an_id,
     p_tho_han_id: payload.tho_han_id,
@@ -363,9 +368,50 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
     p_kinh_do: payload.kinh_do ?? null,
     p_vi_do: payload.vi_do ?? null,
     p_ly_trinh: payload.ly_trinh?.trim() || null,
+  };
+
+  // RPC mới lưu nhật ký, GPS và mã NDT trong cùng một transaction.
+  const atomicRpcRes = await supabase.rpc("them_nhat_ky_han_co_toa_do_ndt", {
+    ...rpcParams,
+    p_ma_khuyet_tat: payload.ma_khuyet_tat?.length ? payload.ma_khuyet_tat : null,
   });
 
+  if (!atomicRpcRes.error) {
+    invalidateWeldReportCache();
+    return;
+  }
+
+  const missingAtomicRpc = atomicRpcRes.error.code === "PGRST202";
+  if (!missingAtomicRpc) throw new Error(formatSupabaseError(atomicRpcRes.error));
+
+  if (payload.ma_khuyet_tat?.length) {
+    throw new Error(
+      "Chưa thể lưu mã khuyết tật NDT vì migration_20260906_bo_sung_ma_khuyet_tat.sql chưa được chạy trên Supabase.",
+    );
+  }
+
+  // Tương thích tạm thời với database chưa chạy migration NDT.
+  const rpcRes = await supabase.rpc("them_nhat_ky_han_co_toa_do", rpcParams);
+
   if (rpcRes.error) throw new Error(formatSupabaseError(rpcRes.error));
+
+  if (payload.ma_khuyet_tat && payload.ma_khuyet_tat.length > 0) {
+    const insertedId = typeof rpcRes.data === "string" ? rpcRes.data : "";
+    const updateRequest = supabase
+      .from("lich_su_moi_han")
+      .update({ ma_khuyet_tat: payload.ma_khuyet_tat });
+    const updateResult = insertedId
+      ? await updateRequest.eq("id", insertedId).select("id")
+      : await updateRequest.eq("ma_lich_su", payload.ma_lich_su.trim()).select("id");
+    if (updateResult.error) {
+      throw new Error(
+        `Nhật ký đã được tạo nhưng chưa lưu được mã khuyết tật NDT: ${formatSupabaseError(updateResult.error)}`,
+      );
+    }
+    if ((updateResult.data ?? []).length !== 1) {
+      throw new Error("Nhật ký đã được tạo nhưng không xác định được đúng bản ghi để lưu mã khuyết tật NDT.");
+    }
+  }
 
   invalidateWeldReportCache();
 }
@@ -378,15 +424,13 @@ export function uniqueProjectOptions(rows: WeldReportRow[]) {
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
-export function getJournalRowDateIso(row: WeldReportRow, index = 0): string {
-  if (row.ngay_thuc_hien) return row.ngay_thuc_hien.slice(0, 10);
-  const sequence = Number(row.ma_lich_su.match(/(\d+)$/)?.[1] ?? index + 1);
-  const day = String(((sequence * 7) % 28) + 1).padStart(2, "0");
-  const month = String(((sequence * 5) % 12) + 1).padStart(2, "0");
-  return `${row.nam_thuc_hien}-${month}-${day}`;
+export function getJournalRowDateIso(row: WeldReportRow, _index = 0): string {
+  const value = row.ngay_thuc_hien?.slice(0, 10) ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
 export function formatJournalDateIso(iso: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "Chưa có ngày";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -401,7 +445,7 @@ export function listFailedWeldsInDateRange(
       row,
       isoDate: getJournalRowDateIso(row, index),
     }))
-    .filter(({ row, isoDate }) => row.so_luong_loi > 0 && isoDate >= dateFrom && isoDate <= dateTo)
+    .filter(({ row, isoDate }) => Boolean(isoDate) && row.so_luong_loi > 0 && isoDate >= dateFrom && isoDate <= dateTo)
     .sort((a, b) => a.isoDate.localeCompare(b.isoDate) || a.row.ma_lich_su.localeCompare(b.row.ma_lich_su))
     .map(({ row, isoDate }) => ({
       value: row.ma_lich_su,
@@ -428,7 +472,7 @@ export type WeldJournalPageResult = {
 };
 
 const JOURNAL_PAGE_COLUMNS = [
-  ...REPORT_COLUMNS_WITH_DATE,
+  ...REPORT_COLUMNS_WITH_DEFECT,
 ].join(",");
 
 /** Tải 1 trang nhật ký hàn từ Supabase (mặc định 50 dòng). */
@@ -454,9 +498,9 @@ export async function loadWeldJournalPage({
   let request = supabase
     .from("bao_cao_moi_han_theo_du_an")
     .select(JOURNAL_PAGE_COLUMNS, { count: "exact" })
-    .order("nam_thuc_hien", { ascending: false })
     .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
-    .order("ma_lich_su", { ascending: true });
+    .order("nam_thuc_hien", { ascending: false })
+    .order("ma_lich_su", { ascending: false });
 
   if (project && project !== "Tất cả dự án") {
     request = request.eq("du_an", project);
@@ -481,13 +525,30 @@ export async function loadWeldJournalPage({
 
   const { data, error, count } = await request.range(from, to);
   if (error) {
-    // Fallback nếu thiếu cột máy/ngày — bỏ filter or phức tạp
-    const fallback = await supabase
+    // Triển khai an toàn trong thời gian migration NDT chưa được chạy: vẫn giữ
+    // nguyên bộ lọc, ngày và thứ tự; chỉ bỏ riêng cột ma_khuyet_tat.
+    let fallbackRequest = supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select(REPORT_COLUMNS_BASE.join(","), { count: "exact" })
+      .select(REPORT_COLUMNS_WITH_DATE.join(","), { count: "exact" })
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
       .order("nam_thuc_hien", { ascending: false })
-      .order("ma_lich_su", { ascending: true })
-      .range(from, to);
+      .order("ma_lich_su", { ascending: false });
+    if (project && project !== "Tất cả dự án") fallbackRequest = fallbackRequest.eq("du_an", project);
+    if (resultFilter === "Đạt") fallbackRequest = fallbackRequest.eq("so_luong_loi", 0);
+    else if (resultFilter === "Không đạt") fallbackRequest = fallbackRequest.gt("so_luong_loi", 0);
+    if (q) {
+      fallbackRequest = fallbackRequest.or(
+        [
+          `ten_tho_han.ilike.%${q}%`,
+          `ma_nhan_su.ilike.%${q}%`,
+          `du_an.ilike.%${q}%`,
+          `ma_lich_su.ilike.%${q}%`,
+          `chung_chi_su_dung.ilike.%${q}%`,
+          `ma_may.ilike.%${q}%`,
+        ].join(","),
+      );
+    }
+    const fallback = await fallbackRequest.range(from, to);
     if (fallback.error) throw error;
     const rows = (fallback.data ?? []) as unknown as WeldReportRow[];
     const summary = summarizeJournalRows(rows);
@@ -554,6 +615,81 @@ export async function loadWeldJournalPage({
     passCount,
     failCount,
   };
+}
+
+export type WeldJournalExportQuery = Omit<WeldJournalPageQuery, "page" | "pageSize">;
+
+/** Tải toàn bộ nhật ký theo đúng bộ lọc hiện tại để xuất Excel. */
+export async function exportFilteredWeldJournal({
+  query = "",
+  project = "Tất cả dự án",
+  resultFilter = "Tất cả",
+}: WeldJournalExportQuery): Promise<WeldReportRow[]> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể xuất nhật ký hàn.");
+  }
+
+  const supabase = createClient();
+  const q = query.trim();
+  const pageSize = 1000;
+  const rows: WeldReportRow[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    let request = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select(JOURNAL_PAGE_COLUMNS)
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+      .order("nam_thuc_hien", { ascending: false })
+      .order("ma_lich_su", { ascending: false });
+
+    if (project && project !== "Tất cả dự án") request = request.eq("du_an", project);
+    if (resultFilter === "Đạt") request = request.eq("so_luong_loi", 0);
+    else if (resultFilter === "Không đạt") request = request.gt("so_luong_loi", 0);
+    if (q) {
+      request = request.or(
+        [
+          `ten_tho_han.ilike.%${q}%`,
+          `ma_nhan_su.ilike.%${q}%`,
+          `du_an.ilike.%${q}%`,
+          `ma_lich_su.ilike.%${q}%`,
+          `chung_chi_su_dung.ilike.%${q}%`,
+          `ma_may.ilike.%${q}%`,
+        ].join(","),
+      );
+    }
+
+    let { data, error } = await request.range(offset, offset + pageSize - 1);
+    if (error && formatSupabaseError(error).includes("ma_khuyet_tat")) {
+      let fallbackRequest = supabase
+        .from("bao_cao_moi_han_theo_du_an")
+        .select(REPORT_COLUMNS_WITH_DATE.join(","))
+        .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+        .order("nam_thuc_hien", { ascending: false })
+        .order("ma_lich_su", { ascending: false });
+      if (project && project !== "Tất cả dự án") fallbackRequest = fallbackRequest.eq("du_an", project);
+      if (resultFilter === "Đạt") fallbackRequest = fallbackRequest.eq("so_luong_loi", 0);
+      else if (resultFilter === "Không đạt") fallbackRequest = fallbackRequest.gt("so_luong_loi", 0);
+      if (q) {
+        fallbackRequest = fallbackRequest.or(
+          [
+            `ten_tho_han.ilike.%${q}%`,
+            `ma_nhan_su.ilike.%${q}%`,
+            `du_an.ilike.%${q}%`,
+            `ma_lich_su.ilike.%${q}%`,
+            `chung_chi_su_dung.ilike.%${q}%`,
+            `ma_may.ilike.%${q}%`,
+          ].join(","),
+        );
+      }
+      const fallback = await fallbackRequest.range(offset, offset + pageSize - 1);
+      data = fallback.data;
+      error = fallback.error;
+    }
+    if (error) throw new Error(formatSupabaseError(error));
+    const page = (data ?? []) as unknown as WeldReportRow[];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
 }
 
 /** Danh sách dự án nhẹ cho filter/form — không cần load toàn bộ nhật ký. */
@@ -647,34 +783,39 @@ export function loadWeldReportRows() {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE);
-      } catch (firstError) {
-        const message = formatSupabaseError(firstError);
-        const missingOptionalColumn =
-          message.includes("may_id") ||
-          message.includes("ma_may") ||
-          message.includes("ten_may") ||
-          message.includes("to_han") ||
-          message.includes("chung_chi_nhan_su") ||
-          message.includes("chung_chi_su_dung") ||
-          message.includes("ngay_thuc_hien") ||
-          message.includes("moi_han_lien_ket") ||
-          message.includes("column") ||
-          message.includes("42703");
-        if (!missingOptionalColumn) throw firstError;
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT);
+      } catch {
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
-        } catch {
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE);
+        } catch (firstError) {
+          const message = formatSupabaseError(firstError);
+          const missingOptionalColumn =
+            message.includes("may_id") ||
+            message.includes("ma_may") ||
+            message.includes("ten_may") ||
+            message.includes("to_han") ||
+            message.includes("chung_chi_nhan_su") ||
+            message.includes("chung_chi_su_dung") ||
+            message.includes("ngay_thuc_hien") ||
+            message.includes("moi_han_lien_ket") ||
+            message.includes("ma_khuyet_tat") ||
+            message.includes("column") ||
+            message.includes("42703");
+          if (!missingOptionalColumn) throw firstError;
           try {
-            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
+            return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CERTIFICATE);
           } catch {
             try {
-              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
+              return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEAM);
             } catch {
               try {
-                return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+                return await fetchWeldReportRows(REPORT_COLUMNS_WITH_MACHINE);
               } catch {
-                return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+                try {
+                  return await fetchWeldReportRows(REPORT_COLUMNS_WITH_LINK);
+                } catch {
+                  return fetchWeldReportRows(REPORT_COLUMNS_BASE);
+                }
               }
             }
           }
@@ -696,8 +837,16 @@ export function machineForRow(row: WeldReportRow): string {
 export function filterWeldReportRows(rows: WeldReportRow[], filters: WeldReportFilters) {
   return rows.filter((row, index) => {
     const performedDate = getJournalRowDateIso(row, index);
-    if (filters.dateFrom && performedDate < filters.dateFrom) return false;
-    if (filters.dateTo && performedDate > filters.dateTo) return false;
+    if (performedDate) {
+      if (filters.dateFrom && performedDate < filters.dateFrom) return false;
+      if (filters.dateTo && performedDate > filters.dateTo) return false;
+    } else {
+      // Dữ liệu tổng hợp cũ chỉ có năm: chỉ đưa vào khi bộ lọc bao trọn năm đó.
+      const yearStart = `${row.nam_thuc_hien}-01-01`;
+      const yearEnd = `${row.nam_thuc_hien}-12-31`;
+      if (filters.dateFrom && filters.dateFrom > yearStart) return false;
+      if (filters.dateTo && filters.dateTo < yearEnd) return false;
+    }
     if (filters.projects?.length && !filters.projects.includes(row.du_an)) return false;
     if (filters.personnel?.length && !filters.personnel.includes(row.ten_tho_han)) return false;
     if (filters.machines?.length && !filters.machines.includes(machineForRow(row))) return false;
@@ -828,13 +977,29 @@ export function buildYearlyVolumeSeries(rows: WeldReportRow[]): YearVolumePoint[
     .map(([year, stats]) => ({ year, ...stats }));
 }
 
-/** Nhóm nguyên nhân lỗi theo bản ghi nhật ký (mỗi dòng lỗi = 1). */
-export function groupJournalErrorReasons(rows: WeldReportRow[], limit = 5): ErrorReasonRow[] {
+export const NDT_DEFECT_MAP: Record<string, string> = {
+  LOF: "Lack of fusion (LOF)",
+  LOP: "Lack of Penetration (LOP)",
+  C: "Crack (C)",
+  S: "Slag (S)",
+  Po: "Porosity (Po)",
+  La: "Lamination (La)",
+};
+
+/** Nhóm nguyên nhân lỗi theo bản ghi nhật ký (mỗi dòng lỗi = 1), ưu tiên theo mã khuyết tật NDT. */
+export function groupJournalErrorReasons(rows: WeldReportRow[], limit = 6): ErrorReasonRow[] {
   const counts = new Map<string, number>();
   for (const row of rows) {
     if (row.so_luong_loi <= 0) continue;
-    const reason = row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân";
-    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    if (row.ma_khuyet_tat && row.ma_khuyet_tat.length > 0) {
+      for (const code of row.ma_khuyet_tat) {
+        const key = NDT_DEFECT_MAP[code] || code;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    } else {
+      const reason = row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân";
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    }
   }
   if (counts.size === 0) return [];
   const max = Math.max(...counts.values());
@@ -849,12 +1014,19 @@ export function groupJournalErrorReasons(rows: WeldReportRow[], limit = 5): Erro
 }
 
 /** Nhóm nguyên nhân lỗi thật từ nhật ký hàn. */
-export function groupErrorReasons(rows: WeldReportRow[], limit = 5): ErrorReasonRow[] {
+export function groupErrorReasons(rows: WeldReportRow[], limit = 6): ErrorReasonRow[] {
   const counts = new Map<string, number>();
   for (const row of rows) {
     if (row.so_luong_loi <= 0) continue;
-    const reason = row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân";
-    counts.set(reason, (counts.get(reason) ?? 0) + row.so_luong_loi);
+    if (row.ma_khuyet_tat && row.ma_khuyet_tat.length > 0) {
+      for (const code of row.ma_khuyet_tat) {
+        const key = NDT_DEFECT_MAP[code] || code;
+        counts.set(key, (counts.get(key) ?? 0) + row.so_luong_loi);
+      }
+    } else {
+      const reason = row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân";
+      counts.set(reason, (counts.get(reason) ?? 0) + row.so_luong_loi);
+    }
   }
   if (counts.size === 0) return [];
   const max = Math.max(...counts.values());
@@ -949,7 +1121,7 @@ export function buildDailyJournalSeries(
   const counts = new Map<string, number>();
   rows.forEach((row, index) => {
     const iso = getJournalRowDateIso(row, index);
-    if (iso >= dateFrom && iso <= dateTo) {
+    if (iso && iso >= dateFrom && iso <= dateTo) {
       counts.set(iso, (counts.get(iso) ?? 0) + row.so_luong_thuc_hien);
     }
   });
@@ -980,8 +1152,9 @@ export function buildQuarterlyPassRateSeries(
   const byQuarter = new Map<string, { year: number; quarter: number; total: number; errors: number }>();
   rows.forEach((row, index) => {
     const iso = getJournalRowDateIso(row, index);
-    const year = Number(iso.slice(0, 4)) || row.nam_thuc_hien;
-    const month = Number(iso.slice(5, 7)) || 1;
+    if (!iso) return;
+    const year = Number(iso.slice(0, 4));
+    const month = Number(iso.slice(5, 7));
     const quarter = Math.floor((month - 1) / 3) + 1;
     const key = `${year}-Q${quarter}`;
     const current = byQuarter.get(key) ?? { year, quarter, total: 0, errors: 0 };

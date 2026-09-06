@@ -73,30 +73,44 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
 
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/90 px-3.5 py-1 text-xs font-semibold text-[#0047AB] shadow-2xs">
             <ShieldCheck size={16} weight="fill" className="text-[#0047AB]" />
-            <span>CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</span>
+            <span>
+              {lang === "en"
+                ? "THANH PHAT ENGINEERING JOINT STOCK COMPANY"
+                : "CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT"}
+            </span>
           </div>
 
           <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-900">
-            HỆ THỐNG QUẢN LÝ <span className="text-[#0047AB]">THÀNH PHÁT</span>
+            {lang === "en" ? (
+              <>
+                <span className="text-[#0047AB]">THANH PHAT</span> MANAGEMENT SYSTEM
+              </>
+            ) : (
+              <>
+                HỆ THỐNG QUẢN LÝ <span className="text-[#0047AB]">THÀNH PHÁT</span>
+              </>
+            )}
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
-            Nền tảng Quản trị Nhân sự, Đào tạo Chứng chỉ, Nhật ký GPS &amp; Báo cáo Vận hành Hàn Ray Đường sắt Toàn diện
+            {lang === "en"
+              ? "Comprehensive Platform for Welder Personnel, Certification Training, GPS Logs & Railway Welding Operations"
+              : "Nền tảng Quản trị Nhân sự, Đào tạo Chứng chỉ, Nhật ký GPS & Báo cáo Vận hành Hàn Ray Đường sắt Toàn diện"}
           </p>
 
           {/* Quick Metrics Bar */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-slate-600">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
               <Users size={16} className="text-[#0047AB]" weight="bold" />
-              <span>Quản lý Thợ hàn &amp; Chứng chỉ</span>
+              <span>{lang === "en" ? "Welder Management & Certificates" : "Quản lý Thợ hàn & Chứng chỉ"}</span>
             </div>
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
               <Wrench size={16} className="text-emerald-600" weight="bold" />
-              <span>Giám sát Máy hàn Ray FBW/ATW</span>
+              <span>{lang === "en" ? "FBW/ATW Rail Welding Monitoring" : "Giám sát Máy hàn Ray FBW/ATW"}</span>
             </div>
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
               <Path size={16} className="text-amber-600" weight="bold" />
-              <span>Đồng bộ Tọa độ GPS &amp; Lý trình</span>
+              <span>{lang === "en" ? "GPS Coordinates & Chainage Sync" : "Đồng bộ Tọa độ GPS & Lý trình"}</span>
             </div>
           </div>
         </div>
@@ -105,11 +119,17 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
       {/* Dynamic Navigation Menu Blocks (4/3/2/1 Columns) */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900">Danh mục chức năng</h2>
-          <p className="text-xs sm:text-sm text-slate-500">Truy cập nhanh các phân hệ vận hành và quản trị của hệ thống</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+            {lang === "en" ? "System Modules & Functions" : "Danh mục chức năng"}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500">
+            {lang === "en"
+              ? "Quick access to operational and administrative subsystems"
+              : "Truy cập nhanh các phân hệ vận hành và quản trị của hệ thống"}
+          </p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-          {navigation.length} phân hệ
+          {navigation.length} {lang === "en" ? "subsystems" : "phân hệ"}
         </span>
       </div>
 
@@ -141,7 +161,9 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
                       <div className="text-sm font-bold text-slate-900 group-hover:text-[#0047AB] transition-colors">
                         {lang === "en" ? group.labelEn : group.label}
                       </div>
-                      <div className="text-[11px] font-mono text-slate-400">Mã {group.code}</div>
+                      <div className="text-[11px] font-mono text-slate-400">
+                        {lang === "en" ? `Code ${group.code}` : `Mã ${group.code}`}
+                      </div>
                     </div>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${colors.badge}`}>
@@ -167,11 +189,11 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-xs sm:text-sm font-semibold text-slate-800 group-hover/item:text-[#0047AB] transition-colors">
-                          {child.label}
+                          {lang === "en" ? child.labelEn : child.label}
                         </div>
-                        {child.description && (
+                        {(child.description || child.descriptionEn) && (
                           <div className="mt-0.5 line-clamp-1 text-[11px] sm:text-xs text-slate-400 font-normal leading-relaxed">
-                            {child.description}
+                            {lang === "en" ? (child.descriptionEn || child.description) : child.description}
                           </div>
                         )}
                       </div>

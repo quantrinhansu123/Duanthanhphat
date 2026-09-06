@@ -32,12 +32,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Dung lượng PDF không được vượt quá 250 MB." }, { status: 413 });
     }
 
-    const uploadUrl = await createResumableUploadSession({
+    const uploadParams: {
+      name: string;
+      mimeType: string;
+      description: string;
+      fileSize: number;
+      appProperties?: Record<string, string>;
+    } = {
       name,
       mimeType,
       description,
       fileSize,
-    });
+    };
+
+    if (body.appProperties && typeof body.appProperties === "object") {
+      const allowedKeys = ["entityType", "employeeId", "weldingId", "documentType", "source", "category"];
+      const props: Record<string, string> = {};
+      for (const key of allowedKeys) {
+        if (typeof body.appProperties[key] === "string" && body.appProperties[key].trim()) {
+          props[key] = body.appProperties[key].trim();
+        }
+      }
+      if (Object.keys(props).length > 0) {
+        uploadParams.appProperties = props;
+      }
+    }
+
+    const uploadUrl = await createResumableUploadSession(uploadParams);
 
     return NextResponse.json({ uploadUrl });
   } catch (error: unknown) {

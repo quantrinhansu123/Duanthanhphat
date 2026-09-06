@@ -79,6 +79,13 @@ function viDateShort(iso: string) {
   return `${day}/${month}`;
 }
 
+function localIsoDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function sampleChartLabels(labels: string[], maxCount: number) {
   if (labels.length <= maxCount) return labels.map((text) => ({ text }));
   const picked: { text: string }[] = [];
@@ -149,16 +156,17 @@ export default function OverviewDashboard() {
     [rows, appliedFilters],
   );
   const summary = useMemo(() => summarizeJournalRows(selectedRows), [selectedRows]);
+  const todayIso = localIsoDate();
 
-  // Tìm ngày có dữ liệu mới nhất trong danh sách đã lọc
+  // Chỉ dùng ngày thực hiện thật và không nhận ngày tương lai làm "ngày gần nhất".
   const latestDataDate = useMemo(() => {
     let maxDate = "";
     selectedRows.forEach((r, i) => {
       const iso = getJournalRowDateIso(r, i);
-      if (iso && iso > maxDate) maxDate = iso;
+      if (iso && iso <= todayIso && iso > maxDate) maxDate = iso;
     });
     return maxDate;
-  }, [selectedRows]);
+  }, [selectedRows, todayIso]);
 
   const chartDateRange = useMemo(() => {
     const usesDefaultPeriod =
@@ -349,10 +357,9 @@ export default function OverviewDashboard() {
     ),
     [appliedFilters.dateFrom, appliedFilters.dateTo, selectedProjects],
   );
-  const todayIso = new Date().toLocaleDateString("en-CA");
   const yesterdayDate = new Date(`${todayIso}T00:00:00`);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterdayIso = yesterdayDate.toLocaleDateString("en-CA");
+  const yesterdayIso = localIsoDate(yesterdayDate);
   const todayTotal = selectedRows.reduce(
     (sum, row, index) => getJournalRowDateIso(row, index) === todayIso ? sum + row.so_luong_thuc_hien : sum,
     0,

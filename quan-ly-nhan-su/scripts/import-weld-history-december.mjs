@@ -142,7 +142,11 @@ async function insertChunk(chunk, offset, attempt = 1) {
 const projectIds = await fetchLookup("du_an", "id", "ma_du_an");
 const employeeIds = await fetchLookup("nhan_su", "employee_id", "ma_nhan_su");
 
-/** Mỗi mối hàn = 1 dòng (so_luong_thuc_hien = 1), chia đều 01–30/12. */
+/**
+ * Mỗi mối hàn = 1 dòng (so_luong_thuc_hien = 1).
+ * Nguồn tổng hợp chỉ cung cấp năm, vì vậy tuyệt đối không tự tạo ngày/tháng.
+ * Biến `day` bên dưới chỉ còn dùng để giữ mã R4W ổn định với dữ liệu đã nhập.
+ */
 const weldRows = sourceRows.flatMap((source, sourceIndex) => {
   const [projectCode, year, railType, weldType, technology, totalWelds, totalErrors, employeeCode, sourceLine] =
     source;
@@ -165,7 +169,7 @@ const weldRows = sourceRows.flatMap((source, sourceIndex) => {
         ma_lich_su: `${ROW_PREFIX}${pad(sourceIndex + 1, 3)}-${pad(day, 2)}-${pad(i + 1, 4)}`,
         du_an_id: projectId,
         nam_thuc_hien: year,
-        ngay_thuc_hien: `${year}-12-${pad(day, 2)}`,
+        ngay_thuc_hien: null,
         loai_ray: railType,
         loai_moi_han: weldType,
         cong_nghe_han: technology,
@@ -173,7 +177,7 @@ const weldRows = sourceRows.flatMap((source, sourceIndex) => {
         so_luong_loi: isError ? 1 : 0,
         tho_han_id: employeeId,
         nguyen_nhan_loi: isError ? "Lỗi từ tổng hợp R4" : null,
-        nguon_du_lieu: "TỔNG HỢP KHỐI LƯỢNG HÀN RAY R4.xlsx - 1 mối/dòng, chia đều 01-30/12",
+        nguon_du_lieu: "TỔNG HỢP KHỐI LƯỢNG HÀN RAY R4.xlsx - dữ liệu gốc chỉ có năm; 1 mối/dòng",
         dong_nguon: sourceLine,
         ghi_chu: null,
       });
@@ -230,14 +234,12 @@ try {
   if (finalCountError) throw finalCountError;
 
   const finalRows = inserted;
-  const invalidDate = finalRows.find(
-    (row) => !/^\d{4}-12-(0[1-9]|[12]\d|30)$/.test(row.ngay_thuc_hien ?? ""),
-  );
+  const inventedDate = finalRows.find((row) => row.ngay_thuc_hien !== null);
   const multiWeld = finalRows.find((row) => Number(row.so_luong_thuc_hien) !== 1);
   if (
     finalCount !== EXPECTED_WELDS ||
     finalRows.length !== EXPECTED_WELDS ||
-    invalidDate ||
+    inventedDate ||
     multiWeld ||
     sum(finalRows, "so_luong_loi") !== EXPECTED_ERRORS
   ) {
@@ -252,7 +254,7 @@ try {
         totalWelds: sum(finalRows, "so_luong_thuc_hien"),
         totalErrors: sum(finalRows, "so_luong_loi"),
         mode: "1 mối = 1 dòng",
-        dateRange: "01-30/12 theo năm thực hiện",
+        dateRange: "Không tạo ngày giả; nguồn chỉ có năm thực hiện",
       },
       null,
       2,
@@ -263,5 +265,5 @@ try {
   throw error;
 }
 
-// Đồng bộ định mức từng dự án/ngày = thực tế + 5.
+// Chỉ đồng bộ định mức từ các bản ghi có ngày thực tế; dữ liệu tổng hợp theo năm bị loại.
 await import("./sync-weld-daily-targets.mjs");

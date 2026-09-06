@@ -1,18 +1,68 @@
-export type MachineSpecs = {
+export type EquipmentAsset = {
+  url: string;
+  publicId?: string;
+  name?: string;
+};
+
+export type WeldingUnitSpecs = {
   applicationWork?: string;
-  emissionStandard?: string;
-  axes?: number;
-  clampingGradient?: string;
-  speedRoad?: string;
-  speedRail?: string;
-  gauge?: string;
-  weight?: string;
-  dimensions?: string;
   upsettingForce?: string;
   clampingForce?: string;
   weldingStroke?: string;
   efficiency?: string;
+  supportedRails?: string;
+  weldingTechnology?: string;
+  coolingCapacity?: string;
+  oilTankCapacity?: string;
+  powerSupply?: string;
+  [key: string]: unknown;
 };
+
+export type TransportSpecs = {
+  applicationWork?: string; // On rail / stationary | On rail / road / stationary
+  emissionStandard?: string; // Euro V
+  axes?: number | string; // 4
+  clampingGradient?: string; // 5% | 3.5%
+  speedRoad?: string; // 80 km/h | — (Không tự hành đường bộ)
+  speedRail?: string; // 20 km/h | 25 km/h
+  gauge?: string; // 1435 mm | 1000 mm & 1435 mm
+  weight?: string; // 32 ton | 35 ton
+  dimensions?: string; // 8300 × 2500 × 950 mm | 10000 × 3200 × 2500 mm
+  plateNumber?: string;
+  chassisNumber?: string;
+  engineModel?: string;
+  transmission?: string;
+  [key: string]: unknown;
+};
+
+export type WeldingUnitDetail = {
+  code: string;
+  name: string;
+  model: string;
+  serial?: string;
+  manufacturer?: string;
+  coverImage?: string;
+  coverAsset?: EquipmentAsset;
+  gallery: string[];
+  galleryAssets?: EquipmentAsset[];
+  specs: WeldingUnitSpecs;
+};
+
+export type TransportUnitDetail = {
+  code: string;
+  name: string;
+  model: string;
+  serial?: string;
+  manufacturer?: string;
+  plateNumber?: string;
+  coverImage?: string;
+  coverAsset?: EquipmentAsset;
+  gallery: string[];
+  galleryAssets?: EquipmentAsset[];
+  specs: TransportSpecs;
+};
+
+export type MachineSpecs = WeldingUnitSpecs & TransportSpecs;
 
 export type Machine = {
   id: string;
@@ -46,6 +96,8 @@ export type Machine = {
   errorRate: string;
   note: string;
   specs?: MachineSpecs;
+  weldingUnit?: WeldingUnitDetail;
+  transportUnit?: TransportUnitDetail;
 };
 
 export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
@@ -107,6 +159,38 @@ export const machines: Machine[] = [
       weldingStroke: "100 – 120 mm",
       efficiency: "12 mối/giờ",
     },
+    weldingUnit: {
+      code: "KCM-007 (K922-1)",
+      name: "Tổ hợp máy hàn ray lưu động",
+      model: "K922-1",
+      coverImage: "/may-han/kcm007.jpg",
+      gallery: ["/may-han/kcm007.jpg"],
+      specs: {
+        upsettingForce: "90 ~ 120 kN",
+        clampingForce: "280 kN",
+        weldingStroke: "100 – 120 mm",
+        efficiency: "12 mối/giờ",
+        weldingTechnology: "Flash Butt Welding – FBW",
+      },
+    },
+    transportUnit: {
+      code: "VOLVO FMX 330",
+      name: "Phương tiện bộ - sắt",
+      model: "VOLVO FMX 330",
+      coverImage: "/may-han/kcm007.jpg",
+      gallery: ["/may-han/kcm007.jpg"],
+      specs: {
+        applicationWork: "On rail / stationary",
+        emissionStandard: "Euro V",
+        axes: 4,
+        clampingGradient: "5%",
+        speedRoad: "",
+        speedRail: "20 km/h",
+        gauge: "1435 mm",
+        weight: "32 ton",
+        dimensions: "8300 × 2500 × 950 mm",
+      },
+    },
   },
   {
     id: "2",
@@ -158,6 +242,28 @@ export const machines: Machine[] = [
       weldingStroke: "100 – 120 mm",
       efficiency: "12 mối/giờ",
     },
+    weldingUnit: {
+      code: "UN5-150ZC2-01",
+      name: "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6",
+      model: "UN5-150ZC2-C6",
+      coverImage: "/may-han/un5-150zc2-c6-main.jpg",
+      gallery: ["/may-han/un5-150zc2-c6-main.jpg"],
+      specs: {
+        upsettingForce: "90 ~ 120 kN",
+        clampingForce: "280 kN",
+        weldingStroke: "100 – 120 mm",
+        efficiency: "12 mối/giờ",
+        weldingTechnology: "Flash Butt Welding – FBW",
+      },
+    },
+    transportUnit: {
+      code: "",
+      name: "Phương tiện vận chuyển",
+      model: "",
+      coverImage: "/may-han/un5-150zc2-c6-detail.jpg",
+      gallery: ["/may-han/un5-150zc2-c6-detail.jpg"],
+      specs: {},
+    },
   },
   {
     id: "3",
@@ -204,6 +310,28 @@ export const machines: Machine[] = [
       clampingForce: "280 kN",
       weldingStroke: "100 – 120 mm",
       efficiency: "12 mối/giờ",
+    },
+    weldingUnit: {
+      code: "KCM007-02",
+      name: "Tổ hợp máy hàn ray lưu động KCM-007 (K922-1) (Tổ 2)",
+      model: "K922-1",
+      coverImage: "/may-han/kcm007.jpg",
+      gallery: ["/may-han/kcm007.jpg"],
+      specs: {
+        upsettingForce: "90 ~ 120 kN",
+        clampingForce: "280 kN",
+        weldingStroke: "100 – 120 mm",
+        efficiency: "12 mối/giờ",
+        weldingTechnology: "Flash Butt Welding – FBW",
+      },
+    },
+    transportUnit: {
+      code: "",
+      name: "Phương tiện vận chuyển",
+      model: "",
+      coverImage: "/may-han/kcm007.jpg",
+      gallery: ["/may-han/kcm007.jpg"],
+      specs: {},
     },
   },
   {
@@ -255,6 +383,28 @@ export const machines: Machine[] = [
       clampingForce: "280 kN",
       weldingStroke: "100 – 120 mm",
       efficiency: "12 mối/giờ",
+    },
+    weldingUnit: {
+      code: "UN5-150ZC2-02",
+      name: "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6 (Dự phòng)",
+      model: "UN5-150ZC2-C6",
+      coverImage: "/may-han/un5-150zc2-c6-main.jpg",
+      gallery: ["/may-han/un5-150zc2-c6-main.jpg"],
+      specs: {
+        upsettingForce: "90 ~ 120 kN",
+        clampingForce: "280 kN",
+        weldingStroke: "100 – 120 mm",
+        efficiency: "12 mối/giờ",
+        weldingTechnology: "Flash Butt Welding – FBW",
+      },
+    },
+    transportUnit: {
+      code: "",
+      name: "Phương tiện vận chuyển",
+      model: "",
+      coverImage: "/may-han/un5-150zc2-c6-detail.jpg",
+      gallery: ["/may-han/un5-150zc2-c6-detail.jpg"],
+      specs: {},
     },
   },
 ];

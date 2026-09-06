@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+import { DownloadSimple } from "@/components/icons";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
@@ -8,6 +10,7 @@ import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
 import {
   fetchFailedWeldsInDateRange,
+  exportFilteredWeldJournal,
   formatJournalDateIso,
   insertWeldJournalEntry,
   invalidateWeldReportCache,
@@ -24,6 +27,7 @@ import {
   eligibleCertificatesForWeld,
   hasCertificate,
 } from "@/lib/weldingCertificates";
+import { NDT_DEFECTS } from "@/data/error-library";
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +41,7 @@ type JournalFormValues = {
   cong_nghe_han: WeldReportRow["cong_nghe_han"];
   loai_moi_han: WeldReportRow["loai_moi_han"];
   result: "Đạt" | "Không đạt";
+  ma_khuyet_tat: string[];
   nguyen_nhan_loi: string;
   moi_han_lien_ket: string;
   chung_chi_su_dung: string;
@@ -86,6 +91,7 @@ function emptyJournalForm(
     cong_nghe_han: "FBW",
     loai_moi_han: "Sản xuất",
     result: "Đạt",
+    ma_khuyet_tat: [],
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
     chung_chi_su_dung: welder
@@ -240,6 +246,10 @@ function JournalFormModal({
       window.alert("Chưa tạo được mã mối hàn. Kiểm tra ngày thực hiện.");
       return;
     }
+    if (form.performedAt.slice(0, 10) > defaultPerformedAt().slice(0, 10)) {
+      window.alert("Ngày thực hiện không được lớn hơn ngày hiện tại.");
+      return;
+    }
     if (!form.du_an_id) {
       window.alert("Vui lòng chọn dự án.");
       return;
@@ -260,8 +270,8 @@ function JournalFormModal({
       window.alert("Vui lòng chọn máy thực hiện mối hàn.");
       return;
     }
-    if (form.result === "Không đạt" && !form.nguyen_nhan_loi.trim()) {
-      window.alert("Vui lòng nhập lý do không đạt.");
+    if (form.result === "Không đạt" && form.ma_khuyet_tat.length === 0 && !form.nguyen_nhan_loi.trim()) {
+      window.alert("Vui lòng chọn ít nhất một mã khuyết tật hoặc nhập lý do không đạt.");
       return;
     }
     onSubmit(form);
@@ -316,6 +326,7 @@ function JournalFormModal({
               <input
                 type="datetime-local"
                 value={form.performedAt}
+                max={defaultPerformedAt()}
                 onChange={(e) => setForm({ ...form, performedAt: e.target.value })}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
               />
@@ -507,15 +518,49 @@ function JournalFormModal({
           </div>
 
           {form.result === "Không đạt" && (
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Lý do không đạt
-              <textarea
-                value={form.nguyen_nhan_loi}
-                onChange={(e) => setForm({ ...form, nguyen_nhan_loi: e.target.value })}
-                rows={2}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 resize-y"
-              />
-            </label>
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-rose-800">
+                  Mã khuyết tật mối hàn (NDT) — Chọn một hoặc nhiều mã
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {NDT_DEFECTS.map((defect) => {
+                    const isSelected = form.ma_khuyet_tat.includes(defect.code);
+                    return (
+                      <button
+                        key={defect.code}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? form.ma_khuyet_tat.filter((c) => c !== defect.code)
+                            : [...form.ma_khuyet_tat, defect.code];
+                          setForm({ ...form, ma_khuyet_tat: next });
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "bg-white text-slate-700 border border-slate-300 hover:border-rose-300 hover:bg-rose-50"
+                        }`}
+                      >
+                        <span className="font-mono">{defect.code}</span>
+                        <span className="font-normal opacity-90 text-[11px]">— {defect.nameEn}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <label className="block text-xs font-semibold text-slate-700">
+                Ghi chú nguyên nhân / lỗi bổ sung (tùy chọn)
+                <textarea
+                  value={form.nguyen_nhan_loi}
+                  onChange={(e) => setForm({ ...form, nguyen_nhan_loi: e.target.value })}
+                  rows={2}
+                  placeholder="Ghi chú thêm về vị trí khuyết tật, nguyên nhân..."
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 resize-y"
+                />
+              </label>
+            </div>
           )}
 
           {/* Tọa độ GPS */}
@@ -640,6 +685,7 @@ export default function WeldingJournalList() {
   const [saving, setSaving] = useState(false);
   const [syncingCodes, setSyncingCodes] = useState(false);
   const [syncProgress, setSyncProgress] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState("");
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -777,7 +823,9 @@ export default function WeldingJournalList() {
         mapUrl: gpsPoint ? googleOpenPoint(gpsPoint.latitude, gpsPoint.longitude) : "",
         failureReason: pass
           ? "—"
-          : row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân",
+          : (row.ma_khuyet_tat && row.ma_khuyet_tat.length > 0)
+            ? `${row.ma_khuyet_tat.join(", ")}${row.nguyen_nhan_loi ? ` · ${row.nguyen_nhan_loi}` : ""}`
+            : (row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân"),
         resultType: pass ? ("pass" as const) : ("fail" as const),
       };
     });
@@ -804,6 +852,90 @@ export default function WeldingJournalList() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  async function handleExportExcel() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportRows = await exportFilteredWeldJournal({
+        query: appliedQuery,
+        project,
+        resultFilter,
+      });
+
+      const gpsByWeldId = new Map(
+        gpsPoints.filter((point) => point.weldId).map((point) => [point.weldId!, point]),
+      );
+      const gpsByWeldCode = new Map(
+        gpsPoints
+          .filter((point) => point.weldCode)
+          .map((point) => [point.weldCode!.trim().toLocaleLowerCase("vi"), point]),
+      );
+      const gpsByPointCode = new Map(
+        gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
+      );
+
+      const data = exportRows.map((row, index) => {
+        const codeKey = row.ma_lich_su.trim().toLocaleLowerCase("vi");
+        const gpsPoint =
+          gpsByWeldId.get(row.id) ??
+          gpsByWeldCode.get(codeKey) ??
+          gpsByPointCode.get(codeKey) ??
+          null;
+        const isoDate = row.ngay_thuc_hien?.slice(0, 10) ?? "";
+
+        return {
+          STT: index + 1,
+          "Ngày thực hiện": isoDate ? formatJournalDateIso(isoDate) : `Chỉ có năm ${row.nam_thuc_hien}`,
+          "Mã bản ghi": row.id,
+          "Mã mối hàn": row.ma_lich_su,
+          "Mối hàn liên kết": row.moi_han_lien_ket?.trim() || "",
+          "Welding ID": row.ma_nhan_su,
+          "Thợ hàn": row.ten_tho_han,
+          "Tổ hàn": row.to_han?.trim() || "",
+          "Chứng chỉ sử dụng": row.chung_chi_su_dung?.trim() || "",
+          "Mã máy": row.ma_may?.trim() || "",
+          "Tên máy": row.ten_may?.trim() || "",
+          "Mã dự án": row.ma_du_an,
+          "Dự án": row.du_an,
+          "Loại ray": row.loai_ray,
+          "Công nghệ hàn": row.cong_nghe_han,
+          "Loại mối hàn": row.loai_moi_han,
+          "Lý trình": gpsPoint?.chainage || "",
+          "Vĩ độ": gpsPoint?.latitude ?? "",
+          "Kinh độ": gpsPoint?.longitude ?? "",
+          "Mã khuyết tật": row.ma_khuyet_tat?.join(", ") || "",
+          "Lý do không đạt": row.nguyen_nhan_loi?.trim() || "",
+          "Kết quả": row.so_luong_loi === 0 ? "Đạt" : "Không đạt",
+          "Ghi chú": row.ghi_chu?.trim() || "",
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      worksheet["!cols"] = [
+        { wch: 7 }, { wch: 17 }, { wch: 38 }, { wch: 25 }, { wch: 22 },
+        { wch: 16 }, { wch: 24 }, { wch: 15 }, { wch: 45 }, { wch: 18 },
+        { wch: 30 }, { wch: 16 }, { wch: 48 }, { wch: 13 }, { wch: 16 },
+        { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
+        { wch: 36 }, { wch: 14 }, { wch: 36 },
+      ];
+      if (worksheet["!ref"]) worksheet["!autofilter"] = { ref: worksheet["!ref"] };
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Nhật ký hàn");
+      XLSX.writeFile(
+        workbook,
+        `Nhat_ky_moi_han_${defaultPerformedAt().slice(0, 10)}.xlsx`,
+      );
+      showToast(`Đã xuất ${exportRows.length.toLocaleString("vi-VN")} bản ghi ra Excel`);
+    } catch (exportError) {
+      window.alert(
+        `Không thể xuất Excel: ${exportError instanceof Error ? exportError.message : String(exportError)}`,
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleSyncAllCodes() {
@@ -846,7 +978,10 @@ export default function WeldingJournalList() {
         loai_moi_han: values.loai_moi_han,
         cong_nghe_han: values.cong_nghe_han,
         so_luong_loi: values.result === "Không đạt" ? 1 : 0,
-        nguyen_nhan_loi: values.result === "Không đạt" ? values.nguyen_nhan_loi : null,
+        ma_khuyet_tat: values.result === "Không đạt" ? values.ma_khuyet_tat : [],
+        nguyen_nhan_loi: values.result === "Không đạt"
+          ? (values.nguyen_nhan_loi.trim() || values.ma_khuyet_tat.join(", "))
+          : null,
         ghi_chu: values.ghi_chu || null,
         moi_han_lien_ket: values.moi_han_lien_ket || null,
         may_id: values.may_id,
@@ -916,6 +1051,16 @@ export default function WeldingJournalList() {
           <option>Đạt</option>
           <option>Không đạt</option>
         </select>
+        <button
+          type="button"
+          onClick={() => void handleExportExcel()}
+          disabled={exporting || loading}
+          title="Xuất toàn bộ nhật ký theo bộ lọc hiện tại"
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs sm:text-sm font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer"
+        >
+          <DownloadSimple size={16} weight="bold" aria-hidden />
+          {exporting ? "Đang tạo Excel…" : "Tải Excel"}
+        </button>
         <button
           type="button"
           onClick={handleSyncAllCodes}

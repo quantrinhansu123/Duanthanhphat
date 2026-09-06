@@ -9,6 +9,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import BulkImportList from "@/components/BulkImportList";
 import CertificateManagement from "@/components/CertificateManagement";
+import ComplianceStandardsList from "@/components/ComplianceStandardsList";
 import DeploymentHandoverList from "@/components/DeploymentHandoverList";
 import DocumentLibrary from "@/components/DocumentLibrary";
 import ErrorLibrary from "@/components/ErrorLibrary";
@@ -41,6 +42,7 @@ const views: Record<string, React.ReactNode> = {
   "lich-su-han": <WeldingHistoryList />,
   "khoa-dao-tao": <TrainingList />,
   "chung-chi": <CertificateManagement />,
+  "tieu-chuan-tcvn": <ComplianceStandardsList />,
   "tra-cuu-dao-tao": <TrainingHistoryLookup />,
   "danh-sach-may": <MachineList />,
   "quan-ly-khay-han": <WeldingTrayList />,
@@ -188,13 +190,17 @@ export default function AppShell({ tab }: AppShellProps) {
 
             {crumb ? (
               <>
-                <span className="hidden md:inline truncate font-medium text-slate-600">{crumb.parent}</span>
+                <span className="hidden md:inline truncate font-medium text-slate-600">
+                  {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
+                </span>
                 <CaretRight size={12} weight="bold" aria-hidden className="hidden md:inline shrink-0 text-slate-400" />
-                <span className="truncate font-semibold text-slate-900 text-xs sm:text-sm">{crumb.title}</span>
+                <span className="truncate font-semibold text-slate-900 text-xs sm:text-sm">
+                  {lang === "en" ? (crumb.titleEn || crumb.title) : crumb.title}
+                </span>
               </>
             ) : (
               <span className="truncate font-semibold text-slate-800 text-xs sm:text-sm">
-                Hệ thống Quản lý Vận hành &amp; Nhân sự
+                {lang === "en" ? "Operations & HR Management System" : "Hệ thống Quản lý Vận hành & Nhân sự"}
               </span>
             )}
           </div>
@@ -202,13 +208,13 @@ export default function AppShell({ tab }: AppShellProps) {
           <div className="flex flex-none items-center gap-2.5 sm:gap-4 text-xs sm:text-sm">
             <div className="hidden sm:block text-right leading-tight">
               <div className="font-semibold font-mono text-slate-900 tabular-nums text-xs sm:text-sm">{clock?.time ?? "--:--"}</div>
-              <div className="capitalize text-[11px] sm:text-xs font-medium text-slate-500">{clock?.date ?? "Đang tải..."}</div>
+              <div className="capitalize text-[11px] sm:text-xs font-medium text-slate-500">{clock?.date ?? (lang === "en" ? "Loading..." : "Đang tải...")}</div>
             </div>
             <LanguageSwitcher />
             <button
               className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#0047AB]/20 focus:outline-hidden"
               type="button"
-              aria-label="Thông báo"
+              aria-label={lang === "en" ? "Notifications" : "Thông báo"}
             >
               <Bell size={18} weight="regular" aria-hidden />
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#0047AB] ring-2 ring-white" />
@@ -216,7 +222,7 @@ export default function AppShell({ tab }: AppShellProps) {
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
               <div className="hidden md:block text-right leading-tight">
                 <div className="text-xs sm:text-sm font-semibold text-slate-900">Nguyễn Đắc Công</div>
-                <div className="text-[11px] font-medium text-slate-500">Admin</div>
+                <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Admin" : "Admin"}</div>
               </div>
               <div className="relative h-8 w-8 sm:h-9 sm:w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-slate-200 hover:ring-blue-200 transition-all shadow-xs">
                 <Image
@@ -243,11 +249,15 @@ export default function AppShell({ tab }: AppShellProps) {
             <div className="mx-auto max-w-[1440px] px-4 sm:px-6 pt-4 sm:pt-5">
               <div className="mb-3.5 sm:mb-4">
                 <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  {lang === "en" ? crumb.parentEn : crumb.parent}
+                  {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
                 </div>
-                <h1 className="mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{crumb.title}</h1>
-                {crumb.description ? (
-                  <p className="mt-1 max-w-3xl text-xs sm:text-sm leading-relaxed text-slate-500">{crumb.description}</p>
+                <h1 className="mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                  {lang === "en" ? (crumb.titleEn || crumb.title) : crumb.title}
+                </h1>
+                {(crumb.description || crumb.descriptionEn) ? (
+                  <p className="mt-1 max-w-3xl text-xs sm:text-sm leading-relaxed text-slate-500">
+                    {lang === "en" ? (crumb.descriptionEn || crumb.description) : crumb.description}
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -260,6 +270,8 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {(group?.children ?? []).map((child) => {
                   const active = child.id === current;
+                  const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
+                  const childDesc = lang === "en" ? (child.descriptionEn || child.description) : child.description;
                   return (
                     <button
                       key={child.id}
@@ -272,18 +284,22 @@ export default function AppShell({ tab }: AppShellProps) {
                       }`}
                     >
                       <div className={`text-sm font-bold ${active ? "text-[#0047AB]" : "text-slate-900"}`}>
-                        {child.label}
+                        {childTitle}
                       </div>
-                      <div className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500">{child.description}</div>
+                      <div className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500">{childDesc}</div>
                     </button>
                   );
                 })}
               </div>
 
               <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-7 text-center shadow-xs">
-                <div className="text-sm font-semibold text-slate-900">Module đang được xây dựng</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {lang === "en" ? "Module Under Development" : "Module đang được xây dựng"}
+                </div>
                 <p className="mt-1 text-xs sm:text-sm text-slate-500">
-                  Các chức năng đã sẵn sàng: Hồ sơ thợ hàn, Danh sách khóa đào tạo, Quản lý chứng chỉ, Tra cứu lịch sử đào tạo.
+                  {lang === "en"
+                    ? "Available functions: Welder Profiles, Training Courses, Certificates, Training Lookup."
+                    : "Các chức năng đã sẵn sàng: Hồ sơ thợ hàn, Danh sách khóa đào tạo, Quản lý chứng chỉ, Tra cứu lịch sử đào tạo."}
                 </p>
               </div>
             </div>

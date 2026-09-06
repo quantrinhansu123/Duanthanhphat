@@ -36,7 +36,8 @@ export async function uploadDocumentToDrive(
   title: string,
   description: string,
   onProgress?: (percent: number) => void,
-): Promise<{ success: boolean; error?: string }> {
+  appProperties?: Record<string, string>,
+): Promise<{ success: boolean; item?: DriveDocumentItem; error?: string }> {
   try {
     if (!file.name.toLowerCase().endsWith(".pdf") || (file.type && file.type !== "application/pdf")) {
       return { success: false, error: "Chỉ hỗ trợ tải tài liệu PDF." };
@@ -54,6 +55,7 @@ export async function uploadDocumentToDrive(
         mimeType: file.type || "application/pdf",
         description: description.trim(),
         fileSize: file.size,
+        appProperties,
       }),
     });
 
@@ -81,7 +83,28 @@ export async function uploadDocumentToDrive(
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve({ success: true });
+          try {
+            const response = JSON.parse(xhr.responseText || "{}") as Partial<DriveDocumentItem> & { size?: number | string };
+            const item = response.id
+              ? {
+                  id: response.id,
+                  name: response.name || title || file.name,
+                  description: response.description || description,
+                  size: Number(response.size || file.size),
+                  mimeType: response.mimeType || "application/pdf",
+                  createdTime: response.createdTime || new Date().toISOString(),
+                  modifiedTime: response.modifiedTime,
+                  webViewLink: response.webViewLink,
+                  webContentLink: response.webContentLink,
+                  thumbnailLink: response.thumbnailLink,
+                  appProperties: response.appProperties,
+                  md5Checksum: response.md5Checksum,
+                }
+              : undefined;
+            resolve({ success: true, item });
+          } catch {
+            resolve({ success: true });
+          }
         } else {
           resolve({
             success: false,
@@ -106,7 +129,7 @@ export async function updateDriveDocumentMeta(
   fileId: string,
   title: string,
   description: string,
-): Promise<{ item?: DriveDocumentItem; error?: string }> {
+): Promise<{ success: boolean; item?: DriveDocumentItem; error?: string }> {
   try {
     const res = await fetch(`/api/documents/${fileId}`, {
       method: "PATCH",
@@ -118,12 +141,12 @@ export async function updateDriveDocumentMeta(
     });
     const data = await res.json();
     if (!res.ok) {
-      return { error: data.error || "Lỗi cập nhật tài liệu trên Google Drive" };
+      return { success: false, error: data.error || "Lỗi cập nhật tài liệu trên Google Drive" };
     }
-    return { item: data.item };
+    return { success: true, item: data.item };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Lỗi kết nối mạng";
-    return { error: message };
+    return { success: false, error: message };
   }
 }
 

@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { deaccent } from "./deaccent";
 import { PHRASES as UI_PHRASES } from "./phrases";
 import { PHRASES_DATA } from "./phrases.data";
 
@@ -45,8 +44,8 @@ function translate(raw: string): string {
   const trail = raw.match(/\s*$/)?.[0] ?? "";
   const core = raw.slice(lead.length, raw.length - trail.length);
   if (!core) return raw;
-  const next = PHRASES[core] ?? deaccent(core);
-  return next === core ? raw : lead + next + trail;
+  const next = PHRASES[core];
+  return next ? lead + next + trail : raw;
 }
 
 function shouldSkip(el: Element | null): boolean {
@@ -181,7 +180,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     (vi: string) => {
       if (lang === "vi") return vi;
       const core = vi.trim();
-      return PHRASES[core] ?? deaccent(vi);
+      return PHRASES[core] ?? vi;
     },
     [lang],
   );

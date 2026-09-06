@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 
-const ALLOWED_FOLDERS = new Set(["thanhphat/certificates", "thanhphat/trainings"]);
+const ALLOWED_FOLDERS = new Set([
+  "thanhphat/certificates",
+  "thanhphat/trainings",
+  "thanhphat/machines",
+  "thanhphat/vehicles",
+]);
 
 export async function POST(req: NextRequest) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();

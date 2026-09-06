@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED_SERVICE_PATHS = ["/api/documents", "/api/cloudinary"];
+const PROTECTED_SERVICE_PATHS = ["/api/documents", "/api/cloudinary", "/api/quality-metadata"];
 
 function constantTimeEqual(left: string, right: string): boolean {
   const maxLength = Math.max(left.length, right.length);

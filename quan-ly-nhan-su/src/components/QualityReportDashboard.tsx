@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Warning } from "@/components/icons";
+import { NDT_DEFECTS } from "@/data/error-library";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
@@ -15,14 +16,11 @@ import {
   summarizeJournalRows,
   type QuarterlyPassRatePoint,
 } from "@/lib/weldReportData";
-const DEFECT_META = [
-  { name: "Lỗi bề mặt", color: "#ef4444", severity: "Cao" as const },
-  { name: "Nứt bề mặt", color: "#dc2626", severity: "Cao" as const },
-  { name: "Rỗ khí", color: "#f59e0b", severity: "Trung bình" as const },
-  { name: "Cháy cạnh", color: "#3b82f6", severity: "Trung bình" as const },
-  { name: "Biến dạng nhiệt", color: "#6366f1", severity: "Thấp" as const },
-  { name: "Khác", color: "#a855f7", severity: "Thấp" as const },
-];
+const DEFECT_COLORS = ["#ef4444", "#dc2626", "#f59e0b", "#3b82f6", "#6366f1", "#a855f7"];
+const DEFECT_META = NDT_DEFECTS.map((defect, index) => ({
+  name: `${defect.nameEn} (${defect.code})`,
+  color: DEFECT_COLORS[index],
+}));
 
 function fmt(n: number) {
   return n.toLocaleString("vi-VN");
@@ -80,7 +78,7 @@ function QualityKpiGrid({
       label: "Không đạt",
       value: fmt(failed),
       unit: "mối",
-      note: `${criticalDefects} lỗi nghiêm trọng`,
+      note: `${criticalDefects} mối không đạt`,
       labelColor: "text-rose-700",
       noteColor: "text-rose-600",
       accent: "bg-rose-50/40",
@@ -327,6 +325,7 @@ const severityStyle = {
   Cao: "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
   "Trung bình": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
   Thấp: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Chưa phân loại": "bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs",
 };
 
 const statusStyle = {
@@ -371,7 +370,6 @@ export default function QualityReportDashboard() {
       name: reason.label,
       count: reason.count,
       color: DEFECT_META[index % DEFECT_META.length].color,
-      severity: DEFECT_META[index % DEFECT_META.length].severity,
     }));
   }, [errorRows]);
 
@@ -423,26 +421,24 @@ export default function QualityReportDashboard() {
 
   const currentRecentDefects = useMemo(() => {
     const defects = [];
-    let sequence = 0;
     for (const [index, row] of errorRows.entries()) {
-      const meta = DEFECT_META[sequence % DEFECT_META.length];
       const isoDate = getJournalRowDateIso(row, index);
+      const ndtNames = (row.ma_khuyet_tat ?? []).map((code) => {
+        const defect = NDT_DEFECTS.find((item) => item.code === code);
+        return defect ? `${defect.nameEn} (${defect.code})` : code;
+      });
       defects.push({
         id: row.id,
         date: formatJournalDateIso(isoDate),
         weldJoint: row.ma_lich_su,
-        defectType: row.nguyen_nhan_loi?.trim() || meta.name,
+        defectType: ndtNames.length > 0
+          ? ndtNames.join(", ")
+          : row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân",
         welder: row.ten_tho_han,
         plant: row.du_an,
-        severity: meta.severity,
-        status:
-          row.moi_han_lien_ket?.trim()
-            ? ("Đã đóng" as const)
-            : sequence % 3 === 0
-              ? ("Đang sửa" as const)
-              : ("Chờ xử lý" as const),
+        severity: "Chưa phân loại" as const,
+        status: row.moi_han_lien_ket?.trim() ? ("Đã đóng" as const) : ("Chờ xử lý" as const),
       });
-      sequence += 1;
     }
     return defects;
   }, [errorRows]);

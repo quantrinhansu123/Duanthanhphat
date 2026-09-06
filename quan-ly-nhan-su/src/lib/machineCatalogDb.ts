@@ -5,7 +5,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
-const LOCAL_STORAGE_MACHINES_KEY = "tp_machines_extended_v2";
+const LOCAL_STORAGE_MACHINES_KEY = "tp_machines_extended_v3";
 
 type MachineCatalogRow = {
   id: string;
@@ -31,6 +31,8 @@ type MachineCatalogRow = {
   ghi_chu?: string | null;
   thong_so?: Record<string, unknown> | null;
   hinh_anh_chi_tiet?: string[] | null;
+  thong_so_may_han?: Record<string, unknown> | null;
+  phuong_tien_van_chuyen?: Record<string, unknown> | null;
 };
 
 const validStatuses = new Set<Machine["status"]>([
@@ -104,42 +106,43 @@ function rowToMachine(row: MachineCatalogRow): Machine {
   const seed = seedMachines.find((m) => m.code === row.ma_may);
   const status = normalizeStatus(row.trang_thai);
   const code = row.ma_may;
-  const model = determineModel(code, local?.model ?? (row.model || seed?.model));
-  const safeImage = resolveSafeImage(local?.image || row.hinh_anh || seed?.image, code);
+  const model = determineModel(code, row.model || local?.model || seed?.model);
+  const safeImage = resolveSafeImage(row.hinh_anh || local?.image || seed?.image, code);
 
   return {
     id: row.id,
     code,
-    name: local?.name || row.ten_may || seed?.name || `Máy hàn ${code}`,
+    name: row.ten_may || local?.name || seed?.name || `Máy hàn ${code}`,
     model,
     type:
-      local?.type ||
       row.loai_may ||
+      local?.type ||
       seed?.type ||
       (code.startsWith("KCM")
         ? "Tổ hợp máy hàn ray lưu động gắn trên xe tải (Road-Rail)"
         : "Máy hàn tiếp xúc đối đầu ray lưu động"),
     nameEn: seed?.nameEn,
     nameVi: seed?.nameVi,
-    brand: local?.brand || seed?.brand || "TCW",
+    brand: local?.brand || seed?.brand || "",
     manufacturer:
       local?.manufacturer ||
       seed?.manufacturer ||
-      (code.startsWith("KCM") ? "Chengdu Aigre Technology / TCW" : "Chengdu Aigre Technology"),
-    plant: local?.plant || seed?.plant || "Trung tâm Cơ giới TCW",
+      "",
+    plant: local?.plant || seed?.plant || "",
     location: row.vi_tri_hien_tai?.trim() || local?.location || seed?.location || "Chưa cập nhật",
-    currentProject: local?.currentProject || row.du_an_hien_tai || seed?.currentProject || "Dự án đường sắt",
+    currentProject: row.du_an_hien_tai || local?.currentProject || seed?.currentProject || "",
     status,
     available: status === "Sẵn sàng",
     weldCount:
-      local?.weldCount ??
-      (row.tong_moi_han ? Number(row.tong_moi_han) : seed?.weldCount ?? 0),
+      row.tong_moi_han !== null && row.tong_moi_han !== undefined
+        ? Number(row.tong_moi_han)
+        : local?.weldCount ?? seed?.weldCount ?? 0,
     image: safeImage,
     gallery:
-      local?.gallery ||
       (row.hinh_anh_chi_tiet && row.hinh_anh_chi_tiet.length > 0
         ? row.hinh_anh_chi_tiet.map((img) => resolveSafeImage(img, code))
         : undefined) ||
+      local?.gallery ||
       seed?.gallery ||
       (code.startsWith("UN5")
         ? [
@@ -149,53 +152,70 @@ function rowToMachine(row: MachineCatalogRow): Machine {
           ]
         : ["/may-han/kcm007.jpg"]),
     serialNumber:
-      local?.serialNumber ||
       row.so_serial ||
+      local?.serialNumber ||
       seed?.serialNumber ||
-      "Chờ cập nhật theo hồ sơ bàn giao thiết bị",
+      "",
     yearInstalled:
-      local?.yearInstalled ||
       row.nam_san_xuat ||
+      local?.yearInstalled ||
       seed?.yearInstalled ||
-      2021,
+      0,
     weldingTechnology:
-      local?.weldingTechnology ||
       row.cong_nghe_han ||
+      local?.weldingTechnology ||
       seed?.weldingTechnology ||
-      "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+      "",
     supportedRails:
-      local?.supportedRails ||
       row.loai_ray_ho_tro ||
+      local?.supportedRails ||
       seed?.supportedRails ||
-      "43 – 75 kg/m · Khổ ray 1.435 mm",
+      "",
     weldingCapacity:
-      local?.weldingCapacity ||
       row.nang_suat_han ||
+      local?.weldingCapacity ||
       seed?.weldingCapacity ||
-      "12 mối/giờ",
-    operator: local?.operator || seed?.operator || "Chưa phân công",
+      "",
+    operator: local?.operator || seed?.operator || "",
     personInCharge:
-      local?.personInCharge ||
       row.nguoi_phu_trach ||
+      local?.personInCharge ||
       seed?.personInCharge ||
-      "Kỹ sư trưởng TCW",
-    team: local?.team || row.to_van_hanh || seed?.team || "Tổ hàn cơ giới",
+      "",
+    team: row.to_van_hanh || local?.team || seed?.team || "",
     lastMaintenance:
-      local?.lastMaintenance ||
       row.ngay_bao_tri_gan_nhat ||
+      local?.lastMaintenance ||
       seed?.lastMaintenance ||
       "—",
     nextMaintenance:
-      local?.nextMaintenance ||
       row.ngay_bao_tri_tiep_theo ||
+      local?.nextMaintenance ||
       seed?.nextMaintenance ||
       "—",
     operatingHours:
-      local?.operatingHours ??
-      (row.gio_hoat_dong ? Number(row.gio_hoat_dong) : seed?.operatingHours ?? 0),
-    errorRate: local?.errorRate || seed?.errorRate || "0,0%",
-    note: local?.note || row.ghi_chu || seed?.note || "",
-    specs: local?.specs || (row.thong_so as Machine["specs"]) || seed?.specs,
+      row.gio_hoat_dong !== null && row.gio_hoat_dong !== undefined
+        ? Number(row.gio_hoat_dong)
+        : local?.operatingHours ?? seed?.operatingHours ?? 0,
+    errorRate: local?.errorRate || seed?.errorRate || "—",
+    note: row.ghi_chu || local?.note || seed?.note || "",
+    specs: (row.thong_so as Machine["specs"]) || local?.specs || seed?.specs,
+    weldingUnit: ((row.thong_so_may_han as unknown as Machine["weldingUnit"]) ||
+      local?.weldingUnit ||
+      seed?.weldingUnit) ?? {
+      code,
+      name: row.ten_may || `Máy hàn ${code}`,
+      model,
+      serial: row.so_serial || seed?.serialNumber,
+      coverImage: safeImage,
+      gallery: (row.hinh_anh_chi_tiet && row.hinh_anh_chi_tiet.length > 0)
+        ? row.hinh_anh_chi_tiet.map((img) => resolveSafeImage(img, code))
+        : seed?.gallery || [safeImage],
+      specs: {},
+    },
+    transportUnit: ((row.phuong_tien_van_chuyen as unknown as Machine["transportUnit"]) ||
+      local?.transportUnit ||
+      seed?.transportUnit),
   };
 }
 
@@ -301,6 +321,18 @@ function machineBasicPayload(machine: Machine) {
   };
 }
 
+function missingSplitMachineColumns(error: unknown) {
+  const message = formatSupabaseError(error).toLowerCase();
+  return message.includes("thong_so_may_han") || message.includes("phuong_tien_van_chuyen");
+}
+
+function withoutSplitMachineColumns(payload: Record<string, unknown>) {
+  const compatible = { ...payload };
+  delete compatible.thong_so_may_han;
+  delete compatible.phuong_tien_van_chuyen;
+  return compatible;
+}
+
 export async function createMachine(machine: Machine): Promise<Machine> {
   if (!isSupabaseConfigured()) {
     writeLocalOverride(machine);
@@ -331,19 +363,40 @@ export async function createMachine(machine: Machine): Promise<Machine> {
       machine.gallery && machine.gallery.length > 0
         ? machine.gallery
         : (machine.image ? [machine.image] : []),
+    thong_so_may_han: machine.weldingUnit ?? null,
+    phuong_tien_van_chuyen: machine.transportUnit ?? null,
   };
 
-  const { data, error } = await supabase
+  let usedCompatibilityFallback = false;
+  let insertResult = await supabase
     .from("thiet_bi")
     .insert(extendedPayload)
     .select()
     .single();
 
+  if (insertResult.error && missingSplitMachineColumns(insertResult.error)) {
+    usedCompatibilityFallback = true;
+    insertResult = await supabase
+      .from("thiet_bi")
+      .insert(withoutSplitMachineColumns(extendedPayload))
+      .select()
+      .single();
+  }
+
+  const { data, error } = insertResult;
+
   if (error) {
     throw new Error(`Lỗi lưu máy lên Supabase: ${formatSupabaseError(error)}`);
   }
 
-  const saved = rowToMachine(data as MachineCatalogRow);
+  const mapped = rowToMachine(data as MachineCatalogRow);
+  const saved = usedCompatibilityFallback
+    ? {
+        ...mapped,
+        weldingUnit: machine.weldingUnit,
+        transportUnit: machine.transportUnit,
+      }
+    : mapped;
   writeLocalOverride(saved);
   return saved;
 }
@@ -378,12 +431,23 @@ export async function updateMachine(machine: Machine): Promise<void> {
       machine.gallery && machine.gallery.length > 0
         ? machine.gallery
         : (machine.image ? [machine.image] : []),
+    thong_so_may_han: machine.weldingUnit ?? null,
+    phuong_tien_van_chuyen: machine.transportUnit ?? null,
   };
 
-  const { error } = await supabase
+  let updateResult = await supabase
     .from("thiet_bi")
     .update(extendedPayload)
     .eq("id", machine.id);
+
+  if (updateResult.error && missingSplitMachineColumns(updateResult.error)) {
+    updateResult = await supabase
+      .from("thiet_bi")
+      .update(withoutSplitMachineColumns(extendedPayload))
+      .eq("id", machine.id);
+  }
+
+  const { error } = updateResult;
 
   if (error) {
     throw new Error(`Lỗi cập nhật máy lên Supabase: ${formatSupabaseError(error)}`);

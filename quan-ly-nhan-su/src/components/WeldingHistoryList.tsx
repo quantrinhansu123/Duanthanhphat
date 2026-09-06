@@ -405,7 +405,16 @@ export default function WeldingHistoryList() {
     accountingCounts: [],
   });
 
-  const [query, setQuery] = useState("");
+  const [queryInput, setQueryInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(queryInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [queryInput]);
+
   const [welder, setWelder] = useState("Tất cả thợ hàn");
   const [result, setResult] = useState("Tất cả kết quả");
   const [dateFrom, setDateFrom] = useState("");
@@ -448,7 +457,7 @@ export default function WeldingHistoryList() {
     const filterParams: WeldingHistoryFilterParams = {
       page: p,
       pageSize: ps,
-      query,
+      query: debouncedQuery,
       welder,
       result,
       dateFrom,
@@ -469,7 +478,7 @@ export default function WeldingHistoryList() {
       setLoadError(null);
     }
     setLoading(false);
-  }, [page, pageSize, query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
+  }, [page, pageSize, debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
 
   useEffect(() => {
     fetchData(page, pageSize);
@@ -478,7 +487,7 @@ export default function WeldingHistoryList() {
   // Khi bộ lọc thay đổi, quay về trang 1
   useEffect(() => {
     setPage(1);
-  }, [query, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, pageSize]);
+  }, [debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, pageSize]);
 
   const welderOptions = useMemo(
     () => ["Tất cả thợ hàn", ...Array.from(new Set([...allWelders, ...list.map((r) => r.welderName)])).filter(Boolean).sort()],
@@ -546,7 +555,7 @@ export default function WeldingHistoryList() {
     try {
       setExporting(true);
       const allRows = await exportAllFilteredWeldingHistory({
-        query,
+        query: debouncedQuery,
         welder,
         result,
         dateFrom,
@@ -588,7 +597,7 @@ export default function WeldingHistoryList() {
     try {
       setExporting(true);
       const allRows = await exportAllFilteredWeldingHistory({
-        query,
+        query: debouncedQuery,
         welder,
         result,
         dateFrom,
@@ -644,7 +653,7 @@ export default function WeldingHistoryList() {
   }
 
   const hasFilter =
-    query.trim() ||
+    queryInput.trim() ||
     dateFrom ||
     dateTo ||
     welder !== "Tất cả thợ hàn" ||
@@ -776,8 +785,8 @@ export default function WeldingHistoryList() {
         <div className="relative min-w-[240px] flex-1">
           <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
             placeholder="Tìm theo mối hàn, thợ hàn, máy, dự án, mã hạch toán..."
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
@@ -823,7 +832,8 @@ export default function WeldingHistoryList() {
           <button
             type="button"
             onClick={() => {
-              setQuery("");
+              setQueryInput("");
+              setDebouncedQuery("");
               setDateFrom("");
               setDateTo("");
               setWelder("Tất cả thợ hàn");

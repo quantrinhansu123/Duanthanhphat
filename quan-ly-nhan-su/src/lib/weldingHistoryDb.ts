@@ -130,6 +130,16 @@ function mapViewRow(row: ViewWeldHistoryRow, idx: number): WeldingHistoryRecord 
   };
 }
 
+export function removeVietnameseTones(str?: string | null): string {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, (m) => (m === "đ" ? "d" : "D"))
+    .toLowerCase()
+    .trim();
+}
+
 function sanitizePostgrestSearch(value?: string) {
   return (value || "").trim().replace(/[(),"]/g, " ");
 }
@@ -189,7 +199,7 @@ function filterInMemoryRecords(
   records: WeldingHistoryRecord[],
   params: WeldingHistoryFilterParams,
 ): { filtered: WeldingHistoryRecord[]; stats: WeldingHistoryStats } {
-  const queryLower = (params.query || "").trim().toLowerCase();
+  const tokens = removeVietnameseTones(params.query).split(/\s+/).filter(Boolean);
   const welderFilter = params.welder && params.welder !== "Tất cả thợ hàn" ? params.welder : null;
   const resultFilter = params.result && params.result !== "Tất cả kết quả" ? params.result : null;
 
@@ -204,14 +214,11 @@ function filterInMemoryRecords(
     if (params.shifts && params.shifts.length > 0 && !params.shifts.includes(r.shift)) return false;
     if (params.accountingCodes && params.accountingCodes.length > 0 && !params.accountingCodes.includes(r.accountingCode)) return false;
 
-    if (queryLower) {
-      const match =
-        r.weldingId.toLowerCase().includes(queryLower) ||
-        r.weldJoint.toLowerCase().includes(queryLower) ||
-        r.welderName.toLowerCase().includes(queryLower) ||
-        r.machine.toLowerCase().includes(queryLower) ||
-        r.project.toLowerCase().includes(queryLower) ||
-        (r.accountingCode || "").toLowerCase().includes(queryLower);
+    if (tokens.length > 0) {
+      const haystack = removeVietnameseTones(
+        `${r.weldingId} ${r.weldJoint} ${r.welderName} ${r.machine} ${r.project} ${r.accountingCode || ""} ${r.railType} ${r.shift}`,
+      );
+      const match = tokens.every((token) => haystack.includes(token));
       if (!match) return false;
     }
     return true;
@@ -267,8 +274,9 @@ export async function loadWeldingHistoryPage(
   }
 
   const supabase = createClient();
+  const searchTokens = removeVietnameseTones(params.query).split(/\s+/).filter(Boolean);
 
-  // 1. Thử truy vấn qua view v_lich_su_moi_han_chi_tiet
+  // 1. Thử truy vấn qua view v_lich_su_moi_han_chi_tiet (hỗ trợ tim_kiem_khong_dau)
   try {
     let viewQuery = supabase
       .from("v_lich_su_moi_han_chi_tiet")
@@ -283,16 +291,57 @@ export async function loadWeldingHistoryPage(
     if (params.projects && params.projects.length > 0) viewQuery = viewQuery.in("ten_du_an", params.projects);
     if (params.shifts && params.shifts.length > 0) viewQuery = viewQuery.in("ca_han", params.shifts);
     if (params.accountingCodes && params.accountingCodes.length > 0) viewQuery = viewQuery.in("hach_toan", params.accountingCodes);
-    const searchQuery = sanitizePostgrestSearch(params.query);
-    if (searchQuery) {
-      const q = searchQuery;
-      viewQuery = viewQuery.or(`ma_lich_su.ilike.%${q}%,moi_han_lien_ket.ilike.%${q}%,ghi_chu.ilike.%${q}%,ten_tho_han.ilike.%${q}%,ten_du_an.ilike.%${q}%,ten_may.ilike.%${q}%,hach_toan.ilike.%${q}%`);
+
+    if (searchTokens.length > 0) {
+      searchTokens.forEach((tok) => {
+        viewQuery = viewQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
+      });
     }
 
     // Lấy dữ liệu trang
     const { data: pageData, count: totalCount, error: pageError } = await viewQuery
       .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
       .range(fromIndex, toIndex);
+
+    // Nếu lỗi do view chưa có cột tim_kiem_khong_dau, fallback về tìm kiếm or
+    if (pageError && pageError.message?.includes("tim_kiem_khong_dau")) {
+      let legacyQuery = supabase
+        .from("v_lich_su_moi_han_chi_tiet")
+        .select("*", { count: "exact" });
+      if (params.dateFrom) legacyQuery = legacyQuery.gte("ngay_thuc_hien", params.dateFrom);
+      if (params.dateTo) legacyQuery = legacyQuery.lte("ngay_thuc_hien", params.dateTo);
+      if (params.welder && params.welder !== "Tất cả thợ hàn") legacyQuery = legacyQuery.eq("ten_tho_han", params.welder);
+      if (params.result && params.result !== "Tất cả kết quả") legacyQuery = legacyQuery.eq("ket_qua", params.result);
+      if (params.machines && params.machines.length > 0) legacyQuery = legacyQuery.in("ten_may", params.machines);
+      if (params.rails && params.rails.length > 0) legacyQuery = legacyQuery.in("loai_ray", params.rails);
+      if (params.projects && params.projects.length > 0) legacyQuery = legacyQuery.in("ten_du_an", params.projects);
+      if (params.shifts && params.shifts.length > 0) legacyQuery = legacyQuery.in("ca_han", params.shifts);
+      if (params.accountingCodes && params.accountingCodes.length > 0) legacyQuery = legacyQuery.in("hach_toan", params.accountingCodes);
+      const rawSearch = sanitizePostgrestSearch(params.query);
+      if (rawSearch) {
+        legacyQuery = legacyQuery.or(`ma_lich_su.ilike.%${rawSearch}%,moi_han_lien_ket.ilike.%${rawSearch}%,ghi_chu.ilike.%${rawSearch}%,ten_tho_han.ilike.%${rawSearch}%,ten_du_an.ilike.%${rawSearch}%,ten_may.ilike.%${rawSearch}%,hach_toan.ilike.%${rawSearch}%`);
+      }
+      const legacyRes = await legacyQuery
+        .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+        .range(fromIndex, toIndex);
+      if (!legacyRes.error && legacyRes.data) {
+        const records = (legacyRes.data as unknown as ViewWeldHistoryRow[]).map((row, idx) =>
+          mapViewRow(row, fromIndex + idx),
+        );
+        return {
+          records,
+          totalCount: legacyRes.count ?? legacyRes.data.length,
+          stats: {
+            total: legacyRes.count ?? legacyRes.data.length,
+            pass: 0,
+            fail: 0,
+            rework: 0,
+            accountingCounts: [],
+          },
+          source: "supabase",
+        };
+      }
+    }
 
     if (!pageError && pageData) {
       const total = totalCount ?? pageData.length;
@@ -306,7 +355,7 @@ export async function loadWeldingHistoryPage(
         p_projects: params.projects?.length ? params.projects : null,
         p_shifts: params.shifts?.length ? params.shifts : null,
         p_accounting_codes: params.accountingCodes?.length ? params.accountingCodes : null,
-        p_query: searchQuery || null,
+        p_query: params.query?.trim() || null,
       });
 
       let stats: WeldingHistoryStats | null = null;
@@ -331,7 +380,7 @@ export async function loadWeldingHistoryPage(
         for (let offset = 0; ; offset += statsPageSize) {
           let allQuery = supabase
             .from("v_lich_su_moi_han_chi_tiet")
-            .select("id, ket_qua, hach_toan");
+            .select("id, ket_qua, hach_toan, tim_kiem_khong_dau");
           if (params.dateFrom) allQuery = allQuery.gte("ngay_thuc_hien", params.dateFrom);
           if (params.dateTo) allQuery = allQuery.lte("ngay_thuc_hien", params.dateTo);
           if (params.welder && params.welder !== "Tất cả thợ hàn") allQuery = allQuery.eq("ten_tho_han", params.welder);
@@ -341,8 +390,10 @@ export async function loadWeldingHistoryPage(
           if (params.projects?.length) allQuery = allQuery.in("ten_du_an", params.projects);
           if (params.shifts?.length) allQuery = allQuery.in("ca_han", params.shifts);
           if (params.accountingCodes?.length) allQuery = allQuery.in("hach_toan", params.accountingCodes);
-          if (searchQuery) {
-            allQuery = allQuery.or(`ma_lich_su.ilike.%${searchQuery}%,moi_han_lien_ket.ilike.%${searchQuery}%,ghi_chu.ilike.%${searchQuery}%,ten_tho_han.ilike.%${searchQuery}%,ten_du_an.ilike.%${searchQuery}%,ten_may.ilike.%${searchQuery}%,hach_toan.ilike.%${searchQuery}%`);
+          if (searchTokens.length > 0) {
+            searchTokens.forEach((tok) => {
+              allQuery = allQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
+            });
           }
           const { data: allStatsData, error: allStatsError } = await allQuery.range(offset, offset + statsPageSize - 1);
           if (allStatsError) break;
@@ -459,7 +510,7 @@ export async function exportAllFilteredWeldingHistory(
   try {
     const rows: ViewWeldHistoryRow[] = [];
     const pageSize = 1000;
-    const searchQuery = sanitizePostgrestSearch(params.query);
+    const searchTokens = removeVietnameseTones(params.query).split(/\s+/).filter(Boolean);
 
     for (let offset = 0; ; offset += pageSize) {
       let viewQuery = supabase
@@ -475,12 +526,43 @@ export async function exportAllFilteredWeldingHistory(
       if (params.projects?.length) viewQuery = viewQuery.in("ten_du_an", params.projects);
       if (params.shifts?.length) viewQuery = viewQuery.in("ca_han", params.shifts);
       if (params.accountingCodes?.length) viewQuery = viewQuery.in("hach_toan", params.accountingCodes);
-      if (searchQuery) {
-        viewQuery = viewQuery.or(`ma_lich_su.ilike.%${searchQuery}%,moi_han_lien_ket.ilike.%${searchQuery}%,ghi_chu.ilike.%${searchQuery}%,ten_tho_han.ilike.%${searchQuery}%,ten_du_an.ilike.%${searchQuery}%,ten_may.ilike.%${searchQuery}%,hach_toan.ilike.%${searchQuery}%`);
+
+      if (searchTokens.length > 0) {
+        searchTokens.forEach((tok) => {
+          viewQuery = viewQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
+        });
       }
 
       const { data, error } = await viewQuery.range(offset, offset + pageSize - 1);
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes("tim_kiem_khong_dau")) {
+          // Fallback nếu view cũ
+          let fallbackQ = supabase
+            .from("v_lich_su_moi_han_chi_tiet")
+            .select("*")
+            .order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+          if (params.dateFrom) fallbackQ = fallbackQ.gte("ngay_thuc_hien", params.dateFrom);
+          if (params.dateTo) fallbackQ = fallbackQ.lte("ngay_thuc_hien", params.dateTo);
+          if (params.welder && params.welder !== "Tất cả thợ hàn") fallbackQ = fallbackQ.eq("ten_tho_han", params.welder);
+          if (params.result && params.result !== "Tất cả kết quả") fallbackQ = fallbackQ.eq("ket_qua", params.result);
+          if (params.machines?.length) fallbackQ = fallbackQ.in("ten_may", params.machines);
+          if (params.rails?.length) fallbackQ = fallbackQ.in("loai_ray", params.rails);
+          if (params.projects?.length) fallbackQ = fallbackQ.in("ten_du_an", params.projects);
+          if (params.shifts?.length) fallbackQ = fallbackQ.in("ca_han", params.shifts);
+          if (params.accountingCodes?.length) fallbackQ = fallbackQ.in("hach_toan", params.accountingCodes);
+          const rawSearch = sanitizePostgrestSearch(params.query);
+          if (rawSearch) {
+            fallbackQ = fallbackQ.or(`ma_lich_su.ilike.%${rawSearch}%,moi_han_lien_ket.ilike.%${rawSearch}%,ghi_chu.ilike.%${rawSearch}%,ten_tho_han.ilike.%${rawSearch}%,ten_du_an.ilike.%${rawSearch}%,ten_may.ilike.%${rawSearch}%,hach_toan.ilike.%${rawSearch}%`);
+          }
+          const fbRes = await fallbackQ.range(offset, offset + pageSize - 1);
+          if (fbRes.error) throw fbRes.error;
+          const page = (fbRes.data ?? []) as unknown as ViewWeldHistoryRow[];
+          rows.push(...page);
+          if (page.length < pageSize) break;
+          continue;
+        }
+        throw error;
+      }
       const page = (data ?? []) as unknown as ViewWeldHistoryRow[];
       rows.push(...page);
       if (page.length < pageSize) break;

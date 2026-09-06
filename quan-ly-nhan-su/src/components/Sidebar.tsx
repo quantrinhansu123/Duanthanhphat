@@ -49,7 +49,7 @@ export default function Sidebar({
   onToggle,
   onClose,
 }: SidebarProps) {
-  const { lang, t } = useLanguage();
+  const { lang } = useLanguage();
   const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
@@ -120,7 +120,7 @@ export default function Sidebar({
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">
         <div className={`mb-2.5 px-2 text-[11px] font-bold uppercase tracking-wider text-blue-300/70 ${collapsed ? "text-center" : ""}`}>
-          {collapsed ? "•••" : "Chức năng hệ thống"}
+          {collapsed ? "•••" : (lang === "en" ? "System Features" : "Chức năng hệ thống")}
         </div>
 
         <div className="flex flex-col gap-1 pb-2">
@@ -145,7 +145,7 @@ export default function Sidebar({
                       ? "bg-white/[0.12] font-semibold text-white shadow-xs"
                       : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                   } ${collapsed ? "justify-center px-0" : ""}`}
-                  title={lang === "en" ? item.labelEn : item.label}
+                  title={lang === "en" ? (item.labelEn || item.label) : item.label}
                 >
                   <span
                     className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg transition-colors duration-150 ${
@@ -159,7 +159,7 @@ export default function Sidebar({
                   {!collapsed && (
                     <>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">{lang === "en" ? item.labelEn : item.label}</span>
+                        <span className="block truncate font-semibold">{lang === "en" ? (item.labelEn || item.label) : item.label}</span>
                       </span>
                       <CaretDown
                         size={14}
@@ -175,6 +175,7 @@ export default function Sidebar({
                   <div className="mt-1 mb-2 ml-4 space-y-0.5 pl-3 border-l border-white/10">
                     {item.children.map((child) => {
                       const childActive = activeId === child.id;
+                      const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
                       return (
                         <button
                           key={child.id}
@@ -186,7 +187,7 @@ export default function Sidebar({
                               : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                           }`}
                         >
-                          <span className="block text-xs sm:text-[13px] leading-snug">{t(child.label)}</span>
+                          <span className="block text-xs sm:text-[13px] leading-snug">{childTitle}</span>
                         </button>
                       );
                     })}
@@ -212,7 +213,9 @@ export default function Sidebar({
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <div className="truncate text-xs sm:text-sm font-semibold text-white">Nguyễn Đắc Công</div>
-              <div className="truncate text-[11px] font-medium text-blue-200/80">Quản trị viên</div>
+              <div className="truncate text-[11px] font-medium text-blue-200/80">
+                {lang === "en" ? "Administrator" : "Quản trị viên"}
+              </div>
             </div>
           </div>
         ) : (
@@ -232,7 +235,7 @@ export default function Sidebar({
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-blue-200/80 hover:bg-white/[0.08] hover:text-white transition-colors duration-150 cursor-pointer"
         >
           {collapsed ? <CaretRight size={16} weight="bold" aria-hidden /> : <CaretLeft size={16} weight="bold" aria-hidden />}
-          {!collapsed && <span>Thu gọn</span>}
+          {!collapsed && <span>{lang === "en" ? "Collapse" : "Thu gọn"}</span>}
         </button>
       </div>
     </aside>
