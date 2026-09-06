@@ -786,6 +786,19 @@ export default function OverviewDashboard() {
     [selectedProjects],
   );
 
+  const projectChartRows = useMemo(
+    () => projectRows.filter((row) => row.count > 0),
+    [projectRows],
+  );
+  const projectChartTotal = useMemo(
+    () => projectChartRows.reduce((sum, row) => sum + row.count, 0),
+    [projectChartRows],
+  );
+  const projectDonutArcs = useMemo(
+    () => buildDonutArcs(projectChartRows.map((row) => row.count)),
+    [projectChartRows],
+  );
+
   const statusDonutArcs = useMemo(
     () => buildDonutArcs([passed, rework, failed]),
     [passed, rework, failed],
@@ -1413,80 +1426,66 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 3: MỐI HÀN THEO DỰ ÁN */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               MỐI HÀN THEO DỰ ÁN
             </div>
             <div className="text-[11px] font-semibold text-slate-500">
-              <span className="font-mono text-[#0047AB]">{fmt(projectRows.length)}</span> dự án
+              <span className="font-mono text-[#0047AB]">{fmt(projectChartRows.length)}</span> dự án
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
             Báo cáo sản lượng theo dự án trong kỳ lọc
           </p>
 
-          <div className="mt-3 flex-1 min-h-0">
-            <div className="grid grid-cols-[1fr_0.55fr_0.55fr_0.7fr] gap-x-1.5 border-b border-slate-100 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              <div>Dự án</div>
-              <div className="text-right">KH</div>
-              <div className="text-right">TH</div>
-              <div className="text-right">Tỷ lệ</div>
-            </div>
-            <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-100">
-              {projectRows.length > 0 ? (
-                projectRows.map((row) => {
-                  const rate = row.count > 0 ? Math.round((row.passed / row.count) * 100) : 0;
-                  const progress =
-                    row.planned > 0 ? Math.min(100, Math.round((row.count / row.planned) * 100)) : rate;
-                  return (
-                    <div
-                      key={row.id}
-                      className="grid grid-cols-[1fr_0.55fr_0.55fr_0.7fr] gap-x-1.5 items-center py-2.5 text-xs text-slate-700 hover:bg-slate-50/60 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-start gap-1.5">
-                          <span
-                            className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: row.color }}
-                          />
-                          <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 leading-snug line-clamp-2" title={row.name}>
-                              {row.name}
-                            </div>
-                            <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-[#0047AB]"
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right font-mono tabular-nums text-slate-600">{fmt(row.planned)}</div>
-                      <div className="text-right font-mono font-bold tabular-nums text-[#0047AB]">{fmt(row.count)}</div>
-                      <div className="text-right font-mono tabular-nums text-emerald-700">{rate}%</div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="py-10 text-center text-sm text-slate-500">
-                  Chưa có dữ liệu mối hàn theo dự án.
-                </div>
-              )}
+          <div className="mt-3.5 flex justify-center">
+            <div className="relative h-[126px] w-[126px]">
+              <svg viewBox="0 0 140 140" className="block h-[126px] w-[126px]">
+                <circle cx="70" cy="70" r="52" fill="none" stroke="#f1f5f9" strokeWidth="20" />
+                {projectDonutArcs.map((arc, index) => (
+                  <circle
+                    key={projectChartRows[index]?.id ?? index}
+                    cx="70"
+                    cy="70"
+                    r="52"
+                    fill="none"
+                    stroke={projectChartRows[index]?.color ?? "#cbd5e1"}
+                    strokeWidth="20"
+                    strokeDasharray={arc.dasharray}
+                    transform={arc.transform}
+                  />
+                ))}
+              </svg>
+              <div className="absolute left-0 right-0 top-[46px] text-center font-mono text-lg sm:text-xl font-bold leading-none tabular-nums text-slate-900">
+                {fmt(projectChartTotal)}
+              </div>
+              <div className="absolute left-0 right-0 top-[66px] text-center text-xs font-medium text-slate-500">
+                Tổng
+              </div>
             </div>
           </div>
 
-          <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-600">
-            <span>
-              KH: <strong className="font-mono text-slate-900">{fmt(plannedWeldsAll)}</strong>
-            </span>
-            <span>
-              TH:{" "}
-              <strong className="font-mono text-[#0047AB]">
-                {fmt(projectRows.reduce((sum, row) => sum + row.count, 0))}
-              </strong>
-            </span>
+          <div className="mt-4 flex max-h-[190px] flex-col gap-2 overflow-y-auto">
+            {projectChartRows.length > 0 ? (
+              projectChartRows.map((row) => (
+                <div key={row.id} className="flex items-center gap-2 text-xs sm:text-sm">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: row.color }}
+                  />
+                  <span
+                    className="min-w-0 flex-1 line-clamp-2 break-words font-medium leading-snug text-slate-700"
+                    title={row.name}
+                  >
+                    {row.name}
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-slate-500">{fmt(row.count)}</span>
+                </div>
+              ))
+            ) : (
+              <div className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu dự án</div>
+            )}
           </div>
         </div>
       </div>

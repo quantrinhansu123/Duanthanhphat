@@ -175,6 +175,30 @@ export function parseTrainedMachineTokens(value?: string | null): string[] {
     .filter(Boolean);
 }
 
+function normalizeRailToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleUpperCase("vi")
+    .replace(/\s+/g, "");
+}
+
+/** Kiểm tra thợ hàn có được phép hàn loại ray (theo hồ sơ loai_ray). */
+export function personAllowedOnRail(
+  loaiRay: string | null | undefined,
+  railType: string,
+): boolean {
+  const target = normalizeRailToken(railType);
+  if (!target) return false;
+  const tokens = parseTrainedMachineTokens(loaiRay)
+    .map(normalizeRailToken)
+    .filter((token) => token && token !== "CHUACAPNHAT");
+  if (tokens.length === 0) return false;
+  return tokens.some(
+    (token) => token === target || token.includes(target) || target.includes(token),
+  );
+}
+
 export function personTrainedOnMachine(
   loaiMay: string | null | undefined,
   machine: { code: string; model?: string },

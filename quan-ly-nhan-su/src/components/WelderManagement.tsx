@@ -352,6 +352,17 @@ export default function WelderManagement() {
     void reloadWelders();
   }, []);
 
+  useEffect(() => {
+    if (list.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const employeeId = params.get("employeeId");
+    if (!employeeId) return;
+    const found = list.find((item) => item.id === employeeId);
+    if (!found) return;
+    setSelectedWelder(found);
+    setProfileOpen(true);
+  }, [list]);
+
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
 
   useEffect(() => {
