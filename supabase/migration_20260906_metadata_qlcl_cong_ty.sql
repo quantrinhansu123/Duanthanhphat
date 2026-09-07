@@ -45,6 +45,11 @@ alter table public.danh_gia_tieu_chuan_qlcl enable row level security;
 revoke all on public.chung_chi_qlcl_cong_ty from anon, authenticated;
 revoke all on public.danh_gia_tieu_chuan_qlcl from anon, authenticated;
 
+-- Route Handler phía server dùng service_role. BYPASSRLS không thay thế quyền
+-- thao tác bảng, vì vậy cần cấp quyền bảng tường minh sau khi đã revoke client.
+grant select, insert, update, delete on public.chung_chi_qlcl_cong_ty to service_role;
+grant select, insert, update, delete on public.danh_gia_tieu_chuan_qlcl to service_role;
+
 comment on table public.chung_chi_qlcl_cong_ty is
   'Metadata chứng chỉ/hồ sơ QLCL cấp cho doanh nghiệp; không chứa chứng chỉ cá nhân thợ hàn.';
 comment on table public.danh_gia_tieu_chuan_qlcl is
