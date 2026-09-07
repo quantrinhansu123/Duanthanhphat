@@ -205,13 +205,13 @@ export default function CompanyCertificateManagement() {
         </div>
         <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-slate-900">
           {isEn
-            ? "Company ISO/TCVN & Quality Management Certificates"
-            : "Chứng chỉ ISO/TCVN & Hồ sơ QLCL Công ty"}
+            ? "Quality Management Certificates (ISO)"
+            : "Chứng chỉ quản lý chất lượng (ISO)"}
         </h1>
         <p className="mt-1 text-sm text-slate-600 max-w-4xl">
           {isEn
-            ? "Official ISO 9001, TCVN railway welding standards, and quality management accreditations of Thanh Phat Joint Stock Company."
-            : "Chứng chỉ ISO/TCVN và hồ sơ quản lý chất lượng của Công ty Cổ phần Thành Phát."}
+            ? "ISO quality management certificates and records of Thanh Phat Joint Stock Company."
+            : "Chứng chỉ quản lý chất lượng (ISO) và hồ sơ của Công ty Cổ phần Thành Phát."}
         </p>
       </div>
 

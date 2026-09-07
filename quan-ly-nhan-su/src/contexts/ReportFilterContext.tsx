@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   REPORT_PERIOD_END,
   REPORT_PERIOD_START,
@@ -62,24 +62,6 @@ const EMPTY_DRAFT: DraftFilters = {
   weldTypes: [],
 };
 
-function currentMonthDraft(now = new Date()): DraftFilters {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(now);
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  const monthText = String(month).padStart(2, "0");
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-
-  return {
-    ...EMPTY_DRAFT,
-    dateFrom: `${year}-${monthText}-01`,
-    dateTo: `${year}-${monthText}-${String(lastDay).padStart(2, "0")}`,
-  };
-}
-
 function yearStart(year: string | number) {
   return `${year}-01-01`;
 }
@@ -114,9 +96,10 @@ function normalizeForMode(draft: DraftFilters): DraftFilters {
 
 function toApplied(draft: DraftFilters): AppliedReportFilters {
   const normalized = normalizeForMode(draft);
+  // Để trống ngày = lọc tất cả (không ép về REPORT_PERIOD_*).
   return {
-    dateFrom: normalized.dateFrom || REPORT_PERIOD_START,
-    dateTo: normalized.dateTo || REPORT_PERIOD_END,
+    dateFrom: normalized.dateFrom,
+    dateTo: normalized.dateTo,
     projects: normalized.projects,
     personnel: normalized.personnel,
     machines: normalized.machines,
@@ -140,8 +123,8 @@ function sameFilters(a: AppliedReportFilters, b: AppliedReportFilters) {
 const ReportFilterContext = createContext<ReportFilterContextValue | null>(null);
 
 export function ReportFilterProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<DraftFilters>(currentMonthDraft);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(draft));
+  const [draft, setDraft] = useState<DraftFilters>(EMPTY_DRAFT);
+  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(EMPTY_DRAFT));
   const [appliedPeriodMode, setAppliedPeriodMode] = useState<ReportPeriodMode>("day");
 
   const setPeriodMode = useCallback((mode: ReportPeriodMode) => {
@@ -221,6 +204,19 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
     setAppliedPeriodMode(normalized.periodMode);
   }, [draft]);
 
+  // Tự áp dụng bộ lọc (debounce nhẹ) — mọi tab báo cáo hạch toán đúng theo lựa chọn hiện tại.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const normalized = normalizeForMode(draft);
+      setAppliedFilters((prev) => {
+        const next = toApplied(normalized);
+        return sameFilters(prev, next) ? prev : next;
+      });
+      setAppliedPeriodMode(normalized.periodMode);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [draft]);
+
   const clearFilters = useCallback(() => {
     setDraft(EMPTY_DRAFT);
     setAppliedFilters(toApplied(EMPTY_DRAFT));
@@ -232,8 +228,7 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
     !sameFilters(draftAsApplied, appliedFilters) || draft.periodMode !== appliedPeriodMode;
 
   const hasFilter =
-    appliedFilters.dateFrom !== REPORT_PERIOD_START ||
-    appliedFilters.dateTo !== REPORT_PERIOD_END ||
+    Boolean(appliedFilters.dateFrom || appliedFilters.dateTo) ||
     appliedFilters.projects.length > 0 ||
     appliedFilters.personnel.length > 0 ||
     appliedFilters.machines.length > 0 ||
@@ -247,7 +242,7 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
     (appliedFilters.machines.length ? 1 : 0) +
     (appliedFilters.methods.length ? 1 : 0) +
     (appliedFilters.weldTypes.length ? 1 : 0) +
-    (appliedFilters.dateFrom !== REPORT_PERIOD_START || appliedFilters.dateTo !== REPORT_PERIOD_END ? 1 : 0) +
+    (appliedFilters.dateFrom || appliedFilters.dateTo ? 1 : 0) +
     (appliedPeriodMode === "year" ? 1 : 0);
 
   const value = useMemo(

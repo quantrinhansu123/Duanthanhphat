@@ -147,17 +147,17 @@ export const navigation: NavItem[] = [
     children: [
       {
         id: "chung-chi-cong-ty",
-        label: "Chứng chỉ ISO/TCVN & QLCL",
-        labelEn: "Company Quality & ISO Certificates",
-        description: "Chứng chỉ ISO/TCVN và hồ sơ quản lý chất lượng của Công ty Thành Phát.",
-        descriptionEn: "ISO/TCVN certificates and quality management records of Thanh Phat Company.",
+        label: "Chứng chỉ quản lý chất lượng (ISO)",
+        labelEn: "Quality Management Certificates (ISO)",
+        description: "Chứng chỉ quản lý chất lượng (ISO) và hồ sơ của Công ty Thành Phát.",
+        descriptionEn: "ISO quality management certificates and records of Thanh Phat Company.",
       },
       {
         id: "tieu-chuan-tcvn",
-        label: "Yêu cầu TCVN & Đối chiếu ISO",
-        labelEn: "TCVN & ISO Compliance",
-        description: "Đối chiếu yêu cầu TCVN 13965-1/2:2024, ISO 9001 và minh chứng đáp ứng",
-        descriptionEn: "TCVN 13965-1/2:2024 & ISO 9001 compliance criteria and verification evidence",
+        label: "Yêu cầu về quản lý chất lượng",
+        labelEn: "Quality Management Requirements",
+        description: "Yêu cầu về quản lý chất lượng và minh chứng đáp ứng",
+        descriptionEn: "Quality management requirements and verification evidence",
       },
       {
         id: "nhat-ky-han",

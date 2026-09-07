@@ -337,8 +337,8 @@ const statusStyle = {
 export default function QualityReportDashboard() {
   const { appliedFilters } = useReportFilters();
   const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom,
-    appliedFilters.dateTo,
+    appliedFilters.dateFrom || undefined,
+    appliedFilters.dateTo || undefined,
   );
 
   const selectedRows = useMemo(

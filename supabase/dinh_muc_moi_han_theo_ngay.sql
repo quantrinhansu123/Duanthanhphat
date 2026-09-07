@@ -1,5 +1,7 @@
--- Định mức theo từng dự án/ngày = tổng thực tế của ngày + 5 mối.
--- Dữ liệu được lưu trong du_an.tien_do_ly_thuyet để biểu đồ "Dự kiến" sử dụng trực tiếp.
+-- Định mức theo dự án:
+--   • Có ngày thực hiện: mỗi ngày = count(bản ghi) + 5
+--   • Chỉ có năm: mốc YYYY-01-01 = count(năm) + 5 (bỏ qua nếu năm đó đã có ngày chi tiết)
+-- Lưu vào du_an.tien_do_ly_thuyet.
 
 create or replace function public.dong_bo_dinh_muc_moi_han(p_du_an_id uuid)
 returns void
@@ -17,55 +19,100 @@ begin
     return;
   end if;
 
-  select
-    coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'ngay', ngay_thuc_hien::text,
-          'so_moi_han', so_luong_thuc_hien + 5
-        )
-        order by ngay_thuc_hien
-      ),
-      '[]'::jsonb
-    ),
-    coalesce(sum(so_luong_thuc_hien + 5), 0)::integer,
-    min(ngay_thuc_hien),
-    max(ngay_thuc_hien)
-  into v_tien_do, v_tong_dinh_muc, v_ngay_bat_dau, v_ngay_ket_thuc
-  from (
+  with thuc_te_ngay as (
     select
-      ngay_thuc_hien,
-      sum(so_luong_thuc_hien)::integer as so_luong_thuc_hien
+      ngay_thuc_hien as ngay,
+      count(*)::integer as so_moi_han
     from public.lich_su_moi_han
     where du_an_id = p_du_an_id
       and ngay_thuc_hien is not null
     group by ngay_thuc_hien
-  ) as thuc_te_theo_ngay;
+  ),
+  nam_co_ngay as (
+    select distinct extract(year from ngay)::integer as nam
+    from thuc_te_ngay
+  ),
+  thuc_te_nam as (
+    select
+      make_date(nam_thuc_hien, 1, 1) as ngay,
+      count(*)::integer as so_moi_han
+    from public.lich_su_moi_han
+    where du_an_id = p_du_an_id
+      and ngay_thuc_hien is null
+      and nam_thuc_hien is not null
+      and nam_thuc_hien not in (select nam from nam_co_ngay)
+    group by nam_thuc_hien
+  ),
+  hop as (
+    select ngay, so_moi_han from thuc_te_ngay
+    union all
+    select ngay, so_moi_han from thuc_te_nam
+  )
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'ngay', ngay::text,
+          'so_moi_han', so_moi_han + 5
+        )
+        order by ngay
+      ),
+      '[]'::jsonb
+    ),
+    coalesce(sum(so_moi_han + 5), 0)::integer,
+    min(ngay),
+    max(ngay)
+  into v_tien_do, v_tong_dinh_muc, v_ngay_bat_dau, v_ngay_ket_thuc
+  from hop;
 
   if v_ngay_bat_dau is null then
     update public.du_an
-    set tong_moi_han_du_kien = 0,
-        tien_do_ly_thuyet = '[]'::jsonb
+    set tien_do_ly_thuyet = '[]'::jsonb,
+        tong_moi_han_du_kien = 0,
+        updated_at = now()
     where id = p_du_an_id;
     return;
   end if;
 
-  -- Trigger hiện có của du_an sẽ tạo kế hoạch tạm khi cập nhật tổng/ngày.
   update public.du_an
   set ngay_bat_dau = v_ngay_bat_dau,
       ngay_ket_thuc = v_ngay_ket_thuc,
-      tong_moi_han_du_kien = v_tong_dinh_muc
+      tong_moi_han_du_kien = v_tong_dinh_muc,
+      updated_at = now()
   where id = p_du_an_id;
 
-  -- Ghi đè bằng định mức chính xác dựa trên dữ liệu thực tế từng ngày.
   update public.du_an
-  set tien_do_ly_thuyet = v_tien_do
+  set tien_do_ly_thuyet = v_tien_do,
+      tong_moi_han_du_kien = v_tong_dinh_muc,
+      updated_at = now()
   where id = p_du_an_id;
 end;
 $$;
 
 comment on function public.dong_bo_dinh_muc_moi_han(uuid) is
-  'Đồng bộ du_an.tien_do_ly_thuyet: định mức mỗi dự án/ngày bằng tổng thực tế + 5 mối';
+  'Đồng bộ tien_do_ly_thuyet: thực tế + 5 (theo ngày hoặc theo năm nếu thiếu ngày)';
+
+create or replace function public.dong_bo_dinh_muc_moi_han_tat_ca()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_du_an_id uuid;
+  v_count integer := 0;
+begin
+  for v_du_an_id in select id from public.du_an
+  loop
+    perform public.dong_bo_dinh_muc_moi_han(v_du_an_id);
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end;
+$$;
+
+grant execute on function public.dong_bo_dinh_muc_moi_han(uuid) to anon, authenticated, service_role;
+grant execute on function public.dong_bo_dinh_muc_moi_han_tat_ca() to anon, authenticated, service_role;
 
 create or replace function public.trg_dong_bo_dinh_muc_sau_insert()
 returns trigger
@@ -139,44 +186,6 @@ create trigger trg_dong_bo_dinh_muc_sau_update
   referencing old table as old_rows new table as new_rows
   for each statement execute function public.trg_dong_bo_dinh_muc_sau_update();
 
--- Đồng bộ ngay toàn bộ dự án đang có dữ liệu.
-do $$
-declare
-  v_du_an_id uuid;
-begin
-  for v_du_an_id in select id from public.du_an
-  loop
-    perform public.dong_bo_dinh_muc_moi_han(v_du_an_id);
-  end loop;
-end;
-$$;
-
--- Kiểm tra: mọi dự án/ngày phải có định mức = thực tế + 5.
-do $$
-begin
-  if exists (
-    with thuc_te as (
-      select du_an_id, ngay_thuc_hien as ngay, sum(so_luong_thuc_hien)::integer as so_moi_han
-      from public.lich_su_moi_han
-      where ngay_thuc_hien is not null
-      group by du_an_id, ngay_thuc_hien
-    ),
-    dinh_muc as (
-      select
-        du_an.id as du_an_id,
-        (item ->> 'ngay')::date as ngay,
-        (item ->> 'so_moi_han')::integer as so_moi_han
-      from public.du_an
-      cross join lateral jsonb_array_elements(du_an.tien_do_ly_thuyet) as item
-    )
-    select 1
-    from thuc_te
-    full join dinh_muc using (du_an_id, ngay)
-    where dinh_muc.so_moi_han is distinct from thuc_te.so_moi_han + 5
-  ) then
-    raise exception 'Định mức chưa khớp thực tế + 5';
-  end if;
-end;
-$$;
+select public.dong_bo_dinh_muc_moi_han_tat_ca() as so_du_an_da_dong_bo;
 
 notify pgrst, 'reload schema';

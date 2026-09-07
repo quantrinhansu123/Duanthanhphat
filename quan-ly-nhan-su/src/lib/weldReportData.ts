@@ -1219,11 +1219,12 @@ export function buildDailyJournalSeries(
   const end = new Date(`${dateTo}T00:00:00`);
   const dayCount = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
 
+  // 1 bản ghi nhật ký = 1 mối — đồng bộ summarizeJournalRows / KPI theo bộ lọc.
   const counts = new Map<string, number>();
   rows.forEach((row, index) => {
     const iso = getJournalRowDateIso(row, index);
     if (iso && iso >= dateFrom && iso <= dateTo) {
-      counts.set(iso, (counts.get(iso) ?? 0) + row.so_luong_thuc_hien);
+      counts.set(iso, (counts.get(iso) ?? 0) + 1);
     }
   });
 

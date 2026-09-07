@@ -26,8 +26,8 @@ const PORTRAIT_IDS = [32, 52, 36, 22, 48, 44];
 export default function PersonnelReportDashboard() {
   const { appliedFilters } = useReportFilters();
   const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom,
-    appliedFilters.dateTo,
+    appliedFilters.dateFrom || undefined,
+    appliedFilters.dateTo || undefined,
   );
   const [teamFilter, setTeamFilter] = useState("Tất cả tổ hàn");
   const [certList, setCertList] = useState<CertificateType[]>([]);

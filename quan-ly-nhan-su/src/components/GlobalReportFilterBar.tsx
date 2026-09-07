@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import { REPORT_MACHINES, REPORT_PERIOD_END, REPORT_PERIOD_START, uniqueReportValues } from "@/lib/weldReportData";
+import { REPORT_MACHINES, uniqueReportValues } from "@/lib/weldReportData";
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -21,8 +21,8 @@ function filterPickLabel(count: number, defaultText: string) {
 export default function GlobalReportFilterBar() {
   const reportFilters = useReportFilters();
   const { rows } = useWeldReportData(
-    reportFilters.appliedFilters.dateFrom,
-    reportFilters.appliedFilters.dateTo,
+    reportFilters.appliedFilters.dateFrom || undefined,
+    reportFilters.appliedFilters.dateTo || undefined,
   );
   const [dbMachines, setDbMachines] = useState<string[]>([]);
   const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
@@ -50,6 +50,7 @@ export default function GlobalReportFilterBar() {
 
   const {
     filterCount,
+    hasFilter,
     appliedFilters,
     isDirty,
     dateFrom,
@@ -76,12 +77,14 @@ export default function GlobalReportFilterBar() {
   const [machineFilterOpen, setMachineFilterOpen] = useState(false);
   const [methodFilterOpen, setMethodFilterOpen] = useState(false);
   const [weldTypeFilterOpen, setWeldTypeFilterOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   const activeSummary = useMemo(() => {
     const parts: string[] = [];
-    if (appliedFilters.dateFrom !== REPORT_PERIOD_START || appliedFilters.dateTo !== REPORT_PERIOD_END) {
-      parts.push(`${appliedFilters.dateFrom} → ${appliedFilters.dateTo}`);
+    if (appliedFilters.dateFrom || appliedFilters.dateTo) {
+      parts.push(
+        `${appliedFilters.dateFrom || "…"} → ${appliedFilters.dateTo || "…"}`,
+      );
     }
     if (appliedFilters.projects.length) parts.push(`${appliedFilters.projects.length} dự án`);
     if (appliedFilters.personnel.length) parts.push(`${appliedFilters.personnel.length} nhân sự`);
@@ -156,9 +159,27 @@ export default function GlobalReportFilterBar() {
                 <span className="min-w-0 truncate text-xs text-slate-500">{activeSummary}</span>
               )}
             </div>
-            <span className="shrink-0 text-xs sm:text-sm font-semibold text-[#0047AB]">
-              {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              {hasFilter ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearFilters();
+                  }}
+                  className="inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Lọc tất cả
+                </button>
+              ) : (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                  Đang xem tất cả
+                </span>
+              )}
+              <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">
+                {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
+              </span>
+            </div>
           </button>
 
           {filtersOpen && (
@@ -183,6 +204,9 @@ export default function GlobalReportFilterBar() {
                   }}
                   className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
                 />
+                {!dateFrom && !dateTo ? (
+                  <span className="mt-0.5 block text-[10px] text-slate-400">Trống = tất cả</span>
+                ) : null}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -373,21 +397,18 @@ export default function GlobalReportFilterBar() {
             </div>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              {isDirty && (
-                <span className="text-[11px] font-medium text-amber-700">Chưa áp dụng · nhấn Enter</span>
-              )}
               <button
                 type="button"
                 onClick={clearFilters}
                 className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
-                Xóa lọc
+                Lọc tất cả
               </button>
               <button
                 type="submit"
                 className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer shadow-xs"
               >
-                Áp dụng (Enter)
+                {isDirty ? "Áp dụng ngay" : "Đã áp dụng"}
               </button>
             </div>
           </div>
