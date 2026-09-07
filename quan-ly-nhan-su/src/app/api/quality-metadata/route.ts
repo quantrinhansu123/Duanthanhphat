@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatSupabaseError } from "@/lib/supabase/env";
 
 const CERT_STATUSES = new Set(["Chưa cập nhật", "Còn hiệu lực", "Sắp hết hạn", "Hết hạn"]);
 const COMPLIANCE_STATUSES = new Set(["Chưa đánh giá", "Thiếu minh chứng", "Đáp ứng một phần", "Đạt"]);
@@ -28,7 +29,7 @@ export async function GET() {
       assessments: assessments.data ?? [],
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Không tải được metadata QLCL.";
+    const message = formatSupabaseError(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "Loại metadata không được hỗ trợ." }, { status: 400 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Không lưu được metadata QLCL.";
+    const message = formatSupabaseError(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -133,7 +134,7 @@ export async function DELETE(request: Request) {
     }
     return NextResponse.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Không xóa được chứng chỉ công ty.";
+    const message = formatSupabaseError(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

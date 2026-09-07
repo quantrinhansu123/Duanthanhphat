@@ -3,6 +3,15 @@ import type { DriveDocumentItem } from "./googleDrive/types";
 export type { DriveDocumentItem };
 
 const MAX_PDF_BYTES = 250 * 1024 * 1024;
+const CONFIRMABLE_APP_PROPERTY_KEYS = new Set([
+  "entityType",
+  "employeeId",
+  "weldingId",
+  "documentType",
+  "source",
+  "category",
+  "certificateId",
+]);
 
 export async function fetchDriveDocuments(): Promise<{
   configured: boolean;
@@ -31,6 +40,89 @@ export async function fetchDriveDocuments(): Promise<{
   }
 }
 
+function toDriveDocumentItem(
+  response: Partial<DriveDocumentItem> & { size?: number | string },
+  fallback: { file: File; title: string; description: string },
+): DriveDocumentItem | undefined {
+  if (!response.id) return undefined;
+  return {
+    id: response.id,
+    name: response.name || fallback.title || fallback.file.name,
+    description: response.description || fallback.description,
+    size: Number(response.size || fallback.file.size),
+    mimeType: response.mimeType || "application/pdf",
+    createdTime: response.createdTime || new Date().toISOString(),
+    modifiedTime: response.modifiedTime,
+    webViewLink: response.webViewLink,
+    webContentLink: response.webContentLink,
+    thumbnailLink: response.thumbnailLink,
+    appProperties: response.appProperties,
+    md5Checksum: response.md5Checksum,
+  };
+}
+
+function expectedPdfName(title: string, file: File) {
+  const value = (title.trim() || file.name).trim();
+  return value.toLowerCase().endsWith(".pdf") ? value : `${value}.pdf`;
+}
+
+function matchesExpectedProperties(
+  item: DriveDocumentItem,
+  expected?: Record<string, string>,
+) {
+  const entries = Object.entries(expected ?? {}).filter(
+    ([key, value]) => CONFIRMABLE_APP_PROPERTY_KEYS.has(key) && value.trim(),
+  );
+  return entries.every(([key, value]) => item.appProperties?.[key] === value.trim());
+}
+
+async function confirmCompletedDriveUpload(params: {
+  uploadUrl: string;
+  file: File;
+  title: string;
+  description: string;
+  startedAt: number;
+  appProperties?: Record<string, string>;
+  expectedFileId?: string;
+}): Promise<{ success: boolean; item?: DriveDocumentItem; error?: string }> {
+  try {
+    const statusResponse = await fetch("/api/documents/resumable/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadUrl: params.uploadUrl, fileSize: params.file.size }),
+    });
+    const statusData = await statusResponse.json().catch(() => ({}));
+    if (statusResponse.ok && statusData.complete) {
+      const item = toDriveDocumentItem(statusData.item ?? {}, params);
+      if (item) return { success: true, item };
+    }
+  } catch {
+    // Nếu phiên đã hoàn tất nhưng phản hồi bị chặn, đối chiếu lại danh sách file bên dưới.
+  }
+
+  const targetName = expectedPdfName(params.title, params.file).toLocaleLowerCase("vi");
+  for (const delay of [250, 750, 1500]) {
+    await new Promise((resolve) => window.setTimeout(resolve, delay));
+    const result = await fetchDriveDocuments();
+    const item = result.items
+      .filter((candidate) => {
+        if (params.expectedFileId && candidate.id !== params.expectedFileId) return false;
+        if (!params.expectedFileId && candidate.name.toLocaleLowerCase("vi") !== targetName) return false;
+        if (Number(candidate.size) !== params.file.size) return false;
+        if (!matchesExpectedProperties(candidate, params.appProperties)) return false;
+        const timestamp = Date.parse(candidate.modifiedTime || candidate.createdTime);
+        return !Number.isFinite(timestamp) || timestamp >= params.startedAt - 10_000;
+      })
+      .sort((a, b) => Date.parse(b.modifiedTime || b.createdTime) - Date.parse(a.modifiedTime || a.createdTime))[0];
+    if (item) return { success: true, item };
+  }
+
+  return {
+    success: false,
+    error: "Không nhận được phản hồi hoàn tất từ Google Drive. Hãy kiểm tra thư mục Drive trước khi tải lại.",
+  };
+}
+
 export async function uploadDocumentToDrive(
   file: File,
   title: string,
@@ -45,6 +137,8 @@ export async function uploadDocumentToDrive(
     if (file.size <= 0 || file.size > MAX_PDF_BYTES) {
       return { success: false, error: "Dung lượng PDF phải lớn hơn 0 và không vượt quá 250 MB." };
     }
+
+    const startedAt = Date.now();
 
     // 1. Khởi tạo phiên upload resumable trên server
     const initRes = await fetch("/api/documents/resumable", {
@@ -85,22 +179,7 @@ export async function uploadDocumentToDrive(
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const response = JSON.parse(xhr.responseText || "{}") as Partial<DriveDocumentItem> & { size?: number | string };
-            const item = response.id
-              ? {
-                  id: response.id,
-                  name: response.name || title || file.name,
-                  description: response.description || description,
-                  size: Number(response.size || file.size),
-                  mimeType: response.mimeType || "application/pdf",
-                  createdTime: response.createdTime || new Date().toISOString(),
-                  modifiedTime: response.modifiedTime,
-                  webViewLink: response.webViewLink,
-                  webContentLink: response.webContentLink,
-                  thumbnailLink: response.thumbnailLink,
-                  appProperties: response.appProperties,
-                  md5Checksum: response.md5Checksum,
-                }
-              : undefined;
+            const item = toDriveDocumentItem(response, { file, title, description });
             resolve({ success: true, item });
           } catch {
             resolve({ success: true });
@@ -114,7 +193,14 @@ export async function uploadDocumentToDrive(
       };
 
       xhr.onerror = () => {
-        resolve({ success: false, error: "Lỗi kết nối mạng trong quá trình tải trực tiếp lên Drive." });
+        void confirmCompletedDriveUpload({
+          uploadUrl,
+          file,
+          title,
+          description,
+          startedAt,
+          appProperties,
+        }).then(resolve);
       };
 
       xhr.send(file);
@@ -181,6 +267,7 @@ export async function replaceDocumentContentInDrive(
       return { success: false, error: "Dung lượng PDF phải lớn hơn 0 và không vượt quá 250 MB." };
     }
 
+    const startedAt = Date.now();
     const initRes = await fetch("/api/documents/replace-content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -225,7 +312,14 @@ export async function replaceDocumentContentInDrive(
       };
 
       xhr.onerror = () => {
-        resolve({ success: false, error: "Lỗi kết nối mạng trong quá trình thay thế file Drive." });
+        void confirmCompletedDriveUpload({
+          uploadUrl,
+          file,
+          title: title || file.name,
+          description: description || "",
+          startedAt,
+          expectedFileId: fileId,
+        }).then((result) => resolve({ success: result.success, error: result.error }));
       };
 
       xhr.send(file);

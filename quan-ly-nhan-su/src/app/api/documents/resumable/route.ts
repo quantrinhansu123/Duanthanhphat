@@ -46,7 +46,15 @@ export async function POST(req: NextRequest) {
     };
 
     if (body.appProperties && typeof body.appProperties === "object") {
-      const allowedKeys = ["entityType", "employeeId", "weldingId", "documentType", "source", "category"];
+      const allowedKeys = [
+        "entityType",
+        "employeeId",
+        "weldingId",
+        "documentType",
+        "source",
+        "category",
+        "certificateId",
+      ];
       const props: Record<string, string> = {};
       for (const key of allowedKeys) {
         if (typeof body.appProperties[key] === "string" && body.appProperties[key].trim()) {
