@@ -3,17 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Welder } from "@/data/welders";
 import type { Machine } from "@/data/machines";
-import { sharedCatalogs } from "@/data/systemConfig";
 import { X } from "@/components/icons";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import {
   parseTrainedMachineTokens,
   personTrainedOnMachine,
 } from "@/lib/personnelCertificatesDb";
-
-const CATALOG_RAIL_TYPES = sharedCatalogs
-  .filter((item) => item.group === "Loại ray" && item.active)
-  .map((item) => item.code);
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 export type WelderFormValues = {
   id?: string;
@@ -37,7 +33,7 @@ const emptyForm: WelderFormValues = {
   weldingId: "",
   name: "",
   position: "Thợ hàn",
-  department: "Phòng Sản xuất",
+  department: "Bộ phận hàn ray (Welding Department)",
   weldingTeam: "Tổ hàn 1",
   rank: "Hạng 2",
   railTypes: "",
@@ -72,6 +68,17 @@ export default function WelderFormModal({
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
 
+  const configuredRailOptions = useCatalogOptions("Loại ray");
+  const departmentOptions = useCatalogOptions("Phòng ban", "name");
+  const defaultDepartment = departmentOptions[0] || "Bộ phận hàn ray (Welding Department)";
+  const effectiveDepartments = useMemo(() => {
+    const list = departmentOptions.length > 0 ? departmentOptions : ["Bộ phận hàn ray (Welding Department)"];
+    if (form.department && !list.includes(form.department)) {
+      return [form.department, ...list];
+    }
+    return list;
+  }, [departmentOptions, form.department]);
+
   const selectedRailTypes = useMemo(
     () => parseTrainedMachineTokens(form.railTypes),
     [form.railTypes],
@@ -79,10 +86,10 @@ export default function WelderFormModal({
 
   const railTypeChoices = useMemo(() => {
     const fromProp = (railOptions ?? []).map((v) => v.trim()).filter(Boolean);
-    return Array.from(new Set([...CATALOG_RAIL_TYPES, ...fromProp, ...selectedRailTypes])).sort((a, b) =>
+    return Array.from(new Set([...configuredRailOptions, ...fromProp, ...selectedRailTypes])).sort((a, b) =>
       a.localeCompare(b, "vi"),
     );
-  }, [railOptions, selectedRailTypes]);
+  }, [configuredRailOptions, railOptions, selectedRailTypes]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +99,7 @@ export default function WelderFormModal({
         weldingId: initial.weldingId === "Chưa có mã" ? "" : initial.weldingId,
         name: initial.name,
         position: initial.position,
-        department: initial.department === "Chưa cập nhật" ? "" : initial.department,
+        department: initial.department && initial.department !== "Chưa cập nhật" ? initial.department : defaultDepartment,
         weldingTeam: initial.weldingTeam === "Chưa phân tổ" ? "" : initial.weldingTeam,
         rank: initial.rank === "Chưa phân hạng" ? "Hạng 2" : initial.rank,
         railTypes: initial.railTypes === "Chưa cập nhật" ? "" : initial.railTypes,
@@ -102,10 +109,10 @@ export default function WelderFormModal({
         status: initial.status,
       });
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, department: defaultDepartment });
     }
     setError("");
-  }, [open, initial]);
+  }, [open, initial, defaultDepartment]);
 
   useEffect(() => {
     if (!open) return;
@@ -239,7 +246,17 @@ export default function WelderFormModal({
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                 {isEn ? "Department" : "Đơn vị"}
               </label>
-              <input className={fieldClass} value={form.department} onChange={(e) => set("department", e.target.value)} />
+              <select
+                className={fieldClass}
+                value={form.department || defaultDepartment}
+                onChange={(e) => set("department", e.target.value)}
+              >
+                {effectiveDepartments.map((dep) => (
+                  <option key={dep} value={dep}>
+                    {dep}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

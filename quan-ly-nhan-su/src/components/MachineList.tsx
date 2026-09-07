@@ -32,6 +32,8 @@ import {
 } from "@/lib/machineCatalogDb";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import { useProjectsData } from "@/hooks/useProjectsData";
 import {
   appendTrainedMachineToken,
   loadPersonnelCertificateRows,
@@ -1331,6 +1333,22 @@ function MachineFormModal({
   const [formTab, setFormTab] = useState<"assembly" | "vehicle">("assembly");
   const [isUploading, setIsUploading] = useState(false);
   const isCreate = mode === "create";
+  const railOptions = useCatalogOptions("Loại ray");
+  const { projects } = useProjectsData();
+  const selectedRails = form.supportedRails
+    .split(/[,;|/]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  function toggleRail(rail: string) {
+    const next = new Set(selectedRails);
+    if (next.has(rail)) next.delete(rail);
+    else next.add(rail);
+    setForm((previous) => ({
+      ...previous,
+      supportedRails: railOptions.filter((item) => next.has(item)).join(", "),
+    }));
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1514,14 +1532,17 @@ function MachineFormModal({
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Loại ray hỗ trợ
-                  <input
-                    value={form.supportedRails}
-                    onChange={(e) => setForm({ ...form, supportedRails: e.target.value })}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
-                  />
-                </label>
+                  <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
+                    {railOptions.map((rail) => (
+                      <label key={rail} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 font-mono text-xs text-slate-700 hover:bg-slate-50">
+                        <input type="checkbox" checked={selectedRails.includes(rail)} onChange={() => toggleRail(rail)} className="h-4 w-4 accent-[#0047AB]" />
+                        {rail}
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1536,12 +1557,17 @@ function MachineFormModal({
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Dự án đang phục vụ
-                  <input
+                  <select
                     value={form.currentProject}
                     onChange={(e) => setForm({ ...form, currentProject: e.target.value })}
-                    placeholder="VD: Dự án ĐSCT Bắc – Nam"
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
+                  >
+                    <option value="">Chưa gắn dự án</option>
+                    {!projects.some((project) => project.name === form.currentProject) && form.currentProject && (
+                      <option value={form.currentProject}>{form.currentProject}</option>
+                    )}
+                    {projects.map((project) => <option key={project.id} value={project.name}>{project.name}</option>)}
+                  </select>
                 </label>
               </div>
 

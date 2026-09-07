@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { weldingTrays, type WeldingTray } from "@/data/welding-trays";
 import { CaretRight, MagnifyingGlass } from "@/components/icons";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 const statusStyle: Record<WeldingTray["status"], string> = {
   "Sẵn sàng": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -42,6 +43,16 @@ function TrayFormFields({
   form: WeldingTray;
   setForm: (t: WeldingTray) => void;
 }) {
+  const railOptions = useCatalogOptions("Loại ray");
+  const selectedRails = form.railTypes.split(/[,;|/]+/).map((value) => value.trim()).filter(Boolean);
+
+  function toggleRail(rail: string) {
+    const next = new Set(selectedRails);
+    if (next.has(rail)) next.delete(rail);
+    else next.add(rail);
+    setForm({ ...form, railTypes: railOptions.filter((item) => next.has(item)).join(", ") });
+  }
+
   return (
     <div className="space-y-3.5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -103,15 +114,17 @@ function TrayFormFields({
             className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </label>
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Loại ray
-          <input
-            value={form.railTypes}
-            onChange={(e) => setForm({ ...form, railTypes: e.target.value })}
-            placeholder="VD: UIC60, P50"
-            className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </label>
+          <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
+            {railOptions.map((rail) => (
+              <label key={rail} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs font-mono text-slate-700 hover:bg-slate-50">
+                <input type="checkbox" checked={selectedRails.includes(rail)} onChange={() => toggleRail(rail)} className="h-4 w-4 accent-[#0047AB]" />
+                {rail}
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
         Người phụ trách

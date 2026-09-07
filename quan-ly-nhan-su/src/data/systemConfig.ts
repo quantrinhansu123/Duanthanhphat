@@ -26,6 +26,13 @@ export type InitialAccount = {
   note: string;
 };
 
+export type StoredSystemConfiguration = {
+  catalogs: CatalogItem[];
+  settings: SystemSettings;
+  accounts: InitialAccount[];
+  updatedAt?: string;
+};
+
 export const catalogGroups = [
   "Loại ray",
   "Phương pháp hàn",
@@ -39,17 +46,18 @@ export const catalogGroups = [
 export type CatalogGroup = (typeof catalogGroups)[number];
 
 export const sharedCatalogs: CatalogItem[] = [
-  { id: "1", code: "UIC60", name: "UIC60", group: "Loại ray", active: true },
-  { id: "2", code: "P50", name: "P50", group: "Loại ray", active: true },
-  { id: "3", code: "P43", name: "P43", group: "Loại ray", active: true },
-  { id: "4", code: "50N", name: "50N", group: "Loại ray", active: true },
+  { id: "rail-p50", code: "P50", name: "P50", group: "Loại ray", active: true },
+  { id: "rail-50n", code: "50N", name: "50N", group: "Loại ray", active: true },
+  { id: "rail-60e1", code: "60E1", name: "60E1", group: "Loại ray", active: true },
+  { id: "rail-60n", code: "60N", name: "60N", group: "Loại ray", active: true },
+  { id: "rail-60r2", code: "60R2", name: "60R2", group: "Loại ray", active: true },
+  { id: "rail-cr100", code: "CR100", name: "CR100", group: "Loại ray", active: true },
   { id: "5", code: "FBW", name: "Flash Butt Welding (hàn điểm)", group: "Phương pháp hàn", active: true },
   { id: "6", code: "ATW", name: "Aluminothermic Welding (hàn nhiệt)", group: "Phương pháp hàn", active: true },
   { id: "7", code: "TN", name: "Thử nghiệm", group: "Loại mối hàn", active: true },
   { id: "8", code: "DT", name: "Đào tạo", group: "Loại mối hàn", active: true },
   { id: "9", code: "SX", name: "Sản xuất", group: "Loại mối hàn", active: true },
-  { id: "10", code: "CNTT", name: "Phòng Công nghệ thông tin", group: "Phòng ban", active: true },
-  { id: "11", code: "SXU", name: "Phòng Sản xuất", group: "Phòng ban", active: true },
+  { id: "department-welding", code: "WD", name: "Bộ phận hàn ray (Welding Department)", group: "Phòng ban", active: true },
   { id: "12", code: "HN", name: "Nhà máy Hà Nội", group: "Nhà máy", active: true },
   { id: "13", code: "DN", name: "Nhà máy Đà Nẵng", group: "Nhà máy", active: true },
   { id: "14", code: "HCM", name: "Nhà máy TP.HCM", group: "Nhà máy", active: true },

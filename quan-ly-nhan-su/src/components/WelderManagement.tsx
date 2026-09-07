@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { welders as seedWelders, type Welder } from "@/data/welders";
 import type { Certificate } from "@/data/certificates";
 import type { Machine } from "@/data/machines";
-import { sharedCatalogs } from "@/data/systemConfig";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
   MagnifyingGlass,
   CaretDown,
@@ -35,7 +35,7 @@ import WelderFormModal, { type WelderFormValues } from "@/components/WelderFormM
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { loadWeldReportRows, uniqueReportValues, type WeldReportRow } from "@/lib/weldReportData";
+import { loadWeldReportRows, type WeldReportRow } from "@/lib/weldReportData";
 import {
   fetchDriveDocuments,
   uploadDocumentToDrive,
@@ -273,6 +273,7 @@ function MultiSelectCombobox({
 }
 
 export default function WelderManagement() {
+  const configuredRailOptions = useCatalogOptions("Loại ray");
   const { lang } = useLanguage();
   const isEn = lang === "en";
 
@@ -890,18 +891,7 @@ export default function WelderManagement() {
   );
 
   const rankOptions = useMemo(() => Array.from(new Set(list.map((w) => w.rank))).sort(), [list]);  const teamOptions = useMemo(() => Array.from(new Set(list.map((w) => w.weldingTeam))).sort(), [list]);
-  const railOptions = useMemo(() => {
-    const catalog = sharedCatalogs
-      .filter((item) => item.group === "Loại ray" && item.active)
-      .map((item) => item.code);
-    const fromJournal = uniqueReportValues(allWeldRows, "loai_ray");
-    const fromWelders = list.flatMap((w) =>
-      w.railTypes.split(/[,;|/]+/).map((s) => s.trim()).filter((s) => s && s !== "Chưa cập nhật"),
-    );
-    return Array.from(new Set([...catalog, ...fromJournal, ...fromWelders])).sort((a, b) =>
-      a.localeCompare(b, "vi"),
-    );
-  }, [allWeldRows, list]);
+  const railOptions = configuredRailOptions;
   const machineOptions = useMemo(() => {
     return Array.from(new Set(machineCatalog.map((machine) => machine.code.trim()).filter(Boolean)))
       .sort((a, b) => a.localeCompare(b, "vi"));

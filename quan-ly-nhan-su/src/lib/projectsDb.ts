@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { projects as seedProjects, type Project } from "@/data/projects";
+import type { ProjectMetadata, ProjectMetadataStore } from "@/data/projectMetadata";
+import { deleteProjectMetadata, loadProjectMetadata, saveProjectMetadata } from "@/lib/projectMetadataClient";
 
 /** Một dòng tiến độ lý thuyết trong JSONB bảng du_an. */
 export type TheoreticalProgressRow = {
@@ -105,7 +107,14 @@ function hydrateProjectPlan(project: Project): Project {
   };
 }
 
-export function duAnRowToProject(row: DuAnRow, managerName = ""): Project {
+const CANONICAL_RAIL_CODES = ["CR100", "60R2", "60E1", "60N", "50N", "P50"];
+
+export function inferRailTypesFromName(name: string): string[] {
+  const upper = name.toUpperCase();
+  return CANONICAL_RAIL_CODES.filter((code) => upper.includes(code));
+}
+
+export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: ProjectMetadata): Project {
   const existingProgress = normalizeTheoreticalProgress(row.tien_do_ly_thuyet);
   const startDate = row.ngay_bat_dau?.slice(0, 10) || existingProgress[0]?.ngay || row.created_at.slice(0, 10);
   const endDate = row.ngay_ket_thuc?.slice(0, 10) || existingProgress.at(-1)?.ngay || startDate;
@@ -116,23 +125,28 @@ export function duAnRowToProject(row: DuAnRow, managerName = ""): Project {
         existingProgress.reduce((sum, item) => sum + item.so_moi_han, 0),
     ),
   );
+  const fallbackRails = inferRailTypesFromName(row.du_an);
+  const fallbackPersonnel = row.nguoi_phu_trach ? [row.nguoi_phu_trach] : [];
+  const personnelIds = metadata?.personnelIds?.length ? metadata.personnelIds : fallbackPersonnel;
+  const railTypes = metadata?.railTypes?.length ? metadata.railTypes : fallbackRails;
+
   return {
     id: row.id,
     name: row.du_an,
     manager: managerName,
     managerId: row.nguoi_phu_trach ?? undefined,
     plant: "",
-    staffCount: 0,
-    machineCount: 0,
-    status: "Đang triển khai",
+    staffCount: personnelIds.length,
+    machineCount: (metadata?.machineTypes ?? []).length,
+    status: metadata?.status ?? "Đang triển khai",
     startDate,
     endDate,
     location: row.vi_tri?.trim() || "here",
     plannedWeldCount,
-    personnelIds: [],
-    machineTypes: [],
-    weldTypes: [],
-    railTypes: [],
+    personnelIds,
+    machineTypes: metadata?.machineTypes ?? [],
+    weldTypes: metadata?.weldTypes ?? [],
+    railTypes,
     theoreticalProgress:
       existingProgress.length > 0
         ? existingProgress
@@ -210,16 +224,21 @@ async function fetchProjects() {
     return { projects: [], source: "supabase" as const };
   }
 
-  const { data: personnelRows } = await supabase
-    .from("nhan_su")
-    .select("employee_id,ho_ten");
+  const [{ data: personnelRows }, metadata] = await Promise.all([
+    supabase.from("nhan_su").select("employee_id,ho_ten"),
+    loadProjectMetadata().catch(() => ({} as ProjectMetadataStore)),
+  ]);
   const managerNames = new Map(
     (personnelRows ?? []).map((person) => [String(person.employee_id), String(person.ho_ten ?? "")]),
   );
 
   return {
     projects: (data as DuAnRow[]).map((row) =>
-      duAnRowToProject(row, row.nguoi_phu_trach ? managerNames.get(row.nguoi_phu_trach) ?? "" : ""),
+      duAnRowToProject(
+        row,
+        row.nguoi_phu_trach ? managerNames.get(row.nguoi_phu_trach) ?? "" : "",
+        metadata[row.id],
+      ),
     ),
     source: "supabase" as const,
   };
@@ -254,6 +273,11 @@ export async function insertDuAn(payload: {
   startDate: string;
   endDate: string;
   plannedWeldCount: number;
+  status?: Project["status"];
+  personnelIds?: string[];
+  machineTypes?: string[];
+  weldTypes?: string[];
+  railTypes?: string[];
 }): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
     return { error: "Chưa cấu hình Supabase env" };
@@ -283,8 +307,22 @@ export async function insertDuAn(payload: {
     .single();
 
   if (error) return { error: error.message };
+  const metadata: ProjectMetadata = {
+    status: payload.status ?? "Đang triển khai",
+    personnelIds: payload.personnelIds ?? [],
+    machineTypes: payload.machineTypes ?? [],
+    weldTypes: payload.weldTypes ?? [],
+    railTypes: payload.railTypes ?? [],
+  };
+  try {
+    await saveProjectMetadata(String(data.id), metadata);
+  } catch (metadataError) {
+    console.warn("Could not save project metadata:", metadataError);
+  }
   invalidateProjectsCache();
-  return { project: duAnRowToProject(data as DuAnRow, payload.manager.trim()) };
+  return {
+    project: duAnRowToProject(data as DuAnRow, payload.manager.trim(), metadata),
+  };
 }
 
 export async function updateDuAn(
@@ -297,6 +335,11 @@ export async function updateDuAn(
     startDate?: string;
     endDate?: string;
     plannedWeldCount?: number;
+    status?: Project["status"];
+    personnelIds?: string[];
+    machineTypes?: string[];
+    weldTypes?: string[];
+    railTypes?: string[];
   },
 ): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
@@ -325,21 +368,42 @@ export async function updateDuAn(
     );
   }
 
-  if (Object.keys(body).length === 0) {
-    return { error: "Không có thay đổi để lưu" };
+  const supabase = createClient();
+  let updatedRow: DuAnRow | null = null;
+  if (Object.keys(body).length > 0) {
+    const { data, error } = await supabase
+      .from("du_an")
+      .update(body)
+      .eq("id", projectId)
+      .select(DU_AN_COLUMNS)
+      .single();
+
+    if (error) return { error: error.message };
+    updatedRow = data as DuAnRow;
+  } else {
+    const { data, error } = await supabase
+      .from("du_an")
+      .select(DU_AN_COLUMNS)
+      .eq("id", projectId)
+      .single();
+    if (error) return { error: error.message };
+    updatedRow = data as DuAnRow;
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("du_an")
-    .update(body)
-    .eq("id", projectId)
-    .select(DU_AN_COLUMNS)
-    .single();
-
-  if (error) return { error: error.message };
+  const metadata: ProjectMetadata = {
+    status: patch.status ?? "Đang triển khai",
+    personnelIds: patch.personnelIds ?? [],
+    machineTypes: patch.machineTypes ?? [],
+    weldTypes: patch.weldTypes ?? [],
+    railTypes: patch.railTypes ?? [],
+  };
+  try {
+    await saveProjectMetadata(projectId, metadata);
+  } catch (metadataError) {
+    console.warn("Could not save project metadata:", metadataError);
+  }
   invalidateProjectsCache();
-  return { project: duAnRowToProject(data as DuAnRow, patch.manager?.trim() ?? "") };
+  return { project: duAnRowToProject(updatedRow, patch.manager?.trim() ?? "", metadata) };
 }
 
 export async function deleteDuAn(projectId: string): Promise<{ error?: string }> {
@@ -350,6 +414,11 @@ export async function deleteDuAn(projectId: string): Promise<{ error?: string }>
   const supabase = createClient();
   const { error } = await supabase.from("du_an").delete().eq("id", projectId);
   if (error) return { error: error.message };
+  try {
+    await deleteProjectMetadata(projectId);
+  } catch (metadataError) {
+    console.warn("Could not delete project metadata:", metadataError);
+  }
   invalidateProjectsCache();
   return {};
 }

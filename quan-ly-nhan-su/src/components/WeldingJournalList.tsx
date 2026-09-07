@@ -6,6 +6,7 @@ import { DownloadSimple } from "@/components/icons";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
 import {
@@ -81,7 +82,7 @@ function emptyJournalForm(
   const project = projects[0];
   const isInternalTraining = isInternalTrainingProject(project?.label ?? "");
   const context = {
-    railType: "UIC60",
+    railType: "P50",
     method: "FBW" as const,
     machineCode: machine?.code,
     machineName: machine?.name,
@@ -95,7 +96,7 @@ function emptyJournalForm(
     du_an_id: project?.id ?? "",
     tho_han_id: welder?.id ?? "",
     may_id: machine?.id ?? "",
-    loai_ray: "UIC60",
+    loai_ray: "P50",
     cong_nghe_han: "FBW",
     loai_moi_han: isInternalTraining ? "Đào tạo" : "Sản xuất",
     result: isInternalTraining ? "Không thí nghiệm" : "Chờ thí nghiệm",
@@ -141,6 +142,7 @@ function JournalFormModal({
     { value: string; label: string; isoDate: string }[]
   >([]);
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
+  const railOptions = useCatalogOptions("Loại ray");
 
   useEffect(() => {
     let active = true;
@@ -459,11 +461,13 @@ function JournalFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại ray
-              <input
+              <select
                 value={form.loai_ray}
                 onChange={(e) => setForm({ ...form, loai_ray: e.target.value })}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-              />
+              >
+                {railOptions.map((rail) => <option key={rail}>{rail}</option>)}
+              </select>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Công nghệ

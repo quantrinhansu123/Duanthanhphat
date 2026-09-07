@@ -29,6 +29,7 @@ import {
   type WeldingHistoryStats,
 } from "@/lib/weldingHistoryDb";
 import { createClient } from "@/lib/supabase/client";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -39,7 +40,6 @@ const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
 const resultOptions: WeldingHistoryRecord["result"][] = ["Đạt", "Không đạt", "Sửa chữa"];
 const shiftOptions: WeldingHistoryRecord["shift"][] = ["Ca 1", "Ca 2", "Ca 3"];
 const defaultMachines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
-const defaultRails = ["UIC60", "50N", "60kg/m", "P50", "P43"];
 
 function emptyRecord(): WeldingHistoryRecord {
   return {
@@ -50,7 +50,7 @@ function emptyRecord(): WeldingHistoryRecord {
     rank: "Hạng 1",
     weldJoint: `MH-HN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-01`,
     machine: "KCM007-01",
-    railType: "UIC60",
+    railType: "P50",
     project: "Dự án đường sắt Bắc Nam",
     shift: "Ca 1",
     accountingCode: "HT-SX01",
@@ -70,6 +70,7 @@ function HistoryModal({
   onSave?: (updated: WeldingHistoryRecord) => void;
 }) {
   const [form, setForm] = useState(record);
+  const configuredRails = useCatalogOptions("Loại ray");
   const readOnly = mode === "view";
 
   useEffect(() => {
@@ -200,7 +201,7 @@ function HistoryModal({
                   onChange={(e) => setForm({ ...form, railType: e.target.value })}
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer font-mono"
                 >
-                  {defaultRails.map((r) => (
+                  {configuredRails.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
@@ -388,6 +389,7 @@ function FilterGroup({
 }
 
 export default function WeldingHistoryList() {
+  const configuredRails = useCatalogOptions("Loại ray");
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -495,8 +497,8 @@ export default function WeldingHistoryList() {
     [list],
   );
   const railOptions = useMemo(
-    () => Array.from(new Set([...defaultRails, ...list.map((r) => r.railType)])).filter(Boolean).sort(),
-    [list],
+    () => Array.from(new Set([...configuredRails, ...list.map((r) => r.railType)])).filter(Boolean).sort(),
+    [configuredRails, list],
   );
   const projectOptions = useMemo(
     () => Array.from(new Set([...allProjects, ...list.map((r) => r.project)])).filter(Boolean).sort(),

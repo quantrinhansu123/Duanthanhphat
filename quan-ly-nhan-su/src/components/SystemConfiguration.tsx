@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
 import {
   catalogGroups,
@@ -12,6 +12,10 @@ import {
   type InitialAccount,
   type SystemSettings,
 } from "@/data/systemConfig";
+import {
+  loadSystemConfiguration,
+  saveSystemConfiguration,
+} from "@/lib/systemConfigurationClient";
 
 type ConfigTab = "catalogs" | "settings" | "accounts";
 
@@ -89,9 +93,11 @@ function CatalogModal({
 function CatalogsPanel({
   catalogs,
   setCatalogs,
+  onPersist,
 }: {
   catalogs: CatalogItem[];
   setCatalogs: React.Dispatch<React.SetStateAction<CatalogItem[]>>;
+  onPersist?: (nextCatalogs: CatalogItem[]) => Promise<void> | void;
 }) {
   const [group, setGroup] = useState<CatalogGroup>("Loại ray");
   const [query, setQuery] = useState("");
@@ -107,18 +113,23 @@ function CatalogsPanel({
   }, [catalogs, group, query]);
 
   function handleSave(item: CatalogItem) {
+    let next: CatalogItem[];
     if (modal?.mode === "create") {
-      setCatalogs((prev) => [...prev, { ...item, id: String(Date.now()) }]);
+      next = [...catalogs, { ...item, id: item.id || `catalog-${Date.now()}` }];
     } else {
-      setCatalogs((prev) => prev.map((c) => (c.id === item.id ? item : c)));
+      next = catalogs.map((c) => (c.id === item.id ? item : c));
     }
+    setCatalogs(next);
     setModal(null);
+    if (onPersist) void onPersist(next);
   }
 
   function handleDelete(item: CatalogItem) {
     if (!window.confirm(`Xóa danh mục "${item.name}"?`)) return;
-    setCatalogs((prev) => prev.filter((c) => c.id !== item.id));
+    const next = catalogs.filter((c) => c.id !== item.id);
+    setCatalogs(next);
     setMenuOpen(null);
+    if (onPersist) void onPersist(next);
   }
 
   return (
@@ -250,13 +261,20 @@ function CatalogsPanel({
 function SettingsPanel({
   settings,
   setSettings,
+  onPersist,
+  saving,
 }: {
   settings: SystemSettings;
   setSettings: React.Dispatch<React.SetStateAction<SystemSettings>>;
+  onPersist?: (nextSettings: SystemSettings) => Promise<void> | void;
+  saving?: boolean;
 }) {
   const [saved, setSaved] = useState(false);
 
-  function handleSave() {
+  async function handleSave() {
+    if (onPersist) {
+      await onPersist(settings);
+    }
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
   }
@@ -331,10 +349,11 @@ function SettingsPanel({
       <div className="mt-6 flex items-center gap-3 border-t border-slate-200 pt-5">
         <button
           type="button"
+          disabled={saving}
           onClick={handleSave}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-5 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] disabled:opacity-60 px-5 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
-          Lưu cấu hình
+          {saving ? "Đang lưu..." : "Lưu cấu hình"}
         </button>
         {saved && <span className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-emerald-700 animate-in fade-in duration-200"><Check size={14} weight="bold" aria-hidden /> Đã lưu thay đổi thành công</span>}
       </div>
@@ -345,9 +364,11 @@ function SettingsPanel({
 function AccountsPanel({
   accounts,
   setAccounts,
+  onPersist,
 }: {
   accounts: InitialAccount[];
   setAccounts: React.Dispatch<React.SetStateAction<InitialAccount[]>>;
+  onPersist?: (nextAccounts: InitialAccount[]) => Promise<void> | void;
 }) {
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -364,15 +385,37 @@ function AccountsPanel({
   }, [accounts, query]);
 
   function toggleStatus(account: InitialAccount) {
-    const next = account.status === "Hoạt động" ? "Khóa" : "Hoạt động";
-    setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, status: next } : a)));
+    const next: InitialAccount["status"] = account.status === "Hoạt động" ? "Khóa" : "Hoạt động";
+    const nextAccounts = accounts.map((a) => (a.id === account.id ? { ...a, status: next } : a));
+    setAccounts(nextAccounts);
     setMenuOpen(null);
+    if (onPersist) void onPersist(nextAccounts);
   }
 
   function handleDelete(account: InitialAccount) {
     if (!window.confirm(`Xóa tài khoản "${account.username}"?`)) return;
-    setAccounts((prev) => prev.filter((a) => a.id !== account.id));
+    const nextAccounts = accounts.filter((a) => a.id !== account.id);
+    setAccounts(nextAccounts);
     setMenuOpen(null);
+    if (onPersist) void onPersist(nextAccounts);
+  }
+
+  function handleAddAccount() {
+    const nextAccounts: InitialAccount[] = [
+      {
+        id: String(Date.now()),
+        username: `user${accounts.length + 1}`,
+        fullName: "Nhân viên mới",
+        email: "",
+        role: "Nhân viên",
+        status: "Hoạt động",
+        createdAt: new Date().toISOString().slice(0, 10),
+        note: "Tài khoản thêm thủ công",
+      },
+      ...accounts,
+    ];
+    setAccounts(nextAccounts);
+    if (onPersist) void onPersist(nextAccounts);
   }
 
   return (
@@ -394,21 +437,7 @@ function AccountsPanel({
         </div>
         <button
           type="button"
-          onClick={() =>
-            setAccounts((prev) => [
-              {
-                id: String(Date.now()),
-                username: `user${prev.length + 1}`,
-                fullName: "Nhân viên mới",
-                email: "",
-                role: "Nhân viên",
-                status: "Hoạt động",
-                createdAt: new Date().toISOString().slice(0, 10),
-                note: "Tài khoản thêm thủ công",
-              },
-              ...prev,
-            ])
-          }
+          onClick={handleAddAccount}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm tài khoản
@@ -508,6 +537,53 @@ export default function SystemConfiguration() {
   const [catalogs, setCatalogs] = useState(seedCatalogs);
   const [settings, setSettings] = useState(defaultSystemSettings);
   const [accounts, setAccounts] = useState(seedAccounts);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadSystemConfiguration()
+      .then((data) => {
+        if (!active) return;
+        setCatalogs(data.catalogs);
+        setSettings(data.settings);
+        setAccounts(data.accounts);
+      })
+      .catch((err) => {
+        console.error("Lỗi tải cấu hình:", err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function persist(
+    newCatalogs: CatalogItem[] = catalogs,
+    newSettings: SystemSettings = settings,
+    newAccounts: InitialAccount[] = accounts,
+  ) {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveSystemConfiguration({
+        catalogs: newCatalogs,
+        settings: newSettings,
+        accounts: newAccounts,
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Lỗi lưu cấu hình hệ thống";
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const tabs: { id: ConfigTab; label: string; count?: number }[] = [
     { id: "catalogs", label: "Danh mục dùng chung", count: catalogs.length },
@@ -517,33 +593,76 @@ export default function SystemConfiguration() {
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
-      <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 gap-1">
-        {tabs.map((t) => (
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
+                tab === t.id ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {t.label}
+              {t.count != null && (
+                <span
+                  className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-bold font-mono tabular-nums ${
+                    tab === t.id ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-white/80 text-slate-600 border border-slate-200 shadow-2xs"
+                  }`}
+                >
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {loading && (
+            <span className="text-xs text-slate-500">Đang tải cấu hình…</span>
+          )}
+          {saveError && (
+            <span className="text-xs font-semibold text-rose-600">{saveError}</span>
+          )}
+          {saved && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 animate-in fade-in">
+              <Check size={14} weight="bold" /> Đã lưu thay đổi
+            </span>
+          )}
           <button
-            key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
-            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
-              tab === t.id ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            disabled={saving || loading}
+            onClick={() => void persist()}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-60 px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer"
           >
-            {t.label}
-            {t.count != null && (
-              <span
-                className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-bold font-mono tabular-nums ${
-                  tab === t.id ? "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs" : "bg-white/80 text-slate-600 border border-slate-200 shadow-2xs"
-                }`}
-              >
-                {t.count}
-              </span>
-            )}
+            {saving ? "Đang lưu…" : "Lưu thay đổi"}
           </button>
-        ))}
+        </div>
       </div>
 
-      {tab === "catalogs" && <CatalogsPanel catalogs={catalogs} setCatalogs={setCatalogs} />}
-      {tab === "settings" && <SettingsPanel settings={settings} setSettings={setSettings} />}
-      {tab === "accounts" && <AccountsPanel accounts={accounts} setAccounts={setAccounts} />}
+      {tab === "catalogs" && (
+        <CatalogsPanel
+          catalogs={catalogs}
+          setCatalogs={setCatalogs}
+          onPersist={(next) => persist(next, settings, accounts)}
+        />
+      )}
+      {tab === "settings" && (
+        <SettingsPanel
+          settings={settings}
+          setSettings={setSettings}
+          saving={saving}
+          onPersist={(next) => persist(catalogs, next, accounts)}
+        />
+      )}
+      {tab === "accounts" && (
+        <AccountsPanel
+          accounts={accounts}
+          setAccounts={setAccounts}
+          onPersist={(next) => persist(catalogs, settings, next)}
+        />
+      )}
     </main>
   );
 }

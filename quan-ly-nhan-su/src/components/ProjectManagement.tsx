@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
@@ -8,7 +8,6 @@ import {
 import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
 import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { type Project, type TheoreticalProgressRow } from "@/data/projects";
-import { welders } from "@/data/welders";
 import { useProjectsData } from "@/hooks/useProjectsData";
 import {
   loadMachineRunScheduleBundle,
@@ -21,15 +20,17 @@ import {
   projectDurationDays,
   updateDuAn,
 } from "@/lib/projectsDb";
-import { REPORT_MACHINES } from "@/lib/weldReportData";
 import {
   loadPersonnelCertificateRows,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import { loadMachineCatalog } from "@/lib/machineCatalogDb";
+import type { Machine } from "@/data/machines";
+import { welders } from "@/data/welders";
+import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
-const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
-const RAIL_TYPES = ["UIC60", "P50", "P43", "50N"] as const;
 const activeWelders = welders.filter((w) => w.status === "Hoạt động");
 
 const statusStyle: Record<Project["status"], string> = {
@@ -134,8 +135,11 @@ function CheckboxGroup({
         <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-white rounded-lg cursor-pointer transition-colors border-b border-slate-200/80 pb-2 mb-0.5">
           <input
             type="checkbox"
-            checked={selected.length === 0 || selected.length === options.length}
-            onChange={() => onChange([])}
+            checked={options.length > 0 && options.every((opt) => selected.includes(opt))}
+            onChange={() => {
+              const all = options.length > 0 && options.every((opt) => selected.includes(opt));
+              onChange(all ? [] : [...options]);
+            }}
             className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
           />
           <span>Tất cả</span>
@@ -310,11 +314,17 @@ function ProjectInfoFields({
   setForm,
   readOnly,
   personnelOptions,
+  machineOptions,
+  railOptions,
+  weldOptions,
 }: {
   form: Project;
   setForm: (p: Project) => void;
   readOnly: boolean;
   personnelOptions: PersonnelCertificateRow[];
+  machineOptions: Machine[];
+  railOptions: string[];
+  weldOptions: string[];
 }) {
   const [managerSuggestionsOpen, setManagerSuggestionsOpen] = useState(false);
   function updateForm(patch: Partial<Project>) {
@@ -471,29 +481,33 @@ function ProjectInfoFields({
       <CheckboxGroup
         label="Nhân sự tham gia"
         hint="Chọn nhiều thợ hàn từ danh sách hồ sơ thợ hàn"
-        options={activeWelders.map((w) => w.id)}
+        options={personnelOptions.map((p) => p.employee_id)}
         selected={form.personnelIds}
         onChange={(personnelIds) => updateForm({ personnelIds })}
         readOnly={readOnly}
         renderLabel={(id) => {
-          const welder = activeWelders.find((w) => w.id === id);
-          return welder ? `${welder.name} · ${welder.position}` : id;
+          const person = personnelOptions.find((p) => p.employee_id === id);
+          return person ? `${person.ho_ten} · ${person.chuc_vu || "Nhân sự"}` : id;
         }}
       />
 
       <CheckboxGroup
         label="Loại máy"
         hint="Chọn các loại máy hàn sử dụng trong dự án"
-        options={MACHINE_TYPES}
+        options={machineOptions.map((m) => m.code)}
         selected={form.machineTypes}
         onChange={(machineTypes) => updateForm({ machineTypes })}
         readOnly={readOnly}
+        renderLabel={(code) => {
+          const machine = machineOptions.find((m) => m.code === code);
+          return machine ? `${machine.code} · ${machine.name}` : code;
+        }}
       />
 
       <CheckboxGroup
         label="Loại ray"
         hint="Chọn các loại ray áp dụng cho dự án"
-        options={[...RAIL_TYPES]}
+        options={railOptions}
         selected={form.railTypes}
         onChange={(railTypes) => updateForm({ railTypes })}
         readOnly={readOnly}
@@ -502,7 +516,7 @@ function ProjectInfoFields({
       <CheckboxGroup
         label="Loại mối hàn"
         hint="Chọn loại mối hàn áp dụng cho dự án"
-        options={[...WELD_TYPES]}
+        options={weldOptions}
         selected={form.weldTypes}
         onChange={(weldTypes) => updateForm({ weldTypes })}
         readOnly={readOnly}
@@ -1045,6 +1059,9 @@ function ProjectModal({
   onSaveWork,
   onStartEdit,
   personnelOptions,
+  machineOptions,
+  railOptions,
+  weldOptions,
 }: {
   project: Project;
   mode: "view" | "edit" | "create";
@@ -1054,6 +1071,9 @@ function ProjectModal({
   onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
   personnelOptions: PersonnelCertificateRow[];
+  machineOptions: Machine[];
+  railOptions: string[];
+  weldOptions: string[];
 }) {
   const [form, setForm] = useState(project);
   const [personnelRows, setPersonnelRows] = useState<ProjectPersonnel[]>([]);
@@ -1136,14 +1156,25 @@ function ProjectModal({
               {isCreate ? "Dự án mới" : project.name}
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
-            aria-label="Đóng"
-          >
-            <X size={18} weight="bold" aria-hidden />
-          </button>
+          <div className="flex items-center gap-2">
+            {readOnly && onStartEdit && (
+              <button
+                type="button"
+                onClick={onStartEdit}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#0047AB] bg-[#0047AB]/5 px-3 text-xs font-semibold text-[#0047AB] hover:bg-[#0047AB]/10 transition-colors cursor-pointer"
+              >
+                Sửa dự án
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+              aria-label="Đóng"
+            >
+              <X size={18} weight="bold" aria-hidden />
+            </button>
+          </div>
         </div>
 
         <div className="border-b border-slate-200 px-5 sm:px-6 bg-white">
@@ -1177,6 +1208,9 @@ function ProjectModal({
               setForm={setForm}
               readOnly={readOnly}
               personnelOptions={personnelOptions}
+              machineOptions={machineOptions}
+              railOptions={railOptions}
+              weldOptions={weldOptions}
             />
           )}
           {tab === "personnel" && (
@@ -1220,20 +1254,21 @@ function ProjectModal({
           >
             {readOnly ? "Đóng" : "Hủy"}
           </button>
+          {readOnly && onStartEdit && (
+            <button
+              type="button"
+              onClick={onStartEdit}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs hover:bg-[#00388A] sm:text-sm cursor-pointer"
+            >
+              Sửa dự án
+            </button>
+          )}
           {!readOnly && onSave && tab === "info" && (
             <button
               type="button"
               onClick={() => {
                 if (!form.name.trim()) {
                   window.alert("Vui lòng nhập tên dự án.");
-                  return;
-                }
-                if (!form.manager.trim()) {
-                  window.alert("Vui lòng chọn người phụ trách.");
-                  return;
-                }
-                if (!form.managerId) {
-                  window.alert("Vui lòng chọn người phụ trách từ danh sách gợi ý nhân sự.");
                   return;
                 }
                 if (!form.location.trim()) {
@@ -1303,6 +1338,9 @@ export default function ProjectManagement() {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
   const [personnelOptions, setPersonnelOptions] = useState<PersonnelCertificateRow[]>([]);
+  const [machineOptions, setMachineOptions] = useState<Machine[]>([]);
+  const railOptions = useCatalogOptions("Loại ray");
+  const weldOptions = useCatalogOptions("Loại mối hàn", "name");
 
   useEffect(() => {
     let active = true;
@@ -1312,6 +1350,20 @@ export default function ProjectManagement() {
       })
       .catch(() => {
         if (active) setPersonnelOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    loadMachineCatalog()
+      .then((result) => {
+        if (active) setMachineOptions(result.machines);
+      })
+      .catch(() => {
+        if (active) setMachineOptions([]);
       });
     return () => {
       active = false;
@@ -1386,6 +1438,11 @@ export default function ProjectManagement() {
           startDate: updated.startDate,
           endDate: updated.endDate,
           plannedWeldCount: updated.plannedWeldCount,
+          status: updated.status,
+          personnelIds: updated.personnelIds,
+          machineTypes: updated.machineTypes,
+          weldTypes: updated.weldTypes,
+          railTypes: updated.railTypes,
         });
         if (saveError) {
           window.alert(`Không lưu được: ${saveError}`);
@@ -1430,6 +1487,11 @@ export default function ProjectManagement() {
           startDate: project.startDate,
           endDate: project.endDate,
           plannedWeldCount: project.plannedWeldCount,
+          status: project.status,
+          personnelIds: project.personnelIds,
+          machineTypes: project.machineTypes,
+          weldTypes: project.weldTypes,
+          railTypes: project.railTypes,
         });
         if (createError) {
           window.alert(`Không thêm được: ${createError}`);
@@ -1749,6 +1811,9 @@ export default function ProjectManagement() {
           onSaveWork={modal.mode === "edit" ? handleSaveWork : undefined}
           onStartEdit={() => setModal((m) => (m ? { ...m, mode: "edit" } : null))}
           personnelOptions={personnelOptions}
+          machineOptions={machineOptions}
+          railOptions={railOptions}
+          weldOptions={weldOptions}
         />
       )}
     </main>
