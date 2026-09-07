@@ -273,6 +273,63 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
   if (error) throw new Error(formatSupabaseError(error));
 }
 
+/** Tạo loại chứng chỉ mới trong danh mục (không bắt buộc gán nhân sự / không ảnh). */
+export async function createCertificateType(input: {
+  title: string;
+  code?: string;
+  organization?: string;
+  machine?: string;
+  notes?: string;
+  employeeIds?: string[];
+  issuedAt?: string;
+  expiresAt?: string;
+}): Promise<{ id: string; name: string }> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase nên không thể thêm chứng chỉ.");
+  const title = input.title.trim();
+  if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+
+  const employeeIds = (input.employeeIds ?? []).filter(Boolean);
+  if (employeeIds.length > 0) {
+    await createPersonnelCertificates({
+      title,
+      employeeIds,
+      issuedAt: input.issuedAt || "",
+      expiresAt: input.expiresAt || "",
+      status: "Còn hiệu lực",
+      organization: input.organization,
+      machine: input.machine,
+      certificateNumber: input.code,
+      notes: input.notes,
+    });
+    return { id: "", name: title };
+  }
+
+  const supabase = createClient();
+  const { data: existing, error: findError } = await supabase
+    .from("chung_chi_nhom")
+    .select("id, ten_nhom")
+    .ilike("ten_nhom", title)
+    .limit(1);
+  if (findError) throw new Error(formatSupabaseError(findError));
+  if (existing?.[0]) {
+    throw new Error(`Loại chứng chỉ "${existing[0].ten_nhom}" đã có trong danh mục.`);
+  }
+
+  const { data, error } = await supabase
+    .from("chung_chi_nhom")
+    .insert({
+      ten_nhom: title,
+      ma_nhom: input.code?.trim() || null,
+      don_vi_cap: input.organization?.trim() || null,
+      may_ap_dung: input.machine?.trim() || null,
+      ghi_chu: input.notes?.trim() || null,
+    })
+    .select("id, ten_nhom")
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return { id: data.id as string, name: data.ten_nhom as string };
+}
+
 /** Cập nhật chi tiết 1 chứng chỉ */
 export async function updateCertificateRecord(input: UpdateCertificateInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");

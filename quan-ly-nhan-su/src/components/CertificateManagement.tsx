@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { CaretDown, MagnifyingGlass, Users } from "@/components/icons";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { CaretDown, MagnifyingGlass, Plus, Users, X } from "@/components/icons";
+import { createCertificateType } from "@/lib/certificatesDb";
 import {
   loadPersonnelCertificateRows,
   type PersonnelCertificateRow,
@@ -43,6 +44,9 @@ function isWelderRow(row: PersonnelCertificateRow) {
   return position.includes("hàn") || (team !== "" && team !== "Chưa phân tổ");
 }
 
+const fieldClass =
+  "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
+
 export default function CertificateManagement() {
   const [personnelRows, setPersonnelRows] = useState<PersonnelCertificateRow[]>([]);
   const [catalogGroups, setCatalogGroups] = useState<CertificateGroupOption[]>([]);
@@ -50,30 +54,47 @@ export default function CertificateManagement() {
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [toast, setToast] = useState("");
+  const [form, setForm] = useState({
+    title: "",
+    code: "",
+    organization: "",
+    machine: "",
+    notes: "",
+    holderIds: [] as string[],
+  });
+  const [holderQuery, setHolderQuery] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const reload = useCallback(async () => {
     setLoading(true);
     setLoadError("");
-    Promise.all([loadPersonnelCertificateRows(), fetchCertificateGroups().catch(() => [])])
-      .then(([rows, groups]) => {
-        if (!active) return;
-        setPersonnelRows(rows);
-        setCatalogGroups(groups);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setPersonnelRows([]);
-        setCatalogGroups([]);
-        setLoadError(error instanceof Error ? error.message : "Không tải được dữ liệu chứng chỉ");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    try {
+      const [rows, groups] = await Promise.all([
+        loadPersonnelCertificateRows(),
+        fetchCertificateGroups().catch(() => [] as CertificateGroupOption[]),
+      ]);
+      setPersonnelRows(rows);
+      setCatalogGroups(groups);
+    } catch (error) {
+      setPersonnelRows([]);
+      setCatalogGroups([]);
+      setLoadError(error instanceof Error ? error.message : "Không tải được dữ liệu chứng chỉ");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2800);
+  }
 
   const welders = useMemo(() => personnelRows.filter(isWelderRow), [personnelRows]);
 
@@ -149,6 +170,25 @@ export default function CertificateManagement() {
     });
   }, [certificateTypes, query]);
 
+  const filteredWeldersForForm = useMemo(() => {
+    const q = holderQuery.trim().toLocaleLowerCase("vi");
+    const list = welders
+      .map((row) => ({
+        id: row.employee_id,
+        name: row.ho_ten,
+        code: row.ma_nhan_su?.trim() || "Chưa có mã",
+        team: row.to_han?.trim() || "Chưa phân tổ",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+    if (!q) return list;
+    return list.filter(
+      (w) =>
+        w.name.toLocaleLowerCase("vi").includes(q) ||
+        w.code.toLocaleLowerCase("vi").includes(q) ||
+        w.team.toLocaleLowerCase("vi").includes(q),
+    );
+  }, [holderQuery, welders]);
+
   const totalTypes = certificateTypes.length;
   const typesWithHolders = certificateTypes.filter((row) => row.holders.length > 0).length;
   const totalAssignments = certificateTypes.reduce((sum, row) => sum + row.holders.length, 0);
@@ -156,8 +196,77 @@ export default function CertificateManagement() {
     return welders.filter((row) => parseCertificateList(row.chung_chi).length > 0).length;
   }, [welders]);
 
+  function openAddModal() {
+    setForm({
+      title: "",
+      code: "",
+      organization: "",
+      machine: "",
+      notes: "",
+      holderIds: [],
+    });
+    setHolderQuery("");
+    setFormError("");
+    setAddOpen(true);
+  }
+
+  function toggleHolder(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      holderIds: prev.holderIds.includes(id)
+        ? prev.holderIds.filter((x) => x !== id)
+        : [...prev.holderIds, id],
+    }));
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const title = form.title.trim();
+    if (!title) {
+      setFormError("Vui lòng nhập tên loại chứng chỉ.");
+      return;
+    }
+    const exists = certificateTypes.some(
+      (row) => normalizeCertTitle(row.title) === normalizeCertTitle(title),
+    );
+    if (exists) {
+      setFormError(`Loại chứng chỉ "${title}" đã có trong danh mục.`);
+      return;
+    }
+
+    setSaving(true);
+    setFormError("");
+    try {
+      await createCertificateType({
+        title,
+        code: form.code,
+        organization: form.organization,
+        machine: form.machine,
+        notes: form.notes,
+        employeeIds: form.holderIds,
+      });
+      setAddOpen(false);
+      showToast(
+        form.holderIds.length > 0
+          ? `Đã thêm chứng chỉ và gán cho ${form.holderIds.length} thợ hàn.`
+          : "Đã thêm loại chứng chỉ mới vào danh mục.",
+      );
+      await reload();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Không thêm được chứng chỉ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-[1440px] px-4 sm:px-6 pb-8">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+
       <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-[#0047AB]">
         Danh mục loại chứng chỉ · thống kê nhân sự từ{" "}
         <Link href="/ho-so-tho-han" className="font-bold underline underline-offset-2 hover:text-blue-800">
@@ -207,6 +316,14 @@ export default function CertificateManagement() {
         >
           Mở hồ sơ thợ hàn
         </Link>
+        <button
+          type="button"
+          onClick={openAddModal}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
+        >
+          <Plus size={14} weight="bold" />
+          Thêm chứng chỉ
+        </button>
       </div>
 
       {loadError && (
@@ -219,7 +336,10 @@ export default function CertificateManagement() {
         <div className="p-12 text-center text-slate-400 text-sm">Đang tải loại chứng chỉ và nhân sự…</div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-400">
-          Không tìm thấy loại chứng chỉ phù hợp.
+          Không tìm thấy loại chứng chỉ phù hợp.{" "}
+          <button type="button" onClick={openAddModal} className="font-semibold text-[#0047AB] hover:underline cursor-pointer">
+            Thêm chứng chỉ mới
+          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
@@ -261,9 +381,7 @@ export default function CertificateManagement() {
                           ) : (
                             <div className="text-slate-700">
                               {preview.map((h) => h.name).join(", ")}
-                              {more > 0 ? (
-                                <span className="text-slate-400"> +{more}</span>
-                              ) : null}
+                              {more > 0 ? <span className="text-slate-400"> +{more}</span> : null}
                             </div>
                           )}
                         </td>
@@ -313,6 +431,171 @@ export default function CertificateManagement() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => !saving && setAddOpen(false)}
+            aria-label="Đóng"
+          />
+          <form
+            onSubmit={(e) => void handleCreate(e)}
+            className="relative z-10 flex max-h-[92dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
+                  Danh mục chứng chỉ
+                </div>
+                <h2 className="text-base font-bold text-slate-900">Thêm chứng chỉ mới</h2>
+              </div>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setAddOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Tên loại chứng chỉ *
+                </label>
+                <input
+                  className={fieldClass}
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="VD: Chứng chỉ thợ hàn ray hạng 1 – UIC60"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Mã</label>
+                  <input
+                    className={fieldClass}
+                    value={form.code}
+                    onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                    placeholder="VD: CC-UIC60"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Đơn vị cấp
+                  </label>
+                  <input
+                    className={fieldClass}
+                    value={form.organization}
+                    onChange={(e) => setForm((f) => ({ ...f, organization: e.target.value }))}
+                    placeholder="VD: Sở GTVT"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Máy áp dụng
+                </label>
+                <input
+                  className={fieldClass}
+                  value={form.machine}
+                  onChange={(e) => setForm((f) => ({ ...f, machine: e.target.value }))}
+                  placeholder="VD: K922-1 / UN5"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ghi chú</label>
+                <input
+                  className={fieldClass}
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Tùy chọn"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Gán thợ hàn (tuỳ chọn)
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Đã chọn {form.holderIds.length}
+                  </span>
+                </div>
+                <input
+                  className={`${fieldClass} mb-1.5`}
+                  value={holderQuery}
+                  onChange={(e) => setHolderQuery(e.target.value)}
+                  placeholder="Tìm thợ hàn…"
+                />
+                <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                  {filteredWeldersForForm.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-slate-400">Không có thợ hàn phù hợp.</div>
+                  ) : (
+                    filteredWeldersForForm.map((welder) => {
+                      const checked = form.holderIds.includes(welder.id);
+                      return (
+                        <label
+                          key={welder.id}
+                          className={`flex cursor-pointer items-center gap-2.5 border-b border-slate-100 px-3 py-2 last:border-b-0 hover:bg-slate-50 ${
+                            checked ? "bg-blue-50/70" : ""
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleHolder(welder.id)}
+                            className="h-4 w-4 rounded accent-[#0047AB]"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs sm:text-sm font-semibold text-slate-900">
+                              {welder.name}
+                            </span>
+                            <span className="block text-[11px] text-slate-500 font-mono">
+                              {welder.code} · {welder.team}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Có thể chỉ thêm loại chứng chỉ vào danh mục, hoặc chọn thợ hàn để gán ngay.
+                </p>
+              </div>
+
+              {formError && <div className="text-xs font-semibold text-rose-600">{formError}</div>}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setAddOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer disabled:opacity-50"
+              >
+                {saving ? "Đang lưu…" : "Thêm chứng chỉ"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </main>
