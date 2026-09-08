@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { DownloadSimple } from "@/components/icons";
+import { DownloadSimple, PencilSimple } from "@/components/icons";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
+import { deleteMapPoint, insertMapPoint, linkGpsPointToWeld } from "@/lib/mapPointsDb";
 import {
   loadPersonnelCertificateOptions,
   loadPersonnelCertificateRows,
@@ -27,6 +28,7 @@ import {
   loadWeldJournalPage,
   resolveWeldTestStatus,
   syncAllWeldCodes,
+  updateWeldJournalEntry,
   type CertifiedWelderOption,
   type WeldReportRow,
   type WeldTestStatus,
@@ -123,8 +125,36 @@ function emptyJournalForm(
   };
 }
 
+function journalRowToForm(
+  row: WeldReportRow,
+  gpsPoint: MapPoint | null,
+): JournalFormValues {
+  return {
+    ma_lich_su: row.ma_lich_su,
+    performedAt: `${(row.ngay_thuc_hien?.slice(0, 10) || `${row.nam_thuc_hien}-01-01`)}T08:00`,
+    du_an_id: row.du_an_id,
+    tho_han_id: row.tho_han_id,
+    may_id: row.may_id || "",
+    loai_ray: row.loai_ray,
+    cong_nghe_han: row.cong_nghe_han,
+    loai_moi_han: row.loai_moi_han,
+    result: resolveWeldTestStatus(row),
+    ma_khuyet_tat: row.ma_khuyet_tat ?? [],
+    nguyen_nhan_loi: row.nguyen_nhan_loi ?? "",
+    moi_han_lien_ket: row.moi_han_lien_ket ?? "",
+    chung_chi_su_dung: row.chung_chi_su_dung ?? "",
+    ghi_chu: row.ghi_chu ?? "",
+    toa_do_id: gpsPoint?.id ?? "",
+    ly_trinh: gpsPoint?.chainage ?? "",
+    kinh_do: gpsPoint ? String(gpsPoint.longitude) : "",
+    vi_do: gpsPoint ? String(gpsPoint.latitude) : "",
+  };
+}
+
 function JournalFormModal({
   open,
+  mode = "create",
+  initial,
   projects,
   welders,
   machines,
@@ -135,6 +165,8 @@ function JournalFormModal({
   onSubmit,
 }: {
   open: boolean;
+  mode?: "create" | "edit";
+  initial?: JournalFormValues | null;
   projects: { id: string; label: string }[];
   welders: CertifiedWelderOption[];
   machines: MachineOption[];
@@ -190,15 +222,16 @@ function JournalFormModal({
 
   useEffect(() => {
     if (open) {
-      setForm(emptyJournalForm(projects, welders, machines));
+      setForm(initial ?? emptyJournalForm(projects, welders, machines));
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
     }
-  }, [open, projects, welders, machines]);
+  }, [open, initial, projects, welders, machines]);
 
   useEffect(() => {
     if (!open) return;
+    if (mode === "edit") return;
     const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt);
     if (!prefix) {
       setPrefixCodes([]);
@@ -215,15 +248,16 @@ function JournalFormModal({
     return () => {
       active = false;
     };
-  }, [open, form.cong_nghe_han, form.performedAt]);
+  }, [mode, open, form.cong_nghe_han, form.performedAt]);
 
   useEffect(() => {
     if (!open) return;
+    if (mode === "edit") return;
     const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
     const nextCode = suggestWeldCode(form.cong_nghe_han, form.performedAt, codes);
     if (!nextCode || form.ma_lich_su === nextCode) return;
     setForm((prev) => ({ ...prev, ma_lich_su: nextCode }));
-  }, [open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes]);
+  }, [mode, open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes]);
 
   useEffect(() => {
     const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
@@ -311,8 +345,12 @@ function JournalFormModal({
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
           <div className="min-w-0">
-            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Thêm nhật ký hàn</div>
-            <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">Bản ghi mới</h2>
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+              {mode === "edit" ? "Sửa nhật ký hàn" : "Thêm nhật ký hàn"}
+            </div>
+            <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900">
+              {mode === "edit" ? form.ma_lich_su || "Bản ghi nhật ký" : "Bản ghi mới"}
+            </h2>
           </div>
           <button
             type="button"
@@ -700,7 +738,7 @@ function JournalFormModal({
             disabled={saving || projects.length === 0 || welders.length === 0 || machines.length === 0}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs disabled:opacity-60 transition-all duration-150 cursor-pointer"
           >
-            {saving ? "Đang lưu…" : "Thêm nhật ký"}
+            {saving ? "Đang lưu…" : mode === "edit" ? "Lưu thay đổi" : "Thêm nhật ký"}
           </button>
         </div>
       </div>
@@ -730,6 +768,8 @@ export default function WeldingJournalList() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
+  const [editingRow, setEditingRow] = useState<WeldReportRow | null>(null);
+  const [editingForm, setEditingForm] = useState<JournalFormValues | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -1199,10 +1239,79 @@ export default function WeldingJournalList() {
         ly_trinh: values.ly_trinh || null,
       });
       setFormOpen(false);
+      setEditingRow(null);
+      setEditingForm(null);
       refetch();
       showToast("Đã thêm nhật ký hàn");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không thể lưu nhật ký hàn");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEdit(values: JournalFormValues) {
+    if (!editingRow) return;
+    setSaving(true);
+    try {
+      const year = Number(values.performedAt.slice(0, 4)) || new Date().getFullYear();
+      const kinhDoNum = values.kinh_do ? Number(values.kinh_do.replace(",", ".")) : null;
+      const viDoNum = values.vi_do ? Number(values.vi_do.replace(",", ".")) : null;
+      const currentPoint = gpsPoints.find((point) => point.weldId === editingRow.id) ?? null;
+
+      await updateWeldJournalEntry({
+        id: editingRow.id,
+        previousWeldCode: editingRow.ma_lich_su,
+        ma_lich_su: values.ma_lich_su,
+        du_an_id: values.du_an_id,
+        tho_han_id: values.tho_han_id,
+        nam_thuc_hien: year,
+        ngay_thuc_hien: values.performedAt.slice(0, 10),
+        loai_ray: values.loai_ray,
+        loai_moi_han: values.loai_moi_han,
+        cong_nghe_han: values.cong_nghe_han,
+        so_luong_loi: values.result === "Không đạt" ? 1 : 0,
+        ma_khuyet_tat: values.result === "Không đạt" ? values.ma_khuyet_tat : [],
+        tinh_trang_thi_nghiem: values.result,
+        nguyen_nhan_loi: values.result === "Không đạt"
+          ? (values.nguyen_nhan_loi.trim() || values.ma_khuyet_tat.join(", "))
+          : null,
+        ghi_chu: values.ghi_chu || null,
+        moi_han_lien_ket: values.moi_han_lien_ket || null,
+        may_id: values.may_id,
+        chung_chi_su_dung: values.chung_chi_su_dung,
+        hach_toan: "HT-SX01",
+        toa_do_id: values.toa_do_id || null,
+        kinh_do: isNaN(kinhDoNum as number) ? null : kinhDoNum,
+        vi_do: isNaN(viDoNum as number) ? null : viDoNum,
+        ly_trinh: values.ly_trinh || null,
+      });
+
+      if (values.toa_do_id) {
+        await linkGpsPointToWeld(values.toa_do_id, editingRow.id);
+      } else if (kinhDoNum != null && viDoNum != null && Number.isFinite(kinhDoNum) && Number.isFinite(viDoNum)) {
+        if (currentPoint) {
+          await deleteMapPoint(currentPoint.id);
+        }
+        await insertMapPoint({
+          code: values.ma_lich_su,
+          longitude: kinhDoNum,
+          latitude: viDoNum,
+          chainage: values.ly_trinh || undefined,
+          weldId: editingRow.id,
+          weldCode: values.ma_lich_su,
+        });
+      } else if (currentPoint) {
+        await deleteMapPoint(currentPoint.id);
+      }
+
+      setFormOpen(false);
+      setEditingRow(null);
+      setEditingForm(null);
+      refetch();
+      showToast("Đã cập nhật nhật ký hàn");
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không thể cập nhật nhật ký hàn");
     } finally {
       setSaving(false);
     }
@@ -1305,7 +1414,11 @@ export default function WeldingJournalList() {
         </button>
         <button
           type="button"
-          onClick={() => setFormOpen(true)}
+          onClick={() => {
+            setEditingRow(null);
+            setEditingForm(null);
+            setFormOpen(true);
+          }}
           className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm nhật ký
@@ -1337,6 +1450,7 @@ export default function WeldingJournalList() {
                 <th className="p-2.5 font-semibold">Vị trí</th>
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
                 <th className="p-2.5 font-semibold">Tình trạng</th>
+                <th className="p-2.5 font-semibold">Sửa</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1422,11 +1536,32 @@ export default function WeldingJournalList() {
                       {w.testStatus}
                     </span>
                   </td>
+                  <td className="p-2.5 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const raw = rows.find((row) => row.id === w.id);
+                        if (!raw) return;
+                        const gpsPoint =
+                          gpsPoints.find((point) => point.weldId === raw.id) ??
+                          gpsPoints.find((point) => point.weldCode?.trim().toLocaleLowerCase("vi") === raw.ma_lich_su.trim().toLocaleLowerCase("vi")) ??
+                          null;
+                        setEditingRow(raw);
+                        setEditingForm(journalRowToForm(raw, gpsPoint));
+                        setFormOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#0047AB] hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
+                      title="Sửa nhật ký hàn"
+                    >
+                      <PencilSimple size={14} weight="bold" />
+                      Sửa
+                    </button>
+                  </td>
                 </tr>
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-500">
                     Không có nhật ký hàn phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -1472,14 +1607,25 @@ export default function WeldingJournalList() {
 
       <JournalFormModal
         open={formOpen}
+        mode={editingRow ? "edit" : "create"}
+        initial={editingForm}
         projects={projectOptions}
         welders={welderOptions}
         machines={machineOptions}
         existingCodes={rows.map((row) => row.ma_lich_su)}
         saving={saving}
-        unlinkedGpsPoints={gpsPoints.filter((p) => !p.isLinked && !p.weldId)}
-        onClose={() => !saving && setFormOpen(false)}
-        onSubmit={handleCreate}
+        unlinkedGpsPoints={
+          editingRow
+            ? gpsPoints.filter((p) => !p.isLinked || p.weldId === editingRow.id)
+            : gpsPoints.filter((p) => !p.isLinked && !p.weldId)
+        }
+        onClose={() => {
+          if (saving) return;
+          setFormOpen(false);
+          setEditingRow(null);
+          setEditingForm(null);
+        }}
+        onSubmit={editingRow ? handleEdit : handleCreate}
       />
 
       {machineError && (

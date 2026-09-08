@@ -359,6 +359,11 @@ export type WeldJournalInsert = {
   tinh_trang_thi_nghiem: WeldTestStatus;
 };
 
+export type WeldJournalUpdate = WeldJournalInsert & {
+  id: string;
+  previousWeldCode?: string | null;
+};
+
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
   const supabase = createClient();
 
@@ -446,6 +451,37 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
       throw new Error("Nhật ký đã được tạo nhưng không xác định được đúng bản ghi để lưu mã khuyết tật NDT.");
     }
   }
+
+  invalidateWeldReportCache();
+}
+
+export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
+  const supabase = createClient();
+  const body = {
+    ma_lich_su: payload.ma_lich_su.trim(),
+    du_an_id: payload.du_an_id,
+    tho_han_id: payload.tho_han_id,
+    nam_thuc_hien: payload.nam_thuc_hien,
+    ngay_thuc_hien: payload.ngay_thuc_hien,
+    loai_ray: payload.loai_ray.trim(),
+    loai_moi_han: payload.loai_moi_han,
+    cong_nghe_han: payload.cong_nghe_han,
+    so_luong_loi: payload.so_luong_loi,
+    nguyen_nhan_loi: payload.nguyen_nhan_loi?.trim() || null,
+    ghi_chu: payload.ghi_chu?.trim() || null,
+    moi_han_lien_ket: payload.moi_han_lien_ket?.trim() || null,
+    may_id: payload.may_id,
+    chung_chi_su_dung: payload.chung_chi_su_dung.trim(),
+    hach_toan: payload.hach_toan?.trim() || "HT-SX01",
+    ma_khuyet_tat: payload.ma_khuyet_tat?.length ? payload.ma_khuyet_tat : null,
+    tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem,
+  };
+
+  const { error } = await supabase
+    .from("lich_su_moi_han")
+    .update(body)
+    .eq("id", payload.id);
+  if (error) throw new Error(formatSupabaseError(error));
 
   invalidateWeldReportCache();
 }
