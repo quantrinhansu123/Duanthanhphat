@@ -41,6 +41,9 @@ import {
   parseCertificateList,
 } from "@/lib/weldingCertificates";
 import { NDT_DEFECTS } from "@/data/error-library";
+const defectLabels: Record<string, string> = {
+  LOF: "Không ngấu", LOP: "Không thấu", C: "Nứt", S: "Ngậm xỉ", Po: "Rỗ khí", La: "Phân lớp",
+};
 import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
@@ -495,6 +498,8 @@ function JournalFormModal({
               onChange={(e) => setForm({ ...form, may_id: e.target.value })}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
             >
+              <option value="">— Chọn máy thực hiện —</option>
+              {form.may_id && !machines.some((machine) => machine.id === form.may_id) && <option value={form.may_id}>Máy đã gắn không có trong danh mục hiện tại</option>}
               {machines.length === 0 ? (
                 <option value="">Chưa có danh mục máy</option>
               ) : (
@@ -628,7 +633,7 @@ function JournalFormModal({
                         }`}
                       >
                         <span className="font-mono">{defect.code}</span>
-                        <span className="font-normal opacity-90 text-[11px]">— {defect.nameEn}</span>
+                        <span className="font-normal opacity-90 text-[11px]">— {defectLabels[defect.code] || defect.nameEn}</span>
                       </button>
                     );
                   })}
@@ -636,7 +641,7 @@ function JournalFormModal({
               </div>
 
               <label className="block text-xs font-semibold text-slate-700">
-                Ghi chú nguyên nhân / lỗi bổ sung (tùy chọn)
+                Ghi chú bổ sung về lỗi (tùy chọn)
                 <textarea
                   value={form.nguyen_nhan_loi}
                   onChange={(e) => setForm({ ...form, nguyen_nhan_loi: e.target.value })}

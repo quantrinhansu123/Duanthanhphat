@@ -571,6 +571,7 @@ export function resolveWeldTestStatus(row: WeldReportRow): WeldTestStatus {
 }
 
 /** Tải 1 trang nhật ký hàn từ Supabase (mặc định 50 dòng). */
+let journalHasCreatedAt = true;
 export async function loadWeldJournalPage({
   page,
   pageSize = 50,
@@ -592,8 +593,8 @@ export async function loadWeldJournalPage({
 
   let request = supabase
     .from("bao_cao_moi_han_theo_du_an")
-    .select(JOURNAL_PAGE_COLUMNS, { count: "exact" })
-    .order("created_at", { ascending: false })
+    .select(journalHasCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","), { count: "exact" })
+    .order(journalHasCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false });
 
   if (project && project !== "Tất cả dự án") {
@@ -616,7 +617,12 @@ export async function loadWeldJournalPage({
   }
 
   const { data, error, count } = await request.range(from, to);
+  if (error && journalHasCreatedAt && error.message.includes("created_at")) {
+    journalHasCreatedAt = false;
+    return loadWeldJournalPage({ page, pageSize, query, project, resultFilter });
+  }
   if (error) {
+    if (!/ma_khuyet_tat|tinh_trang_thi_nghiem/.test(error.message)) throw new Error(formatSupabaseError(error));
     // Triển khai an toàn trong thời gian migration NDT chưa được chạy: vẫn giữ
     // nguyên bộ lọc, ngày và thứ tự; chỉ bỏ riêng cột ma_khuyet_tat.
     let fallbackRequest = supabase

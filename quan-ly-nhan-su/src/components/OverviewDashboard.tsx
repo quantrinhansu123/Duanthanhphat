@@ -1636,12 +1636,13 @@ export default function OverviewDashboard() {
                   <th className="px-3.5 py-2.5 text-right">Thực hiện</th>
                   <th className="px-3.5 py-2.5 text-right">Đạt</th>
                   <th className="px-3.5 py-2.5 text-right">Lỗi</th>
-                  <th className="min-w-[120px] px-3.5 py-2.5">Tỷ lệ</th>
+                  <th className="min-w-[120px] px-3.5 py-2.5">Tỷ lệ đạt / đã test</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {projectRows.map((row, index) => {
-                  const rate = row.count > 0 ? Math.round((row.passed / row.count) * 100) : 0;
+                  const tested = row.passed + row.errors;
+                  const rate = tested > 0 ? (row.passed / tested) * 100 : 0;
                   return (
                     <tr key={row.id} className="align-top hover:bg-slate-50/80 transition-colors">
                       <td className="px-3.5 py-3 font-mono text-slate-400">{index + 1}</td>
@@ -1692,8 +1693,8 @@ export default function OverviewDashboard() {
                               style={{ width: `${rate}%` }}
                             />
                           </div>
-                          <span className="w-10 text-right font-mono text-[11px] tabular-nums text-slate-600">
-                            {rate}%
+                          <span className="w-16 text-right font-mono text-sm tabular-nums text-slate-600">
+                            {tested > 0 ? `${rate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%` : "—"}
                           </span>
                         </div>
                       </td>
