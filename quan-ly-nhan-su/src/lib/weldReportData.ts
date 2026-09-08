@@ -400,6 +400,12 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
 
   if (!statusRpcRes.error) {
     invalidateWeldReportCache();
+    const verification = await supabase.from("lich_su_moi_han")
+      .select("tinh_trang_thi_nghiem")
+      .eq("ma_lich_su", payload.ma_lich_su.trim()).single();
+    if (verification.error || verification.data?.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
+      throw new Error("Nhật ký đã được tạo nhưng chưa xác nhận đúng tình trạng thí nghiệm. Hãy mở lại bản ghi để kiểm tra, không thêm lại.");
+    }
     return;
   }
 
@@ -479,11 +485,16 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem,
   };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("lich_su_moi_han")
     .update(body)
-    .eq("id", payload.id);
+    .eq("id", payload.id)
+    .select("id,tinh_trang_thi_nghiem")
+    .single();
   if (error) throw new Error(formatSupabaseError(error));
+  if (!data || data.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
+    throw new Error("Cơ sở dữ liệu chưa lưu đúng tình trạng thí nghiệm. Vui lòng kiểm tra lại bản ghi.");
+  }
 
   invalidateWeldReportCache();
 }

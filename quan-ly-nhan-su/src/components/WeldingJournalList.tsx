@@ -216,13 +216,17 @@ function JournalFormModal({
       : selectedWelder.certificates
     : [];
 
+  const initializedForm = useRef<JournalFormValues | null | undefined>(undefined);
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && (!wasOpen.current || initializedForm.current !== initial)) {
       setForm(initial ?? emptyJournalForm(projects, welders, machines));
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
+      initializedForm.current = initial;
     }
+    wasOpen.current = open;
   }, [open, initial, projects, welders, machines]);
 
   useEffect(() => {
