@@ -92,15 +92,8 @@ function emptyJournalForm(
   const machine = machines[0];
   const project = projects[0];
   const isInternalTraining = isInternalTrainingProject(project?.label ?? "");
-  const context = {
-    railType: "P50",
-    method: "FBW" as const,
-    machineCode: machine?.code,
-    machineName: machine?.name,
-  };
-  const welder = welders.find(
-    (item) => eligibleCertificatesForWeld(item.certificates, context).length > 0,
-  );
+  // Việc kiểm tra chứng chỉ đang được tạm ẩn khi tạo mối hàn mới.
+  const welder = welders[0];
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
@@ -114,9 +107,7 @@ function emptyJournalForm(
     ma_khuyet_tat: [],
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
-    chung_chi_su_dung: welder
-      ? eligibleCertificatesForWeld(welder.certificates, context)[0] ?? ""
-      : "",
+    chung_chi_su_dung: "",
     ghi_chu: "",
     toa_do_id: "",
     ly_trinh: "",
@@ -176,6 +167,7 @@ function JournalFormModal({
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void;
 }) {
+  const shouldCheckCertificate = mode === "edit";
   const [form, setForm] = useState(() => emptyJournalForm(projects, welders, machines));
   const [linkDateFrom, setLinkDateFrom] = useState(() => defaultLinkDateRange().from);
   const [linkDateTo, setLinkDateTo] = useState(() => defaultLinkDateRange().to);
@@ -210,14 +202,18 @@ function JournalFormModal({
     [form.loai_ray, form.cong_nghe_han, selectedMachine?.code, selectedMachine?.name],
   );
   const qualifiedWelders = useMemo(
-    () => welders.filter(
-      (welder) => eligibleCertificatesForWeld(welder.certificates, qualificationContext).length > 0,
-    ),
-    [welders, qualificationContext],
+    () => shouldCheckCertificate
+      ? welders.filter(
+          (welder) => eligibleCertificatesForWeld(welder.certificates, qualificationContext).length > 0,
+        )
+      : welders,
+    [shouldCheckCertificate, welders, qualificationContext],
   );
   const selectedWelder = welders.find((welder) => welder.id === form.tho_han_id);
   const selectedEligibleCertificates = selectedWelder
-    ? eligibleCertificatesForWeld(selectedWelder.certificates, qualificationContext)
+    ? shouldCheckCertificate
+      ? eligibleCertificatesForWeld(selectedWelder.certificates, qualificationContext)
+      : selectedWelder.certificates
     : [];
 
   useEffect(() => {
@@ -264,18 +260,22 @@ function JournalFormModal({
     const nextWelderId = selectedIsQualified ? form.tho_han_id : qualifiedWelders[0]?.id ?? "";
     const nextWelder = welders.find((welder) => welder.id === nextWelderId);
     const eligibleCertificates = nextWelder
-      ? eligibleCertificatesForWeld(nextWelder.certificates, qualificationContext)
+      ? shouldCheckCertificate
+        ? eligibleCertificatesForWeld(nextWelder.certificates, qualificationContext)
+        : nextWelder.certificates
       : [];
     const nextCertificate = eligibleCertificates.includes(form.chung_chi_su_dung)
       ? form.chung_chi_su_dung
-      : eligibleCertificates[0] ?? "";
+      : shouldCheckCertificate
+        ? eligibleCertificates[0] ?? ""
+        : "";
     if (form.chung_chi_su_dung === nextCertificate && form.tho_han_id === nextWelderId) return;
     setForm((prev) => ({
       ...prev,
       tho_han_id: nextWelderId,
       chung_chi_su_dung: nextCertificate,
     }));
-  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, qualificationContext, welders]);
+  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, qualificationContext, shouldCheckCertificate, welders]);
 
   useEffect(() => {
     if (!form.moi_han_lien_ket) return;
@@ -308,16 +308,18 @@ function JournalFormModal({
       return;
     }
     if (!form.tho_han_id) {
-      window.alert("Không có nhân sự sở hữu chứng chỉ phù hợp với mối hàn này.");
+      window.alert("Vui lòng chọn người trực tiếp hàn.");
       return;
     }
-    if (!selectedWelder || selectedEligibleCertificates.length === 0) {
-      window.alert(`Nhân sự được chọn chưa có ${describeCertificateRequirement(qualificationContext)}.`);
-      return;
-    }
-    if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
-      window.alert("Vui lòng chọn đúng chứng chỉ của nhân sự được sử dụng cho mối hàn.");
-      return;
+    if (shouldCheckCertificate) {
+      if (!selectedWelder || selectedEligibleCertificates.length === 0) {
+        window.alert(`Nhân sự được chọn chưa có ${describeCertificateRequirement(qualificationContext)}.`);
+        return;
+      }
+      if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
+        window.alert("Vui lòng chọn đúng chứng chỉ của nhân sự được sử dụng cho mối hàn.");
+        return;
+      }
     }
     if (!form.may_id) {
       window.alert("Vui lòng chọn máy thực hiện mối hàn.");
@@ -410,38 +412,37 @@ function JournalFormModal({
               onChange={(e) => setForm({ ...form, tho_han_id: e.target.value })}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
             >
-              {qualifiedWelders.length === 0 && (
+              {shouldCheckCertificate && qualifiedWelders.length === 0 && (
                 <option value="">Chưa có nhân sự đủ chứng chỉ</option>
               )}
               {welders.length === 0 ? (
                 <option value="">Chưa có dữ liệu thợ hàn</option>
               ) : (
                 welders.map((w) => (
-                  <option key={w.id} value={w.id} disabled={!qualifiedWelders.some((item) => item.id === w.id)}>
-                    {w.label}{qualifiedWelders.some((item) => item.id === w.id) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ"}
+                  <option key={w.id} value={w.id} disabled={shouldCheckCertificate && !qualifiedWelders.some((item) => item.id === w.id)}>
+                    {w.label}{shouldCheckCertificate && (qualifiedWelders.some((item) => item.id === w.id) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ")}
                   </option>
                 ))
               )}
             </select>
-            <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
-              Yêu cầu: {describeCertificateRequirement(qualificationContext)} · {qualifiedWelders.length} nhân sự phù hợp
-            </span>
+            {shouldCheckCertificate && (
+              <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+                Yêu cầu: {describeCertificateRequirement(qualificationContext)} · {qualifiedWelders.length} nhân sự phù hợp
+              </span>
+            )}
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Chứng chỉ sử dụng
+            Chứng chỉ sử dụng{shouldCheckCertificate ? "" : " (không bắt buộc)"}
             <select
               value={form.chung_chi_su_dung}
               onChange={(e) => setForm({ ...form, chung_chi_su_dung: e.target.value })}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
             >
-              {selectedEligibleCertificates.length === 0 ? (
-                <option value="">Chưa có chứng chỉ phù hợp</option>
-              ) : (
-                selectedEligibleCertificates.map((certificate) => (
-                  <option key={certificate} value={certificate}>{certificate}</option>
-                ))
-              )}
+              <option value="">{shouldCheckCertificate ? "Chưa có chứng chỉ phù hợp" : "Không chọn"}</option>
+              {selectedEligibleCertificates.map((certificate) => (
+                <option key={certificate} value={certificate}>{certificate}</option>
+              ))}
             </select>
           </label>
 
