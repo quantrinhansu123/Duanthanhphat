@@ -16,6 +16,7 @@ export type PersonnelCertificateRow = {
   loai_ray: string | null;
   loai_may: string | null;
   hinh_anh: string | null;
+  trang_thai: string | null;
 };
 
 const PERSONNEL_CERTIFICATE_COLUMNS = [
@@ -31,6 +32,7 @@ const PERSONNEL_CERTIFICATE_COLUMNS = [
   "loai_ray",
   "loai_may",
   "hinh_anh",
+  "trang_thai",
 ].join(",");
 
 export async function loadPersonnelCertificateRows(): Promise<PersonnelCertificateRow[]> {
@@ -103,6 +105,7 @@ export type PersonnelUpsertInput = {
   loaiMay?: string;
   kinhNghiem?: string;
   hinhAnh?: string;
+  trangThai?: string;
 };
 
 function toNullable(value?: string) {
@@ -131,6 +134,7 @@ export async function upsertPersonnel(input: PersonnelUpsertInput): Promise<Pers
     loai_may: toNullable(input.loaiMay),
     kinh_nghiem: toNullable(input.kinhNghiem),
     hinh_anh: toNullable(input.hinhAnh),
+    trang_thai: input.trangThai === "Khóa" ? "Khóa" : "Hoạt động",
   };
 
   const supabase = createClient();
@@ -175,12 +179,42 @@ export function parseTrainedMachineTokens(value?: string | null): string[] {
     .filter(Boolean);
 }
 
-function normalizeRailToken(value: string) {
+export function normalizeRailToken(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleUpperCase("vi")
-    .replace(/\s+/g, "");
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * Doi chieu danh sach loai ray cua tho han (loai_ray, dang text tu do) voi
+ * danh muc cau hinh he thong. Tra ve:
+ *  - matched: nhan loai ray dung theo cau hinh
+ *  - unmatched: token khong khop danh muc nao (giu nguyen de khong mat du lieu)
+ */
+export function resolveRailTokensToConfig(
+  loaiRay: string | null | undefined,
+  configOptions: string[],
+): { matched: string[]; unmatched: string[] } {
+  const optionByNorm = new Map<string, string>();
+  for (const opt of configOptions) {
+    const norm = normalizeRailToken(opt);
+    if (norm && !optionByNorm.has(norm)) optionByNorm.set(norm, opt);
+  }
+  const matched: string[] = [];
+  const unmatched: string[] = [];
+  for (const token of parseTrainedMachineTokens(loaiRay)) {
+    const norm = normalizeRailToken(token);
+    if (!norm || norm === "CHUACAPNHAT") continue;
+    const hit = optionByNorm.get(norm);
+    if (hit) {
+      if (!matched.includes(hit)) matched.push(hit);
+    } else if (!unmatched.includes(token)) {
+      unmatched.push(token);
+    }
+  }
+  return { matched, unmatched };
 }
 
 /** Kiểm tra thợ hàn có được phép hàn loại ray (theo hồ sơ loai_ray). */

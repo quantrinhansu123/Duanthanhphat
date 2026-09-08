@@ -995,17 +995,21 @@ export default function WeldingHistoryList() {
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{row.welderName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.rank}</td>
                   <td className="px-3.5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        window.history.pushState(null, "", `/nhat-ky-han?query=${encodeURIComponent(row.weldJoint)}`);
-                        window.dispatchEvent(new PopStateEvent("popstate"));
-                      }}
-                      className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs hover:bg-blue-100 hover:underline"
-                      title="Mở mối hàn trong Nhật ký hàn"
-                    >
-                      {row.weldJoint}
-                    </button>
+                    {row.weldJoint && row.weldJoint !== "—" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.history.pushState(null, "", `/nhat-ky-han?query=${encodeURIComponent(row.weldJoint)}`);
+                          window.dispatchEvent(new PopStateEvent("popstate"));
+                        }}
+                        className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs hover:bg-blue-100 hover:underline"
+                        title="Mở mối hàn trong Nhật ký hàn"
+                      >
+                        {row.weldJoint}
+                      </button>
+                    ) : (
+                      <span className="font-mono text-xs text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-3.5 py-3 font-mono text-xs font-bold text-slate-800">{row.machine}</td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono text-xs sm:text-sm">{row.railType}</td>

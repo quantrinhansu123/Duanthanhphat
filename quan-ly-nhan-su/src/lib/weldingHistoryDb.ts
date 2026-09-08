@@ -17,7 +17,7 @@ export interface SupabaseWeldRow {
   hach_toan?: string | null;
   moi_han_lien_ket?: string | null;
   ghi_chu?: string | null;
-  nhan_su?: { ho_ten?: string | null } | null;
+  nhan_su?: { ho_ten?: string | null; ma_nhan_su?: string | null } | null;
   du_an?: { du_an?: string | null } | null;
   may?: { ma_may?: string | null } | null;
 }
@@ -28,6 +28,7 @@ export interface ViewWeldHistoryRow {
   nam_thuc_hien?: number | null;
   ma_lich_su?: string | null;
   ten_tho_han?: string | null;
+  ma_nhan_su?: string | null;
   ghi_chu?: string | null;
   moi_han_lien_ket?: string | null;
   so_luong_loi?: number | null;
@@ -76,8 +77,6 @@ function parseResult(row: SupabaseWeldRow): WeldingHistoryRecord["result"] {
 
 function parseWeldJoint(
   row: { ghi_chu?: string | null; moi_han_lien_ket?: string | null; ma_lich_su?: string | null },
-  dateStr: string,
-  idx: number,
 ): string {
   const ghiChu = row.ghi_chu || "";
   const match = ghiChu.match(/Mối hàn:\s*([^\s|]+)/i);
@@ -85,7 +84,9 @@ function parseWeldJoint(
   if (row.moi_han_lien_ket) {
     return row.moi_han_lien_ket.replace(/^SC-/, "");
   }
-  return row.ma_lich_su || `MH-${dateStr.replace(/-/g, "")}-${String(idx + 1).padStart(2, "0")}`;
+  // Bản ghi đồng bộ (__SYNC_<uuid>) không có mã mối hàn thực -> để trống.
+  if (row.ma_lich_su && !row.ma_lich_su.startsWith("__SYNC_")) return row.ma_lich_su;
+  return "—";
 }
 
 function mapSupabaseRow(row: SupabaseWeldRow, idx: number): WeldingHistoryRecord {
@@ -98,10 +99,10 @@ function mapSupabaseRow(row: SupabaseWeldRow, idx: number): WeldingHistoryRecord
   return {
     id: row.id,
     date: dateStr,
-    weldingId: row.ma_lich_su || `WH${String(idx + 1).padStart(3, "0")}`,
+    weldingId: row.nhan_su?.ma_nhan_su || "—",
     welderName: row.nhan_su?.ho_ten || "Thợ hàn chính",
     rank: parseRank(row.ghi_chu),
-    weldJoint: parseWeldJoint(row, dateStr, idx),
+    weldJoint: parseWeldJoint(row),
     machine: row.may?.ma_may || "KCM007-01",
     railType: row.loai_ray || "UIC60",
     project: row.du_an?.du_an || "ĐSCT Bắc – Nam",
@@ -117,10 +118,10 @@ function mapViewRow(row: ViewWeldHistoryRow, idx: number): WeldingHistoryRecord 
   return {
     id: row.id,
     date: row.ngay_thuc_hien || `${row.nam_thuc_hien || 2026}-01-01`,
-    weldingId: row.ma_lich_su || `WH${String(idx + 1).padStart(3, "0")}`,
+    weldingId: row.ma_nhan_su || "—",
     welderName: row.ten_tho_han || "Thợ hàn chính",
     rank: parseRank(row.ghi_chu),
-    weldJoint: parseWeldJoint(row, row.ngay_thuc_hien || "", idx),
+    weldJoint: parseWeldJoint(row),
     machine: row.ten_may || "KCM007-01",
     railType: row.loai_ray || "UIC60",
     project: row.ten_du_an || "ĐSCT Bắc – Nam",
@@ -450,7 +451,7 @@ export async function loadWeldingHistoryPage(
         hach_toan,
         moi_han_lien_ket,
         ghi_chu,
-        nhan_su:tho_han_id (ho_ten),
+        nhan_su:tho_han_id (ho_ten, ma_nhan_su),
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
       `)
@@ -591,7 +592,7 @@ export async function exportAllFilteredWeldingHistory(
         hach_toan,
         moi_han_lien_ket,
         ghi_chu,
-        nhan_su:tho_han_id (ho_ten),
+        nhan_su:tho_han_id (ho_ten, ma_nhan_su),
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
       `)

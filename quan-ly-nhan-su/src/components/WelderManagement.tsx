@@ -25,8 +25,10 @@ import {
 import {
   deletePersonnel,
   loadPersonnelCertificateRows,
+  normalizeRailToken,
   parseTrainedMachineTokens,
   personTrainedOnMachine,
+  resolveRailTokensToConfig,
   upsertPersonnel,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
@@ -125,6 +127,16 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+/**
+ * Một số giá trị đơn vị/chức vụ được lưu song ngữ dạng "Tiếng Việt (English)".
+ * Hiển thị đúng theo ngôn ngữ đang chọn thay vì luôn kèm phần tiếng Anh.
+ */
+function localizeBilingual(value: string, isEn: boolean): string {
+  const match = value.match(/^\s*(.+?)\s*\(([^()]+)\)\s*$/);
+  if (!match) return value;
+  return (isEn ? match[2] : match[1]).trim();
+}
+
 function formatDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("vi-VN", {
@@ -158,7 +170,11 @@ function personnelRowToWelder(row: PersonnelCertificateRow): Welder {
     railTypes: row.loai_ray?.trim() || seed?.railTypes || "Chưa cập nhật",
     trainedMachines: row.loai_may?.trim() || seed?.trainedMachines || "Chưa cập nhật",
     experience: row.kinh_nghiem?.trim() || seed?.experience || "Chưa cập nhật",
-    status: seed?.status || "Hoạt động",
+    status: row.trang_thai
+      ? row.trang_thai === "Khóa"
+        ? "Khóa"
+        : "Hoạt động"
+      : seed?.status || "Hoạt động",
     photo: row.hinh_anh?.trim() || seed?.photo || "https://randomuser.me/api/portraits/lego/1.jpg",
   };
 }
@@ -470,6 +486,7 @@ export default function WelderManagement() {
         loaiMay: values.trainedMachines,
         kinhNghiem: values.experience,
         hinhAnh: values.photo,
+        trangThai: values.status,
       });
       const saved = { ...personnelRowToWelder(row), status: values.status };
       setList((prev) => {
@@ -898,12 +915,24 @@ export default function WelderManagement() {
   }, [machineCatalog]);
   const statusOptions = ["Hoạt động", "Khóa"];
 
-  const selectedRailTypes = useMemo(() => {
-    if (!selectedWelder) return [] as string[];
-    return parseTrainedMachineTokens(
+  // Loại ray của thợ hàn (loai_ray là text tự do) được đối chiếu với danh mục
+  // cấu hình: token khớp -> dùng nhãn chuẩn trong cấu hình; token lệch chuẩn
+  // vẫn giữ lại để không mất dữ liệu và hiển thị được trong bộ chọn.
+  const railResolution = useMemo(() => {
+    if (!selectedWelder) return { matched: [] as string[], unmatched: [] as string[] };
+    return resolveRailTokensToConfig(
       selectedWelder.railTypes === "Chưa cập nhật" ? "" : selectedWelder.railTypes,
+      railOptions,
     );
-  }, [selectedWelder]);
+  }, [selectedWelder, railOptions]);
+  const selectedRailTypes = useMemo(
+    () => [...railResolution.matched, ...railResolution.unmatched],
+    [railResolution],
+  );
+  const railComboOptions = useMemo(
+    () => Array.from(new Set([...railOptions, ...railResolution.unmatched])),
+    [railOptions, railResolution.unmatched],
+  );
 
   async function handleUpdateRailTypes(next: string[]) {
     if (!selectedWelder) return;
@@ -921,6 +950,7 @@ export default function WelderManagement() {
         loaiMay: selectedWelder.trainedMachines === "Chưa cập nhật" ? "" : selectedWelder.trainedMachines,
         kinhNghiem: selectedWelder.experience === "Chưa cập nhật" ? "" : selectedWelder.experience,
         hinhAnh: selectedWelder.photo?.startsWith("http") ? selectedWelder.photo : "",
+        trangThai: selectedWelder.status,
       });
       const saved = { ...personnelRowToWelder(row), status: selectedWelder.status };
       setList((prev) => {
@@ -936,7 +966,7 @@ export default function WelderManagement() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return list.filter((w) => {
+    const rows = list.filter((w) => {
       const matchQ =
         !q ||
         w.name.toLowerCase().includes(q) ||
@@ -948,8 +978,11 @@ export default function WelderManagement() {
         w.trainedMachines.toLowerCase().includes(q);
       const matchRank = ranksSel.length === 0 || ranksSel.includes(w.rank);
       const matchTeam = teamsSel.length === 0 || teamsSel.includes(w.weldingTeam);
+      const railTokenSet = new Set(
+        parseTrainedMachineTokens(w.railTypes).map((t) => normalizeRailToken(t)),
+      );
       const matchRail =
-        railsSel.length === 0 || railsSel.some((r) => w.railTypes.split(",").map((s) => s.trim()).includes(r));
+        railsSel.length === 0 || railsSel.some((r) => railTokenSet.has(normalizeRailToken(r)));
       const matchMachine = machinesSel.length === 0 || machinesSel.some((code) => {
         const machine = machineCatalog.find((item) => item.code === code);
         return personTrainedOnMachine(w.trainedMachines, {
@@ -960,6 +993,16 @@ export default function WelderManagement() {
       const matchStatus = statusesSel.length === 0 || statusesSel.includes(w.status);
       return matchQ && matchRank && matchTeam && matchRail && matchMachine && matchStatus;
     });
+    const teamOrder = (team: string) => {
+      const m = team.match(/\d+/);
+      return m ? Number(m[0]) : Number.POSITIVE_INFINITY;
+    };
+    return [...rows].sort(
+      (a, b) =>
+        teamOrder(a.weldingTeam) - teamOrder(b.weldingTeam) ||
+        a.weldingTeam.localeCompare(b.weldingTeam, "vi") ||
+        a.name.localeCompare(b.name, "vi"),
+    );
   }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel, machineCatalog]);
 
   const stats = useMemo(() => {
@@ -1277,7 +1320,7 @@ export default function WelderManagement() {
                             {w.name}
                           </div>
                           <div className="text-xs text-slate-500 truncate">
-                            {w.position} · {w.department}
+                            {localizeBilingual(w.position, isEn)} · {localizeBilingual(w.department, isEn)}
                           </div>
                         </div>
                       </div>
@@ -1426,7 +1469,7 @@ export default function WelderManagement() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-5">
               <div className="text-xs sm:text-sm text-slate-500">
-                {selectedWelder.position} · {selectedWelder.department} · {selectedWelder.email}
+                {localizeBilingual(selectedWelder.position, isEn)} · {localizeBilingual(selectedWelder.department, isEn)} · {selectedWelder.email}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1450,11 +1493,19 @@ export default function WelderManagement() {
                   </div>
                   <MultiSelectCombobox
                     title={isEn ? "Rail type" : "Loại ray"}
-                    options={railOptions}
+                    options={railComboOptions}
                     selected={selectedRailTypes}
                     onChange={(next) => void handleUpdateRailTypes(next)}
                     minWidth="min-w-0 w-full"
                   />
+                  {railResolution.unmatched.length > 0 && (
+                    <p className="mt-2 text-[11px] text-amber-600">
+                      {isEn
+                        ? "Not in system config: "
+                        : "Chưa khớp cấu hình hệ thống: "}
+                      {railResolution.unmatched.join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">

@@ -22,6 +22,8 @@ create table if not exists public.nhan_su (
   loai_ray        text,
   loai_may        text,
   hinh_anh        text,                    -- URL Storage hoặc path
+  trang_thai      text not null default 'Hoạt động'
+                  check (trang_thai in ('Hoạt động', 'Khóa')),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
