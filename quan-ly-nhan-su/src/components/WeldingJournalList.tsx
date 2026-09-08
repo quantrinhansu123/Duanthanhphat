@@ -404,7 +404,7 @@ function JournalFormModal({
           </div>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Nhân sự phụ trách
+            Người trực tiếp hàn
             <select
               value={form.tho_han_id}
               onChange={(e) => setForm({ ...form, tho_han_id: e.target.value })}
@@ -986,7 +986,7 @@ export default function WeldingJournalList() {
           "Mã mối hàn": row.ma_lich_su,
           "Mối hàn liên kết": row.moi_han_lien_ket?.trim() || "",
           "Welding ID": row.ma_nhan_su,
-          "Thợ hàn": row.ten_tho_han,
+          "Người trực tiếp hàn": row.ten_tho_han,
           "Tổ hàn": row.to_han?.trim() || "",
           "Chứng chỉ sử dụng": row.chung_chi_su_dung?.trim() || "",
           "Mã máy": row.ma_may?.trim() || "",
@@ -1441,7 +1441,7 @@ export default function WeldingJournalList() {
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">ID</th>
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
-                <th className="p-2.5 font-semibold">Nhân sự phụ trách</th>
+                <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
                 <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Mã mối hàn</th>

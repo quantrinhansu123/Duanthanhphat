@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   CaretDown,
@@ -24,6 +24,7 @@ import {
   deleteWeldingHistoryRecord,
   exportAllFilteredWeldingHistory,
   loadWeldingHistoryPage,
+  removeVietnameseTones,
   saveWeldingHistoryRecord,
   type WeldingHistoryFilterParams,
   type WeldingHistoryStats,
@@ -42,36 +43,169 @@ const shiftOptions: WeldingHistoryRecord["shift"][] = ["Ca 1", "Ca 2", "Ca 3"];
 const defaultMachines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
 
 function emptyRecord(): WeldingHistoryRecord {
+  // Chỉ điền sẵn ngày (hôm nay) và vài giá trị enum bắt buộc; các trường
+  // còn lại để trống cho người dùng tự nhập, tránh dữ liệu mẫu gây hiểu nhầm.
   return {
     id: `temp-${Date.now()}`,
     date: new Date().toISOString().slice(0, 10),
-    weldingId: `WH${String(Math.floor(Math.random() * 900) + 100)}`,
-    welderName: "Lê Thị Kim Anh",
-    rank: "Hạng 1",
-    weldJoint: `MH-HN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-01`,
-    machine: "KCM007-01",
-    railType: "P50",
-    project: "Dự án đường sắt Bắc Nam",
+    weldingId: "",
+    welderName: "",
+    rank: "",
+    weldJoint: "",
+    machine: "",
+    railType: "",
+    project: "",
     shift: "Ca 1",
-    accountingCode: "HT-SX01",
+    accountingCode: "",
     result: "Đạt",
   };
+}
+
+type ComboOption = { value: string; label: string; hint?: string };
+
+/**
+ * Combo box 1 lựa chọn, tự dựng menu bằng div định vị `left-0 right-0` nên menu
+ * luôn rộng đúng bằng ô combobox trên mọi kích thước màn hình (khác <select>
+ * gốc mà trình duyệt/di động tự vẽ chiều rộng phủ toàn màn hình).
+ */
+function FormCombo({
+  value,
+  options,
+  onChange,
+  placeholder,
+  searchable = false,
+  searchPlaceholder = "Tìm...",
+  emptyText = "Không tìm thấy",
+}: {
+  value: string;
+  options: ComboOption[];
+  onChange: (value: string, option?: ComboOption) => void;
+  placeholder: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyText?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQ("");
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", onClick);
+      return () => document.removeEventListener("mousedown", onClick);
+    }
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!searchable) return options;
+    const key = removeVietnameseTones(q).trim();
+    return key ? options.filter((o) => removeVietnameseTones(o.label).includes(key)) : options;
+  }, [searchable, q, options]);
+
+  const current = options.find((o) => o.value === value);
+
+  function pick(v: string, opt?: ComboOption) {
+    onChange(v, opt);
+    setOpen(false);
+    setQ("");
+  }
+
+  return (
+    <div ref={ref} className="relative mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex h-10 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-xs sm:text-sm font-medium outline-hidden transition-all duration-150 cursor-pointer ${
+          open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : "border-slate-300 hover:border-slate-400"
+        }`}
+      >
+        <span className={`truncate ${value ? "text-slate-900" : "text-slate-400"}`}>
+          {current?.label || placeholder}
+        </span>
+        <CaretDown
+          size={13}
+          weight="bold"
+          aria-hidden
+          className={`shrink-0 text-slate-400 transition-transform duration-150 ${open ? "rotate-180 text-[#0047AB]" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 flex max-h-60 flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg animate-in fade-in-50 duration-150">
+          {searchable && (
+            <div className="relative mb-1.5">
+              <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-2 text-xs text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-0.5 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => pick("")}
+              className="rounded-lg px-2.5 py-2 text-left text-xs sm:text-sm text-slate-400 hover:bg-slate-100"
+            >
+              {placeholder}
+            </button>
+            {filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => pick(o.value, o)}
+                className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs sm:text-sm transition-colors duration-150 ${
+                  o.value === value ? "bg-blue-50 font-semibold text-[#0047AB]" : "text-slate-800 hover:bg-slate-100"
+                }`}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.hint ? <span className="shrink-0 text-[11px] font-normal text-slate-400">{o.hint}</span> : null}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-2.5 py-3 text-center text-xs text-slate-400">{emptyText}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HistoryModal({
   record,
   mode,
+  welders = [],
   onClose,
   onSave,
 }: {
   record: WeldingHistoryRecord;
   mode: "view" | "edit" | "create";
+  welders?: { name: string; rank: string }[];
   onClose: () => void;
   onSave?: (updated: WeldingHistoryRecord) => void;
 }) {
   const [form, setForm] = useState(record);
   const configuredRails = useCatalogOptions("Loại ray");
   const readOnly = mode === "view";
+
+  // Danh sách chọn thợ hàn; gồm cả giá trị đang có của bản ghi cũ nếu chưa nằm trong danh mục.
+  const welderChoices = useMemo(() => {
+    const names = new Set(welders.map((w) => w.name));
+    if (form.welderName.trim() && !names.has(form.welderName)) {
+      return [{ name: form.welderName, rank: "" }, ...welders];
+    }
+    return welders;
+  }, [welders, form.welderName]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -131,11 +265,12 @@ function HistoryModal({
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Welding ID
+              Mã bản ghi
               <input
                 readOnly={readOnly}
                 value={form.weldingId}
                 onChange={(e) => setForm({ ...form, weldingId: e.target.value })}
+                placeholder={mode === "create" ? "Bỏ trống để tự sinh" : undefined}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
               />
             </label>
@@ -143,14 +278,29 @@ function HistoryModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Thợ hàn
-              <input
-                readOnly={readOnly}
-                value={form.welderName}
-                onChange={(e) => setForm({ ...form, welderName: e.target.value })}
-                placeholder="Họ tên thợ hàn"
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-              />
+              Người trực tiếp hàn
+              {readOnly ? (
+                <div className="mt-2 text-xs sm:text-sm font-medium text-slate-900">{form.welderName || "—"}</div>
+              ) : welderChoices.length > 0 ? (
+                <FormCombo
+                  value={form.welderName}
+                  options={welderChoices.map((w) => ({ value: w.name, label: w.name, hint: w.rank || undefined }))}
+                  placeholder="— Chọn thợ hàn —"
+                  searchable
+                  searchPlaceholder="Tìm thợ hàn..."
+                  emptyText="Không tìm thấy thợ hàn"
+                  onChange={(name, opt) =>
+                    setForm({ ...form, welderName: name, rank: opt?.hint || (name ? form.rank : "") })
+                  }
+                />
+              ) : (
+                <input
+                  value={form.welderName}
+                  onChange={(e) => setForm({ ...form, welderName: e.target.value })}
+                  placeholder="Họ tên thợ hàn"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+                />
+              )}
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Hạng thợ
@@ -158,6 +308,7 @@ function HistoryModal({
                 readOnly={readOnly}
                 value={form.rank}
                 onChange={(e) => setForm({ ...form, rank: e.target.value })}
+                placeholder="Tự điền theo thợ hàn"
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
               />
             </label>
@@ -178,33 +329,27 @@ function HistoryModal({
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Máy hàn
               {readOnly ? (
-                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.machine}</div>
+                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.machine || "—"}</div>
               ) : (
-                <select
+                <FormCombo
                   value={form.machine}
-                  onChange={(e) => setForm({ ...form, machine: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer font-mono"
-                >
-                  {defaultMachines.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
+                  options={defaultMachines.map((m) => ({ value: m, label: m }))}
+                  placeholder="— Chọn máy hàn —"
+                  onChange={(v) => setForm({ ...form, machine: v })}
+                />
               )}
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại ray
               {readOnly ? (
-                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.railType}</div>
+                <div className="mt-2 text-xs sm:text-sm font-medium font-mono text-slate-900">{form.railType || "—"}</div>
               ) : (
-                <select
+                <FormCombo
                   value={form.railType}
-                  onChange={(e) => setForm({ ...form, railType: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer font-mono"
-                >
-                  {configuredRails.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                  options={configuredRails.map((r) => ({ value: r, label: r }))}
+                  placeholder="— Chọn loại ray —"
+                  onChange={(v) => setForm({ ...form, railType: v })}
+                />
               )}
             </label>
           </div>
@@ -225,15 +370,12 @@ function HistoryModal({
               {readOnly ? (
                 <div className="mt-2 text-xs sm:text-sm font-medium text-slate-900">{form.shift}</div>
               ) : (
-                <select
+                <FormCombo
                   value={form.shift}
-                  onChange={(e) => setForm({ ...form, shift: e.target.value as WeldingHistoryRecord["shift"] })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-                >
-                  {shiftOptions.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
+                  options={shiftOptions.map((s) => ({ value: s, label: s }))}
+                  placeholder="— Chọn ca —"
+                  onChange={(v) => setForm({ ...form, shift: (v || "Ca 1") as WeldingHistoryRecord["shift"] })}
+                />
               )}
             </label>
 
@@ -246,15 +388,12 @@ function HistoryModal({
                   </span>
                 </div>
               ) : (
-                <select
+                <FormCombo
                   value={form.result}
-                  onChange={(e) => setForm({ ...form, result: e.target.value as WeldingHistoryRecord["result"] })}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-                >
-                  {resultOptions.map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
+                  options={resultOptions.map((r) => ({ value: r, label: r }))}
+                  placeholder="— Chọn kết quả —"
+                  onChange={(v) => setForm({ ...form, result: (v || "Đạt") as WeldingHistoryRecord["result"] })}
+                />
               )}
             </label>
           </div>
@@ -432,6 +571,7 @@ export default function WeldingHistoryList() {
   } | null>(null);
 
   const [allWelders, setAllWelders] = useState<string[]>([]);
+  const [welderDirectory, setWelderDirectory] = useState<{ name: string; rank: string }[]>([]);
   const [allProjects, setAllProjects] = useState<string[]>([]);
 
   // Tải danh mục thợ hàn & dự án từ DB
@@ -439,8 +579,17 @@ export default function WeldingHistoryList() {
     async function loadMaster() {
       try {
         const supabase = createClient();
-        const { data: ns } = await supabase.from("nhan_su").select("ho_ten").order("ho_ten");
-        if (ns) setAllWelders(Array.from(new Set(ns.map((n: { ho_ten?: string }) => n.ho_ten).filter((x): x is string => Boolean(x)))));
+        const { data: ns } = await supabase.from("nhan_su").select("ho_ten, cap_bac").order("ho_ten");
+        if (ns) {
+          const rows = ns as { ho_ten?: string | null; cap_bac?: string | null }[];
+          setAllWelders(Array.from(new Set(rows.map((n) => n.ho_ten).filter((x): x is string => Boolean(x)))));
+          const dir = new Map<string, string>();
+          for (const n of rows) {
+            const name = n.ho_ten?.trim();
+            if (name && !dir.has(name)) dir.set(name, n.cap_bac?.trim() || "");
+          }
+          setWelderDirectory(Array.from(dir, ([name, rank]) => ({ name, rank })).sort((a, b) => a.name.localeCompare(b.name, "vi")));
+        }
         const { data: da } = await supabase.from("du_an").select("du_an").order("du_an");
         if (da) setAllProjects(Array.from(new Set(da.map((d: { du_an?: string }) => d.du_an).filter((x): x is string => Boolean(x)))));
       } catch {
@@ -529,6 +678,16 @@ export default function WeldingHistoryList() {
 
   async function handleSave(updated: WeldingHistoryRecord) {
     const isNew = modal?.mode === "create";
+    const missing: string[] = [];
+    if (!updated.welderName.trim()) missing.push("Người trực tiếp hàn");
+    if (!updated.weldJoint.trim()) missing.push("Ký hiệu mối hàn");
+    if (!updated.project.trim()) missing.push("Dự án");
+    if (!updated.machine.trim()) missing.push("Máy hàn");
+    if (!updated.railType.trim()) missing.push("Loại ray");
+    if (missing.length > 0) {
+      window.alert(`Vui lòng nhập đầy đủ:\n- ${missing.join("\n- ")}`);
+      return;
+    }
     const res = await saveWeldingHistoryRecord(updated, list, isNew);
     if (res.error) {
       window.alert(`Không thể lưu vào cơ sở dữ liệu Supabase:\n${res.error}\n\nDữ liệu chưa được lưu. Vui lòng kiểm tra lại thông tin.`);
@@ -559,7 +718,7 @@ export default function WeldingHistoryList() {
         STT: idx + 1,
         Ngày: formatWeldingDate(r.date),
         "Welding ID": r.weldingId,
-        "Thợ hàn": r.welderName,
+        "Người trực tiếp hàn": r.welderName,
         Hạng: r.rank,
         "Mối hàn": r.weldJoint,
         "Máy hàn": r.machine,
@@ -601,7 +760,7 @@ export default function WeldingHistoryList() {
         "STT",
         "Ngày",
         "Welding ID",
-        "Thợ hàn",
+        "Người trực tiếp hàn",
         "Hạng",
         "Mối hàn",
         "Máy hàn",
@@ -958,7 +1117,7 @@ export default function WeldingHistoryList() {
         )}
       </div>
 
-      {/* Bảng: Ngày | Welding ID | Thợ hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Kết quả | Thao tác */}
+      {/* Bảng: Ngày | Welding ID | Người trực tiếp hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Kết quả | Thao tác */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
           <table className="w-max min-w-full border-collapse text-left text-xs sm:text-sm whitespace-nowrap">
@@ -966,7 +1125,7 @@ export default function WeldingHistoryList() {
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
                 <th className="px-3.5 py-3">Welding ID</th>
-                <th className="px-3.5 py-3">Thợ hàn</th>
+                <th className="px-3.5 py-3">Người trực tiếp hàn</th>
                 <th className="px-3.5 py-3">Hạng</th>
                 <th className="px-3.5 py-3">Mã mối hàn</th>
                 <th className="px-3.5 py-3">Máy</th>
@@ -1178,6 +1337,7 @@ export default function WeldingHistoryList() {
         <HistoryModal
           record={modal.record}
           mode={modal.mode}
+          welders={welderDirectory}
           onClose={() => setModal(null)}
           onSave={modal.mode !== "view" ? handleSave : undefined}
         />

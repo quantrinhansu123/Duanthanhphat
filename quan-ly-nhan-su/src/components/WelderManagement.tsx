@@ -120,6 +120,16 @@ function normalizeName(value: string) {
     .trim();
 }
 
+function nextWelderCode(existingCodes: string[]) {
+  const maxNumber = existingCodes.reduce((max, code) => {
+    const match = code.trim().toUpperCase().match(/^TH-R4-(\d+)$/);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 0);
+
+  return `TH-R4-${String(maxNumber + 1).padStart(3, "0")}`;
+}
+
 function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -311,6 +321,13 @@ export default function WelderManagement() {
 
   // All welding journal rows for performance metrics
   const [allWeldRows, setAllWeldRows] = useState<WeldReportRow[]>([]);
+  const suggestedWeldingId = useMemo(
+    () => nextWelderCode([
+      ...list.map((welder) => welder.weldingId),
+      ...allWeldRows.map((row) => row.ma_nhan_su),
+    ]),
+    [list, allWeldRows],
+  );
   // Google Drive documents
   const [driveDocs, setDriveDocs] = useState<DriveDocumentItem[]>([]);
   const [loadingDrive, setLoadingDrive] = useState(false);
@@ -2241,6 +2258,7 @@ export default function WelderManagement() {
       <WelderFormModal
         open={formOpen}
         initial={editingWelder}
+        suggestedWeldingId={suggestedWeldingId}
         saving={savingWelder}
         isEn={isEn}
         railOptions={railOptions}

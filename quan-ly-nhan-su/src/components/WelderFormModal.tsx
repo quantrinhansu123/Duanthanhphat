@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Welder } from "@/data/welders";
 import type { Machine } from "@/data/machines";
 import { X } from "@/components/icons";
@@ -46,6 +46,7 @@ const emptyForm: WelderFormValues = {
 type WelderFormModalProps = {
   open: boolean;
   initial?: Welder | null;
+  suggestedWeldingId: string;
   saving?: boolean;
   isEn?: boolean;
   /** Loại ray từ Quản lý mối hàn / danh mục Loại ray */
@@ -57,6 +58,7 @@ type WelderFormModalProps = {
 export default function WelderFormModal({
   open,
   initial,
+  suggestedWeldingId,
   saving,
   isEn,
   railOptions,
@@ -67,6 +69,7 @@ export default function WelderFormModal({
   const [error, setError] = useState("");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
+  const initializedFormKey = useRef<string | null>(null);
 
   const configuredRailOptions = useCatalogOptions("Loại ray");
   const departmentOptions = useCatalogOptions("Phòng ban", "name");
@@ -92,7 +95,13 @@ export default function WelderFormModal({
   }, [configuredRailOptions, railOptions, selectedRailTypes]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedFormKey.current = null;
+      return;
+    }
+    const formKey = initial?.id ?? "new";
+    if (initializedFormKey.current === formKey) return;
+    initializedFormKey.current = formKey;
     if (initial) {
       setForm({
         id: initial.id,
@@ -109,10 +118,14 @@ export default function WelderFormModal({
         status: initial.status,
       });
     } else {
-      setForm({ ...emptyForm, department: defaultDepartment });
+      setForm({
+        ...emptyForm,
+        weldingId: suggestedWeldingId,
+        department: defaultDepartment,
+      });
     }
     setError("");
-  }, [open, initial, defaultDepartment]);
+  }, [open, initial, defaultDepartment, suggestedWeldingId]);
 
   useEffect(() => {
     if (!open) return;
@@ -222,10 +235,23 @@ export default function WelderFormModal({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              <label htmlFor="welder-welding-id" className="text-xs font-bold uppercase tracking-wider text-slate-600">
                 {isEn ? "Welding ID" : "Mã thợ hàn"}
               </label>
-              <input className={fieldClass} value={form.weldingId} onChange={(e) => set("weldingId", e.target.value)} placeholder="TH-R4-001" />
+              <input
+                id="welder-welding-id"
+                className={fieldClass}
+                value={form.weldingId}
+                onChange={(e) => set("weldingId", e.target.value)}
+                placeholder="TH-R4-001"
+                required
+                aria-describedby="welder-welding-id-helper"
+              />
+              <p id="welder-welding-id-helper" className="mt-1 text-[11px] text-slate-500">
+                {isEn
+                  ? "Auto-generated for new welders; editable if needed."
+                  : "Tự sinh cho thợ hàn mới; có thể chỉnh sửa khi cần."}
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">

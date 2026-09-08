@@ -755,9 +755,15 @@ export async function saveWeldingHistoryRecord(
     const linkedJoint = isRepair ? (record.weldJoint.startsWith("SC-") ? record.weldJoint : `SC-${record.weldJoint}`) : null;
 
     if (isNew) {
+      // Sinh mã bản ghi khi người dùng để trống Welding ID (ma_lich_su là NOT NULL + UNIQUE).
+      const maLichSu =
+        record.weldingId?.trim() ||
+        `LSH-${record.date.replace(/-/g, "")}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+      finalRecord = { ...finalRecord, weldingId: maLichSu };
+
       // Build insert payload
       const basePayload: Record<string, unknown> = {
-        ma_lich_su: record.weldingId,
+        ma_lich_su: maLichSu,
         ngay_thuc_hien: record.date,
         nam_thuc_hien: Number(record.date.slice(0, 4)) || new Date().getFullYear(),
         loai_ray: record.railType,
