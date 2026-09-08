@@ -44,11 +44,11 @@ export const navigation: NavItem[] = [
     labelEn: "Training & Certificates",
     children: [
       {
-        id: "khoa-dao-tao",
-        label: "Danh sách khóa đào tạo",
-        labelEn: "Training Courses",
-        description: "Ngày đào tạo, nội dung, người đào tạo, học viên, kết quả",
-        descriptionEn: "Training date, curriculum, trainer, attendees, evaluation results",
+        id: "tra-cuu-dao-tao",
+        label: "Tra cứu lịch sử đào tạo",
+        labelEn: "Training History Lookup",
+        description: "Tra cứu khóa học, giờ đào tạo và chứng chỉ theo nhân sự",
+        descriptionEn: "Look up training and competency qualification records by welder",
       },
       {
         id: "chung-chi",
@@ -58,11 +58,11 @@ export const navigation: NavItem[] = [
         descriptionEn: "Issue date, expiry date, and attached certificate files by welder",
       },
       {
-        id: "tra-cuu-dao-tao",
-        label: "Tra cứu lịch sử đào tạo",
-        labelEn: "Training History Lookup",
-        description: "Tra cứu khóa học, giờ đào tạo và chứng chỉ theo nhân sự",
-        descriptionEn: "Look up training and competency qualification records by welder",
+        id: "khoa-dao-tao",
+        label: "Danh sách khóa đào tạo",
+        labelEn: "Training Courses",
+        description: "Ngày đào tạo, nội dung, người đào tạo, học viên, kết quả",
+        descriptionEn: "Training date, curriculum, trainer, attendees, evaluation results",
       },
     ],
   },
