@@ -61,7 +61,7 @@ export const navigation: NavItem[] = [
         id: "tra-cuu-dao-tao",
         label: "Tra cứu lịch sử đào tạo",
         labelEn: "Training History Lookup",
-        description: "Tra cứu lịch sử đào tạo theo thợ hàn",
+        description: "Tra cứu khóa học, giờ đào tạo và chứng chỉ theo nhân sự",
         descriptionEn: "Look up training and competency qualification records by welder",
       },
     ],

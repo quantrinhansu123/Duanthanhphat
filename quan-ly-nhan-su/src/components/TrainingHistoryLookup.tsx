@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { MagnifyingGlass } from "@/components/icons";
 import {
   fetchWelderTrainingHistory,
@@ -31,16 +32,28 @@ export default function TrainingHistoryLookup() {
 
   useEffect(() => {
     let cancelled = false;
+    let requestId = 0;
     async function loadHistory() {
+      const currentRequest = ++requestId;
       setIsLoading(true);
-      const response = await fetchWelderTrainingHistory();
-      if (cancelled) return;
-      setRecords(response.records);
-      setLoadError(response.error || "");
-      setIsLoading(false);
+      try {
+        const response = await fetchWelderTrainingHistory();
+        if (cancelled || currentRequest !== requestId) return;
+        setRecords(response.records);
+        setLoadError(response.error || "");
+      } catch (error) {
+        if (cancelled || currentRequest !== requestId) return;
+        setLoadError(error instanceof Error ? error.message : "Không tải được lịch sử đào tạo");
+      } finally {
+        if (!cancelled && currentRequest === requestId) setIsLoading(false);
+      }
     }
     void loadHistory();
-    return () => { cancelled = true; };
+    window.addEventListener("focus", loadHistory);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadHistory);
+    };
   }, []);
 
   const courseOptions = useMemo(
@@ -85,7 +98,7 @@ export default function TrainingHistoryLookup() {
             onChange={(e) => setPersonType(e.target.value)}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
-            {["Tất cả đối tượng", "Thợ hàn"].map((t) => (
+            {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
@@ -129,7 +142,7 @@ export default function TrainingHistoryLookup() {
           </div>
         )}
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1280px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1580px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Mã</th>
@@ -138,11 +151,14 @@ export default function TrainingHistoryLookup() {
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Khóa đào tạo</th>
                 <th className="px-3.5 py-3">Người đào tạo</th>
-                <th className="px-3.5 py-3">Ngày</th>
+                <th className="px-3.5 py-3">Ngày đào tạo</th>
                 <th className="px-3.5 py-3">Thời lượng</th>
+                <th className="px-3.5 py-3">Giờ NSX</th>
+                <th className="px-3.5 py-3">Giờ tự đào tạo</th>
                 <th className="px-3.5 py-3">Kết quả</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
                 <th className="px-3.5 py-3">Chứng chỉ</th>
+                <th className="px-3.5 py-3">Ngày cấp chứng chỉ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -168,6 +184,8 @@ export default function TrainingHistoryLookup() {
                   <td className="px-3.5 py-3 text-slate-700">{row.trainer}</td>
                   <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.date}</td>
                   <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.duration}</td>
+                  <td className="px-3.5 py-3 text-slate-700 font-mono tabular-nums">{row.manufacturerHours.toLocaleString("vi-VN")}</td>
+                  <td className="px-3.5 py-3 text-slate-700 font-mono tabular-nums">{row.selfTrainingHours.toLocaleString("vi-VN")}</td>
                   <td className="px-3.5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[row.result]}`}
@@ -183,24 +201,25 @@ export default function TrainingHistoryLookup() {
                     </span>
                   </td>
                   <td className="max-w-[220px] px-3.5 py-3">
-                    {row.certificate === "Chưa cấp" ? (
+                    {!row.certificateId ? (
                       <span className="text-xs text-slate-400">Chưa cấp</span>
                     ) : (
-                      <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">{row.certificate}</span>
+                      <Link href={`/chung-chi?certificateId=${encodeURIComponent(row.certificateId)}`} className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:underline">{row.certificate}</Link>
                     )}
                   </td>
+                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.certificateDate}</td>
                 </tr>
               ))}
               {isLoading && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
                     Đang tải lịch sử đào tạo từ CSDL...
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>
                   </td>
                 </tr>

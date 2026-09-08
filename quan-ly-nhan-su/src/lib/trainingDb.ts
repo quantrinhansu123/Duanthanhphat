@@ -69,7 +69,7 @@ export type DbTrainingHistoryRecord = {
   createdAt?: string;
   personCode: string;
   personName: string;
-  personType: "Thợ hàn";
+  personType: "Thợ hàn" | "Nhân sự khác";
   department: string;
   courseTitle: string;
   trainer: string;
@@ -78,6 +78,10 @@ export type DbTrainingHistoryRecord = {
   result: "Đạt" | "Không đạt" | "Đang học";
   status: "Hoàn thành" | "Đang học" | "Không hoàn thành";
   certificate: string;
+  certificateId?: string;
+  certificateDate: string;
+  manufacturerHours: number;
+  selfTrainingHours: number;
 };
 
 export type SaveTrainingCourseInput = {
@@ -422,17 +426,21 @@ export async function fetchWelderTrainingHistory(): Promise<{
   const certificateIds = [...new Set(
     attendees.map((attendee) => attendee.chung_chi_id).filter((id): id is string => Boolean(id)),
   )];
-  const certificateById = new Map<string, string>();
+  const certificateById = new Map<string, { name: string; date: string; employeeId: string }>();
   if (certificateIds.length) {
     const supabase = createClient();
     for (let index = 0; index < certificateIds.length; index += 100) {
       const { data, error } = await supabase
         .from("chung_chi")
-        .select("id, ten_chung_chi")
+        .select("id, ten_chung_chi, ngay_cap, employee_id")
         .in("id", certificateIds.slice(index, index + 100));
       if (error) return { records: [], error: error.message };
       for (const certificate of data ?? []) {
-        certificateById.set(certificate.id, certificate.ten_chung_chi);
+        certificateById.set(certificate.id, {
+          name: certificate.ten_chung_chi,
+          date: formatTrainingDate(certificate.ngay_cap),
+          employeeId: certificate.employee_id,
+        });
       }
     }
   }
@@ -442,24 +450,28 @@ export async function fetchWelderTrainingHistory(): Promise<{
   const records = attendees.flatMap((attendee): DbTrainingHistoryRecord[] => {
     const course = courseById.get(attendee.dao_tao_id);
     const person = personnelById.get(attendee.employee_id);
-    if (!course || !person || !isWelder(person)) return [];
+    if (!course || !person) return [];
+    const linkedCertificate = attendee.chung_chi_id ? certificateById.get(attendee.chung_chi_id) : undefined;
+    const certificate = linkedCertificate?.employeeId === attendee.employee_id ? linkedCertificate : undefined;
     const trainer = course.nguoi_dao_tao ? personnelById.get(course.nguoi_dao_tao) : undefined;
     return [{
       id: attendee.id,
       createdAt: attendee.created_at,
       personCode: person.code,
       personName: person.name,
-      personType: "Thợ hàn",
+      personType: isWelder(person) ? "Thợ hàn" : "Nhân sự khác",
       department: person.department,
       courseTitle: course.ten_khoa_hoc,
       trainer: course.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       date: formatTrainingDate(course.ngay),
       duration: course.thoi_luong || "0:00",
+      manufacturerHours: toNonNegNumber(course.tong_gio_nha_san_xuat),
+      selfTrainingHours: toNonNegNumber(course.tong_gio_tu_dao_tao),
       result: (attendee.ket_qua as DbTrainingHistoryRecord["result"]) || "Đang học",
       status: (attendee.trang_thai as DbTrainingHistoryRecord["status"]) || "Đang học",
-      certificate: attendee.chung_chi_id
-        ? certificateById.get(attendee.chung_chi_id) || "Chưa cấp"
-        : "Chưa cấp",
+      certificate: certificate?.name || "Chưa cấp",
+      certificateId: certificate ? attendee.chung_chi_id || undefined : undefined,
+      certificateDate: certificate?.date || "—",
     }];
   });
 
@@ -877,9 +889,9 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
 
   if (!v2.error) return { id: v2.data as string };
 
-  // Fallback khi RPC còn lỗi v_nhom (migration chưa chạy)
+  // Không bỏ nhóm chứng chỉ đã chọn khi RPC lỗi: transaction phải báo thất bại.
   if (/v_nhom/i.test(v2.error.message)) {
-    return saveTrainingCourseDirect({ ...input, certificateGroupId: undefined });
+    return { error: "Chưa lưu khóa và cấp chứng chỉ. Cần chạy migration_20260908_fix_v_nhom_dao_tao.sql trên Supabase rồi lưu lại." };
   }
 
   // RPC cũ chưa có 3 tham số mới — lưu khóa rồi cập nhật cột riêng
@@ -903,7 +915,7 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
       return { id: courseId };
     }
     if (/v_nhom/i.test(legacyV2.error.message)) {
-      return saveTrainingCourseDirect({ ...input, certificateGroupId: undefined });
+      return { error: "Chưa lưu khóa và cấp chứng chỉ. Cần chạy migration_20260908_fix_v_nhom_dao_tao.sql trên Supabase rồi lưu lại." };
     }
     if (legacyV2.error.code !== "PGRST202") return { error: legacyV2.error.message };
   } else {
@@ -920,7 +932,7 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
 
   if (error) {
     if (/v_nhom/i.test(error.message)) {
-      return saveTrainingCourseDirect({ ...input, certificateGroupId: undefined });
+      return { error: "Chưa lưu khóa và cấp chứng chỉ. Cần chạy migration_20260908_fix_v_nhom_dao_tao.sql trên Supabase rồi lưu lại." };
     }
     return { error: error.message };
   }
