@@ -348,9 +348,9 @@ export default function BulkImportList() {
         const [projectResult, welderResult, yearResult] = await Promise.all([
           supabase
             .from("bao_cao_moi_han_theo_du_an")
-            .select("id,ma_lich_su,ma_du_an,du_an,nam_thuc_hien,loai_ray,loai_moi_han,cong_nghe_han,so_luong_thuc_hien,so_luong_loi,ma_nhan_su,ten_tho_han,nguyen_nhan_loi")
-            .order("nam_thuc_hien", { ascending: false })
-            .order("ma_lich_su", { ascending: true }),
+            .select("id,ma_lich_su,ma_du_an,du_an,nam_thuc_hien,loai_ray,loai_moi_han,cong_nghe_han,so_luong_thuc_hien,so_luong_loi,ma_nhan_su,ten_tho_han,nguyen_nhan_loi,created_at")
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false }),
           supabase
             .from("bao_cao_moi_han_theo_tho")
             .select("tho_han_id,ma_nhan_su,ho_ten,thuc_hien_fbw,thuc_hien_atw,loi_fbw,loi_atw,tong_thuc_hien,tong_loi")

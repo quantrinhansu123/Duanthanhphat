@@ -9,6 +9,7 @@ import {
 
 type DbFaultRow = {
   id: string;
+  created_at: string;
   nhom: MachineFaultSection;
   stt: number;
   trieu_chung: string;
@@ -34,6 +35,7 @@ function parseCases(value: unknown): FaultCase[] {
 function rowToFault(row: DbFaultRow): MachineFault {
   return {
     id: row.id,
+    createdAt: row.created_at,
     section: row.nhom,
     order: row.stt,
     symptom: row.trieu_chung,
@@ -56,10 +58,10 @@ export async function loadMachineFaultLibrary(): Promise<{
     const supabase = createClient();
     const { data, error } = await supabase
       .from("thu_vien_loi_thiet_bi")
-      .select("id, nhom, stt, trieu_chung, nguyen_nhan_khac_phuc, nguon_bang, active")
+      .select("id, nhom, stt, trieu_chung, nguyen_nhan_khac_phuc, nguon_bang, active, created_at")
       .eq("active", true)
-      .order("nhom", { ascending: true })
-      .order("stt", { ascending: true });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
     if (error) throw error;
     const items = ((data ?? []) as DbFaultRow[]).map(rowToFault);

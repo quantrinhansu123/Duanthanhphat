@@ -12,6 +12,7 @@ export type MaintenanceImageAsset = {
 
 export type MaintenanceEvent = {
   id: string;
+  createdAt?: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   durationMin: number;

@@ -126,10 +126,10 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
           )
         );
       })
-      .sort((a, b) => {
-        if (a.section === b.section) return a.order - b.order;
-        return machineFaultSections.indexOf(a.section) - machineFaultSections.indexOf(b.section);
-      });
+      .sort(
+        (a, b) =>
+          (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || b.id.localeCompare(a.id),
+      );
   }, [faults, query, selectedTab]);
 
   const filteredNdt = useMemo(() => {

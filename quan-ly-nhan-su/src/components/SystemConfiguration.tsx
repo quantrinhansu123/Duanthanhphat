@@ -375,12 +375,16 @@ function AccountsPanel({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter(
-      (a) =>
-        a.username.toLowerCase().includes(q) ||
-        a.fullName.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q),
+    const matches = q
+      ? accounts.filter(
+          (a) =>
+            a.username.toLowerCase().includes(q) ||
+            a.fullName.toLowerCase().includes(q) ||
+            a.email.toLowerCase().includes(q),
+        )
+      : accounts;
+    return [...matches].sort(
+      (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     );
   }, [accounts, query]);
 

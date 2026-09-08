@@ -24,7 +24,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const { publicId } = await params;
     const decodedId = decodeURIComponent(publicId);
-    if (!/^thanhphat\/(certificates|trainings|machines|vehicles|maintenance)\/[A-Za-z0-9_.-]+$/.test(decodedId)) {
+    if (!/^thanhphat\/(certificates|trainings|machines|vehicles|maintenance|machine-operation-logs)\/[A-Za-z0-9_.-]+$/.test(decodedId)) {
       return NextResponse.json({ error: "Cloudinary public ID không hợp lệ." }, { status: 400 });
     }
     const requestedType = req.nextUrl.searchParams.get("resourceType");

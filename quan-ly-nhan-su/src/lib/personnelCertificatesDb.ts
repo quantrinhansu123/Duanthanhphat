@@ -17,6 +17,7 @@ export type PersonnelCertificateRow = {
   loai_may: string | null;
   hinh_anh: string | null;
   trang_thai: string | null;
+  created_at: string;
 };
 
 const PERSONNEL_CERTIFICATE_COLUMNS = [
@@ -33,6 +34,7 @@ const PERSONNEL_CERTIFICATE_COLUMNS = [
   "loai_may",
   "hinh_anh",
   "trang_thai",
+  "created_at",
 ].join(",");
 
 export async function loadPersonnelCertificateRows(): Promise<PersonnelCertificateRow[]> {
@@ -45,7 +47,8 @@ export async function loadPersonnelCertificateRows(): Promise<PersonnelCertifica
     const { data, error } = await supabase
       .from("nhan_su")
       .select(PERSONNEL_CERTIFICATE_COLUMNS)
-      .order("ho_ten", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("employee_id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(formatSupabaseError(error));
     const page = (data ?? []) as unknown as PersonnelCertificateRow[];
@@ -57,11 +60,13 @@ export async function loadPersonnelCertificateRows(): Promise<PersonnelCertifica
 
 export async function loadPersonnelCertificateOptions(): Promise<CertifiedWelderOption[]> {
   const rows = await loadPersonnelCertificateRows();
-  return rows.map((row) => ({
-    id: row.employee_id,
-    label: row.ho_ten,
-    certificates: parseCertificateList(row.chung_chi),
-  }));
+  return rows
+    .map((row) => ({
+      id: row.employee_id,
+      label: row.ho_ten,
+      certificates: parseCertificateList(row.chung_chi),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
 export async function updatePersonnelCertificates(employeeId: string, certificates: string[]) {

@@ -1,6 +1,7 @@
 import {
   machineRunSchedules as seedSchedules,
   type LookupOption,
+  type MachineOperationImageAsset,
   type MachineOption,
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
@@ -12,6 +13,7 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
 type MachineRunScheduleRow = {
   id: string;
+  created_at: string;
   ngay: string;
   may_id: string;
   ma_may: string;
@@ -22,6 +24,12 @@ type MachineRunScheduleRow = {
   du_an: string;
   nguoi_phu_trach_id: string;
   nguoi_phu_trach: string;
+  nhien_lieu_bo_sung_lit?: number | string | null;
+  bom_mo?: boolean | null;
+  tinh_trang_may?: string | null;
+  mo_ta_tinh_trang?: string | null;
+  de_nghi?: string | null;
+  hinh_anh?: unknown;
 };
 
 type EquipmentRow = { id: string; ma_may: string; ten_may: string };
@@ -59,7 +67,30 @@ export type MachineRunScheduleFormValues = {
   operatingHours: number;
   projectId: string;
   personInChargeId: string;
+  fuelAddedLiters: number;
+  pumpOpened: boolean;
+  machineCondition: string;
+  conditionDescription: string;
+  recommendation: string;
+  imageAssets: MachineOperationImageAsset[];
 };
+
+function parseImageAssets(value: unknown): MachineOperationImageAsset[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const publicId = String(row.publicId ?? row.public_id ?? "").trim();
+    const secureUrl = String(row.secureUrl ?? row.secure_url ?? "").trim();
+    if (!publicId || !secureUrl) return [];
+    return [{
+      publicId,
+      secureUrl,
+      name: String(row.name ?? publicId.split("/").at(-1) ?? "Ảnh vận hành"),
+      bytes: Number.isFinite(Number(row.bytes)) ? Number(row.bytes) : undefined,
+    }];
+  });
+}
 
 export type MachineRunScheduleBundle = {
   schedules: MachineRunSchedule[];
@@ -83,6 +114,13 @@ function rowToSchedule(row: MachineRunScheduleRow): MachineRunSchedule {
     projectName: row.du_an,
     personInChargeId: row.nguoi_phu_trach_id,
     personInChargeName: row.nguoi_phu_trach,
+    createdAt: row.created_at,
+    fuelAddedLiters: Number(row.nhien_lieu_bo_sung_lit ?? 0),
+    pumpOpened: row.bom_mo === true,
+    machineCondition: row.tinh_trang_may?.trim() || "Bình thường",
+    conditionDescription: row.mo_ta_tinh_trang?.trim() || "",
+    recommendation: row.de_nghi?.trim() || "",
+    imageAssets: parseImageAssets(row.hinh_anh),
   };
 }
 
@@ -157,9 +195,9 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
     const [scheduleResult, machineResult, projectResult, personnelResult] = await Promise.all([
       supabase
         .from("bao_cao_lich_chay_may")
-        .select("id,ngay,may_id,ma_may,ten_may,vi_tri,so_gio_hoat_dong,du_an_id,du_an,nguoi_phu_trach_id,nguoi_phu_trach")
-        .order("ngay", { ascending: false })
-        .order("ma_may", { ascending: true }),
+        .select("id,ngay,may_id,ma_may,ten_may,vi_tri,so_gio_hoat_dong,du_an_id,du_an,nguoi_phu_trach_id,nguoi_phu_trach,created_at,nhien_lieu_bo_sung_lit,bom_mo,tinh_trang_may,mo_ta_tinh_trang,de_nghi,hinh_anh")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }),
       supabase.from("thiet_bi").select("id,ma_may,ten_may").order("ma_may", { ascending: true }),
       supabase.from("du_an").select("id,du_an").order("du_an", { ascending: true }),
       supabase.from("nhan_su").select("employee_id,ho_ten").order("ho_ten", { ascending: true }),
@@ -196,6 +234,12 @@ export async function insertMachineRunSchedule(values: MachineRunScheduleFormVal
     so_gio_hoat_dong: values.operatingHours,
     du_an: values.projectId,
     nguoi_phu_trach: values.personInChargeId,
+    nhien_lieu_bo_sung_lit: Math.max(0, values.fuelAddedLiters),
+    bom_mo: values.pumpOpened,
+    tinh_trang_may: values.machineCondition.trim(),
+    mo_ta_tinh_trang: values.conditionDescription.trim() || null,
+    de_nghi: values.recommendation.trim() || null,
+    hinh_anh: values.imageAssets,
   });
   if (error) throw new Error(formatSupabaseError(error));
 }
@@ -211,6 +255,12 @@ export async function updateMachineRunSchedule(id: string, values: MachineRunSch
       so_gio_hoat_dong: values.operatingHours,
       du_an: values.projectId,
       nguoi_phu_trach: values.personInChargeId,
+      nhien_lieu_bo_sung_lit: Math.max(0, values.fuelAddedLiters),
+      bom_mo: values.pumpOpened,
+      tinh_trang_may: values.machineCondition.trim(),
+      mo_ta_tinh_trang: values.conditionDescription.trim() || null,
+      de_nghi: values.recommendation.trim() || null,
+      hinh_anh: values.imageAssets,
     })
     .eq("id", id);
   if (error) throw new Error(formatSupabaseError(error));

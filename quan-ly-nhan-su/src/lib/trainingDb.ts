@@ -23,6 +23,7 @@ export type DbTrainingAttendee = {
 
 export type DbTrainingCourse = {
   id: string;
+  createdAt?: string;
   title: string;
   trainer: string;
   trainerId?: string;
@@ -46,6 +47,7 @@ export type DbTrainingCourse = {
 export type CertificateGroupOption = {
   id: string;
   name: string;
+  createdAt?: string;
   code?: string;
   issuer?: string;
   machine?: string;
@@ -59,6 +61,23 @@ export type TrainingPersonnelOption = {
   code: string;
   team: string;
   role: string;
+  department: string;
+};
+
+export type DbTrainingHistoryRecord = {
+  id: string;
+  createdAt?: string;
+  personCode: string;
+  personName: string;
+  personType: "Thợ hàn";
+  department: string;
+  courseTitle: string;
+  trainer: string;
+  date: string;
+  duration: string;
+  result: "Đạt" | "Không đạt" | "Đang học";
+  status: "Hoàn thành" | "Đang học" | "Không hoàn thành";
+  certificate: string;
 };
 
 export type SaveTrainingCourseInput = {
@@ -88,6 +107,7 @@ export type SaveTrainingCourseInput = {
 
 interface RawCourseListRow {
   id: string;
+  created_at: string;
   ten_khoa_hoc: string;
   ngay?: string | null;
   thoi_luong?: string | null;
@@ -108,6 +128,8 @@ interface RawCourseListRow {
 
 interface RawAttendeeRow {
   id: string;
+  created_at: string;
+  dao_tao_id: string;
   employee_id: string;
   chung_chi_id?: string | null;
   ket_qua?: string | null;
@@ -118,6 +140,7 @@ type RawCourseDetailRow = RawCourseListRow;
 
 const COURSE_COLUMNS_BASE = `
   id,
+  created_at,
   ten_khoa_hoc,
   ngay,
   thoi_luong,
@@ -175,7 +198,8 @@ async function fetchAllCourseRows(): Promise<RawCourseListRow[]> {
     const primary = await supabase
       .from("dao_tao")
       .select(COURSE_COLUMNS_FULL)
-      .order("ngay", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     let data: RawCourseListRow[] | null = primary.data as unknown as RawCourseListRow[] | null;
     let error = primary.error;
@@ -183,7 +207,8 @@ async function fetchAllCourseRows(): Promise<RawCourseListRow[]> {
       const withAssets = await supabase
         .from("dao_tao")
         .select(COURSE_COLUMNS_WITH_ASSETS)
-        .order("ngay", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(offset, offset + pageSize - 1);
       data = withAssets.data as unknown as RawCourseListRow[] | null;
       error = withAssets.error;
@@ -192,7 +217,8 @@ async function fetchAllCourseRows(): Promise<RawCourseListRow[]> {
       const fallback = await supabase
         .from("dao_tao")
         .select(COURSE_COLUMNS_BASE)
-        .order("ngay", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(offset, offset + pageSize - 1);
       data = fallback.data as unknown as RawCourseListRow[] | null;
       error = fallback.error;
@@ -214,7 +240,9 @@ async function fetchAllAttendeeCourseIds(): Promise<string[]> {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("dao_tao_hoc_vien")
-      .select("dao_tao_id")
+      .select("dao_tao_id, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const page = data ?? [];
@@ -233,8 +261,10 @@ async function fetchCourseAttendeeRows(courseId: string): Promise<RawAttendeeRow
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("dao_tao_hoc_vien")
-      .select("id, employee_id, ket_qua, trang_thai, chung_chi_id")
+      .select("id, dao_tao_id, employee_id, ket_qua, trang_thai, chung_chi_id, created_at")
       .eq("dao_tao_id", courseId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const page = (data ?? []) as unknown as RawAttendeeRow[];
@@ -254,8 +284,9 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("chung_chi_nhom")
-      .select("id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han")
-      .order("ten_nhom", { ascending: true })
+      .select("id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const page = data ?? [];
@@ -263,6 +294,7 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
       byId.set(r.id, {
         id: r.id,
         name: r.ten_nhom,
+        createdAt: r.created_at,
         code: r.ma_nhom ?? undefined,
         issuer: r.don_vi_cap ?? undefined,
         machine: r.may_ap_dung ?? undefined,
@@ -277,9 +309,10 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("chung_chi")
-      .select("nhom_id, ten_chung_chi, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han")
+      .select("nhom_id, ten_chung_chi, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at")
       .not("nhom_id", "is", null)
-      .order("ten_chung_chi", { ascending: true })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
     const page = data ?? [];
@@ -289,6 +322,7 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
       byId.set(id, {
         id,
         name: r.ten_chung_chi,
+        createdAt: r.created_at,
         issuer: r.don_vi_cap ?? undefined,
         machine: r.may_ap_dung ?? undefined,
         issueDate: r.ngay_cap ?? undefined,
@@ -298,7 +332,9 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
     if (page.length < pageSize) break;
   }
 
-  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  return Array.from(byId.values()).sort(
+    (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || b.id.localeCompare(a.id),
+  );
 }
 
 export async function fetchTrainingPersonnelOptions(): Promise<TrainingPersonnelOption[]> {
@@ -310,7 +346,7 @@ export async function fetchTrainingPersonnelOptions(): Promise<TrainingPersonnel
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("nhan_su")
-      .select("employee_id, ho_ten, ma_nhan_su, to_han, chuc_vu")
+      .select("employee_id, ho_ten, ma_nhan_su, to_han, chuc_vu, don_vi")
       .order("ho_ten", { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(error.message);
@@ -321,11 +357,114 @@ export async function fetchTrainingPersonnelOptions(): Promise<TrainingPersonnel
       code: row.ma_nhan_su?.trim() || "Chưa có mã",
       team: row.to_han?.trim() || "Chưa phân tổ",
       role: row.chuc_vu?.trim() || "Nhân sự",
+      department: row.don_vi?.trim() || row.to_han?.trim() || "Chưa cập nhật",
     })));
     if (rows.length < pageSize) break;
   }
 
   return result;
+}
+
+async function fetchAllTrainingAttendees(): Promise<RawAttendeeRow[]> {
+  const supabase = createClient();
+  const pageSize = 1000;
+  const attendees: RawAttendeeRow[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("dao_tao_hoc_vien")
+      .select("id, dao_tao_id, employee_id, ket_qua, trang_thai, chung_chi_id, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as unknown as RawAttendeeRow[];
+    attendees.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return attendees;
+}
+
+function isWelder(person: TrainingPersonnelOption): boolean {
+  const role = person.role.toLocaleLowerCase("vi");
+  return role.includes("hàn") || person.team !== "Chưa phân tổ";
+}
+
+function formatTrainingDate(date?: string | null): string {
+  return date
+    ? new Date(`${date}T00:00:00`).toLocaleDateString("vi-VN")
+    : "Chưa cập nhật";
+}
+
+export async function fetchWelderTrainingHistory(): Promise<{
+  records: DbTrainingHistoryRecord[];
+  error?: string;
+}> {
+  if (!isSupabaseReady()) return { records: [], error: "Chưa cấu hình Supabase env" };
+
+  let courses: RawCourseListRow[];
+  let personnel: TrainingPersonnelOption[];
+  let attendees: RawAttendeeRow[];
+  try {
+    [courses, personnel, attendees] = await Promise.all([
+      fetchAllCourseRows(),
+      fetchTrainingPersonnelOptions(),
+      fetchAllTrainingAttendees(),
+    ]);
+  } catch (error) {
+    return {
+      records: [],
+      error: error instanceof Error ? error.message : "Không tải được lịch sử đào tạo",
+    };
+  }
+
+  const certificateIds = [...new Set(
+    attendees.map((attendee) => attendee.chung_chi_id).filter((id): id is string => Boolean(id)),
+  )];
+  const certificateById = new Map<string, string>();
+  if (certificateIds.length) {
+    const supabase = createClient();
+    for (let index = 0; index < certificateIds.length; index += 100) {
+      const { data, error } = await supabase
+        .from("chung_chi")
+        .select("id, ten_chung_chi")
+        .in("id", certificateIds.slice(index, index + 100));
+      if (error) return { records: [], error: error.message };
+      for (const certificate of data ?? []) {
+        certificateById.set(certificate.id, certificate.ten_chung_chi);
+      }
+    }
+  }
+
+  const courseById = new Map(courses.map((course) => [course.id, course]));
+  const personnelById = new Map(personnel.map((person) => [person.id, person]));
+  const records = attendees.flatMap((attendee): DbTrainingHistoryRecord[] => {
+    const course = courseById.get(attendee.dao_tao_id);
+    const person = personnelById.get(attendee.employee_id);
+    if (!course || !person || !isWelder(person)) return [];
+    const trainer = course.nguoi_dao_tao ? personnelById.get(course.nguoi_dao_tao) : undefined;
+    return [{
+      id: attendee.id,
+      createdAt: attendee.created_at,
+      personCode: person.code,
+      personName: person.name,
+      personType: "Thợ hàn",
+      department: person.department,
+      courseTitle: course.ten_khoa_hoc,
+      trainer: course.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
+      date: formatTrainingDate(course.ngay),
+      duration: course.thoi_luong || "0:00",
+      result: (attendee.ket_qua as DbTrainingHistoryRecord["result"]) || "Đang học",
+      status: (attendee.trang_thai as DbTrainingHistoryRecord["status"]) || "Đang học",
+      certificate: attendee.chung_chi_id
+        ? certificateById.get(attendee.chung_chi_id) || "Chưa cấp"
+        : "Chưa cấp",
+    }];
+  });
+
+  records.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  return { records };
 }
 
 export async function fetchTrainingCourses(): Promise<{
@@ -366,6 +505,7 @@ export async function fetchTrainingCourses(): Promise<{
 
     return {
       id: row.id,
+      createdAt: row.created_at,
       title: row.ten_khoa_hoc,
       trainer: row.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       trainerId: trainer?.id,

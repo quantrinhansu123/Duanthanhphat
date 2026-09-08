@@ -78,7 +78,7 @@ with source (
     ('R4-028', 'DA-R4-004', 2025, '60E1',  'Thử nghiệm', 'FBW',  100, 0, 'TH-R4-005', 41),
     ('R4-029', 'DA-R4-004', 2025, 'P50',   'Thử nghiệm', 'FBW',   50, 0, 'TH-R4-006', 42),
 
-    ('R4-030', 'DA-R4-005', 2026, 'CR100', 'Thử nghiệm', 'ATW',    4, 0, 'TH-R4-002', 43)
+    ('R4-030', 'DA-R4-005', 2026, 'CR100', 'Sản xuất',   'ATW',    4, 0, 'TH-R4-002', 43)
 )
 insert into public.lich_su_moi_han (
   ma_lich_su,

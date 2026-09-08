@@ -8,6 +8,7 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
 type DbMaintenanceRow = {
   id: string;
+  created_at: string;
   may_id: string;
   ngay: string;
   gio: string;
@@ -41,6 +42,7 @@ export type MaintenanceSaveInput = {
 
 const MAINTENANCE_COLUMNS = [
   "id",
+  "created_at",
   "may_id",
   "ngay",
   "gio",
@@ -74,6 +76,7 @@ function rowToEvent(row: DbMaintenanceRow, machineCode: string): MaintenanceEven
   const assets = parseImageAssets(row.hinh_anh);
   return {
     id: row.id,
+    createdAt: row.created_at,
     date: row.ngay.slice(0, 10),
     time: row.gio.slice(0, 5),
     durationMin: Number(row.thoi_luong_phut),
@@ -93,7 +96,10 @@ function mergeEvents(primary: MaintenanceEvent[], fallback: MaintenanceEvent[]) 
   const merged = new Map<string, MaintenanceEvent>();
   for (const event of [...fallback, ...primary]) merged.set(event.id, event);
   return Array.from(merged.values()).sort(
-    (a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time),
+    (a, b) =>
+      (b.createdAt ?? `${b.date}T${b.time}`).localeCompare(
+        a.createdAt ?? `${a.date}T${a.time}`,
+      ),
   );
 }
 
@@ -118,8 +124,8 @@ export async function loadMaintenanceEvents(): Promise<{
       supabase
         .from("lich_su_bao_tri_may")
         .select(MAINTENANCE_COLUMNS)
-        .order("ngay", { ascending: false })
-        .order("gio", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }),
     ]);
     if (maintenance.error) throw maintenance.error;
     const codes = new Map(machines.map((machine) => [machine.id, machine.ma_may]));
@@ -152,8 +158,8 @@ export async function loadMachineMaintenanceEvents(machineCode: string): Promise
     .from("lich_su_bao_tri_may")
     .select(MAINTENANCE_COLUMNS)
     .eq("may_id", machineRow.id)
-    .order("ngay", { ascending: false })
-    .order("gio", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
   if (maintenance.error) throw new Error(formatSupabaseError(maintenance.error));
   return ((maintenance.data ?? []) as unknown as DbMaintenanceRow[]).map((row) =>
     rowToEvent(row, machineRow.ma_may),

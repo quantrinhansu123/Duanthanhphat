@@ -243,7 +243,8 @@ async function fetchProjects() {
   const primaryResult = await supabase
     .from("du_an")
     .select(DU_AN_COLUMNS)
-    .order("du_an", { ascending: true });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
   let data: unknown[] | null = primaryResult.data;
   let error = primaryResult.error;
 
@@ -251,7 +252,8 @@ async function fetchProjects() {
     const legacyFallback = await supabase
       .from("du_an")
       .select(DU_AN_COLUMNS_BASE)
-      .order("du_an", { ascending: true });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     data = legacyFallback.data as unknown[] | null;
     error = legacyFallback.error;
   }
@@ -353,6 +355,12 @@ export async function insertDuAn(payload: {
   if (!name) return { error: "Vui lòng nhập tên dự án" };
 
   const offDays = clampOffDaysToRange(payload.offDays ?? [], payload.startDate, payload.endDate);
+  const dailyPlan = buildDailyWeldPlan(
+    payload.plannedWeldCount,
+    payload.startDate,
+    payload.endDate,
+    offDays,
+  );
   const supabase = createClient();
   const { data, error } = await supabase
     .from("du_an")
@@ -364,17 +372,23 @@ export async function insertDuAn(payload: {
       ngay_bat_dau: payload.startDate,
       ngay_ket_thuc: payload.endDate,
       tong_moi_han_du_kien: Math.max(0, Math.round(payload.plannedWeldCount)),
-      tien_do_ly_thuyet: buildDailyWeldPlan(
-        payload.plannedWeldCount,
-        payload.startDate,
-        payload.endDate,
-        offDays,
-      ),
+      tien_do_ly_thuyet: dailyPlan,
     })
     .select(DU_AN_COLUMNS)
     .single();
 
   if (error) return { error: error.message };
+  // Tương thích database còn trigger cũ: ghi riêng JSONB sau INSERT để kế hoạch
+  // có ngày nghỉ (0 mối) không bị trigger chia đều lại trên toàn bộ ngày.
+  const planResult = await supabase
+    .from("du_an")
+    .update({ tien_do_ly_thuyet: dailyPlan })
+    .eq("id", String(data.id))
+    .select(DU_AN_COLUMNS)
+    .single();
+  if (planResult.error) return { error: planResult.error.message };
+  const savedRow = planResult.data as DuAnRow;
+
   const metadata: ProjectMetadata = {
     status: payload.status ?? "Đang triển khai",
     personnelIds: payload.personnelIds ?? [],
@@ -390,7 +404,7 @@ export async function insertDuAn(payload: {
   }
   invalidateProjectsCache();
   return {
-    project: duAnRowToProject(data as DuAnRow, payload.manager.trim(), metadata),
+    project: duAnRowToProject(savedRow, payload.manager.trim(), metadata),
   };
 }
 
@@ -417,6 +431,7 @@ export async function updateDuAn(
   }
 
   const body: Record<string, string | number | TheoreticalProgressRow[] | null> = {};
+  let dailyPlan: TheoreticalProgressRow[] | null = null;
   if (patch.name !== undefined) body.du_an = patch.name.trim();
   if (patch.managerId !== undefined) body.nguoi_phu_trach = patch.managerId || null;
   if (patch.location !== undefined) body.vi_tri = patch.location.trim();
@@ -436,12 +451,13 @@ export async function updateDuAn(
     patch.endDate !== undefined &&
     patch.plannedWeldCount !== undefined
   ) {
-    body.tien_do_ly_thuyet = buildDailyWeldPlan(
+    dailyPlan = buildDailyWeldPlan(
       patch.plannedWeldCount,
       patch.startDate,
       patch.endDate,
       offDays,
     );
+    body.tien_do_ly_thuyet = dailyPlan;
   }
 
   const supabase = createClient();
@@ -464,6 +480,17 @@ export async function updateDuAn(
       .single();
     if (error) return { error: error.message };
     updatedRow = data as DuAnRow;
+  }
+
+  if (dailyPlan) {
+    const planResult = await supabase
+      .from("du_an")
+      .update({ tien_do_ly_thuyet: dailyPlan })
+      .eq("id", projectId)
+      .select(DU_AN_COLUMNS)
+      .single();
+    if (planResult.error) return { error: planResult.error.message };
+    updatedRow = planResult.data as DuAnRow;
   }
 
   const metadata: ProjectMetadata = {

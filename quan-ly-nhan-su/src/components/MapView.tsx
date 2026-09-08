@@ -157,8 +157,11 @@ export default function MapView() {
 
   const selected = filtered.find((p) => p.id === selectedId) ?? null;
   const visibleListPoints = useMemo(() => {
-    if (filtered.length <= POINT_LIST_RENDER_LIMIT) return filtered;
-    const visible = filtered.slice(0, POINT_LIST_RENDER_LIMIT);
+    const newestFirst = [...filtered].sort(
+      (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || b.id.localeCompare(a.id),
+    );
+    if (newestFirst.length <= POINT_LIST_RENDER_LIMIT) return newestFirst;
+    const visible = newestFirst.slice(0, POINT_LIST_RENDER_LIMIT);
     if (selected && !visible.some((point) => point.id === selected.id)) {
       return [selected, ...visible.slice(0, POINT_LIST_RENDER_LIMIT - 1)];
     }

@@ -10,6 +10,7 @@ const LOCAL_STORAGE_MACHINES_KEY = "tp_machines_extended_v3";
 
 type MachineCatalogRow = {
   id: string;
+  created_at?: string;
   ma_may: string;
   ten_may: string;
   vi_tri_hien_tai: string | null;
@@ -245,14 +246,16 @@ export async function loadMachineCatalog(): Promise<{
     const { data, error } = await supabase
       .from("thiet_bi")
       .select("*")
-      .order("ma_may", { ascending: true });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
     if (error) {
       // Fall back to basic columns
       const { data: basicData, error: basicError } = await supabase
         .from("thiet_bi")
-        .select("id,ma_may,ten_may,vi_tri_hien_tai,hinh_anh,trang_thai")
-        .order("ma_may", { ascending: true });
+        .select("id,ma_may,ten_may,vi_tri_hien_tai,hinh_anh,trang_thai,created_at")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
 
       if (basicError) {
         const overrides = readLocalOverrides();
@@ -381,7 +384,7 @@ async function insertMachineRow(
 
   if (result.error && missingSplitMachineColumns(result.error)) {
     usedCompatibilityFallback = true;
-    let stripped = withoutSplitMachineColumns(payload);
+    const stripped = withoutSplitMachineColumns(payload);
     result = await supabase.from("thiet_bi").insert(stripped).select().single();
     if (result.error && missingTechnicalDocsColumn(result.error)) {
       result = await supabase
@@ -410,7 +413,7 @@ async function updateMachineRow(
   }
 
   if (result.error && missingSplitMachineColumns(result.error)) {
-    let stripped = withoutSplitMachineColumns(payload);
+    const stripped = withoutSplitMachineColumns(payload);
     result = await supabase.from("thiet_bi").update(stripped).eq("id", machineId);
     if (result.error && missingTechnicalDocsColumn(result.error)) {
       result = await supabase

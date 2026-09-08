@@ -3,6 +3,7 @@ import { mapPoints as seedMapPoints, type MapPoint } from "@/data/mapPoints";
 
 export type ToaDoRow = {
   id: string;
+  created_at?: string;
   ma_diem: string;
   kinh_do: number;
   vi_do: number;
@@ -44,6 +45,7 @@ function rowToMapPoint(row: ToaDoRow): MapPoint {
 
   return {
     id: row.toa_do_id || row.id,
+    createdAt: row.created_at,
     code: row.ma_diem,
     longitude: Number(row.kinh_do),
     latitude: Number(row.vi_do),
@@ -133,7 +135,7 @@ async function fetchMapPoints(limit?: number): Promise<MapPointFetchResult> {
   for (let offset = 0; ; offset += pageSize) {
     let query = supabase
       .from("toa_do")
-      .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id")
+      .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id, created_at")
       .order("thu_tu", { ascending: true })
       .order("ma_diem", { ascending: true });
     query = limit ? query.limit(limit) : query.range(offset, offset + pageSize - 1);
@@ -153,7 +155,7 @@ export async function fetchUnlinkedGpsPoints(): Promise<MapPoint[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("toa_do")
-    .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id")
+    .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id, created_at")
     .is("lich_su_moi_han_id", null)
     .order("thu_tu", { ascending: true });
 

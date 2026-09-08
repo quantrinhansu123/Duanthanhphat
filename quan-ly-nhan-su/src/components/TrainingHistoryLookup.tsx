@@ -1,40 +1,56 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MagnifyingGlass } from "@/components/icons";
 import {
-  trainingHistory,
-  type TrainingHistoryRecord,
-} from "@/data/trainingHistory";
+  fetchWelderTrainingHistory,
+  type DbTrainingHistoryRecord,
+} from "@/lib/trainingDb";
 
-const resultStyle: Record<TrainingHistoryRecord["result"], string> = {
+const resultStyle: Record<DbTrainingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Không đạt": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
   "Đang học": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
-const statusStyle: Record<TrainingHistoryRecord["status"], string> = {
+const statusStyle: Record<DbTrainingHistoryRecord["status"], string> = {
   "Hoàn thành": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Đang học": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
   "Không hoàn thành": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
 };
 
 export default function TrainingHistoryLookup() {
+  const [records, setRecords] = useState<DbTrainingHistoryRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [personType, setPersonType] = useState("Tất cả đối tượng");
   const [course, setCourse] = useState("Tất cả khóa đào tạo");
   const [result, setResult] = useState("Tất cả kết quả");
   const [status, setStatus] = useState("Tất cả trạng thái");
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHistory() {
+      setIsLoading(true);
+      const response = await fetchWelderTrainingHistory();
+      if (cancelled) return;
+      setRecords(response.records);
+      setLoadError(response.error || "");
+      setIsLoading(false);
+    }
+    void loadHistory();
+    return () => { cancelled = true; };
+  }, []);
+
   const courseOptions = useMemo(
-    () => ["Tất cả khóa đào tạo", ...Array.from(new Set(trainingHistory.map((r) => r.courseTitle)))],
-    [],
+    () => ["Tất cả khóa đào tạo", ...Array.from(new Set(records.map((r) => r.courseTitle)))],
+    [records],
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return trainingHistory.filter((row) => {
-      if (row.personType !== "Thợ hàn") return false;
+    return records.filter((row) => {
       const matchQ =
         !q ||
         row.personCode.toLowerCase().includes(q) ||
@@ -49,7 +65,7 @@ export default function TrainingHistoryLookup() {
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
       return matchQ && matchType && matchCourse && matchResult && matchStatus;
     });
-  }, [query, personType, course, result, status]);
+  }, [records, query, personType, course, result, status]);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
@@ -107,6 +123,11 @@ export default function TrainingHistoryLookup() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        {loadError && (
+          <div className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            Không tải được dữ liệu từ CSDL: {loadError}
+          </div>
+        )}
         <div className="table-scroll overflow-x-auto">
           <table className="w-full min-w-[1280px] border-collapse text-left text-xs sm:text-sm">
             <thead>
@@ -170,7 +191,14 @@ export default function TrainingHistoryLookup() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {isLoading && (
+                <tr>
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                    Đang tải lịch sử đào tạo từ CSDL...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>

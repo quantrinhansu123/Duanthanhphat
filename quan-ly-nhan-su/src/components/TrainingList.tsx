@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
-import { Check, MagnifyingGlass, PencilSimple, Plus, UploadSimple, X } from "@/components/icons";
+import { Check, MagnifyingGlass, PencilSimple, Plus, TrashSimple, UploadSimple, X } from "@/components/icons";
 import {
+  deleteTrainingCourse,
   fetchCertificateGroups,
   fetchTrainingCourseDetail,
   fetchTrainingCourses,
@@ -814,6 +815,7 @@ export default function TrainingList() {
   const [openAdd, setOpenAdd] = useState(false);
   const [editing, setEditing] = useState<DbTrainingCourse | null>(null);
   const [toast, setToast] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function showToast(message: string) {
     setToast(message);
@@ -872,6 +874,40 @@ export default function TrainingList() {
       return;
     }
     setEditing(res.course);
+  }
+
+  async function handleDeleteCourse(course: DbTrainingCourse) {
+    const confirmed = window.confirm(
+      `Xóa khóa đào tạo “${course.title}”? Danh sách học viên của khóa cũng sẽ bị xóa. Thao tác này không thể hoàn tác.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(course.id);
+    const res = await deleteTrainingCourse(course.id);
+    if (res.success) {
+      const assets = new Map<string, TrainingAsset>();
+      for (const asset of course.assets) assets.set(asset.publicId, asset);
+      if (course.cloudinaryPublicId) {
+        assets.set(course.cloudinaryPublicId, {
+          publicId: course.cloudinaryPublicId,
+          secureUrl: course.thumbnail,
+          resourceType: "image",
+          name: "Ảnh khóa đào tạo",
+        });
+      }
+      for (const asset of assets.values()) {
+        if (!(await isTrainingAssetReferenced(asset.publicId))) {
+          await deleteCloudinaryAsset(asset.publicId, asset.resourceType);
+        }
+      }
+      setDetail((current) => (current?.id === course.id ? null : current));
+      setEditing((current) => (current?.id === course.id ? null : current));
+      showToast("Đã xóa khóa đào tạo.");
+      await loadData();
+    } else {
+      showToast(res.error || "Không thể xóa khóa đào tạo.");
+    }
+    setDeletingId(null);
   }
 
   return (
@@ -991,6 +1027,16 @@ export default function TrainingList() {
                     title="Chỉnh sửa"
                   >
                     <PencilSimple size={15} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteCourse(c)}
+                    disabled={deletingId === c.id}
+                    className="rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer"
+                    title="Xóa khóa đào tạo"
+                    aria-label={`Xóa khóa đào tạo ${c.title}`}
+                  >
+                    <TrashSimple size={15} weight="bold" />
                   </button>
                 </div>
               </div>

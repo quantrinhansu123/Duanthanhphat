@@ -111,6 +111,18 @@ begin
     return new;
   end if;
 
+  -- Ứng dụng có thể gửi kế hoạch đã loại ngày nghỉ. Giữ nguyên kế hoạch đó;
+  -- chỉ tự chia đều khi không có kế hoạch tường minh trong INSERT/UPDATE.
+  if jsonb_typeof(coalesce(new.tien_do_ly_thuyet, '[]'::jsonb)) = 'array'
+     and jsonb_array_length(coalesce(new.tien_do_ly_thuyet, '[]'::jsonb)) > 0 then
+    if tg_op = 'INSERT' then
+      return new;
+    end if;
+    if tg_op = 'UPDATE' and new.tien_do_ly_thuyet is distinct from old.tien_do_ly_thuyet then
+      return new;
+    end if;
+  end if;
+
   so_ngay = (new.ngay_ket_thuc - new.ngay_bat_dau) + 1;
   moi_han_co_ban = new.tong_moi_han_du_kien / so_ngay;
   so_du = new.tong_moi_han_du_kien % so_ngay;

@@ -1452,10 +1452,9 @@ export default function WeldingJournalList() {
         </div>
 
         <div className="table-scroll overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className="w-full min-w-[1480px] border-collapse text-left">
+          <table className="w-full min-w-[1390px] border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <th className="p-2.5 font-semibold">ID</th>
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
                 <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
@@ -1472,9 +1471,6 @@ export default function WeldingJournalList() {
             <tbody className="divide-y divide-slate-100">
               {pageRows.map((w) => (
                 <tr key={w.id} className="text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors">
-                  <td className="p-2.5 truncate font-mono text-xs text-slate-500 max-w-[90px]" title={w.id}>
-                    {w.id.slice(0, 8)}
-                  </td>
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
                   <td className="p-2.5">
@@ -1577,7 +1573,7 @@ export default function WeldingJournalList() {
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-500">
                     Không có nhật ký hàn phù hợp với bộ lọc.
                   </td>
                 </tr>

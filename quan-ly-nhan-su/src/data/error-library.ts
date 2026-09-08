@@ -26,6 +26,7 @@ export type MachineFaultSection = "Tổng thể" | "Cẩu" | "Bơm" | "Máy hàn
 
 export type MachineFault = {
   id: string;
+  createdAt?: string;
   section: MachineFaultSection;
   order: number;
   symptom: string;

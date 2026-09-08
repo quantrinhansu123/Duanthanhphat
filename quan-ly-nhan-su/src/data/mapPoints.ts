@@ -1,5 +1,6 @@
 export type MapPoint = {
   id: string;
+  createdAt?: string;
   code: string;
   longitude: number;
   latitude: number;

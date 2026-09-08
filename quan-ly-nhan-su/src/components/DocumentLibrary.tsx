@@ -71,13 +71,15 @@ export default function DocumentLibrary() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q) ||
-        d.description.toLowerCase().includes(q) ||
-        (d.md5Checksum && d.md5Checksum.toLowerCase().includes(q)),
-    );
+    const matches = q
+      ? items.filter(
+          (d) =>
+            d.name.toLowerCase().includes(q) ||
+            d.description.toLowerCase().includes(q) ||
+            (d.md5Checksum && d.md5Checksum.toLowerCase().includes(q)),
+        )
+      : items;
+    return [...matches].sort((a, b) => b.createdTime.localeCompare(a.createdTime));
   }, [items, query]);
 
   async function handleUpload(e: React.FormEvent) {

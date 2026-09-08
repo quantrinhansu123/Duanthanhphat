@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MagnifyingGlass } from "@/components/icons";
 import {
@@ -9,12 +8,6 @@ import {
   type WeldReportRow,
 } from "@/lib/weldReportData";
 import { hasCertificate } from "@/lib/weldingCertificates";
-import {
-  loadPersonnelCertificateRows,
-  parseTrainedMachineTokens,
-  personAllowedOnRail,
-  type PersonnelCertificateRow,
-} from "@/lib/personnelCertificatesDb";
 
 const PAGE_SIZE = 100;
 
@@ -28,9 +21,6 @@ type WeldPersonnel = {
   id: string;
   name: string;
   code: string;
-  railTypes: string[];
-  fromProfile: boolean;
-  hasWeldHistory: boolean;
 };
 
 type WeldComboGroup = {
@@ -58,16 +48,7 @@ function uniquePreserveOrder(values: string[]): string[] {
   return result;
 }
 
-function isWelderProfile(row: PersonnelCertificateRow) {
-  const position = row.chuc_vu?.toLocaleLowerCase("vi") ?? "";
-  const team = row.to_han?.trim() ?? "";
-  return position.includes("hàn") || (team !== "" && team !== "Chưa phân tổ");
-}
-
-function groupRowsByCombo(
-  rows: WeldReportRow[],
-  welders: PersonnelCertificateRow[],
-): WeldComboGroup[] {
+function groupRowsByCombo(rows: WeldReportRow[]): WeldComboGroup[] {
   const map = new Map<string, WeldReportRow[]>();
   for (const row of rows) {
     const key = [row.cong_nghe_han, row.loai_ray, row.loai_moi_han].join("||");
@@ -79,68 +60,12 @@ function groupRowsByCombo(
   return Array.from(map.entries())
     .map(([key, groupRows]) => {
       const first = groupRows[0];
-      const railType = first.loai_ray?.trim() || "";
-
-      const historyKeys = new Set<string>();
-      for (const row of groupRows) {
-        const name = row.ten_tho_han?.trim() || "";
-        const code = row.ma_nhan_su?.trim() || "";
-        if (name) historyKeys.add(name.toLocaleLowerCase("vi"));
-        if (code) historyKeys.add(code.toLocaleLowerCase("vi"));
-      }
-
-      const allowedFromProfile = welders
-        .filter((welder) => personAllowedOnRail(welder.loai_ray, railType))
-        .map((welder) => {
-          const name = welder.ho_ten.trim();
-          const code = welder.ma_nhan_su?.trim() || "";
-          const hasWeldHistory =
-            historyKeys.has(name.toLocaleLowerCase("vi")) ||
-            (code !== "" && historyKeys.has(code.toLocaleLowerCase("vi")));
-          return {
-            id: welder.employee_id,
-            name,
-            code,
-            railTypes: parseTrainedMachineTokens(welder.loai_ray),
-            fromProfile: true,
-            hasWeldHistory,
-          } satisfies WeldPersonnel;
-        })
-        .sort((a, b) => {
-          if (a.hasWeldHistory !== b.hasWeldHistory) return a.hasWeldHistory ? -1 : 1;
-          return a.name.localeCompare(b.name, "vi");
-        });
-
-      // Giữ nhân sự chỉ có trên nhật ký (chưa có trong hồ sơ / chưa gắn loại ray)
-      const profileKeys = new Set(
-        allowedFromProfile.flatMap((person) =>
-          [person.name, person.code]
-            .filter(Boolean)
-            .map((value) => value.toLocaleLowerCase("vi")),
-        ),
-      );
-      const historyOnly: WeldPersonnel[] = [];
-      const seenHistory = new Set<string>();
+      const personnelById = new Map<string, WeldPersonnel>();
       for (const row of groupRows) {
         const name = row.ten_tho_han?.trim() || "Chưa cập nhật";
         const code = row.ma_nhan_su?.trim() || "";
-        const idKey = `${name.toLocaleLowerCase("vi")}::${code.toLocaleLowerCase("vi")}`;
-        if (seenHistory.has(idKey)) continue;
-        seenHistory.add(idKey);
-        if (
-          profileKeys.has(name.toLocaleLowerCase("vi")) ||
-          (code && profileKeys.has(code.toLocaleLowerCase("vi")))
-        ) {
-          continue;
-        }
-        historyOnly.push({
-          id: `history-${idKey}`,
-          name,
-          code,
-          railTypes: [],
-          fromProfile: false,
-          hasWeldHistory: true,
-        });
+        const id = `${code.toLocaleLowerCase("vi")}::${name.toLocaleLowerCase("vi")}`;
+        if (!personnelById.has(id)) personnelById.set(id, { id, name, code });
       }
 
       const certMap = new Map<string, { title: string; linked: boolean }>();
@@ -156,22 +81,20 @@ function groupRowsByCombo(
 
       return {
         key,
+        createdAt: groupRows.reduce(
+          (latest, row) => row.created_at && row.created_at > latest ? row.created_at : latest,
+          "",
+        ),
         cong_nghe_han: first.cong_nghe_han,
         loai_ray: first.loai_ray,
         loai_moi_han: first.loai_moi_han,
-        personnel: [...allowedFromProfile, ...historyOnly],
+        personnel: Array.from(personnelById.values()).sort((a, b) => a.name.localeCompare(b.name, "vi")),
         certificates: Array.from(certMap.values()),
         projects: uniquePreserveOrder(groupRows.map((row) => row.du_an || "")),
         rowCount: groupRows.length,
       };
     })
-    .sort((a, b) => {
-      const tech = String(a.cong_nghe_han).localeCompare(String(b.cong_nghe_han), "vi");
-      if (tech !== 0) return tech;
-      const rail = a.loai_ray.localeCompare(b.loai_ray, "vi");
-      if (rail !== 0) return rail;
-      return a.loai_moi_han.localeCompare(b.loai_moi_han, "vi");
-    });
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key));
 }
 
 export default function WeldJointManagement() {
@@ -182,11 +105,8 @@ export default function WeldJointManagement() {
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [total, setTotal] = useState(0);
   const [projects, setProjects] = useState<{ id: string; label: string }[]>([]);
-  const [welders, setWelders] = useState<PersonnelCertificateRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingWelders, setLoadingWelders] = useState(true);
   const [error, setError] = useState("");
-  const [welderError, setWelderError] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAppliedQuery(query.trim()), 300);
@@ -201,30 +121,6 @@ export default function WeldJointManagement() {
       })
       .catch(() => {
         if (active) setProjects([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    setLoadingWelders(true);
-    setWelderError("");
-    loadPersonnelCertificateRows()
-      .then((rowsData) => {
-        if (!active) return;
-        setWelders(rowsData.filter(isWelderProfile));
-      })
-      .catch((loadError) => {
-        if (!active) return;
-        setWelders([]);
-        setWelderError(
-          loadError instanceof Error ? loadError.message : "Không tải được hồ sơ thợ hàn",
-        );
-      })
-      .finally(() => {
-        if (active) setLoadingWelders(false);
       });
     return () => {
       active = false;
@@ -257,13 +153,13 @@ export default function WeldJointManagement() {
 
   useEffect(() => setPage(1), [appliedQuery, project]);
 
-  const comboGroups = useMemo(() => groupRowsByCombo(rows, welders), [rows, welders]);
+  const comboGroups = useMemo(() => groupRowsByCombo(rows), [rows]);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageFrom = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const pageTo = Math.min(currentPage * PAGE_SIZE, total);
   const allowedPersonnelCount = useMemo(
-    () => comboGroups.reduce((sum, group) => sum + group.personnel.filter((p) => p.fromProfile).length, 0),
+    () => comboGroups.reduce((sum, group) => sum + group.personnel.length, 0),
     [comboGroups],
   );
 
@@ -275,18 +171,16 @@ export default function WeldJointManagement() {
     <main className="w-full px-4 sm:px-6 pb-8">
       <div
         className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${
-          error || welderError
+          error
             ? "border-rose-200 bg-rose-50 text-rose-700"
             : "border-blue-200 bg-blue-50 text-[#0047AB]"
         }`}
       >
         {error
           ? `Không tải được dữ liệu: ${error}`
-          : welderError
-            ? `Hồ sơ thợ hàn: ${welderError}`
-            : loading || loadingWelders
-              ? "Đang tải danh sách mối hàn và hồ sơ thợ hàn…"
-              : `Nhân sự theo Loại ray được phép hàn (hồ sơ thợ hàn) · ${welders.length.toLocaleString("vi-VN")} thợ · ${comboGroups.length.toLocaleString("vi-VN")} tổ hợp trên trang`}
+          : loading
+            ? "Đang tải danh sách mối hàn…"
+            : `Nhân sự hiển thị là người trực tiếp hàn trong nhật ký · ${comboGroups.length.toLocaleString("vi-VN")} tổ hợp trên trang`}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-slate-600">
@@ -300,12 +194,8 @@ export default function WeldJointManagement() {
         </span>
         <span className="text-slate-300">|</span>
         <span>
-          <strong className="font-mono text-emerald-700">{allowedPersonnelCount}</strong> lượt nhân sự khớp loại ray
+          <strong className="font-mono text-emerald-700">{allowedPersonnelCount}</strong> lượt nhân sự trực tiếp hàn
         </span>
-        <span className="text-slate-300">|</span>
-        <Link href="/ho-so-tho-han" className="font-semibold text-[#0047AB] hover:underline">
-          Cập nhật loại ray tại Hồ sơ thợ hàn
-        </Link>
       </div>
 
       <div className="mb-4 flex flex-col gap-2.5 sm:flex-row">
@@ -344,7 +234,7 @@ export default function WeldJointManagement() {
                 <th className="min-w-[90px] px-3.5 py-3">Công nghệ</th>
                 <th className="min-w-[120px] px-3.5 py-3">Loại ray</th>
                 <th className="min-w-[120px] px-3.5 py-3">Loại mối</th>
-                <th className="min-w-[260px] px-3.5 py-3">Nhân sự (theo loại ray được phép hàn)</th>
+                <th className="min-w-[260px] px-3.5 py-3">Người trực tiếp hàn (từ nhật ký)</th>
                 <th className="min-w-[280px] px-3.5 py-3">Chứng chỉ sử dụng</th>
                 <th className="min-w-[220px] px-3.5 py-3">Dự án</th>
               </tr>
@@ -370,41 +260,14 @@ export default function WeldJointManagement() {
                   </td>
                   <td className="px-3.5 py-3">
                     {group.personnel.length === 0 ? (
-                      <div className="text-xs text-amber-700">
-                        Chưa có thợ hàn được phép hàn {group.loai_ray}. Cập nhật tại{" "}
-                        <Link href="/ho-so-tho-han" className="font-semibold underline">
-                          Hồ sơ thợ hàn
-                        </Link>
-                        .
-                      </div>
+                      <div className="text-xs text-amber-700">Chưa ghi nhận người trực tiếp hàn.</div>
                     ) : (
                       <div className="space-y-2">
                         {group.personnel.map((person) => (
                           <div key={person.id} className="leading-snug">
                             <div className="font-semibold text-slate-900">{person.name}</div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                              {person.code ? (
-                                <span className="font-mono text-[11px] text-[#0047AB]">{person.code}</span>
-                              ) : null}
-                              {person.fromProfile ? (
-                                <span className="rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                                  Được phép {group.loai_ray}
-                                </span>
-                              ) : (
-                                <span className="rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                                  Chỉ có trên nhật ký
-                                </span>
-                              )}
-                              {person.hasWeldHistory && person.fromProfile ? (
-                                <span className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-bold text-[#0047AB]">
-                                  Có trong tổ hợp
-                                </span>
-                              ) : null}
-                            </div>
-                            {person.railTypes.length > 0 ? (
-                              <div className="mt-0.5 font-mono text-[10px] text-slate-400">
-                                Ray: {person.railTypes.join(", ")}
-                              </div>
+                            {person.code ? (
+                              <div className="mt-0.5 font-mono text-[11px] text-[#0047AB]">{person.code}</div>
                             ) : null}
                           </div>
                         ))}
@@ -436,14 +299,14 @@ export default function WeldJointManagement() {
                   </td>
                 </tr>
               ))}
-              {!loading && !loadingWelders && comboGroups.length === 0 && (
+              {!loading && comboGroups.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-500">
                     Không có tổ hợp mối hàn phù hợp.
                   </td>
                 </tr>
               )}
-              {(loading || loadingWelders) && (
+              {loading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-500">
                     Đang tải dữ liệu…

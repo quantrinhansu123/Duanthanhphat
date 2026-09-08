@@ -63,7 +63,9 @@ function viDate(iso: string) {
 }
 
 function emptyProject(): Project {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const firstDayOfCurrentMonth = `${today.slice(0, 8)}01`;
   return {
     id: "",
     name: "",
@@ -73,7 +75,7 @@ function emptyProject(): Project {
     staffCount: 0,
     machineCount: 0,
     status: "Đang triển khai",
-    startDate: today,
+    startDate: firstDayOfCurrentMonth,
     endDate: today,
     location: "",
     plannedWeldCount: 0,
@@ -345,11 +347,14 @@ function TabAddButton({
 function ProjectTheoreticalProgressTab({
   projectName,
   rows,
+  offDays = [],
 }: {
   projectName: string;
   rows: TheoreticalProgressRow[];
+  offDays?: string[];
 }) {
   const total = rows.reduce((sum, row) => sum + row.so_moi_han, 0);
+  const offDaySet = new Set(offDays);
 
   return (
     <div>
@@ -380,9 +385,15 @@ function ProjectTheoreticalProgressTab({
                 </td>
                 <td className="px-3.5 py-2.5 font-medium text-slate-900">{projectName}</td>
                 <td className="px-3.5 py-2.5 text-right">
-                  <span className="font-mono font-semibold tabular-nums text-[#0047AB]">
-                    {row.so_moi_han.toLocaleString("vi-VN")}
-                  </span>
+                  {offDaySet.has(row.ngay) ? (
+                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                      Ngày nghỉ · 0
+                    </span>
+                  ) : (
+                    <span className="font-mono font-semibold tabular-nums text-[#0047AB]">
+                      {row.so_moi_han.toLocaleString("vi-VN")}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -1183,8 +1194,7 @@ function useProjectMachineRuns(projectId: string, projectName: string, enabled: 
             (s) =>
               (projectId && s.projectId === projectId) ||
               (projectName && s.projectName === projectName),
-          )
-          .sort((a, b) => b.date.localeCompare(a.date));
+          );
         setRuns(rows);
         if (bundle.error) setError(bundle.error);
       })
@@ -1356,7 +1366,7 @@ function ProjectModal({
   const tabs: { id: DetailTab; label: string; count?: number }[] = [
     { id: "info", label: "Thông tin" },
     ...(isCreate
-      ? []
+      ? [{ id: "progress" as const, label: "Xem kế hoạch theo ngày", count: progressCount }]
       : [
           { id: "personnel" as const, label: "Nhân sự", count: personnelCount },
           { id: "work" as const, label: "Công việc", count: weldCount },
@@ -1473,6 +1483,7 @@ function ProjectModal({
             <ProjectTheoreticalProgressTab
               projectName={form.name || project.name}
               rows={form.theoreticalProgress ?? []}
+              offDays={form.offDays ?? []}
             />
           )}
         </div>
@@ -1494,7 +1505,7 @@ function ProjectModal({
               Sửa dự án
             </button>
           )}
-          {!readOnly && onSave && tab === "info" && (
+          {!readOnly && onSave && (tab === "info" || isCreate) && (
             <button
               type="button"
               onClick={() => {
@@ -1512,6 +1523,10 @@ function ProjectModal({
                 }
                 if (form.plannedWeldCount <= 0) {
                   window.alert("Tổng mối hàn dự tính phải lớn hơn 0.");
+                  return;
+                }
+                if (projectWorkingDays(form.startDate, form.endDate, form.offDays ?? []) <= 0) {
+                  window.alert("Dự án phải có ít nhất một ngày làm việc sau khi trừ ngày nghỉ.");
                   return;
                 }
                 onSave({

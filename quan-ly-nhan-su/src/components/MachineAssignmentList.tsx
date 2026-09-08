@@ -44,6 +44,13 @@ function createLocalSchedule(
     projectName: project?.label ?? "Dự án chưa xác định",
     personInChargeId: values.personInChargeId,
     personInChargeName: person?.label ?? "Chưa xác định",
+    createdAt: new Date().toISOString(),
+    fuelAddedLiters: values.fuelAddedLiters,
+    pumpOpened: values.pumpOpened,
+    machineCondition: values.machineCondition,
+    conditionDescription: values.conditionDescription,
+    recommendation: values.recommendation,
+    imageAssets: values.imageAssets,
   };
 }
 
@@ -90,7 +97,16 @@ export default function MachineAssignmentList() {
       if (projectId && row.projectId !== projectId) return false;
       if (personId && row.personInChargeId !== personId) return false;
       if (!keyword) return true;
-      return [row.machineCode, row.machineName, row.location, row.projectName, row.personInChargeName]
+      return [
+        row.machineCode,
+        row.machineName,
+        row.location,
+        row.projectName,
+        row.personInChargeName,
+        row.machineCondition,
+        row.conditionDescription,
+        row.recommendation,
+      ]
         .some((value) => value.toLocaleLowerCase("vi").includes(keyword));
     });
   }, [list, query, dateFrom, dateTo, machineId, projectId, personId]);
@@ -109,6 +125,9 @@ export default function MachineAssignmentList() {
   }, [filtered]);
 
   const totalHours = filtered.reduce((sum, row) => sum + row.operatingHours, 0);
+  const issueCount = filtered.filter(
+    (row) => row.machineCondition.trim().toLocaleLowerCase("vi") !== "bình thường",
+  ).length;
   const hasFilter = Boolean(query || dateFrom || dateTo || machineId || projectId || personId);
 
   function showToast(message: string) {
@@ -136,6 +155,7 @@ export default function MachineAssignmentList() {
       showToast(modal?.mode === "edit" ? "Đã cập nhật lịch chạy máy" : "Đã thêm lịch chạy máy");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Không thể lưu lịch chạy máy");
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -161,16 +181,21 @@ export default function MachineAssignmentList() {
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:text-sm">
           <div className="font-semibold">Đang hiển thị dữ liệu mẫu</div>
           <div className="mt-0.5">
-            Hãy chạy file <span className="font-mono">supabase/lich_chay_may.sql</span> để bật lưu dữ liệu thật. {loadError}
+            Hãy chạy file <span className="font-mono">supabase/migration_20260908_nhat_ky_van_hanh_may_chi_tiet.sql</span> để bật đầy đủ nhật ký vận hành. {loadError}
           </div>
         </div>
       )}
 
-      <div className="mb-4 grid gap-3.5 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Lượt chạy</div>
           <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{filtered.length}</div>
           <div className="mt-1.5 text-xs text-slate-400">Theo bộ lọc hiện tại</div>
+        </div>
+        <div className="rounded-xl border border-amber-200/80 bg-white p-4.5 shadow-xs">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Cần chú ý</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-amber-700">{issueCount}</div>
+          <div className="mt-1.5 text-xs text-slate-400">Lượt có tình trạng bất thường</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng giờ hoạt động</div>
@@ -243,13 +268,17 @@ export default function MachineAssignmentList() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1640px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
                 <th className="px-3.5 py-3">Tên máy</th>
                 <th className="px-3.5 py-3">Vị trí</th>
                 <th className="px-3.5 py-3 text-right">Số giờ hoạt động</th>
+                <th className="px-3.5 py-3">Vận hành</th>
+                <th className="px-3.5 py-3">Tình trạng máy</th>
+                <th className="px-3.5 py-3">Mô tả / Đề nghị</th>
+                <th className="px-3.5 py-3 text-center">Ảnh</th>
                 <th className="px-3.5 py-3">Dự án</th>
                 <th className="px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3 text-right">Thao tác</th>
@@ -265,6 +294,28 @@ export default function MachineAssignmentList() {
                   </td>
                   <td className="px-3.5 py-3 font-mono text-xs text-slate-700">{row.location}</td>
                   <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-slate-900">{formatOperatingHours(row.operatingHours)}</td>
+                  <td className="px-3.5 py-3 text-xs text-slate-700">
+                    <div><span className="font-semibold">Đổ dầu:</span> {row.fuelAddedLiters.toLocaleString("vi-VN")} lít</div>
+                    <div className="mt-1"><span className="font-semibold">Bơm:</span> {row.pumpOpened ? "Đã mở" : "Không mở"}</div>
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                      row.machineCondition.trim().toLocaleLowerCase("vi") === "bình thường"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}>
+                      {row.machineCondition}
+                    </span>
+                  </td>
+                  <td className="max-w-[320px] px-3.5 py-3 text-xs text-slate-600">
+                    <div className="line-clamp-2" title={row.conditionDescription}>{row.conditionDescription || "—"}</div>
+                    {row.recommendation && <div className="mt-1 line-clamp-2 font-medium text-[#0047AB]" title={row.recommendation}>Đề nghị: {row.recommendation}</div>}
+                  </td>
+                  <td className="px-3.5 py-3 text-center">
+                    {row.imageAssets.length > 0 ? (
+                      <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-[#0047AB]">{row.imageAssets.length}</span>
+                    ) : "—"}
+                  </td>
                   <td className="px-3.5 py-3 text-slate-700">{row.projectName}</td>
                   <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>
                   <td className="px-3.5 py-3">
@@ -276,8 +327,8 @@ export default function MachineAssignmentList() {
                   </td>
                 </tr>
               ))}
-              {!loading && filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Chưa có lịch chạy máy phù hợp.</td></tr>}
-              {loading && <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải lịch chạy máy…</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">Chưa có lịch chạy máy phù hợp.</td></tr>}
+              {loading && <tr><td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải lịch chạy máy…</td></tr>}
             </tbody>
           </table>
         </div>
@@ -292,7 +343,7 @@ export default function MachineAssignmentList() {
         personnel={personnel}
         saving={saving}
         onClose={() => setModal(null)}
-        onSubmit={(values) => void handleSave(values)}
+        onSubmit={handleSave}
       />
 
       {toast && (

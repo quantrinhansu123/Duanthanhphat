@@ -22,6 +22,7 @@ export type WeldTestStatus = (typeof WELD_TEST_STATUSES)[number];
 
 export type WeldReportRow = {
   id: string;
+  created_at?: string;
   ma_lich_su: string;
   du_an_id: string;
   ma_du_an: string;
@@ -120,6 +121,7 @@ const REPORT_COLUMNS_WITH_DEFECT = [
   ...REPORT_COLUMNS_WITH_DATE,
   "ma_khuyet_tat",
 ] as const;
+const REPORT_COLUMNS_WITH_CREATED_AT = [...REPORT_COLUMNS_WITH_DEFECT, "created_at"] as const;
 const REPORT_COLUMNS_WITH_TEST_STATUS = [
   ...REPORT_COLUMNS_WITH_DEFECT,
   "tinh_trang_thi_nghiem",
@@ -545,6 +547,7 @@ export type WeldJournalPageResult = {
 
 const JOURNAL_PAGE_COLUMNS = [
   ...REPORT_COLUMNS_WITH_TEST_STATUS,
+  "created_at",
 ].join(",");
 
 export function resolveWeldTestStatus(row: WeldReportRow): WeldTestStatus {
@@ -579,9 +582,8 @@ export async function loadWeldJournalPage({
   let request = supabase
     .from("bao_cao_moi_han_theo_du_an")
     .select(JOURNAL_PAGE_COLUMNS, { count: "exact" })
-    .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
-    .order("nam_thuc_hien", { ascending: false })
-    .order("ma_lich_su", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
 
   if (project && project !== "Tất cả dự án") {
     request = request.eq("du_an", project);
@@ -705,9 +707,8 @@ export async function exportFilteredWeldJournal({
     let request = supabase
       .from("bao_cao_moi_han_theo_du_an")
       .select(JOURNAL_PAGE_COLUMNS)
-      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
-      .order("nam_thuc_hien", { ascending: false })
-      .order("ma_lich_su", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
     if (project && project !== "Tất cả dự án") request = request.eq("du_an", project);
     if (WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus)) {
@@ -845,10 +846,13 @@ async function fetchWeldReportRows(
       if (dateTo) query = query.lte("nam_thuc_hien", Number(dateTo.slice(0, 4)));
     }
 
-    const { data, error } = await query
-      .order("nam_thuc_hien", { ascending: false })
-      .order("ma_lich_su", { ascending: true })
-      .range(offset, offset + pageSize - 1);
+    const orderedQuery = columns.includes("created_at")
+      ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
+      : query
+          .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+          .order("nam_thuc_hien", { ascending: false })
+          .order("ma_lich_su", { ascending: false });
+    const { data, error } = await orderedQuery.range(offset, offset + pageSize - 1);
 
     if (error) throw error;
     const page = (data ?? []) as unknown as WeldReportRow[];
@@ -870,10 +874,10 @@ export function loadWeldReportRows(dateFrom?: string, dateTo?: string) {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT, dateFrom, dateTo);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CREATED_AT, dateFrom, dateTo);
       } catch {
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DATE, dateFrom, dateTo);
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT, dateFrom, dateTo);
         } catch (firstError) {
           const message = formatSupabaseError(firstError);
           const missingOptionalColumn =

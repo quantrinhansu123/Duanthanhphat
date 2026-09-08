@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { CaretDown, MagnifyingGlass, Plus, Users, X } from "@/components/icons";
-import { createCertificateType } from "@/lib/certificatesDb";
+import { CaretDown, MagnifyingGlass, PencilSimple, Plus, TrashSimple, Users, X } from "@/components/icons";
+import {
+  createCertificateType,
+  deleteCertificateType,
+  updateCertificateType,
+} from "@/lib/certificatesDb";
 import {
   loadPersonnelCertificateRows,
   type PersonnelCertificateRow,
@@ -16,6 +20,7 @@ import { parseCertificateList } from "@/lib/weldingCertificates";
 
 type CertHolder = {
   id: string;
+  createdAt: string;
   name: string;
   code: string;
   team: string;
@@ -24,9 +29,11 @@ type CertHolder = {
 
 type CertificateTypeRow = {
   key: string;
+  createdAt: string;
   title: string;
   holders: CertHolder[];
   fromCatalog: boolean;
+  group?: CertificateGroupOption;
 };
 
 function normalizeCertTitle(value: string) {
@@ -67,6 +74,9 @@ export default function CertificateManagement() {
     holderIds: [] as string[],
   });
   const [holderQuery, setHolderQuery] = useState("");
+  const [editTarget, setEditTarget] = useState<CertificateTypeRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CertificateTypeRow | null>(null);
+  const [actionError, setActionError] = useState("");
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -108,9 +118,11 @@ export default function CertificateManagement() {
       if (map.has(key)) continue;
       map.set(key, {
         key,
+        createdAt: group.createdAt ?? "",
         title,
         holders: [],
         fromCatalog: true,
+        group,
       });
     }
 
@@ -122,6 +134,7 @@ export default function CertificateManagement() {
         const key = normalizeCertTitle(title);
         const holder: CertHolder = {
           id: row.employee_id,
+          createdAt: row.created_at,
           name: row.ho_ten,
           code: row.ma_nhan_su?.trim() || "Chưa có mã",
           team: row.to_han?.trim() || "Chưa phân tổ",
@@ -138,6 +151,7 @@ export default function CertificateManagement() {
         } else {
           map.set(key, {
             key,
+            createdAt: row.created_at,
             title,
             holders: [holder],
             fromCatalog: false,
@@ -149,12 +163,11 @@ export default function CertificateManagement() {
     return Array.from(map.values())
       .map((row) => ({
         ...row,
-        holders: [...row.holders].sort((a, b) => a.name.localeCompare(b.name, "vi")),
+        holders: [...row.holders].sort(
+          (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+        ),
       }))
-      .sort(
-        (a, b) =>
-          b.holders.length - a.holders.length || a.title.localeCompare(b.title, "vi"),
-      );
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key));
   }, [catalogGroups, welders]);
 
   const filtered = useMemo(() => {
@@ -208,6 +221,63 @@ export default function CertificateManagement() {
     setHolderQuery("");
     setFormError("");
     setAddOpen(true);
+  }
+
+  function openEditModal(row: CertificateTypeRow) {
+    if (!row.group) return;
+    setEditTarget(row);
+    setForm({
+      title: row.title,
+      code: row.group.code || "",
+      organization: row.group.issuer || "",
+      machine: row.group.machine || "",
+      notes: "",
+      holderIds: row.holders.map((holder) => holder.id),
+    });
+    setHolderQuery("");
+    setActionError("");
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editTarget?.group) return;
+    setSaving(true);
+    setActionError("");
+    try {
+      await updateCertificateType({
+        id: editTarget.group.id,
+        title: form.title,
+        code: form.code,
+        organization: form.organization,
+        machine: form.machine,
+        notes: form.notes,
+        employeeIds: form.holderIds,
+      });
+      setEditTarget(null);
+      showToast("Đã cập nhật loại chứng chỉ.");
+      await reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không thể cập nhật loại chứng chỉ.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget?.group) return;
+    setSaving(true);
+    setActionError("");
+    try {
+      await deleteCertificateType(deleteTarget.group.id);
+      const deletedTitle = deleteTarget.title;
+      setDeleteTarget(null);
+      showToast(`Đã xóa loại chứng chỉ “${deletedTitle}”.`);
+      await reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không thể xóa loại chứng chỉ.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function toggleHolder(id: string) {
@@ -344,13 +414,14 @@ export default function CertificateManagement() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
           <div className="table-scroll overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-xs sm:text-sm">
+            <table className="w-full min-w-[800px] border-collapse text-left text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <th className="w-12 px-3.5 py-3">#</th>
                   <th className="min-w-[320px] px-3.5 py-3">Loại chứng chỉ</th>
                   <th className="px-3.5 py-3 text-right">Số nhân sự</th>
                   <th className="min-w-[280px] px-3.5 py-3">Nhân sự sở hữu</th>
+                  <th className="w-[110px] px-2 py-3 text-right">Thao tác</th>
                   <th className="w-12 px-2 py-3" aria-label="Mở rộng" />
                 </tr>
               </thead>
@@ -386,6 +457,32 @@ export default function CertificateManagement() {
                           )}
                         </td>
                         <td className="px-2 py-3">
+                          {row.group ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(row)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] focus:outline-none focus:ring-2 focus:ring-[#0047AB]/30"
+                                aria-label={`Sửa loại chứng chỉ ${row.title}`}
+                                title="Sửa"
+                              >
+                                <PencilSimple size={16} weight="bold" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setDeleteTarget(row); setActionError(""); }}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                aria-label={`Xóa loại chứng chỉ ${row.title}`}
+                                title="Xóa"
+                              >
+                                <TrashSimple size={16} weight="bold" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">Dữ liệu cũ</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-3">
                           {row.holders.length > 0 ? (
                             <button
                               type="button"
@@ -406,7 +503,7 @@ export default function CertificateManagement() {
                       </tr>
                       {open && (
                         <tr className="bg-slate-50/70">
-                          <td colSpan={5} className="px-3.5 py-3">
+                          <td colSpan={6} className="px-3.5 py-3">
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                               {row.holders.map((holder) => (
                                 <Link
@@ -434,16 +531,16 @@ export default function CertificateManagement() {
         </div>
       )}
 
-      {addOpen && (
+      {(addOpen || editTarget) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
           <button
             type="button"
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-            onClick={() => !saving && setAddOpen(false)}
+            onClick={() => !saving && (editTarget ? setEditTarget(null) : setAddOpen(false))}
             aria-label="Đóng"
           />
           <form
-            onSubmit={(e) => void handleCreate(e)}
+            onSubmit={(e) => void (editTarget ? handleEdit(e) : handleCreate(e))}
             className="relative z-10 flex max-h-[92dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
@@ -451,12 +548,12 @@ export default function CertificateManagement() {
                 <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
                   Danh mục chứng chỉ
                 </div>
-                <h2 className="text-base font-bold text-slate-900">Thêm chứng chỉ mới</h2>
+                <h2 className="text-base font-bold text-slate-900">{editTarget ? "Sửa loại chứng chỉ" : "Thêm chứng chỉ mới"}</h2>
               </div>
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setAddOpen(false)}
+                onClick={() => editTarget ? setEditTarget(null) : setAddOpen(false)}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
               >
                 <X size={18} />
@@ -575,14 +672,14 @@ export default function CertificateManagement() {
                 </p>
               </div>
 
-              {formError && <div className="text-xs font-semibold text-rose-600">{formError}</div>}
+              {(editTarget ? actionError : formError) && <div className="text-xs font-semibold text-rose-600">{editTarget ? actionError : formError}</div>}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setAddOpen(false)}
+                onClick={() => editTarget ? setEditTarget(null) : setAddOpen(false)}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
               >
                 Hủy
@@ -592,10 +689,20 @@ export default function CertificateManagement() {
                 disabled={saving}
                 className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer disabled:opacity-50"
               >
-                {saving ? "Đang lưu…" : "Thêm chứng chỉ"}
+                {saving ? "Đang lưu…" : editTarget ? "Lưu thay đổi" : "Thêm chứng chỉ"}
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5" role="alertdialog" aria-modal="true" aria-labelledby="delete-certificate-title">
+          <button type="button" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => !saving && setDeleteTarget(null)} aria-label="Đóng" />
+          <div className="relative z-10 w-full max-w-[460px] rounded-2xl border border-rose-200 bg-white shadow-2xl">
+            <div className="px-5 py-4"><h2 id="delete-certificate-title" className="text-base font-bold text-slate-900">Xóa loại chứng chỉ?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Thao tác này sẽ xóa loại <strong>{deleteTarget.title}</strong> và toàn bộ hồ sơ chứng chỉ thuộc loại này. Không thể khôi phục.</p>{actionError && <div className="mt-3 text-xs font-semibold text-rose-600">{actionError}</div>}</div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5"><button type="button" disabled={saving} onClick={() => setDeleteTarget(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Hủy</button><button type="button" disabled={saving} onClick={() => void handleDelete()} className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50">{saving ? "Đang xóa…" : "Xóa chứng chỉ"}</button></div>
+          </div>
         </div>
       )}
     </main>

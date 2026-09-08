@@ -6,6 +6,7 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
 export interface SupabaseWeldRow {
   id: string;
+  created_at?: string | null;
   ma_lich_su?: string | null;
   ngay_thuc_hien?: string | null;
   nam_thuc_hien?: number | null;
@@ -24,6 +25,7 @@ export interface SupabaseWeldRow {
 
 export interface ViewWeldHistoryRow {
   id: string;
+  created_at?: string | null;
   ngay_thuc_hien?: string | null;
   nam_thuc_hien?: number | null;
   ma_lich_su?: string | null;
@@ -114,7 +116,7 @@ function mapSupabaseRow(row: SupabaseWeldRow, idx: number): WeldingHistoryRecord
   };
 }
 
-function mapViewRow(row: ViewWeldHistoryRow, idx: number): WeldingHistoryRecord {
+function mapViewRow(row: ViewWeldHistoryRow, _idx: number): WeldingHistoryRecord {
   return {
     id: row.id,
     date: row.ngay_thuc_hien || `${row.nam_thuc_hien || 2026}-01-01`,
@@ -301,11 +303,15 @@ export async function loadWeldingHistoryPage(
 
     // Lấy dữ liệu trang
     const { data: pageData, count: totalCount, error: pageError } = await viewQuery
-      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(fromIndex, toIndex);
 
     // Nếu lỗi do view chưa có cột tim_kiem_khong_dau, fallback về tìm kiếm or
-    if (pageError && pageError.message?.includes("tim_kiem_khong_dau")) {
+    if (
+      pageError &&
+      (pageError.message?.includes("tim_kiem_khong_dau") || pageError.message?.includes("created_at"))
+    ) {
       let legacyQuery = supabase
         .from("v_lich_su_moi_han_chi_tiet")
         .select("*", { count: "exact" });
@@ -440,6 +446,7 @@ export async function loadWeldingHistoryPage(
       .from("lich_su_moi_han")
       .select(`
         id,
+        created_at,
         ma_lich_su,
         ngay_thuc_hien,
         nam_thuc_hien,
@@ -455,7 +462,8 @@ export async function loadWeldingHistoryPage(
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
       `)
-      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     if (params.dateFrom) baseQuery = baseQuery.gte("ngay_thuc_hien", params.dateFrom);
     if (params.dateTo) baseQuery = baseQuery.lte("ngay_thuc_hien", params.dateTo);
     if (params.rails?.length) baseQuery = baseQuery.in("loai_ray", params.rails);
@@ -517,7 +525,8 @@ export async function exportAllFilteredWeldingHistory(
       let viewQuery = supabase
         .from("v_lich_su_moi_han_chi_tiet")
         .select("*")
-        .order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
       if (params.dateFrom) viewQuery = viewQuery.gte("ngay_thuc_hien", params.dateFrom);
       if (params.dateTo) viewQuery = viewQuery.lte("ngay_thuc_hien", params.dateTo);
       if (params.welder && params.welder !== "Tất cả thợ hàn") viewQuery = viewQuery.eq("ten_tho_han", params.welder);
@@ -536,7 +545,7 @@ export async function exportAllFilteredWeldingHistory(
 
       const { data, error } = await viewQuery.range(offset, offset + pageSize - 1);
       if (error) {
-        if (error.message?.includes("tim_kiem_khong_dau")) {
+        if (error.message?.includes("tim_kiem_khong_dau") || error.message?.includes("created_at")) {
           // Fallback nếu view cũ
           let fallbackQ = supabase
             .from("v_lich_su_moi_han_chi_tiet")
@@ -581,6 +590,7 @@ export async function exportAllFilteredWeldingHistory(
       .from("lich_su_moi_han")
       .select(`
         id,
+        created_at,
         ma_lich_su,
         ngay_thuc_hien,
         nam_thuc_hien,
@@ -596,7 +606,8 @@ export async function exportAllFilteredWeldingHistory(
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
       `)
-      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(offset, offset + rawPageSize - 1);
     if (error) throw new Error(formatSupabaseError(error));
     const page = (data ?? []) as unknown as SupabaseWeldRow[];

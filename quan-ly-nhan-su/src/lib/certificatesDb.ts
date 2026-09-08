@@ -330,6 +330,98 @@ export async function createCertificateType(input: {
   return { id: data.id as string, name: data.ten_nhom as string };
 }
 
+export type UpdateCertificateTypeInput = {
+  id: string;
+  title: string;
+  code?: string;
+  organization?: string;
+  machine?: string;
+  notes?: string;
+  employeeIds?: string[];
+};
+
+/** Cập nhật một loại chứng chỉ và đồng bộ tên cho các chứng chỉ thuộc nhóm đó. */
+export async function updateCertificateType(input: UpdateCertificateTypeInput): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  const title = input.title.trim();
+  if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+
+  const supabase = createClient();
+  const { error: groupError } = await supabase
+    .from("chung_chi_nhom")
+    .update({
+      ten_nhom: title,
+      ma_nhom: input.code?.trim() || null,
+      don_vi_cap: input.organization?.trim() || null,
+      may_ap_dung: input.machine?.trim() || null,
+      ghi_chu: input.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id);
+  if (groupError) throw new Error(formatSupabaseError(groupError));
+
+  const { error: certificateError } = await supabase
+    .from("chung_chi")
+    .update({ ten_chung_chi: title, updated_at: new Date().toISOString() })
+    .eq("nhom_id", input.id);
+  if (certificateError) throw new Error(formatSupabaseError(certificateError));
+
+  if (input.employeeIds === undefined) return;
+
+  const targetEmployeeIds = [...new Set(input.employeeIds.filter(Boolean))];
+  const { data: currentRows, error: currentError } = await supabase
+    .from("chung_chi")
+    .select("id, employee_id")
+    .eq("nhom_id", input.id);
+  if (currentError) throw new Error(formatSupabaseError(currentError));
+
+  const currentEmployeeIds = new Set((currentRows ?? []).map((row) => row.employee_id));
+  const removedIds = (currentRows ?? [])
+    .filter((row) => !targetEmployeeIds.includes(row.employee_id))
+    .map((row) => row.id);
+  if (removedIds.length) {
+    const { error } = await supabase.from("chung_chi").delete().in("id", removedIds);
+    if (error) throw new Error(formatSupabaseError(error));
+  }
+
+  const addedEmployeeIds = targetEmployeeIds.filter((employeeId) => !currentEmployeeIds.has(employeeId));
+  if (!addedEmployeeIds.length) return;
+
+  const { data: group, error: groupReadError } = await supabase
+    .from("chung_chi_nhom")
+    .select("ngay_cap, ngay_het_han, file_chung_chi, cloudinary_public_id, secure_url")
+    .eq("id", input.id)
+    .single();
+  if (groupReadError) throw new Error(formatSupabaseError(groupReadError));
+
+  const { error: insertError } = await supabase.from("chung_chi").insert(
+    addedEmployeeIds.map((employeeId) => ({
+      nhom_id: input.id,
+      employee_id: employeeId,
+      ten_chung_chi: title,
+      ngay_cap: group.ngay_cap,
+      ngay_het_han: group.ngay_het_han,
+      file_chung_chi: group.file_chung_chi,
+      cloudinary_public_id: group.cloudinary_public_id,
+      secure_url: group.secure_url,
+    })),
+  );
+  if (insertError) throw new Error(formatSupabaseError(insertError));
+}
+
+/** Xóa một loại chứng chỉ cùng toàn bộ hồ sơ chứng chỉ thuộc nhóm. */
+export async function deleteCertificateType(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  if (!id.trim()) throw new Error("Thiếu mã loại chứng chỉ để xóa.");
+
+  const supabase = createClient();
+  const { error: certificateError } = await supabase.from("chung_chi").delete().eq("nhom_id", id);
+  if (certificateError) throw new Error(formatSupabaseError(certificateError));
+
+  const { error: groupError } = await supabase.from("chung_chi_nhom").delete().eq("id", id);
+  if (groupError) throw new Error(formatSupabaseError(groupError));
+}
+
 /** Cập nhật chi tiết 1 chứng chỉ */
 export async function updateCertificateRecord(input: UpdateCertificateInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
