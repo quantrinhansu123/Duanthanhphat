@@ -1,55 +1,10 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { fetchBulkImportData, type ProjectWeldRow, type WelderSummaryRow, type YearSummaryRow, type WeldData } from "@/lib/bulkImportDb";
+import { formatSupabaseError } from "@/lib/supabase/env";
 
 type ImportTab = "projects" | "welders" | "years";
-
-type ProjectWeldRow = {
-  id: string;
-  ma_lich_su: string;
-  ma_du_an: string;
-  du_an: string;
-  nam_thuc_hien: number;
-  loai_ray: string;
-  loai_moi_han: "Thử nghiệm" | "Đào tạo" | "Sản xuất";
-  cong_nghe_han: "FBW" | "ATW";
-  so_luong_thuc_hien: number;
-  so_luong_loi: number;
-  ma_nhan_su: string;
-  ten_tho_han: string;
-  nguyen_nhan_loi: string | null;
-};
-
-type WelderSummaryRow = {
-  tho_han_id: string;
-  ma_nhan_su: string;
-  ho_ten: string;
-  thuc_hien_fbw: number;
-  thuc_hien_atw: number;
-  loi_fbw: number;
-  loi_atw: number;
-  tong_thuc_hien: number;
-  tong_loi: number;
-};
-
-type YearSummaryRow = {
-  nam_thuc_hien: number;
-  thu_nghiem_dao_tao_fbw: number;
-  thu_nghiem_dao_tao_atw: number;
-  san_xuat_fbw: number;
-  san_xuat_atw: number;
-  loi_fbw: number;
-  loi_atw: number;
-  tong_thuc_hien: number;
-  tong_loi: number;
-};
-
-type WeldData = {
-  projects: ProjectWeldRow[];
-  welders: WelderSummaryRow[];
-  years: YearSummaryRow[];
-};
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
 
@@ -344,35 +299,10 @@ export default function BulkImportList() {
       setError("");
 
       try {
-        const supabase = createClient();
-        const [projectResult, welderResult, yearResult] = await Promise.all([
-          supabase
-            .from("bao_cao_moi_han_theo_du_an")
-            .select("id,ma_lich_su,ma_du_an,du_an,nam_thuc_hien,loai_ray,loai_moi_han,cong_nghe_han,so_luong_thuc_hien,so_luong_loi,ma_nhan_su,ten_tho_han,nguyen_nhan_loi,created_at")
-            .order("created_at", { ascending: false })
-            .order("id", { ascending: false }),
-          supabase
-            .from("bao_cao_moi_han_theo_tho")
-            .select("tho_han_id,ma_nhan_su,ho_ten,thuc_hien_fbw,thuc_hien_atw,loi_fbw,loi_atw,tong_thuc_hien,tong_loi")
-            .order("ma_nhan_su", { ascending: true }),
-          supabase
-            .from("bao_cao_moi_han_theo_nam")
-            .select("nam_thuc_hien,thu_nghiem_dao_tao_fbw,thu_nghiem_dao_tao_atw,san_xuat_fbw,san_xuat_atw,loi_fbw,loi_atw,tong_thuc_hien,tong_loi")
-            .order("nam_thuc_hien", { ascending: true }),
-        ]);
-
-        const firstError = projectResult.error ?? welderResult.error ?? yearResult.error;
-        if (firstError) throw firstError;
-
-        if (active) {
-          setData({
-            projects: (projectResult.data ?? []) as ProjectWeldRow[],
-            welders: (welderResult.data ?? []) as WelderSummaryRow[],
-            years: (yearResult.data ?? []) as YearSummaryRow[],
-          });
-        }
+        const result = await fetchBulkImportData();
+        if (active) setData(result);
       } catch (loadError) {
-        if (active) setError(loadError instanceof Error ? loadError.message : "Lỗi không xác định");
+        if (active) setError(formatSupabaseError(loadError));
       } finally {
         if (active) setLoading(false);
       }
