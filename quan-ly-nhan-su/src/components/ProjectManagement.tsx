@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaretLeft, CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
 import {
   type MachineRunSchedule,
@@ -245,6 +245,7 @@ function CheckboxGroup({
   onChange,
   readOnly,
   renderLabel,
+  searchable = false,
 }: {
   label: string;
   hint?: string;
@@ -253,8 +254,13 @@ function CheckboxGroup({
   onChange: (next: string[]) => void;
   readOnly: boolean;
   renderLabel?: (option: string) => string;
+  searchable?: boolean;
 }) {
   const display = renderLabel ?? ((option: string) => option);
+  const [search, setSearch] = useState("");
+  const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  const visibleOptions = options.filter((option) => normalize(display(option)).includes(normalize(search.trim())))
+    .sort((a, b) => Number(selected.includes(b)) - Number(selected.includes(a)));
 
   if (readOnly) {
     return (
@@ -279,7 +285,7 @@ function CheckboxGroup({
   }
 
   return (
-    <fieldset className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+    <fieldset className="block min-w-0 text-xs sm:text-[13px] font-semibold text-slate-700">
       <legend className="flex flex-wrap items-center gap-2">
         <span>{label}</span>
         {selected.length > 0 && (
@@ -289,20 +295,22 @@ function CheckboxGroup({
         )}
       </legend>
       {hint ? <p className="mt-1 text-xs font-normal text-slate-500">{hint}</p> : null}
+      {searchable && <input type="search" aria-label={`Tìm ${label.toLowerCase()}`} placeholder="Gõ tên để tìm…" value={search} onChange={(e) => setSearch(e.target.value)} className="mt-2 h-9 w-full rounded-lg border border-slate-300 px-3 font-normal" />}
       <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-0.5">
         <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-white rounded-lg cursor-pointer transition-colors border-b border-slate-200/80 pb-2 mb-0.5">
           <input
             type="checkbox"
-            checked={options.length > 0 && options.every((opt) => selected.includes(opt))}
+            checked={visibleOptions.length > 0 && visibleOptions.every((opt) => selected.includes(opt))}
+            disabled={visibleOptions.length === 0}
             onChange={() => {
-              const all = options.length > 0 && options.every((opt) => selected.includes(opt));
-              onChange(all ? [] : [...options]);
+              const all = visibleOptions.every((opt) => selected.includes(opt));
+              onChange(all ? selected.filter((opt) => !visibleOptions.includes(opt)) : Array.from(new Set([...selected, ...visibleOptions])));
             }}
             className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0"
           />
           <span>Tất cả</span>
         </label>
-        {options.map((option) => (
+        {visibleOptions.map((option) => (
           <label
             key={option}
             className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-white rounded-lg cursor-pointer transition-colors"
@@ -316,6 +324,7 @@ function CheckboxGroup({
             <span className="truncate">{display(option)}</span>
           </label>
         ))}
+        {visibleOptions.length === 0 && <p className="p-2 font-normal text-slate-500">Không tìm thấy kết quả</p>}
       </div>
     </fieldset>
   );
@@ -418,6 +427,7 @@ function AllTheoreticalProgressTable({
   onDownloadTemplate,
   onUploadExcel,
   onExportExcel,
+  onChangeRow,
 }: {
   rows: ReturnType<typeof flattenTheoreticalProgress>;
   loading: boolean;
@@ -425,8 +435,29 @@ function AllTheoreticalProgressTable({
   onDownloadTemplate: () => void;
   onUploadExcel: (file: File | null) => void;
   onExportExcel: () => void;
+  onChangeRow: (row: ReturnType<typeof flattenTheoreticalProgress>[number], next: TheoreticalProgressRow | null) => Promise<boolean>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<{ key: string; date: string; count: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  async function changeRow(row: ReturnType<typeof flattenTheoreticalProgress>[number], remove = false) {
+    if (savingRef.current || importing) return;
+    if (remove && !window.confirm(`Xóa kế hoạch ngày ${viDate(row.ngay)} của dự án ${row.du_an}?`)) return;
+    if (!remove && (!editing?.date || !editing.count.trim() || !Number.isSafeInteger(Number(editing.count)) || Number(editing.count) < 0)) {
+      window.alert("Nhập ngày hợp lệ và số mối hàn là số nguyên không âm.");
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const saved = await onChangeRow(row, remove ? null : { ngay: editing!.date, so_moi_han: Number(editing!.count) });
+      if (saved) setEditing(null);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
 
   return (
     <section className="mt-6 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
@@ -460,7 +491,7 @@ function AllTheoreticalProgressTable({
             />
             <button
               type="button"
-              disabled={importing}
+              disabled={importing || saving}
               onClick={() => fileRef.current?.click()}
               className="inline-flex h-9 items-center rounded-lg border border-[#0047AB] bg-white px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-50 cursor-pointer"
             >
@@ -484,28 +515,40 @@ function AllTheoreticalProgressTable({
               <th className="px-4 py-3">Ngày</th>
               <th className="px-3.5 py-3">Dự án</th>
               <th className="px-3.5 py-3 text-right">Số mối hàn</th>
+              <th className="px-3.5 py-3 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
                   Đang tải tiến độ lý thuyết…
                 </td>
               </tr>
             ) : rows.length > 0 ? (
               rows.map((row, index) => (
                 <tr key={`${row.du_an_id}-${row.ngay}-${index}`} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-4 py-3 font-mono text-slate-900 whitespace-nowrap">{viDate(row.ngay)}</td>
+                  <td className="px-4 py-3 font-mono text-slate-900 whitespace-nowrap">
+                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <input aria-label="Ngày kế hoạch" type="date" disabled={saving} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} className="rounded border border-slate-300 p-1" /> : viDate(row.ngay)}
+                  </td>
                   <td className="px-3.5 py-3 font-medium text-slate-900">{row.du_an}</td>
                   <td className="px-3.5 py-3 text-right font-mono font-semibold tabular-nums text-[#0047AB]">
-                    {row.so_moi_han.toLocaleString("vi-VN")}
+                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <input aria-label="Số mối hàn kế hoạch" type="number" min="0" step="1" disabled={saving} value={editing.count} onChange={(e) => setEditing({ ...editing, count: e.target.value })} className="w-24 rounded border border-slate-300 p-1 text-right" /> : row.so_moi_han.toLocaleString("vi-VN")}
+                  </td>
+                  <td className="px-3.5 py-3 text-right whitespace-nowrap">
+                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <>
+                      <button disabled={saving || importing} onClick={() => void changeRow(row)} className="px-2 text-blue-700 disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu"}</button>
+                      <button disabled={saving} onClick={() => setEditing(null)} className="px-2 text-slate-600">Hủy</button>
+                    </> : <>
+                      <button disabled={saving || importing} onClick={() => setEditing({ key: `${row.du_an_id}-${row.ngay}`, date: row.ngay, count: String(row.so_moi_han) })} className="px-2 text-blue-700 disabled:opacity-50">Sửa</button>
+                      <button disabled={saving || importing} onClick={() => void changeRow(row, true)} className="px-2 text-rose-700 disabled:opacity-50">Xóa</button>
+                    </>}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
                   Chưa có kế hoạch. Tải mẫu Excel hoặc mở dự án để tạo tiến độ theo ngày.
                 </td>
               </tr>
@@ -554,12 +597,14 @@ function ProjectInfoFields({
       next.startDate,
       next.endDate,
     );
+    if (patch.startDate !== undefined || patch.endDate !== undefined || patch.plannedWeldCount !== undefined || patch.offDays !== undefined) {
     next.theoreticalProgress = buildDailyWeldPlan(
       next.plannedWeldCount,
       next.startDate,
       next.endDate,
       next.offDays,
     );
+    }
     setForm(next);
   }
 
@@ -719,8 +764,10 @@ function ProjectInfoFields({
         </p>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <CheckboxGroup
         label="Nhân sự tham gia"
+        searchable
         hint="Chọn nhiều thợ hàn từ danh sách hồ sơ thợ hàn"
         options={personnelOptions.map((p) => p.employee_id)}
         selected={form.personnelIds}
@@ -762,6 +809,7 @@ function ProjectInfoFields({
         onChange={(weldTypes) => updateForm({ weldTypes })}
         readOnly={readOnly}
       />
+      </div>
 
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
         Trạng thái
@@ -1293,7 +1341,7 @@ function ProjectMachineRunsTab({
 function ProjectModal({
   project,
   mode,
-  onClose,
+  onClose: closeModal,
   onSave,
   onSavePersonnel,
   onSaveWork,
@@ -1306,7 +1354,7 @@ function ProjectModal({
   project: Project;
   mode: "view" | "edit" | "create";
   onClose: () => void;
-  onSave?: (updated: Project) => void;
+  onSave?: (updated: Project) => Promise<void>;
   onSavePersonnel?: (projectId: string, rows: ProjectPersonnel[]) => void;
   onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
@@ -1316,6 +1364,11 @@ function ProjectModal({
   weldOptions: string[];
 }) {
   const [form, setForm] = useState(project);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const onClose = useCallback(() => {
+    if (!savingRef.current) closeModal();
+  }, [closeModal]);
   const [personnelRows, setPersonnelRows] = useState<ProjectPersonnel[]>([]);
   const [workRows, setWorkRows] = useState<ProjectWeld[]>([]);
   const [tab, setTab] = useState<DetailTab>("info");
@@ -1508,7 +1561,9 @@ function ProjectModal({
           {!readOnly && onSave && (tab === "info" || isCreate) && (
             <button
               type="button"
-              onClick={() => {
+              disabled={saving}
+              onClick={async () => {
+                if (savingRef.current) return;
                 if (!form.name.trim()) {
                   window.alert("Vui lòng nhập tên dự án.");
                   return;
@@ -1529,24 +1584,33 @@ function ProjectModal({
                   window.alert("Dự án phải có ít nhất một ngày làm việc sau khi trừ ngày nghỉ.");
                   return;
                 }
-                onSave({
+                savingRef.current = true;
+                setSaving(true);
+                try {
+                await onSave({
                   ...form,
                   location: form.location.trim(),
                   plant: "",
                   staffCount: form.personnelIds.length,
                   machineCount: form.machineTypes.length,
                   offDays: clampOffDaysToRange(form.offDays ?? [], form.startDate, form.endDate),
-                  theoreticalProgress: buildDailyWeldPlan(
+                  theoreticalProgress: form.theoreticalProgress ?? buildDailyWeldPlan(
                     form.plannedWeldCount,
                     form.startDate,
                     form.endDate,
                     form.offDays ?? [],
                   ),
                 });
+                } catch (error) {
+                  window.alert(error instanceof Error ? error.message : "Không lưu được dự án.");
+                } finally {
+                  savingRef.current = false;
+                  setSaving(false);
+                }
               }}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
             >
-              {isCreate ? "Thêm dự án" : "Lưu thay đổi"}
+              {saving ? "Đang lưu…" : isCreate ? "Thêm dự án" : "Lưu thay đổi"}
             </button>
           )}
           {!readOnly && onSavePersonnel && tab === "personnel" && project.id && (
@@ -1676,8 +1740,7 @@ export default function ProjectManagement() {
     })();
   }
 
-  function handleSave(updated: Project) {
-    void (async () => {
+  async function handleSave(updated: Project) {
       if (source === "supabase") {
         const { project: saved, error: saveError } = await updateDuAn(updated.id, {
           name: updated.name,
@@ -1687,6 +1750,7 @@ export default function ProjectManagement() {
           startDate: updated.startDate,
           endDate: updated.endDate,
           plannedWeldCount: updated.plannedWeldCount,
+          theoreticalProgress: updated.theoreticalProgress,
           status: updated.status,
           personnelIds: updated.personnelIds,
           machineTypes: updated.machineTypes,
@@ -1723,11 +1787,9 @@ export default function ProjectManagement() {
         setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       }
       setModal(null);
-    })();
   }
 
-  function handleCreate(project: Project) {
-    void (async () => {
+  async function handleCreate(project: Project) {
       if (source === "supabase") {
         const { project: created, error: createError } = await insertDuAn({
           name: project.name,
@@ -1766,7 +1828,6 @@ export default function ProjectManagement() {
             ...prev,
           ]);
         }
-        await reload();
       } else {
         const id = String(Date.now());
         setProjects((prev) => [{
@@ -1782,7 +1843,6 @@ export default function ProjectManagement() {
         }, ...prev]);
       }
       setModal(null);
-    })();
   }
 
   function handleSavePersonnel(projectId: string, rows: ProjectPersonnel[]) {
@@ -1808,6 +1868,38 @@ export default function ProjectManagement() {
         (p.maDuAn || "").trim().toLocaleLowerCase("vi") === normalized ||
         p.name.trim().toLocaleLowerCase("vi") === normalized,
     );
+  }
+
+  async function handleChangeProgressRow(
+    row: ReturnType<typeof flattenTheoreticalProgress>[number],
+    next: TheoreticalProgressRow | null,
+  ): Promise<boolean> {
+    const project = list.find((item) => item.id === row.du_an_id);
+    if (!project) return false;
+    const current = project.theoreticalProgress ?? [];
+    if (next && next.ngay !== row.ngay && current.some((item) => item.ngay === next.ngay)) {
+      window.alert("Dự án đã có kế hoạch ngày này. Hãy sửa dòng hiện có.");
+      return false;
+    }
+    const progress = current.flatMap((item) => item.ngay === row.ngay ? (next ? [next] : []) : [item])
+      .sort((a, b) => a.ngay.localeCompare(b.ngay));
+    try {
+      if (source === "supabase") {
+        const result = await saveTheoreticalProgress(project.id, progress);
+        if (result.error) throw new Error(result.error);
+      }
+      setProjects((prev) => prev.map((item) => item.id === project.id ? {
+        ...item,
+        theoreticalProgress: progress,
+        plannedWeldCount: progress.reduce((sum, item) => sum + item.so_moi_han, 0),
+        startDate: progress[0]?.ngay || item.startDate,
+        endDate: progress.at(-1)?.ngay || item.endDate,
+      } : item));
+      return true;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Không lưu được tiến độ lý thuyết.");
+      return false;
+    }
   }
 
   async function handleUploadTheoreticalExcel(file: File | null) {
@@ -2155,6 +2247,7 @@ export default function ProjectManagement() {
         onDownloadTemplate={() => downloadTheoreticalProgressExcelTemplate()}
         onUploadExcel={(file) => void handleUploadTheoreticalExcel(file)}
         onExportExcel={handleExportTheoreticalExcel}
+        onChangeRow={handleChangeProgressRow}
       />
 
       {modal && (

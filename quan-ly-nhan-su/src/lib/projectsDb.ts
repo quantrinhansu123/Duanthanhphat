@@ -192,7 +192,7 @@ export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: Proj
     railTypes,
     offDays,
     theoreticalProgress:
-      existingProgress.length > 0
+      Array.isArray(row.tien_do_ly_thuyet)
         ? existingProgress
         : buildDailyWeldPlan(plannedWeldCount, startDate, endDate, offDays),
     maDuAn: row.ma_du_an ?? undefined,
@@ -305,12 +305,11 @@ export async function saveTheoreticalProgress(
   const supabase = createClient();
 
   // Cập nhật khung ngày + tổng trước (trigger có thể tạo kế hoạch tạm).
-  if (ngayBatDau && ngayKetThuc) {
+  {
     const { error: metaError } = await supabase
       .from("du_an")
       .update({
-        ngay_bat_dau: ngayBatDau,
-        ngay_ket_thuc: ngayKetThuc,
+        ...(ngayBatDau && ngayKetThuc ? { ngay_bat_dau: ngayBatDau, ngay_ket_thuc: ngayKetThuc } : {}),
         tong_moi_han_du_kien: tong,
       })
       .eq("id", projectId);
@@ -322,7 +321,6 @@ export async function saveTheoreticalProgress(
     .from("du_an")
     .update({
       tien_do_ly_thuyet: normalized,
-      tong_moi_han_du_kien: tong,
     })
     .eq("id", projectId);
 
@@ -418,6 +416,7 @@ export async function updateDuAn(
     startDate?: string;
     endDate?: string;
     plannedWeldCount?: number;
+    theoreticalProgress?: TheoreticalProgressRow[];
     status?: Project["status"];
     personnelIds?: string[];
     machineTypes?: string[];
@@ -446,7 +445,10 @@ export async function updateDuAn(
       ? clampOffDaysToRange(patch.offDays ?? [], patch.startDate, patch.endDate)
       : normalizeOffDays(patch.offDays);
 
-  if (
+  if (patch.theoreticalProgress !== undefined) {
+    dailyPlan = normalizeTheoreticalProgress(patch.theoreticalProgress);
+    body.tien_do_ly_thuyet = dailyPlan;
+  } else if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
     patch.plannedWeldCount !== undefined
