@@ -256,7 +256,7 @@ export const machines: Machine[] = [
     nameVi: "Máy hàn tiếp xúc đối đầu ray lưu động",
     brand: "TCW",
     manufacturer: "Chengdu Aigre Technology",
-    plant: "Nhà máy Hà Nội",
+    plant: "",
     location: "Km 0+500 · Depot ga Hà Nội",
     currentProject: "Tuyến đường sắt đô thị",
     status: "Sẵn sàng",

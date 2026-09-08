@@ -38,7 +38,6 @@ export const catalogGroups = [
   "Phương pháp hàn",
   "Loại mối hàn",
   "Phòng ban",
-  "Nhà máy",
   "Ca làm việc",
   "Hạng thợ hàn",
 ] as const;
@@ -58,9 +57,6 @@ export const sharedCatalogs: CatalogItem[] = [
   { id: "8", code: "DT", name: "Đào tạo", group: "Loại mối hàn", active: true },
   { id: "9", code: "SX", name: "Sản xuất", group: "Loại mối hàn", active: true },
   { id: "department-welding", code: "WD", name: "Bộ phận hàn ray (Welding Department)", group: "Phòng ban", active: true },
-  { id: "12", code: "HN", name: "Nhà máy Hà Nội", group: "Nhà máy", active: true },
-  { id: "13", code: "DN", name: "Nhà máy Đà Nẵng", group: "Nhà máy", active: true },
-  { id: "14", code: "HCM", name: "Nhà máy TP.HCM", group: "Nhà máy", active: true },
   { id: "15", code: "C1", name: "Ca 1", group: "Ca làm việc", active: true },
   { id: "16", code: "C2", name: "Ca 2", group: "Ca làm việc", active: true },
   { id: "17", code: "C3", name: "Ca 3", group: "Ca làm việc", active: true },

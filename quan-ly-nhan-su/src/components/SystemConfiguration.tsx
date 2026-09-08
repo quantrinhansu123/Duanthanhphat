@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
 import {
   catalogGroups,
@@ -137,7 +136,6 @@ function CatalogsPanel({
     <>
       <div className="mb-4 flex flex-wrap gap-1.5 sm:gap-2">
         {catalogGroups.map((g) => (
-          g === "Nhà máy" ? <Link key={g} href="/danh-sach-may" className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50">Quản lý máy</Link> :
           <button
             key={g}
             type="button"

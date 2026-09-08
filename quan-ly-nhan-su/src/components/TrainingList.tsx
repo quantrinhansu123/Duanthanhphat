@@ -349,7 +349,7 @@ function TrainingFormModal({
                 className={fieldClass}
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
-                placeholder="VD: Phòng đào tạo – Nhà máy Hà Nội"
+                placeholder="VD: Phòng đào tạo – Hà Nội"
               />
             </div>
           </div>

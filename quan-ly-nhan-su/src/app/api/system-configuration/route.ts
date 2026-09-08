@@ -32,7 +32,7 @@ function validate(body: unknown): StoredSystemConfiguration {
     throw new Error("Thiếu dữ liệu cấu hình cần lưu.");
   }
 
-  const catalogs = input.catalogs.slice(0, 500).map((raw, index) => {
+  const catalogs = input.catalogs.filter((item) => item?.group !== "Nhà máy").slice(0, 500).map((raw, index) => {
     const item = raw as CatalogItem;
     const code = cleanText(item.code, 80);
     const name = cleanText(item.name, 200);
@@ -86,7 +86,11 @@ function validate(body: unknown): StoredSystemConfiguration {
 export async function GET() {
   try {
     const stored = await readPrivateJson<StoredSystemConfiguration>(FILE_PATH);
-    return NextResponse.json(stored ?? defaults);
+    const configuration = stored ?? defaults;
+    return NextResponse.json({
+      ...configuration,
+      catalogs: configuration.catalogs.filter((item) => item.group !== "Nhà máy"),
+    });
   } catch (error) {
     return NextResponse.json({ error: formatSupabaseError(error) }, { status: 500 });
   }
