@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
-import { Check, MagnifyingGlass, PencilSimple, Plus, Trash, UploadSimple, X } from "@/components/icons";
+import { Check, MagnifyingGlass, PencilSimple, Plus, UploadSimple, X } from "@/components/icons";
 import {
-  deleteTrainingCourse,
   fetchCertificateGroups,
   fetchTrainingCourseDetail,
   fetchTrainingCourses,
@@ -590,12 +589,10 @@ function TrainingDetailModal({
   course,
   onClose,
   onEdit,
-  onDelete,
 }: {
   course: DbTrainingCourse;
   onClose: () => void;
   onEdit: () => void;
-  onDelete: () => void;
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -630,14 +627,6 @@ function TrainingDetailModal({
             >
               <PencilSimple size={14} weight="bold" />
               Chỉnh sửa
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-              title="Xóa khóa học"
-            >
-              <Trash size={16} weight="bold" />
             </button>
             <button
               type="button"
@@ -885,22 +874,6 @@ export default function TrainingList() {
     setEditing(res.course);
   }
 
-  async function handleDeleteCourse(course: DbTrainingCourse) {
-    if (!confirm(`Xác nhận xóa khóa đào tạo "${course.title}"?`)) return;
-    const res = await deleteTrainingCourse(course.id);
-    if (res.success) {
-      if (course.cloudinaryPublicId) {
-        const stillReferenced = await isTrainingAssetReferenced(course.cloudinaryPublicId);
-        if (!stillReferenced) await deleteCloudinaryAsset(course.cloudinaryPublicId);
-      }
-      showToast("Đã xóa khóa đào tạo thành công.");
-      setDetail(null);
-      void loadData();
-    } else {
-      showToast(res.error || "Không thể xóa khóa học.");
-    }
-  }
-
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
       {toast && (
@@ -1019,14 +992,6 @@ export default function TrainingList() {
                   >
                     <PencilSimple size={15} weight="bold" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteCourse(c)}
-                    className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors cursor-pointer"
-                    title="Xóa khóa đào tạo"
-                  >
-                    <Trash size={15} weight="bold" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -1044,7 +1009,6 @@ export default function TrainingList() {
             setDetail(null);
             setEditing(current);
           }}
-          onDelete={() => void handleDeleteCourse(detail)}
         />
       )}
 

@@ -500,6 +500,7 @@ export default function WelderManagement() {
         toHan: values.weldingTeam,
         capBac: values.rank,
         loaiRay: values.railTypes,
+        chungChi: values.certificates,
         loaiMay: values.trainedMachines,
         kinhNghiem: values.experience,
         hinhAnh: values.photo,

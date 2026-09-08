@@ -102,6 +102,7 @@ export type PersonnelUpsertInput = {
   toHan?: string;
   capBac?: string;
   loaiRay?: string;
+  chungChi?: string[];
   loaiMay?: string;
   kinhNghiem?: string;
   hinhAnh?: string;
@@ -131,6 +132,7 @@ export async function upsertPersonnel(input: PersonnelUpsertInput): Promise<Pers
     to_han: toNullable(input.toHan),
     cap_bac: toNullable(input.capBac),
     loai_ray: toNullable(input.loaiRay),
+    ...(input.chungChi !== undefined ? { chung_chi: parseCertificateList(input.chungChi) } : {}),
     loai_may: toNullable(input.loaiMay),
     kinh_nghiem: toNullable(input.kinhNghiem),
     hinh_anh: toNullable(input.hinhAnh),

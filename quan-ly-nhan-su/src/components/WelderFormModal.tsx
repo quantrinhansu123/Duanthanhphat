@@ -10,6 +10,8 @@ import {
   personTrainedOnMachine,
 } from "@/lib/personnelCertificatesDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import { fetchCertificateGroups, type CertificateGroupOption } from "@/lib/trainingDb";
+import { parseCertificateList, WELDING_CERTIFICATE_OPTIONS } from "@/lib/weldingCertificates";
 
 export type WelderFormValues = {
   id?: string;
@@ -20,6 +22,7 @@ export type WelderFormValues = {
   weldingTeam: string;
   rank: string;
   railTypes: string;
+  certificates: string[];
   trainedMachines: string;
   experience: string;
   photo: string;
@@ -37,6 +40,7 @@ const emptyForm: WelderFormValues = {
   weldingTeam: "Tổ hàn 1",
   rank: "Hạng 2",
   railTypes: "",
+  certificates: [],
   trainedMachines: "",
   experience: "",
   photo: "",
@@ -69,6 +73,8 @@ export default function WelderFormModal({
   const [error, setError] = useState("");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
+  const [certificateGroups, setCertificateGroups] = useState<CertificateGroupOption[]>([]);
+  const [certificatesLoading, setCertificatesLoading] = useState(false);
   const initializedFormKey = useRef<string | null>(null);
 
   const configuredRailOptions = useCatalogOptions("Loại ray");
@@ -94,6 +100,15 @@ export default function WelderFormModal({
     );
   }, [configuredRailOptions, railOptions, selectedRailTypes]);
 
+  const certificateChoices = useMemo(
+    () => Array.from(new Set([
+      ...WELDING_CERTIFICATE_OPTIONS,
+      ...certificateGroups.map((group) => group.name),
+      ...form.certificates,
+    ])).sort((a, b) => a.localeCompare(b, "vi")),
+    [certificateGroups, form.certificates],
+  );
+
   useEffect(() => {
     if (!open) {
       initializedFormKey.current = null;
@@ -112,6 +127,7 @@ export default function WelderFormModal({
         weldingTeam: initial.weldingTeam === "Chưa phân tổ" ? "" : initial.weldingTeam,
         rank: initial.rank === "Chưa phân hạng" ? "Hạng 2" : initial.rank,
         railTypes: initial.railTypes === "Chưa cập nhật" ? "" : initial.railTypes,
+        certificates: parseCertificateList(initial.certificates),
         trainedMachines: initial.trainedMachines === "Chưa cập nhật" ? "" : initial.trainedMachines,
         experience: initial.experience === "Chưa cập nhật" ? "" : initial.experience,
         photo: initial.photo?.startsWith("http") ? initial.photo : "",
@@ -126,6 +142,25 @@ export default function WelderFormModal({
     }
     setError("");
   }, [open, initial, defaultDepartment, suggestedWeldingId]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setCertificatesLoading(true);
+    fetchCertificateGroups()
+      .then((groups) => {
+        if (active) setCertificateGroups(groups);
+      })
+      .catch(() => {
+        if (active) setCertificateGroups([]);
+      })
+      .finally(() => {
+        if (active) setCertificatesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,6 +224,15 @@ export default function WelderFormModal({
     set("railTypes", ordered.join(", "));
   }
 
+  function toggleCertificate(certificate: string) {
+    setForm((prev) => ({
+      ...prev,
+      certificates: prev.certificates.includes(certificate)
+        ? prev.certificates.filter((item) => item !== certificate)
+        : [...prev.certificates, certificate],
+    }));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -203,6 +247,7 @@ export default function WelderFormModal({
       department: form.department.trim(),
       weldingTeam: form.weldingTeam.trim(),
       railTypes: form.railTypes.trim(),
+      certificates: parseCertificateList(form.certificates),
       trainedMachines: form.trainedMachines.trim(),
       experience: form.experience.trim(),
       photo: form.photo.trim(),
@@ -336,6 +381,54 @@ export default function WelderFormModal({
             {selectedRailTypes.length > 0 && (
               <div className="mt-1.5 text-[11px] text-slate-500 font-mono">
                 {selectedRailTypes.join(", ")}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                {isEn ? "Certificates" : "Chứng chỉ"}
+              </label>
+              <span className="text-[11px] text-slate-500">
+                {isEn ? "Select all applicable certificates" : "Có thể chọn nhiều chứng chỉ"}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {isEn
+                ? "Used to determine eligibility when assigning new welds."
+                : "Dùng để xét điều kiện khi gán mối hàn mới."}
+            </p>
+            {certificatesLoading ? (
+              <div className="mt-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-4 text-xs text-slate-500">
+                {isEn ? "Loading certificate catalog…" : "Đang tải danh mục chứng chỉ…"}
+              </div>
+            ) : (
+              <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
+                {certificateChoices.map((certificate) => {
+                  const checked = form.certificates.includes(certificate);
+                  return (
+                    <label
+                      key={certificate}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs sm:text-sm transition-colors ${
+                        checked ? "border border-blue-200 bg-blue-50" : "border border-transparent hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCertificate(certificate)}
+                        className="h-4 w-4 rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]"
+                      />
+                      <span className="text-slate-700">{certificate}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {form.certificates.length > 0 && (
+              <div className="mt-1.5 text-[11px] text-slate-500">
+                {form.certificates.join(", ")}
               </div>
             )}
           </div>
