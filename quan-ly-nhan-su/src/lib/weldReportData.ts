@@ -539,6 +539,8 @@ export type WeldJournalPageResult = {
   pageSize: number;
   passCount: number;
   failCount: number;
+  pendingCount: number;
+  untestedCount: number;
 };
 
 const JOURNAL_PAGE_COLUMNS = [
@@ -611,10 +613,6 @@ export async function loadWeldJournalPage({
       .order("nam_thuc_hien", { ascending: false })
       .order("ma_lich_su", { ascending: false });
     if (project && project !== "Tất cả dự án") fallbackRequest = fallbackRequest.eq("du_an", project);
-    if (resultFilter === "Đạt") fallbackRequest = fallbackRequest.eq("so_luong_loi", 0);
-    else if (resultFilter === "Không đạt") fallbackRequest = fallbackRequest.gt("so_luong_loi", 0);
-    else if (resultFilter === "Không thí nghiệm") fallbackRequest = fallbackRequest.eq("loai_moi_han", "Đào tạo");
-    else if (resultFilter === "Chờ thí nghiệm") fallbackRequest = fallbackRequest.eq("id", "00000000-0000-0000-0000-000000000000");
     if (q) {
       fallbackRequest = fallbackRequest.or(
         [
@@ -627,97 +625,52 @@ export async function loadWeldJournalPage({
         ].join(","),
       );
     }
-    const fallback = await fallbackRequest.range(from, to);
-    if (fallback.error) throw error;
-    const rows = (fallback.data ?? []) as unknown as WeldReportRow[];
-    const summary = summarizeJournalRows(rows);
+    const allRows: WeldReportRow[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const fallback = await fallbackRequest.range(offset, offset + 999);
+      if (fallback.error) throw error;
+      const chunk = (fallback.data ?? []) as unknown as WeldReportRow[];
+      allRows.push(...chunk);
+      if (chunk.length < 1000) break;
+    }
+    const filteredRows = WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus)
+      ? allRows.filter((row) => resolveWeldTestStatus(row) === resultFilter)
+      : allRows;
+    const summary = summarizeJournalRows(filteredRows);
     return {
-      rows,
-      total: fallback.count ?? rows.length,
+      rows: filteredRows.slice(from, to + 1),
+      total: filteredRows.length,
       page: safePage,
       pageSize,
       passCount: summary.passed,
       failCount: summary.errors,
+      pendingCount: summary.pending,
+      untestedCount: summary.untested,
     };
   }
 
   const rows = (data ?? []) as unknown as WeldReportRow[];
 
-  // Đếm đạt / không đạt trên toàn bộ bộ lọc (head count), không chỉ trang hiện tại.
-  let passCount = 0;
-  let failCount = 0;
-  {
-    let passReq = supabase
+  // Count each status across the full filtered result, independently of pagination.
+  const counts = await Promise.all(WELD_TEST_STATUSES.map(async (status) => {
+    if (WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus) && resultFilter !== status) return 0;
+    let countRequest = supabase
       .from("bao_cao_moi_han_theo_du_an")
       .select("id", { count: "exact", head: true })
-      .eq("tinh_trang_thi_nghiem", "Đạt");
-    let failReq = supabase
-      .from("bao_cao_moi_han_theo_du_an")
-      .select("id", { count: "exact", head: true })
-      .eq("tinh_trang_thi_nghiem", "Không đạt");
-    if (project && project !== "Tất cả dự án") {
-      passReq = passReq.eq("du_an", project);
-      failReq = failReq.eq("du_an", project);
-    }
+      .eq("tinh_trang_thi_nghiem", status);
+    if (project && project !== "Tất cả dự án") countRequest = countRequest.eq("du_an", project);
     if (q) {
-      const orFilter = [
-        `ten_tho_han.ilike.%${q}%`,
-        `ma_nhan_su.ilike.%${q}%`,
-        `du_an.ilike.%${q}%`,
-        `ma_lich_su.ilike.%${q}%`,
-        `chung_chi_su_dung.ilike.%${q}%`,
-        `ma_may.ilike.%${q}%`,
-      ].join(",");
-      passReq = passReq.or(orFilter);
-      failReq = failReq.or(orFilter);
+      countRequest = countRequest.or([
+        `ten_tho_han.ilike.%${q}%`, `ma_nhan_su.ilike.%${q}%`,
+        `du_an.ilike.%${q}%`, `ma_lich_su.ilike.%${q}%`,
+        `chung_chi_su_dung.ilike.%${q}%`, `ma_may.ilike.%${q}%`,
+      ].join(","));
     }
-    if (resultFilter === "Đạt") {
-      failCount = 0;
-      const passRes = await passReq;
-      passCount = passRes.count ?? 0;
-    } else if (resultFilter === "Không đạt") {
-      passCount = 0;
-      const failRes = await failReq;
-      failCount = failRes.count ?? 0;
-    } else if (resultFilter === "Chờ thí nghiệm" || resultFilter === "Không thí nghiệm") {
-      passCount = 0;
-      failCount = 0;
-    } else {
-      const [passRes, failRes] = await Promise.all([passReq, failReq]);
-      if (passRes.error || failRes.error) {
-        let legacyPassReq = supabase
-          .from("bao_cao_moi_han_theo_du_an")
-          .select("id", { count: "exact", head: true })
-          .eq("so_luong_loi", 0);
-        let legacyFailReq = supabase
-          .from("bao_cao_moi_han_theo_du_an")
-          .select("id", { count: "exact", head: true })
-          .gt("so_luong_loi", 0);
-        if (project && project !== "Tất cả dự án") {
-          legacyPassReq = legacyPassReq.eq("du_an", project);
-          legacyFailReq = legacyFailReq.eq("du_an", project);
-        }
-        if (q) {
-          const orFilter = [
-            `ten_tho_han.ilike.%${q}%`,
-            `ma_nhan_su.ilike.%${q}%`,
-            `du_an.ilike.%${q}%`,
-            `ma_lich_su.ilike.%${q}%`,
-            `chung_chi_su_dung.ilike.%${q}%`,
-            `ma_may.ilike.%${q}%`,
-          ].join(",");
-          legacyPassReq = legacyPassReq.or(orFilter);
-          legacyFailReq = legacyFailReq.or(orFilter);
-        }
-        const [legacyPass, legacyFail] = await Promise.all([legacyPassReq, legacyFailReq]);
-        passCount = legacyPass.count ?? 0;
-        failCount = legacyFail.count ?? 0;
-      } else {
-        passCount = passRes.count ?? 0;
-        failCount = failRes.count ?? 0;
-      }
-    }
-  }
+    const result = await countRequest;
+    if (result.error) throw new Error(formatSupabaseError(result.error));
+    return result.count ?? 0;
+  }));
+  const [pendingCount, passCount, failCount, untestedCount] = counts;
 
   return {
     rows,
@@ -726,6 +679,8 @@ export async function loadWeldJournalPage({
     pageSize,
     passCount,
     failCount,
+    pendingCount,
+    untestedCount,
   };
 }
 
@@ -1004,19 +959,23 @@ export function summarizeWeldRows(rows: WeldReportRow[]): WeldSummary {
 }
 
 /** Tổng hợp theo bản ghi nhật ký — mỗi dòng = 1 mối (giống /nhat-ky-han). */
-export function summarizeJournalRows(rows: WeldReportRow[]): WeldSummary {
+export function summarizeJournalRows(rows: WeldReportRow[]): WeldSummary & { pending: number; untested: number; tested: number } {
   let passed = 0;
   let failed = 0;
+  let pending = 0;
+  let untested = 0;
   let fbw = 0;
   let atw = 0;
   for (const row of rows) {
     const testStatus = resolveWeldTestStatus(row);
     if (testStatus === "Đạt") passed += 1;
     else if (testStatus === "Không đạt") failed += 1;
+    else if (testStatus === "Chờ thí nghiệm") pending += 1;
+    else if (testStatus === "Không thí nghiệm") untested += 1;
     if (row.cong_nghe_han === "FBW") fbw += 1;
     else atw += 1;
   }
-  return { total: rows.length, errors: failed, passed, fbw, atw };
+  return { total: rows.length, errors: failed, passed, pending, untested, tested: passed + failed, fbw, atw };
 }
 
 export function hasLinkedWeld(row: WeldReportRow): boolean {

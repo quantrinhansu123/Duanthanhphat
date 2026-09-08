@@ -759,6 +759,12 @@ export default function WeldingJournalList() {
   const [total, setTotal] = useState(0);
   const [passCount, setPassCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [untestedCount, setUntestedCount] = useState(0);
+  const testedCount = passCount + failCount;
+  const errorRate = testedCount > 0
+    ? `${((failCount / testedCount) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
+    : "—";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
@@ -851,6 +857,8 @@ export default function WeldingJournalList() {
         setTotal(result.total);
         setPassCount(result.passCount);
         setFailCount(result.failCount);
+        setPendingCount(result.pendingCount);
+        setUntestedCount(result.untestedCount);
       })
       .catch((loadError) => {
         if (!active) return;
@@ -858,6 +866,8 @@ export default function WeldingJournalList() {
         setTotal(0);
         setPassCount(0);
         setFailCount(0);
+        setPendingCount(0);
+        setUntestedCount(0);
         setError(loadError instanceof Error ? loadError.message : "Không tải được nhật ký hàn");
       })
       .finally(() => {
@@ -1337,6 +1347,11 @@ export default function WeldingJournalList() {
           <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount.toLocaleString("vi-VN")}</strong> đạt ·{" "}
           <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount.toLocaleString("vi-VN")}</strong> không đạt
         </span>
+        <span className="text-slate-300">|</span>
+        <span><strong className="font-semibold text-amber-700 font-mono tabular-nums">{pendingCount.toLocaleString("vi-VN")}</strong> chờ thí nghiệm</span>
+        <span><strong className="font-semibold text-slate-700 font-mono tabular-nums">{untestedCount.toLocaleString("vi-VN")}</strong> không thí nghiệm</span>
+        <span className="text-slate-300">|</span>
+        <span>{testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm · Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong></span>
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row gap-2.5">
