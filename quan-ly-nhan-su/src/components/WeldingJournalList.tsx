@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { DownloadSimple } from "@/components/icons";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
@@ -8,7 +8,14 @@ import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import { loadPersonnelCertificateOptions } from "@/lib/personnelCertificatesDb";
+import {
+  loadPersonnelCertificateOptions,
+  loadPersonnelCertificateRows,
+} from "@/lib/personnelCertificatesDb";
+import {
+  downloadWeldJournalExcelTemplate,
+  parseWeldJournalExcel,
+} from "@/lib/parseWeldJournalExcel";
 import {
   fetchFailedWeldsInDateRange,
   exportFilteredWeldJournal,
@@ -29,8 +36,10 @@ import {
   describeCertificateRequirement,
   eligibleCertificatesForWeld,
   hasCertificate,
+  parseCertificateList,
 } from "@/lib/weldingCertificates";
 import { NDT_DEFECTS } from "@/data/error-library";
+import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
 
@@ -719,7 +728,9 @@ export default function WeldingJournalList() {
   const [syncingCodes, setSyncingCodes] = useState(false);
   const [syncProgress, setSyncProgress] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
+  const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
@@ -1005,6 +1016,157 @@ export default function WeldingJournalList() {
     }
   }
 
+  async function handleImportExcel(file: File | null) {
+    if (!file || importing || saving) return;
+    setImporting(true);
+    try {
+      const parsed = await parseWeldJournalExcel(file);
+      if (!parsed.rows.length) {
+        window.alert(
+          parsed.errors.length
+            ? parsed.errors.slice(0, 10).join("\n")
+            : "File không có dòng dữ liệu hợp lệ.",
+        );
+        return;
+      }
+
+      const supabase = createClient();
+      const [{ data: projectRows }, personnelRows] = await Promise.all([
+        supabase.from("du_an").select("id,du_an,ma_du_an"),
+        loadPersonnelCertificateRows(),
+      ]);
+
+      const projectsDb = (projectRows ?? []) as Array<{
+        id: string;
+        du_an: string;
+        ma_du_an: string | null;
+      }>;
+
+      const usedCodes = new Set<string>();
+      let inserted = 0;
+      const rowErrors: string[] = [...parsed.errors];
+
+      for (let index = 0; index < parsed.rows.length; index++) {
+        const row = parsed.rows[index];
+        const project =
+          projectsDb.find(
+            (p) =>
+              (row.ma_du_an &&
+                (p.ma_du_an || "").trim().toLocaleLowerCase("vi") ===
+                  row.ma_du_an.trim().toLocaleLowerCase("vi")) ||
+              (row.du_an &&
+                p.du_an.trim().toLocaleLowerCase("vi") === row.du_an.trim().toLocaleLowerCase("vi")),
+          ) ?? null;
+        if (!project) {
+          rowErrors.push(`Dòng dữ liệu ${index + 1}: không tìm thấy dự án`);
+          continue;
+        }
+
+        const personnel =
+          personnelRows.find(
+            (p) =>
+              (row.ma_nhan_su &&
+                (p.ma_nhan_su || "").trim().toLocaleLowerCase("vi") ===
+                  row.ma_nhan_su.trim().toLocaleLowerCase("vi")) ||
+              (row.ten_tho_han &&
+                p.ho_ten.trim().toLocaleLowerCase("vi") ===
+                  row.ten_tho_han.trim().toLocaleLowerCase("vi")),
+          ) ?? null;
+        if (!personnel) {
+          rowErrors.push(`Dòng dữ liệu ${index + 1}: không tìm thấy thợ hàn`);
+          continue;
+        }
+
+        const machine =
+          machineOptions.find(
+            (m) => m.code.trim().toLocaleLowerCase("vi") === row.ma_may.trim().toLocaleLowerCase("vi"),
+          ) ?? null;
+        if (!machine) {
+          rowErrors.push(`Dòng dữ liệu ${index + 1}: không tìm thấy máy ${row.ma_may}`);
+          continue;
+        }
+
+        const welderCerts = parseCertificateList(personnel.chung_chi);
+        const context = {
+          railType: row.loai_ray,
+          method: row.cong_nghe_han,
+          machineCode: machine.code,
+          machineName: machine.name,
+        };
+        const eligible = eligibleCertificatesForWeld(welderCerts, context);
+        const certificate =
+          (row.chung_chi_su_dung &&
+          eligible.some(
+            (c) => c.toLocaleLowerCase("vi") === row.chung_chi_su_dung.toLocaleLowerCase("vi"),
+          )
+            ? row.chung_chi_su_dung
+            : eligible[0]) || "";
+
+        if (!certificate) {
+          rowErrors.push(
+            `Dòng dữ liệu ${index + 1}: thợ hàn chưa có chứng chỉ phù hợp (${describeCertificateRequirement(context)})`,
+          );
+          continue;
+        }
+
+        let maLichSu = row.ma_moi_han.trim();
+        if (!maLichSu) {
+          const prefix = buildWeldCodePrefix(row.cong_nghe_han, `${row.ngay_thuc_hien}T08:00`);
+          const existing = await loadWeldCodesWithPrefix(prefix);
+          const allExisting = [...existing, ...usedCodes];
+          maLichSu = suggestWeldCode(row.cong_nghe_han, `${row.ngay_thuc_hien}T08:00`, allExisting);
+        }
+        usedCodes.add(maLichSu);
+
+        try {
+          await insertWeldJournalEntry({
+            ma_lich_su: maLichSu,
+            du_an_id: project.id,
+            tho_han_id: personnel.employee_id,
+            nam_thuc_hien: Number(row.ngay_thuc_hien.slice(0, 4)),
+            ngay_thuc_hien: row.ngay_thuc_hien,
+            loai_ray: row.loai_ray,
+            loai_moi_han: row.loai_moi_han,
+            cong_nghe_han: row.cong_nghe_han,
+            so_luong_loi: row.tinh_trang_thi_nghiem === "Không đạt" ? 1 : 0,
+            ma_khuyet_tat: row.tinh_trang_thi_nghiem === "Không đạt" ? row.ma_khuyet_tat : [],
+            tinh_trang_thi_nghiem: row.tinh_trang_thi_nghiem,
+            nguyen_nhan_loi:
+              row.tinh_trang_thi_nghiem === "Không đạt"
+                ? row.nguyen_nhan_loi || row.ma_khuyet_tat.join(", ") || null
+                : null,
+            ghi_chu: row.ghi_chu || null,
+            moi_han_lien_ket: row.moi_han_lien_ket || null,
+            may_id: machine.id,
+            chung_chi_su_dung: certificate,
+            hach_toan: row.hach_toan || "HT-SX01",
+            toa_do_id: null,
+            kinh_do: row.kinh_do,
+            vi_do: row.vi_do,
+            ly_trinh: row.ly_trinh || null,
+          });
+          inserted += 1;
+        } catch (insertError) {
+          rowErrors.push(
+            `Dòng dữ liệu ${index + 1}: ${
+              insertError instanceof Error ? insertError.message : String(insertError)
+            }`,
+          );
+        }
+      }
+
+      refetch();
+      const parts = [`Đã nhập ${inserted}/${parsed.rows.length} dòng từ Excel (${file.name}).`];
+      if (rowErrors.length) parts.push(rowErrors.slice(0, 8).join("\n"));
+      if (inserted > 0) showToast(`Đã nhập ${inserted} nhật ký từ Excel`);
+      window.alert(parts.join("\n"));
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không đọc được file Excel");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleCreate(values: JournalFormValues) {
     setSaving(true);
     try {
@@ -1099,13 +1261,38 @@ export default function WeldingJournalList() {
         </select>
         <button
           type="button"
+          onClick={() => downloadWeldJournalExcelTemplate()}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+        >
+          Tải mẫu Excel
+        </button>
+        <input
+          ref={excelInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            void handleImportExcel(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => excelInputRef.current?.click()}
+          disabled={importing || saving || loading}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-4 text-xs sm:text-sm font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer"
+        >
+          {importing ? "Đang nhập…" : "Tải Excel lên"}
+        </button>
+        <button
+          type="button"
           onClick={() => void handleExportExcel()}
           disabled={exporting || loading}
           title="Xuất toàn bộ nhật ký theo bộ lọc hiện tại"
           className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs sm:text-sm font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer"
         >
           <DownloadSimple size={16} weight="bold" aria-hidden />
-          {exporting ? "Đang tạo Excel…" : "Tải Excel"}
+          {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
         </button>
         <button
           type="button"

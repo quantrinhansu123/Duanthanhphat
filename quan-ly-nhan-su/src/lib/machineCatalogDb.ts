@@ -1,5 +1,6 @@
 import {
   machines as seedMachines,
+  normalizeTechnicalDocs,
   type Machine,
 } from "@/data/machines";
 import { createClient } from "@/lib/supabase/client";
@@ -33,6 +34,7 @@ type MachineCatalogRow = {
   hinh_anh_chi_tiet?: string[] | null;
   thong_so_may_han?: Record<string, unknown> | null;
   phuong_tien_van_chuyen?: Record<string, unknown> | null;
+  ho_so_ky_thuat?: unknown;
 };
 
 const validStatuses = new Set<Machine["status"]>([
@@ -219,6 +221,9 @@ function rowToMachine(row: MachineCatalogRow): Machine {
     transportUnit: ((row.phuong_tien_van_chuyen as unknown as Machine["transportUnit"]) ||
       local?.transportUnit ||
       seed?.transportUnit),
+    technicalDocs: normalizeTechnicalDocs(
+      row.ho_so_ky_thuat ?? local?.technicalDocs ?? seed?.technicalDocs,
+    ),
   };
 }
 
@@ -341,11 +346,81 @@ function missingSplitMachineColumns(error: unknown) {
   return message.includes("thong_so_may_han") || message.includes("phuong_tien_van_chuyen");
 }
 
+function missingTechnicalDocsColumn(error: unknown) {
+  const message = formatSupabaseError(error).toLowerCase();
+  return message.includes("ho_so_ky_thuat");
+}
+
 function withoutSplitMachineColumns(payload: Record<string, unknown>) {
   const compatible = { ...payload };
   delete compatible.thong_so_may_han;
   delete compatible.phuong_tien_van_chuyen;
   return compatible;
+}
+
+function withoutTechnicalDocsColumn(payload: Record<string, unknown>) {
+  const compatible = { ...payload };
+  delete compatible.ho_so_ky_thuat;
+  return compatible;
+}
+
+async function insertMachineRow(
+  supabase: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>,
+) {
+  let result = await supabase.from("thiet_bi").insert(payload).select().single();
+  let usedCompatibilityFallback = false;
+
+  if (result.error && missingTechnicalDocsColumn(result.error)) {
+    result = await supabase
+      .from("thiet_bi")
+      .insert(withoutTechnicalDocsColumn(payload))
+      .select()
+      .single();
+  }
+
+  if (result.error && missingSplitMachineColumns(result.error)) {
+    usedCompatibilityFallback = true;
+    let stripped = withoutSplitMachineColumns(payload);
+    result = await supabase.from("thiet_bi").insert(stripped).select().single();
+    if (result.error && missingTechnicalDocsColumn(result.error)) {
+      result = await supabase
+        .from("thiet_bi")
+        .insert(withoutTechnicalDocsColumn(stripped))
+        .select()
+        .single();
+    }
+  }
+
+  return { result, usedCompatibilityFallback };
+}
+
+async function updateMachineRow(
+  supabase: ReturnType<typeof createClient>,
+  machineId: string,
+  payload: Record<string, unknown>,
+) {
+  let result = await supabase.from("thiet_bi").update(payload).eq("id", machineId);
+
+  if (result.error && missingTechnicalDocsColumn(result.error)) {
+    result = await supabase
+      .from("thiet_bi")
+      .update(withoutTechnicalDocsColumn(payload))
+      .eq("id", machineId);
+  }
+
+  if (result.error && missingSplitMachineColumns(result.error)) {
+    let stripped = withoutSplitMachineColumns(payload);
+    result = await supabase.from("thiet_bi").update(stripped).eq("id", machineId);
+    if (result.error && missingTechnicalDocsColumn(result.error)) {
+      result = await supabase
+        .from("thiet_bi")
+        .update(withoutTechnicalDocsColumn(stripped))
+        .eq("id", machineId);
+    }
+  }
+
+  return result;
 }
 
 export async function createMachine(machine: Machine): Promise<Machine> {
@@ -380,23 +455,13 @@ export async function createMachine(machine: Machine): Promise<Machine> {
         : (machine.image ? [machine.image] : []),
     thong_so_may_han: machine.weldingUnit ?? null,
     phuong_tien_van_chuyen: machine.transportUnit ?? null,
+    ho_so_ky_thuat: normalizeTechnicalDocs(machine.technicalDocs),
   };
 
-  let usedCompatibilityFallback = false;
-  let insertResult = await supabase
-    .from("thiet_bi")
-    .insert(extendedPayload)
-    .select()
-    .single();
-
-  if (insertResult.error && missingSplitMachineColumns(insertResult.error)) {
-    usedCompatibilityFallback = true;
-    insertResult = await supabase
-      .from("thiet_bi")
-      .insert(withoutSplitMachineColumns(extendedPayload))
-      .select()
-      .single();
-  }
+  const { result: insertResult, usedCompatibilityFallback } = await insertMachineRow(
+    supabase,
+    extendedPayload,
+  );
 
   const { data, error } = insertResult;
 
@@ -405,13 +470,16 @@ export async function createMachine(machine: Machine): Promise<Machine> {
   }
 
   const mapped = rowToMachine(data as MachineCatalogRow);
-  const saved = usedCompatibilityFallback
-    ? {
-        ...mapped,
-        weldingUnit: machine.weldingUnit,
-        transportUnit: machine.transportUnit,
-      }
-    : mapped;
+  const saved = {
+    ...mapped,
+    ...(usedCompatibilityFallback
+      ? {
+          weldingUnit: machine.weldingUnit,
+          transportUnit: machine.transportUnit,
+        }
+      : {}),
+    technicalDocs: normalizeTechnicalDocs(machine.technicalDocs ?? mapped.technicalDocs),
+  };
   writeLocalOverride(saved);
   return saved;
 }
@@ -448,19 +516,10 @@ export async function updateMachine(machine: Machine): Promise<void> {
         : (machine.image ? [machine.image] : []),
     thong_so_may_han: machine.weldingUnit ?? null,
     phuong_tien_van_chuyen: machine.transportUnit ?? null,
+    ho_so_ky_thuat: normalizeTechnicalDocs(machine.technicalDocs),
   };
 
-  let updateResult = await supabase
-    .from("thiet_bi")
-    .update(extendedPayload)
-    .eq("id", machine.id);
-
-  if (updateResult.error && missingSplitMachineColumns(updateResult.error)) {
-    updateResult = await supabase
-      .from("thiet_bi")
-      .update(withoutSplitMachineColumns(extendedPayload))
-      .eq("id", machine.id);
-  }
+  const updateResult = await updateMachineRow(supabase, machine.id, extendedPayload);
 
   const { error } = updateResult;
 
@@ -468,7 +527,10 @@ export async function updateMachine(machine: Machine): Promise<void> {
     throw new Error(`Lỗi cập nhật máy lên Supabase: ${formatSupabaseError(error)}`);
   }
 
-  writeLocalOverride(machine);
+  writeLocalOverride({
+    ...machine,
+    technicalDocs: normalizeTechnicalDocs(machine.technicalDocs),
+  });
 }
 
 export async function deleteMachine(id: string): Promise<void> {

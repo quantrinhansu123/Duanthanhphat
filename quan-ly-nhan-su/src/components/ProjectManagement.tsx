@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import { CaretLeft, CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
 import {
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
@@ -14,12 +14,21 @@ import {
 } from "@/lib/machineRunSchedulesDb";
 import {
   buildDailyWeldPlan,
+  clampOffDaysToRange,
   deleteDuAn,
   flattenTheoreticalProgress,
   insertDuAn,
   projectDurationDays,
+  projectWorkingDays,
+  saveTheoreticalProgress,
   updateDuAn,
 } from "@/lib/projectsDb";
+import {
+  downloadTheoreticalProgressExcelTemplate,
+  exportTheoreticalProgressToExcel,
+  groupTheoreticalProgressByProject,
+  parseTheoreticalProgressExcel,
+} from "@/lib/parseTheoreticalProgressExcel";
 import {
   loadPersonnelCertificateRows,
   type PersonnelCertificateRow,
@@ -72,11 +81,158 @@ function emptyProject(): Project {
     machineTypes: [],
     weldTypes: [],
     railTypes: [],
+    offDays: [],
   };
 }
 
 function toggleItem(list: string[], item: string) {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+}
+
+const WEEKDAYS_VI = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const MONTHS_VI = [
+  "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+  "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12",
+];
+
+function OffDaysCalendar({
+  startDate,
+  endDate,
+  offDays,
+  onChange,
+  readOnly,
+}: {
+  startDate: string;
+  endDate: string;
+  offDays: string[];
+  onChange: (next: string[]) => void;
+  readOnly: boolean;
+}) {
+  const initialView = startDate ? new Date(`${startDate}T00:00:00`) : new Date();
+  const [viewDate, setViewDate] = useState(initialView);
+  const offSet = useMemo(() => new Set(offDays), [offDays]);
+
+  useEffect(() => {
+    if (startDate) setViewDate(new Date(`${startDate}T00:00:00`));
+  }, [startDate]);
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startPad = (firstDay.getDay() + 6) % 7; // Monday-first
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = Array.from({ length: startPad + daysInMonth }, (_, index) => {
+    if (index < startPad) return null;
+    return index - startPad + 1;
+  });
+
+  function isoForDay(day: number) {
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${m}-${d}`;
+  }
+
+  function inProjectRange(iso: string) {
+    if (!startDate || !endDate) return false;
+    return iso >= startDate && iso <= endDate;
+  }
+
+  function toggleDay(iso: string) {
+    if (readOnly || !inProjectRange(iso)) return;
+    onChange(toggleItem(offDays, iso).sort());
+  }
+
+  const sortedOff = [...offDays].sort();
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs sm:text-[13px] font-semibold text-slate-700">Ngày nghỉ dự án</div>
+          <p className="mt-0.5 text-[11px] font-normal text-slate-500">
+            Bấm ngày trong khoảng dự án để đánh dấu nghỉ. Ngày nghỉ không được chia mối hàn lý thuyết.
+          </p>
+        </div>
+        <div className="shrink-0 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-bold font-mono text-amber-800">
+          {offDays.length} ngày nghỉ
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => setViewDate(new Date(year, month - 1, 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+          aria-label="Tháng trước"
+        >
+          <CaretLeft size={14} weight="bold" />
+        </button>
+        <div className="text-sm font-bold text-slate-900">
+          {MONTHS_VI[month]} {year}
+        </div>
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => setViewDate(new Date(year, month + 1, 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+          aria-label="Tháng sau"
+        >
+          <CaretRight size={14} weight="bold" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {WEEKDAYS_VI.map((label) => (
+          <div key={label} className="py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            {label}
+          </div>
+        ))}
+        {cells.map((day, index) => {
+          if (!day) return <div key={`pad-${index}`} />;
+          const iso = isoForDay(day);
+          const inRange = inProjectRange(iso);
+          const isOff = offSet.has(iso);
+          return (
+            <button
+              key={iso}
+              type="button"
+              disabled={readOnly || !inRange}
+              onClick={() => toggleDay(iso)}
+              className={`h-9 rounded-lg text-xs font-semibold transition-colors ${
+                isOff
+                  ? "bg-amber-500 text-white shadow-xs"
+                  : inRange
+                    ? "bg-slate-50 text-slate-800 hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
+                    : "text-slate-300 cursor-not-allowed"
+              } disabled:cursor-default`}
+              title={isOff ? "Bỏ ngày nghỉ" : inRange ? "Chọn ngày nghỉ" : "Ngoài khoảng dự án"}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      {sortedOff.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
+          {sortedOff.map((day) => (
+            <button
+              key={day}
+              type="button"
+              disabled={readOnly}
+              onClick={() => toggleDay(day)}
+              className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:hover:bg-amber-50 cursor-pointer disabled:cursor-default"
+              title={readOnly ? undefined : "Bỏ ngày nghỉ"}
+            >
+              {viDate(day)}
+              {!readOnly && <span aria-hidden>×</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CheckboxGroup({
@@ -247,17 +403,68 @@ function ProjectTheoreticalProgressTab({
 function AllTheoreticalProgressTable({
   rows,
   loading,
+  importing,
+  onDownloadTemplate,
+  onUploadExcel,
+  onExportExcel,
 }: {
   rows: ReturnType<typeof flattenTheoreticalProgress>;
   loading: boolean;
+  importing: boolean;
+  onDownloadTemplate: () => void;
+  onUploadExcel: (file: File | null) => void;
+  onExportExcel: () => void;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
   return (
     <section className="mt-6 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
       <div className="border-b border-slate-200 px-4 sm:px-5 py-4">
-        <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Tiến độ lý thuyết</h2>
-        <p className="mt-1 text-xs sm:text-sm text-slate-500">
-          Tự động chia tổng mối hàn cho từng ngày trong thời gian dự án
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              Tiến độ lý thuyết
+            </h2>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+              Số mối hàn dự kiến theo dự án theo ngày — tải mẫu Excel hoặc nhập file để cập nhật
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onDownloadTemplate}
+              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Tải mẫu Excel
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                onUploadExcel(e.target.files?.[0] ?? null);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              disabled={importing}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex h-9 items-center rounded-lg border border-[#0047AB] bg-white px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-50 cursor-pointer"
+            >
+              {importing ? "Đang nhập…" : "Tải Excel lên"}
+            </button>
+            <button
+              type="button"
+              disabled={!rows.length}
+              onClick={onExportExcel}
+              className="inline-flex h-9 items-center rounded-lg border border-emerald-600 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+            >
+              Xuất Excel ({rows.length})
+            </button>
+          </div>
+        </div>
       </div>
       <div className="table-scroll overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
@@ -288,7 +495,7 @@ function AllTheoreticalProgressTable({
             ) : (
               <tr>
                 <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
-                  Chưa có kế hoạch. Mở dự án và nhập tổng mối hàn cùng khoảng thời gian để tự động tạo.
+                  Chưa có kế hoạch. Tải mẫu Excel hoặc mở dự án để tạo tiến độ theo ngày.
                 </td>
               </tr>
             )}
@@ -331,16 +538,23 @@ function ProjectInfoFields({
     const next = { ...form, ...patch };
     next.staffCount = next.personnelIds.length;
     next.machineCount = next.machineTypes.length;
+    next.offDays = clampOffDaysToRange(
+      next.offDays ?? [],
+      next.startDate,
+      next.endDate,
+    );
     next.theoreticalProgress = buildDailyWeldPlan(
       next.plannedWeldCount,
       next.startDate,
       next.endDate,
+      next.offDays,
     );
     setForm(next);
   }
 
   const durationDays = projectDurationDays(form.startDate, form.endDate);
-  const averagePerDay = durationDays > 0 ? form.plannedWeldCount / durationDays : 0;
+  const workingDays = projectWorkingDays(form.startDate, form.endDate, form.offDays ?? []);
+  const averagePerDay = workingDays > 0 ? form.plannedWeldCount / workingDays : 0;
   const managerSuggestions = useMemo(() => {
     const query = form.manager.trim().toLocaleLowerCase("vi");
     return personnelOptions
@@ -449,6 +663,14 @@ function ProjectInfoFields({
         </label>
       </div>
 
+      <OffDaysCalendar
+        startDate={form.startDate}
+        endDate={form.endDate}
+        offDays={form.offDays ?? []}
+        onChange={(offDays) => updateForm({ offDays })}
+        readOnly={readOnly}
+      />
+
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
         Tổng mối hàn dự tính
         <input
@@ -462,19 +684,27 @@ function ProjectInfoFields({
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-3.5">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Số ngày thực hiện</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng ngày</div>
           <div className="mt-1 font-mono text-xl font-bold text-slate-900">{durationDays}</div>
         </div>
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bình quân/ngày</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Ngày làm việc</div>
+          <div className="mt-1 font-mono text-xl font-bold text-slate-900">{workingDays}</div>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bình quân/ngày LV</div>
           <div className="mt-1 font-mono text-xl font-bold text-[#0047AB]">
             {averagePerDay.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}
           </div>
         </div>
-        <p className="col-span-2 text-xs text-slate-600">
-          Khi lưu, hệ thống tự chia {form.plannedWeldCount.toLocaleString("vi-VN")} mối cho {durationDays} ngày; phần dư được cộng từ ngày đầu.
+        <p className="col-span-2 sm:col-span-3 text-xs text-slate-600">
+          Khi lưu, hệ thống chia {form.plannedWeldCount.toLocaleString("vi-VN")} mối cho {workingDays} ngày làm việc
+          {(form.offDays?.length ?? 0) > 0
+            ? ` (bỏ ${(form.offDays ?? []).length} ngày nghỉ)`
+            : ""}
+          ; phần dư được cộng từ ngày làm việc đầu.
         </p>
       </div>
 
@@ -1110,6 +1340,7 @@ function ProjectModal({
       machineTypes: project.machineTypes ?? [],
       weldTypes: project.weldTypes ?? [],
       railTypes: project.railTypes ?? [],
+      offDays: clampOffDaysToRange(project.offDays ?? [], project.startDate, project.endDate),
     });
     setPersonnelRows(project.projectPersonnel ?? getProjectPersonnel(project.id));
     setWorkRows(project.projectWelds ?? getProjectWelds(project.id));
@@ -1289,10 +1520,12 @@ function ProjectModal({
                   plant: "",
                   staffCount: form.personnelIds.length,
                   machineCount: form.machineTypes.length,
+                  offDays: clampOffDaysToRange(form.offDays ?? [], form.startDate, form.endDate),
                   theoreticalProgress: buildDailyWeldPlan(
                     form.plannedWeldCount,
                     form.startDate,
                     form.endDate,
+                    form.offDays ?? [],
                   ),
                 });
               }}
@@ -1339,6 +1572,7 @@ export default function ProjectManagement() {
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
   const [personnelOptions, setPersonnelOptions] = useState<PersonnelCertificateRow[]>([]);
   const [machineOptions, setMachineOptions] = useState<Machine[]>([]);
+  const [importingExcel, setImportingExcel] = useState(false);
   const railOptions = useCatalogOptions("Loại ray");
   const weldOptions = useCatalogOptions("Loại mối hàn", "name");
 
@@ -1443,6 +1677,7 @@ export default function ProjectManagement() {
           machineTypes: updated.machineTypes,
           weldTypes: updated.weldTypes,
           railTypes: updated.railTypes,
+          offDays: updated.offDays ?? [],
         });
         if (saveError) {
           window.alert(`Không lưu được: ${saveError}`);
@@ -1461,6 +1696,7 @@ export default function ProjectManagement() {
                     machineTypes: updated.machineTypes,
                     weldTypes: updated.weldTypes,
                     railTypes: updated.railTypes ?? [],
+                    offDays: updated.offDays ?? [],
                     staffCount: updated.staffCount,
                     machineCount: updated.machineCount,
                   }
@@ -1492,6 +1728,7 @@ export default function ProjectManagement() {
           machineTypes: project.machineTypes,
           weldTypes: project.weldTypes,
           railTypes: project.railTypes,
+          offDays: project.offDays ?? [],
         });
         if (createError) {
           window.alert(`Không thêm được: ${createError}`);
@@ -1503,10 +1740,12 @@ export default function ProjectManagement() {
               ...created,
               ...project,
               id: created.id,
+              offDays: project.offDays ?? [],
               theoreticalProgress: buildDailyWeldPlan(
                 project.plannedWeldCount,
                 project.startDate,
                 project.endDate,
+                project.offDays ?? [],
               ),
             },
             ...prev,
@@ -1518,10 +1757,12 @@ export default function ProjectManagement() {
         setProjects((prev) => [{
           ...project,
           id,
+          offDays: project.offDays ?? [],
           theoreticalProgress: buildDailyWeldPlan(
             project.plannedWeldCount,
             project.startDate,
             project.endDate,
+            project.offDays ?? [],
           ),
         }, ...prev]);
       }
@@ -1543,6 +1784,105 @@ export default function ProjectManagement() {
       prev.map((p) => (p.id === projectId ? { ...p, projectWelds: rows } : p)),
     );
     setModal(null);
+  }
+
+  function resolveProjectForExcelKey(key: string): Project | undefined {
+    const normalized = key.trim().toLocaleLowerCase("vi");
+    return list.find(
+      (p) =>
+        (p.maDuAn || "").trim().toLocaleLowerCase("vi") === normalized ||
+        p.name.trim().toLocaleLowerCase("vi") === normalized,
+    );
+  }
+
+  async function handleUploadTheoreticalExcel(file: File | null) {
+    if (!file) return;
+    setImportingExcel(true);
+    try {
+      const parsed = await parseTheoreticalProgressExcel(file);
+      if (!parsed.rows.length) {
+        window.alert(
+          parsed.errors.length
+            ? parsed.errors.slice(0, 8).join("\n")
+            : "File không có dòng dữ liệu hợp lệ.",
+        );
+        return;
+      }
+
+      const grouped = groupTheoreticalProgressByProject(parsed.rows);
+      let updated = 0;
+      const missing: string[] = [];
+      const saveErrors: string[] = [];
+
+      for (const [key, progress] of grouped) {
+        const project = resolveProjectForExcelKey(key);
+        if (!project) {
+          missing.push(key);
+          continue;
+        }
+
+        const tong = progress.reduce((sum, row) => sum + row.so_moi_han, 0);
+        const startDate = progress[0]?.ngay || project.startDate;
+        const endDate = progress.at(-1)?.ngay || project.endDate;
+
+        if (source === "supabase") {
+          const { error: saveError } = await saveTheoreticalProgress(project.id, progress);
+          if (saveError) {
+            saveErrors.push(`${project.name}: ${saveError}`);
+            continue;
+          }
+        }
+
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === project.id
+              ? {
+                  ...p,
+                  theoreticalProgress: progress,
+                  plannedWeldCount: tong,
+                  startDate,
+                  endDate,
+                }
+              : p,
+          ),
+        );
+        updated += 1;
+      }
+
+      if (source === "supabase" && updated > 0) {
+        await reload();
+      }
+
+      const parts = [`Đã cập nhật ${updated} dự án từ Excel (${file.name}).`];
+      if (parsed.errors.length) {
+        parts.push(`Cảnh báo dòng: ${parsed.errors.slice(0, 5).join("; ")}`);
+      }
+      if (missing.length) {
+        parts.push(`Không khớp dự án: ${missing.slice(0, 8).join(", ")}`);
+      }
+      if (saveErrors.length) {
+        parts.push(saveErrors.slice(0, 5).join("; "));
+      }
+      window.alert(parts.join("\n"));
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không đọc được file Excel");
+    } finally {
+      setImportingExcel(false);
+    }
+  }
+
+  function handleExportTheoreticalExcel() {
+    exportTheoreticalProgressToExcel(
+      progressRows.map((row) => {
+        const project = list.find((p) => p.id === row.du_an_id);
+        return {
+          ngay: row.ngay,
+          du_an: row.du_an,
+          so_moi_han: row.so_moi_han,
+          ma_du_an: project?.maDuAn || "",
+        };
+      }),
+    );
   }
 
   return (
@@ -1793,7 +2133,14 @@ export default function ProjectManagement() {
         </div>
       </div>
 
-      <AllTheoreticalProgressTable rows={progressRows} loading={loading} />
+      <AllTheoreticalProgressTable
+        rows={progressRows}
+        loading={loading}
+        importing={importingExcel}
+        onDownloadTemplate={() => downloadTheoreticalProgressExcelTemplate()}
+        onUploadExcel={(file) => void handleUploadTheoreticalExcel(file)}
+        onExportExcel={handleExportTheoreticalExcel}
+      />
 
       {modal && (
         <ProjectModal

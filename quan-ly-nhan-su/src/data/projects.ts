@@ -23,6 +23,8 @@ export type Project = {
   machineTypes: string[];
   weldTypes: string[];
   railTypes: string[];
+  /** Ngày nghỉ trong khoảng dự án (ISO yyyy-mm-dd). */
+  offDays?: string[];
   /** Tiến độ lý thuyết theo ngày — lưu JSONB trên Supabase (du_an.tien_do_ly_thuyet). */
   theoreticalProgress?: TheoreticalProgressRow[];
   /** Nhân sự gán cho dự án (tab con). */

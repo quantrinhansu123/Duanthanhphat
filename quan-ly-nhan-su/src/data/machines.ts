@@ -2,7 +2,59 @@ export type EquipmentAsset = {
   url: string;
   publicId?: string;
   name?: string;
+  resourceType?: "image" | "video" | "raw";
+  mimeType?: string;
 };
+
+export type MachineDocumentKind = "manual" | "hydraulic" | "electrical" | "control";
+
+export type MachineTechnicalDocs = Record<MachineDocumentKind, EquipmentAsset[]>;
+
+export const MACHINE_DOC_LABELS: Record<MachineDocumentKind, string> = {
+  manual: "Hồ sơ hướng dẫn máy",
+  hydraulic: "Sơ đồ thuỷ lực",
+  electrical: "Sơ đồ điện",
+  control: "Sơ đồ điều khiển",
+};
+
+export const MACHINE_DOC_KINDS = Object.keys(MACHINE_DOC_LABELS) as MachineDocumentKind[];
+
+export function emptyTechnicalDocs(): MachineTechnicalDocs {
+  return {
+    manual: [],
+    hydraulic: [],
+    electrical: [],
+    control: [],
+  };
+}
+
+export function normalizeTechnicalDocs(value: unknown): MachineTechnicalDocs {
+  const empty = emptyTechnicalDocs();
+  if (!value || typeof value !== "object") return empty;
+  const raw = value as Record<string, unknown>;
+  for (const kind of MACHINE_DOC_KINDS) {
+    const list = raw[kind];
+    if (!Array.isArray(list)) continue;
+    empty[kind] = list.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const row = item as Record<string, unknown>;
+      const url = String(row.url ?? row.secureUrl ?? row.secure_url ?? "").trim();
+      if (!url) return [];
+      const resourceType = String(row.resourceType ?? row.resource_type ?? "");
+      return [{
+        url,
+        publicId: row.publicId ? String(row.publicId) : row.public_id ? String(row.public_id) : undefined,
+        name: row.name ? String(row.name) : undefined,
+        resourceType:
+          resourceType === "image" || resourceType === "video" || resourceType === "raw"
+            ? resourceType
+            : undefined,
+        mimeType: row.mimeType ? String(row.mimeType) : undefined,
+      }];
+    });
+  }
+  return empty;
+}
 
 export type WeldingUnitSpecs = {
   applicationWork?: string;
@@ -98,6 +150,8 @@ export type Machine = {
   specs?: MachineSpecs;
   weldingUnit?: WeldingUnitDetail;
   transportUnit?: TransportUnitDetail;
+  /** Hồ sơ hướng dẫn, sơ đồ thuỷ lực / điện / điều khiển */
+  technicalDocs?: MachineTechnicalDocs;
 };
 
 export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;

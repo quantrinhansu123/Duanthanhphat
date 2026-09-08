@@ -754,6 +754,7 @@ declare
   v_dao_tao_id uuid := p_dao_tao_id;
   v_hv record;
   v_nhom record;
+  v_has_nhom boolean := false;
   v_chung_chi_id uuid;
   v_old_chung_chi_id uuid;
 begin
@@ -813,10 +814,8 @@ begin
 
   -- Lấy thông tin nhóm chứng chỉ nếu có gắn với khóa học
   if p_nhom_chung_chi_id is not null then
-    select * into v_nhom from public.chung_chi_nhom where id = p_nhom_chung_chi_id;
-    if not found then
-      raise exception 'Không tìm thấy nhóm chứng chỉ %', p_nhom_chung_chi_id;
-    end if;
+    select * into strict v_nhom from public.chung_chi_nhom where id = p_nhom_chung_chi_id;
+    v_has_nhom := true;
   end if;
 
   -- Thu hồi chứng chỉ do chính khóa này cấp cho học viên đã bị bỏ khỏi danh sách.
@@ -870,7 +869,8 @@ begin
       end if;
 
       -- Nếu kết quả = "Đạt" và khóa học có gắn nhóm chứng chỉ -> Tự động cấp chứng chỉ
-      if v_hv.ket_qua = 'Đạt' and p_nhom_chung_chi_id is not null and v_nhom.id is not null then
+      -- Dùng v_has_nhom (không đọc v_nhom.id khi record chưa gán — lỗi PL/pgSQL)
+      if v_hv.ket_qua = 'Đạt' and v_has_nhom then
         -- Tìm xem học viên đã có chứng chỉ của nhóm này chưa
         select id into v_chung_chi_id
         from public.chung_chi

@@ -61,6 +61,10 @@ function TrainingFormModal({
     description: initial?.description ?? "",
     topics: initial?.topics.join("\n") ?? "",
     certGroupId: initial?.certificateGroupId ?? "",
+    manufacturerHours: initial?.manufacturerHours != null ? String(initial.manufacturerHours) : "",
+    selfTrainingHours: initial?.selfTrainingHours != null ? String(initial.selfTrainingHours) : "",
+    participantsCount:
+      initial?.participantsCount != null ? String(initial.participantsCount) : "",
   });
 
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnail ?? DEFAULT_THUMBNAIL);
@@ -164,6 +168,9 @@ function TrainingFormModal({
       cloudinaryPublicId,
       certificateGroupId: form.certGroupId || undefined,
       topics: topicsArray,
+      manufacturerHours: Number(form.manufacturerHours) || 0,
+      selfTrainingHours: Number(form.selfTrainingHours) || 0,
+      participantsCount: Math.round(Number(form.participantsCount) || 0),
       attendees: attendeeList.map((a) => ({
         employeeId: a.id,
         result: a.result,
@@ -343,6 +350,51 @@ function TrainingFormModal({
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
                 placeholder="VD: Phòng đào tạo – Nhà máy Hà Nội"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Tổng giờ đào tạo NSX
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.5"
+                className={fieldClass}
+                value={form.manufacturerHours}
+                onChange={(e) => set("manufacturerHours", e.target.value)}
+                placeholder="VD: 112"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Tổng giờ tự đào tạo
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.5"
+                className={fieldClass}
+                value={form.selfTrainingHours}
+                onChange={(e) => set("selfTrainingHours", e.target.value)}
+                placeholder="VD: 64"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Tổng người tham gia
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className={fieldClass}
+                value={form.participantsCount}
+                onChange={(e) => set("participantsCount", e.target.value)}
+                placeholder="VD: 12"
               />
             </div>
           </div>
@@ -611,13 +663,28 @@ function TrainingDetailModal({
               Kết quả: {course.result}
             </span>
             <span className="inline-flex items-center rounded-full bg-blue-50 text-[#0047AB] border border-blue-200 px-2.5 py-0.5 text-xs font-semibold">
-              {course.participantsCount} học viên
+              {course.participantsCount} người tham gia
             </span>
             {course.certificateGroupName && (
               <span className="inline-flex items-center rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
                 Cấp: {course.certificateGroupName}
               </span>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ đào tạo NSX</div>
+              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.manufacturerHours} giờ</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ tự đào tạo</div>
+              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.selfTrainingHours} giờ</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Người tham gia</div>
+              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.participantsCount}</div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
@@ -917,9 +984,23 @@ export default function TrainingList() {
                   {c.description || "Chưa có mô tả chi tiết khóa học."}
                 </p>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span>HLV: <strong className="text-slate-700">{c.trainer}</strong></span>
-                  <span><strong className="text-slate-900 font-mono">{c.participantsCount}</strong> học viên</span>
+                <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs text-slate-500">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>HLV: <strong className="text-slate-700">{c.trainer}</strong></span>
+                    <span>
+                      <strong className="text-slate-900 font-mono">{c.participantsCount}</strong> người tham gia
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-snug">
+                    <div>
+                      <div className="text-slate-400 font-semibold uppercase tracking-wide">Giờ NSX</div>
+                      <div className="mt-0.5 font-mono font-semibold text-slate-800">{c.manufacturerHours} giờ</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 font-semibold uppercase tracking-wide">Tự đào tạo</div>
+                      <div className="mt-0.5 font-mono font-semibold text-slate-800">{c.selfTrainingHours} giờ</div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-2">
@@ -937,6 +1018,14 @@ export default function TrainingList() {
                     title="Chỉnh sửa"
                   >
                     <PencilSimple size={15} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteCourse(c)}
+                    className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-colors cursor-pointer"
+                    title="Xóa khóa đào tạo"
+                  >
+                    <Trash size={15} weight="bold" />
                   </button>
                 </div>
               </div>

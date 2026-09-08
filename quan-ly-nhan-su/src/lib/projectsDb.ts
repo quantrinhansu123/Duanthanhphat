@@ -72,37 +72,79 @@ function toIsoDateLocal(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-/** Chia đều tổng mối hàn theo số ngày; phần dư được cộng từ ngày đầu tiên. */
+export function normalizeOffDays(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(
+    raw
+      .map((item) => (typeof item === "string" ? item.slice(0, 10) : ""))
+      .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item)),
+  )].sort();
+}
+
+export function clampOffDaysToRange(offDays: string[], startDate: string, endDate: string): string[] {
+  if (!startDate || !endDate) return normalizeOffDays(offDays);
+  return normalizeOffDays(offDays).filter((day) => day >= startDate && day <= endDate);
+}
+
+export function projectWorkingDays(
+  startDate: string,
+  endDate: string,
+  offDays: string[] = [],
+): number {
+  const total = projectDurationDays(startDate, endDate);
+  if (total <= 0) return 0;
+  const offInRange = clampOffDaysToRange(offDays, startDate, endDate).length;
+  return Math.max(0, total - offInRange);
+}
+
+/** Chia đều tổng mối hàn theo ngày làm việc; ngày nghỉ = 0. Phần dư cộng từ ngày làm việc đầu. */
 export function buildDailyWeldPlan(
   totalWelds: number,
   startDate: string,
   endDate: string,
+  offDays: string[] = [],
 ): TheoreticalProgressRow[] {
   const days = projectDurationDays(startDate, endDate);
   const total = Math.max(0, Math.round(totalWelds || 0));
-  if (days <= 0 || total <= 0) return [];
+  if (days <= 0) return [];
 
-  const base = Math.floor(total / days);
-  const remainder = total % days;
+  const offSet = new Set(clampOffDaysToRange(offDays, startDate, endDate));
   const start = new Date(`${startDate}T00:00:00`);
-  return Array.from({ length: days }, (_, index) => {
+  const allDates = Array.from({ length: days }, (_, index) => {
     const date = new Date(start);
     date.setDate(date.getDate() + index);
-    return {
-      ngay: toIsoDateLocal(date),
-      so_moi_han: base + (index < remainder ? 1 : 0),
-    };
+    return toIsoDateLocal(date);
+  });
+  const workDates = allDates.filter((ngay) => !offSet.has(ngay));
+
+  if (workDates.length === 0 || total <= 0) {
+    return allDates.map((ngay) => ({ ngay, so_moi_han: 0 }));
+  }
+
+  const base = Math.floor(total / workDates.length);
+  const remainder = total % workDates.length;
+  let workIndex = 0;
+  return allDates.map((ngay) => {
+    if (offSet.has(ngay)) return { ngay, so_moi_han: 0 };
+    const so_moi_han = base + (workIndex < remainder ? 1 : 0);
+    workIndex += 1;
+    return { ngay, so_moi_han };
   });
 }
 
 function hydrateProjectPlan(project: Project): Project {
-  if (project.theoreticalProgress?.length) return project;
+  const offDays = clampOffDaysToRange(project.offDays ?? [], project.startDate, project.endDate);
+  if (project.theoreticalProgress?.length) {
+    return { ...project, offDays };
+  }
   return {
     ...project,
+    offDays,
     theoreticalProgress: buildDailyWeldPlan(
       project.plannedWeldCount,
       project.startDate,
       project.endDate,
+      offDays,
     ),
   };
 }
@@ -129,6 +171,7 @@ export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: Proj
   const fallbackPersonnel = row.nguoi_phu_trach ? [row.nguoi_phu_trach] : [];
   const personnelIds = metadata?.personnelIds?.length ? metadata.personnelIds : fallbackPersonnel;
   const railTypes = metadata?.railTypes?.length ? metadata.railTypes : fallbackRails;
+  const offDays = clampOffDaysToRange(metadata?.offDays ?? [], startDate, endDate);
 
   return {
     id: row.id,
@@ -147,10 +190,11 @@ export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: Proj
     machineTypes: metadata?.machineTypes ?? [],
     weldTypes: metadata?.weldTypes ?? [],
     railTypes,
+    offDays,
     theoreticalProgress:
       existingProgress.length > 0
         ? existingProgress
-        : buildDailyWeldPlan(plannedWeldCount, startDate, endDate),
+        : buildDailyWeldPlan(plannedWeldCount, startDate, endDate, offDays),
     maDuAn: row.ma_du_an ?? undefined,
   };
 }
@@ -253,10 +297,31 @@ export async function saveTheoreticalProgress(
   }
 
   const normalized = normalizeTheoreticalProgress(rows);
+  const tong = normalized.reduce((sum, row) => sum + row.so_moi_han, 0);
+  const ngayBatDau = normalized[0]?.ngay;
+  const ngayKetThuc = normalized.at(-1)?.ngay;
   const supabase = createClient();
+
+  // Cập nhật khung ngày + tổng trước (trigger có thể tạo kế hoạch tạm).
+  if (ngayBatDau && ngayKetThuc) {
+    const { error: metaError } = await supabase
+      .from("du_an")
+      .update({
+        ngay_bat_dau: ngayBatDau,
+        ngay_ket_thuc: ngayKetThuc,
+        tong_moi_han_du_kien: tong,
+      })
+      .eq("id", projectId);
+    if (metaError) return { error: metaError.message };
+  }
+
+  // Ghi đè đúng tiến độ từ Excel / nguồn ngoài (không đụng trigger chia đều).
   const { error } = await supabase
     .from("du_an")
-    .update({ tien_do_ly_thuyet: normalized })
+    .update({
+      tien_do_ly_thuyet: normalized,
+      tong_moi_han_du_kien: tong,
+    })
     .eq("id", projectId);
 
   if (error) return { error: error.message };
@@ -278,6 +343,7 @@ export async function insertDuAn(payload: {
   machineTypes?: string[];
   weldTypes?: string[];
   railTypes?: string[];
+  offDays?: string[];
 }): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
     return { error: "Chưa cấu hình Supabase env" };
@@ -286,6 +352,7 @@ export async function insertDuAn(payload: {
   const name = payload.name.trim();
   if (!name) return { error: "Vui lòng nhập tên dự án" };
 
+  const offDays = clampOffDaysToRange(payload.offDays ?? [], payload.startDate, payload.endDate);
   const supabase = createClient();
   const { data, error } = await supabase
     .from("du_an")
@@ -301,6 +368,7 @@ export async function insertDuAn(payload: {
         payload.plannedWeldCount,
         payload.startDate,
         payload.endDate,
+        offDays,
       ),
     })
     .select(DU_AN_COLUMNS)
@@ -313,6 +381,7 @@ export async function insertDuAn(payload: {
     machineTypes: payload.machineTypes ?? [],
     weldTypes: payload.weldTypes ?? [],
     railTypes: payload.railTypes ?? [],
+    offDays,
   };
   try {
     await saveProjectMetadata(String(data.id), metadata);
@@ -340,6 +409,7 @@ export async function updateDuAn(
     machineTypes?: string[];
     weldTypes?: string[];
     railTypes?: string[];
+    offDays?: string[];
   },
 ): Promise<{ project?: Project; error?: string }> {
   if (!hasSupabaseEnv()) {
@@ -356,6 +426,11 @@ export async function updateDuAn(
     body.tong_moi_han_du_kien = Math.max(0, Math.round(patch.plannedWeldCount));
   }
 
+  const offDays =
+    patch.startDate !== undefined && patch.endDate !== undefined
+      ? clampOffDaysToRange(patch.offDays ?? [], patch.startDate, patch.endDate)
+      : normalizeOffDays(patch.offDays);
+
   if (
     patch.startDate !== undefined &&
     patch.endDate !== undefined &&
@@ -365,6 +440,7 @@ export async function updateDuAn(
       patch.plannedWeldCount,
       patch.startDate,
       patch.endDate,
+      offDays,
     );
   }
 
@@ -396,6 +472,7 @@ export async function updateDuAn(
     machineTypes: patch.machineTypes ?? [],
     weldTypes: patch.weldTypes ?? [],
     railTypes: patch.railTypes ?? [],
+    offDays,
   };
   try {
     await saveProjectMetadata(projectId, metadata);

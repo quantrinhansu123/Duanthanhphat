@@ -1978,7 +1978,6 @@ export default function MachineList() {
   const [dataError, setDataError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
-  const [plant, setPlant] = useState("Tất cả nhà máy");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Machine | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("welding");
@@ -2034,11 +2033,6 @@ export default function MachineList() {
     };
   }, []);
 
-  const plants = useMemo(
-    () => ["Tất cả nhà máy", ...Array.from(new Set(list.map((m) => m.plant)))],
-    [list],
-  );
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list.filter((m) => {
@@ -2050,10 +2044,9 @@ export default function MachineList() {
         m.location.toLowerCase().includes(q) ||
         (m.transportUnit?.plateNumber && m.transportUnit.plateNumber.toLowerCase().includes(q));
       const matchStatus = status === "Tất cả trạng thái" || m.status === status;
-      const matchPlant = plant === "Tất cả nhà máy" || m.plant === plant;
-      return matchQ && matchStatus && matchPlant;
+      return matchQ && matchStatus;
     });
-  }, [list, query, status, plant]);
+  }, [list, query, status]);
 
   const running = list.filter((m) => m.status === "Đang làm việc").length;
   const ready = list.filter((m) => m.status === "Sẵn sàng").length;
@@ -2159,26 +2152,15 @@ export default function MachineList() {
             className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
         </div>
-        <div className="grid grid-cols-2 sm:flex items-center gap-2">
-          <select
-            value={plant}
-            onChange={(e) => setPlant(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
-            {plants.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
-            {["Tất cả trạng thái", ...statusOptions].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+        >
+          {["Tất cả trạng thái", ...statusOptions].map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={() => setFormModal({ machine: emptyMachine(), mode: "create" })}
