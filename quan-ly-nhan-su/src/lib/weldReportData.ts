@@ -77,6 +77,8 @@ export type WeldSummary = {
   total: number;
   errors: number;
   passed: number;
+  /** Mối đang chờ kết quả thí nghiệm — chưa tính là đạt hay lỗi. */
+  pending: number;
   fbw: number;
   atw: number;
 };
@@ -1121,6 +1123,17 @@ export function machineForRow(row: WeldReportRow): string {
   return row.ma_may?.trim() || "Chưa gán máy";
 }
 
+/**
+ * Ẩn mã tạm "__SYNC_<id>" khỏi hiển thị. Các mã này sinh ra khi chức năng
+ * "Đồng bộ mã mối hàn" chạy Phase 1 nhưng Phase 2 chưa hoàn tất; bản ghi vẫn
+ * hợp lệ, chỉ là chưa được cấp mã chuẩn.
+ */
+export function displayWeldCode(code: string | null | undefined): string {
+  const value = (code ?? "").trim();
+  if (!value || value.startsWith("__SYNC_")) return "(chưa cấp mã)";
+  return value;
+}
+
 export function filterWeldReportRows(rows: WeldReportRow[], filters: WeldReportFilters) {
   return rows.filter((row, index) => {
     const performedDate = getJournalRowDateIso(row, index);
@@ -1148,13 +1161,17 @@ export function summarizeWeldRows(rows: WeldReportRow[]): WeldSummary {
     (result, row) => {
       result.total += row.so_luong_thuc_hien;
       result.errors += row.so_luong_loi;
+      // Mối đang "Chờ thí nghiệm" chưa có kết quả → không được coi là đạt.
+      if (resolveWeldTestStatus(row) === "Chờ thí nghiệm") {
+        result.pending += row.so_luong_thuc_hien;
+      }
       if (row.cong_nghe_han === "FBW") result.fbw += row.so_luong_thuc_hien;
       else result.atw += row.so_luong_thuc_hien;
       return result;
     },
-    { total: 0, errors: 0, passed: 0, fbw: 0, atw: 0 },
+    { total: 0, errors: 0, passed: 0, pending: 0, fbw: 0, atw: 0 },
   );
-  summary.passed = summary.total - summary.errors;
+  summary.passed = Math.max(0, summary.total - summary.errors - summary.pending);
   return summary;
 }
 

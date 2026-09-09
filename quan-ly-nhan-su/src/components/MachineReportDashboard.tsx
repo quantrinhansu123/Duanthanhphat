@@ -132,6 +132,8 @@ export default function MachineReportDashboard() {
       code: group.name,
       total: group.total,
       errors: group.errors,
+      pending: group.pending,
+      tested: group.passed + group.errors,
     }));
   }, [selectedRows]);
   const machineSummaryByCode = useMemo(
@@ -149,8 +151,9 @@ export default function MachineReportDashboard() {
       const code = machine.code;
       const stat = machineStatsByCode.get(code);
       const report = machineSummaryByCode.get(code);
-      const errorRate = stat?.total
-        ? ((stat.errors / stat.total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })
+      // Tỷ lệ lỗi trên số mối đã có kết quả thí nghiệm (bỏ mối đang chờ KQ).
+      const errorRate = stat?.tested
+        ? ((stat.errors / stat.tested) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })
         : "0";
       const status = normalizeMachineStatus(report?.status ?? machine.status ?? "Sẵn sàng");
       const operatingHours = report?.operatingHours ?? machine.operatingHours ?? 0;

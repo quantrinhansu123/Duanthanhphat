@@ -112,25 +112,37 @@ export default function PersonnelReportDashboard() {
       name: welder.name,
       photo: `https://randomuser.me/api/portraits/men/${PORTRAIT_IDS[index % PORTRAIT_IDS.length]}.jpg`,
       meta: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machine} · ${source.ma_nhan_su}`,
-      status: welder.errors > 0 ? "Cần theo dõi" : "Đạt chuẩn",
-      statusBg: welder.errors > 0
-        ? "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]"
-        : "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
+      status:
+        welder.errors > 0
+          ? "Cần theo dõi"
+          : welder.passed === 0 && welder.pending > 0
+            ? "Chờ kết quả"
+            : "Đạt chuẩn",
+      statusBg:
+        welder.errors > 0
+          ? "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]"
+          : welder.passed === 0 && welder.pending > 0
+            ? "bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]"
+            : "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
       shift: ["Ca sáng", "Ca chiều", "Ca đêm"][index % 3],
       borderColor: welder.errors > 0 ? "ring-[#f59e0b]" : "ring-[#16a34a]",
     };
   });
   const welderProductivity = welders.map((welder, index) => {
     const source = welder.rows[0];
-    const passRate = welder.total > 0 ? ((welder.passed / welder.total) * 100) : 0;
+    // Tỷ lệ đạt tính trên số mối ĐÃ có kết quả (đạt + lỗi), bỏ mối đang chờ.
+    const tested = welder.passed + welder.errors;
+    const passRate = tested > 0 ? ((welder.passed / tested) * 100) : 0;
     const todayVolume = latestDateVolumeByWelder.get(welder.name) ?? 0;
     return {
       name: welder.name,
       teamMachine: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machineForRow(source)}`,
       welds: welder.total.toLocaleString("vi-VN"),
       today: todayVolume.toLocaleString("vi-VN"),
-      passRate: `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`,
-      rateColor: passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
+      passRate: tested > 0
+        ? `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
+        : "Chờ KQ",
+      rateColor: tested === 0 ? "text-slate-400" : passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
       shift: ["Sáng", "Chiều", "Đêm"][index % 3],
     };
   });

@@ -18,6 +18,7 @@ export interface SupabaseWeldRow {
   hach_toan?: string | null;
   moi_han_lien_ket?: string | null;
   ghi_chu?: string | null;
+  tinh_trang_thi_nghiem?: string | null;
   nhan_su?: { ho_ten?: string | null; ma_nhan_su?: string | null } | null;
   du_an?: { du_an?: string | null } | null;
   may?: { ma_may?: string | null } | null;
@@ -73,6 +74,10 @@ function parseResult(row: SupabaseWeldRow): WeldingHistoryRecord["result"] {
       return "Sửa chữa";
     }
     return "Không đạt";
+  }
+  // Chưa có kết quả thí nghiệm → không coi là đạt.
+  if (row.tinh_trang_thi_nghiem === "Chờ thí nghiệm" && !ghiChu.includes("Kết quả: Đạt")) {
+    return "Chờ thí nghiệm";
   }
   return "Đạt";
 }
@@ -152,6 +157,7 @@ type WeldingHistoryStatsRpcRow = {
   dat?: number | string | null;
   khong_dat?: number | string | null;
   sua_chua?: number | string | null;
+  cho_thi_nghiem?: number | string | null;
   thong_ke_hach_toan?: unknown;
 };
 
@@ -187,6 +193,8 @@ export interface WeldingHistoryStats {
   pass: number;
   fail: number;
   rework: number;
+  /** Mối đang chờ kết quả thí nghiệm — không tính là đạt. */
+  pending: number;
   accountingCounts: [string, number][];
 }
 
@@ -230,6 +238,7 @@ function filterInMemoryRecords(
   const pass = filtered.filter((r) => r.result === "Đạt").length;
   const fail = filtered.filter((r) => r.result === "Không đạt").length;
   const rework = filtered.filter((r) => r.result === "Sửa chữa").length;
+  const pending = filtered.filter((r) => r.result === "Chờ thí nghiệm").length;
 
   const acMap = new Map<string, number>();
   filtered.forEach((r) => {
@@ -247,8 +256,95 @@ function filterInMemoryRecords(
       pass,
       fail,
       rework,
+      pending,
       accountingCounts,
     },
+  };
+}
+
+/**
+ * Tính thống kê Đạt / Không đạt / Sửa chữa / Chờ thí nghiệm theo đúng bộ lọc.
+ * Ưu tiên RPC thong_ke_lich_su_moi_han; nếu RPC thiếu hoặc lỗi thì quét view.
+ * Dùng chung cho cả nhánh truy vấn chính lẫn nhánh fallback (không phụ thuộc
+ * cột created_at của view).
+ */
+async function computeViewStats(
+  supabase: ReturnType<typeof createClient>,
+  params: WeldingHistoryFilterParams,
+  searchTokens: string[],
+  total: number,
+): Promise<WeldingHistoryStats> {
+  const { data: statsData, error: statsError } = await supabase.rpc("thong_ke_lich_su_moi_han", {
+    p_date_from: params.dateFrom || null,
+    p_date_to: params.dateTo || null,
+    p_welder: params.welder && params.welder !== "Tất cả thợ hàn" ? params.welder : null,
+    p_result: params.result && params.result !== "Tất cả kết quả" ? params.result : null,
+    p_machines: params.machines?.length ? params.machines : null,
+    p_rails: params.rails?.length ? params.rails : null,
+    p_projects: params.projects?.length ? params.projects : null,
+    p_shifts: params.shifts?.length ? params.shifts : null,
+    p_accounting_codes: params.accountingCodes?.length ? params.accountingCodes : null,
+    p_query: params.query?.trim() || null,
+  });
+
+  if (!statsError && Array.isArray(statsData) && statsData.length > 0) {
+    const row = statsData[0] as WeldingHistoryStatsRpcRow;
+    return {
+      total: Number(row.tong ?? total),
+      pass: Number(row.dat ?? 0),
+      fail: Number(row.khong_dat ?? 0),
+      rework: Number(row.sua_chua ?? 0),
+      pending: Number(row.cho_thi_nghiem ?? 0),
+      accountingCounts: parseAccountingStats(row.thong_ke_hach_toan),
+    };
+  }
+
+  // RPC không dùng được → quét view theo trang.
+  let pass = 0;
+  let fail = 0;
+  let rework = 0;
+  let pending = 0;
+  const acMap = new Map<string, number>();
+  const statsPageSize = 1000;
+
+  for (let offset = 0; ; offset += statsPageSize) {
+    let allQuery = supabase
+      .from("v_lich_su_moi_han_chi_tiet")
+      .select("id, ket_qua, hach_toan, tim_kiem_khong_dau");
+    if (params.dateFrom) allQuery = allQuery.gte("ngay_thuc_hien", params.dateFrom);
+    if (params.dateTo) allQuery = allQuery.lte("ngay_thuc_hien", params.dateTo);
+    if (params.welder && params.welder !== "Tất cả thợ hàn") allQuery = allQuery.eq("ten_tho_han", params.welder);
+    if (params.result && params.result !== "Tất cả kết quả") allQuery = allQuery.eq("ket_qua", params.result);
+    if (params.machines?.length) allQuery = allQuery.in("ten_may", params.machines);
+    if (params.rails?.length) allQuery = allQuery.in("loai_ray", params.rails);
+    if (params.projects?.length) allQuery = allQuery.in("ten_du_an", params.projects);
+    if (params.shifts?.length) allQuery = allQuery.in("ca_han", params.shifts);
+    if (params.accountingCodes?.length) allQuery = allQuery.in("hach_toan", params.accountingCodes);
+    if (searchTokens.length > 0) {
+      searchTokens.forEach((tok) => {
+        allQuery = allQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
+      });
+    }
+    const { data: allStatsData, error: allStatsError } = await allQuery.range(offset, offset + statsPageSize - 1);
+    if (allStatsError) break;
+    const rows = allStatsData ?? [];
+    rows.forEach((row: { ket_qua?: string | null; hach_toan?: string | null }) => {
+      if (row.ket_qua === "Đạt") pass++;
+      else if (row.ket_qua === "Không đạt") fail++;
+      else if (row.ket_qua === "Sửa chữa") rework++;
+      else if (row.ket_qua === "Chờ thí nghiệm") pending++;
+      if (row.hach_toan) acMap.set(row.hach_toan, (acMap.get(row.hach_toan) ?? 0) + 1);
+    });
+    if (rows.length < statsPageSize) break;
+  }
+
+  return {
+    total,
+    pass,
+    fail,
+    rework,
+    pending,
+    accountingCounts: Array.from(acMap.entries()).sort((a, b) => b[1] - a[1]),
   };
 }
 
@@ -269,6 +365,7 @@ export async function loadWeldingHistoryPage(
         pass: 0,
         fail: 0,
         rework: 0,
+        pending: 0,
         accountingCounts: [],
       },
       source: "supabase",
@@ -335,16 +432,11 @@ export async function loadWeldingHistoryPage(
         const records = (legacyRes.data as unknown as ViewWeldHistoryRow[]).map((row, idx) =>
           mapViewRow(row, fromIndex + idx),
         );
+        const legacyTotal = legacyRes.count ?? legacyRes.data.length;
         return {
           records,
-          totalCount: legacyRes.count ?? legacyRes.data.length,
-          stats: {
-            total: legacyRes.count ?? legacyRes.data.length,
-            pass: 0,
-            fail: 0,
-            rework: 0,
-            accountingCounts: [],
-          },
+          totalCount: legacyTotal,
+          stats: await computeViewStats(supabase, params, searchTokens, legacyTotal),
           source: "supabase",
         };
       }
@@ -352,75 +444,7 @@ export async function loadWeldingHistoryPage(
 
     if (!pageError && pageData) {
       const total = totalCount ?? pageData.length;
-      const { data: statsData, error: statsError } = await supabase.rpc("thong_ke_lich_su_moi_han", {
-        p_date_from: params.dateFrom || null,
-        p_date_to: params.dateTo || null,
-        p_welder: params.welder && params.welder !== "Tất cả thợ hàn" ? params.welder : null,
-        p_result: params.result && params.result !== "Tất cả kết quả" ? params.result : null,
-        p_machines: params.machines?.length ? params.machines : null,
-        p_rails: params.rails?.length ? params.rails : null,
-        p_projects: params.projects?.length ? params.projects : null,
-        p_shifts: params.shifts?.length ? params.shifts : null,
-        p_accounting_codes: params.accountingCodes?.length ? params.accountingCodes : null,
-        p_query: params.query?.trim() || null,
-      });
-
-      let stats: WeldingHistoryStats | null = null;
-      if (!statsError && Array.isArray(statsData) && statsData.length > 0) {
-        const row = statsData[0] as WeldingHistoryStatsRpcRow;
-        stats = {
-          total: Number(row.tong ?? total),
-          pass: Number(row.dat ?? 0),
-          fail: Number(row.khong_dat ?? 0),
-          rework: Number(row.sua_chua ?? 0),
-          accountingCounts: parseAccountingStats(row.thong_ke_hach_toan),
-        };
-      }
-
-      if (!stats) {
-        let pass = 0;
-        let fail = 0;
-        let rework = 0;
-        const acMap = new Map<string, number>();
-        const statsPageSize = 1000;
-
-        for (let offset = 0; ; offset += statsPageSize) {
-          let allQuery = supabase
-            .from("v_lich_su_moi_han_chi_tiet")
-            .select("id, ket_qua, hach_toan, tim_kiem_khong_dau");
-          if (params.dateFrom) allQuery = allQuery.gte("ngay_thuc_hien", params.dateFrom);
-          if (params.dateTo) allQuery = allQuery.lte("ngay_thuc_hien", params.dateTo);
-          if (params.welder && params.welder !== "Tất cả thợ hàn") allQuery = allQuery.eq("ten_tho_han", params.welder);
-          if (params.result && params.result !== "Tất cả kết quả") allQuery = allQuery.eq("ket_qua", params.result);
-          if (params.machines?.length) allQuery = allQuery.in("ten_may", params.machines);
-          if (params.rails?.length) allQuery = allQuery.in("loai_ray", params.rails);
-          if (params.projects?.length) allQuery = allQuery.in("ten_du_an", params.projects);
-          if (params.shifts?.length) allQuery = allQuery.in("ca_han", params.shifts);
-          if (params.accountingCodes?.length) allQuery = allQuery.in("hach_toan", params.accountingCodes);
-          if (searchTokens.length > 0) {
-            searchTokens.forEach((tok) => {
-              allQuery = allQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
-            });
-          }
-          const { data: allStatsData, error: allStatsError } = await allQuery.range(offset, offset + statsPageSize - 1);
-          if (allStatsError) break;
-          const rows = allStatsData ?? [];
-          rows.forEach((row: { ket_qua?: string | null; hach_toan?: string | null }) => {
-            if (row.ket_qua === "Đạt") pass++;
-            else if (row.ket_qua === "Không đạt") fail++;
-            else if (row.ket_qua === "Sửa chữa") rework++;
-            if (row.hach_toan) acMap.set(row.hach_toan, (acMap.get(row.hach_toan) ?? 0) + 1);
-          });
-          if (rows.length < statsPageSize) break;
-        }
-        stats = {
-          total,
-          pass,
-          fail,
-          rework,
-          accountingCounts: Array.from(acMap.entries()).sort((a, b) => b[1] - a[1]),
-        };
-      }
+      const stats = await computeViewStats(supabase, params, searchTokens, total);
 
       const records = (pageData as unknown as ViewWeldHistoryRow[]).map((row, idx) =>
         mapViewRow(row, fromIndex + idx),
@@ -458,6 +482,7 @@ export async function loadWeldingHistoryPage(
         hach_toan,
         moi_han_lien_ket,
         ghi_chu,
+        tinh_trang_thi_nghiem,
         nhan_su:tho_han_id (ho_ten, ma_nhan_su),
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
@@ -488,6 +513,7 @@ export async function loadWeldingHistoryPage(
         pass: 0,
         fail: 0,
         rework: 0,
+        pending: 0,
         accountingCounts: [],
       },
       source: "supabase",
@@ -602,6 +628,7 @@ export async function exportAllFilteredWeldingHistory(
         hach_toan,
         moi_han_lien_ket,
         ghi_chu,
+        tinh_trang_thi_nghiem,
         nhan_su:tho_han_id (ho_ten, ma_nhan_su),
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
@@ -761,7 +788,14 @@ export async function saveWeldingHistoryRecord(
     }
 
     const isRepair = record.result === "Sửa chữa";
-    const errorCount = record.result === "Đạt" ? 0 : 1;
+    // Chỉ "Không đạt" / "Sửa chữa" là có lỗi; "Chờ thí nghiệm" chưa có kết quả nên không tính lỗi.
+    const errorCount = record.result === "Không đạt" || record.result === "Sửa chữa" ? 1 : 0;
+    const testStatus =
+      record.result === "Chờ thí nghiệm"
+        ? "Chờ thí nghiệm"
+        : record.result === "Đạt"
+          ? "Đạt"
+          : "Không đạt";
     const noteContent = `Ca: ${record.shift} | Hạng: ${record.rank} | Thợ: ${record.welderName} | Mối hàn: ${record.weldJoint} | Kết quả: ${record.result}`;
     const linkedJoint = isRepair ? (record.weldJoint.startsWith("SC-") ? record.weldJoint : `SC-${record.weldJoint}`) : null;
 
@@ -782,6 +816,7 @@ export async function saveWeldingHistoryRecord(
         cong_nghe_han: "FBW",
         so_luong_thuc_hien: 1,
         so_luong_loi: errorCount,
+        tinh_trang_thi_nghiem: testStatus,
         moi_han_lien_ket: linkedJoint,
         ghi_chu: noteContent,
         nguon_du_lieu: "lich-su-han",
@@ -820,6 +855,7 @@ export async function saveWeldingHistoryRecord(
           moi_han_lien_ket: linkedJoint,
           loai_ray: record.railType,
           so_luong_loi: errorCount,
+          tinh_trang_thi_nghiem: testStatus,
           ghi_chu: noteContent,
         };
         if (duAnId) updatePayload.du_an_id = duAnId;

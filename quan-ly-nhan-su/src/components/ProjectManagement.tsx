@@ -2154,7 +2154,7 @@ export default function ProjectManagement() {
                 <th className="px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
-                <th className="px-3.5 py-3 text-right">Tổng mối hàn</th>
+                <th className="px-3.5 py-3 text-right">Tổng mối hàn dự kiến</th>
                 <th className="px-3.5 py-3 text-right">Số ngày</th>
                 <th className="min-w-[190px] px-3.5 py-3">Thời gian dự án</th>
                 <th className="px-3.5 py-3">Trạng thái</th>

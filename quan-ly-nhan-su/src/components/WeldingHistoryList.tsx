@@ -36,9 +36,10 @@ const resultStyle: Record<WeldingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Không đạt": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
   "Sửa chữa": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
+  "Chờ thí nghiệm": "bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs",
 };
 
-const resultOptions: WeldingHistoryRecord["result"][] = ["Đạt", "Không đạt", "Sửa chữa"];
+const resultOptions: WeldingHistoryRecord["result"][] = ["Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"];
 const shiftOptions: WeldingHistoryRecord["shift"][] = ["Ca 1", "Ca 2", "Ca 3"];
 const defaultMachines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
 
@@ -541,6 +542,7 @@ export default function WeldingHistoryList() {
     pass: 0,
     fail: 0,
     rework: 0,
+    pending: 0,
     accountingCounts: [],
   });
 
@@ -826,7 +828,7 @@ export default function WeldingHistoryList() {
       )}
 
       {/* 4 thẻ KPI thống kê to rõ ràng nổi bật theo Ảnh 12 */}
-      <div className="mb-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="mb-4 grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="rounded-xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng mối hàn</span>
@@ -847,7 +849,9 @@ export default function WeldingHistoryList() {
             {stats.pass.toLocaleString("vi-VN")}
           </div>
           <div className="mt-1 text-xs text-emerald-600 font-medium">
-            {stats.total > 0 ? ((stats.pass / stats.total) * 100).toFixed(1) : "0"}% tổng sản lượng
+            {stats.total - stats.pending > 0
+              ? ((stats.pass / (stats.total - stats.pending)) * 100).toFixed(1)
+              : "0"}% số mối đã có kết quả
           </div>
         </div>
 
@@ -875,6 +879,17 @@ export default function WeldingHistoryList() {
           <div className="mt-1 text-xs text-amber-600 font-medium">
             {stats.total > 0 ? ((stats.rework / stats.total) * 100).toFixed(1) : "0"}% cần xử lý
           </div>
+        </div>
+
+        <div className="rounded-xl border border-blue-200/80 bg-gradient-to-br from-white to-blue-50/40 p-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-700">Chờ thí nghiệm</span>
+            <ClockCounterClockwise size={18} weight="bold" className="text-blue-600" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-blue-700 font-mono tabular-nums">
+            {stats.pending.toLocaleString("vi-VN")}
+          </div>
+          <div className="mt-1 text-xs text-blue-600 font-medium">Chưa có kết quả · không tính đạt/lỗi</div>
         </div>
       </div>
 
@@ -970,7 +985,7 @@ export default function WeldingHistoryList() {
           onChange={(e) => setResult(e.target.value)}
           className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
         >
-          {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa"].map((r) => (
+          {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
             <option key={r}>{r}</option>
           ))}
         </select>

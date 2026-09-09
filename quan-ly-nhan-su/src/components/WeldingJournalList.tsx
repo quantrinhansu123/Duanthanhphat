@@ -22,6 +22,7 @@ import {
   fetchFailedWeldsInDateRange,
   exportFilteredWeldJournal,
   deleteWeldJournalEntry,
+  displayWeldCode,
   formatJournalDateIso,
   insertWeldJournalEntry,
   invalidateWeldReportCache,
@@ -938,7 +939,7 @@ export default function WeldingJournalList() {
         machine: row.ma_may
           ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
           : "Chưa gán máy",
-        weldName: row.ma_lich_su,
+        weldName: displayWeldCode(row.ma_lich_su),
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
         location: gpsPoint

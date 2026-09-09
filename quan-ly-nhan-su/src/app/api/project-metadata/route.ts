@@ -11,6 +11,19 @@ function cleanArray(value: unknown) {
   return Array.from(new Set(value.map((item) => typeof item === "string" ? item.trim().slice(0, 300) : "").filter(Boolean))).slice(0, 1000);
 }
 
+function cleanDateArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.slice(0, 10) : ""))
+        .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item)),
+    ),
+  )
+    .sort()
+    .slice(0, 2000);
+}
+
 function validate(value: unknown): ProjectMetadata {
   const input = value && typeof value === "object" ? value as Partial<ProjectMetadata> : {};
   return {
@@ -19,6 +32,7 @@ function validate(value: unknown): ProjectMetadata {
     machineTypes: cleanArray(input.machineTypes),
     weldTypes: cleanArray(input.weldTypes),
     railTypes: cleanArray(input.railTypes),
+    offDays: cleanDateArray(input.offDays),
   };
 }
 

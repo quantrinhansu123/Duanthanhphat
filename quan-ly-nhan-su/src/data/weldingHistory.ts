@@ -10,7 +10,7 @@ export type WeldingHistoryRecord = {
   project: string;
   shift: "Ca 1" | "Ca 2" | "Ca 3";
   accountingCode: string; // Mã hạch toán
-  result: "Đạt" | "Không đạt" | "Sửa chữa";
+  result: "Đạt" | "Không đạt" | "Sửa chữa" | "Chờ thí nghiệm";
 };
 
 export type AccountingCodeOption = {
