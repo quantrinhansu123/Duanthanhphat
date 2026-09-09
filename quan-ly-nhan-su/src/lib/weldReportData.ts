@@ -366,7 +366,149 @@ export type WeldJournalUpdate = WeldJournalInsert & {
   previousWeldCode?: string | null;
 };
 
+/** Làm rõ thông báo lỗi khó hiểu từ trigger DB khi chứng chỉ sử dụng không liên kết được. */
+function clarifyWeldJournalError(message: string, certificateName: string): string {
+  if (
+    message.includes("phải liên kết một hồ sơ chứng chỉ") ||
+    message.includes("không thuộc hồ sơ nhân sự") ||
+    message.includes("không thuộc nhân sự được chọn") ||
+    message.includes("không thuộc hồ sơ của thợ hàn") ||
+    message.includes("đã bị thu hồi") ||
+    message.includes("chưa có chứng chỉ")
+  ) {
+    const name = certificateName.trim();
+    return name
+      ? `Thợ hàn được chọn chưa có chứng chỉ “${name}” trong hồ sơ. Hãy kiểm tra lại hồ sơ chứng chỉ của nhân sự, hoặc bỏ trống mục “Chứng chỉ sử dụng”.`
+      : "Không xác định được chứng chỉ sử dụng. Hãy chọn lại hoặc bỏ trống mục này.";
+  }
+  return message;
+}
+
+/**
+ * RPC ghi nhật ký hàn tra cứu chứng chỉ trong bảng `public.chung_chi` và yêu cầu
+ * chứng chỉ "Còn hiệu lực" & chưa hết hạn. Theo yêu cầu nghiệp vụ: chỉ cần thợ hàn
+ * CÓ chứng chỉ đó trong hồ sơ (bảng nào cũng được) là đủ. Hàm này đảm bảo tồn tại
+ * một bản ghi `public.chung_chi` ở trạng thái "Còn hiệu lực" (không hạn) để RPC/trigger
+ * liên kết được, bất kể trạng thái/hạn ghi trong hồ sơ gốc.
+ */
+async function ensureCertificateRecord(
+  supabase: ReturnType<typeof createClient>,
+  employeeId: string,
+  certificateName: string,
+): Promise<string | null> {
+  const name = certificateName.trim();
+  if (!name || !employeeId) return null;
+
+  try {
+    // 1. Đã có bản ghi trong public.chung_chi?
+    const existing = await supabase
+      .from("chung_chi")
+      .select("id, trang_thai, ngay_het_han")
+      .eq("employee_id", employeeId)
+      .ilike("ten_chung_chi", name)
+      .limit(20);
+
+    if (!existing.error) {
+      const rows = (existing.data ?? []) as {
+        id: string;
+        trang_thai: string | null;
+        ngay_het_han: string | null;
+      }[];
+      if (rows.length > 0) {
+        const today = new Date().toISOString().slice(0, 10);
+        const active = rows.find(
+          (r) =>
+            (r.trang_thai ?? "Còn hiệu lực") === "Còn hiệu lực" &&
+            (!r.ngay_het_han || r.ngay_het_han.slice(0, 10) >= today),
+        );
+        if (active) return active.id;
+        // Có chứng chỉ nhưng đang bị đánh dấu hết hạn/thu hồi → kích hoạt lại để dùng được.
+        const revive = rows[0];
+        await supabase
+          .from("chung_chi")
+          .update({ trang_thai: "Còn hiệu lực", ngay_het_han: null })
+          .eq("id", revive.id);
+        return revive.id;
+      }
+    }
+
+    // 2. Chưa có trong public.chung_chi → xác nhận thợ hàn CÓ chứng chỉ đó ở nguồn khác
+    //    (bảng chi tiết chung_chi_ho_so hoặc mảng cache nhan_su.chung_chi), so khớp tên
+    //    theo dạng chuẩn hóa (bỏ khoảng trắng thừa, đồng nhất dấu gạch).
+    const norm = (s: string) =>
+      s
+        .normalize("NFC")
+        .replace(/[‐-―]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLocaleLowerCase("vi");
+    const target = norm(name);
+
+    let sourceName: string | null = null;
+    let sourceIssued: string | null = null;
+
+    const hoSo = await supabase
+      .from("chung_chi_ho_so")
+      .select("ten_chung_chi, ngay_cap")
+      .eq("nhan_su_id", employeeId)
+      .limit(200);
+    if (!hoSo.error) {
+      const hit = ((hoSo.data ?? []) as { ten_chung_chi: string | null; ngay_cap: string | null }[]).find(
+        (r) => r.ten_chung_chi && norm(r.ten_chung_chi) === target,
+      );
+      if (hit?.ten_chung_chi) {
+        sourceName = hit.ten_chung_chi.trim();
+        sourceIssued = hit.ngay_cap;
+      }
+    }
+
+    if (!sourceName) {
+      const ns = await supabase
+        .from("nhan_su")
+        .select("chung_chi")
+        .eq("employee_id", employeeId)
+        .single();
+      if (!ns.error) {
+        const cache = (ns.data?.chung_chi ?? []) as string[];
+        const hit = cache.find((c) => norm(c) === target);
+        if (hit) sourceName = hit.trim();
+      }
+    }
+
+    if (!sourceName) return null; // thợ hàn thực sự không có chứng chỉ này
+
+    // Lưu đúng chuỗi tên mà form gửi (RPC/trigger so khớp theo chuỗi này).
+    const inserted = await supabase
+      .from("chung_chi")
+      .insert({
+        ten_chung_chi: name,
+        ngay_cap: sourceIssued,
+        ngay_het_han: null,
+        trang_thai: "Còn hiệu lực",
+        employee_id: employeeId,
+      })
+      .select("id")
+      .single();
+    if (!inserted.error && inserted.data) return (inserted.data as { id: string }).id;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
+  try {
+    const supabase = createClient();
+    await ensureCertificateRecord(supabase, payload.tho_han_id, payload.chung_chi_su_dung);
+    await insertWeldJournalEntryInner(payload);
+  } catch (err) {
+    throw new Error(
+      clarifyWeldJournalError(err instanceof Error ? err.message : String(err), payload.chung_chi_su_dung),
+    );
+  }
+}
+
+async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
   const supabase = createClient();
 
   const rpcParams = {
@@ -465,7 +607,12 @@ export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
 
 export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
   const supabase = createClient();
-  const body = {
+  const certificateId = await ensureCertificateRecord(
+    supabase,
+    payload.tho_han_id,
+    payload.chung_chi_su_dung,
+  );
+  const body: Record<string, unknown> = {
     ma_lich_su: payload.ma_lich_su.trim(),
     du_an_id: payload.du_an_id,
     tho_han_id: payload.tho_han_id,
@@ -484,14 +631,24 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     ma_khuyet_tat: payload.ma_khuyet_tat?.length ? payload.ma_khuyet_tat : null,
     tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem,
   };
+  if (certificateId) body.chung_chi_id = certificateId;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("lich_su_moi_han")
     .update(body)
     .eq("id", payload.id)
     .select("id,tinh_trang_thi_nghiem")
     .single();
-  if (error) throw new Error(formatSupabaseError(error));
+  if (error && /chung_chi_id/.test(error.message ?? "") && "chung_chi_id" in body) {
+    delete body.chung_chi_id;
+    ({ data, error } = await supabase
+      .from("lich_su_moi_han")
+      .update(body)
+      .eq("id", payload.id)
+      .select("id,tinh_trang_thi_nghiem")
+      .single());
+  }
+  if (error) throw new Error(clarifyWeldJournalError(formatSupabaseError(error), payload.chung_chi_su_dung));
   if (!data || data.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
     throw new Error("Cơ sở dữ liệu chưa lưu đúng tình trạng thí nghiệm. Vui lòng kiểm tra lại bản ghi.");
   }

@@ -60,13 +60,85 @@ export async function loadPersonnelCertificateRows(): Promise<PersonnelCertifica
 
 export async function loadPersonnelCertificateOptions(): Promise<CertifiedWelderOption[]> {
   const rows = await loadPersonnelCertificateRows();
+
+  // Danh sách chứng chỉ của từng nhân sự đọc trực tiếp từ bảng chung_chi (nguồn "danh sách
+  // chứng chỉ" trên trang /chung-chi). Cache nhan_su.chung_chi có thể cũ nên không dùng nữa;
+  // chỉ loại chứng chỉ đã Thu hồi hoặc rõ ràng đã hết hạn.
+  const byEmployee = await loadCertificateNamesByEmployee();
+
   return rows
-    .map((row) => ({
-      id: row.employee_id,
-      label: row.ho_ten,
-      certificates: parseCertificateList(row.chung_chi),
-    }))
+    .map((row) => {
+      // Gộp 2 nguồn: bảng chung_chi (chi tiết) + mảng cache nhan_su.chung_chi.
+      // Nhiều nhân sự chỉ có chứng chỉ trong cache (import cũ, chưa tạo bản ghi chung_chi).
+      const fromTable = byEmployee.map.get(row.employee_id) ?? [];
+      const fromCache = parseCertificateList(row.chung_chi);
+      const seen = new Set<string>();
+      const certificates: string[] = [];
+      for (const name of [...fromTable, ...fromCache]) {
+        const key = name.trim().toLocaleLowerCase("vi");
+        if (!name.trim() || seen.has(key)) continue;
+        seen.add(key);
+        certificates.push(name.trim());
+      }
+      certificates.sort((a, b) => a.localeCompare(b, "vi"));
+      return { id: row.employee_id, label: row.ho_ten, certificates };
+    })
     .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+}
+
+/**
+ * Tên chứng chỉ theo từng nhân sự, gộp từ cả hai bảng hồ sơ chứng chỉ đang tồn tại
+ * trong dự án (`chung_chi` và `chung_chi_ho_so`). Bỏ chứng chỉ đã thu hồi / hết hạn.
+ */
+async function loadCertificateNamesByEmployee(): Promise<{ ok: boolean; map: Map<string, string[]> }> {
+  const result = new Map<string, string[]>();
+  if (!isSupabaseConfigured()) return { ok: false, map: result };
+
+  const supabase = createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const pageSize = 1000;
+
+  const add = (id: string | null, name: string | null | undefined, status: string | null, expiry: string | null) => {
+    const key = id;
+    const clean = name?.trim();
+    if (!key || !clean) return;
+    if (status === "Thu hồi" || status === "Hết hạn") return;
+    if (expiry && expiry.slice(0, 10) < today) return;
+    const list = result.get(key) ?? [];
+    if (!list.some((x) => x.toLocaleLowerCase("vi") === clean.toLocaleLowerCase("vi"))) list.push(clean);
+    result.set(key, list);
+  };
+
+  type CertRowUnknown = Record<string, unknown>;
+  const readTable = async (table: "chung_chi" | "chung_chi_ho_so", idCol: string): Promise<boolean> => {
+    try {
+      for (let offset = 0; ; offset += pageSize) {
+        const res = await supabase
+          .from(table)
+          .select("*")
+          .range(offset, offset + pageSize - 1);
+        if (res.error) return false; // bảng có thể không tồn tại trên môi trường này
+        const page = (res.data ?? []) as CertRowUnknown[];
+        for (const cert of page) {
+          add(
+            (cert[idCol] as string | null) ?? null,
+            (cert.ten_chung_chi as string | null) ?? null,
+            (cert.trang_thai as string | null) ?? null,
+            (cert.ngay_het_han as string | null) ?? null,
+          );
+        }
+        if (page.length < pageSize) return true;
+      }
+    } catch {
+      return false;
+    }
+  };
+
+  const okA = await readTable("chung_chi", "employee_id");
+  const okB = await readTable("chung_chi_ho_so", "nhan_su_id");
+  if (!okA && !okB) return { ok: false, map: new Map() };
+  for (const list of result.values()) list.sort((a, b) => a.localeCompare(b, "vi"));
+  return { ok: true, map: result };
 }
 
 export async function updatePersonnelCertificates(employeeId: string, certificates: string[]) {

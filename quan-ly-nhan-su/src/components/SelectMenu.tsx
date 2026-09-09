@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CaretDown, Check, MagnifyingGlass } from "@/components/icons";
+import { CaretDown, Check } from "@/components/icons";
 
 export type SelectMenuOption = {
   value: string;
@@ -110,21 +110,25 @@ export default function SelectMenu({
     close();
   }
 
-  const baseButton = `flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-left text-xs sm:text-sm outline-hidden transition-all duration-150 ${
-    open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : "border-slate-300 hover:border-slate-400"
-  } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70 ${buttonClassName}`;
+  const fieldBorder = open
+    ? "border-[#0047AB] ring-2 ring-[#0047AB]/20"
+    : "border-slate-300 hover:border-slate-400";
+  const baseButton = `flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-left text-xs sm:text-sm outline-hidden transition-all duration-150 ${fieldBorder} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70 ${buttonClassName}`;
+  const baseInput = `w-full rounded-lg border bg-white px-3 text-xs sm:text-sm text-slate-900 outline-hidden transition-all duration-150 ${fieldBorder} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70 ${buttonClassName}`;
 
   return (
     <div ref={boxRef} className={`relative ${className}`}>
       {searchable ? (
-        <div className={`${baseButton} ${selected && !typing ? "text-slate-900" : ""}`}>
-          <MagnifyingGlass aria-hidden size={14} className="shrink-0 text-slate-400" />
+        <>
           <input
             ref={inputRef}
             type="text"
             disabled={disabled}
             value={typing ? query : selected?.label ?? ""}
             placeholder={selected ? undefined : searchPlaceholder ?? placeholder}
+            role="combobox"
+            aria-expanded={open}
+            aria-autocomplete="list"
             onFocus={() => {
               setOpen(true);
               setTyping(true);
@@ -142,7 +146,7 @@ export default function SelectMenu({
                 inputRef.current?.blur();
               }
             }}
-            className="min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-slate-900 outline-hidden placeholder:text-slate-400"
+            className={`${baseInput} pr-9 placeholder:text-slate-400`}
           />
           <button
             type="button"
@@ -157,7 +161,7 @@ export default function SelectMenu({
                 inputRef.current?.focus();
               }
             }}
-            className="shrink-0 text-slate-400"
+            className="absolute right-0 top-0 flex h-full w-9 items-center justify-center text-slate-400 hover:text-slate-600 disabled:cursor-not-allowed"
           >
             <CaretDown
               size={13}
@@ -166,7 +170,7 @@ export default function SelectMenu({
               className={`transition-transform duration-150 ${open ? "rotate-180 text-[#0047AB]" : ""}`}
             />
           </button>
-        </div>
+        </>
       ) : (
         <button
           type="button"

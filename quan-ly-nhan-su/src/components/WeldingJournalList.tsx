@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { CaretRight, DownloadSimple, MapPin, PencilSimple, X } from "@/components/icons";
+import SelectMenu from "@/components/SelectMenu";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
@@ -273,9 +274,7 @@ function JournalFormModal({
       : [];
     const nextCertificate = eligibleCertificates.includes(form.chung_chi_su_dung)
       ? form.chung_chi_su_dung
-      : shouldCheckCertificate
-        ? eligibleCertificates[0] ?? ""
-        : "";
+      : eligibleCertificates[0] ?? "";
     if (form.chung_chi_su_dung === nextCertificate && form.tho_han_id === nextWelderId) return;
     setForm((prev) => ({
       ...prev,
@@ -318,15 +317,17 @@ function JournalFormModal({
       window.alert("Vui lòng chọn người trực tiếp hàn.");
       return;
     }
-    if (shouldCheckCertificate) {
-      if (!selectedWelder || selectedEligibleCertificates.length === 0) {
-        window.alert(`Nhân sự được chọn chưa có ${describeCertificateRequirement(qualificationContext)}.`);
-        return;
-      }
-      if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
-        window.alert("Vui lòng chọn đúng chứng chỉ của nhân sự được sử dụng cho mối hàn.");
-        return;
-      }
+    if (!selectedWelder || selectedEligibleCertificates.length === 0) {
+      window.alert(
+        shouldCheckCertificate
+          ? `Nhân sự được chọn chưa có ${describeCertificateRequirement(qualificationContext)}.`
+          : "Người trực tiếp hàn chưa có chứng chỉ còn hiệu lực trong hồ sơ. Không thể ghi nhật ký.",
+      );
+      return;
+    }
+    if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
+      window.alert("Vui lòng chọn chứng chỉ sử dụng cho mối hàn.");
+      return;
     }
     if (!form.may_id) {
       window.alert("Vui lòng chọn máy thực hiện mối hàn.");
@@ -414,24 +415,27 @@ function JournalFormModal({
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Người trực tiếp hàn
-            <select
+            <SelectMenu
               value={form.tho_han_id}
-              onChange={(e) => setForm({ ...form, tho_han_id: e.target.value })}
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-            >
-              {shouldCheckCertificate && qualifiedWelders.length === 0 && (
-                <option value="">Chưa có nhân sự đủ chứng chỉ</option>
-              )}
-              {welders.length === 0 ? (
-                <option value="">Chưa có dữ liệu thợ hàn</option>
-              ) : (
-                welders.map((w) => (
-                  <option key={w.id} value={w.id} disabled={shouldCheckCertificate && !qualifiedWelders.some((item) => item.id === w.id)}>
-                    {w.label}{shouldCheckCertificate && (qualifiedWelders.some((item) => item.id === w.id) ? " · Đủ chứng chỉ" : " · Thiếu chứng chỉ")}
-                  </option>
-                ))
-              )}
-            </select>
+              onChange={(tho_han_id) => setForm({ ...form, tho_han_id })}
+              options={welders.map((w) => {
+                const qualified = qualifiedWelders.some((item) => item.id === w.id);
+                return {
+                  value: w.id,
+                  label: w.label,
+                  hint: shouldCheckCertificate
+                    ? qualified
+                      ? "Đủ chứng chỉ"
+                      : "Thiếu chứng chỉ"
+                    : `${w.certificates.length} chứng chỉ`,
+                };
+              })}
+              searchable
+              placeholder={welders.length === 0 ? "Chưa có dữ liệu thợ hàn" : "Chọn người trực tiếp hàn"}
+              searchPlaceholder="Gõ tên để tìm thợ hàn..."
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
             {shouldCheckCertificate && (
               <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
                 Yêu cầu: {describeCertificateRequirement(qualificationContext)} · {qualifiedWelders.length} nhân sự phù hợp
@@ -440,25 +444,32 @@ function JournalFormModal({
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Chứng chỉ sử dụng{shouldCheckCertificate ? "" : " (không bắt buộc)"}
-            <select
+            Chứng chỉ sử dụng
+            <SelectMenu
               value={form.chung_chi_su_dung}
-              onChange={(e) => setForm({ ...form, chung_chi_su_dung: e.target.value })}
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-            >
-              <option value="">{shouldCheckCertificate ? "Chưa có chứng chỉ phù hợp" : "Không chọn"}</option>
-              {selectedEligibleCertificates.map((certificate) => (
-                <option key={certificate} value={certificate}>{certificate}</option>
-              ))}
-            </select>
+              onChange={(chung_chi_su_dung) => setForm({ ...form, chung_chi_su_dung })}
+              options={selectedEligibleCertificates.map((certificate) => ({
+                value: certificate,
+                label: certificate,
+              }))}
+              searchable={selectedEligibleCertificates.length > 5}
+              placeholder={
+                selectedEligibleCertificates.length === 0
+                  ? "Nhân sự chưa có chứng chỉ trong hồ sơ"
+                  : "Chọn chứng chỉ"
+              }
+              searchPlaceholder="Tìm chứng chỉ..."
+              emptyLabel="Nhân sự chưa có chứng chỉ trong hồ sơ"
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Dự án
-            <select
+            <SelectMenu
               value={form.du_an_id}
-              onChange={(e) => {
-                const projectId = e.target.value;
+              onChange={(projectId) => {
                 const internalTraining = isInternalTrainingProject(
                   projects.find((project) => project.id === projectId)?.label ?? "",
                 );
@@ -477,39 +488,35 @@ function JournalFormModal({
                       : current.result,
                 }));
               }}
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-            >
-              {projects.length === 0 ? (
-                <option value="">Chưa có dữ liệu dự án</option>
-              ) : (
-                projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))
-              )}
-            </select>
+              options={projects.map((p) => ({ value: p.id, label: p.label }))}
+              searchable={projects.length > 5}
+              placeholder={projects.length === 0 ? "Chưa có dữ liệu dự án" : "Chọn dự án"}
+              searchPlaceholder="Gõ để tìm dự án..."
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Máy thực hiện
-            <select
+            <SelectMenu
               value={form.may_id}
-              onChange={(e) => setForm({ ...form, may_id: e.target.value })}
-              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-            >
-              <option value="">— Chọn máy thực hiện —</option>
-              {form.may_id && !machines.some((machine) => machine.id === form.may_id) && <option value={form.may_id}>Máy đã gắn không có trong danh mục hiện tại</option>}
-              {machines.length === 0 ? (
-                <option value="">Chưa có danh mục máy</option>
-              ) : (
-                machines.map((machine) => (
-                  <option key={machine.id} value={machine.id}>
-                    {machine.code} · {machine.name}
-                  </option>
-                ))
-              )}
-            </select>
+              onChange={(may_id) => setForm({ ...form, may_id })}
+              options={[
+                ...(form.may_id && !machines.some((machine) => machine.id === form.may_id)
+                  ? [{ value: form.may_id, label: "Máy đã gắn không có trong danh mục hiện tại" }]
+                  : []),
+                ...machines.map((machine) => ({
+                  value: machine.id,
+                  label: `${machine.code} · ${machine.name}`,
+                })),
+              ]}
+              searchable={machines.length > 5}
+              placeholder={machines.length === 0 ? "Chưa có danh mục máy" : "— Chọn máy thực hiện —"}
+              searchPlaceholder="Tìm máy theo mã hoặc tên..."
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
             <span className="mt-1 block text-[11px] font-normal text-slate-500">
               Báo cáo máy sẽ tự cộng mối hàn theo lựa chọn này.
             </span>
