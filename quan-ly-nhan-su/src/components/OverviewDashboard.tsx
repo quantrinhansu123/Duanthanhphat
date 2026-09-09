@@ -791,9 +791,11 @@ export default function OverviewDashboard() {
   }
 
   const chartDayCount = chart.dayPoints.length;
-  // Bề rộng vùng vẽ: mặc định ~44px/ngày (hoặc ~72px/năm), nhân theo mức zoom.
+  const hasMonthlyAxis = chartViewMode === "monthly" || chartViewMode === "cumulative";
+  // Nhãn MM/YYYY cần đủ chỗ ở mức zoom nhỏ nhất; các mốc vẫn cuộn cùng cột.
+  const chartSlotWidth = hasMonthlyAxis ? 88 : chartViewMode === "yearly" ? 72 : 44;
   const plotWidthPx = Math.round(
-    Math.max(chartDayCount * (chartViewMode === "yearly" ? 72 : 44) * chartZoom, 1),
+    Math.max(chartDayCount * chartSlotWidth * chartZoom, 1),
   );
 
   // Đường xu hướng nối đỉnh các cột
@@ -1527,7 +1529,9 @@ export default function OverviewDashboard() {
                     key={dp.idx}
                     type="button"
                     onClick={() => toggleDaySelection(dp.idx)}
-                    className={`min-w-0 flex-1 basis-0 rounded py-0.5 text-center text-[11px] font-mono whitespace-nowrap transition-colors cursor-pointer ${
+                    title={dp.dateFull}
+                    aria-label={dp.dateFull}
+                    className={`min-w-0 flex-1 basis-0 rounded px-1 py-1 text-center text-[11px] leading-4 font-mono transition-colors cursor-pointer ${hasMonthlyAxis ? "min-h-10 whitespace-normal" : "whitespace-nowrap"} ${
                       selectedDayIndex === dp.idx
                         ? "bg-[#0047AB] text-white font-semibold"
                         : "text-slate-900 hover:bg-slate-100"
