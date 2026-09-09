@@ -516,7 +516,7 @@ export default function DocumentLibrary() {
                 <th className="px-4 py-3">Tên tài liệu & Định danh</th>
                 <th className="px-4 py-3 w-32">Dung lượng</th>
                 <th className="px-4 py-3 w-40">Ngày tải</th>
-                <th className="px-4 py-3 w-64 text-right">Thao tác</th>
+                <th className="px-4 py-3 w-px whitespace-nowrap text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -558,45 +558,47 @@ export default function DocumentLibrary() {
                     <td className="px-4 py-3.5 font-mono text-slate-500 text-xs">
                       {formatDate(doc.createdTime)}
                     </td>
-                    <td className="px-4 py-3.5 text-right space-x-1.5">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(doc)}
-                        className="rounded px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReplacingDoc(doc);
-                          setErrorMsg(null);
-                          setStatusMsg(null);
-                        }}
-                        className="rounded px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 cursor-pointer"
-                      >
-                        Thay tệp
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewer(doc)}
-                        className="rounded px-2.5 py-1 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#00388A] cursor-pointer"
-                      >
-                        Xem
-                      </button>
-                      <a
-                        href={`/api/documents/${doc.id}?download=1`}
-                        className="inline-block rounded px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 cursor-pointer border border-emerald-200"
-                      >
-                        Tải về
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(doc)}
-                        className="rounded px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 cursor-pointer"
-                      >
-                        Xóa
-                      </button>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap [&>a]:shrink-0 [&>button]:shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(doc)}
+                          className="inline-flex h-8 min-w-12 items-center justify-center rounded-md border border-slate-200 px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplacingDoc(doc);
+                            setErrorMsg(null);
+                            setStatusMsg(null);
+                          }}
+                          className="inline-flex h-8 min-w-12 items-center justify-center rounded-md border border-amber-200 px-2.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 cursor-pointer"
+                        >
+                          Thay tệp
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewer(doc)}
+                          className="inline-flex h-8 min-w-12 items-center justify-center rounded-md border border-transparent px-2.5 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#00388A] cursor-pointer"
+                        >
+                          Xem
+                        </button>
+                        <a
+                          href={`/api/documents/${doc.id}?download=1`}
+                          className="inline-flex h-8 min-w-12 items-center justify-center rounded-md border border-emerald-200 px-2.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 cursor-pointer"
+                        >
+                          Tải về
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(doc)}
+                          className="inline-flex h-8 min-w-12 items-center justify-center rounded-md border border-rose-200 px-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
