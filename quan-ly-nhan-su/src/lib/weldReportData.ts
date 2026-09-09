@@ -123,10 +123,16 @@ const REPORT_COLUMNS_WITH_DEFECT = [
   ...REPORT_COLUMNS_WITH_DATE,
   "ma_khuyet_tat",
 ] as const;
-const REPORT_COLUMNS_WITH_CREATED_AT = [...REPORT_COLUMNS_WITH_DEFECT, "created_at"] as const;
 const REPORT_COLUMNS_WITH_TEST_STATUS = [
   ...REPORT_COLUMNS_WITH_DEFECT,
   "tinh_trang_thi_nghiem",
+] as const;
+// Báo cáo phải luôn lấy trạng thái thí nghiệm gốc từ DB. Nếu bỏ cột này,
+// resolveWeldTestStatus sẽ buộc phải suy luận từ số lỗi và biến các mối
+// "Chờ thí nghiệm" thành "Đạt".
+const REPORT_COLUMNS_WITH_TEST_STATUS_AND_CREATED_AT = [
+  ...REPORT_COLUMNS_WITH_TEST_STATUS,
+  "created_at",
 ] as const;
 
 const reportRowsPromises = new Map<string, Promise<WeldReportRow[]>>();
@@ -1072,10 +1078,12 @@ export function loadWeldReportRows(dateFrom?: string, dateTo?: string) {
       }
 
       try {
-        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_CREATED_AT, dateFrom, dateTo);
+        return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEST_STATUS_AND_CREATED_AT, dateFrom, dateTo);
       } catch {
         try {
-          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_DEFECT, dateFrom, dateTo);
+          // Môi trường cũ có thể chưa có created_at trong view, nhưng vẫn phải
+          // ưu tiên cột tình trạng thí nghiệm để các KPI khớp Nhật ký hàn.
+          return await fetchWeldReportRows(REPORT_COLUMNS_WITH_TEST_STATUS, dateFrom, dateTo);
         } catch (firstError) {
           const message = formatSupabaseError(firstError);
           const missingOptionalColumn =

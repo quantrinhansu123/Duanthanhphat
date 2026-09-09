@@ -11,7 +11,7 @@ import {
   Wrench,
 } from "@/components/icons";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
-import { machines as seedMachines, type Machine } from "@/data/machines";
+import type { Machine } from "@/data/machines";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import {
@@ -100,7 +100,7 @@ export default function MachineReportDashboard() {
   );
   const [activeSlide, setActiveSlide] = useState(0);
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
-  const [machineCatalog, setMachineCatalog] = useState<Machine[]>(seedMachines);
+  const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
   const [machineSummaryError, setMachineSummaryError] = useState("");
   const [machineStatusFilter, setMachineStatusFilter] = useState<MachineStatusFilter>("Tất cả máy");
 
@@ -113,8 +113,11 @@ export default function MachineReportDashboard() {
       .then(([summary, catalog]) => {
         if (!active) return;
         setMachineSummary(summary);
-        setMachineCatalog(catalog.machines);
-        if (catalog.error) setMachineSummaryError(catalog.error);
+        // Trang báo cáo không được hiển thị số liệu mẫu khi DB không trả dữ liệu.
+        setMachineCatalog(catalog.source === "supabase" ? catalog.machines : []);
+        if (catalog.source !== "supabase" || catalog.error) {
+          setMachineSummaryError(catalog.error || "Không có dữ liệu máy từ Supabase");
+        }
       })
       .catch((loadError) => {
         if (active) setMachineSummaryError(loadError instanceof Error ? loadError.message : "Không tải được số giờ máy");

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -20,8 +19,6 @@ import {
 } from "@/lib/weldReportData";
 import { loadCertificateRegistry } from "@/lib/certificatesDb";
 import type { Certificate as CertificateType } from "@/data/certificates";
-
-const PORTRAIT_IDS = [32, 52, 36, 22, 48, 44];
 
 export default function PersonnelReportDashboard() {
   const { appliedFilters } = useReportFilters();
@@ -105,12 +102,11 @@ export default function PersonnelReportDashboard() {
     return map;
   }, [selectedRows]);
 
-  const activeWelders = welders.map((welder, index) => {
+  const activeWelders = welders.map((welder) => {
     const source = welder.rows[0];
     const machine = machineForRow(source);
     return {
       name: welder.name,
-      photo: `https://randomuser.me/api/portraits/men/${PORTRAIT_IDS[index % PORTRAIT_IDS.length]}.jpg`,
       meta: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machine} · ${source.ma_nhan_su}`,
       status:
         welder.errors > 0
@@ -124,11 +120,10 @@ export default function PersonnelReportDashboard() {
           : welder.passed === 0 && welder.pending > 0
             ? "bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]"
             : "bg-[#f0fdf4] text-[#15803d] border border-[#bbf7d0]",
-      shift: ["Ca sáng", "Ca chiều", "Ca đêm"][index % 3],
       borderColor: welder.errors > 0 ? "ring-[#f59e0b]" : "ring-[#16a34a]",
     };
   });
-  const welderProductivity = welders.map((welder, index) => {
+  const welderProductivity = welders.map((welder) => {
     const source = welder.rows[0];
     // Tỷ lệ đạt tính trên số mối ĐÃ có kết quả (đạt + lỗi), bỏ mối đang chờ.
     const tested = welder.passed + welder.errors;
@@ -143,7 +138,6 @@ export default function PersonnelReportDashboard() {
         ? `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
         : "Chờ KQ",
       rateColor: tested === 0 ? "text-slate-400" : passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
-      shift: ["Sáng", "Chiều", "Đêm"][index % 3],
     };
   });
   const readyPersonnel = welders.filter((welder) => welder.errors === 0).length;
@@ -182,9 +176,7 @@ export default function PersonnelReportDashboard() {
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
               {welders.length} <span className="text-xs sm:text-sm font-medium text-slate-400">/ {welders.length}</span>
             </div>
-            <div className="mt-2.5 text-xs text-emerald-700 font-medium">
-              ↑ 2 người <span className="text-slate-400 font-normal">so với ca trước</span>
-            </div>
+            <div className="mt-2.5 text-xs text-slate-400 font-normal">Theo dữ liệu nhật ký hàn trong kỳ đã chọn</div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <Users size={24} weight="fill" aria-hidden />
@@ -228,14 +220,8 @@ export default function PersonnelReportDashboard() {
             <div className="mt-3.5 flex flex-col max-h-[440px] overflow-y-auto divide-y divide-slate-100 pr-1">
               {activeWelders.map((w, idx) => (
                 <div key={idx} className="flex items-center gap-3 py-2.5 px-1 hover:bg-slate-50/80 rounded-lg transition-colors">
-                  <div className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ${w.borderColor} shadow-2xs`}>
-                    <Image
-                      src={w.photo}
-                      alt={w.name}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 ring-2 ${w.borderColor} shadow-2xs`} aria-hidden>
+                    {w.name.trim().slice(0, 1).toLocaleUpperCase("vi")}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs sm:text-sm font-semibold text-slate-900">
@@ -249,7 +235,6 @@ export default function PersonnelReportDashboard() {
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-2xs ${w.statusBg}`}>
                       {w.status}
                     </span>
-                    <span className="text-xs text-slate-500 font-medium">{w.shift}</span>
                   </div>
                 </div>
               ))}
@@ -262,20 +247,19 @@ export default function PersonnelReportDashboard() {
               Năng suất theo thợ hàn
             </div>
             <div className="table-scroll overflow-x-auto mt-3.5">
-              <div className="min-w-[560px]">
-                <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <div className="min-w-[480px]">
+                <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <div>Họ tên</div>
                   <div>Tổ / Máy</div>
                   <div>Mối hàn</div>
                   <div>Hôm nay</div>
                   <div>Tỷ lệ đạt</div>
-                  <div className="text-right">Ca làm</div>
                 </div>
                 <div className="divide-y divide-slate-100">
                   {welderProductivity.map((w, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr_0.9fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
+                      className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                     >
                       <div className="font-semibold text-slate-900">
                         {w.name}
@@ -286,7 +270,6 @@ export default function PersonnelReportDashboard() {
                       <div className={`font-semibold font-mono tabular-nums ${w.rateColor}`}>
                         {w.passRate}
                       </div>
-                      <div className="text-right text-slate-600">{w.shift}</div>
                     </div>
                   ))}
                 </div>
