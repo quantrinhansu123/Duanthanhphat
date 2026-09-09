@@ -850,13 +850,21 @@ export default function TrainingList() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return courses;
-    return courses.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.trainer.toLowerCase().includes(q) ||
-        c.date.includes(q),
-    );
+    const base = !q
+      ? courses
+      : courses.filter(
+          (c) =>
+            c.title.toLowerCase().includes(q) ||
+            c.trainer.toLowerCase().includes(q) ||
+            c.date.includes(q),
+        );
+    // Mặc định sắp theo ngày đào tạo mới nhất -> cũ nhất (khóa chưa có ngày xếp cuối).
+    return [...base].sort((a, b) => {
+      if (a.dateIso && b.dateIso) return b.dateIso.localeCompare(a.dateIso);
+      if (a.dateIso) return -1;
+      if (b.dateIso) return 1;
+      return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+    });
   }, [query, courses]);
 
   const totals = useMemo(() => {

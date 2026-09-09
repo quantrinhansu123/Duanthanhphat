@@ -878,6 +878,24 @@ export default function OverviewDashboard() {
     [filterFrom, filterTo, isAllDates, selectedProjects],
   );
 
+  // Card DỰ ÁN: KH năm dự kiến = kế hoạch PQ rơi vào NĂM HIỆN TẠI;
+  // "Đã thực hiện" = khối lượng mối hàn các năm trước năm hiện tại;
+  // "Tổng KH đến <năm hiện tại>" = đã thực hiện + KH năm hiện tại.
+  const PLAN_YEAR = new Date().getFullYear();
+  const plannedWelds2026 = useMemo(
+    () =>
+      selectedProjects.reduce(
+        (sum, project) =>
+          sum + planWeldsInRange(project, `${PLAN_YEAR}-01-01`, `${PLAN_YEAR}-12-31`),
+        0,
+      ),
+    [PLAN_YEAR, selectedProjects],
+  );
+  const doneBeforePlanYear = useMemo(
+    () => selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
+    [PLAN_YEAR, selectedRows],
+  );
+
   const projectChartRows = useMemo(
     () => projectRows.filter((row) => row.count > 0),
     [projectRows],
@@ -954,10 +972,30 @@ export default function OverviewDashboard() {
               </div>
               <div className="text-xs font-medium text-slate-400">dự án</div>
             </div>
-            <div className="mt-2.5 text-xs text-violet-700 font-medium">
-              {isAllDates ? "KH dự kiến" : "KH trong kỳ lọc"}:{" "}
-              <span className="font-mono font-semibold">{fmt(plannedWeldsAll)}</span> mối
-            </div>
+            {isAllDates ? (
+              <div className="mt-2.5 space-y-1 text-xs">
+                <div className="text-slate-500">
+                  Đã thực hiện:{" "}
+                  <span className="font-mono font-semibold text-slate-700">{fmt(doneBeforePlanYear)}</span> mối
+                </div>
+                <div className="text-violet-700 font-medium">
+                  KH dự kiến {PLAN_YEAR}:{" "}
+                  <span className="font-mono font-semibold">{fmt(plannedWelds2026)}</span> mối
+                </div>
+                <div className="text-slate-500">
+                  Tổng KH đến {PLAN_YEAR}:{" "}
+                  <span className="font-mono font-semibold text-slate-700">
+                    {fmt(doneBeforePlanYear + plannedWelds2026)}
+                  </span>{" "}
+                  mối
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2.5 text-xs text-violet-700 font-medium">
+                KH trong kỳ lọc:{" "}
+                <span className="font-mono font-semibold">{fmt(plannedWeldsAll)}</span> mối
+              </div>
+            )}
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-200">
             <Buildings size={24} weight="fill" aria-hidden />

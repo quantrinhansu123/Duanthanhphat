@@ -28,6 +28,8 @@ export type DbTrainingCourse = {
   trainer: string;
   trainerId?: string;
   date: string;
+  /** Ngày đào tạo dạng ISO (yyyy-mm-dd) để sắp xếp; rỗng nếu chưa cập nhật. */
+  dateIso: string;
   duration: string;
   location: string;
   description: string;
@@ -522,6 +524,7 @@ export async function fetchTrainingCourses(): Promise<{
       trainer: row.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       trainerId: trainer?.id,
       date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
+      dateIso: row.ngay ? row.ngay.slice(0, 10) : "",
       duration: row.thoi_luong || "0:00",
       location: row.dia_diem || "Chưa cập nhật",
       description: row.mo_ta || "",
@@ -647,6 +650,7 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
     trainer: row.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
     trainerId: trainer?.id,
     date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
+    dateIso: row.ngay ? row.ngay.slice(0, 10) : "",
     duration: row.thoi_luong || "0:00",
     location: row.dia_diem || "Chưa cập nhật",
     description: row.mo_ta || "",
