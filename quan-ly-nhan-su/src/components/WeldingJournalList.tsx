@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { DownloadSimple, PencilSimple } from "@/components/icons";
+import { CaretRight, DownloadSimple, MapPin, PencilSimple, X } from "@/components/icons";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
@@ -786,6 +786,7 @@ export default function WeldingJournalList() {
   const [toast, setToast] = useState("");
   const [editingRow, setEditingRow] = useState<WeldReportRow | null>(null);
   const [editingForm, setEditingForm] = useState<JournalFormValues | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -944,6 +945,32 @@ export default function WeldingJournalList() {
       };
     });
   }, [rows, gpsPoints]);
+
+  const gpsPointForRow = useCallback(
+    (raw: WeldReportRow) =>
+      gpsPoints.find((point) => point.weldId === raw.id) ??
+      gpsPoints.find(
+        (point) =>
+          point.weldCode?.trim().toLocaleLowerCase("vi") ===
+          raw.ma_lich_su.trim().toLocaleLowerCase("vi"),
+      ) ??
+      null,
+    [gpsPoints],
+  );
+
+  const openEditById = useCallback(
+    (id: string) => {
+      const raw = rows.find((row) => row.id === id);
+      if (!raw) return;
+      setEditingRow(raw);
+      setEditingForm(journalRowToForm(raw, gpsPointForRow(raw)));
+      setFormOpen(true);
+    },
+    [rows, gpsPointForRow],
+  );
+
+  const detailRaw = detailId ? rows.find((row) => row.id === detailId) ?? null : null;
+  const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -1339,13 +1366,11 @@ export default function WeldingJournalList() {
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
-      <div className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
-        {error
-          ? `Không tải được Supabase: ${error}`
-          : loading
-            ? "Đang tải trang nhật ký…"
-            : `Supabase · trang ${currentPage}/${totalPages} · ${PAGE_SIZE} dòng/trang · tổng ${total.toLocaleString("vi-VN")} bản ghi`}
-      </div>
+      {error && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          Không tải được Supabase: {error}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-600">
         <span>
@@ -1460,7 +1485,53 @@ export default function WeldingJournalList() {
           </span>
         </div>
 
-        <div className="table-scroll overflow-x-auto mt-3.5 -mx-1 px-1">
+        {/* Danh sách dạng thẻ — mobile & tablet */}
+        <div className="mt-3.5 space-y-2.5 lg:hidden">
+          {pageRows.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => setDetailId(w.id)}
+              className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xs transition-colors hover:border-[#0047AB]/40 hover:bg-blue-50/40 cursor-pointer"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                    w.testStatus === "Đạt"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : w.testStatus === "Không đạt"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : w.testStatus === "Không thí nghiệm"
+                          ? "border-slate-200 bg-slate-50 text-slate-600"
+                          : "border-amber-200 bg-amber-50 text-amber-700"
+                  }`}>
+                    {w.testStatus}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
+                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate}</div>
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                  <span className="truncate">🏗️ {w.project}</span>
+                  <span className={`truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
+                </div>
+                {w.resultType === "fail" && (
+                  <div className="mt-1 line-clamp-2 text-[11px] font-medium text-rose-700">⚠ {w.failureReason}</div>
+                )}
+              </div>
+              <span className="shrink-0 self-center text-slate-300">
+                <CaretRight size={16} weight="bold" aria-hidden />
+              </span>
+            </button>
+          ))}
+          {pageRows.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 px-3 py-10 text-center text-sm text-slate-500">
+              Không có nhật ký hàn phù hợp với bộ lọc.
+            </div>
+          )}
+        </div>
+
+        <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
           <table className="w-full min-w-[1390px] border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
@@ -1479,7 +1550,11 @@ export default function WeldingJournalList() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pageRows.map((w) => (
-                <tr key={w.id} className="text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors">
+                <tr
+                  key={w.id}
+                  onClick={() => setDetailId(w.id)}
+                  className="cursor-pointer text-xs sm:text-sm text-slate-700 hover:bg-blue-50/50 transition-colors"
+                >
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
                   <td className="p-2.5">
@@ -1511,13 +1586,15 @@ export default function WeldingJournalList() {
                           target="_blank"
                           rel="noreferrer"
                           title={w.location}
+                          onClick={(e) => e.stopPropagation()}
                           className="line-clamp-1 text-xs font-medium text-[#0047AB] hover:underline"
                         >
                           {w.location}
                         </a>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             window.history.pushState(null, "", `/ban-do?weldId=${w.id}`);
                             window.dispatchEvent(new PopStateEvent("popstate"));
                           }}
@@ -1560,16 +1637,9 @@ export default function WeldingJournalList() {
                   <td className="p-2.5 whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        const raw = rows.find((row) => row.id === w.id);
-                        if (!raw) return;
-                        const gpsPoint =
-                          gpsPoints.find((point) => point.weldId === raw.id) ??
-                          gpsPoints.find((point) => point.weldCode?.trim().toLocaleLowerCase("vi") === raw.ma_lich_su.trim().toLocaleLowerCase("vi")) ??
-                          null;
-                        setEditingRow(raw);
-                        setEditingForm(journalRowToForm(raw, gpsPoint));
-                        setFormOpen(true);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditById(w.id);
                       }}
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#0047AB] hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
                       title="Sửa nhật ký hàn"
@@ -1625,6 +1695,157 @@ export default function WeldingJournalList() {
             : "Mã mối hàn, ngày, nhân sự và tọa độ GPS đồng bộ trực tiếp từ Supabase qua khóa ngoại và view bao_cao_moi_han_gps."}
         </div>
       </div>
+
+      {detailView && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="weld-journal-detail-title"
+          onClick={() => setDetailId(null)}
+        >
+          <div
+            className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-5">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
+                  Chi tiết nhật ký hàn
+                </div>
+                <h3
+                  id="weld-journal-detail-title"
+                  className="mt-0.5 font-mono text-base font-bold text-slate-900 truncate"
+                >
+                  {detailView.weldName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailId(null)}
+                aria-label="Đóng"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} weight="bold" aria-hidden />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+                    detailView.testStatus === "Đạt"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : detailView.testStatus === "Không đạt"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : detailView.testStatus === "Không thí nghiệm"
+                          ? "border-slate-200 bg-slate-50 text-slate-600"
+                          : "border-amber-200 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {detailView.testStatus}
+                </span>
+                {detailRaw && (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                    {detailRaw.loai_moi_han}
+                  </span>
+                )}
+              </div>
+
+              <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                {[
+                  ["Ngày thực hiện", detailView.performedDate],
+                  ["Người trực tiếp hàn", detailView.operator],
+                  ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
+                  ["Tổ hàn", detailRaw?.to_han || "—"],
+                  ["Dự án", detailView.project],
+                  ["Máy", detailView.machine],
+                  ["Loại ray", detailRaw?.loai_ray || "—"],
+                  ["Công nghệ hàn", detailRaw?.cong_nghe_han || "—"],
+                  ["Số lượng thực hiện", detailRaw?.so_luong_thuc_hien ?? "—"],
+                  ["Số lượng lỗi", detailRaw?.so_luong_loi ?? "—"],
+                  ["Mối hàn liên kết", detailView.linkedWeld],
+                ].map(([label, value]) => (
+                  <div key={label as string}>
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</dt>
+                    <dd className="mt-0.5 text-sm text-slate-800 break-words">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-3.5 border-t border-slate-100 pt-3.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chứng chỉ sử dụng</div>
+                <div className={`mt-0.5 text-sm ${detailView.certificateLinked ? "text-emerald-700" : "text-amber-700"}`}>
+                  {detailView.certificate}
+                </div>
+              </div>
+
+              {detailView.resultType === "fail" && (
+                <div className="mt-3.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-rose-500">Lý do không đạt</div>
+                  <div className="mt-0.5 text-sm font-medium text-rose-700">{detailView.failureReason}</div>
+                </div>
+              )}
+
+              {detailRaw?.ghi_chu?.trim() && (
+                <div className="mt-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ghi chú</div>
+                  <div className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">{detailRaw.ghi_chu}</div>
+                </div>
+              )}
+
+              <div className="mt-3.5 border-t border-slate-100 pt-3.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị trí GPS</div>
+                <div className="mt-0.5 text-sm text-slate-800">{detailView.location}</div>
+                {detailView.mapUrl && (
+                  <div className="mt-1.5 flex flex-wrap gap-3">
+                    <a
+                      href={detailView.mapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#0047AB] hover:underline"
+                    >
+                      <MapPin size={13} weight="bold" /> Mở Google Maps
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailId(null);
+                        window.history.pushState(null, "", `/ban-do?weldId=${detailView.id}`);
+                        window.dispatchEvent(new PopStateEvent("popstate"));
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      📍 Xem trên bản đồ
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-200 px-4 py-3 sm:px-5">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = detailView.id;
+                  setDetailId(null);
+                  openEditById(id);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer"
+              >
+                <PencilSimple size={14} weight="bold" /> Sửa nhật ký
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailId(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <JournalFormModal
         open={formOpen}

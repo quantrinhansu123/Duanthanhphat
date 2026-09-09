@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
-import { Check, MagnifyingGlass, PencilSimple, Plus, TrashSimple, UploadSimple, X } from "@/components/icons";
+import { Check, Clock, ClockCounterClockwise, MagnifyingGlass, PencilSimple, Plus, TrashSimple, UploadSimple, Users, Warning, X } from "@/components/icons";
 import {
   deleteTrainingCourse,
   fetchCertificateGroups,
@@ -170,7 +170,7 @@ function TrainingFormModal({
       topics: topicsArray,
       manufacturerHours: Number(form.manufacturerHours) || 0,
       selfTrainingHours: Number(form.selfTrainingHours) || 0,
-      participantsCount: Math.round(Number(form.participantsCount) || 0),
+      participantsCount: attendeeList.length,
       attendees: attendeeList.map((a) => ({
         employeeId: a.id,
         result: a.result,
@@ -387,15 +387,15 @@ function TrainingFormModal({
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                 Tổng người tham gia
               </label>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                className={fieldClass}
-                value={form.participantsCount}
-                onChange={(e) => set("participantsCount", e.target.value)}
-                placeholder="VD: 12"
-              />
+              <div
+                className={`${fieldClass} flex items-center bg-slate-50 text-slate-700 cursor-not-allowed`}
+                aria-readonly="true"
+              >
+                {attendeeList.length}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Tự động tính theo danh sách học viên bên dưới.
+              </p>
             </div>
           </div>
 
@@ -816,6 +816,7 @@ export default function TrainingList() {
   const [editing, setEditing] = useState<DbTrainingCourse | null>(null);
   const [toast, setToast] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DbTrainingCourse | null>(null);
 
   function showToast(message: string) {
     setToast(message);
@@ -858,6 +859,18 @@ export default function TrainingList() {
     );
   }, [query, courses]);
 
+  const totals = useMemo(() => {
+    return filtered.reduce(
+      (acc, c) => {
+        acc.manufacturerHours += Number(c.manufacturerHours) || 0;
+        acc.selfTrainingHours += Number(c.selfTrainingHours) || 0;
+        acc.participants += Number(c.participantsCount) || 0;
+        return acc;
+      },
+      { manufacturerHours: 0, selfTrainingHours: 0, participants: 0 },
+    );
+  }, [filtered]);
+
   async function openDetailModal(c: DbTrainingCourse) {
     const res = await fetchTrainingCourseDetail(c.id);
     if (res.error || !res.course) {
@@ -877,11 +890,6 @@ export default function TrainingList() {
   }
 
   async function handleDeleteCourse(course: DbTrainingCourse) {
-    const confirmed = window.confirm(
-      `Xóa khóa đào tạo “${course.title}”? Danh sách học viên của khóa cũng sẽ bị xóa. Thao tác này không thể hoàn tác.`,
-    );
-    if (!confirmed) return;
-
     setDeletingId(course.id);
     const res = await deleteTrainingCourse(course.id);
     if (res.success) {
@@ -910,12 +918,68 @@ export default function TrainingList() {
     setDeletingId(null);
   }
 
+  async function confirmDelete() {
+    if (!pendingDelete || deletingId !== null) return;
+    await handleDeleteCourse(pendingDelete);
+    setPendingDelete(null);
+  }
+
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-xl">
           <Check size={16} weight="bold" className="text-emerald-400" />
           {toast}
+        </div>
+      )}
+
+      {/* Tổng hợp */}
+      {!loading && !loadError && (
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Tổng giờ NSX đào tạo
+              </div>
+              <div className="mt-1 text-2xl font-bold font-mono text-slate-900">
+                {totals.manufacturerHours.toLocaleString("vi-VN")}
+                <span className="ml-1 text-sm font-semibold text-slate-400">giờ</span>
+              </div>
+            </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 border border-blue-100 text-[#0047AB]">
+              <Clock size={22} weight="bold" />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Tổng giờ nội bộ đào tạo
+              </div>
+              <div className="mt-1 text-2xl font-bold font-mono text-slate-900">
+                {totals.selfTrainingHours.toLocaleString("vi-VN")}
+                <span className="ml-1 text-sm font-semibold text-slate-400">giờ</span>
+              </div>
+            </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 border border-amber-100 text-amber-500">
+              <ClockCounterClockwise size={22} weight="bold" />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Tổng lượt người tham gia
+              </div>
+              <div className="mt-1 text-2xl font-bold font-mono text-slate-900">
+                {totals.participants.toLocaleString("vi-VN")}
+                <span className="ml-1 text-sm font-semibold text-slate-400">người</span>
+              </div>
+            </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600">
+              <Users size={22} weight="bold" />
+            </div>
+          </div>
         </div>
       )}
 
@@ -1030,7 +1094,7 @@ export default function TrainingList() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleDeleteCourse(c)}
+                    onClick={() => setPendingDelete(c)}
                     disabled={deletingId === c.id}
                     className="rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors cursor-pointer"
                     title="Xóa khóa đào tạo"
@@ -1042,6 +1106,57 @@ export default function TrainingList() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Popup xác nhận xóa */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          onClick={() => deletingId === null && setPendingDelete(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <Warning size={22} weight="bold" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="confirm-delete-title" className="text-base font-bold text-slate-900">
+                  Xóa khóa đào tạo?
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                  Khóa <strong className="font-semibold text-slate-900">“{pendingDelete.title}”</strong> và toàn bộ
+                  danh sách học viên của khóa sẽ bị xóa. Thao tác này không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deletingId !== null}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={deletingId !== null}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 transition-colors cursor-pointer"
+              >
+                <TrashSimple size={15} weight="bold" />
+                {deletingId !== null ? "Đang xóa..." : "Xóa khóa đào tạo"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

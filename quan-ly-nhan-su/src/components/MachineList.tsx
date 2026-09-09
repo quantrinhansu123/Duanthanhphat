@@ -17,7 +17,6 @@ import {
 } from "@/data/machines";
 import {
   CaretRight,
-  DotsThree,
   MagnifyingGlass,
   Plus,
   Trash,
@@ -31,6 +30,8 @@ import {
   updateMachine as updateMachineInDb,
 } from "@/lib/machineCatalogDb";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import ComboBoxInput from "@/components/ComboBoxInput";
+import SelectMenu from "@/components/SelectMenu";
 import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { useProjectsData } from "@/hooks/useProjectsData";
@@ -66,6 +67,12 @@ const maintStatusStyle: Record<MachineMaintenanceHistoryRow["status"], string> =
 
 const statusOptions: Machine["status"][] = ["Đang làm việc", "Sẵn sàng", "Bảo trì", "Hỏng"];
 const modelOptions = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
+const NO_PROJECT_LABEL = "Chưa gắn dự án";
+const WELDING_TECH_OPTIONS = [
+  "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
+  "Hàn nhiệt nhôm (Thermit)",
+  "Hàn hồ quang tay (SMAW)",
+] as const;
 
 const defaultMachineImage = "/may-han/kcm007.jpg";
 
@@ -461,7 +468,6 @@ function MachineDetailModal({
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab, machine.id]);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [personnelRows, setPersonnelRows] = useState<PersonnelCertificateRow[]>([]);
   const [personnelLoading, setPersonnelLoading] = useState(false);
   const [personnelError, setPersonnelError] = useState("");
@@ -678,30 +684,6 @@ function MachineDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
-                aria-label="Tùy chọn"
-              >
-                <DotsThree size={16} weight="bold" aria-hidden />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg animate-in fade-in-50 zoom-in-95 duration-100 text-left">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEdit();
-                    }}
-                    className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
-                  >
-                    Chỉnh sửa tổ hợp & máy
-                  </button>
-                </div>
-              )}
-            </div>
             <button
               type="button"
               onClick={onClose}
@@ -714,7 +696,7 @@ function MachineDetailModal({
         </div>
 
         {/* Tab Selection */}
-        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
+        <div className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
           <button
             type="button"
             onClick={() => setTab("welding")}
@@ -1263,17 +1245,17 @@ function MachineDetailModal({
         <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5 bg-white">
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
-          >
-            Đóng
-          </button>
-          <button
-            type="button"
             onClick={onEdit}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
           >
             Chỉnh sửa tổ hợp & máy
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
+          >
+            Đóng
           </button>
         </div>
       </div>
@@ -1287,11 +1269,15 @@ function MachineDetailModal({
 function MachineFormModal({
   machine,
   mode,
+  modelSuggestions = [],
+  techSuggestions = [],
   onClose,
   onSave,
 }: {
   machine: Machine;
   mode: "create" | "edit";
+  modelSuggestions?: string[];
+  techSuggestions?: string[];
   onClose: () => void;
   onSave: (updated: Machine) => void;
 }) {
@@ -1335,6 +1321,42 @@ function MachineFormModal({
   const isCreate = mode === "create";
   const railOptions = useCatalogOptions("Loại ray");
   const { projects } = useProjectsData();
+
+  const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelCertificateRow[]>([]);
+  useEffect(() => {
+    let active = true;
+    loadPersonnelCertificateRows()
+      .then((rows) => {
+        if (active) setPersonnelDirectory(rows);
+      })
+      .catch(() => {
+        if (active) setPersonnelDirectory([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const teamOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of personnelDirectory) {
+      const team = row.to_han?.trim();
+      if (team && team !== "Chưa phân tổ") set.add(team);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [personnelDirectory]);
+
+  const personOptions = useMemo(() => {
+    const team = form.team?.trim();
+    const set = new Set<string>();
+    for (const row of personnelDirectory) {
+      const name = row.ho_ten?.trim();
+      if (!name) continue;
+      if (team && row.to_han?.trim() !== team) continue;
+      set.add(name);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [personnelDirectory, form.team]);
   const selectedRails = form.supportedRails
     .split(/[,;|/]+/)
     .map((value) => value.trim())
@@ -1495,21 +1517,14 @@ function MachineFormModal({
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Model tổ hợp
-                  <select
+                  <ComboBoxInput
                     value={form.model}
-                    onChange={(e) => {
-                      const model = e.target.value;
-                      setForm({
-                        ...form,
-                        model,
-                      });
-                    }}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-                  >
-                    {modelOptions.map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
+                    onChange={(model) => setForm({ ...form, model })}
+                    options={[...modelSuggestions, ...modelOptions]}
+                    placeholder="Chọn model có sẵn hoặc nhập model mới"
+                    className="mt-1.5"
+                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                  />
                 </label>
               </div>
 
@@ -1526,10 +1541,13 @@ function MachineFormModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Công nghệ hàn
-                  <input
+                  <ComboBoxInput
                     value={form.weldingTechnology}
-                    onChange={(e) => setForm({ ...form, weldingTechnology: e.target.value })}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                    onChange={(weldingTechnology) => setForm({ ...form, weldingTechnology })}
+                    options={[...techSuggestions, ...WELDING_TECH_OPTIONS]}
+                    placeholder="Chọn công nghệ có sẵn hoặc nhập mới"
+                    className="mt-1.5"
+                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
                 <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1557,35 +1575,44 @@ function MachineFormModal({
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Dự án đang phục vụ
-                  <select
-                    value={form.currentProject}
-                    onChange={(e) => setForm({ ...form, currentProject: e.target.value })}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  >
-                    <option value="">Chưa gắn dự án</option>
-                    {!projects.some((project) => project.name === form.currentProject) && form.currentProject && (
-                      <option value={form.currentProject}>{form.currentProject}</option>
-                    )}
-                    {projects.map((project) => <option key={project.id} value={project.name}>{project.name}</option>)}
-                  </select>
+                  <ComboBoxInput
+                    strict
+                    mono={false}
+                    value={form.currentProject || NO_PROJECT_LABEL}
+                    onChange={(next) =>
+                      setForm({
+                        ...form,
+                        currentProject: next === NO_PROJECT_LABEL ? "" : next,
+                      })
+                    }
+                    options={[
+                      NO_PROJECT_LABEL,
+                      ...(form.currentProject &&
+                      !projects.some((project) => project.name === form.currentProject)
+                        ? [form.currentProject]
+                        : []),
+                      ...projects.map((project) => project.name),
+                    ]}
+                    placeholder={NO_PROJECT_LABEL}
+                    className="mt-1.5"
+                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                  />
                 </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Trạng thái
-                  <select
+                  <SelectMenu
                     value={form.status}
-                    onChange={(e) => {
-                      const status = e.target.value as Machine["status"];
+                    onChange={(next) => {
+                      const status = next as Machine["status"];
                       setForm({ ...form, status, available: status === "Sẵn sàng" });
                     }}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] cursor-pointer"
-                  >
-                    {statusOptions.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
+                    options={statusOptions.map((s) => ({ value: s, label: s }))}
+                    className="mt-1.5"
+                    buttonClassName="h-10 font-medium shadow-2xs"
+                  />
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Số serial đầu hàn
@@ -1609,18 +1636,54 @@ function MachineFormModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Tổ vận hành
-                  <input
+                  <ComboBoxInput
+                    strict
+                    mono={false}
                     value={form.team}
-                    onChange={(e) => setForm({ ...form, team: e.target.value })}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                    onChange={(team) =>
+                      setForm((prev) => {
+                        const stillValid =
+                          !team.trim() ||
+                          !prev.personInCharge ||
+                          personnelDirectory.some(
+                            (row) =>
+                              row.ho_ten?.trim() === prev.personInCharge &&
+                              row.to_han?.trim() === team.trim(),
+                          );
+                        return stillValid
+                          ? { ...prev, team }
+                          : { ...prev, team, personInCharge: "", operator: "" };
+                      })
+                    }
+                    options={[
+                      ...(form.team && !teamOptions.includes(form.team) ? [form.team] : []),
+                      ...teamOptions,
+                    ]}
+                    placeholder="Chọn tổ vận hành..."
+                    emptyLabel="Không tìm thấy tổ phù hợp"
+                    className="mt-1.5"
+                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Người phụ trách / Vận hành
-                  <input
+                  <ComboBoxInput
+                    strict
+                    mono={false}
                     value={form.personInCharge}
-                    onChange={(e) => setForm({ ...form, personInCharge: e.target.value, operator: e.target.value })}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
+                    onChange={(next) =>
+                      setForm({ ...form, personInCharge: next, operator: next })
+                    }
+                    options={[
+                      ...(form.personInCharge && !personOptions.includes(form.personInCharge)
+                        ? [form.personInCharge]
+                        : []),
+                      ...personOptions,
+                    ]}
+                    placeholder="Chọn người phụ trách..."
+                    emptyLabel="Không tìm thấy nhân sự phù hợp"
+                    className="mt-1.5"
+                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
               </div>
@@ -2262,6 +2325,18 @@ export default function MachineList() {
         <MachineFormModal
           machine={formModal.machine}
           mode={formModal.mode}
+          modelSuggestions={Array.from(
+            new Set([
+              ...modelOptions,
+              ...list.map((m) => m.model?.trim()).filter((m): m is string => Boolean(m)),
+            ]),
+          ).sort((a, b) => a.localeCompare(b, "vi"))}
+          techSuggestions={Array.from(
+            new Set([
+              ...WELDING_TECH_OPTIONS,
+              ...list.map((m) => m.weldingTechnology?.trim()).filter((m): m is string => Boolean(m)),
+            ]),
+          ).sort((a, b) => a.localeCompare(b, "vi"))}
           onClose={() => setFormModal(null)}
           onSave={formModal.mode === "create" ? handleCreate : handleSave}
         />

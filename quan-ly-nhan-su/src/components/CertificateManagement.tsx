@@ -17,6 +17,8 @@ import {
   type CertificateGroupOption,
 } from "@/lib/trainingDb";
 import { parseCertificateList } from "@/lib/weldingCertificates";
+import { loadMachineCatalog } from "@/lib/machineCatalogDb";
+import MachineSelect, { type MachineSelectOption } from "@/components/MachineSelect";
 
 type CertHolder = {
   id: string;
@@ -74,6 +76,8 @@ export default function CertificateManagement() {
     holderIds: [] as string[],
   });
   const [holderQuery, setHolderQuery] = useState("");
+  const [machineOptions, setMachineOptions] = useState<MachineSelectOption[]>([]);
+  const [machinesLoading, setMachinesLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<CertificateTypeRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CertificateTypeRow | null>(null);
   const [actionError, setActionError] = useState("");
@@ -100,6 +104,34 @@ export default function CertificateManagement() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    let active = true;
+    setMachinesLoading(true);
+    loadMachineCatalog()
+      .then(({ machines }) => {
+        if (!active) return;
+        const seen = new Set<string>();
+        const opts: MachineSelectOption[] = [];
+        for (const m of machines) {
+          const code = m.code?.trim();
+          if (!code || seen.has(code)) continue;
+          seen.add(code);
+          opts.push({ code, name: m.name?.trim() || undefined });
+        }
+        opts.sort((a, b) => a.code.localeCompare(b.code, "vi"));
+        setMachineOptions(opts);
+      })
+      .catch(() => {
+        if (active) setMachineOptions([]);
+      })
+      .finally(() => {
+        if (active) setMachinesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function showToast(message: string) {
     setToast(message);
@@ -602,11 +634,16 @@ export default function CertificateManagement() {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   Máy áp dụng
                 </label>
-                <input
-                  className={fieldClass}
+                <MachineSelect
                   value={form.machine}
-                  onChange={(e) => setForm((f) => ({ ...f, machine: e.target.value }))}
-                  placeholder="VD: K922-1 / UN5"
+                  onChange={(machine) => setForm((f) => ({ ...f, machine }))}
+                  options={
+                    form.machine && !machineOptions.some((m) => m.code === form.machine)
+                      ? [...machineOptions, { code: form.machine }]
+                      : machineOptions
+                  }
+                  loading={machinesLoading}
+                  placeholder="Chọn 1 máy áp dụng (VD: KCM-007)"
                 />
               </div>
 

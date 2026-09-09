@@ -11,6 +11,7 @@ import {
   MagnifyingGlass,
   CaretDown,
   Users,
+  Stack,
   SealCheck,
   Sparkle,
   X,
@@ -1029,7 +1030,16 @@ export default function WelderManagement() {
     const locked = list.filter((w) => w.status === "Khóa").length;
     const rank1 = list.filter((w) => w.rank === "Hạng 1").length;
     const otherRank = total - rank1;
-    return { total, active, locked, rank1, otherRank };
+    const teamSet = new Set(
+      list
+        .map((w) => w.weldingTeam?.trim())
+        .filter((t): t is string => Boolean(t) && t !== "Chưa phân tổ"),
+    );
+    const teams = teamSet.size;
+    const unassigned = list.filter(
+      (w) => !w.weldingTeam?.trim() || w.weldingTeam.trim() === "Chưa phân tổ",
+    ).length;
+    return { total, active, locked, rank1, otherRank, teams, unassigned };
   }, [list]);
 
   // Performance metrics for selected welder
@@ -1179,9 +1189,30 @@ export default function WelderManagement() {
         </div>
       )}
 
-      {/* 3 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex items-center justify-between">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {isEn ? "Total Teams" : "Tổng tổ"}
+            </div>
+            <div className="mt-1 text-3xl font-bold font-mono text-slate-900">
+              {stats.teams}
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              {stats.unassigned > 0
+                ? `${stats.unassigned} ${isEn ? "unassigned" : "chưa phân tổ"}`
+                : isEn
+                  ? "Welding teams"
+                  : "Tổ hàn đang hoạt động"}
+            </div>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-500">
+            <Stack size={24} weight="bold" />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
               {isEn ? "Total Welders" : "Tổng thợ hàn"}
@@ -1198,7 +1229,7 @@ export default function WelderManagement() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
               {isEn ? "Status" : "Trạng thái"}
@@ -1220,7 +1251,7 @@ export default function WelderManagement() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
               {isEn ? "Classification" : "Phân hạng"}

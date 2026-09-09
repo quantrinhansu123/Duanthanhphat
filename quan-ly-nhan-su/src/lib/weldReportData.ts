@@ -591,10 +591,11 @@ export async function loadWeldJournalPage({
   const to = from + pageSize - 1;
   const q = query.trim();
 
+  const journalRequestUsedCreatedAt = journalHasCreatedAt;
   let request = supabase
     .from("bao_cao_moi_han_theo_du_an")
-    .select(journalHasCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","), { count: "exact" })
-    .order(journalHasCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
+    .select(journalRequestUsedCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","), { count: "exact" })
+    .order(journalRequestUsedCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false });
 
   if (project && project !== "Tất cả dự án") {
@@ -617,7 +618,11 @@ export async function loadWeldJournalPage({
   }
 
   const { data, error, count } = await request.range(from, to);
-  if (error && journalHasCreatedAt && error.message.includes("created_at")) {
+  // Cột created_at có thể chưa tồn tại trên một số môi trường (view/bảng cũ). Không phụ thuộc
+  // vào cờ journalHasCreatedAt: các lần gọi song song (React StrictMode, nhiều dependency đổi
+  // cùng lúc) có thể đã tắt cờ trong khi request này vẫn còn chọn created_at. Lần thử lại luôn
+  // dựng query KHÔNG có created_at nên không thể lặp vô hạn.
+  if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
     return loadWeldJournalPage({ page, pageSize, query, project, resultFilter });
   }
@@ -721,10 +726,11 @@ export async function exportFilteredWeldJournal({
   const rows: WeldReportRow[] = [];
 
   for (let offset = 0; ; offset += pageSize) {
+    const exportUsesCreatedAt = journalHasCreatedAt;
     let request = supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select(JOURNAL_PAGE_COLUMNS)
-      .order("created_at", { ascending: false })
+      .select(exportUsesCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","))
+      .order(exportUsesCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false });
 
     if (project && project !== "Tất cả dự án") request = request.eq("du_an", project);
@@ -745,6 +751,11 @@ export async function exportFilteredWeldJournal({
     }
 
     let { data, error } = await request.range(offset, offset + pageSize - 1);
+    if (error && exportUsesCreatedAt && /created_at/.test(error.message ?? "")) {
+      journalHasCreatedAt = false;
+      offset -= pageSize; // lặp lại vòng hiện tại với query không có created_at
+      continue;
+    }
     if (error && formatSupabaseError(error).includes("ma_khuyet_tat")) {
       let fallbackRequest = supabase
         .from("bao_cao_moi_han_theo_du_an")
