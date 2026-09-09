@@ -656,6 +656,17 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
   invalidateWeldReportCache();
 }
 
+/** Xóa 1 bản ghi nhật ký hàn. Điểm GPS liên kết sẽ tự gỡ (FK on delete set null). */
+export async function deleteWeldJournalEntry(id: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể xóa nhật ký hàn.");
+  }
+  const supabase = createClient();
+  const { error } = await supabase.from("lich_su_moi_han").delete().eq("id", id);
+  if (error) throw new Error(formatSupabaseError(error));
+  invalidateWeldReportCache();
+}
+
 export function uniqueProjectOptions(rows: WeldReportRow[]) {
   const map = new Map<string, { id: string; label: string }>();
   for (const row of rows) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { CaretRight, DownloadSimple, MapPin, PencilSimple, X } from "@/components/icons";
+import { CaretRight, DownloadSimple, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
 import SelectMenu from "@/components/SelectMenu";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
@@ -21,6 +21,7 @@ import {
 import {
   fetchFailedWeldsInDateRange,
   exportFilteredWeldJournal,
+  deleteWeldJournalEntry,
   formatJournalDateIso,
   insertWeldJournalEntry,
   invalidateWeldReportCache,
@@ -794,6 +795,8 @@ export default function WeldingJournalList() {
   const [editingRow, setEditingRow] = useState<WeldReportRow | null>(null);
   const [editingForm, setEditingForm] = useState<JournalFormValues | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -1000,6 +1003,22 @@ export default function WeldingJournalList() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  async function confirmDeleteJournal() {
+    if (!pendingDeleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteWeldJournalEntry(pendingDeleteId);
+      if (detailId === pendingDeleteId) setDetailId(null);
+      setPendingDeleteId(null);
+      refetch();
+      showToast("Đã xóa nhật ký hàn");
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không thể xóa nhật ký hàn");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleExportExcel() {
@@ -1552,7 +1571,7 @@ export default function WeldingJournalList() {
                 <th className="p-2.5 font-semibold">Vị trí</th>
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
                 <th className="p-2.5 font-semibold">Tình trạng</th>
-                <th className="p-2.5 font-semibold">Sửa</th>
+                <th className="p-2.5 font-semibold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1642,18 +1661,32 @@ export default function WeldingJournalList() {
                     </span>
                   </td>
                   <td className="p-2.5 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditById(w.id);
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#0047AB] hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
-                      title="Sửa nhật ký hàn"
-                    >
-                      <PencilSimple size={14} weight="bold" />
-                      Sửa
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditById(w.id);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#0047AB] hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
+                        title="Sửa nhật ký hàn"
+                      >
+                        <PencilSimple size={14} weight="bold" />
+                        Sửa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDeleteId(w.id);
+                        }}
+                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white p-1.5 text-rose-600 hover:bg-rose-50 cursor-pointer"
+                        title="Xóa nhật ký hàn"
+                        aria-label="Xóa nhật ký hàn"
+                      >
+                        <TrashSimple size={14} weight="bold" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1702,6 +1735,55 @@ export default function WeldingJournalList() {
             : "Mã mối hàn, ngày, nhân sự và tọa độ GPS đồng bộ trực tiếp từ Supabase qua khóa ngoại và view bao_cao_moi_han_gps."}
         </div>
       </div>
+
+      {pendingDeleteId && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !deleting && setPendingDeleteId(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <Warning size={22} weight="bold" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-bold text-slate-900">Xóa nhật ký hàn?</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                  Bản ghi{" "}
+                  <strong className="font-mono font-semibold text-slate-900">
+                    {rows.find((r) => r.id === pendingDeleteId)?.ma_lich_su ?? ""}
+                  </strong>{" "}
+                  sẽ bị xóa vĩnh viễn. Điểm GPS liên kết sẽ được gỡ khỏi mối hàn. Thao tác này không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteId(null)}
+                disabled={deleting}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteJournal()}
+                disabled={deleting}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 cursor-pointer"
+              >
+                <TrashSimple size={15} weight="bold" />
+                {deleting ? "Đang xóa..." : "Xóa nhật ký"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {detailView && (
         <div
@@ -1830,7 +1912,14 @@ export default function WeldingJournalList() {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-200 px-4 py-3 sm:px-5">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 border-t border-slate-200 px-4 py-3 sm:px-5">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteId(detailView.id)}
+                className="mr-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
+              >
+                <TrashSimple size={14} weight="bold" /> Xóa
+              </button>
               <button
                 type="button"
                 onClick={() => {
