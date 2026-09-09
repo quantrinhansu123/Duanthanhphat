@@ -141,19 +141,33 @@ export default function ComboBoxInput({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (!open) setOpen(true);
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
-      const pick = activeIndex >= 0 && activeIndex < filtered.length ? filtered[activeIndex] : strict ? filtered[0] : undefined;
+      e.preventDefault();
+      const pick =
+        activeIndex >= 0 && activeIndex < filtered.length
+          ? filtered[activeIndex]
+          : strict
+            ? filtered[0]
+            : undefined;
       if (open && pick) {
-        e.preventDefault();
         commit(pick);
         inputRef.current?.blur();
-      } else {
-        finishEditing();
+        return;
       }
+      if (!strict) {
+        const typed = (editing ? draft : value).trim();
+        if (typed) {
+          commit(typed);
+          inputRef.current?.blur();
+          return;
+        }
+      }
+      finishEditing();
+      inputRef.current?.blur();
     } else if (e.key === "Escape") {
       if (strict) {
         setEditing(false);
@@ -162,6 +176,12 @@ export default function ComboBoxInput({
       setOpen(false);
     }
   }
+
+  const typedValue = (strict && editing ? draft : value).trim();
+  const canCreateTyped =
+    !strict &&
+    typedValue.length > 0 &&
+    !uniqueOptions.some((opt) => opt.toLocaleLowerCase("vi") === typedValue.toLocaleLowerCase("vi"));
 
   const resolvedEmpty =
     emptyLabel ??
@@ -226,35 +246,75 @@ export default function ComboBoxInput({
           }`}
         >
           {filtered.length === 0 ? (
-            <li className="px-2.5 py-2 text-[11px] leading-snug text-slate-400">{resolvedEmpty}</li>
+            canCreateTyped ? (
+              <li role="option" aria-selected={false}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    commit(typedValue);
+                    inputRef.current?.blur();
+                  }}
+                  className="flex w-full flex-col items-start gap-0.5 rounded-lg bg-blue-50 px-2.5 py-2 text-left transition-colors hover:bg-blue-100"
+                >
+                  <span className="text-xs font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
+                  <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
+                    {typedValue}
+                  </span>
+                  <span className="text-[11px] leading-snug text-slate-500">
+                    Nhấn Enter để dùng giá trị vừa nhập
+                  </span>
+                </button>
+              </li>
+            ) : (
+              <li className="px-2.5 py-2 text-[11px] leading-snug text-slate-400">{resolvedEmpty}</li>
+            )
           ) : (
-            filtered.map((opt, i) => {
-              const active = i === activeIndex;
-              const selected = opt.toLocaleLowerCase("vi") === value.trim().toLocaleLowerCase("vi");
-              return (
-                <li key={opt} role="option" aria-selected={selected}>
+            <>
+              {filtered.map((opt, i) => {
+                const active = i === activeIndex;
+                const selected = opt.toLocaleLowerCase("vi") === value.trim().toLocaleLowerCase("vi");
+                return (
+                  <li key={opt} role="option" aria-selected={selected}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActiveIndex(i)}
+                      onClick={() => {
+                        commit(opt);
+                        inputRef.current?.blur();
+                      }}
+                      className={`flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs sm:text-sm transition-colors duration-150 ${
+                        active
+                          ? "bg-blue-50 text-[#0047AB]"
+                          : selected
+                            ? "font-semibold text-[#0047AB]"
+                            : "text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className={`min-w-0 flex-1 ${mono ? "truncate font-mono" : "whitespace-normal break-words leading-snug"}`}>
+                        {opt}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+              {canCreateTyped && (
+                <li role="option" aria-selected={false} className="mt-1 border-t border-slate-100 pt-1">
                   <button
                     type="button"
-                    onMouseEnter={() => setActiveIndex(i)}
                     onClick={() => {
-                      commit(opt);
+                      commit(typedValue);
                       inputRef.current?.blur();
                     }}
-                    className={`flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs sm:text-sm transition-colors duration-150 ${
-                      active
-                        ? "bg-blue-50 text-[#0047AB]"
-                        : selected
-                          ? "font-semibold text-[#0047AB]"
-                          : "text-slate-700 hover:bg-slate-100"
-                    }`}
+                    className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left hover:bg-blue-50"
                   >
-                    <span className={`min-w-0 flex-1 ${mono ? "truncate font-mono" : "whitespace-normal break-words leading-snug"}`}>
-                      {opt}
+                    <span className="text-[11px] font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
+                    <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
+                      {typedValue}
                     </span>
                   </button>
                 </li>
-              );
-            })
+              )}
+            </>
           )}
         </ul>
       )}

@@ -1525,6 +1525,9 @@ function MachineFormModal({
                     className="mt-1.5"
                     inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                   />
+                  <span className="mt-1 block text-[11px] font-medium text-slate-500">
+                    Có thể thêm mới trực tiếp từ form — Enter hoặc chọn “+ Thêm mới từ form”
+                  </span>
                 </label>
               </div>
 
@@ -1545,10 +1548,14 @@ function MachineFormModal({
                     value={form.weldingTechnology}
                     onChange={(weldingTechnology) => setForm({ ...form, weldingTechnology })}
                     options={[...techSuggestions, ...WELDING_TECH_OPTIONS]}
-                    placeholder="Chọn công nghệ có sẵn hoặc nhập mới"
+                    placeholder="Chọn công nghệ có sẵn hoặc nhập công nghệ mới"
+                    mono={false}
                     className="mt-1.5"
                     inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
+                  <span className="mt-1 block text-[11px] font-medium text-slate-500">
+                    Có thể thêm mới trực tiếp từ form — Enter hoặc chọn “+ Thêm mới từ form”
+                  </span>
                 </label>
                 <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Loại ray hỗ trợ
