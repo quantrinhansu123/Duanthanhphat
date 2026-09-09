@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,7 +48,6 @@ type ChartDayPoint = {
 
 const PROJECT_COLORS = ["#0047AB", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
 
-const CHART_ZOOM_MIN = 1;
 const CHART_ZOOM_MAX = 8;
 
 function fmt(n: number) {
@@ -150,40 +149,20 @@ export default function OverviewDashboard() {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
   const plotScrollRef = useRef<HTMLDivElement>(null);
+  const [plotViewportWidth, setPlotViewportWidth] = useState(0);
+
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setPlotViewportWidth(el.clientWidth));
+    setPlotViewportWidth(el.clientWidth);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setSelectedDayIndex(null);
   }, [appliedFilters, chartViewMode]);
-
-  // Cuộn chuột trên biểu đồ để phóng to / thu nhỏ các cột
-  useEffect(() => {
-    const el = plotScrollRef.current;
-    if (!el) return;
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY === 0) return;
-      event.preventDefault();
-      const prevWidth = el.scrollWidth;
-      const anchorRatio =
-        prevWidth > 0 ? (el.scrollLeft + event.offsetX) / prevWidth : 0.5;
-      setChartZoom((current) => {
-        const next = Math.min(
-          CHART_ZOOM_MAX,
-          Math.max(CHART_ZOOM_MIN, +(current * (event.deltaY < 0 ? 1.2 : 1 / 1.2)).toFixed(3)),
-        );
-        if (next !== current) {
-          requestAnimationFrame(() => {
-            const node = plotScrollRef.current;
-            if (node) {
-              node.scrollLeft = anchorRatio * node.scrollWidth - event.offsetX;
-            }
-          });
-        }
-        return next;
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
 
   useEffect(() => {
     setChartZoom(1);
@@ -794,9 +773,40 @@ export default function OverviewDashboard() {
   const hasMonthlyAxis = chartViewMode === "monthly" || chartViewMode === "cumulative";
   // Nhãn MM/YYYY cần đủ chỗ ở mức zoom nhỏ nhất; các mốc vẫn cuộn cùng cột.
   const chartSlotWidth = hasMonthlyAxis ? 88 : chartViewMode === "yearly" ? 72 : 44;
-  const plotWidthPx = Math.round(
-    Math.max(chartDayCount * chartSlotWidth * chartZoom, 1),
-  );
+  const basePlotWidth = Math.max(chartDayCount * chartSlotWidth, 1);
+  const minChartZoom = plotViewportWidth > 0 ? Math.min(1, plotViewportWidth / basePlotWidth) : 1;
+  const plotWidthPx = Math.max(plotViewportWidth, Math.round(basePlotWidth * chartZoom));
+  const labelStep = Math.max(1, Math.ceil(chartSlotWidth * chartDayCount / Math.max(plotWidthPx, 1)));
+
+  // Cuộn chuột trên biểu đồ để phóng to / thu nhỏ các cột
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const prevWidth = el.scrollWidth;
+      const anchorRatio =
+        prevWidth > 0 ? (el.scrollLeft + event.offsetX) / prevWidth : 0.5;
+      setChartZoom((current) => {
+        const next = Math.min(
+          CHART_ZOOM_MAX,
+          Math.max(minChartZoom, +(current * (event.deltaY < 0 ? 1.2 : 1 / 1.2)).toFixed(3)),
+        );
+        if (next !== current) {
+          requestAnimationFrame(() => {
+            const node = plotScrollRef.current;
+            if (node) {
+              node.scrollLeft = anchorRatio * node.scrollWidth - event.offsetX;
+            }
+          });
+        }
+        return next;
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [minChartZoom]);
 
   // Đường xu hướng nối đỉnh các cột
   const stackBars = chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
@@ -816,7 +826,7 @@ export default function OverviewDashboard() {
     setChartZoom((current) =>
       Math.min(
         CHART_ZOOM_MAX,
-        Math.max(CHART_ZOOM_MIN, +(current * (dir === 1 ? 1.25 : 1 / 1.25)).toFixed(3)),
+        Math.max(minChartZoom, +(current * (dir === 1 ? 1.25 : 1 / 1.25)).toFixed(3)),
       ),
     );
   }
@@ -1523,21 +1533,33 @@ export default function OverviewDashboard() {
                   style={{ left: `${(p.x / 500) * 100}%`, top: `${p.y}px` }}
                 />
               ))}
-              <div className="flex pt-2 pb-0.5">
-                {chart.dayPoints.map((dp) => (
+              <div className="relative h-12 pt-2 pb-0.5">
+                {chart.dayPoints.filter((dp) => {
+                  if (labelStep === 1) return true;
+                  const center = ((dp.idx + 0.5) / chartDayCount) * plotWidthPx;
+                  return dp.idx % labelStep === Math.floor(labelStep / 2)
+                    && center >= chartSlotWidth / 2
+                    && center <= plotWidthPx - chartSlotWidth / 2;
+                }).map((dp) => (
                   <button
                     key={dp.idx}
                     type="button"
                     onClick={() => toggleDaySelection(dp.idx)}
+                    style={{
+                      left: `${(dp.idx / Math.max(chartDayCount, 1)) * 100}%`,
+                      width: `${100 / Math.max(chartDayCount, 1)}%`,
+                    }}
                     title={dp.dateFull}
                     aria-label={dp.dateFull}
-                    className={`min-w-0 flex-1 basis-0 rounded px-1 py-1 text-center text-[11px] leading-4 font-mono transition-colors cursor-pointer ${hasMonthlyAxis ? "min-h-10 whitespace-normal" : "whitespace-nowrap"} ${
+                    className={`absolute rounded py-1 text-center text-[11px] leading-4 font-mono transition-colors cursor-pointer ${hasMonthlyAxis ? "min-h-10 whitespace-normal" : "whitespace-nowrap"} ${
                       selectedDayIndex === dp.idx
                         ? "bg-[#0047AB] text-white font-semibold"
                         : "text-slate-900 hover:bg-slate-100"
                     }`}
                   >
-                    {dp.dateShort}
+                    <span className="relative left-1/2 block -translate-x-1/2" style={{ width: `${Math.min(chartSlotWidth, plotWidthPx)}px` }}>
+                      {dp.dateShort}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1545,19 +1567,26 @@ export default function OverviewDashboard() {
               )}
                 </div>
               </div>
-              <div className="mt-2 flex items-center justify-end gap-2 text-sm font-medium text-slate-900">
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setChartZoom(minChartZoom)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-50 cursor-pointer"
+                >
+                  Xem toàn bộ
+                </button>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => stepZoom(-1)}
-                    disabled={chartZoom <= CHART_ZOOM_MIN}
+                    disabled={chartZoom <= minChartZoom}
                     className="h-7 w-7 rounded-md border border-slate-300 text-base leading-none text-slate-900 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     aria-label="Thu nhỏ"
                   >
                     −
                   </button>
                   <span className="w-10 text-center font-mono tabular-nums font-semibold text-slate-900">
-                    {chartZoom.toFixed(1)}×
+                    {chartZoom.toFixed(chartZoom < 0.1 ? 2 : 1)}×
                   </span>
                   <button
                     type="button"
