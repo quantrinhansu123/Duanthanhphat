@@ -31,15 +31,116 @@ export type DuAnRow = {
 
 const DU_AN_COLUMNS_BASE = "id,ma_du_an,du_an,nguoi_phu_trach,tien_do_ly_thuyet,created_at,updated_at";
 const DU_AN_COLUMNS = `${DU_AN_COLUMNS_BASE},vi_tri,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
+/** Cột nhẹ cho danh sách dự án — bỏ JSONB tiến độ lý thuyết để tải nhanh. */
+const DU_AN_LIST_COLUMNS_BASE = "id,ma_du_an,du_an,nguoi_phu_trach,created_at,updated_at";
+const DU_AN_LIST_COLUMNS = `${DU_AN_LIST_COLUMNS_BASE},vi_tri,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
 
-let projectsPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
+let projectsListPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
   null;
+let projectsFullPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
+  null;
+
+export function loadProjects(options?: { includeProgress?: boolean }) {
+  const includeProgress = options?.includeProgress !== false;
+  if (includeProgress) {
+    if (!projectsFullPromise) {
+      projectsFullPromise = fetchProjects({ includeProgress: true }).catch((error) => {
+        projectsFullPromise = null;
+        throw error;
+      });
+    }
+    return projectsFullPromise;
+  }
+  if (!projectsListPromise) {
+    projectsListPromise = fetchProjects({ includeProgress: false }).catch((error) => {
+      projectsListPromise = null;
+      throw error;
+    });
+  }
+  return projectsListPromise;
+}
+
+export function invalidateProjectsCache() {
+  projectsListPromise = null;
+  projectsFullPromise = null;
+}
+
+async function fetchProjects(options?: { includeProgress?: boolean }) {
+  const includeProgress = options?.includeProgress !== false;
+  if (!hasSupabaseEnv()) {
+    return {
+      projects: seedProjects.map(hydrateProjectPlan),
+      source: "seed" as const,
+      error: "Chưa cấu hình Supabase env",
+    };
+  }
+
+  const supabase = createClient();
+  const columns = includeProgress ? DU_AN_COLUMNS : DU_AN_LIST_COLUMNS;
+  const legacyColumns = includeProgress ? DU_AN_COLUMNS_BASE : DU_AN_LIST_COLUMNS_BASE;
+  const primaryResult = await supabase
+    .from("du_an")
+    .select(columns)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+  let data: unknown[] | null = primaryResult.data;
+  let error = primaryResult.error;
+
+  if (error && (error.message.includes("column") || error.code === "42703" || error.code === "PGRST204")) {
+    const legacyFallback = await supabase
+      .from("du_an")
+      .select(legacyColumns)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    data = legacyFallback.data as unknown[] | null;
+    error = legacyFallback.error;
+  }
+
+  if (error) {
+    return {
+      projects: seedProjects.map(hydrateProjectPlan),
+      source: "seed" as const,
+      error: error.message,
+    };
+  }
+
+  if (!data?.length) {
+    return { projects: [], source: "supabase" as const };
+  }
+
+  const [{ data: personnelRows }, metadata] = await Promise.all([
+    supabase.from("nhan_su").select("employee_id,ho_ten"),
+    loadProjectMetadata().catch(() => ({} as ProjectMetadataStore)),
+  ]);
+  const managerNames = new Map(
+    (personnelRows ?? []).map((person) => [String(person.employee_id), String(person.ho_ten ?? "")]),
+  );
+
+  return {
+    projects: (data as DuAnRow[]).map((row) =>
+      duAnRowToProject(
+        row,
+        row.nguoi_phu_trach ? managerNames.get(row.nguoi_phu_trach) ?? "" : "",
+        metadata[row.id],
+        { includeProgress },
+      ),
+    ),
+    source: "supabase" as const,
+  };
+}
 
 export function hasSupabaseEnv() {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
   );
+}
+
+function formatDuAnSaveError(message: string) {
+  if (message.includes("du_an_ma_du_an_unique")) {
+    return "Mã dự án đã tồn tại. Vui lòng chọn mã khác.";
+  }
+  return message;
 }
 
 export function normalizeTheoreticalProgress(raw: unknown): TheoreticalProgressRow[] {
@@ -191,8 +292,16 @@ export function inferRailTypesFromName(name: string): string[] {
   return CANONICAL_RAIL_CODES.filter((code) => upper.includes(code));
 }
 
-export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: ProjectMetadata): Project {
-  const existingProgress = normalizeTheoreticalProgress(row.tien_do_ly_thuyet);
+export function duAnRowToProject(
+  row: DuAnRow,
+  managerName = "",
+  metadata?: ProjectMetadata,
+  options?: { includeProgress?: boolean },
+): Project {
+  const includeProgress = options?.includeProgress !== false;
+  const existingProgress = includeProgress
+    ? normalizeTheoreticalProgress(row.tien_do_ly_thuyet)
+    : [];
   const startDate = row.ngay_bat_dau?.slice(0, 10) || existingProgress[0]?.ngay || row.created_at.slice(0, 10);
   const endDate = row.ngay_ket_thuc?.slice(0, 10) || existingProgress.at(-1)?.ngay || startDate;
   const plannedWeldCount = Math.max(
@@ -226,10 +335,11 @@ export function duAnRowToProject(row: DuAnRow, managerName = "", metadata?: Proj
     weldTypes: metadata?.weldTypes ?? [],
     railTypes,
     offDays,
-    theoreticalProgress:
-      Array.isArray(row.tien_do_ly_thuyet)
+    theoreticalProgress: includeProgress
+      ? Array.isArray(row.tien_do_ly_thuyet)
         ? reconcileAutoPlan(existingProgress, plannedWeldCount, startDate, endDate, offDays)
-        : buildDailyWeldPlan(plannedWeldCount, startDate, endDate, offDays),
+        : buildDailyWeldPlan(plannedWeldCount, startDate, endDate, offDays)
+      : [],
     maDuAn: row.ma_du_an ?? undefined,
   };
 }
@@ -251,78 +361,60 @@ export function sumTheoreticalWelds(project: Pick<Project, "theoreticalProgress"
   return (project.theoreticalProgress ?? []).reduce((sum, row) => sum + row.so_moi_han, 0);
 }
 
-export function loadProjects() {
-  if (!projectsPromise) {
-    projectsPromise = fetchProjects().catch((error) => {
-      projectsPromise = null;
-      throw error;
-    });
-  }
-  return projectsPromise;
-}
-
-export function invalidateProjectsCache() {
-  projectsPromise = null;
-}
-
-async function fetchProjects() {
+/** Tải tiến độ lý thuyết dạng phẳng cho bảng tổng — tách khỏi danh sách dự án. */
+export async function loadTheoreticalProgressViewRows(): Promise<TheoreticalProgressViewRow[]> {
   if (!hasSupabaseEnv()) {
-    return {
-      projects: seedProjects.map(hydrateProjectPlan),
-      source: "seed" as const,
-      error: "Chưa cấu hình Supabase env",
-    };
+    return flattenTheoreticalProgress(seedProjects.map(hydrateProjectPlan));
   }
 
   const supabase = createClient();
-  const primaryResult = await supabase
-    .from("du_an")
-    .select(DU_AN_COLUMNS)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
-  let data: unknown[] | null = primaryResult.data;
-  let error = primaryResult.error;
+  const pageSize = 200;
+  const projects: Array<{ id: string; du_an: string; tien_do_ly_thuyet: unknown }> = [];
 
-  if (error && (error.message.includes("column") || error.code === "42703" || error.code === "PGRST204")) {
-    const legacyFallback = await supabase
+  for (let from = 0; ; from += pageSize) {
+    const result = await supabase
       .from("du_an")
-      .select(DU_AN_COLUMNS_BASE)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-    data = legacyFallback.data as unknown[] | null;
-    error = legacyFallback.error;
+      .select("id,du_an,tien_do_ly_thuyet")
+      .order("du_an", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (result.error) throw new Error(result.error.message);
+    const chunk = (result.data ?? []) as Array<{ id: string; du_an: string; tien_do_ly_thuyet: unknown }>;
+    projects.push(...chunk);
+    if (chunk.length < pageSize) break;
   }
 
-  if (error) {
-    return {
-      projects: seedProjects.map(hydrateProjectPlan),
-      source: "seed" as const,
-      error: error.message,
-    };
+  return projects
+    .flatMap((project) =>
+      normalizeTheoreticalProgress(project.tien_do_ly_thuyet).map((row) => ({
+        ...row,
+        du_an_id: project.id,
+        du_an: project.du_an,
+      })),
+    )
+    .sort((a, b) => b.ngay.localeCompare(a.ngay) || a.du_an.localeCompare(b.du_an, "vi"));
+}
+
+/** Tải tiến độ lý thuyết của một dự án (khi mở chi tiết/sửa). */
+export async function loadProjectTheoreticalProgress(projectId: string): Promise<TheoreticalProgressRow[]> {
+  if (!hasSupabaseEnv()) {
+    const project = seedProjects.find((item) => item.id === projectId);
+    return project ? normalizeTheoreticalProgress(project.theoreticalProgress) : [];
   }
-
-  if (!data?.length) {
-    return { projects: [], source: "supabase" as const };
-  }
-
-  const [{ data: personnelRows }, metadata] = await Promise.all([
-    supabase.from("nhan_su").select("employee_id,ho_ten"),
-    loadProjectMetadata().catch(() => ({} as ProjectMetadataStore)),
-  ]);
-  const managerNames = new Map(
-    (personnelRows ?? []).map((person) => [String(person.employee_id), String(person.ho_ten ?? "")]),
-  );
-
-  return {
-    projects: (data as DuAnRow[]).map((row) =>
-      duAnRowToProject(
-        row,
-        row.nguoi_phu_trach ? managerNames.get(row.nguoi_phu_trach) ?? "" : "",
-        metadata[row.id],
-      ),
-    ),
-    source: "supabase" as const,
-  };
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("du_an")
+    .select("tien_do_ly_thuyet,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return [];
+  const existing = normalizeTheoreticalProgress(data.tien_do_ly_thuyet);
+  if (existing.length > 0) return existing;
+  const startDate = String(data.ngay_bat_dau ?? "").slice(0, 10);
+  const endDate = String(data.ngay_ket_thuc ?? "").slice(0, 10);
+  const planned = Math.max(0, Math.round(Number(data.tong_moi_han_du_kien) || 0));
+  if (!startDate || !endDate || planned <= 0) return [];
+  return buildDailyWeldPlan(planned, startDate, endDate);
 }
 
 export async function saveTheoreticalProgress(
@@ -410,7 +502,7 @@ export async function insertDuAn(payload: {
     .select(DU_AN_COLUMNS)
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: formatDuAnSaveError(error.message) };
   // Tương thích database còn trigger cũ: ghi riêng JSONB sau INSERT để kế hoạch
   // có ngày nghỉ (0 mối) không bị trigger chia đều lại trên toàn bộ ngày.
   const planResult = await supabase
@@ -419,7 +511,7 @@ export async function insertDuAn(payload: {
     .eq("id", String(data.id))
     .select(DU_AN_COLUMNS)
     .single();
-  if (planResult.error) return { error: planResult.error.message };
+  if (planResult.error) return { error: formatDuAnSaveError(planResult.error.message) };
   const savedRow = planResult.data as DuAnRow;
 
   const metadata: ProjectMetadata = {
@@ -445,6 +537,7 @@ export async function updateDuAn(
   projectId: string,
   patch: {
     name?: string;
+    maDuAn?: string;
     manager?: string;
     managerId?: string;
     location?: string;
@@ -467,6 +560,7 @@ export async function updateDuAn(
   const body: Record<string, string | number | TheoreticalProgressRow[] | null> = {};
   let dailyPlan: TheoreticalProgressRow[] | null = null;
   if (patch.name !== undefined) body.du_an = patch.name.trim();
+  if (patch.maDuAn !== undefined) body.ma_du_an = patch.maDuAn.trim() || null;
   if (patch.managerId !== undefined) body.nguoi_phu_trach = patch.managerId || null;
   if (patch.location !== undefined) body.vi_tri = patch.location.trim();
   if (patch.startDate !== undefined) body.ngay_bat_dau = patch.startDate;
@@ -507,7 +601,7 @@ export async function updateDuAn(
       .select(DU_AN_COLUMNS)
       .single();
 
-    if (error) return { error: error.message };
+    if (error) return { error: formatDuAnSaveError(error.message) };
     updatedRow = data as DuAnRow;
   } else {
     const { data, error } = await supabase

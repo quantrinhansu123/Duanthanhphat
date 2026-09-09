@@ -16,12 +16,14 @@ import {
   buildDailyWeldPlan,
   clampOffDaysToRange,
   deleteDuAn,
-  flattenTheoreticalProgress,
   insertDuAn,
+  loadProjectTheoreticalProgress,
+  loadTheoreticalProgressViewRows,
   projectDurationDays,
   projectWorkingDays,
   saveTheoreticalProgress,
   updateDuAn,
+  type TheoreticalProgressViewRow,
 } from "@/lib/projectsDb";
 import {
   downloadTheoreticalProgressExcelTemplate,
@@ -30,17 +32,22 @@ import {
   parseTheoreticalProgressExcel,
 } from "@/lib/parseTheoreticalProgressExcel";
 import {
-  loadPersonnelCertificateRows,
+  loadPersonnelPickerRows,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
-import { loadMachineCatalog } from "@/lib/machineCatalogDb";
-import type { Machine } from "@/data/machines";
+import { loadMachinePickerOptions } from "@/lib/machineCatalogDb";
 import { welders } from "@/data/welders";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
+const PROGRESS_PAGE_SIZE = 50;
 const activeWelders = welders.filter((w) => w.status === "Hoạt động");
+type ProjectMachineOption = { code: string; name: string };
+type ProjectPersonnelOption = Pick<
+  PersonnelCertificateRow,
+  "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han"
+>;
 
 const statusStyle: Record<Project["status"], string> = {
   "Đang triển khai": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -69,6 +76,7 @@ function emptyProject(): Project {
   return {
     id: "",
     name: "",
+    maDuAn: "",
     manager: "",
     managerId: undefined,
     plant: "",
@@ -429,19 +437,31 @@ function AllTheoreticalProgressTable({
   onExportExcel,
   onChangeRow,
 }: {
-  rows: ReturnType<typeof flattenTheoreticalProgress>;
+  rows: TheoreticalProgressViewRow[];
   loading: boolean;
   importing: boolean;
   onDownloadTemplate: () => void;
   onUploadExcel: (file: File | null) => void;
   onExportExcel: () => void;
-  onChangeRow: (row: ReturnType<typeof flattenTheoreticalProgress>[number], next: TheoreticalProgressRow | null) => Promise<boolean>;
+  onChangeRow: (row: TheoreticalProgressViewRow, next: TheoreticalProgressRow | null) => Promise<boolean>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<{ key: string; date: string; count: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  async function changeRow(row: ReturnType<typeof flattenTheoreticalProgress>[number], remove = false) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / PROGRESS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = useMemo(() => {
+    const start = (currentPage - 1) * PROGRESS_PAGE_SIZE;
+    return rows.slice(start, start + PROGRESS_PAGE_SIZE);
+  }, [rows, currentPage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [rows]);
+
+  async function changeRow(row: TheoreticalProgressViewRow, remove = false) {
     if (savingRef.current || importing) return;
     if (remove && !window.confirm(`Xóa kế hoạch ngày ${viDate(row.ngay)} của dự án ${row.du_an}?`)) return;
     if (!remove && (!editing?.date || !editing.count.trim() || !Number.isSafeInteger(Number(editing.count)) || Number(editing.count) < 0)) {
@@ -525,8 +545,8 @@ function AllTheoreticalProgressTable({
                   Đang tải tiến độ lý thuyết…
                 </td>
               </tr>
-            ) : rows.length > 0 ? (
-              rows.map((row, index) => (
+            ) : pageRows.length > 0 ? (
+              pageRows.map((row, index) => (
                 <tr key={`${row.du_an_id}-${row.ngay}-${index}`} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-4 py-3 font-mono text-slate-900 whitespace-nowrap">
                     {editing?.key === `${row.du_an_id}-${row.ngay}` ? <input aria-label="Ngày kế hoạch" type="date" disabled={saving} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} className="rounded border border-slate-300 p-1" /> : viDate(row.ngay)}
@@ -556,6 +576,34 @@ function AllTheoreticalProgressTable({
           </tbody>
         </table>
       </div>
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+          <div>
+            Trang <strong className="font-mono text-slate-800">{currentPage}</strong> /{" "}
+            <strong className="font-mono text-slate-800">{totalPages}</strong>
+            {" · "}
+            {rows.length.toLocaleString("vi-VN")} dòng
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              className="inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Trước
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              className="inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -582,8 +630,8 @@ function ProjectInfoFields({
   form: Project;
   setForm: (p: Project) => void;
   readOnly: boolean;
-  personnelOptions: PersonnelCertificateRow[];
-  machineOptions: Machine[];
+  personnelOptions: ProjectPersonnelOption[];
+  machineOptions: ProjectMachineOption[];
   railOptions: string[];
   weldOptions: string[];
 }) {
@@ -633,6 +681,17 @@ function ProjectInfoFields({
           value={form.name}
           onChange={(e) => updateForm({ name: e.target.value })}
           className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+        />
+      </label>
+      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        Mã dự án
+        <input
+          readOnly={readOnly}
+          value={form.maDuAn ?? ""}
+          onChange={(e) => updateForm({ maDuAn: e.target.value })}
+          placeholder="VD: HN01"
+          autoComplete="off"
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-mono text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
       <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1358,8 +1417,8 @@ function ProjectModal({
   onSavePersonnel?: (projectId: string, rows: ProjectPersonnel[]) => void;
   onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
-  personnelOptions: PersonnelCertificateRow[];
-  machineOptions: Machine[];
+  personnelOptions: ProjectPersonnelOption[];
+  machineOptions: ProjectMachineOption[];
   railOptions: string[];
   weldOptions: string[];
 }) {
@@ -1398,6 +1457,7 @@ function ProjectModal({
     setTab("info");
     setForm({
       ...project,
+      maDuAn: project.maDuAn ?? "",
       location: project.location?.trim() || "",
       personnelIds: project.personnelIds ?? [],
       machineTypes: project.machineTypes ?? [],
@@ -1589,6 +1649,7 @@ function ProjectModal({
                 try {
                 await onSave({
                   ...form,
+                  maDuAn: (form.maDuAn ?? "").trim(),
                   location: form.location.trim(),
                   plant: "",
                   staffCount: form.personnelIds.length,
@@ -1638,7 +1699,9 @@ function ProjectModal({
 }
 
 export default function ProjectManagement() {
-  const { projects: list, setProjects, loading, error, source, reload } = useProjectsData();
+  const { projects: list, setProjects, loading, error, source, reload } = useProjectsData({
+    includeProgress: false,
+  });
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
@@ -1649,41 +1712,90 @@ export default function ProjectManagement() {
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
-  const [personnelOptions, setPersonnelOptions] = useState<PersonnelCertificateRow[]>([]);
-  const [machineOptions, setMachineOptions] = useState<Machine[]>([]);
+  const [personnelOptions, setPersonnelOptions] = useState<ProjectPersonnelOption[]>([]);
+  const [machineOptions, setMachineOptions] = useState<ProjectMachineOption[]>([]);
+  const [formOptionsLoaded, setFormOptionsLoaded] = useState(false);
   const [importingExcel, setImportingExcel] = useState(false);
+  const [progressRows, setProgressRows] = useState<TheoreticalProgressViewRow[]>([]);
+  const [progressLoading, setProgressLoading] = useState(true);
+  const [progressReloadToken, setProgressReloadToken] = useState(0);
   const railOptions = useCatalogOptions("Loại ray");
   const weldOptions = useCatalogOptions("Loại mối hàn", "name");
 
   useEffect(() => {
+    if (!modal || formOptionsLoaded) return;
     let active = true;
-    loadPersonnelCertificateRows()
-      .then((rows) => {
-        if (active) setPersonnelOptions(rows);
+    Promise.all([loadPersonnelPickerRows(), loadMachinePickerOptions()])
+      .then(([personnel, machines]) => {
+        if (!active) return;
+        setPersonnelOptions(personnel);
+        setMachineOptions(machines);
+        setFormOptionsLoaded(true);
       })
       .catch(() => {
-        if (active) setPersonnelOptions([]);
+        if (!active) return;
+        setPersonnelOptions([]);
+        setMachineOptions([]);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [modal, formOptionsLoaded]);
 
   useEffect(() => {
     let active = true;
-    loadMachineCatalog()
-      .then((result) => {
-        if (active) setMachineOptions(result.machines);
+    setProgressLoading(true);
+    loadTheoreticalProgressViewRows()
+      .then((rows) => {
+        if (active) setProgressRows(rows);
       })
       .catch(() => {
-        if (active) setMachineOptions([]);
+        if (active) setProgressRows([]);
+      })
+      .finally(() => {
+        if (active) setProgressLoading(false);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [progressReloadToken]);
 
-  const progressRows = useMemo(() => flattenTheoreticalProgress(list), [list]);
+  function refreshProgress() {
+    setProgressReloadToken((token) => token + 1);
+  }
+
+  async function openProjectModal(project: Project, mode: "view" | "edit" | "create") {
+    if (mode === "create") {
+      setModal({ project, mode });
+      return;
+    }
+    setModal({ project, mode });
+    if ((project.theoreticalProgress?.length ?? 0) > 0) return;
+    try {
+      const progress = await loadProjectTheoreticalProgress(project.id);
+      const nextProgress =
+        progress.length > 0
+          ? progress
+          : buildDailyWeldPlan(
+              project.plannedWeldCount,
+              project.startDate,
+              project.endDate,
+              project.offDays ?? [],
+            );
+      setProjects((prev) =>
+        prev.map((item) =>
+          item.id === project.id ? { ...item, theoreticalProgress: nextProgress } : item,
+        ),
+      );
+      setModal((current) =>
+        current && current.project.id === project.id
+          ? { ...current, project: { ...current.project, theoreticalProgress: nextProgress } }
+          : current,
+      );
+    } catch {
+      // Giữ modal với dữ liệu hiện có nếu không tải được tiến độ.
+    }
+  }
 
   useEffect(() => {
     if (!projectMenuOpen) return;
@@ -1744,6 +1856,7 @@ export default function ProjectManagement() {
       if (source === "supabase") {
         const { project: saved, error: saveError } = await updateDuAn(updated.id, {
           name: updated.name,
+          maDuAn: updated.maDuAn,
           manager: updated.manager,
           managerId: updated.managerId,
           location: updated.location,
@@ -1769,6 +1882,7 @@ export default function ProjectManagement() {
                 ? {
                     ...updated,
                     ...saved,
+                    maDuAn: saved.maDuAn ?? updated.maDuAn,
                     plant: "",
                     status: updated.status,
                     personnelIds: updated.personnelIds,
@@ -1787,6 +1901,7 @@ export default function ProjectManagement() {
         setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       }
       setModal(null);
+      refreshProgress();
   }
 
   async function handleCreate(project: Project) {
@@ -1843,6 +1958,7 @@ export default function ProjectManagement() {
         }, ...prev]);
       }
       setModal(null);
+      refreshProgress();
   }
 
   function handleSavePersonnel(projectId: string, rows: ProjectPersonnel[]) {
@@ -1871,7 +1987,7 @@ export default function ProjectManagement() {
   }
 
   async function handleChangeProgressRow(
-    row: ReturnType<typeof flattenTheoreticalProgress>[number],
+    row: TheoreticalProgressViewRow,
     next: TheoreticalProgressRow | null,
   ): Promise<boolean> {
     const project = list.find((item) => item.id === row.du_an_id);
@@ -1895,6 +2011,7 @@ export default function ProjectManagement() {
         startDate: progress[0]?.ngay || item.startDate,
         endDate: progress.at(-1)?.ngay || item.endDate,
       } : item));
+      refreshProgress();
       return true;
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Không lưu được tiến độ lý thuyết.");
@@ -1971,6 +2088,7 @@ export default function ProjectManagement() {
         parts.push(saveErrors.slice(0, 5).join("; "));
       }
       window.alert(parts.join("\n"));
+      if (updated > 0) refreshProgress();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không đọc được file Excel");
     } finally {
@@ -2137,7 +2255,7 @@ export default function ProjectManagement() {
 
         <button
           type="button"
-          onClick={() => setModal({ project: emptyProject(), mode: "create" })}
+          onClick={() => void openProjectModal(emptyProject(), "create")}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm dự án
@@ -2200,7 +2318,7 @@ export default function ProjectManagement() {
                           type="button"
                           className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
-                            setModal({ project: p, mode: "view" });
+                            void openProjectModal(p, "view");
                             setMenuOpen(null);
                           }}
                         >
@@ -2210,7 +2328,7 @@ export default function ProjectManagement() {
                           type="button"
                           className="block w-full px-3.5 py-2 text-left text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] cursor-pointer transition-colors"
                           onClick={() => {
-                            setModal({ project: p, mode: "edit" });
+                            void openProjectModal(p, "edit");
                             setMenuOpen(null);
                           }}
                         >
@@ -2242,7 +2360,7 @@ export default function ProjectManagement() {
 
       <AllTheoreticalProgressTable
         rows={progressRows}
-        loading={loading}
+        loading={progressLoading}
         importing={importingExcel}
         onDownloadTemplate={() => downloadTheoreticalProgressExcelTemplate()}
         onUploadExcel={(file) => void handleUploadTheoreticalExcel(file)}

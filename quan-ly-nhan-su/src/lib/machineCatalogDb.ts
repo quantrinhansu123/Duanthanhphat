@@ -242,7 +242,6 @@ export async function loadMachineCatalog(): Promise<{
   const supabase = createClient();
 
   try {
-    // Try to select extended columns if they exist
     const { data, error } = await supabase
       .from("thiet_bi")
       .select("*")
@@ -250,7 +249,6 @@ export async function loadMachineCatalog(): Promise<{
       .order("id", { ascending: false });
 
     if (error) {
-      // Fall back to basic columns
       const { data: basicData, error: basicError } = await supabase
         .from("thiet_bi")
         .select("id,ma_may,ten_may,vi_tri_hien_tai,hinh_anh,trang_thai,created_at")
@@ -271,8 +269,6 @@ export async function loadMachineCatalog(): Promise<{
     }
 
     const rows = (data ?? []) as MachineCatalogRow[];
-
-    // If Supabase returned rows
     if (rows.length > 0) {
       try {
         const mapped = rows.map(rowToMachine).filter((m) => Boolean(m.code));
@@ -293,7 +289,6 @@ export async function loadMachineCatalog(): Promise<{
       }
     }
 
-    // If table is completely empty, use seeds
     return { machines: seedMachines, source: "seed" };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -301,6 +296,27 @@ export async function loadMachineCatalog(): Promise<{
     const merged = seedMachines.map((m) => overrides[m.code] || m);
     return { machines: merged, source: "seed", error: errorMsg };
   }
+}
+
+/** Chỉ mã + tên máy cho form dự án — tránh select(*) nặng. */
+export async function loadMachinePickerOptions(): Promise<Array<{ code: string; name: string }>> {
+  if (!isSupabaseConfigured()) {
+    return seedMachines.map((machine) => ({ code: machine.code, name: machine.name }));
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("thiet_bi")
+    .select("ma_may,ten_may")
+    .order("ma_may", { ascending: true });
+  if (error) {
+    return seedMachines.map((machine) => ({ code: machine.code, name: machine.name }));
+  }
+  return (data ?? [])
+    .map((row) => ({
+      code: String(row.ma_may ?? "").trim(),
+      name: String(row.ten_may ?? "").trim() || String(row.ma_may ?? "").trim(),
+    }))
+    .filter((row) => row.code);
 }
 
 export async function syncRealMachinesToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {

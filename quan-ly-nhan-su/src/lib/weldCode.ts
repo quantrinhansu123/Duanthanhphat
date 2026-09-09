@@ -1,4 +1,4 @@
-/** Mã mối hàn: {site}{công nghệ}{DD}{MM}{YY}{số TT} — VD: PHQFBW1208260001 */
+/** Mã mối hàn: {mã dự án}{công nghệ}{DD}{MM}{YY}{số TT} — VD: PHQFBW1208260001 */
 
 export const WELD_CODE_SITE_PREFIX = "PHQ";
 
@@ -8,6 +8,12 @@ export function pad2(n: number) {
 
 export function padWeldSequence(n: number, width = 4) {
   return String(n).padStart(width, "0");
+}
+
+/** Chuẩn hóa mã dự án dùng làm tiền tố mã mối hàn. */
+export function normalizeWeldSitePrefix(value?: string | null) {
+  const trimmed = (value ?? "").trim().toUpperCase();
+  return trimmed || WELD_CODE_SITE_PREFIX;
 }
 
 /** Tách ngày từ datetime-local / ISO thành DD, MM, YY. */
@@ -27,7 +33,7 @@ export function buildWeldCodePrefix(
   const parts = weldCodeDateParts(performedAt);
   if (!parts) return "";
   const tech = method.trim().toUpperCase() || "FBW";
-  return `${sitePrefix}${tech}${parts.day}${parts.month}${parts.year}`;
+  return `${normalizeWeldSitePrefix(sitePrefix)}${tech}${parts.day}${parts.month}${parts.year}`;
 }
 
 export function buildWeldCode(
@@ -41,7 +47,7 @@ export function buildWeldCode(
   return `${prefix}${padWeldSequence(sequence)}`;
 }
 
-/** Lấy số TT lớn nhất đã dùng cho cùng tiền tố ngày + công nghệ. */
+/** Lấy số TT lớn nhất đã dùng cho cùng tiền tố mã dự án + công nghệ + ngày. */
 export function nextWeldSequence(existingCodes: string[], prefix: string) {
   if (!prefix) return 1;
   let max = 0;
@@ -72,22 +78,44 @@ export type WeldCodeSourceRow = {
   cong_nghe_han: string;
   /** ISO date YYYY-MM-DD */
   isoDate: string;
+  /** Mã dự án — tiền tố mã mối hàn */
+  sitePrefix?: string | null;
 };
 
-/** Lập kế hoạch mã mới cho toàn bộ bản ghi (số TT theo ngày + công nghệ). */
+/** Lập kế hoạch mã mới cho các bản ghi (số TT theo mã dự án + ngày + công nghệ). */
 export function planWeldCodeAssignments(
   rows: WeldCodeSourceRow[],
-  sitePrefix = WELD_CODE_SITE_PREFIX,
+  options?: {
+    fallbackSitePrefix?: string;
+    /** Mã đang giữ của bản ghi không thuộc phạm vi đồng bộ — tránh trùng số TT. */
+    reservedCodes?: string[];
+  } | string,
 ): { id: string; oldCode: string; newCode: string }[] {
+  const normalizedOptions =
+    typeof options === "string"
+      ? { fallbackSitePrefix: options, reservedCodes: [] as string[] }
+      : {
+          fallbackSitePrefix: options?.fallbackSitePrefix ?? WELD_CODE_SITE_PREFIX,
+          reservedCodes: options?.reservedCodes ?? [],
+        };
+  const fallbackSitePrefix = normalizedOptions.fallbackSitePrefix;
+  const reservedCodes = normalizedOptions.reservedCodes;
+
   const enriched = rows
-    .map((row) => ({
-      ...row,
-      prefix: buildWeldCodePrefix(row.cong_nghe_han, row.isoDate, sitePrefix),
-    }))
+    .map((row) => {
+      const sitePrefix = normalizeWeldSitePrefix(row.sitePrefix || fallbackSitePrefix);
+      return {
+        ...row,
+        sitePrefix,
+        prefix: buildWeldCodePrefix(row.cong_nghe_han, row.isoDate, sitePrefix),
+      };
+    })
     .filter((row) => row.prefix)
     .sort((a, b) => {
       const byDate = a.isoDate.localeCompare(b.isoDate);
       if (byDate !== 0) return byDate;
+      const bySite = a.sitePrefix.localeCompare(b.sitePrefix);
+      if (bySite !== 0) return bySite;
       const byMethod = a.cong_nghe_han.localeCompare(b.cong_nghe_han);
       if (byMethod !== 0) return byMethod;
       const byCode = a.ma_lich_su.localeCompare(b.ma_lich_su, "vi");
@@ -96,13 +124,19 @@ export function planWeldCodeAssignments(
     });
 
   const seqByPrefix = new Map<string, number>();
+  for (const row of enriched) {
+    if (!seqByPrefix.has(row.prefix)) {
+      seqByPrefix.set(row.prefix, nextWeldSequence(reservedCodes, row.prefix) - 1);
+    }
+  }
+
   return enriched.map((row) => {
     const next = (seqByPrefix.get(row.prefix) ?? 0) + 1;
     seqByPrefix.set(row.prefix, next);
     return {
       id: row.id,
       oldCode: row.ma_lich_su,
-      newCode: buildWeldCode(row.cong_nghe_han, row.isoDate, next, sitePrefix),
+      newCode: buildWeldCode(row.cong_nghe_han, row.isoDate, next, row.sitePrefix),
     };
   });
 }

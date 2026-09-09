@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { Project } from "@/data/projects";
 import { invalidateProjectsCache, loadProjects } from "@/lib/projectsDb";
 
-export function useProjectsData() {
+export function useProjectsData(options?: { includeProgress?: boolean }) {
+  const includeProgress = options?.includeProgress !== false;
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +15,7 @@ export function useProjectsData() {
     setLoading(true);
     invalidateProjectsCache();
     try {
-      const result = await loadProjects();
+      const result = await loadProjects({ includeProgress });
       setProjects(result.projects);
       setSource(result.source);
       setError(result.error ?? null);
@@ -23,7 +24,7 @@ export function useProjectsData() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includeProgress]);
 
   useEffect(() => {
     void reload();

@@ -36,7 +36,7 @@ import {
   type WeldReportRow,
   type WeldTestStatus,
 } from "@/lib/weldReportData";
-import { buildWeldCodePrefix, suggestWeldCode, WELD_CODE_SITE_PREFIX } from "@/lib/weldCode";
+import { buildWeldCodePrefix, normalizeWeldSitePrefix, suggestWeldCode } from "@/lib/weldCode";
 import {
   describeCertificateRequirement,
   eligibleCertificatesForWeld,
@@ -50,6 +50,8 @@ const defectLabels: Record<string, string> = {
 import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
+
+type JournalProjectOption = { id: string; label: string; ma_du_an: string };
 
 type JournalFormValues = {
   ma_lich_su: string;
@@ -91,7 +93,7 @@ function defaultPerformedAt() {
 }
 
 function emptyJournalForm(
-  projects: { id: string; label: string }[],
+  projects: JournalProjectOption[],
   welders: CertifiedWelderOption[],
   machines: MachineOption[],
 ): JournalFormValues {
@@ -164,7 +166,7 @@ function JournalFormModal({
   open: boolean;
   mode?: "create" | "edit";
   initial?: JournalFormValues | null;
-  projects: { id: string; label: string }[];
+  projects: JournalProjectOption[];
   welders: CertifiedWelderOption[];
   machines: MachineOption[];
   existingCodes: string[];
@@ -198,6 +200,8 @@ function JournalFormModal({
   }, [linkDateFrom, linkDateTo]);
 
   const selectedMachine = machines.find((machine) => machine.id === form.may_id);
+  const selectedProject = projects.find((project) => project.id === form.du_an_id);
+  const sitePrefix = normalizeWeldSitePrefix(selectedProject?.ma_du_an);
   const qualificationContext = useMemo(
     () => ({
       railType: form.loai_ray,
@@ -238,7 +242,7 @@ function JournalFormModal({
   useEffect(() => {
     if (!open) return;
     if (mode === "edit") return;
-    const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt);
+    const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt, sitePrefix);
     if (!prefix) {
       setPrefixCodes([]);
       return;
@@ -254,16 +258,16 @@ function JournalFormModal({
     return () => {
       active = false;
     };
-  }, [mode, open, form.cong_nghe_han, form.performedAt]);
+  }, [mode, open, form.cong_nghe_han, form.performedAt, sitePrefix]);
 
   useEffect(() => {
     if (!open) return;
     if (mode === "edit") return;
     const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
-    const nextCode = suggestWeldCode(form.cong_nghe_han, form.performedAt, codes);
+    const nextCode = suggestWeldCode(form.cong_nghe_han, form.performedAt, codes, sitePrefix);
     if (!nextCode || form.ma_lich_su === nextCode) return;
     setForm((prev) => ({ ...prev, ma_lich_su: nextCode }));
-  }, [mode, open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes]);
+  }, [mode, open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes, sitePrefix]);
 
   useEffect(() => {
     const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
@@ -383,11 +387,11 @@ function JournalFormModal({
               <input
                 readOnly
                 value={form.ma_lich_su}
-                placeholder={`${WELD_CODE_SITE_PREFIX}FBW1208260001`}
+                placeholder={`${sitePrefix}FBW1208260001`}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Tự tạo: {WELD_CODE_SITE_PREFIX} + công nghệ + ngày/tháng/năm + số TT (VD: {WELD_CODE_SITE_PREFIX}FBW1208260001)
+                Tự tạo: mã dự án + công nghệ + ngày/tháng/năm (2 số) + số TT (VD: {sitePrefix}FBW1208260001)
               </span>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -772,6 +776,8 @@ export default function WeldingJournalList() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [project, setProject] = useState("Tất cả dự án");
   const [resultFilter, setResultFilter] = useState("Tất cả");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -802,7 +808,7 @@ export default function WeldingJournalList() {
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
-  const [projectOptions, setProjectOptions] = useState<{ id: string; label: string }[]>([]);
+  const [projectOptions, setProjectOptions] = useState<JournalProjectOption[]>([]);
 
   useEffect(() => {
     const initialQuery = new URLSearchParams(window.location.search).get("query")?.trim() || "";
@@ -871,6 +877,8 @@ export default function WeldingJournalList() {
       query: appliedQuery,
       project,
       resultFilter,
+      dateFrom,
+      dateTo,
     })
       .then((result) => {
         if (!active) return;
@@ -897,7 +905,7 @@ export default function WeldingJournalList() {
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, project, resultFilter, reloadToken]);
+  }, [page, appliedQuery, project, resultFilter, dateFrom, dateTo, reloadToken]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
@@ -990,7 +998,7 @@ export default function WeldingJournalList() {
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, project, resultFilter]);
+  }, [appliedQuery, project, resultFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -1030,6 +1038,8 @@ export default function WeldingJournalList() {
         query: appliedQuery,
         project,
         resultFilter,
+        dateFrom,
+        dateTo,
       });
 
       const gpsByWeldId = new Map(
@@ -1108,19 +1118,44 @@ export default function WeldingJournalList() {
 
   async function handleSyncAllCodes() {
     if (syncingCodes || saving) return;
+    const filterParts = [
+      project !== "Tất cả dự án" ? `dự án "${project}"` : null,
+      resultFilter !== "Tất cả" ? `tình trạng "${resultFilter}"` : null,
+      appliedQuery ? `tìm kiếm "${appliedQuery}"` : null,
+      dateFrom || dateTo
+        ? `ngày ${dateFrom || "…"} → ${dateTo || "…"}`
+        : null,
+    ].filter(Boolean);
+    const scopeText =
+      filterParts.length > 0
+        ? `Chỉ đồng bộ ${total.toLocaleString("vi-VN")} bản ghi theo bộ lọc hiện tại (${filterParts.join(", ")}).`
+        : `Đồng bộ toàn bộ ${total.toLocaleString("vi-VN")} bản ghi đang hiển thị (không có bộ lọc).`;
     const ok = window.confirm(
-      "Đồng bộ toàn bộ mã mối hàn theo chuẩn PHQ + công nghệ + ngày/tháng/năm + số TT?\nThao tác này sẽ ghi đè mã hiện tại trong database.",
+      `${scopeText}\n\nChuẩn mã: Mã dự án + Công nghệ + ngày/tháng/năm (2 số) + số thứ tự.\nThao tác này sẽ ghi đè mã hiện tại trong database.`,
     );
     if (!ok) return;
+    if (total === 0) {
+      window.alert("Không có bản ghi nào trong bộ lọc hiện tại để đồng bộ.");
+      return;
+    }
     setSyncingCodes(true);
     setSyncProgress("Bắt đầu đồng bộ…");
     try {
-      const result = await syncAllWeldCodes((message) => setSyncProgress(message));
+      const result = await syncAllWeldCodes(
+        (message) => setSyncProgress(message),
+        {
+          query: appliedQuery,
+          project,
+          resultFilter,
+          dateFrom,
+          dateTo,
+        },
+      );
       refetch();
       showToast(
         result.updated === 0
           ? `Không cần đổi mã · ${result.total.toLocaleString("vi-VN")} bản ghi đã đúng chuẩn`
-          : `Đã đồng bộ ${result.updated.toLocaleString("vi-VN")}/${result.total.toLocaleString("vi-VN")} mã mối hàn`,
+          : `Đã đồng bộ ${result.updated.toLocaleString("vi-VN")}/${result.total.toLocaleString("vi-VN")} mã mối hàn theo bộ lọc`,
       );
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không thể đồng bộ mã mối hàn");
@@ -1225,10 +1260,20 @@ export default function WeldingJournalList() {
 
         let maLichSu = row.ma_moi_han.trim();
         if (!maLichSu) {
-          const prefix = buildWeldCodePrefix(row.cong_nghe_han, `${row.ngay_thuc_hien}T08:00`);
+          const sitePrefix = normalizeWeldSitePrefix(project.ma_du_an);
+          const prefix = buildWeldCodePrefix(
+            row.cong_nghe_han,
+            `${row.ngay_thuc_hien}T08:00`,
+            sitePrefix,
+          );
           const existing = await loadWeldCodesWithPrefix(prefix);
           const allExisting = [...existing, ...usedCodes];
-          maLichSu = suggestWeldCode(row.cong_nghe_han, `${row.ngay_thuc_hien}T08:00`, allExisting);
+          maLichSu = suggestWeldCode(
+            row.cong_nghe_han,
+            `${row.ngay_thuc_hien}T08:00`,
+            allExisting,
+            sitePrefix,
+          );
         }
         usedCodes.add(maLichSu);
 
@@ -1445,6 +1490,38 @@ export default function WeldingJournalList() {
           <option>Không đạt</option>
           <option>Không thí nghiệm</option>
         </select>
+        <label className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-600 shadow-2xs">
+          <span className="whitespace-nowrap font-semibold text-slate-700">Từ</span>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-8 rounded-md border-0 bg-transparent px-1 text-sm text-slate-900 outline-hidden"
+          />
+        </label>
+        <label className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-600 shadow-2xs">
+          <span className="whitespace-nowrap font-semibold text-slate-700">Đến</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-8 rounded-md border-0 bg-transparent px-1 text-sm text-slate-900 outline-hidden"
+          />
+        </label>
+        {(dateFrom || dateTo) && (
+          <button
+            type="button"
+            onClick={() => {
+              setDateFrom("");
+              setDateTo("");
+            }}
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer"
+          >
+            Xóa ngày
+          </button>
+        )}
         <button
           type="button"
           onClick={() => downloadWeldJournalExcelTemplate()}
@@ -1484,7 +1561,7 @@ export default function WeldingJournalList() {
           type="button"
           onClick={handleSyncAllCodes}
           disabled={syncingCodes || saving || loading}
-          title={syncProgress || "Đồng bộ toàn bộ mã mối hàn theo chuẩn PHQ…"}
+          title={syncProgress || "Đồng bộ mã mối hàn theo bộ lọc hiện tại"}
           className="inline-flex h-10 max-w-[280px] shrink-0 items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer"
         >
           {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
