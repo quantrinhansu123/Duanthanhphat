@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { CaretRight, DownloadSimple, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
+import { CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
+import DateField from "@/components/DateField";
 import SelectMenu from "@/components/SelectMenu";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
@@ -396,26 +397,22 @@ function JournalFormModal({
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày giờ
-              <input
-                type="datetime-local"
+              <DateField
+                withTime
                 value={form.performedAt}
-                max={defaultPerformedAt()}
-                onChange={(e) => setForm({ ...form, performedAt: e.target.value })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 font-mono"
+                onChange={(performedAt) => setForm({ ...form, performedAt })}
+                className="mt-1.5"
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Tình trạng thí nghiệm
-              <select
+              <SelectMenu
                 value={form.result}
-                onChange={(e) => setForm({ ...form, result: e.target.value as JournalFormValues["result"] })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              >
-                <option>Chờ thí nghiệm</option>
-                <option>Đạt</option>
-                <option>Không đạt</option>
-                <option>Không thí nghiệm</option>
-              </select>
+                onChange={(result) => setForm({ ...form, result: result as JournalFormValues["result"] })}
+                options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((value) => ({ value, label: value }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
             </label>
           </div>
 
@@ -531,40 +528,33 @@ function JournalFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại ray
-              <select
+              <SelectMenu
                 value={form.loai_ray}
-                onChange={(e) => setForm({ ...form, loai_ray: e.target.value })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-              >
-                {railOptions.map((rail) => <option key={rail}>{rail}</option>)}
-              </select>
+                onChange={(loai_ray) => setForm({ ...form, loai_ray })}
+                options={railOptions.map((rail) => ({ value: rail, label: rail }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Công nghệ
-              <select
+              <SelectMenu
                 value={form.cong_nghe_han}
-                onChange={(e) =>
-                  setForm({ ...form, cong_nghe_han: e.target.value as JournalFormValues["cong_nghe_han"] })
-                }
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              >
-                <option>FBW</option>
-                <option>ATW</option>
-              </select>
+                onChange={(cong_nghe_han) => setForm({ ...form, cong_nghe_han: cong_nghe_han as JournalFormValues["cong_nghe_han"] })}
+                options={["FBW", "ATW"].map((value) => ({ value, label: value }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại mối
-              <select
+              <SelectMenu
                 value={form.loai_moi_han}
-                onChange={(e) =>
-                  setForm({ ...form, loai_moi_han: e.target.value as JournalFormValues["loai_moi_han"] })
-                }
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              >
-                <option>Sản xuất</option>
-                <option>Thử nghiệm</option>
-                <option>Đào tạo</option>
-              </select>
+                onChange={(loai_moi_han) => setForm({ ...form, loai_moi_han: loai_moi_han as JournalFormValues["loai_moi_han"] })}
+                options={["Sản xuất", "Thử nghiệm", "Đào tạo"].map((value) => ({ value, label: value }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
             </label>
           </div>
 
@@ -573,45 +563,38 @@ function JournalFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block text-xs font-semibold text-slate-600">
                 Từ ngày
-                <input
-                  type="date"
+                <DateField
                   value={linkDateFrom}
-                  onChange={(e) => {
-                    const val = e.target.value;
+                  onChange={(val) => {
                     setLinkDateFrom(val);
                     if (linkDateTo && val > linkDateTo) setLinkDateTo(val);
                   }}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
+                  className="mt-1"
                 />
               </label>
               <label className="block text-xs font-semibold text-slate-600">
                 Đến ngày
-                <input
-                  type="date"
+                <DateField
                   value={linkDateTo}
-                  onChange={(e) => {
-                    const val = e.target.value;
+                  onChange={(val) => {
                     setLinkDateTo(val);
                     if (linkDateFrom && val < linkDateFrom) setLinkDateFrom(val);
                   }}
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
+                  className="mt-1"
                 />
               </label>
             </div>
             <label className="block text-xs font-semibold text-slate-600">
               Chọn mối hàn lỗi trong khoảng ngày
-              <select
+              <SelectMenu
                 value={form.moi_han_lien_ket}
-                onChange={(e) => setForm({ ...form, moi_han_lien_ket: e.target.value })}
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              >
-                <option value="">— Không liên kết —</option>
-                {failedWeldOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(moi_han_lien_ket) => setForm({ ...form, moi_han_lien_ket })}
+                options={[{ value: "", label: "— Không liên kết —" }, ...failedWeldOptions]}
+                searchable={failedWeldOptions.length > 5}
+                searchPlaceholder="Tìm mã mối hàn..."
+                className="mt-1"
+                buttonClassName="h-10 shadow-2xs"
+              />
             </label>
             <p className="text-[11px] text-slate-500">
               {failedWeldOptions.length > 0
@@ -675,10 +658,9 @@ function JournalFormModal({
               <div className="mt-2.5">
                 <label className="block text-xs font-semibold text-slate-600">
                   Gán điểm GPS có sẵn (chưa liên kết)
-                  <select
+                  <SelectMenu
                     value={form.toa_do_id}
-                    onChange={(e) => {
-                      const id = e.target.value;
+                    onChange={(id) => {
                       const pt = unlinkedGpsPoints.find((p) => p.id === id);
                       if (pt) {
                         setForm((prev) => ({
@@ -692,15 +674,18 @@ function JournalFormModal({
                         setForm((prev) => ({ ...prev, toa_do_id: "" }));
                       }
                     }}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  >
-                    <option value="">— Nhập mới hoặc không gán điểm có sẵn —</option>
-                    {unlinkedGpsPoints.map((pt) => (
-                      <option key={pt.id} value={pt.id}>
-                        {pt.code} ({pt.chainage}) — {pt.latitude.toFixed(5)}, {pt.longitude.toFixed(5)}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: "", label: "— Nhập mới hoặc không gán điểm có sẵn —" },
+                      ...unlinkedGpsPoints.map((pt) => ({
+                        value: pt.id,
+                        label: `${pt.code} (${pt.chainage}) — ${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
+                      })),
+                    ]}
+                    searchable={unlinkedGpsPoints.length > 5}
+                    searchPlaceholder="Tìm mã hoặc lý trình..."
+                    className="mt-1"
+                    buttonClassName="h-10 shadow-2xs"
+                  />
                 </label>
               </div>
             )}
@@ -776,6 +761,7 @@ export default function WeldingJournalList() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [project, setProject] = useState("Tất cả dự án");
   const [resultFilter, setResultFilter] = useState("Tất cả");
+  const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -877,6 +863,7 @@ export default function WeldingJournalList() {
       query: appliedQuery,
       project,
       resultFilter,
+      linkedWeldFilter,
       dateFrom,
       dateTo,
     })
@@ -905,7 +892,7 @@ export default function WeldingJournalList() {
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, project, resultFilter, dateFrom, dateTo, reloadToken]);
+  }, [page, appliedQuery, project, resultFilter, linkedWeldFilter, dateFrom, dateTo, reloadToken]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
@@ -1038,6 +1025,7 @@ export default function WeldingJournalList() {
         query: appliedQuery,
         project,
         resultFilter,
+        linkedWeldFilter,
         dateFrom,
         dateTo,
       });
@@ -1121,6 +1109,7 @@ export default function WeldingJournalList() {
     const filterParts = [
       project !== "Tất cả dự án" ? `dự án "${project}"` : null,
       resultFilter !== "Tất cả" ? `tình trạng "${resultFilter}"` : null,
+      linkedWeldFilter !== "Tất cả" ? `mối hàn "${linkedWeldFilter.toLocaleLowerCase("vi")}"` : null,
       appliedQuery ? `tìm kiếm "${appliedQuery}"` : null,
       dateFrom || dateTo
         ? `ngày ${dateFrom || "…"} → ${dateTo || "…"}`
@@ -1147,6 +1136,7 @@ export default function WeldingJournalList() {
           query: appliedQuery,
           project,
           resultFilter,
+          linkedWeldFilter,
           dateFrom,
           dateTo,
         },
@@ -1460,54 +1450,62 @@ export default function WeldingJournalList() {
         <span>{testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm · Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong></span>
       </div>
 
-      <div className="mb-4 flex flex-col sm:flex-row gap-2.5">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm ID, thợ hàn, máy, dự án…"
-          className="h-10 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-        />
-        <select
-          value={project}
-          onChange={(e) => setProject(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-        >
-          {projects.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <select
-          value={resultFilter}
-          onChange={(e) => setResultFilter(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-        >
-          <option>Tất cả</option>
-          <option>Chờ thí nghiệm</option>
-          <option>Đạt</option>
-          <option>Không đạt</option>
-          <option>Không thí nghiệm</option>
-        </select>
-        <label className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-600 shadow-2xs">
-          <span className="whitespace-nowrap font-semibold text-slate-700">Từ</span>
+      <div className="mb-4 space-y-2.5">
+       <div className="grid grid-cols-2 gap-2.5 items-end">
+        <div className="relative col-span-2 min-w-0">
+          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
-            type="date"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Tìm ID, thợ hàn, máy, dự án…"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          />
+        </div>
+        <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700">
+          Dự án
+          <SelectMenu
+            value={project}
+            onChange={setProject}
+            options={projects.map((p) => ({ value: p, label: p }))}
+            className="mt-1"
+            buttonClassName="h-10 shadow-2xs"
+          />
+        </div>
+        <div className="min-w-0 text-xs font-semibold text-slate-700">
+          Tình trạng
+          <SelectMenu
+            value={resultFilter}
+            onChange={setResultFilter}
+            options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
+            className="mt-1"
+            buttonClassName="h-10 shadow-2xs"
+          />
+        </div>
+        <div className="min-w-0 text-xs font-semibold text-slate-700">
+          Mối liên kết
+          <SelectMenu
+            value={linkedWeldFilter}
+            onChange={setLinkedWeldFilter}
+            options={["Tất cả", "Có liên kết", "Chưa liên kết"].map((v) => ({ value: v, label: v }))}
+            className="mt-1"
+            buttonClassName="h-10 shadow-2xs"
+          />
+        </div>
+        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+          Từ ngày
+          <DateField
             value={dateFrom}
-            max={dateTo || undefined}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 rounded-md border-0 bg-transparent px-1 text-sm text-slate-900 outline-hidden"
+            onChange={(value) => setDateFrom(dateTo && value > dateTo ? dateTo : value)}
+            className="w-full"
           />
         </label>
-        <label className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-600 shadow-2xs">
-          <span className="whitespace-nowrap font-semibold text-slate-700">Đến</span>
-          <input
-            type="date"
+        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+          Đến ngày
+          <DateField
             value={dateTo}
-            min={dateFrom || undefined}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="h-8 rounded-md border-0 bg-transparent px-1 text-sm text-slate-900 outline-hidden"
+            onChange={(value) => setDateTo(dateFrom && value < dateFrom ? dateFrom : value)}
+            className="w-full"
           />
         </label>
         {(dateFrom || dateTo) && (
@@ -1517,15 +1515,18 @@ export default function WeldingJournalList() {
               setDateFrom("");
               setDateTo("");
             }}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer"
+            className="col-span-2 inline-flex h-10 w-full items-center justify-center self-end rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer sm:text-sm"
           >
             Xóa ngày
           </button>
         )}
+       </div>
+
+       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <button
           type="button"
           onClick={() => downloadWeldJournalExcelTemplate()}
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
         >
           Tải mẫu Excel
         </button>
@@ -1543,7 +1544,7 @@ export default function WeldingJournalList() {
           type="button"
           onClick={() => excelInputRef.current?.click()}
           disabled={importing || saving || loading}
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-4 text-xs sm:text-sm font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-4 text-xs font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
         >
           {importing ? "Đang nhập…" : "Tải Excel lên"}
         </button>
@@ -1552,7 +1553,7 @@ export default function WeldingJournalList() {
           onClick={() => void handleExportExcel()}
           disabled={exporting || loading}
           title="Xuất toàn bộ nhật ký theo bộ lọc hiện tại"
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs sm:text-sm font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
         >
           <DownloadSimple size={16} weight="bold" aria-hidden />
           {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
@@ -1562,7 +1563,7 @@ export default function WeldingJournalList() {
           onClick={handleSyncAllCodes}
           disabled={syncingCodes || saving || loading}
           title={syncProgress || "Đồng bộ mã mối hàn theo bộ lọc hiện tại"}
-          className="inline-flex h-10 max-w-[280px] shrink-0 items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
         >
           {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
         </button>
@@ -1573,10 +1574,11 @@ export default function WeldingJournalList() {
             setEditingForm(null);
             setFormOpen(true);
           }}
-          className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+          className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
         >
           <span className="text-base leading-none">+</span> Thêm nhật ký
         </button>
+       </div>
       </div>
 
       <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">

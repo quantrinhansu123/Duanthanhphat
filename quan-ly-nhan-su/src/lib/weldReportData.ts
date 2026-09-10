@@ -689,6 +689,7 @@ export type WeldJournalPageQuery = {
   query?: string;
   project?: string;
   resultFilter?: string;
+  linkedWeldFilter?: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -715,6 +716,7 @@ type JournalListFilter = {
   query?: string;
   project?: string;
   resultFilter?: string;
+  linkedWeldFilter?: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -745,6 +747,7 @@ function applyJournalListFilters<T>(
   let next: any = request;
   const project = filters.project ?? "Tất cả dự án";
   const resultFilter = filters.resultFilter ?? "Tất cả";
+  const linkedWeldFilter = filters.linkedWeldFilter ?? "Tất cả";
   const q = (filters.query ?? "").trim();
   const dateFrom = normalizeJournalDateFilter(filters.dateFrom);
   const dateTo = normalizeJournalDateFilter(filters.dateTo);
@@ -752,6 +755,8 @@ function applyJournalListFilters<T>(
   if (project && project !== "Tất cả dự án") next = next.eq("du_an", project);
   if (dateFrom) next = next.gte("ngay_thuc_hien", dateFrom);
   if (dateTo) next = next.lte("ngay_thuc_hien", dateTo);
+  if (linkedWeldFilter === "Có liên kết") next = next.not("moi_han_lien_ket", "is", null);
+  if (linkedWeldFilter === "Chưa liên kết") next = next.is("moi_han_lien_ket", null);
 
   if (mode === "status") {
     if (WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus)) {
@@ -788,6 +793,7 @@ export async function loadWeldJournalPage({
   query = "",
   project = "Tất cả dự án",
   resultFilter = "Tất cả",
+  linkedWeldFilter = "Tất cả",
   dateFrom = "",
   dateTo = "",
 }: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
@@ -801,7 +807,7 @@ export async function loadWeldJournalPage({
   const safePage = Math.max(1, page);
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
-  const filters: JournalListFilter = { query, project, resultFilter, dateFrom, dateTo };
+  const filters: JournalListFilter = { query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo };
 
   const journalRequestUsedCreatedAt = journalHasCreatedAt;
   const request = applyJournalListFilters(
@@ -820,7 +826,7 @@ export async function loadWeldJournalPage({
   // dựng query KHÔNG có created_at nên không thể lặp vô hạn.
   if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
-    return loadWeldJournalPage({ page, pageSize, query, project, resultFilter, dateFrom, dateTo });
+    return loadWeldJournalPage({ page, pageSize, query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo });
   }
   if (error) {
     if (!/ma_khuyet_tat|tinh_trang_thi_nghiem/.test(error.message)) throw new Error(formatSupabaseError(error));
@@ -893,6 +899,7 @@ export async function exportFilteredWeldJournal({
   query = "",
   project = "Tất cả dự án",
   resultFilter = "Tất cả",
+  linkedWeldFilter = "Tất cả",
   dateFrom = "",
   dateTo = "",
 }: WeldJournalExportQuery): Promise<WeldReportRow[]> {
@@ -901,7 +908,7 @@ export async function exportFilteredWeldJournal({
   }
 
   const supabase = createClient();
-  const filters: JournalListFilter = { query, project, resultFilter, dateFrom, dateTo };
+  const filters: JournalListFilter = { query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo };
   const pageSize = 1000;
   const rows: WeldReportRow[] = [];
 
@@ -960,31 +967,57 @@ export async function loadJournalProjectOptions() {
   }));
 }
 
-/** Mối hàn lỗi trong khoảng ngày — query có giới hạn, dùng cho form liên kết. */
+/** Mối hàn lỗi trong khoảng ngày — query có giới hạn, dùng cho form liên kết.
+ * "Lỗi" = tinh_trang_thi_nghiem "Không đạt" HOẶC so_luong_loi > 0 (data cũ chỉ có 1 trong 2).
+ * Lọc theo năm ở DB rồi lọc ngày ở client để không bỏ sót row thiếu ngay_thuc_hien. */
 export async function fetchFailedWeldsInDateRange(dateFrom: string, dateTo: string, limit = 200) {
-  if (!isSupabaseConfigured()) return [] as ReturnType<typeof listFailedWeldsInDateRange>;
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("bao_cao_moi_han_theo_du_an")
-    .select("ma_lich_su,du_an,ngay_thuc_hien,nam_thuc_hien,so_luong_loi")
-    .gt("so_luong_loi", 0)
-    .gte("ngay_thuc_hien", dateFrom)
-    .lte("ngay_thuc_hien", dateTo)
-    .order("ngay_thuc_hien", { ascending: true })
-    .limit(limit);
-  if (error) {
-    // Fallback khi chưa có cột ngày: dùng list rỗng thay vì kéo cả bảng.
-    return [];
+  if (!isSupabaseConfigured() || !dateFrom || !dateTo) {
+    return [] as ReturnType<typeof listFailedWeldsInDateRange>;
   }
-  return (data ?? []).map((row) => {
-    const iso = (row.ngay_thuc_hien as string | null)?.slice(0, 10)
-      ?? `${row.nam_thuc_hien}-12-01`;
-    return {
-      value: row.ma_lich_su as string,
-      label: `${row.ma_lich_su} · ${formatJournalDateIso(iso)} · ${row.du_an}`,
-      isoDate: iso,
-    };
-  });
+  const supabase = createClient();
+  const yearFrom = Number(dateFrom.slice(0, 4));
+  const yearTo = Number(dateTo.slice(0, 4));
+  const build = (failedByStatus: boolean) => {
+    let q = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("ma_lich_su,du_an,ngay_thuc_hien,nam_thuc_hien,so_luong_loi")
+      .gte("nam_thuc_hien", yearFrom)
+      .lte("nam_thuc_hien", yearTo)
+      .limit(limit);
+    q = failedByStatus
+      ? q.or("tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0")
+      : q.gt("so_luong_loi", 0);
+    return q;
+  };
+  let { data, error } = await build(true);
+  if (error) ({ data, error } = await build(false)); // cột tinh_trang_thi_nghiem có thể chưa tồn tại
+  if (error) return [];
+
+  return (data ?? [])
+    .map((row) => {
+      const iso = (row.ngay_thuc_hien as string | null)?.slice(0, 10) ?? "";
+      const hasIso = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+      return {
+        row,
+        iso,
+        hasIso,
+        // Có ngày: phải nằm trong khoảng. Không có ngày: nhận nếu năm nằm trong khoảng.
+        inRange: hasIso
+          ? iso >= dateFrom && iso <= dateTo
+          : row.nam_thuc_hien >= yearFrom && row.nam_thuc_hien <= yearTo,
+      };
+    })
+    .filter((x) => x.inRange)
+    .sort((a, b) => (a.iso || "9999").localeCompare(b.iso || "9999") || a.row.ma_lich_su.localeCompare(b.row.ma_lich_su))
+    .map(({ row, iso, hasIso }) => {
+      const code = String(row.ma_lich_su ?? "");
+      const shownCode = code.startsWith("__SYNC_") ? `(chưa cấp mã #${code.slice(7, 15)})` : code;
+      return {
+        value: code,
+        label: shownCode,
+        isoDate: hasIso ? iso : `${row.nam_thuc_hien}-01-01`,
+      };
+    });
 }
 
 export type CertifiedWelderOption = {
