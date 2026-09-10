@@ -688,6 +688,8 @@ export type WeldJournalPageQuery = {
   pageSize?: number;
   query?: string;
   project?: string;
+  /** Lọc nhiều dự án (ưu tiên hơn `project` nếu có phần tử). */
+  projects?: string[];
   resultFilter?: string;
   linkedWeldFilter?: string;
   dateFrom?: string;
@@ -715,6 +717,7 @@ const JOURNAL_PAGE_COLUMNS = [
 type JournalListFilter = {
   query?: string;
   project?: string;
+  projects?: string[];
   resultFilter?: string;
   linkedWeldFilter?: string;
   dateFrom?: string;
@@ -746,13 +749,15 @@ function applyJournalListFilters<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let next: any = request;
   const project = filters.project ?? "Tất cả dự án";
+  const projects = (filters.projects ?? []).filter((p) => p && p !== "Tất cả dự án");
   const resultFilter = filters.resultFilter ?? "Tất cả";
   const linkedWeldFilter = filters.linkedWeldFilter ?? "Tất cả";
   const q = (filters.query ?? "").trim();
   const dateFrom = normalizeJournalDateFilter(filters.dateFrom);
   const dateTo = normalizeJournalDateFilter(filters.dateTo);
 
-  if (project && project !== "Tất cả dự án") next = next.eq("du_an", project);
+  if (projects.length > 0) next = next.in("du_an", projects);
+  else if (project && project !== "Tất cả dự án") next = next.eq("du_an", project);
   if (dateFrom) next = next.gte("ngay_thuc_hien", dateFrom);
   if (dateTo) next = next.lte("ngay_thuc_hien", dateTo);
   if (linkedWeldFilter === "Có liên kết") next = next.not("moi_han_lien_ket", "is", null);
@@ -792,6 +797,7 @@ export async function loadWeldJournalPage({
   pageSize = 50,
   query = "",
   project = "Tất cả dự án",
+  projects = [],
   resultFilter = "Tất cả",
   linkedWeldFilter = "Tất cả",
   dateFrom = "",
@@ -807,7 +813,7 @@ export async function loadWeldJournalPage({
   const safePage = Math.max(1, page);
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
-  const filters: JournalListFilter = { query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo };
+  const filters: JournalListFilter = { query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo };
 
   const journalRequestUsedCreatedAt = journalHasCreatedAt;
   const request = applyJournalListFilters(
@@ -826,7 +832,7 @@ export async function loadWeldJournalPage({
   // dựng query KHÔNG có created_at nên không thể lặp vô hạn.
   if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
-    return loadWeldJournalPage({ page, pageSize, query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo });
+    return loadWeldJournalPage({ page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo });
   }
   if (error) {
     if (!/ma_khuyet_tat|tinh_trang_thi_nghiem/.test(error.message)) throw new Error(formatSupabaseError(error));
@@ -898,6 +904,7 @@ export async function loadWeldJournalPage({
 export async function exportFilteredWeldJournal({
   query = "",
   project = "Tất cả dự án",
+  projects = [],
   resultFilter = "Tất cả",
   linkedWeldFilter = "Tất cả",
   dateFrom = "",
@@ -908,7 +915,7 @@ export async function exportFilteredWeldJournal({
   }
 
   const supabase = createClient();
-  const filters: JournalListFilter = { query, project, resultFilter, linkedWeldFilter, dateFrom, dateTo };
+  const filters: JournalListFilter = { query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo };
   const pageSize = 1000;
   const rows: WeldReportRow[] = [];
 

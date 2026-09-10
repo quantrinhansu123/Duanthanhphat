@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
 import SelectMenu from "@/components/SelectMenu";
+import MultiSelectMenu from "@/components/MultiSelectMenu";
 import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
@@ -759,7 +760,7 @@ export default function WeldingJournalList() {
 
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [project, setProject] = useState("Tất cả dự án");
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState("Tất cả");
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("");
@@ -861,7 +862,7 @@ export default function WeldingJournalList() {
       page,
       pageSize: PAGE_SIZE,
       query: appliedQuery,
-      project,
+      projects: projectFilter,
       resultFilter,
       linkedWeldFilter,
       dateFrom,
@@ -892,11 +893,11 @@ export default function WeldingJournalList() {
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, project, resultFilter, linkedWeldFilter, dateFrom, dateTo, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, dateFrom, dateTo, reloadToken]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
-    () => ["Tất cả dự án", ...projectOptions.map((item) => item.label)],
+    () => projectOptions.map((item) => item.label),
     [projectOptions],
   );
 
@@ -985,7 +986,7 @@ export default function WeldingJournalList() {
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, project, resultFilter, dateFrom, dateTo]);
+  }, [appliedQuery, projectFilter, resultFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -1023,7 +1024,7 @@ export default function WeldingJournalList() {
     try {
       const exportRows = await exportFilteredWeldJournal({
         query: appliedQuery,
-        project,
+        projects: projectFilter,
         resultFilter,
         linkedWeldFilter,
         dateFrom,
@@ -1107,7 +1108,7 @@ export default function WeldingJournalList() {
   async function handleSyncAllCodes() {
     if (syncingCodes || saving) return;
     const filterParts = [
-      project !== "Tất cả dự án" ? `dự án "${project}"` : null,
+      projectFilter.length === 1 ? `dự án "${projectFilter[0]}"` : projectFilter.length > 1 ? `${projectFilter.length} dự án` : null,
       resultFilter !== "Tất cả" ? `tình trạng "${resultFilter}"` : null,
       linkedWeldFilter !== "Tất cả" ? `mối hàn "${linkedWeldFilter.toLocaleLowerCase("vi")}"` : null,
       appliedQuery ? `tìm kiếm "${appliedQuery}"` : null,
@@ -1134,7 +1135,7 @@ export default function WeldingJournalList() {
         (message) => setSyncProgress(message),
         {
           query: appliedQuery,
-          project,
+          projects: projectFilter,
           resultFilter,
           linkedWeldFilter,
           dateFrom,
@@ -1464,10 +1465,12 @@ export default function WeldingJournalList() {
         </div>
         <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700">
           Dự án
-          <SelectMenu
-            value={project}
-            onChange={setProject}
+          <MultiSelectMenu
+            values={projectFilter}
+            onChange={setProjectFilter}
             options={projects.map((p) => ({ value: p, label: p }))}
+            allLabel="Tất cả dự án"
+            searchPlaceholder="Gõ tên dự án…"
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
           />
