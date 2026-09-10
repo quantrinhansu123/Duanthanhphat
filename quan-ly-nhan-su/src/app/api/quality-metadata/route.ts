@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatSupabaseError } from "@/lib/supabase/env";
+import { INITIAL_COMPLIANCE_STANDARDS } from "@/data/complianceStandards";
 
 const CERT_STATUSES = new Set(["Chưa cập nhật", "Còn hiệu lực", "Sắp hết hạn", "Hết hạn"]);
 const COMPLIANCE_STATUSES = new Set(["Chưa đánh giá", "Thiếu minh chứng", "Đáp ứng một phần", "Đạt"]);
@@ -18,15 +19,35 @@ function nullableText(value: unknown, max = 4000) {
 export async function GET() {
   try {
     const supabase = createAdminClient();
+    let standards = await supabase.from("tieu_chuan_qlcl").select("*");
+    if (!standards.error && (standards.data ?? []).length === 0) {
+      standards = await supabase.from("tieu_chuan_qlcl").upsert(
+        INITIAL_COMPLIANCE_STANDARDS.map((item) => ({
+          id: item.id,
+          standard_code: item.standardCode,
+          clause: item.clause,
+          title: item.title,
+          requirement: item.requirement,
+          scope: item.scope,
+          related_standard: item.relatedStandard,
+          evidence_required: item.evidenceRequired,
+          notes: item.notes ?? null,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "id" },
+      ).select("*");
+    }
     const [certificates, assessments] = await Promise.all([
       supabase.from("chung_chi_qlcl_cong_ty").select("*").order("updated_at", { ascending: false }),
       supabase.from("danh_gia_tieu_chuan_qlcl").select("*"),
     ]);
     if (certificates.error) throw certificates.error;
     if (assessments.error) throw assessments.error;
+    if (standards.error) throw standards.error;
     return NextResponse.json({
       certificates: certificates.data ?? [],
       assessments: assessments.data ?? [],
+      standards: standards.data ?? [],
     });
   } catch (error) {
     const message = formatSupabaseError(error);
@@ -85,9 +106,9 @@ export async function POST(request: Request) {
       if (!itemId || !COMPLIANCE_STATUSES.has(status) || !COMPLIANCE_SCOPES.has(scope)) {
         return NextResponse.json({ error: "Dữ liệu đánh giá tiêu chuẩn không hợp lệ." }, { status: 400 });
       }
-      if (status === "Đạt" && (!evidenceDoc || !verifier || !verifiedAt)) {
+      if (status === "Đạt" && (!verifier || !verifiedAt)) {
         return NextResponse.json(
-          { error: "Trạng thái Đạt bắt buộc có minh chứng, người xác nhận và ngày xác nhận." },
+          { error: "Trạng thái Đạt bắt buộc có người xác nhận và ngày xác nhận." },
           { status: 400 },
         );
       }
@@ -107,6 +128,32 @@ export async function POST(request: Request) {
         .upsert(payload, { onConflict: "item_id" })
         .select("*")
         .single();
+      if (result.error) throw result.error;
+      return NextResponse.json({ item: result.data });
+    }
+
+    if (kind === "standard") {
+      const id = text(item.id, 180);
+      const standardCode = text(item.standardCode, 300);
+      const clause = text(item.clause, 180);
+      const title = text(item.title, 500);
+      const requirement = text(item.requirement);
+      const scope = text(item.scope, 40);
+      if (!id || !standardCode || !clause || !title || !requirement || !COMPLIANCE_SCOPES.has(scope)) {
+        return NextResponse.json({ error: "Dữ liệu tiêu chuẩn không hợp lệ." }, { status: 400 });
+      }
+      const result = await supabase.from("tieu_chuan_qlcl").upsert({
+        id,
+        standard_code: standardCode,
+        clause,
+        title,
+        requirement,
+        scope,
+        related_standard: text(item.relatedStandard, 1000),
+        evidence_required: text(item.evidenceRequired),
+        notes: nullableText(item.notes),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" }).select("*").single();
       if (result.error) throw result.error;
       return NextResponse.json({ item: result.data });
     }

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown, Check } from "@/components/icons";
+import { usePopover } from "@/components/usePopover";
 
 export type SelectMenuOption = {
   value: string;
@@ -44,35 +46,19 @@ export default function SelectMenu({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [typing, setTyping] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { style: menuStyle } = usePopover(boxRef, open && !disabled);
 
   const selected = options.find((o) => o.value === value);
 
   useEffect(() => {
     if (!open) return;
-    function updatePlacement() {
-      const el = boxRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const menuH = 272; // xấp xỉ max-h-64 + padding
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setDropUp(spaceBelow < menuH && rect.top > spaceBelow);
-    }
-    updatePlacement();
-    window.addEventListener("resize", updatePlacement);
-    window.addEventListener("scroll", updatePlacement, true);
-    return () => {
-      window.removeEventListener("resize", updatePlacement);
-      window.removeEventListener("scroll", updatePlacement, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
     function onClick(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) close();
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      close();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") close();
@@ -83,7 +69,6 @@ export default function SelectMenu({
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   function close() {
@@ -188,11 +173,11 @@ export default function SelectMenu({
         </button>
       )}
 
-      {open && !disabled && (
+      {open && !disabled && typeof document !== "undefined" && createPortal(
         <div
-          className={`absolute left-0 right-0 z-50 flex max-h-64 flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg animate-in fade-in-50 duration-150 ${
-            dropUp ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"
-          }`}
+          ref={menuRef}
+          style={menuStyle}
+          className="z-[70] flex flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
         >
           <div className="flex flex-col gap-0.5 overflow-y-auto">
             {filtered.length === 0 ? (
@@ -221,7 +206,8 @@ export default function SelectMenu({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

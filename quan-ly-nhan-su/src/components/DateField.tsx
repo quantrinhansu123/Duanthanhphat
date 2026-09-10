@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarBlank, CaretLeft, CaretRight } from "@/components/icons";
 import { useLanguage } from "@/i18n/LanguageProvider";
+import { usePopover } from "@/components/usePopover";
 
 type DateFieldProps = {
-  /** Giá trị dạng ISO "yyyy-mm-dd" (rỗng nếu chưa chọn). */
+  /** Giá trị ISO: "yyyy-mm-dd", hoặc "yyyy-mm-ddThh:mm" khi withTime. Rỗng nếu chưa chọn. */
   value: string;
   onChange: (next: string) => void;
   placeholder?: string;
   className?: string;
+  /** Cho phép chọn cả giờ ngay trong menu lịch. */
+  withTime?: boolean;
 };
 
 const WEEKDAYS_VI = ["H", "B", "T", "N", "S", "B", "C"];
@@ -38,45 +42,65 @@ function parseISO(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function formatVi(value: string) {
-  const d = parseISO(value);
+function formatVi(dateISO: string) {
+  const d = parseISO(dateISO);
   return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : "";
 }
 
-function manualToISO(value: string): string | null {
-  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return toISO(date);
+function formatDisplay(value: string, withTime: boolean) {
+  const d = formatVi(value.slice(0, 10));
+  if (!d) return "";
+  const time = value.slice(11, 16);
+  return withTime && time ? `${d} ${time}` : d;
 }
 
-export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy", className = "" }: DateFieldProps) {
+/** Trả về giá trị emit hoàn chỉnh (kèm giờ nếu withTime) hoặc null. */
+function manualParse(text: string, withTime: boolean, fallbackTime: string): string | null {
+  const m = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  const iso = toISO(date);
+  if (!withTime) return iso;
+  const hh = m[4] != null ? Number(m[4]) : Number(fallbackTime.slice(0, 2)) || 8;
+  const mm = m[5] != null ? Number(m[5]) : Number(fallbackTime.slice(3, 5)) || 0;
+  if (hh > 23 || mm > 59) return null;
+  return `${iso}T${pad(hh)}:${pad(mm)}`;
+}
+
+export default function DateField({ value, onChange, placeholder, className = "", withTime = false }: DateFieldProps) {
   const { lang } = useLanguage();
   const WEEKDAYS = lang === "en" ? WEEKDAYS_EN : WEEKDAYS_VI;
   const MONTHS = lang === "en" ? MONTHS_EN : MONTHS_VI;
+  const ph = placeholder ?? (withTime ? "dd/mm/yyyy HH:mm" : "dd/mm/yyyy");
   const [open, setOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(() => parseISO(value) ?? new Date());
-  const [inputValue, setInputValue] = useState(() => formatVi(value));
+  const [viewDate, setViewDate] = useState(() => parseISO(value.slice(0, 10)) ?? new Date());
+  const [inputValue, setInputValue] = useState(() => formatDisplay(value, withTime));
   const boxRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { style: menuStyle } = usePopover(boxRef, open, 264);
+
+  const datePart = value.slice(0, 10);
+  const timePart = withTime ? value.slice(11, 16) : "";
 
   useEffect(() => {
-    const parsed = parseISO(value);
+    const parsed = parseISO(value.slice(0, 10));
     if (parsed) setViewDate(parsed);
-    setInputValue(formatVi(value));
-  }, [value]);
+    setInputValue(formatDisplay(value, withTime));
+  }, [value, withTime]);
 
   useEffect(() => {
+    if (!open) return;
     function onClick(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     }
-    if (open) {
-      document.addEventListener("mousedown", onClick);
-      return () => document.removeEventListener("mousedown", onClick);
-    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
   const year = viewDate.getFullYear();
@@ -96,17 +120,20 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
 
   const todayISO = toISO(new Date());
 
+  function emit(dateISO: string, time?: string) {
+    if (!dateISO) return onChange("");
+    onChange(withTime ? `${dateISO}T${time || timePart || "08:00"}` : dateISO);
+  }
+
   function pick(day: number) {
-    const next = toISO(new Date(year, month, day));
-    onChange(next);
-    setInputValue(formatVi(next));
-    setOpen(false);
+    emit(toISO(new Date(year, month, day)));
+    if (!withTime) setOpen(false);
   }
 
   return (
     <div ref={boxRef} className={`relative ${className}`}>
       <div
-        className={`flex h-10 w-full items-center rounded-lg border bg-white text-xs sm:text-sm outline-hidden transition-all duration-150 ${
+        className={`flex h-11 w-full items-center rounded-lg border bg-white text-xs sm:h-10 sm:text-sm outline-hidden transition-all duration-150 ${
           open ? "border-[#0047AB] ring-2 ring-[#0047AB]/20" : "border-slate-300 hover:border-slate-400"
         }`}
       >
@@ -115,19 +142,19 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
           onChange={(event) => {
             const nextText = event.target.value;
             setInputValue(nextText);
-            if (!nextText.trim()) onChange("");
-            const nextIso = manualToISO(nextText);
-            if (nextIso) onChange(nextIso);
+            if (!nextText.trim()) return onChange("");
+            const next = manualParse(nextText, withTime, timePart);
+            if (next) onChange(next);
           }}
           onBlur={() => {
             if (!inputValue.trim()) return;
-            const nextIso = manualToISO(inputValue);
-            setInputValue(nextIso ? formatVi(nextIso) : formatVi(value));
+            const next = manualParse(inputValue, withTime, timePart);
+            setInputValue(next ? formatDisplay(next, withTime) : formatDisplay(value, withTime));
           }}
-          placeholder={placeholder}
+          placeholder={ph}
           inputMode="numeric"
           className="h-full min-w-0 flex-1 bg-transparent px-3 text-slate-900 outline-hidden placeholder:text-slate-400"
-          aria-label={placeholder}
+          aria-label={ph}
         />
         <button
           type="button"
@@ -139,8 +166,12 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
         </button>
       </div>
 
-      {open && (
-        <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-[248px] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg animate-in fade-in-50 duration-150">
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={menuRef}
+          style={menuStyle}
+          className="z-[70] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg"
+        >
           <div className="mb-1.5 flex items-center justify-between">
             <button
               type="button"
@@ -172,7 +203,7 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
             {cells.map((day, i) => {
               if (day === null) return <div key={i} />;
               const iso = toISO(new Date(year, month, day));
-              const selected = iso === value;
+              const selected = iso === datePart;
               const isToday = iso === todayISO;
               return (
                 <button
@@ -193,6 +224,18 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
             })}
           </div>
 
+          {withTime && (
+            <div className="mt-1.5 flex items-center gap-2 border-t border-slate-100 pt-1.5">
+              <span className="text-[11px] font-semibold uppercase text-slate-400">Giờ</span>
+              <input
+                type="time"
+                value={timePart || "08:00"}
+                onChange={(e) => emit(datePart || todayISO, e.target.value)}
+                className="h-8 flex-1 rounded-md border border-slate-300 bg-white px-2 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
+            </div>
+          )}
+
           <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 text-xs font-semibold">
             <button
               type="button"
@@ -207,15 +250,16 @@ export default function DateField({ value, onChange, placeholder = "dd/mm/yyyy",
             <button
               type="button"
               onClick={() => {
-                onChange(todayISO);
+                if (!withTime) emit(todayISO);
                 setOpen(false);
               }}
               className="rounded px-1.5 py-0.5 text-[#0047AB] hover:underline cursor-pointer"
             >
-              Hôm nay
+              {withTime ? "Xong" : "Hôm nay"}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -28,6 +28,18 @@ type AssessmentRow = {
   notes?: string | null;
 };
 
+type ComplianceStandardRow = {
+  id: string;
+  standard_code: string;
+  clause: string;
+  title: string;
+  requirement: string;
+  scope: ComplianceStandardItem["scope"];
+  related_standard: string;
+  evidence_required: string;
+  notes?: string | null;
+};
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error || "HTTP " + response.status);
@@ -52,15 +64,32 @@ function certificateFromRow(row: CertificateRow): CompanyCertificate {
   };
 }
 
+function standardFromRow(row: ComplianceStandardRow): ComplianceStandardItem {
+  return {
+    id: row.id,
+    standardCode: row.standard_code,
+    clause: row.clause,
+    title: row.title,
+    requirement: row.requirement,
+    scope: row.scope,
+    relatedStandard: row.related_standard,
+    evidenceRequired: row.evidence_required,
+    notes: row.notes || undefined,
+    status: "Chưa đánh giá",
+  };
+}
+
 export async function loadQualityMetadata() {
   const response = await fetch("/api/quality-metadata", { cache: "no-store" });
   const payload = await parseResponse<{
     certificates: CertificateRow[];
     assessments: AssessmentRow[];
+    standards: ComplianceStandardRow[];
   }>(response);
   return {
     certificates: payload.certificates.map(certificateFromRow),
     assessments: payload.assessments,
+    standards: payload.standards.map(standardFromRow),
   };
 }
 
@@ -88,6 +117,16 @@ export async function saveComplianceAssessment(item: ComplianceStandardItem) {
   });
   const payload = await parseResponse<{ item: AssessmentRow }>(response);
   return payload.item;
+}
+
+export async function saveComplianceStandard(item: ComplianceStandardItem) {
+  const response = await fetch("/api/quality-metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "standard", item }),
+  });
+  const payload = await parseResponse<{ item: ComplianceStandardRow }>(response);
+  return standardFromRow(payload.item);
 }
 
 export function mergeComplianceAssessments(

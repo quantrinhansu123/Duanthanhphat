@@ -182,7 +182,9 @@ export default function OverviewDashboard() {
     };
   }, [setProjects]);
 
-  const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly" | "cumulative">("daily");
+  const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
+  const [cumulativeChartViewMode, setCumulativeChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
+  const [cumulativeChartZoom, setCumulativeChartZoom] = useState(1);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
   const plotScrollRef = useRef<HTMLDivElement>(null);
@@ -204,6 +206,10 @@ export default function OverviewDashboard() {
   useEffect(() => {
     setChartZoom(1);
   }, [chartViewMode, appliedFilters]);
+
+  useEffect(() => {
+    setCumulativeChartZoom(1);
+  }, [cumulativeChartViewMode, appliedFilters]);
 
   const selectedRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
@@ -396,7 +402,7 @@ export default function OverviewDashboard() {
   ]);
 
   const chartPeriod = useMemo(() => {
-    if (chartViewMode === "monthly" || chartViewMode === "cumulative") {
+    if (chartViewMode === "monthly") {
       const months = new Map<string, { value: number; target: number }>();
       const get = (key: string) => {
         if (!months.has(key)) months.set(key, { value: 0, target: 0 });
@@ -442,6 +448,59 @@ export default function OverviewDashboard() {
       unitLabel: "ngày",
     };
   }, [chartViewMode, dailySeries, dailyTargets, dailyValues, yearlySeries, selectedRows, selectedProjects, isAllDates, filterFrom, filterTo]);
+  const cumulativeChartPeriod = useMemo(() => {
+    if (cumulativeChartViewMode === "daily") {
+      return {
+        values: dailyValues,
+        targets: dailyTargets,
+        labels: dailySeries.map((point) => viDateShort(point.date)),
+        fullLabels: dailySeries.map((point) => viDate(point.date)),
+      };
+    }
+    if (cumulativeChartViewMode === "yearly") {
+      return {
+        values: yearlySeries.map((point) => point.value),
+        targets: yearlySeries.map((point) => point.target),
+        labels: yearlySeries.map((point) => point.year),
+        fullLabels: yearlySeries.map((point) => `Năm ${point.year}`),
+      };
+    }
+
+    const months = new Map<string, { value: number; target: number }>();
+    const get = (key: string) => {
+      if (!months.has(key)) months.set(key, { value: 0, target: 0 });
+      return months.get(key)!;
+    };
+    selectedRows.forEach((row) => {
+      const date = getJournalRowDateIso(row);
+      get(date ? date.slice(0, 7) : `${row.nam_thuc_hien}`).value += 1;
+    });
+    selectedProjects.forEach((project) => {
+      (project.theoreticalProgress ?? []).forEach((row) => {
+        if (isAllDates || (row.ngay >= filterFrom && row.ngay <= filterTo)) {
+          get(row.ngay.slice(0, 7)).target += row.so_moi_han;
+        }
+      });
+    });
+    const keys = [...months.keys()].sort();
+    const label = (key: string) => key.length === 4 ? `${key} (chưa rõ tháng)` : `${key.slice(5)}/${key.slice(0, 4)}`;
+    return {
+      values: keys.map((key) => months.get(key)!.value),
+      targets: keys.map((key) => months.get(key)!.target),
+      labels: keys.map(label),
+      fullLabels: keys.map(label),
+    };
+  }, [cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, yearlySeries]);
+
+  const cumulativeChart = useMemo(() => {
+    let actual = 0;
+    let target = 0;
+    const actualValues = cumulativeChartPeriod.values.map((value) => (actual += value));
+    const targetValues = cumulativeChartPeriod.targets.map((value) => (target += value));
+    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, 1) / 10) * 10);
+    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target };
+  }, [cumulativeChartPeriod]);
+
   const plannedTarget = useMemo(
     () => {
       // Luôn cộng đủ mọi dự án đang chọn; lọc tất cả → KH đầy đủ từng dự án.
@@ -575,13 +634,13 @@ export default function OverviewDashboard() {
           : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const };
 
   const chart = useMemo(() => {
-    // Tháng và lũy kế dùng toàn bộ kỳ lọc; Ngày giữ cửa sổ xem gần nhất.
+    // Tháng và năm dùng toàn bộ kỳ lọc; Ngày giữ cửa sổ xem gần nhất.
     const useYearlyBars = chartViewMode !== "daily";
     const slice = useYearlyBars ? chartPeriod.values : dailyValues;
     const targetSlice = useYearlyBars ? chartPeriod.targets : dailyTargets;
     const count = slice.length;
     const chartRangeLabel = useYearlyBars
-      ? `${chartPeriod.fullLabels[0] ?? ""} – ${chartPeriod.fullLabels.at(-1) ?? ""} · ${chartViewMode === "cumulative" ? "lũy kế toàn bộ kỳ lọc" : `sản lượng/${chartPeriod.unitLabel}`}`
+      ? `${chartPeriod.fullLabels[0] ?? ""} – ${chartPeriod.fullLabels.at(-1) ?? ""} · sản lượng/${chartPeriod.unitLabel}`
       : `${viDate(chartDateRange.from)} – ${viDate(chartDateRange.to)} · sản lượng/ngày`;
 
     if (count === 0) {
@@ -807,7 +866,7 @@ export default function OverviewDashboard() {
   }
 
   const chartDayCount = chart.dayPoints.length;
-  const hasMonthlyAxis = chartViewMode === "monthly" || chartViewMode === "cumulative";
+  const hasMonthlyAxis = chartViewMode === "monthly";
   // Nhãn MM/YYYY cần đủ chỗ ở mức zoom nhỏ nhất; các mốc vẫn cuộn cùng cột.
   const chartSlotWidth = hasMonthlyAxis ? 88 : chartViewMode === "yearly" ? 72 : 44;
   const basePlotWidth = Math.max(chartDayCount * chartSlotWidth, 1);
@@ -846,7 +905,7 @@ export default function OverviewDashboard() {
   }, [minChartZoom]);
 
   // Đường xu hướng nối đỉnh các cột
-  const stackBars = chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
+  const stackBars = chart.dailyStackBars;
   const toPath = (pts: { x: number; y: number }[]) =>
     pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
   // ...theo mức dự kiến (đỉnh cả cột)
@@ -1173,10 +1232,10 @@ export default function OverviewDashboard() {
         ))}
       </div>
 
-      {/* Middle Charts Row — 3 bảng cùng hàng */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+      {/* Tổng quan */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {/* Box 1: TIẾN ĐỘ SẢN XUẤT */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs flex flex-col min-w-0">
+        <div className="order-1 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs flex flex-col min-w-0">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             TIẾN ĐỘ SẢN XUẤT
           </div>
@@ -1274,17 +1333,17 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY / LŨY KẾ */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
+        <div className="order-3 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="min-w-0 text-sm sm:text-base font-bold tracking-tight text-slate-900">
               {chartViewMode === "daily"
                 ? "SẢN LƯỢNG HÀN THEO NGÀY"
                 : chartViewMode === "yearly"
                   ? "SẢN LƯỢNG HÀN THEO NĂM"
-                  : chartViewMode === "monthly" ? "SẢN LƯỢNG HÀN THEO THÁNG" : "SẢN LƯỢNG HÀN THEO LŨY KẾ"}
+                  : "SẢN LƯỢNG HÀN THEO THÁNG"}
             </div>
 
-            {/* Ngày | Năm | Lũy kế */}
+            {/* Ngày | Tháng | Năm */}
             <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
               <button
                 type="button"
@@ -1311,22 +1370,9 @@ export default function OverviewDashboard() {
                 <CalendarCheck size={13} weight="bold" aria-hidden />
                 <span>Năm</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setChartViewMode("cumulative")}
-                className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  chartViewMode === "cumulative"
-                    ? "bg-white text-[#0047AB] shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <ChartLineUp size={13} weight="bold" aria-hidden />
-                <span>Lũy kế</span>
-              </button>
             </div>
           </div>
 
-          {chartViewMode === "cumulative" && <p className="mt-2 text-sm font-semibold text-[#0047AB]">Lũy kế toàn kỳ: {fmt(chart.totalCum)} mối · Kế hoạch: {fmt(chart.totalTargetCum)} mối</p>}
           {/* Legend */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
             <div className="flex items-center gap-2">
@@ -1344,11 +1390,7 @@ export default function OverviewDashboard() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    {chartViewMode === "daily"
-                      ? "Số liệu ngày"
-                      : chartViewMode === "yearly"
-                        ? "Số liệu năm"
-                        : "Số liệu lũy kế"}
+                    {chartViewMode === "daily" ? "Số liệu ngày" : chartViewMode === "yearly" ? "Số liệu năm" : "Số liệu tháng"}
                   </p>
                   <p className="text-sm font-bold text-[#0047AB]">{selectedDay.dateFull}</p>
                 </div>
@@ -1362,19 +1404,7 @@ export default function OverviewDashboard() {
                 </button>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {chartViewMode === "cumulative" ? (
-                  <>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Lũy kế thực tế</p>
-                      <p className="font-mono text-sm font-bold text-[#0047AB] tabular-nums">{fmt(selectedDay.cumActual)}</p>
-                    </div>
-                    <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
-                      <p className="text-[10px] text-slate-500">Lũy kế mục tiêu</p>
-                      <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.cumTarget)}</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
+                <>
                     <div className="rounded-md bg-white/90 border border-slate-200/80 px-2.5 py-1.5">
                       <p className="text-[10px] text-slate-500">
                         {chartViewMode === "yearly" ? "Sản lượng năm" : chartViewMode === "monthly" ? "Sản lượng tháng" : "Sản lượng ngày"}
@@ -1387,8 +1417,7 @@ export default function OverviewDashboard() {
                       </p>
                       <p className="font-mono text-sm font-bold text-slate-700 tabular-nums">{fmt(selectedDay.dailyTarget)}</p>
                     </div>
-                  </>
-                )}
+                </>
               </div>
             </div>
           ) : null}
@@ -1398,7 +1427,7 @@ export default function OverviewDashboard() {
             {/* Trục Y cố định — không cuộn theo biểu đồ */}
             <div className="relative h-[260px] w-10 shrink-0 select-none font-mono text-[11px] font-normal text-slate-900">
               {(() => {
-                const axisMax = chartViewMode === "cumulative" ? chart.maxCumVal : chart.maxVal;
+                const axisMax = chart.maxVal;
                 const rows: [number, string][] = [
                   [-7, fmt(axisMax)],
                   [45, fmt(Math.round(axisMax * 0.8))],
@@ -1450,8 +1479,7 @@ export default function OverviewDashboard() {
                 <line x1="0" y1="259.5" x2="500" y2="259.5" stroke="#cbd5e1" strokeWidth="1" />
 
                 {(() => {
-                  const bars =
-                    chartViewMode === "cumulative" ? chart.cumStackBars : chart.dailyStackBars;
+                  const bars = chart.dailyStackBars;
                   return (
                     <>
                   {bars.map((b, i) => {
@@ -1643,7 +1671,7 @@ export default function OverviewDashboard() {
         </div>
 
         {/* Box 3: MỐI HÀN THEO DỰ ÁN */}
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
+        <div className="order-2 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               MỐI HÀN THEO DỰ ÁN
@@ -1703,6 +1731,132 @@ export default function OverviewDashboard() {
             ) : (
               <div className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu dự án</div>
             )}
+          </div>
+        </div>
+
+        {/* Box 4: LŨY KẾ SẢN LƯỢNG HÀN */}
+        <div className="order-4 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              LŨY KẾ SẢN LƯỢNG HÀN
+            </div>
+            <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+              {([
+                ["daily", "Ngày", CalendarBlank],
+                ["monthly", "Tháng", CalendarBlank],
+                ["yearly", "Năm", CalendarCheck],
+              ] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setCumulativeChartViewMode(mode)}
+                  className={`flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    cumulativeChartViewMode === mode ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon size={13} weight="bold" aria-hidden />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-2 text-sm font-semibold text-[#0047AB]">
+            Lũy kế toàn kỳ: {fmt(cumulativeChart.totalActual)} mối · Kế hoạch: {fmt(cumulativeChart.totalTarget)} mối
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
+            <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#3b82f6]" />Thực tế</span>
+            <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />Dự kiến</span>
+          </div>
+
+          {cumulativeChart.actualValues.length === 0 ? (
+            <div className="mt-4 flex h-[260px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm font-semibold text-slate-700">
+              Chưa có dữ liệu sản lượng trong khoảng thời gian này
+            </div>
+          ) : (
+            <>
+              <div className="mt-3 flex">
+                <div className="relative h-[260px] w-10 shrink-0 select-none font-mono text-[11px] text-slate-900">
+                  {[[0, cumulativeChart.max], [52, Math.round(cumulativeChart.max * .8)], [104, Math.round(cumulativeChart.max * .6)], [156, Math.round(cumulativeChart.max * .4)], [208, Math.round(cumulativeChart.max * .2)], [253, 0]].map(([top, value]) => (
+                    <span key={top} className="absolute left-0 tabular-nums" style={{ top }}>{fmt(value)}</span>
+                  ))}
+                </div>
+                <div className="min-w-0 flex-1 overflow-x-auto">
+                  <div className="relative" style={{ width: `${500 * cumulativeChartZoom}px`, minWidth: "100%" }}>
+                    <svg viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
+                      {[0.5, 52, 104, 156, 208, 259.5].map((y) => <line key={y} x1="0" y1={y} x2="500" y2={y} stroke={y === 259.5 ? "#cbd5e1" : "#f1f5f9"} strokeWidth="1" />)}
+                      {cumulativeChart.actualValues.map((actual, index) => {
+                        const target = cumulativeChart.targetValues[index] ?? 0;
+                        const band = 500 / cumulativeChart.actualValues.length;
+                        const blueH = actual > 0 ? Math.max(2, actual / cumulativeChart.max * 260) : 0;
+                        const yellowH = target > actual ? Math.max(2, (target - actual) / cumulativeChart.max * 260) : 0;
+                        return <g key={index}>
+                          {yellowH > 0 && <rect x={band * index + band * .27} y={260 - blueH - yellowH} width={band * .46} height={yellowH} fill="#fcd34d" />}
+                          {blueH > 0 && <rect x={band * index + band * .27} y={260 - blueH} width={band * .46} height={blueH} fill="#3b82f6" />}
+                        </g>;
+                      })}
+                      {([cumulativeChart.targetValues, cumulativeChart.actualValues] as const).map((values, lineIndex) => (
+                        <path
+                          key={lineIndex}
+                          d={values.map((value, index) => `${index ? "L" : "M"} ${(500 / values.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}
+                          fill="none"
+                          stroke={lineIndex === 0 ? "#e08e0b" : "#2563eb"}
+                          strokeWidth="2.25"
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ))}
+                    </svg>
+                    <div className="relative h-12 pt-2">
+                      {cumulativeChartPeriod.labels.map((label, index) => ({ label, index })).filter(({ index }) => cumulativeChartPeriod.labels.length <= 8 || index % Math.ceil(cumulativeChartPeriod.labels.length / 8) === 0).map(({ label, index }) => (
+                        <span key={`${label}-${index}`} className="absolute text-center font-mono text-[11px] text-slate-900" style={{ left: `${index / cumulativeChartPeriod.labels.length * 100}%`, width: `${100 / cumulativeChartPeriod.labels.length}%` }}>{label}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+            <button
+              type="button"
+              onClick={() => setCumulativeChartZoom(1)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-50 cursor-pointer"
+            >
+              Xem toàn bộ
+            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCumulativeChartZoom((zoom) => Math.max(1, +(zoom / 1.25).toFixed(1)))}
+                disabled={cumulativeChartZoom <= 1}
+                className="h-7 w-7 rounded-md border border-slate-300 text-base leading-none text-slate-900 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                aria-label="Thu nhỏ biểu đồ lũy kế"
+              >
+                −
+              </button>
+              <span className="w-10 text-center font-mono tabular-nums font-semibold text-slate-900">
+                {cumulativeChartZoom.toFixed(1)}×
+              </span>
+              <button
+                type="button"
+                onClick={() => setCumulativeChartZoom((zoom) => Math.min(CHART_ZOOM_MAX, +(zoom * 1.25).toFixed(1)))}
+                disabled={cumulativeChartZoom >= CHART_ZOOM_MAX}
+                className="h-7 w-7 rounded-md border border-slate-300 text-base leading-none text-slate-900 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                aria-label="Phóng to biểu đồ lũy kế"
+              >
+                +
+              </button>
+              {cumulativeChartZoom !== 1 && (
+                <button
+                  type="button"
+                  onClick={() => setCumulativeChartZoom(1)}
+                  className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-50 cursor-pointer"
+                >
+                  Đặt lại
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
