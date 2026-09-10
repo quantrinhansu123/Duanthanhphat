@@ -12,6 +12,7 @@ import {
   loadQualityMetadata,
   mergeComplianceAssessments,
   saveComplianceAssessment,
+  saveComplianceStandard,
 } from "@/lib/qualityMetadataClient";
 
 const STORAGE_KEY = "thanhphat_compliance_standards_v2";
@@ -38,6 +39,7 @@ export default function ComplianceStandardsList() {
   const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingItem, setEditingItem] = useState<ComplianceStandardItem | null>(null);
+  const [editingStandard, setEditingStandard] = useState<ComplianceStandardItem | null>(null);
   const [persistenceError, setPersistenceError] = useState("");
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function ComplianceStandardsList() {
     loadQualityMetadata()
       .then((result) => {
         if (!active) return;
-        setItems(mergeComplianceAssessments(INITIAL_COMPLIANCE_STANDARDS, result.assessments));
+        setItems(mergeComplianceAssessments(result.standards.length ? result.standards : INITIAL_COMPLIANCE_STANDARDS, result.assessments));
         setPersistenceError("");
       })
       .catch((error: unknown) => {
@@ -89,12 +91,12 @@ export default function ComplianceStandardsList() {
   async function handleSaveEdit(updated: ComplianceStandardItem) {
     if (
       updated.status === "Đạt" &&
-      (!updated.evidenceDoc?.trim() || !updated.verifier?.trim() || !updated.verifiedAt)
+      (!updated.verifier?.trim() || !updated.verifiedAt)
     ) {
       window.alert(
         isEn
-          ? "A passed assessment requires an evidence document, verifier, and verification date."
-          : "Chỉ được đánh dấu Đạt khi đã nhập tài liệu minh chứng, người xác nhận và ngày xác nhận.",
+          ? "A passed assessment requires a verifier and verification date."
+          : "Chỉ được đánh dấu Đạt khi đã nhập người xác nhận và ngày xác nhận.",
       );
       return;
     }
@@ -107,6 +109,19 @@ export default function ComplianceStandardsList() {
       setEditingItem(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không lưu được đánh giá tiêu chuẩn.";
+      setPersistenceError(message);
+      window.alert(message);
+    }
+  }
+
+  async function handleSaveStandard(updated: ComplianceStandardItem) {
+    try {
+      const saved = await saveComplianceStandard(updated);
+      setItems((prev) => prev.map((item) => item.id === saved.id ? { ...item, ...saved } : item));
+      setPersistenceError("");
+      setEditingStandard(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không lưu được tiêu chuẩn.";
       setPersistenceError(message);
       window.alert(message);
     }
@@ -363,6 +378,13 @@ export default function ComplianceStandardsList() {
                   <td className="p-3 align-top text-right whitespace-nowrap">
                     <button
                       type="button"
+                      onClick={() => setEditingStandard(item)}
+                      className="mr-2 inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] shadow-2xs transition-colors cursor-pointer"
+                    >
+                      ✏️ {isEn ? "Edit" : "Sửa"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setEditingItem(item)}
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] shadow-2xs transition-colors cursor-pointer"
                     >
@@ -383,6 +405,34 @@ export default function ComplianceStandardsList() {
           </table>
         </div>
       </div>
+
+      {editingStandard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 pb-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">{editingStandard.standardCode} — Điều {editingStandard.clause}</div>
+                <h3 className="mt-0.5 text-lg font-bold text-slate-900">{isEn ? "Edit Standard Requirement" : "Sửa yêu cầu tiêu chuẩn"}</h3>
+              </div>
+              <button type="button" onClick={() => setEditingStandard(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Đóng">✕</button>
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); void handleSaveStandard(editingStandard); }} className="mt-4 space-y-3 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="font-semibold text-slate-700">{isEn ? "Standard Code" : "Mã tiêu chuẩn"}<input required value={editingStandard.standardCode} onChange={(event) => setEditingStandard({ ...editingStandard, standardCode: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+                <label className="font-semibold text-slate-700">{isEn ? "Clause" : "Điều khoản"}<input required value={editingStandard.clause} onChange={(event) => setEditingStandard({ ...editingStandard, clause: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+              </div>
+              <label className="block font-semibold text-slate-700">{isEn ? "Title" : "Tên yêu cầu"}<input required value={editingStandard.title} onChange={(event) => setEditingStandard({ ...editingStandard, title: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+              <label className="block font-semibold text-slate-700">{isEn ? "Requirement" : "Nội dung yêu cầu"}<textarea required rows={4} value={editingStandard.requirement} onChange={(event) => setEditingStandard({ ...editingStandard, requirement: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="font-semibold text-slate-700">{isEn ? "Scope" : "Phạm vi"}<select value={editingStandard.scope} onChange={(event) => setEditingStandard({ ...editingStandard, scope: event.target.value as ComplianceScope })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-900 outline-hidden focus:border-[#0047AB]"><option value="Công ty">{isEn ? "Company" : "Công ty"}</option><option value="Quy trình hàn">{isEn ? "Welding Process" : "Quy trình hàn"}</option><option value="Thợ hàn">{isEn ? "Welder" : "Thợ hàn"}</option></select></label>
+                <label className="font-semibold text-slate-700">{isEn ? "Related Standard" : "Tiêu chuẩn đối chiếu"}<input value={editingStandard.relatedStandard} onChange={(event) => setEditingStandard({ ...editingStandard, relatedStandard: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+              </div>
+              <label className="block font-semibold text-slate-700">{isEn ? "Evidence Required" : "Minh chứng đáp ứng"}<textarea rows={2} value={editingStandard.evidenceRequired} onChange={(event) => setEditingStandard({ ...editingStandard, evidenceRequired: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-slate-900 outline-hidden focus:border-[#0047AB]" /></label>
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-3"><button type="button" onClick={() => setEditingStandard(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">{isEn ? "Cancel" : "Hủy"}</button><button type="submit" className="rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white hover:bg-blue-700 cursor-pointer">{isEn ? "Save" : "Lưu"}</button></div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Evaluation Modal */}
       {editingItem && (
@@ -464,21 +514,6 @@ export default function ComplianceStandardsList() {
                     <option value="Thợ hàn">{isEn ? "Welder" : "Thợ hàn"}</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  {isEn ? "Evidence Document / Ref" : "Tài liệu minh chứng đính kèm"}
-                </label>
-                <input
-                  type="text"
-                  value={editingItem.evidenceDoc || ""}
-                  onChange={(e) =>
-                    setEditingItem({ ...editingItem, evidenceDoc: e.target.value })
-                  }
-                  placeholder="Tên file tài liệu minh chứng (PDF)..."
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
