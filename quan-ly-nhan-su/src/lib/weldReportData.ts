@@ -1009,6 +1009,31 @@ export function uniqueWelderOptions(rows: WeldReportRow[]): CertifiedWelderOptio
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
+/** Cột tối thiểu cho báo cáo tổng quan — giảm payload so với màn nhật ký. */
+const OVERVIEW_REPORT_COLUMNS = [
+  "id",
+  "ma_lich_su",
+  "du_an_id",
+  "ma_du_an",
+  "du_an",
+  "nam_thuc_hien",
+  "ngay_thuc_hien",
+  "loai_moi_han",
+  "cong_nghe_han",
+  "so_luong_thuc_hien",
+  "so_luong_loi",
+  "tho_han_id",
+  "ma_nhan_su",
+  "ten_tho_han",
+  "nguyen_nhan_loi",
+  "moi_han_lien_ket",
+  "may_id",
+  "ma_may",
+  "ten_may",
+  "ma_khuyet_tat",
+  "tinh_trang_thi_nghiem",
+] as const;
+
 async function fetchWeldReportRows(
   columns: readonly string[],
   dateFrom?: string,
@@ -1016,29 +1041,69 @@ async function fetchWeldReportRows(
 ) {
   const supabase = createClient();
   const pageSize = 1000;
-  const rows: WeldReportRow[] = [];
 
-  for (let offset = 0; ; offset += pageSize) {
-    let query = supabase
-      .from("bao_cao_moi_han_theo_du_an")
-      .select(columns.join(","));
-
+  const applyDateFilters = <T extends { gte: Function; lte: Function }>(query: T): T => {
+    let next = query;
     if (columns.includes("ngay_thuc_hien")) {
-      if (dateFrom) query = query.gte("ngay_thuc_hien", dateFrom);
-      if (dateTo) query = query.lte("ngay_thuc_hien", dateTo);
+      if (dateFrom) next = next.gte("ngay_thuc_hien", dateFrom) as T;
+      if (dateTo) next = next.lte("ngay_thuc_hien", dateTo) as T;
     } else {
-      if (dateFrom) query = query.gte("nam_thuc_hien", Number(dateFrom.slice(0, 4)));
-      if (dateTo) query = query.lte("nam_thuc_hien", Number(dateTo.slice(0, 4)));
+      if (dateFrom) next = next.gte("nam_thuc_hien", Number(dateFrom.slice(0, 4))) as T;
+      if (dateTo) next = next.lte("nam_thuc_hien", Number(dateTo.slice(0, 4))) as T;
     }
+    return next;
+  };
 
+  const buildPageQuery = (from: number, to: number) => {
+    let query = supabase.from("bao_cao_moi_han_theo_du_an").select(columns.join(","));
+    query = applyDateFilters(query);
     const orderedQuery = columns.includes("created_at")
       ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
       : query
           .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
           .order("nam_thuc_hien", { ascending: false })
           .order("ma_lich_su", { ascending: false });
-    const { data, error } = await orderedQuery.range(offset, offset + pageSize - 1);
+    return orderedQuery.range(from, to);
+  };
 
+  // Đếm trước để tải nhiều trang song song thay vì tuần tự.
+  let countQuery = supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select(columns.includes("id") ? "id" : columns[0], { count: "exact", head: true });
+  countQuery = applyDateFilters(countQuery);
+  const countResult = await countQuery;
+  const total = countResult.count ?? 0;
+
+  if (!countResult.error && total > 0) {
+    const pageCount = Math.ceil(total / pageSize);
+    const concurrency = 4;
+    const pageBuckets: Array<{ from: number; data: WeldReportRow[] }> = [];
+
+    for (let startPage = 0; startPage < pageCount; startPage += concurrency) {
+      const batch = Array.from(
+        { length: Math.min(concurrency, pageCount - startPage) },
+        (_, index) => startPage + index,
+      );
+      const pages = await Promise.all(
+        batch.map(async (pageIndex) => {
+          const from = pageIndex * pageSize;
+          const to = Math.min(from + pageSize - 1, total - 1);
+          const { data, error } = await buildPageQuery(from, to);
+          if (error) throw error;
+          return { from, data: (data ?? []) as unknown as WeldReportRow[] };
+        }),
+      );
+      pageBuckets.push(...pages);
+    }
+
+    pageBuckets.sort((a, b) => a.from - b.from);
+    return pageBuckets.flatMap((page) => page.data);
+  }
+
+  // Fallback tuần tự khi không lấy được count.
+  const rows: WeldReportRow[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await buildPageQuery(offset, offset + pageSize - 1);
     if (error) throw error;
     const page = (data ?? []) as unknown as WeldReportRow[];
     rows.push(...page);
@@ -1046,8 +1111,18 @@ async function fetchWeldReportRows(
   }
 }
 
-export function loadWeldReportRows(dateFrom?: string, dateTo?: string) {
-  const cacheKey = `${dateFrom ?? ""}\0${dateTo ?? ""}`;
+export type LoadWeldReportOptions = {
+  /** Chỉ lấy cột cần cho báo cáo tổng quan để giảm payload. */
+  mode?: "full" | "overview";
+};
+
+export function loadWeldReportRows(
+  dateFrom?: string,
+  dateTo?: string,
+  options?: LoadWeldReportOptions,
+) {
+  const mode = options?.mode ?? "full";
+  const cacheKey = `${mode}\0${dateFrom ?? ""}\0${dateTo ?? ""}`;
   const cached = reportRowsPromises.get(cacheKey);
   if (cached) return cached;
 
@@ -1056,6 +1131,14 @@ export function loadWeldReportRows(dateFrom?: string, dateTo?: string) {
         throw new Error(
           "Chưa cấu hình Supabase. Tạo quan-ly-nhan-su/.env.local với NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_ANON_KEY, rồi khởi động lại npm run dev.",
         );
+      }
+
+      if (mode === "overview") {
+        try {
+          return await fetchWeldReportRows(OVERVIEW_REPORT_COLUMNS, dateFrom, dateTo);
+        } catch {
+          // Fallback dần về bộ cột đầy đủ nếu view thiếu cột tối thiểu.
+        }
       }
 
       try {
@@ -1204,7 +1287,9 @@ export function groupJournalRows(
   const groups = new Map<string, WeldReportRow[]>();
   for (const row of rows) {
     const key = keyForRow(row);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(row);
+    else groups.set(key, [row]);
   }
   return Array.from(groups, ([name, groupRows]) => ({
     name,
@@ -1230,7 +1315,9 @@ export function groupWeldRows(
   const groups = new Map<string, WeldReportRow[]>();
   for (const row of rows) {
     const key = keyForRow(row);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(row);
+    else groups.set(key, [row]);
   }
   return Array.from(groups, ([name, groupRows]) => ({
     name,

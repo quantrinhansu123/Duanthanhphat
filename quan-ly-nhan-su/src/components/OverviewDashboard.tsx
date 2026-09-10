@@ -14,6 +14,7 @@ import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useProjectsData } from "@/hooks/useProjectsData";
 import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { loadTheoreticalProgressViewRows } from "@/lib/projectsDb";
 import {
   buildDailyJournalSeries,
   buildDonutArcs,
@@ -79,11 +80,13 @@ function planWeldsInRange(
   from: string,
   to: string,
 ) {
-  const daily = (project.theoreticalProgress ?? []).reduce(
-    (sum, row) => (row.ngay >= from && row.ngay <= to ? sum + row.so_moi_han : sum),
-    0,
-  );
-  if (project.theoreticalProgress !== undefined) return daily;
+  const progress = project.theoreticalProgress ?? [];
+  if (progress.length > 0) {
+    return progress.reduce(
+      (sum, row) => (row.ngay >= from && row.ngay <= to ? sum + row.so_moi_han : sum),
+      0,
+    );
+  }
 
   const overlapStart = project.startDate > from ? project.startDate : from;
   const overlapEnd = project.endDate < to ? project.endDate : to;
@@ -135,8 +138,14 @@ export default function OverviewDashboard() {
   const { rows, loading, error } = useWeldReportData(
     appliedFilters.dateFrom || undefined,
     appliedFilters.dateTo || undefined,
+    { mode: "overview" },
   );
-  const { projects, loading: projectsLoading, error: projectsError } = useProjectsData();
+  const {
+    projects,
+    setProjects,
+    loading: projectsLoading,
+    error: projectsError,
+  } = useProjectsData({ includeProgress: false });
   const {
     years: yearTotals,
     byProject: yearByProject,
@@ -144,6 +153,34 @@ export default function OverviewDashboard() {
     loading: yearLoading,
     error: yearError,
   } = useTongMoiHanNam();
+
+  // Hydrate tiến độ lý thuyết sau khi danh sách dự án đã hiện — không chặn KPI đầu trang.
+  useEffect(() => {
+    let active = true;
+    loadTheoreticalProgressViewRows()
+      .then((progressRows) => {
+        if (!active || progressRows.length === 0) return;
+        const byProject = new Map<string, { ngay: string; so_moi_han: number }[]>();
+        for (const row of progressRows) {
+          const list = byProject.get(row.du_an_id) ?? [];
+          list.push({ ngay: row.ngay, so_moi_han: row.so_moi_han });
+          byProject.set(row.du_an_id, list);
+        }
+        setProjects((prev) =>
+          prev.map((project) => {
+            const progress = byProject.get(project.id);
+            if (!progress?.length) return project;
+            return { ...project, theoreticalProgress: progress };
+          }),
+        );
+      })
+      .catch(() => {
+        // Giữ KPI theo plannedWeldCount nếu không hydrate được tiến độ ngày.
+      });
+    return () => {
+      active = false;
+    };
+  }, [setProjects]);
 
   const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly" | "cumulative">("daily");
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
@@ -890,11 +927,11 @@ export default function OverviewDashboard() {
     [filterFrom, filterTo, isAllDates, selectedProjects],
   );
 
-  // Card DỰ ÁN: KH năm dự kiến = kế hoạch PQ rơi vào NĂM HIỆN TẠI;
-  // "Đã thực hiện" = khối lượng mối hàn các năm trước năm hiện tại;
-  // "Tổng KH đến <năm hiện tại>" = đã thực hiện + KH năm hiện tại.
+  // Card DỰ ÁN:
+  // - Đã thực hiện = số mối nhật ký các năm trước năm hiện tại (thực tế)
+  // - KH dự kiến <năm> = kế hoạch tiến độ trong đúng năm hiện tại
   const PLAN_YEAR = new Date().getFullYear();
-  const plannedWelds2026 = useMemo(
+  const plannedWeldsPlanYear = useMemo(
     () =>
       selectedProjects.reduce(
         (sum, project) =>
@@ -992,14 +1029,7 @@ export default function OverviewDashboard() {
                 </div>
                 <div className="text-violet-700 font-medium">
                   KH dự kiến {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold">{fmt(plannedWelds2026)}</span> mối
-                </div>
-                <div className="text-slate-500">
-                  Tổng KH đến {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold text-slate-700">
-                    {fmt(doneBeforePlanYear + plannedWelds2026)}
-                  </span>{" "}
-                  mối
+                  <span className="font-mono font-semibold">{fmt(plannedWeldsPlanYear)}</span> mối
                 </div>
               </div>
             ) : (

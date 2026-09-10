@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
-import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import { REPORT_MACHINES, uniqueReportValues } from "@/lib/weldReportData";
+import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
+import { loadJournalProjectOptions } from "@/lib/weldReportData";
+import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -20,29 +21,35 @@ function filterPickLabel(count: number, defaultText: string) {
 
 export default function GlobalReportFilterBar() {
   const reportFilters = useReportFilters();
-  const { rows } = useWeldReportData(
-    reportFilters.appliedFilters.dateFrom || undefined,
-    reportFilters.appliedFilters.dateTo || undefined,
-  );
+  const [PROJECTS, setProjectsList] = useState<string[]>([]);
+  const [PERSONNEL, setPersonnelList] = useState<string[]>([]);
   const [dbMachines, setDbMachines] = useState<string[]>([]);
-  const PROJECTS = useMemo(() => uniqueReportValues(rows, "du_an"), [rows]);
-  const PERSONNEL = useMemo(() => uniqueReportValues(rows, "ten_tho_han"), [rows]);
   const MACHINES = useMemo(() => {
-    const fromRows = uniqueReportValues(rows, "ma_may");
-    const merged = Array.from(new Set([...dbMachines, ...fromRows, ...REPORT_MACHINES]));
+    const merged = Array.from(new Set([...dbMachines, ...REPORT_MACHINES]));
     return merged.filter(Boolean).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [dbMachines, rows]);
+  }, [dbMachines]);
 
   useEffect(() => {
     let active = true;
-    loadMachineOptions()
-      .then((options) => {
-        if (!active) return;
-        setDbMachines(options.map((m) => m.code).filter(Boolean));
-      })
-      .catch(() => {
-        if (active) setDbMachines([]);
-      });
+    Promise.all([
+      loadJournalProjectOptions().catch(() => []),
+      loadPersonnelPickerRows().catch(() => []),
+      loadMachineOptions().catch(() => []),
+    ]).then(([projects, personnel, machines]) => {
+      if (!active) return;
+      setProjectsList(
+        projects
+          .map((item) => item.label.trim())
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b, "vi")),
+      );
+      setPersonnelList(
+        Array.from(
+          new Set(personnel.map((row) => row.ho_ten.trim()).filter(Boolean)),
+        ).sort((a, b) => a.localeCompare(b, "vi")),
+      );
+      setDbMachines(machines.map((m) => m.code).filter(Boolean));
+    });
     return () => {
       active = false;
     };
@@ -311,7 +318,7 @@ export default function GlobalReportFilterBar() {
                 </button>
                 {machineFilterOpen && (
                   <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-60 w-full min-w-full touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                    <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
+                    <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer border-b border-slate-100 pb-2 mb-0.5">
                       <input type="checkbox" checked={machines.length === 0 || machines.length === MACHINES.length} onChange={() => setMachines([])} className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer shrink-0" />
                       <span className="truncate">Tất cả</span>
                     </label>

@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatSupabaseError } from "@/lib/supabase/env";
-import { loadWeldReportRows, type WeldReportRow } from "@/lib/weldReportData";
+import {
+  loadWeldReportRows,
+  type LoadWeldReportOptions,
+  type WeldReportRow,
+} from "@/lib/weldReportData";
 
-export function useWeldReportData(dateFrom?: string, dateTo?: string) {
+export function useWeldReportData(
+  dateFrom?: string,
+  dateTo?: string,
+  options?: LoadWeldReportOptions,
+) {
+  const mode = options?.mode ?? "full";
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -18,7 +27,7 @@ export function useWeldReportData(dateFrom?: string, dateTo?: string) {
     let active = true;
     setLoading(true);
     setError("");
-    loadWeldReportRows(dateFrom, dateTo)
+    loadWeldReportRows(dateFrom, dateTo, { mode })
       .then((data) => {
         if (active) setRows(data);
       })
@@ -34,7 +43,7 @@ export function useWeldReportData(dateFrom?: string, dateTo?: string) {
     return () => {
       active = false;
     };
-  }, [dateFrom, dateTo, reloadKey]);
+  }, [dateFrom, dateTo, mode, reloadKey]);
 
   return { rows, loading, error, refetch };
 }
