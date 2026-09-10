@@ -46,7 +46,7 @@ export const INITIAL_COMPLIANCE_STANDARDS: ComplianceStandardItem[] = [
     requirement:
       "Nhà thầu phải đáp ứng các yêu cầu phê duyệt như trong 4.2.1.2 đến 4.2.1.6. Bên mua có quyền kiểm tra nhà thầu bất kỳ khi nào. Nhà thầu phải áp dụng hệ thống chất lượng đã được bên mua chấp thuận. Hệ thống chất lượng phải bao gồm một hệ thống xác định nguồn gốc đối với tất cả các mối hàn được thực hiện.",
     scope: "Công ty",
-    relatedStandard: "",
+    relatedStandard: "EN 14587;EN 14730;TB/T 1632",
     evidenceRequired: "Hồ sơ phê duyệt của bên mua và minh chứng truy xuất nguồn gốc mối hàn.",
     status: "Chưa đánh giá",
   },
