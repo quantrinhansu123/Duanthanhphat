@@ -988,16 +988,11 @@ export default function OverviewDashboard() {
 
   // Card DỰ ÁN:
   // - Đã thực hiện = số mối nhật ký các năm trước năm hiện tại (thực tế)
-  // - KH dự kiến <năm> = kế hoạch tiến độ trong đúng năm hiện tại
+  // - KH dự kiến <năm> = tổng mối hàn dự kiến của các dự án (tong_moi_han_du_kien / tiến độ)
   const PLAN_YEAR = new Date().getFullYear();
   const plannedWeldsPlanYear = useMemo(
-    () =>
-      selectedProjects.reduce(
-        (sum, project) =>
-          sum + planWeldsInRange(project, `${PLAN_YEAR}-01-01`, `${PLAN_YEAR}-12-31`),
-        0,
-      ),
-    [PLAN_YEAR, selectedProjects],
+    () => selectedProjects.reduce((sum, project) => sum + projectPlanTotal(project), 0),
+    [selectedProjects],
   );
   const doneBeforePlanYear = useMemo(
     () => selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
