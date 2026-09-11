@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   REPORT_PERIOD_END,
   REPORT_PERIOD_START,
@@ -48,6 +48,7 @@ type ReportFilterContextValue = {
   setMethods: (value: string[]) => void;
   setWeldTypes: (value: string[]) => void;
   applyFilters: () => void;
+  cancelFilters: () => void;
   clearFilters: () => void;
 };
 
@@ -204,19 +205,20 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
     setAppliedPeriodMode(normalized.periodMode);
   }, [draft]);
 
-  // Tự áp dụng bộ lọc (debounce nhẹ) — mọi tab báo cáo hạch toán đúng theo lựa chọn hiện tại.
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const normalized = normalizeForMode(draft);
-      setAppliedFilters((prev) => {
-        const next = toApplied(normalized);
-        return sameFilters(prev, next) ? prev : next;
-      });
-      setAppliedPeriodMode(normalized.periodMode);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [draft]);
+  const cancelFilters = useCallback(() => {
+    setDraft({
+      periodMode: appliedPeriodMode,
+      dateFrom: appliedFilters.dateFrom,
+      dateTo: appliedFilters.dateTo,
+      projects: [...appliedFilters.projects],
+      personnel: [...appliedFilters.personnel],
+      machines: [...appliedFilters.machines],
+      methods: [...appliedFilters.methods],
+      weldTypes: [...appliedFilters.weldTypes],
+    });
+  }, [appliedFilters, appliedPeriodMode]);
 
+  // Tự áp dụng bộ lọc (debounce nhẹ) — mọi tab báo cáo hạch toán đúng theo lựa chọn hiện tại.
   const clearFilters = useCallback(() => {
     setDraft(EMPTY_DRAFT);
     setAppliedFilters(toApplied(EMPTY_DRAFT));
@@ -272,6 +274,7 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
       setMethods,
       setWeldTypes,
       applyFilters,
+      cancelFilters,
       clearFilters,
     }),
     [
@@ -293,6 +296,7 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
       setMethods,
       setWeldTypes,
       applyFilters,
+      cancelFilters,
       clearFilters,
     ],
   );

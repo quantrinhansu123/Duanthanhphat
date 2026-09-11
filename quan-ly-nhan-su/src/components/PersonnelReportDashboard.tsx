@@ -22,10 +22,8 @@ import type { Certificate as CertificateType } from "@/data/certificates";
 
 export default function PersonnelReportDashboard() {
   const { appliedFilters } = useReportFilters();
-  const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom || undefined,
-    appliedFilters.dateTo || undefined,
-  );
+  // Không lọc ngày tại nguồn để không bỏ qua lịch sử chỉ có năm thực hiện.
+  const { rows, loading, error } = useWeldReportData();
   const [teamFilter, setTeamFilter] = useState("Tất cả tổ hàn");
   const [certList, setCertList] = useState<CertificateType[]>([]);
   const [certError, setCertError] = useState("");

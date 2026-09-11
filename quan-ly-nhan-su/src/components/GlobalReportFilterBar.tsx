@@ -6,6 +6,7 @@ import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalProjectOptions } from "@/lib/weldReportData";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
+import DateField from "@/components/DateField";
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
@@ -59,7 +60,6 @@ export default function GlobalReportFilterBar() {
     filterCount,
     hasFilter,
     appliedFilters,
-    isDirty,
     dateFrom,
     dateTo,
     projects,
@@ -76,6 +76,7 @@ export default function GlobalReportFilterBar() {
     setMethods,
     setWeldTypes,
     applyFilters,
+    cancelFilters,
     clearFilters,
   } = reportFilters;
 
@@ -84,7 +85,7 @@ export default function GlobalReportFilterBar() {
   const [machineFilterOpen, setMachineFilterOpen] = useState(false);
   const [methodFilterOpen, setMethodFilterOpen] = useState(false);
   const [weldTypeFilterOpen, setWeldTypeFilterOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const activeSummary = useMemo(() => {
     const parts: string[] = [];
@@ -134,13 +135,14 @@ export default function GlobalReportFilterBar() {
     <div className="shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur-md z-20">
       <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-2">
         <div className={`${filtersOpen ? "overflow-visible" : "overflow-hidden"} rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="flex w-full items-center justify-between gap-3 px-3 sm:px-4 py-3 text-left hover:bg-slate-50/80 transition-colors duration-150 cursor-pointer"
-            aria-expanded={filtersOpen}
-          >
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-3 px-3 sm:px-4 py-3 text-left">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left"
+              aria-expanded={filtersOpen}
+            >
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <svg
                 width="16"
                 height="16"
@@ -165,7 +167,8 @@ export default function GlobalReportFilterBar() {
               {!filtersOpen && (
                 <span className="min-w-0 truncate text-xs text-slate-500">{activeSummary}</span>
               )}
-            </div>
+            </span>
+            </button>
             <div className="flex shrink-0 items-center gap-2">
               {hasFilter ? (
                 <button
@@ -176,61 +179,60 @@ export default function GlobalReportFilterBar() {
                   }}
                   className="inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                 >
-                  Lọc tất cả
+                  Xóa bộ lọc
                 </button>
               ) : (
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
                   Đang xem tất cả
                 </span>
               )}
-              <span className="text-xs sm:text-sm font-semibold text-[#0047AB]">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="text-xs sm:text-sm font-semibold text-[#0047AB] hover:text-[#003580] cursor-pointer"
+                aria-expanded={filtersOpen}
+              >
                 {filtersOpen ? "Ẩn bộ lọc" : "Hiện bộ lọc"}
-              </span>
+              </button>
             </div>
-          </button>
+          </div>
 
           {filtersOpen && (
             <form
-              className="border-t border-slate-200 p-3 sm:p-4 flex flex-col gap-3"
+              className="border-t border-slate-200 p-3 sm:p-4 flex flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 applyFilters();
               }}
             >
-          <div className="flex flex-col lg:flex-row lg:items-end gap-2.5 sm:gap-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-end gap-2.5 sm:gap-3 flex-1 min-w-0">
-              <div className="min-w-0 flex-1">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-2">
+              <div className="min-w-0">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Từ ngày</span>
-                <input
-                  type="date"
+                <DateField
                   value={dateFrom}
-                  onChange={(e) => {
-                    const val = e.target.value;
+                  onChange={(val) => {
                     setDateFrom(val);
                     if (dateTo && val > dateTo) setDateTo(val);
                   }}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
+                  placeholder="dd/mm/yyyy"
+                  className="w-full min-w-0"
                 />
-                {!dateFrom && !dateTo ? (
-                  <span className="mt-0.5 block text-[10px] text-slate-400">Trống = tất cả</span>
-                ) : null}
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Đến ngày</span>
-                <input
-                  type="date"
+                <DateField
                   value={dateTo}
-                  onChange={(e) => {
-                    const val = e.target.value;
+                  onChange={(val) => {
                     setDateTo(val);
                     if (dateFrom && val < dateFrom) setDateFrom(val);
                   }}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 focus:outline-hidden hover:border-slate-400 transition-all font-mono"
+                  placeholder="dd/mm/yyyy"
+                  className="w-full min-w-0"
                 />
               </div>
 
-              <div ref={projectRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
+              <div ref={projectRef} className="relative col-span-2 min-w-0">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Theo dự án</span>
                 <button
                   type="button"
@@ -264,7 +266,7 @@ export default function GlobalReportFilterBar() {
                 )}
               </div>
 
-              <div ref={personnelRef} className="relative min-w-0 flex-1 lg:flex-[1.25]">
+              <div ref={personnelRef} className="relative min-w-0">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Theo nhân sự</span>
                 <button
                   type="button"
@@ -298,7 +300,7 @@ export default function GlobalReportFilterBar() {
                 )}
               </div>
 
-              <div ref={machineRef} className="relative col-span-2 sm:col-span-1 min-w-0 flex-1">
+              <div ref={machineRef} className="relative min-w-0">
                 <span className="mb-1 block text-xs font-semibold text-slate-600">Theo máy</span>
                 <button
                   type="button"
@@ -332,10 +334,9 @@ export default function GlobalReportFilterBar() {
                 )}
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 pt-2.5 border-t border-slate-100">
-            <div ref={methodRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[220px]">
+          <div className="grid grid-cols-2 items-end gap-2.5 border-t border-slate-100 pt-3 sm:gap-3 lg:grid-cols-2">
+            <div ref={methodRef} className="relative min-w-0">
               <span className="mb-1 block text-xs font-semibold text-slate-600">Phương pháp hàn</span>
               <button
                 type="button"
@@ -369,7 +370,7 @@ export default function GlobalReportFilterBar() {
               )}
             </div>
 
-            <div ref={weldTypeRef} className="relative min-w-0 w-[calc(50%-5px)] sm:w-[200px]">
+            <div ref={weldTypeRef} className="relative min-w-0">
               <span className="mb-1 block text-xs font-semibold text-slate-600">Loại mối hàn</span>
               <button
                 type="button"
@@ -403,19 +404,20 @@ export default function GlobalReportFilterBar() {
               )}
             </div>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={clearFilters}
-                className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                onClick={applyFilters}
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer sm:w-auto"
               >
                 Lọc tất cả
               </button>
               <button
-                type="submit"
-                className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer shadow-xs"
+                type="button"
+                onClick={cancelFilters}
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer shadow-xs sm:w-auto"
               >
-                {isDirty ? "Áp dụng ngay" : "Đã áp dụng"}
+                Hủy
               </button>
             </div>
           </div>

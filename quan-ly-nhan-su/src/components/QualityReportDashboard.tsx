@@ -336,10 +336,8 @@ const statusStyle = {
 
 export default function QualityReportDashboard() {
   const { appliedFilters } = useReportFilters();
-  const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom || undefined,
-    appliedFilters.dateTo || undefined,
-  );
+  // Giữ các bản ghi lịch sử chỉ có năm; filterWeldReportRows xử lý khoảng ngày an toàn.
+  const { rows, loading, error } = useWeldReportData();
 
   const selectedRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { planWeldCodeAssignments } from "@/lib/weldCode";
 import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
+import { invalidateWeldDailyRollupCache } from "@/lib/weldDailyStats";
 
 export const REPORT_MACHINES = [
   "KCM007-01",
@@ -139,6 +140,7 @@ const reportRowsPromises = new Map<string, Promise<WeldReportRow[]>>();
 
 export function invalidateWeldReportCache() {
   reportRowsPromises.clear();
+  invalidateWeldDailyRollupCache();
 }
 
 /** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo). */
@@ -1082,7 +1084,10 @@ async function fetchWeldReportRows(
   const supabase = createClient();
   const pageSize = 1000;
 
-  const applyDateFilters = <T extends { gte: Function; lte: Function }>(query: T): T => {
+  const applyDateFilters = <T extends {
+    gte: (column: string, value: unknown) => unknown;
+    lte: (column: string, value: unknown) => unknown;
+  }>(query: T): T => {
     let next = query;
     if (columns.includes("ngay_thuc_hien")) {
       if (dateFrom) next = next.gte("ngay_thuc_hien", dateFrom) as T;

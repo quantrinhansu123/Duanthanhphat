@@ -13,6 +13,8 @@ import {
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useProjectsData } from "@/hooks/useProjectsData";
 import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
+import { useWeldDailyRollup } from "@/hooks/useWeldDailyRollup";
+import { useOverviewAggregates } from "@/hooks/useOverviewAggregates";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadTheoreticalProgressViewRows } from "@/lib/projectsDb";
 import {
@@ -32,6 +34,11 @@ import {
 } from "@/lib/weldReportData";
 import { projectDurationDays } from "@/lib/projectsDb";
 import { filterYearTotals } from "@/lib/tongMoiHanNamDb";
+import {
+  buildWeldDailyRollupSeries,
+  filterWeldDailyRollupRows,
+  summarizeWeldDailyRollupRows,
+} from "@/lib/weldDailyStats";
 
 type ChartDayPoint = {
   idx: number;
@@ -133,13 +140,42 @@ function sampleChartLabels(labels: string[], maxCount: number) {
 export default function OverviewDashboard() {
   const { appliedFilters } = useReportFilters();
   const isAllDates = !appliedFilters.dateFrom && !appliedFilters.dateTo;
+  const isUnfilteredOverview =
+    isAllDates &&
+    appliedFilters.projects.length === 0 &&
+    appliedFilters.personnel.length === 0 &&
+    appliedFilters.machines.length === 0 &&
+    appliedFilters.methods.length === 0 &&
+    appliedFilters.weldTypes.length === 0;
   const filterFrom = appliedFilters.dateFrom || REPORT_PERIOD_START;
   const filterTo = appliedFilters.dateTo || REPORT_PERIOD_END;
-  const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom || undefined,
-    appliedFilters.dateTo || undefined,
-    { mode: "overview" },
-  );
+  // Với khoảng ngày không bao trọn cả năm, các dòng chỉ có `nam_thuc_hien`
+  // chắc chắn bị loại bởi bộ lọc. Khi đó có thể đẩy bộ lọc ngày xuống DB và
+  // chỉ tải vài dòng thay vì quét toàn bộ nhật ký 13k dòng.
+  const canQueryDetailByDate = Boolean(appliedFilters.dateFrom && appliedFilters.dateTo) &&
+    (appliedFilters.dateFrom.slice(5) !== "01-01" || appliedFilters.dateTo.slice(5) !== "12-31");
+  const detailQueryFrom = canQueryDetailByDate ? appliedFilters.dateFrom : undefined;
+  const detailQueryTo = canQueryDetailByDate ? appliedFilters.dateTo : undefined;
+  // Dữ liệu lịch sử chỉ có năm không có `ngay_thuc_hien`, nên các khoảng ngày
+  // bao trọn cả năm vẫn tải toàn bộ để không làm mất dòng cũ. Khoảng hẹp
+  // (ví dụ 2026-09-10 → 2026-09-10) được lọc ngay tại DB.
+  const { rows, loading, error } = useWeldReportData(detailQueryFrom, detailQueryTo, { mode: "overview" });
+  // Rollup theo ngày chỉ vài dòng nên được tải song song, dùng để vẽ nhanh trong
+  // lúc bảng chi tiết (máy/nhân sự/lỗi) còn đang phân trang nền.
+  const {
+    rows: dailyRollupRows,
+    source: dailyRollupSource,
+    loading: dailyRollupLoading,
+  } = useWeldDailyRollup();
+  const {
+    summary: overviewAggregateSummary,
+    machineRows: overviewAggregateMachines,
+    projectRows: overviewAggregateProjects,
+    errorReasonRows: overviewAggregateErrorReasons,
+    doneBeforePlanYear: overviewAggregateDoneBeforePlanYear,
+    source: overviewAggregateSource,
+    loading: overviewAggregateLoading,
+  } = useOverviewAggregates(appliedFilters, isUnfilteredOverview);
   const {
     projects,
     setProjects,
@@ -155,7 +191,10 @@ export default function OverviewDashboard() {
   } = useTongMoiHanNam();
 
   // Hydrate tiến độ lý thuyết sau khi danh sách dự án đã hiện — không chặn KPI đầu trang.
+  // Chờ `projects` tải xong trước khi merge: nếu chạy song song, tiến độ có thể về
+  // trước danh sách dự án, merge vào mảng rỗng rồi bị ghi đè mất khi danh sách tới.
   useEffect(() => {
+    if (projects.length === 0) return;
     let active = true;
     loadTheoreticalProgressViewRows()
       .then((progressRows) => {
@@ -180,7 +219,7 @@ export default function OverviewDashboard() {
     return () => {
       active = false;
     };
-  }, [setProjects]);
+  }, [projects.length, setProjects]);
 
   const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartViewMode, setCumulativeChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
@@ -218,6 +257,24 @@ export default function OverviewDashboard() {
   const summary = useMemo(() => summarizeJournalRows(selectedRows), [selectedRows]);
   const todayIso = localIsoDate();
 
+  const fastRollupRows = useMemo(
+    () => filterWeldDailyRollupRows(dailyRollupRows, appliedFilters),
+    [appliedFilters, dailyRollupRows],
+  );
+  const fastSummary = useMemo(
+    () => summarizeWeldDailyRollupRows(fastRollupRows),
+    [fastRollupRows],
+  );
+  const fastLatestDataDate = useMemo(() => {
+    let maxDate = "";
+    for (const row of fastRollupRows) {
+      if (row.ngay_thuc_hien <= todayIso && row.ngay_thuc_hien > maxDate) {
+        maxDate = row.ngay_thuc_hien;
+      }
+    }
+    return maxDate;
+  }, [fastRollupRows, todayIso]);
+
   // Chỉ dùng ngày thực hiện thật và không nhận ngày tương lai làm "ngày gần nhất".
   const latestDataDate = useMemo(() => {
     let maxDate = "";
@@ -228,17 +285,35 @@ export default function OverviewDashboard() {
     return maxDate;
   }, [selectedRows, todayIso]);
 
+  const detailReady = !loading && !error;
+  const fastRollupReady =
+    !dailyRollupLoading &&
+    dailyRollupSource !== "unavailable" &&
+    // Rollup chưa có chiều nhân sự/máy nên không được dùng khi đang lọc hai chiều này.
+    appliedFilters.personnel.length === 0 &&
+    appliedFilters.machines.length === 0;
+  const fastAggregateReady =
+    isUnfilteredOverview &&
+    !overviewAggregateLoading &&
+    overviewAggregateSource === "supabase";
+  const showFastAggregate = !detailReady && fastAggregateReady;
+  const showFastDaily = !detailReady && !showFastAggregate && fastRollupReady;
+  const showFastCharts = fastRollupReady && (showFastAggregate || showFastDaily);
+
   const chartDateRange = useMemo(() => {
     return resolveChartDateRange(
       isAllDates ? REPORT_PERIOD_START : filterFrom,
       isAllDates ? "" : filterTo,
       31,
-      latestDataDate,
+      showFastCharts ? fastLatestDataDate : latestDataDate,
     );
-  }, [filterFrom, filterTo, isAllDates, latestDataDate]);
+  }, [fastLatestDataDate, filterFrom, filterTo, isAllDates, latestDataDate, showFastCharts]);
   const dailySeries = useMemo(
-    () => buildDailyJournalSeries(selectedRows, chartDateRange.from, chartDateRange.to),
-    [selectedRows, chartDateRange.from, chartDateRange.to],
+    () =>
+      showFastCharts
+        ? buildWeldDailyRollupSeries(fastRollupRows, chartDateRange.from, chartDateRange.to)
+        : buildDailyJournalSeries(selectedRows, chartDateRange.from, chartDateRange.to),
+    [chartDateRange.from, chartDateRange.to, fastRollupRows, selectedRows, showFastCharts],
   );
   const dailyValues = useMemo(() => dailySeries.map((point) => point.value), [dailySeries]);
 
@@ -532,24 +607,41 @@ export default function OverviewDashboard() {
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   const yesterdayIso = localIsoDate(yesterdayDate);
   // Đếm theo bản ghi nhật ký (1 dòng = 1 mối), đồng bộ với KPI tổng / bộ lọc.
-  const todayTotal = selectedRows.reduce(
-    (sum, row, index) => (getJournalRowDateIso(row, index) === todayIso ? sum + 1 : sum),
-    0,
-  );
-  const yesterdayTotal = selectedRows.reduce(
-    (sum, row, index) => (getJournalRowDateIso(row, index) === yesterdayIso ? sum + 1 : sum),
-    0,
-  );
+  const todayTotal = showFastCharts
+    ? fastRollupRows.reduce((sum, row) => (row.ngay_thuc_hien === todayIso ? sum + (row.so_moi ?? row.so_luong_thuc_hien ?? 0) : sum), 0)
+    : selectedRows.reduce(
+        (sum, row, index) => (getJournalRowDateIso(row, index) === todayIso ? sum + 1 : sum),
+        0,
+      );
+  const yesterdayTotal = showFastCharts
+    ? fastRollupRows.reduce((sum, row) => (row.ngay_thuc_hien === yesterdayIso ? sum + (row.so_moi ?? row.so_luong_thuc_hien ?? 0) : sum), 0)
+    : selectedRows.reduce(
+        (sum, row, index) => (getJournalRowDateIso(row, index) === yesterdayIso ? sum + 1 : sum),
+        0,
+      );
   const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0);
-  const errorReasonRows = useMemo(() => groupJournalErrorReasons(selectedRows), [selectedRows]);
+  const errorReasonRows = useMemo(
+    () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalErrorReasons(selectedRows),
+    [overviewAggregateErrorReasons, selectedRows, showFastAggregate],
+  );
 
-  const total = summary.total;
-  const passed = summary.passed;
-  const failed = summary.errors;
-  const rework = countReworkWelds(selectedRows);
+  const visibleSummary = showFastAggregate
+    ? overviewAggregateSummary
+    : showFastDaily
+      ? fastSummary
+      : summary;
+  const total = visibleSummary.total;
+  const passed = visibleSummary.passed;
+  const failed = visibleSummary.errors;
+  const rework = showFastAggregate
+    ? overviewAggregateSummary.rework
+    : showFastDaily
+      ? fastSummary.rework
+      : countReworkWelds(selectedRows);
 
   // Thực tế theo đúng các dự án đang xét (toàn bộ khi lọc tất cả).
   const progressActual = useMemo(() => {
+    if (showFastAggregate) return overviewAggregateSummary.total;
     if (selectedProjects.length === 0) return total;
     const projectByKey = new Map<string, (typeof selectedProjects)[number]>();
     for (const project of selectedProjects) {
@@ -575,7 +667,7 @@ export default function OverviewDashboard() {
       count += 1;
     });
     return count;
-  }, [asOfDate, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, total]);
+  }, [asOfDate, filterFrom, filterTo, isAllDates, overviewAggregateSummary.total, selectedProjects, selectedRows, showFastAggregate, total]);
 
   // Mục tiêu: đủ KH mọi dự án (lọc tất cả) hoặc KH trong kỳ lọc.
   const target =
@@ -928,6 +1020,26 @@ export default function OverviewDashboard() {
   }
 
   const projectRows = useMemo(() => {
+    if (showFastAggregate && overviewAggregateProjects.length > 0) {
+      return overviewAggregateProjects.map((project, index) => {
+        const sourceProject = selectedProjects.find(
+          (item) => item.id === project.id || item.name === project.name,
+        );
+        return {
+          id: project.id,
+          name: project.name,
+          maDuAn: project.code || sourceProject?.maDuAn || "",
+          location: sourceProject?.location || "",
+          status: sourceProject?.status || "Từ bảng tổng hợp",
+          planned: sourceProject ? projectPlanTotal(sourceProject) : project.total,
+          count: project.total,
+          passed: project.passed,
+          errors: project.errors,
+          color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+          fromTable: true,
+        };
+      });
+    }
     const weldByName = new Map(
       groupJournalRows(selectedRows, (row) => row.du_an.trim() || "Chưa gắn dự án").map((row) => [
         row.name,
@@ -974,9 +1086,11 @@ export default function OverviewDashboard() {
     return [...fromDuAn, ...orphans].sort(
       (a, b) => b.count - a.count || a.name.localeCompare(b.name, "vi"),
     );
-  }, [filterFrom, filterTo, isAllDates, selectedProjects, selectedRows]);
+  }, [filterFrom, filterTo, isAllDates, overviewAggregateProjects, selectedProjects, selectedRows, showFastAggregate]);
 
-  const projectCount = selectedProjects.length;
+  const projectCount = showFastAggregate && overviewAggregateProjects.length > 0
+    ? overviewAggregateProjects.length
+    : selectedProjects.length;
   const plannedWeldsAll = useMemo(
     () =>
       selectedProjects.reduce((sum, project) => {
@@ -1005,8 +1119,10 @@ export default function OverviewDashboard() {
     [PLAN_YEAR, selectedProjects],
   );
   const doneBeforePlanYear = useMemo(
-    () => selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
-    [PLAN_YEAR, selectedRows],
+    () => showFastAggregate
+      ? overviewAggregateDoneBeforePlanYear
+      : selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
+    [PLAN_YEAR, overviewAggregateDoneBeforePlanYear, selectedRows, showFastAggregate],
   );
 
   const projectChartRows = useMemo(
@@ -1028,6 +1144,29 @@ export default function OverviewDashboard() {
   );
 
   const machineRows = useMemo(() => {
+    if (showFastAggregate && overviewAggregateMachines.length > 0) {
+      return overviewAggregateMachines
+        .slice()
+        .sort((a, b) => {
+          const ai = REPORT_MACHINES.indexOf(a.code as (typeof REPORT_MACHINES)[number]);
+          const bi = REPORT_MACHINES.indexOf(b.code as (typeof REPORT_MACHINES)[number]);
+          return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
+        })
+        .map((machine) => {
+          const passRate = machine.total > 0 ? Math.round(((machine.total - machine.errors) / machine.total) * 100) : 0;
+          return {
+            code: machine.code,
+            total: fmt(machine.total),
+            // Bảng tổng hợp máy không có chiều ngày; giữ dấu "—" để không
+            // nhầm là hôm nay không có mối hàn.
+            today: "—",
+            errorRate: pctComma(machine.errors, machine.total),
+            availLabel: `${passRate}%`,
+            availPct: passRate,
+            availColor: passRate >= 90 ? "#15803d" : "#d97706",
+          };
+        });
+    }
     const todayRows = selectedRows.filter(
       (row, index) => getJournalRowDateIso(row, index) === todayIso,
     );
@@ -1049,7 +1188,7 @@ export default function OverviewDashboard() {
           availColor: passRate >= 90 ? "#15803d" : "#d97706",
         };
       });
-  }, [selectedRows, todayIso]);
+  }, [overviewAggregateMachines, selectedRows, showFastAggregate, todayIso]);
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
@@ -1067,7 +1206,11 @@ export default function OverviewDashboard() {
             : yearError
               ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
               : loading || yearLoading || projectsLoading
-                ? "Đang tải dữ liệu Supabase…"
+                ? showFastAggregate
+                  ? `Đang hiển thị tổng hợp nhanh · ${fmt(total)} mối · chi tiết máy/lỗi đang tải nền…`
+                  : showFastDaily
+                  ? `Đang hiển thị nhanh theo ngày · ${fmt(total)} mối có ngày thực hiện · đang tải chi tiết…`
+                  : "Đang tải dữ liệu Supabase…"
                 : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(projectCount)} dự án (bảng Dự án) · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`}
       </div>
 
@@ -1125,7 +1268,13 @@ export default function OverviewDashboard() {
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
-            <div className="mt-2.5 text-xs text-slate-500">Trong khoảng ngày đang lọc</div>
+            <div className="mt-2.5 text-xs text-slate-500">
+              {showFastAggregate
+                ? "Tổng hợp nhanh từ DB · chi tiết đang tải nền"
+                : showFastDaily
+                  ? "Tạm tính theo ngày · chi tiết đang tải"
+                  : "Trong khoảng ngày đang lọc"}
+            </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <ChartLineUp size={24} weight="fill" aria-hidden />
@@ -1194,7 +1343,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{summary.tested > 0 ? pctComma(passed, summary.tested) : "—"}</span> số mối đã thí nghiệm
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{visibleSummary.tested > 0 ? pctComma(passed, visibleSummary.tested) : "—"}</span> số mối đã thí nghiệm
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1215,7 +1364,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{summary.tested > 0 ? pctComma(failed, summary.tested) : "—"}</span> lỗi / số mối đã thí nghiệm
+              <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{visibleSummary.tested > 0 ? pctComma(failed, visibleSummary.tested) : "—"}</span> lỗi / số mối đã thí nghiệm
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
@@ -1228,8 +1377,8 @@ export default function OverviewDashboard() {
           <div className="mt-2 text-xs text-slate-500">Có mối hàn liên kết</div>
         </div>
         {[
-          { label: "CHỜ THÍ NGHIỆM", count: summary.pending, color: "text-amber-700" },
-          { label: "KHÔNG THÍ NGHIỆM", count: summary.untested, color: "text-slate-600" },
+          { label: "CHỜ THÍ NGHIỆM", count: visibleSummary.pending, color: "text-amber-700" },
+          { label: "KHÔNG THÍ NGHIỆM", count: visibleSummary.untested, color: "text-slate-600" },
         ].map((item) => (
           <div key={item.label} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
             <div className={`text-xs font-bold tracking-wider ${item.color}`}>{item.label}</div>
@@ -1345,12 +1494,19 @@ export default function OverviewDashboard() {
         {/* Box 2: SẢN LƯỢNG HÀN THEO NGÀY / LŨY KẾ */}
         <div className="order-3 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0 flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <div className="min-w-0 text-sm sm:text-base font-bold tracking-tight text-slate-900">
-              {chartViewMode === "daily"
-                ? "SẢN LƯỢNG HÀN THEO NGÀY"
-                : chartViewMode === "yearly"
-                  ? "SẢN LƯỢNG HÀN THEO NĂM"
-                  : "SẢN LƯỢNG HÀN THEO THÁNG"}
+            <div className="flex min-w-0 items-center gap-2 text-sm sm:text-base font-bold tracking-tight text-slate-900">
+              <span>
+                {chartViewMode === "daily"
+                  ? "SẢN LƯỢNG HÀN THEO NGÀY"
+                  : chartViewMode === "yearly"
+                    ? "SẢN LƯỢNG HÀN THEO NĂM"
+                    : "SẢN LƯỢNG HÀN THEO THÁNG"}
+              </span>
+              {showFastDaily && chartViewMode === "daily" ? (
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-[#0047AB]">
+                  Đang tải nhanh
+                </span>
+              ) : null}
             </div>
 
             {/* Ngày | Tháng | Năm */}

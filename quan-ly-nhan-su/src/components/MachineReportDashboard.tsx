@@ -94,10 +94,8 @@ function maintenanceBadge(status: MachineStatus): { label: string; badgeBg: stri
 
 export default function MachineReportDashboard() {
   const { appliedFilters } = useReportFilters();
-  const { rows, loading, error } = useWeldReportData(
-    appliedFilters.dateFrom || undefined,
-    appliedFilters.dateTo || undefined,
-  );
+  // Không lọc ngày tại nguồn để không bỏ qua lịch sử chỉ có năm thực hiện.
+  const { rows, loading, error } = useWeldReportData();
   const [activeSlide, setActiveSlide] = useState(0);
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
@@ -129,6 +127,12 @@ export default function MachineReportDashboard() {
   const selectedRows = useMemo(
     () => filterWeldReportRows(rows, appliedFilters),
     [rows, appliedFilters],
+  );
+  const unassignedMachineWelds = useMemo(
+    () => selectedRows
+      .filter((row) => !row.ma_may?.trim())
+      .reduce((total, row) => total + Number(row.so_luong_thuc_hien || 0), 0),
+    [selectedRows],
   );
   const machineStats = useMemo(() => {
     return groupWeldRows(selectedRows, machineForRow).map((group) => ({
@@ -247,7 +251,9 @@ export default function MachineReportDashboard() {
           ? `Không tải đủ dữ liệu Supabase: ${dataError}`
           : loading
             ? "Đang tải dữ liệu Supabase…"
-            : "Số mối hàn tự động tính từ nhật ký đã chọn máy · Số giờ tự động tính từ lịch chạy máy"}
+            : unassignedMachineWelds > 0
+              ? `Số mối hàn theo máy chỉ gồm bản ghi đã gán máy · ${unassignedMachineWelds.toLocaleString("vi-VN")} mối chưa gán máy không được phân bổ.`
+              : "Số mối hàn tự động tính từ nhật ký đã chọn máy · Số giờ tự động tính từ lịch chạy máy"}
       </div>
       {/* 1. Top KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">

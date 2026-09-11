@@ -1,7 +1,9 @@
 ﻿"use client";
 
 import { useMemo, useState } from "react";
-import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
+import { useReportFilters } from "@/contexts/ReportFilterContext";
+import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { filterWeldReportRows, type WeldReportRow } from "@/lib/weldReportData";
 import type {
   TongMoiHanNamDuAnRow,
   TongMoiHanNamNhanSuRow,
@@ -9,6 +11,69 @@ import type {
 } from "@/lib/tongMoiHanNamDb";
 
 type ViewMode = "nam" | "du-an" | "nhan-su";
+
+function emptyYearRow(year: number): TongMoiHanNamRow {
+  return {
+    nam: year, tong_moi_han: 0, tong_loi: 0, tong_dat: 0,
+    fbw: 0, atw: 0, loi_fbw: 0, loi_atw: 0,
+    san_xuat: 0, thu_nghiem: 0, dao_tao: 0,
+    loi_san_xuat: 0, loi_thu_nghiem: 0, loi_dao_tao: 0,
+  };
+}
+
+function addWeld(row: TongMoiHanNamRow, weld: WeldReportRow) {
+  const total = Number(weld.so_luong_thuc_hien || 0);
+  const errors = Number(weld.so_luong_loi || 0);
+  row.tong_moi_han += total;
+  row.tong_loi += errors;
+  row.tong_dat += total - errors;
+  if (weld.cong_nghe_han === "FBW") {
+    row.fbw += total;
+    row.loi_fbw += errors;
+  } else {
+    row.atw += total;
+    row.loi_atw += errors;
+  }
+  if (weld.loai_moi_han === "Sản xuất") {
+    row.san_xuat += total;
+    row.loi_san_xuat += errors;
+  } else if (weld.loai_moi_han === "Thử nghiệm") {
+    row.thu_nghiem += total;
+    row.loi_thu_nghiem += errors;
+  } else {
+    row.dao_tao += total;
+    row.loi_dao_tao += errors;
+  }
+}
+
+function buildYearReportRows(rows: WeldReportRow[]) {
+  const years = new Map<number, TongMoiHanNamRow>();
+  const projects = new Map<string, TongMoiHanNamDuAnRow>();
+  const personnel = new Map<string, TongMoiHanNamNhanSuRow>();
+
+  for (const weld of rows) {
+    const year = weld.nam_thuc_hien;
+    const yearRow = years.get(year) ?? emptyYearRow(year);
+    addWeld(yearRow, weld);
+    years.set(year, yearRow);
+
+    const projectKey = `${year}\0${weld.du_an_id}`;
+    const projectRow = projects.get(projectKey) ?? {
+      ...emptyYearRow(year), du_an_id: weld.du_an_id, ma_du_an: weld.ma_du_an || null, du_an: weld.du_an,
+    };
+    addWeld(projectRow, weld);
+    projects.set(projectKey, projectRow);
+
+    const personnelKey = `${year}\0${weld.tho_han_id}`;
+    const personnelRow = personnel.get(personnelKey) ?? {
+      ...emptyYearRow(year), tho_han_id: weld.tho_han_id, ma_nhan_su: weld.ma_nhan_su || null, ten_tho_han: weld.ten_tho_han,
+    };
+    addWeld(personnelRow, weld);
+    personnel.set(personnelKey, personnelRow);
+  }
+
+  return { years: [...years.values()], byProject: [...projects.values()], byPersonnel: [...personnel.values()] };
+}
 
 function fmt(n: number) {
   return n.toLocaleString("vi-VN");
@@ -210,8 +275,12 @@ function PersonnelYearTable({ rows }: { rows: TongMoiHanNamNhanSuRow[] }) {
 }
 
 export default function YearlyWeldReport() {
-  const { years, byProject, byPersonnel, loading, error, source } = useTongMoiHanNam();
+  const { appliedFilters } = useReportFilters();
+  // Không lọc ngày tại nguồn: lịch sử chỉ có năm vẫn phải được hạch toán đúng theo năm.
+  const { rows, loading, error } = useWeldReportData();
   const [view, setView] = useState<ViewMode>("nam");
+  const selectedRows = useMemo(() => filterWeldReportRows(rows, appliedFilters), [rows, appliedFilters]);
+  const { years, byProject, byPersonnel } = useMemo(() => buildYearReportRows(selectedRows), [selectedRows]);
 
   const totals = useMemo(() => {
     return years.reduce(
@@ -241,7 +310,7 @@ export default function YearlyWeldReport() {
           ? `Không tải được tổng hợp năm: ${error}`
           : loading
             ? "Đang tải báo cáo mối hàn theo năm…"
-            : `Supabase · bảng tong_moi_han_nam · ${years.length} năm · nguồn ${source}`}
+            : `Nhật ký hàn Supabase · ${selectedRows.length.toLocaleString("vi-VN")} bản ghi đã lọc · ${years.length} năm`}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-600">
@@ -269,7 +338,7 @@ export default function YearlyWeldReport() {
               BÁO CÁO MỐI HÀN THEO NĂM
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Dữ liệu tổng hợp sẵn từ nhật ký hàn — tải nhanh, không kéo toàn bộ lịch sử.
+              Tổng hợp trực tiếp từ nhật ký hàn theo bộ lọc hiện tại.
             </p>
           </div>
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
