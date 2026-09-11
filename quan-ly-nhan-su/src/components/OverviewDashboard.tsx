@@ -988,11 +988,21 @@ export default function OverviewDashboard() {
 
   // Card DỰ ÁN:
   // - Đã thực hiện = số mối nhật ký các năm trước năm hiện tại (thực tế)
-  // - KH dự kiến <năm> = tổng mối hàn dự kiến của các dự án (tong_moi_han_du_kien / tiến độ)
+  // - KH dự kiến = tổng mối hàn dự kiến của các dự án
+  // - KH năm <năm> = chỉ kế hoạch tiến độ trong đúng năm hiện tại
   const PLAN_YEAR = new Date().getFullYear();
-  const plannedWeldsPlanYear = useMemo(
+  const plannedWeldsTotal = useMemo(
     () => selectedProjects.reduce((sum, project) => sum + projectPlanTotal(project), 0),
     [selectedProjects],
+  );
+  const plannedWeldsThisYear = useMemo(
+    () =>
+      selectedProjects.reduce(
+        (sum, project) =>
+          sum + planWeldsInRange(project, `${PLAN_YEAR}-01-01`, `${PLAN_YEAR}-12-31`),
+        0,
+      ),
+    [PLAN_YEAR, selectedProjects],
   );
   const doneBeforePlanYear = useMemo(
     () => selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
@@ -1082,8 +1092,13 @@ export default function OverviewDashboard() {
                   <span className="font-mono font-semibold text-slate-700">{fmt(doneBeforePlanYear)}</span> mối
                 </div>
                 <div className="text-violet-700 font-medium">
-                  KH dự kiến {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold">{fmt(plannedWeldsPlanYear)}</span> mối
+                  KH dự kiến:{" "}
+                  <span className="font-mono font-semibold">{fmt(plannedWeldsTotal)}</span> mối
+                </div>
+                <div className="text-slate-500">
+                  KH năm {PLAN_YEAR}:{" "}
+                  <span className="font-mono font-semibold text-slate-700">{fmt(plannedWeldsThisYear)}</span>{" "}
+                  mối
                 </div>
               </div>
             ) : (
