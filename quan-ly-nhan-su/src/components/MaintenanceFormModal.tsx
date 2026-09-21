@@ -1,14 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   MaintenanceAssignee,
   MaintenanceEvent,
   MaintenanceImageAsset,
 } from "@/data/maintenance";
-import { Trash, UploadSimple, X } from "@/components/icons";
+import { MagnifyingGlass, Trash, UploadSimple, X } from "@/components/icons";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
+import { loadPersonnelCertificateRows } from "@/lib/personnelCertificatesDb";
+import { formatSupabaseError } from "@/lib/supabase/env";
 
 export type MaintenanceFormValues = {
   date: string;
@@ -23,18 +26,6 @@ export type MaintenanceFormValues = {
   imageAssets: MaintenanceImageAsset[];
 };
 
-const assigneeOptions: MaintenanceAssignee[] = [
-  { name: "Phạm Văn Minh", photo: "https://randomuser.me/api/portraits/men/52.jpg" },
-  { name: "Trần Quốc Bảo", photo: "https://randomuser.me/api/portraits/men/22.jpg" },
-  { name: "Nguyễn Văn Hùng", photo: "https://randomuser.me/api/portraits/men/36.jpg" },
-  { name: "Đỗ Thị Lan", photo: "https://randomuser.me/api/portraits/women/48.jpg" },
-  { name: "Lê Thị Kim Anh", photo: "https://randomuser.me/api/portraits/women/65.jpg" },
-];
-
-const machines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
-
-export { assigneeOptions, machines as maintenanceMachineOptions };
-
 type MaintenanceFormModalProps = {
   open: boolean;
   onClose: () => void;
@@ -43,16 +34,16 @@ type MaintenanceFormModalProps = {
   initialEvent?: MaintenanceEvent | null;
 };
 
-function emptyForm(defaultDate: string): MaintenanceFormValues {
+function emptyForm(defaultDate: string, machine = ""): MaintenanceFormValues {
   return {
     date: defaultDate,
     time: "08:00",
     durationMin: 60,
     title: "",
-    machine: machines[0],
+    machine,
     type: "Bảo dưỡng",
     status: "Chờ xác nhận",
-    assigneeNames: [assigneeOptions[0].name],
+    assigneeNames: [],
     note: "",
     imageAssets: [],
   };
@@ -88,6 +79,11 @@ export default function MaintenanceFormModal({
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [assigneeOptions, setAssigneeOptions] = useState<MaintenanceAssignee[]>([]);
+  const [machines, setMachines] = useState<string[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState("");
+  const [assigneeQuery, setAssigneeQuery] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -98,7 +94,57 @@ export default function MaintenanceFormModal({
     setError("");
     setUploading(false);
     setSaving(false);
+    setAssigneeQuery("");
   }, [open, defaultDate, initialEvent]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setOptionsLoading(true);
+    setOptionsError("");
+    Promise.all([loadPersonnelCertificateRows(), loadMachineOptions()])
+      .then(([personnel, machineOptions]) => {
+        if (!active) return;
+        const people = personnel
+          .map((row) => ({
+            name: row.ho_ten.trim(),
+            photo: row.hinh_anh?.trim() || "",
+          }))
+          .filter((row) => row.name)
+          .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+        const uniquePeople = Array.from(
+          new Map(people.map((person) => [person.name, person])).values(),
+        );
+        const machineCodes = machineOptions.map((machine) => machine.code).filter(Boolean);
+        setMachines(machineCodes);
+        const selectedNames = initialEvent?.assignees.map((a) => a.name) ?? [];
+        const missing = selectedNames
+          .filter((name) => !uniquePeople.some((person) => person.name === name))
+          .map((name) => ({ name, photo: "" }));
+        setAssigneeOptions(missing.length ? [...uniquePeople, ...missing] : uniquePeople);
+        setForm((current) => {
+          if (initialEvent) return current;
+          return {
+            ...current,
+            machine: current.machine || machineCodes[0] || "",
+          };
+        });
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setOptionsError(
+          formatSupabaseError(loadError) || "Không tải được danh sách nhân sự / máy.",
+        );
+        setAssigneeOptions([]);
+        setMachines([]);
+      })
+      .finally(() => {
+        if (active) setOptionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, initialEvent]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +154,12 @@ export default function MaintenanceFormModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  const filteredAssignees = useMemo(() => {
+    const q = assigneeQuery.trim().toLowerCase();
+    if (!q) return assigneeOptions;
+    return assigneeOptions.filter((assignee) => assignee.name.toLowerCase().includes(q));
+  }, [assigneeOptions, assigneeQuery]);
 
   if (!open) return null;
 
@@ -178,6 +230,10 @@ export default function MaintenanceFormModal({
       setError("Vui lòng nhập ngày và giờ bảo trì.");
       return;
     }
+    if (!form.machine.trim()) {
+      setError("Vui lòng chọn máy.");
+      return;
+    }
     if (form.assigneeNames.length === 0) {
       setError("Vui lòng chọn ít nhất một nhân sự phụ trách.");
       return;
@@ -197,9 +253,8 @@ export default function MaintenanceFormModal({
   }
 
   const isEdit = Boolean(initialEvent);
-  const machineOptions = form.machine && !machines.includes(form.machine)
-    ? [form.machine, ...machines]
-    : machines;
+  const machineOptions =
+    form.machine && !machines.includes(form.machine) ? [form.machine, ...machines] : machines;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
@@ -237,9 +292,9 @@ export default function MaintenanceFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 space-y-3.5 overflow-y-auto px-5 py-5 sm:px-6">
-          {error && (
+          {(error || optionsError) && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700 sm:text-sm">
-              {error}
+              {error || optionsError}
             </div>
           )}
 
@@ -267,8 +322,12 @@ export default function MaintenanceFormModal({
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
               Máy *
-              <select value={form.machine} onChange={(event) => setForm((current) => ({ ...current, machine: event.target.value }))} disabled={isEdit} className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 disabled:bg-slate-100">
-                {machineOptions.map((machine) => <option key={machine}>{machine}</option>)}
+              <select value={form.machine} onChange={(event) => setForm((current) => ({ ...current, machine: event.target.value }))} disabled={isEdit || optionsLoading} className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 disabled:bg-slate-100">
+                {machineOptions.length === 0 ? (
+                  <option value="">{optionsLoading ? "Đang tải máy…" : "Chưa có dữ liệu máy"}</option>
+                ) : (
+                  machineOptions.map((machine) => <option key={machine} value={machine}>{machine}</option>)
+                )}
               </select>
             </label>
             <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
@@ -294,19 +353,43 @@ export default function MaintenanceFormModal({
 
           <fieldset>
             <legend className="text-xs font-semibold text-slate-700 sm:text-[13px]">
-              Nhân sự sửa chữa * <span className="font-normal text-slate-400">(chọn nhiều)</span>
+              Nhân sự sửa chữa * <span className="font-normal text-slate-400">(chọn nhiều · từ hồ sơ nhân sự)</span>
             </legend>
-            <div className="mt-2 grid max-h-[150px] grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-2">
-              {assigneeOptions.map((assignee) => {
-                const checked = form.assigneeNames.includes(assignee.name);
-                return (
-                  <label key={assignee.name} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${checked ? "bg-blue-50 font-semibold text-[#0047AB]" : "text-slate-700 hover:bg-white"}`}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleAssignee(assignee.name)} className="h-4 w-4 accent-[#0047AB]" />
-                    {assignee.name}
-                  </label>
-                );
-              })}
+            <div className="relative mt-2">
+              <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+              <input
+                value={assigneeQuery}
+                onChange={(event) => setAssigneeQuery(event.target.value)}
+                placeholder="Tìm theo tên nhân sự…"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
             </div>
+            <div className="mt-2 grid max-h-[180px] grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-2">
+              {optionsLoading ? (
+                <div className="col-span-full px-2 py-3 text-xs text-slate-500">Đang tải danh sách nhân sự…</div>
+              ) : filteredAssignees.length === 0 ? (
+                <div className="col-span-full px-2 py-3 text-xs text-slate-500">
+                  {assigneeOptions.length === 0
+                    ? "Chưa có dữ liệu nhân sự trong hồ sơ."
+                    : "Không tìm thấy nhân sự phù hợp."}
+                </div>
+              ) : (
+                filteredAssignees.map((assignee) => {
+                  const checked = form.assigneeNames.includes(assignee.name);
+                  return (
+                    <label key={assignee.name} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${checked ? "bg-blue-50 font-semibold text-[#0047AB]" : "text-slate-700 hover:bg-white"}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleAssignee(assignee.name)} className="h-4 w-4 accent-[#0047AB]" />
+                      <span className="truncate">{assignee.name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {form.assigneeNames.length > 0 && (
+              <div className="mt-1.5 text-[11px] text-slate-500">
+                Đã chọn <span className="font-mono font-semibold text-slate-700">{form.assigneeNames.length}</span> nhân sự
+              </div>
+            )}
           </fieldset>
 
           <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
@@ -344,7 +427,7 @@ export default function MaintenanceFormModal({
 
           <div className="flex justify-end gap-2.5 border-t border-slate-200 pt-4">
             <button type="button" onClick={() => void closeAndCleanUp()} disabled={uploading || saving} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Hủy</button>
-            <button type="submit" disabled={uploading || saving} className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="submit" disabled={uploading || saving || optionsLoading || machines.length === 0} className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60">
               {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Lưu lịch"}
             </button>
           </div>

@@ -5,8 +5,8 @@ import { CaretLeft, CaretRight, DotsThree, MagnifyingGlass, X } from "@/componen
 import {
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
-import { getProjectPersonnel, type ProjectPersonnel } from "@/data/projectPersonnel";
-import { getProjectWelds, type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
+import { type ProjectPersonnel } from "@/data/projectPersonnel";
+import { type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { type Project, type TheoreticalProgressRow } from "@/data/projects";
 import { useProjectsData } from "@/hooks/useProjectsData";
 import {
@@ -37,17 +37,37 @@ import {
 } from "@/lib/personnelCertificatesDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachinePickerOptions } from "@/lib/machineCatalogDb";
-import { welders } from "@/data/welders";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 const PROGRESS_PAGE_SIZE = 50;
-const activeWelders = welders.filter((w) => w.status === "Hoạt động");
 type ProjectMachineOption = { code: string; name: string };
 type ProjectPersonnelOption = Pick<
   PersonnelCertificateRow,
   "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han"
 >;
+
+function personnelRowsFromIds(
+  projectId: string,
+  ids: string[],
+  options: ProjectPersonnelOption[],
+): ProjectPersonnel[] {
+  return ids
+    .map((id) => {
+      const person = options.find((row) => row.employee_id === id);
+      if (!person && !id.trim()) return null;
+      return {
+        id: person?.employee_id || id,
+        projectId,
+        name: person?.ho_ten?.trim() || id,
+        position: person?.chuc_vu?.trim() || person?.to_han?.trim() || "",
+        role: "Nhân viên",
+        onDuty: true,
+        weldsToday: 0,
+      } satisfies ProjectPersonnel;
+    })
+    .filter((row): row is ProjectPersonnel => Boolean(row));
+}
 
 const statusStyle: Record<Project["status"], string> = {
   "Đang triển khai": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -897,28 +917,38 @@ function ProjectInfoFields({
 function ProjectPersonnelTab({
   projectId,
   rows,
+  personnelOptions,
   readOnly,
   onChange,
   onStartEdit,
 }: {
   projectId: string;
   rows: ProjectPersonnel[];
+  personnelOptions: ProjectPersonnelOption[];
   readOnly: boolean;
   onChange: (rows: ProjectPersonnel[]) => void;
   onStartEdit?: (addAction?: () => void) => void;
 }) {
   const onDuty = rows.filter((p) => p.onDuty).length;
+  const usedNames = new Set(rows.map((row) => row.name));
 
   function addRow() {
-    const welder = activeWelders[0];
-    if (!welder) return;
+    const person = personnelOptions.find((option) => !usedNames.has(option.ho_ten.trim()));
+    if (!person) {
+      window.alert(
+        personnelOptions.length === 0
+          ? "Chưa có dữ liệu nhân sự trong hồ sơ."
+          : "Tất cả nhân sự trong hồ sơ đã được gán.",
+      );
+      return;
+    }
     onChange([
       ...rows,
       {
-        id: `p-${Date.now()}`,
+        id: person.employee_id,
         projectId,
-        name: welder.name,
-        position: welder.position,
+        name: person.ho_ten.trim(),
+        position: person.chuc_vu?.trim() || person.to_han?.trim() || "",
         role: "Nhân viên",
         onDuty: true,
         weldsToday: 0,
@@ -970,19 +1000,30 @@ function ProjectPersonnelTab({
                     <select
                       value={p.name}
                       onChange={(e) => {
-                        const welder = activeWelders.find((w) => w.name === e.target.value);
+                        const person = personnelOptions.find((w) => w.ho_ten.trim() === e.target.value);
                         updateRow(index, {
+                          id: person?.employee_id ?? p.id,
                           name: e.target.value,
-                          position: welder?.position ?? p.position,
+                          position: person?.chuc_vu?.trim() || person?.to_han?.trim() || p.position,
                         });
                       }}
                       className="h-9 w-full min-w-[140px] rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
-                      {activeWelders.map((w) => (
-                        <option key={w.id} value={w.name}>
-                          {w.name}
-                        </option>
-                      ))}
+                      {personnelOptions.length === 0 ? (
+                        <option value={p.name}>{p.name || "Chưa có dữ liệu nhân sự"}</option>
+                      ) : (
+                        <>
+                          {!personnelOptions.some((option) => option.ho_ten.trim() === p.name) && p.name ? (
+                            <option value={p.name}>{p.name}</option>
+                          ) : null}
+                          {personnelOptions.map((w) => (
+                            <option key={w.employee_id} value={w.ho_ten.trim()}>
+                              {w.ho_ten.trim()}
+                              {w.ma_nhan_su ? ` (${w.ma_nhan_su})` : ""}
+                            </option>
+                          ))}
+                        </>
+                      )}
                     </select>
                   </td>
                   <td className="px-3.5 py-2.5 text-slate-700">{p.position}</td>
@@ -1036,7 +1077,7 @@ function ProjectPersonnelTab({
               <tr>
                 <td colSpan={readOnly ? 5 : 6} className="px-3 py-8 text-center text-xs sm:text-sm text-slate-500">
                   Chưa có nhân sự được gán cho dự án này.
-                  {!readOnly && " Bấm «Thêm nhân sự» để gán thợ hàn."}
+                  {!readOnly && " Bấm «Thêm nhân sự» để gán từ hồ sơ nhân sự."}
                 </td>
               </tr>
             )}
@@ -1075,21 +1116,23 @@ const WELD_STATUS_OPTIONS: ProjectWeldStatus[] = ["Đạt", "Lỗi", "Chờ ki�
 function ProjectWorkTab({
   projectId,
   rows,
+  personnelOptions,
   readOnly,
   onChange,
   onStartEdit,
 }: {
   projectId: string;
   rows: ProjectWeld[];
+  personnelOptions: ProjectPersonnelOption[];
   readOnly: boolean;
   onChange: (rows: ProjectWeld[]) => void;
   onStartEdit?: (addAction?: () => void) => void;
 }) {
   const passed = rows.filter((w) => w.status === "Đạt").length;
   const failed = rows.filter((w) => w.status === "Lỗi").length;
+  const welderNames = personnelOptions.map((person) => person.ho_ten.trim()).filter(Boolean);
 
   function addRow() {
-    const welder = activeWelders[0];
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
@@ -1102,7 +1145,7 @@ function ProjectWorkTab({
         performedAt: now.toISOString(),
         method: "FBW",
         machine: MACHINE_TYPES[0],
-        welderName: welder?.name ?? "",
+        welderName: welderNames[0] ?? "",
         status: "Chờ kiểm tra",
         errorReason: "",
       },
@@ -1200,11 +1243,20 @@ function ProjectWorkTab({
                       onChange={(e) => updateRow(index, { welderName: e.target.value })}
                       className="h-9 w-full min-w-[120px] rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
-                      {activeWelders.map((welder) => (
-                        <option key={welder.id} value={welder.name}>
-                          {welder.name}
-                        </option>
-                      ))}
+                      {welderNames.length === 0 ? (
+                        <option value={w.welderName}>{w.welderName || "Chưa có dữ liệu nhân sự"}</option>
+                      ) : (
+                        <>
+                          {w.welderName && !welderNames.includes(w.welderName) ? (
+                            <option value={w.welderName}>{w.welderName}</option>
+                          ) : null}
+                          {personnelOptions.map((person) => (
+                            <option key={person.employee_id} value={person.ho_ten.trim()}>
+                              {person.ho_ten.trim()}
+                            </option>
+                          ))}
+                        </>
+                      )}
                     </select>
                   </td>
                   <td className="px-3.5 py-2.5">
@@ -1465,9 +1517,13 @@ function ProjectModal({
       railTypes: project.railTypes ?? [],
       offDays: clampOffDaysToRange(project.offDays ?? [], project.startDate, project.endDate),
     });
-    setPersonnelRows(project.projectPersonnel ?? getProjectPersonnel(project.id));
-    setWorkRows(project.projectWelds ?? getProjectWelds(project.id));
-  }, [project]);
+    setPersonnelRows(
+      project.projectPersonnel?.length
+        ? project.projectPersonnel
+        : personnelRowsFromIds(project.id, project.personnelIds ?? [], personnelOptions),
+    );
+    setWorkRows(project.projectWelds ?? []);
+  }, [project, personnelOptions]);
 
   const readOnly = mode === "view";
   const isCreate = mode === "create";
@@ -1571,6 +1627,7 @@ function ProjectModal({
             <ProjectPersonnelTab
               projectId={project.id}
               rows={personnelRows}
+              personnelOptions={personnelOptions}
               readOnly={readOnly}
               onChange={setPersonnelRows}
               onStartEdit={requestEdit}
@@ -1580,6 +1637,7 @@ function ProjectModal({
             <ProjectWorkTab
               projectId={project.id}
               rows={workRows}
+              personnelOptions={personnelOptions}
               readOnly={readOnly}
               onChange={setWorkRows}
               onStartEdit={requestEdit}

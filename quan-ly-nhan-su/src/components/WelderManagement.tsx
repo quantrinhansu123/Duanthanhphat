@@ -2293,6 +2293,7 @@ export default function WelderManagement() {
         suggestedWeldingId={suggestedWeldingId}
         saving={savingWelder}
         isEn={isEn}
+        existingWelders={list}
         railOptions={railOptions}
         onClose={() => {
           if (savingWelder) return;

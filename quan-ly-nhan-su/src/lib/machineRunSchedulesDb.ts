@@ -7,7 +7,6 @@ import {
 } from "@/data/machineAssignments";
 import { machines as seedMachines } from "@/data/machines";
 import { projects as seedProjects } from "@/data/projects";
-import { welders as seedWelders } from "@/data/welders";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -133,7 +132,8 @@ function seedBundle(error?: string): MachineRunScheduleBundle {
       name: machine.name,
     })),
     projects: seedProjects.map((project) => ({ id: `seed-project-${project.id}`, label: project.name })),
-    personnel: seedWelders.map((person) => ({ id: `seed-person-${person.id}`, label: person.name })),
+    // Không dùng mock nhân sự — form phải lấy từ nhan_su khi Supabase sẵn sàng.
+    personnel: [],
     source: "seed",
     error,
   };

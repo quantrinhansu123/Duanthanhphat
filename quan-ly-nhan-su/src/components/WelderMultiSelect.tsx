@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { welders } from "@/data/welders";
 import { CaretDown, MagnifyingGlass, X } from "@/components/icons";
 
 export type WelderSelectOption = {
@@ -43,7 +42,7 @@ export default function WelderMultiSelect({
   }, [open]);
 
   const q = search.trim().toLowerCase();
-  const sourceOptions = suppliedOptions ?? welders;
+  const sourceOptions = suppliedOptions ?? [];
   const options = useMemo(
     () =>
       sourceOptions.filter(
@@ -121,7 +120,9 @@ export default function WelderMultiSelect({
               );
             })}
             {options.length === 0 && (
-              <div className="px-2.5 py-3 text-center text-xs text-slate-400">Không tìm thấy thợ hàn</div>
+              <div className="px-2.5 py-3 text-center text-xs text-slate-400">
+                {sourceOptions.length === 0 ? "Chưa có dữ liệu nhân sự" : "Không tìm thấy thợ hàn"}
+              </div>
             )}
           </div>
         </div>

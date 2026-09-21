@@ -53,11 +53,30 @@ type WelderFormModalProps = {
   suggestedWeldingId: string;
   saving?: boolean;
   isEn?: boolean;
+  /** Danh sách nhân sự hiện có — dùng để cảnh báo trùng tên + đơn vị. */
+  existingWelders?: Array<{
+    id: string;
+    name: string;
+    department: string;
+    photo: string;
+    weldingId: string;
+    position?: string;
+  }>;
   /** Loại ray từ Quản lý mối hàn / danh mục Loại ray */
   railOptions?: string[];
   onClose: () => void;
   onSubmit: (values: WelderFormValues) => void | Promise<void>;
 };
+
+function normalizePersonKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\([^)]*\)/g, " ")
+    .toLocaleLowerCase("vi")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export default function WelderFormModal({
   open,
@@ -65,6 +84,7 @@ export default function WelderFormModal({
   suggestedWeldingId,
   saving,
   isEn,
+  existingWelders = [],
   railOptions,
   onClose,
   onSubmit,
@@ -75,6 +95,17 @@ export default function WelderFormModal({
   const [machinesLoading, setMachinesLoading] = useState(false);
   const [certificateGroups, setCertificateGroups] = useState<CertificateGroupOption[]>([]);
   const [certificatesLoading, setCertificatesLoading] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<
+    Array<{
+      id: string;
+      name: string;
+      department: string;
+      photo: string;
+      weldingId: string;
+      position?: string;
+    }>
+  >([]);
+  const [pendingValues, setPendingValues] = useState<WelderFormValues | null>(null);
   const initializedFormKey = useRef<string | null>(null);
 
   const configuredRailOptions = useCatalogOptions("Loại ray");
@@ -141,6 +172,8 @@ export default function WelderFormModal({
       });
     }
     setError("");
+    setDuplicateMatches([]);
+    setPendingValues(null);
   }, [open, initial, defaultDepartment, suggestedWeldingId]);
 
   useEffect(() => {
@@ -233,13 +266,26 @@ export default function WelderFormModal({
     }));
   }
 
+  function findDuplicateMatches(name: string, department: string) {
+    const nameKey = normalizePersonKey(name);
+    const deptKey = normalizePersonKey(department);
+    if (!nameKey || !deptKey) return [];
+    return existingWelders.filter((person) => {
+      if (initial?.id && person.id === initial.id) return false;
+      return (
+        normalizePersonKey(person.name) === nameKey &&
+        normalizePersonKey(person.department) === deptKey
+      );
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
       setError(isEn ? "Please enter full name." : "Vui lòng nhập họ tên.");
       return;
     }
-    void onSubmit({
+    const values: WelderFormValues = {
       ...form,
       weldingId: form.weldingId.trim(),
       name: form.name.trim(),
@@ -251,7 +297,23 @@ export default function WelderFormModal({
       trainedMachines: form.trainedMachines.trim(),
       experience: form.experience.trim(),
       photo: form.photo.trim(),
-    });
+    };
+    const matches = findDuplicateMatches(values.name, values.department);
+    if (matches.length > 0) {
+      setPendingValues(values);
+      setDuplicateMatches(matches);
+      setError("");
+      return;
+    }
+    void onSubmit(values);
+  }
+
+  function confirmDuplicateSubmit() {
+    if (!pendingValues) return;
+    const values = pendingValues;
+    setDuplicateMatches([]);
+    setPendingValues(null);
+    void onSubmit(values);
   }
 
   if (!open) return null;
@@ -547,6 +609,90 @@ export default function WelderFormModal({
           </button>
         </div>
       </form>
+
+      {duplicateMatches.length > 0 && pendingValues && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs"
+            aria-label="Đóng cảnh báo"
+            onClick={() => {
+              setDuplicateMatches([]);
+              setPendingValues(null);
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                {isEn ? "Duplicate warning" : "Cảnh báo trùng hồ sơ"}
+              </div>
+              <h3 className="mt-0.5 text-base font-bold text-slate-900">
+                {isEn
+                  ? "Same name and department already exist"
+                  : "Đã có nhân sự cùng họ tên và đơn vị"}
+              </h3>
+              <p className="mt-1 text-xs text-slate-600">
+                {isEn
+                  ? `Found ${duplicateMatches.length} matching profile(s). Confirm to still create/update.`
+                  : `Tìm thấy ${duplicateMatches.length} hồ sơ trùng. Xác nhận nếu vẫn muốn lưu trùng tên.`}
+              </p>
+            </div>
+            <div className="max-h-[50vh] space-y-2 overflow-y-auto px-5 py-4">
+              {duplicateMatches.map((person) => (
+                <div
+                  key={person.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={person.photo || "https://ui-avatars.com/api/?name=" + encodeURIComponent(person.name)}
+                    alt={person.name}
+                    className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-slate-900">{person.name}</div>
+                    <div className="truncate text-xs text-slate-500">
+                      {(person.position || "Thợ hàn") + " · " + person.department}
+                    </div>
+                    <div className="mt-0.5 font-mono text-[11px] text-slate-400">{person.weldingId}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDuplicateMatches([]);
+                  setPendingValues(null);
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+              >
+                {isEn ? "Go back" : "Quay lại sửa"}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={confirmDuplicateSubmit}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-amber-700 cursor-pointer disabled:opacity-50"
+              >
+                {saving
+                  ? isEn
+                    ? "Saving…"
+                    : "Đang lưu…"
+                  : isEn
+                    ? "Confirm duplicate"
+                    : "Xác nhận lưu trùng"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
