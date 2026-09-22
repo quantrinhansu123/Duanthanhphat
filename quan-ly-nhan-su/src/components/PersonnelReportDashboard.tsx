@@ -131,11 +131,13 @@ export default function PersonnelReportDashboard() {
       name: welder.name,
       teamMachine: `${source.to_han?.trim() || "Chưa phân tổ"} · ${machineForRow(source)}`,
       welds: welder.total.toLocaleString("vi-VN"),
+      defects: welder.errors.toLocaleString("vi-VN"),
       today: todayVolume.toLocaleString("vi-VN"),
       passRate: tested > 0
         ? `${passRate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
         : "Chờ KQ",
       rateColor: tested === 0 ? "text-slate-400" : passRate >= 99 ? "text-[#15803d]" : "text-[#b45309]",
+      defectColor: welder.errors > 0 ? "text-rose-600" : "text-slate-700",
     };
   });
   const readyPersonnel = welders.filter((welder) => welder.errors === 0).length;
@@ -245,11 +247,12 @@ export default function PersonnelReportDashboard() {
               Năng suất theo thợ hàn
             </div>
             <div className="table-scroll overflow-x-auto mt-3.5">
-              <div className="min-w-[480px]">
-                <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <div className="min-w-[560px]">
+                <div className="grid grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.8fr_1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <div>Họ tên</div>
                   <div>Tổ / Máy</div>
                   <div>Mối hàn</div>
+                  <div>Số mối lỗi</div>
                   <div>Hôm nay</div>
                   <div>Tỷ lệ đạt</div>
                 </div>
@@ -257,13 +260,16 @@ export default function PersonnelReportDashboard() {
                   {welderProductivity.map((w, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[1.4fr_1fr_0.9fr_0.9fr_1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
+                      className="grid grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.8fr_1fr] gap-x-2 items-center py-2.5 px-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-50/80 transition-colors"
                     >
                       <div className="font-semibold text-slate-900">
                         {w.name}
                       </div>
                       <div>{w.teamMachine}</div>
                       <div className="font-mono tabular-nums">{w.welds}</div>
+                      <div className={`font-mono tabular-nums font-semibold ${w.defectColor}`}>
+                        {w.defects}
+                      </div>
                       <div className="font-mono tabular-nums">{w.today}</div>
                       <div className={`font-semibold font-mono tabular-nums ${w.rateColor}`}>
                         {w.passRate}

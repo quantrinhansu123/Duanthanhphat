@@ -8,6 +8,8 @@ import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import {
   parseTrainedMachineTokens,
   personTrainedOnMachine,
+  appendTrainedMachineToken,
+  removeTrainedMachineTokensForMachine,
 } from "@/lib/personnelCertificatesDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { fetchCertificateGroups, type CertificateGroupOption } from "@/lib/trainingDb";
@@ -216,17 +218,23 @@ export default function WelderFormModal({
   }, [open]);
 
   const selectedMachineCodes = useMemo(() => {
-    const tokens = parseTrainedMachineTokens(form.trainedMachines);
     const codes = new Set<string>();
     for (const machine of machines) {
-      if (personTrainedOnMachine(form.trainedMachines, { code: machine.code, model: machine.model })) {
-        codes.add(machine.code);
+      if (
+        personTrainedOnMachine(form.trainedMachines, {
+          code: machine.code,
+          model: machine.model,
+          name: machine.name,
+        })
+      ) {
+        // Dùng id khi thiếu mã — tránh nhiều máy code rỗng bị gộp một tick
+        codes.add(machine.code.trim() || machine.id);
       }
     }
-    // Giữ token lẻ không khớp catalog (không xóa dữ liệu cũ)
+    const tokens = parseTrainedMachineTokens(form.trainedMachines);
     for (const token of tokens) {
       const matched = machines.some((m) =>
-        personTrainedOnMachine(token, { code: m.code, model: m.model }),
+        personTrainedOnMachine(token, { code: m.code, model: m.model, name: m.name }),
       );
       if (!matched) codes.add(token);
     }
@@ -237,16 +245,16 @@ export default function WelderFormModal({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleMachine(code: string) {
-    const next = new Set(selectedMachineCodes);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    // Ưu tiên lưu theo mã máy (cùng chuẩn với mục Nhân sự đã đào tạo trong Danh sách máy)
-    const ordered = machines
-      .filter((m) => next.has(m.code))
-      .map((m) => m.code);
-    const orphans = [...next].filter((token) => !machines.some((m) => m.code === token));
-    set("trainedMachines", [...ordered, ...orphans].join(", "));
+  function toggleMachine(machine: Machine) {
+    const identity = { code: machine.code, model: machine.model, name: machine.name };
+    const isOn = personTrainedOnMachine(form.trainedMachines, identity);
+    if (isOn) {
+      set("trainedMachines", removeTrainedMachineTokensForMachine(form.trainedMachines, identity));
+      return;
+    }
+    const token = machine.code.trim() || machine.name.trim() || machine.model.trim();
+    if (!token) return;
+    set("trainedMachines", appendTrainedMachineToken(form.trainedMachines, token));
   }
 
   function toggleRailType(code: string) {
@@ -518,7 +526,11 @@ export default function WelderFormModal({
             ) : (
               <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
                 {machines.map((machine) => {
-                  const checked = selectedMachineCodes.has(machine.code);
+                  const checked = personTrainedOnMachine(form.trainedMachines, {
+                    code: machine.code,
+                    model: machine.model,
+                    name: machine.name,
+                  });
                   return (
                     <label
                       key={machine.id}
@@ -529,10 +541,12 @@ export default function WelderFormModal({
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => toggleMachine(machine.code)}
+                        onChange={() => toggleMachine(machine)}
                         className="h-4 w-4 rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]"
                       />
-                      <span className="font-mono font-bold text-[#0047AB]">{machine.code}</span>
+                      <span className="font-mono font-bold text-[#0047AB]">
+                        {machine.code.trim() || "—"}
+                      </span>
                       <span className="min-w-0 flex-1 truncate text-slate-700">
                         {machine.name}
                         <span className="text-slate-400"> · {machine.model}</span>

@@ -342,20 +342,56 @@ export function personAllowedOnRail(
 
 export function personTrainedOnMachine(
   loaiMay: string | null | undefined,
-  machine: { code: string; model?: string },
+  machine: { code: string; model?: string; name?: string },
 ): boolean {
   const tokens = parseTrainedMachineTokens(loaiMay).map((t) => t.toLowerCase());
   if (tokens.length === 0) return false;
   const code = machine.code.trim().toLowerCase();
   const model = machine.model?.trim().toLowerCase() ?? "";
+  const name = machine.name?.trim().toLowerCase() ?? "";
   const modelKey = model.replace(/\(.*?\)/g, "").trim();
+  const nameKey = name.replace(/\(.*?\)/g, "").trim();
+
   return tokens.some((token) => {
     if (!token || token === "chưa cập nhật") return false;
-    if (token === code || (model && token === model) || (modelKey && token === modelKey)) return true;
-    if (code.includes(token) || token.includes(code)) return true;
-    if (modelKey && (modelKey.includes(token) || token.includes(modelKey))) return true;
+    // So khớp chính xác trước
+    if (code && token === code) return true;
+    if (model && token === model) return true;
+    if (modelKey && token === modelKey) return true;
+    if (name && token === name) return true;
+    if (nameKey && token === nameKey) return true;
+    // includes chỉ khi cả hai phía đủ dài — tránh code/model rỗng ("".includes luôn true)
+    if (code.length >= 2 && token.length >= 2 && (code.includes(token) || token.includes(code))) {
+      return true;
+    }
+    if (
+      modelKey.length >= 3 &&
+      token.length >= 3 &&
+      (modelKey.includes(token) || token.includes(modelKey))
+    ) {
+      return true;
+    }
+    if (
+      nameKey.length >= 3 &&
+      token.length >= 3 &&
+      (nameKey.includes(token) || token.includes(nameKey))
+    ) {
+      return true;
+    }
     return false;
   });
+}
+
+/** Gỡ mọi token trong loai_may đang trỏ tới máy này (mã / model / tên). */
+export function removeTrainedMachineTokensForMachine(
+  existing: string | null | undefined,
+  machine: { code: string; model?: string; name?: string },
+): string {
+  const tokens = parseTrainedMachineTokens(existing);
+  const kept = tokens.filter(
+    (token) => !personTrainedOnMachine(token, machine),
+  );
+  return kept.join(", ");
 }
 
 export function appendTrainedMachineToken(existing: string | null | undefined, token: string): string {

@@ -7,6 +7,37 @@ export const DRIVE_PDF_MIME_TYPE = "application/pdf";
 export const GOOGLE_DRIVE_CONFIGURATION_MESSAGE =
   "Google Drive chưa được cấu hình. Hãy thêm GOOGLE_DRIVE_FOLDER_ID và bộ biến OAuth hoặc Service Account.";
 
+export const GOOGLE_DRIVE_REAUTH_MESSAGE =
+  "Phiên Google Drive đã hết hạn hoặc bị thu hồi (invalid_grant). Trong thư mục quan-ly-nhan-su chạy: pnpm google-drive:oauth — đăng nhập lại tài khoản sở hữu thư mục, rồi khởi động lại máy chủ Next.js.";
+
+/** Chuẩn hóa lỗi Google API / OAuth thành thông báo tiếng Việt cho UI. */
+export function formatGoogleDriveError(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message ?? "")
+          : "";
+  const text = raw.trim() || "Lỗi không xác định khi truy vấn Google Drive";
+  const lower = text.toLowerCase();
+
+  if (
+    lower.includes("invalid_grant") ||
+    lower.includes("token has been expired or revoked") ||
+    (lower.includes("refresh token") && lower.includes("revoked"))
+  ) {
+    return GOOGLE_DRIVE_REAUTH_MESSAGE;
+  }
+
+  if (lower.includes("invalid_client") || lower.includes("unauthorized_client")) {
+    return "Client ID/Secret Google OAuth không hợp lệ. Kiểm tra GOOGLE_DRIVE_OAUTH_CLIENT_ID và GOOGLE_DRIVE_OAUTH_CLIENT_SECRET trong .env.local.";
+  }
+
+  return text;
+}
+
 type OAuthDriveCredentials = {
   authMode: "oauth";
   clientId: string;

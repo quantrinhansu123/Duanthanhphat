@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
+  formatGoogleDriveError,
   isGoogleDriveConfigured,
   listDriveDocuments,
 } from "@/lib/googleDrive/server";
@@ -21,7 +22,9 @@ export async function GET() {
     const items = await listDriveDocuments();
     return NextResponse.json({ configured: true, items });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Lỗi không xác định khi truy vấn Google Drive";
-    return NextResponse.json({ configured: true, items: [], error: message }, { status: 500 });
+    return NextResponse.json(
+      { configured: true, items: [], error: formatGoogleDriveError(error) },
+      { status: 500 },
+    );
   }
 }

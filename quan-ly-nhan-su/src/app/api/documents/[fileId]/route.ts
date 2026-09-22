@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
+  formatGoogleDriveError,
   getDriveDocumentBuffer,
   isValidDriveFileId,
   isGoogleDriveConfigured,
@@ -40,8 +41,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Không đọc được tài liệu từ Google Drive";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
   }
 }
 
@@ -70,8 +70,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     });
     return NextResponse.json({ item: updated });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Lỗi cập nhật tài liệu";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
   }
 }
 
@@ -91,7 +90,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     await trashDriveDocument(fileId);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Lỗi chuyển tài liệu vào thùng rác";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
   }
 }
