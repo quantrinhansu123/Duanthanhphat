@@ -44,8 +44,16 @@ function translate(raw: string): string {
   const trail = raw.match(/\s*$/)?.[0] ?? "";
   const core = raw.slice(lead.length, raw.length - trail.length);
   if (!core) return raw;
-  const next = PHRASES[core];
-  return next ? lead + next + trail : raw;
+  const exact = PHRASES[core];
+  if (exact) return lead + exact + trail;
+
+  // Chuỗi động kiểu "1–50 / 13.417 · 50/trang"
+  const pageWord = PHRASES["trang"];
+  if (pageWord && /\/trang\b/.test(core)) {
+    return lead + core.replace(/\/trang\b/g, `/${pageWord}`) + trail;
+  }
+
+  return raw;
 }
 
 function shouldSkip(el: Element | null): boolean {
@@ -179,8 +187,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback(
     (vi: string) => {
       if (lang === "vi") return vi;
-      const core = vi.trim();
-      return PHRASES[core] ?? vi;
+      return translate(vi);
     },
     [lang],
   );

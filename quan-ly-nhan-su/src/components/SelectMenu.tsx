@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown, Check } from "@/components/icons";
 import { usePopover } from "@/components/usePopover";
+import { useLanguage } from "@/i18n/LanguageProvider";
 
 export type SelectMenuOption = {
   value: string;
@@ -43,6 +44,7 @@ export default function SelectMenu({
   buttonClassName = "",
   emptyLabel = "Không có lựa chọn phù hợp",
 }: SelectMenuProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [typing, setTyping] = useState(false);
@@ -109,8 +111,8 @@ export default function SelectMenu({
             ref={inputRef}
             type="text"
             disabled={disabled}
-            value={typing ? query : selected?.label ?? ""}
-            placeholder={selected ? undefined : searchPlaceholder ?? placeholder}
+            value={typing ? query : selected ? t(selected.label) : ""}
+            placeholder={selected ? undefined : t(searchPlaceholder ?? placeholder)}
             role="combobox"
             aria-expanded={open}
             aria-autocomplete="list"
@@ -137,7 +139,7 @@ export default function SelectMenu({
             type="button"
             tabIndex={-1}
             disabled={disabled}
-            aria-label={open ? "Đóng danh sách" : "Mở danh sách"}
+            aria-label={open ? t("Đóng danh sách") : t("Mở danh sách")}
             onClick={() => {
               if (open) {
                 close();
@@ -163,7 +165,7 @@ export default function SelectMenu({
           onClick={() => (open ? close() : setOpen(true))}
           className={`${baseButton} cursor-pointer ${selected ? "text-slate-900" : "text-slate-400"}`}
         >
-          <span className="min-w-0 flex-1 truncate">{selected?.label ?? placeholder}</span>
+          <span className="min-w-0 flex-1 truncate">{selected ? t(selected.label) : t(placeholder)}</span>
           <CaretDown
             size={13}
             weight="bold"
@@ -181,7 +183,7 @@ export default function SelectMenu({
         >
           <div className="flex flex-col gap-0.5 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="px-2.5 py-3 text-center text-xs text-slate-400">{emptyLabel}</div>
+              <div className="px-2.5 py-3 text-center text-xs text-slate-400">{t(emptyLabel)}</div>
             ) : (
               filtered.map((o) => {
                 const active = o.value === value;
@@ -195,9 +197,9 @@ export default function SelectMenu({
                     }`}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block whitespace-normal break-words leading-snug">{o.label}</span>
+                      <span className="block whitespace-normal break-words leading-snug">{t(o.label)}</span>
                       {o.hint && (
-                        <span className="mt-0.5 block text-[11px] font-normal text-slate-400">{o.hint}</span>
+                        <span className="mt-0.5 block text-[11px] font-normal text-slate-400">{t(o.hint)}</span>
                       )}
                     </span>
                     {active && <Check size={14} weight="bold" aria-hidden className="mt-0.5 shrink-0" />}
