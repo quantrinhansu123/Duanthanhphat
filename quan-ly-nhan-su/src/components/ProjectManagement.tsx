@@ -54,7 +54,7 @@ function personnelRowsFromIds(
   options: ProjectPersonnelOption[],
 ): ProjectPersonnel[] {
   return ids
-    .map((id) => {
+    .map((id): ProjectPersonnel | null => {
       const person = options.find((row) => row.employee_id === id);
       if (!person && !id.trim()) return null;
       return {
@@ -65,9 +65,9 @@ function personnelRowsFromIds(
         role: "Nhân viên",
         onDuty: true,
         weldsToday: 0,
-      } satisfies ProjectPersonnel;
+      };
     })
-    .filter((row): row is ProjectPersonnel => Boolean(row));
+    .filter((row): row is ProjectPersonnel => row !== null);
 }
 
 const statusStyle: Record<Project["status"], string> = {
