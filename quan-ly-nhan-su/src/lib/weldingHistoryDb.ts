@@ -186,6 +186,8 @@ export interface WeldingHistoryFilterParams {
   projects?: string[];
   shifts?: string[];
   accountingCodes?: string[];
+  /** Khi false: chỉ lấy trang danh sách, bỏ qua thống kê KPI (load nhanh hơn). */
+  includeStats?: boolean;
 }
 
 export interface WeldingHistoryStats {
@@ -204,6 +206,28 @@ export interface WeldingHistoryPageResult {
   stats: WeldingHistoryStats;
   source: "supabase";
   error?: string;
+}
+
+export const EMPTY_WELDING_HISTORY_STATS: WeldingHistoryStats = {
+  total: 0,
+  pass: 0,
+  fail: 0,
+  rework: 0,
+  pending: 0,
+  accountingCounts: [],
+};
+
+/** Số ngày mặc định khi mở trang Lịch sử hàn (ưu tiên khoảng gần đây). */
+export const WELDING_HISTORY_RECENT_DAYS = 90;
+
+export function weldingHistoryDefaultDateFrom(days = WELDING_HISTORY_RECENT_DAYS): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function filterInMemoryRecords(
@@ -348,6 +372,21 @@ async function computeViewStats(
   };
 }
 
+/** Tải thống kê KPI theo bộ lọc — gọi riêng sau khi đã có danh sách trang. */
+export async function loadWeldingHistoryStats(
+  params: WeldingHistoryFilterParams = {},
+  totalHint = 0,
+): Promise<WeldingHistoryStats> {
+  if (!isSupabaseConfigured()) return { ...EMPTY_WELDING_HISTORY_STATS };
+  const supabase = createClient();
+  const searchTokens = removeVietnameseTones(params.query).split(/\s+/).filter(Boolean);
+  try {
+    return await computeViewStats(supabase, params, searchTokens, totalHint);
+  } catch {
+    return { ...EMPTY_WELDING_HISTORY_STATS, total: totalHint };
+  }
+}
+
 export async function loadWeldingHistoryPage(
   params: WeldingHistoryFilterParams = {},
 ): Promise<WeldingHistoryPageResult> {
@@ -355,19 +394,13 @@ export async function loadWeldingHistoryPage(
   const pageSize = Math.max(1, params.pageSize || 25);
   const fromIndex = (page - 1) * pageSize;
   const toIndex = fromIndex + pageSize - 1;
+  const includeStats = params.includeStats !== false;
 
   if (!isSupabaseConfigured()) {
     return {
       records: [],
       totalCount: 0,
-      stats: {
-        total: 0,
-        pass: 0,
-        fail: 0,
-        rework: 0,
-        pending: 0,
-        accountingCounts: [],
-      },
+      stats: { ...EMPTY_WELDING_HISTORY_STATS },
       source: "supabase",
       error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất của Lịch sử hàn.",
     };
@@ -436,7 +469,9 @@ export async function loadWeldingHistoryPage(
         return {
           records,
           totalCount: legacyTotal,
-          stats: await computeViewStats(supabase, params, searchTokens, legacyTotal),
+          stats: includeStats
+            ? await computeViewStats(supabase, params, searchTokens, legacyTotal)
+            : { ...EMPTY_WELDING_HISTORY_STATS, total: legacyTotal },
           source: "supabase",
         };
       }
@@ -444,7 +479,9 @@ export async function loadWeldingHistoryPage(
 
     if (!pageError && pageData) {
       const total = totalCount ?? pageData.length;
-      const stats = await computeViewStats(supabase, params, searchTokens, total);
+      const stats = includeStats
+        ? await computeViewStats(supabase, params, searchTokens, total)
+        : { ...EMPTY_WELDING_HISTORY_STATS, total };
 
       const records = (pageData as unknown as ViewWeldHistoryRow[]).map((row, idx) =>
         mapViewRow(row, fromIndex + idx),
@@ -461,32 +498,102 @@ export async function loadWeldingHistoryPage(
     // Nếu view chưa tồn tại, tiếp tục sang truy vấn bảng gốc
   }
 
-  // 2. Fallback sang bảng lich_su_moi_han trực tiếp (không giới hạn 100 dòng)
+  // 2. Fallback sang bảng lich_su_moi_han trực tiếp
+  //    Không có bộ lọc join/search → chỉ lấy đúng trang (nhanh).
+  //    Có bộ lọc phức tạp → quét theo trang 1000 (vẫn tôn trọng dateFrom/dateTo).
+  const needsInMemoryFilter =
+    searchTokens.length > 0 ||
+    (params.welder && params.welder !== "Tất cả thợ hàn") ||
+    (params.result && params.result !== "Tất cả kết quả") ||
+    (params.machines && params.machines.length > 0) ||
+    (params.projects && params.projects.length > 0) ||
+    (params.shifts && params.shifts.length > 0);
+
+  const selectCols = `
+    id,
+    created_at,
+    ma_lich_su,
+    ngay_thuc_hien,
+    nam_thuc_hien,
+    loai_ray,
+    loai_moi_han,
+    cong_nghe_han,
+    so_luong_thuc_hien,
+    so_luong_loi,
+    hach_toan,
+    moi_han_lien_ket,
+    ghi_chu,
+    tinh_trang_thi_nghiem,
+    nhan_su:tho_han_id (ho_ten, ma_nhan_su),
+    du_an:du_an_id (du_an),
+    may:may_id (ma_may)
+  `;
+
+  if (!needsInMemoryFilter) {
+    let pageQuery = supabase
+      .from("lich_su_moi_han")
+      .select(selectCols, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (params.dateFrom) pageQuery = pageQuery.gte("ngay_thuc_hien", params.dateFrom);
+    if (params.dateTo) pageQuery = pageQuery.lte("ngay_thuc_hien", params.dateTo);
+    if (params.rails?.length) pageQuery = pageQuery.in("loai_ray", params.rails);
+    if (params.accountingCodes?.length) pageQuery = pageQuery.in("hach_toan", params.accountingCodes);
+
+    const { data, error, count } = await pageQuery.range(fromIndex, toIndex);
+    if (error) {
+      return {
+        records: [],
+        totalCount: 0,
+        stats: { ...EMPTY_WELDING_HISTORY_STATS },
+        source: "supabase",
+        error: `Lỗi kết nối Supabase: ${formatSupabaseError(error)}. Supabase là nguồn dữ liệu duy nhất.`,
+      };
+    }
+    const records = ((data ?? []) as unknown as SupabaseWeldRow[]).map((row, idx) =>
+      mapSupabaseRow(row, fromIndex + idx),
+    );
+    const total = count ?? records.length;
+    if (!includeStats) {
+      return {
+        records,
+        totalCount: total,
+        stats: { ...EMPTY_WELDING_HISTORY_STATS, total },
+        source: "supabase",
+      };
+    }
+    const allRows: SupabaseWeldRow[] = [];
+    const rawPageSize = 1000;
+    for (let offset = 0; ; offset += rawPageSize) {
+      let statsQuery = supabase
+        .from("lich_su_moi_han")
+        .select(selectCols)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      if (params.dateFrom) statsQuery = statsQuery.gte("ngay_thuc_hien", params.dateFrom);
+      if (params.dateTo) statsQuery = statsQuery.lte("ngay_thuc_hien", params.dateTo);
+      if (params.rails?.length) statsQuery = statsQuery.in("loai_ray", params.rails);
+      if (params.accountingCodes?.length) statsQuery = statsQuery.in("hach_toan", params.accountingCodes);
+      const { data: more, error: moreErr } = await statsQuery.range(offset, offset + rawPageSize - 1);
+      if (moreErr) break;
+      const moreRows = (more ?? []) as unknown as SupabaseWeldRow[];
+      allRows.push(...moreRows);
+      if (moreRows.length < rawPageSize) break;
+    }
+    const { stats } = filterInMemoryRecords(
+      allRows.map((row, idx) => mapSupabaseRow(row, idx)),
+      params,
+    );
+    return { records, totalCount: total, stats, source: "supabase" };
+  }
+
   const rawRows: SupabaseWeldRow[] = [];
   let baseErrorMessage = "";
   const rawPageSize = 1000;
   for (let offset = 0; ; offset += rawPageSize) {
     let baseQuery = supabase
       .from("lich_su_moi_han")
-      .select(`
-        id,
-        created_at,
-        ma_lich_su,
-        ngay_thuc_hien,
-        nam_thuc_hien,
-        loai_ray,
-        loai_moi_han,
-        cong_nghe_han,
-        so_luong_thuc_hien,
-        so_luong_loi,
-        hach_toan,
-        moi_han_lien_ket,
-        ghi_chu,
-        tinh_trang_thi_nghiem,
-        nhan_su:tho_han_id (ho_ten, ma_nhan_su),
-        du_an:du_an_id (du_an),
-        may:may_id (ma_may)
-      `)
+      .select(selectCols)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
     if (params.dateFrom) baseQuery = baseQuery.gte("ngay_thuc_hien", params.dateFrom);
@@ -508,14 +615,7 @@ export async function loadWeldingHistoryPage(
     return {
       records: [],
       totalCount: 0,
-      stats: {
-        total: 0,
-        pass: 0,
-        fail: 0,
-        rework: 0,
-        pending: 0,
-        accountingCounts: [],
-      },
+      stats: { ...EMPTY_WELDING_HISTORY_STATS },
       source: "supabase",
       error: `Lỗi kết nối Supabase: ${baseErrorMessage}. Supabase là nguồn dữ liệu duy nhất.`,
     };
@@ -528,7 +628,7 @@ export async function loadWeldingHistoryPage(
   return {
     records: paged,
     totalCount: stats.total,
-    stats,
+    stats: includeStats ? stats : { ...EMPTY_WELDING_HISTORY_STATS, total: stats.total },
     source: "supabase",
   };
 }

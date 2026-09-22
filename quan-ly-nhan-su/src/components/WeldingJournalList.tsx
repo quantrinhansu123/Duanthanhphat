@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
@@ -756,6 +757,7 @@ function JournalFormModal({
 }
 
 export default function WeldingJournalList() {
+  const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
   const [query, setQuery] = useState("");
@@ -1704,8 +1706,7 @@ export default function WeldingJournalList() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.history.pushState(null, "", `/ban-do?weldId=${w.id}`);
-                            window.dispatchEvent(new PopStateEvent("popstate"));
+                            router.push(`/ban-do?weldId=${encodeURIComponent(w.id)}&from=nhat-ky-han`);
                           }}
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
                         >
@@ -1983,8 +1984,7 @@ export default function WeldingJournalList() {
                       type="button"
                       onClick={() => {
                         setDetailId(null);
-                        window.history.pushState(null, "", `/ban-do?weldId=${detailView.id}`);
-                        window.dispatchEvent(new PopStateEvent("popstate"));
+                        router.push(`/ban-do?weldId=${encodeURIComponent(detailView.id)}&from=nhat-ky-han`);
                       }}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
                     >

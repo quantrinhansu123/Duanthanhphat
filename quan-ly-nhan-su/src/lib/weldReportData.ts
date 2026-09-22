@@ -1678,3 +1678,102 @@ export function allocateSyntheticCounts(total: number, weights: number[]) {
   }
   return result;
 }
+
+function escapePostgrestIlike(value: string) {
+  return value
+    .replace(/[%_,."'()\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64);
+}
+
+const ERROR_HISTORY_COLUMNS = [
+  ...REPORT_COLUMNS_WITH_TEST_STATUS,
+  "created_at",
+].join(",");
+
+async function fetchJournalHistoryRows(
+  buildQuery: (select: string) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<WeldReportRow[]> {
+  const primary = await buildQuery(ERROR_HISTORY_COLUMNS);
+  if (!primary.error) return (primary.data ?? []) as unknown as WeldReportRow[];
+
+  if (/created_at/.test(primary.error.message ?? "")) {
+    const withoutCreated = await buildQuery(REPORT_COLUMNS_WITH_TEST_STATUS.join(","));
+    if (!withoutCreated.error) return (withoutCreated.data ?? []) as unknown as WeldReportRow[];
+    if (/ma_khuyet_tat|tinh_trang_thi_nghiem/.test(withoutCreated.error.message ?? "")) {
+      const legacy = await buildQuery(REPORT_COLUMNS_WITH_DATE.join(","));
+      if (legacy.error) throw new Error(formatSupabaseError(legacy.error));
+      return (legacy.data ?? []) as unknown as WeldReportRow[];
+    }
+    throw new Error(formatSupabaseError(withoutCreated.error));
+  }
+
+  if (/ma_khuyet_tat|tinh_trang_thi_nghiem/.test(primary.error.message ?? "")) {
+    const legacy = await buildQuery(REPORT_COLUMNS_WITH_DATE.join(","));
+    if (legacy.error) throw new Error(formatSupabaseError(legacy.error));
+    return (legacy.data ?? []) as unknown as WeldReportRow[];
+  }
+
+  throw new Error(formatSupabaseError(primary.error));
+}
+
+/** Nhật ký hàn có mã khuyết tật NDT khớp (VD: LOF, Po). */
+export async function loadJournalHistoryForDefectCode(
+  code: string,
+  limit = 100,
+): Promise<WeldReportRow[]> {
+  const defectCode = code.trim();
+  if (!defectCode || !isSupabaseConfigured()) return [];
+  const supabase = createClient();
+
+  return fetchJournalHistoryRows(async (select) => {
+    const result = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select(select)
+      .contains("ma_khuyet_tat", [defectCode])
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+      .order("ma_lich_su", { ascending: false })
+      .limit(limit);
+    return { data: result.data as unknown[] | null, error: result.error };
+  });
+}
+
+/**
+ * Nhật ký hàn liên quan triệu chứng/nguyên nhân lỗi thiết bị
+ * (khớp nguyen_nhan_loi / ghi_chu / ma_khuyet_tat text).
+ */
+export async function loadJournalHistoryForFaultText(
+  terms: string[],
+  limit = 100,
+): Promise<WeldReportRow[]> {
+  if (!isSupabaseConfigured()) return [];
+  const keywords = Array.from(
+    new Set(
+      terms
+        .map((term) => escapePostgrestIlike(term))
+        .filter((term) => term.length >= 4),
+    ),
+  ).slice(0, 6);
+  if (keywords.length === 0) return [];
+
+  const supabase = createClient();
+  const orFilter = keywords
+    .flatMap((term) => [
+      `nguyen_nhan_loi.ilike.%${term}%`,
+      `ghi_chu.ilike.%${term}%`,
+      `ma_lich_su.ilike.%${term}%`,
+    ])
+    .join(",");
+
+  return fetchJournalHistoryRows(async (select) => {
+    const result = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select(select)
+      .or(orFilter)
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
+      .order("ma_lich_su", { ascending: false })
+      .limit(limit);
+    return { data: result.data as unknown[] | null, error: result.error };
+  });
+}

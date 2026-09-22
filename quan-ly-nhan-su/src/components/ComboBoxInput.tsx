@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown } from "@/components/icons";
 
 type ComboBoxInputProps = {
@@ -19,7 +20,7 @@ type ComboBoxInputProps = {
 };
 
 /**
- * Combobox có ô tìm kiếm ngay trên input + menu sổ xuống.
+ * Combobox có ô tìm kiếm ngay trên input + menu sổ xuống (portal — không bị cắt bởi overflow).
  * - Mặc định: cho GÕ giá trị mới (giữ nguyên chữ người dùng nhập).
  * - `strict`: chỉ chọn trong danh sách — gõ để lọc, rời ô sẽ khôi phục giá trị hợp lệ.
  */
@@ -41,8 +42,15 @@ export default function ComboBoxInput({
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [dropUp, setDropUp] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -50,10 +58,20 @@ export default function ComboBoxInput({
       const el = boxRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const menuH = 240; // xấp xỉ max-h-56 + padding
+      const menuH = 240;
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      setDropUp(spaceBelow < menuH && spaceAbove > spaceBelow);
+      const up = spaceBelow < menuH && spaceAbove > spaceBelow;
+      setDropUp(up);
+      setMenuStyle({
+        position: "fixed",
+        left: rect.left,
+        width: Math.max(rect.width, 220),
+        zIndex: 10000,
+        ...(up
+          ? { bottom: window.innerHeight - rect.top + 4, top: "auto" }
+          : { top: rect.bottom + 4, bottom: "auto" }),
+      });
     }
     updatePlacement();
     window.addEventListener("resize", updatePlacement);
@@ -92,7 +110,9 @@ export default function ComboBoxInput({
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) finishEditing();
+      const target = e.target as Node;
+      if (boxRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      finishEditing();
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -189,6 +209,90 @@ export default function ComboBoxInput({
       ? "Không tìm thấy lựa chọn phù hợp"
       : "Không có gợi ý phù hợp — nhấn Enter để dùng giá trị vừa nhập");
 
+  const menu =
+    open && !disabled && mounted ? (
+      <ul
+        ref={menuRef}
+        role="listbox"
+        style={menuStyle}
+        className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg animate-in fade-in-50 duration-150"
+      >
+        {filtered.length === 0 ? (
+          canCreateTyped ? (
+            <li role="option" aria-selected={false}>
+              <button
+                type="button"
+                onClick={() => {
+                  commit(typedValue);
+                  inputRef.current?.blur();
+                }}
+                className="flex w-full flex-col items-start gap-0.5 rounded-lg bg-blue-50 px-2.5 py-2 text-left transition-colors hover:bg-blue-100"
+              >
+                <span className="text-xs font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
+                <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
+                  {typedValue}
+                </span>
+                <span className="text-[11px] leading-snug text-slate-500">
+                  Nhấn Enter để dùng giá trị vừa nhập
+                </span>
+              </button>
+            </li>
+          ) : (
+            <li className="px-2.5 py-2 text-[11px] leading-snug text-slate-400">{resolvedEmpty}</li>
+          )
+        ) : (
+          <>
+            {filtered.map((opt, i) => {
+              const active = i === activeIndex;
+              const selected = opt.toLocaleLowerCase("vi") === value.trim().toLocaleLowerCase("vi");
+              return (
+                <li key={opt} role="option" aria-selected={selected}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setActiveIndex(i)}
+                    onClick={() => {
+                      commit(opt);
+                      inputRef.current?.blur();
+                    }}
+                    className={`flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs sm:text-sm transition-colors duration-150 ${
+                      active
+                        ? "bg-blue-50 text-[#0047AB]"
+                        : selected
+                          ? "font-semibold text-[#0047AB]"
+                          : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span
+                      className={`min-w-0 flex-1 ${mono ? "truncate font-mono" : "whitespace-normal break-words leading-snug"}`}
+                    >
+                      {opt}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            {canCreateTyped && (
+              <li role="option" aria-selected={false} className="mt-1 border-t border-slate-100 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    commit(typedValue);
+                    inputRef.current?.blur();
+                  }}
+                  className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left hover:bg-blue-50"
+                >
+                  <span className="text-[11px] font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
+                  <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
+                    {typedValue}
+                  </span>
+                </button>
+              </li>
+            )}
+          </>
+        )}
+      </ul>
+    ) : null;
+
   return (
     <div ref={boxRef} className={`relative ${className}`}>
       <input
@@ -238,86 +342,7 @@ export default function ComboBoxInput({
         />
       </button>
 
-      {open && !disabled && (
-        <ul
-          role="listbox"
-          className={`absolute left-0 right-0 z-50 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg animate-in fade-in-50 duration-150 ${
-            dropUp ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"
-          }`}
-        >
-          {filtered.length === 0 ? (
-            canCreateTyped ? (
-              <li role="option" aria-selected={false}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    commit(typedValue);
-                    inputRef.current?.blur();
-                  }}
-                  className="flex w-full flex-col items-start gap-0.5 rounded-lg bg-blue-50 px-2.5 py-2 text-left transition-colors hover:bg-blue-100"
-                >
-                  <span className="text-xs font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
-                  <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
-                    {typedValue}
-                  </span>
-                  <span className="text-[11px] leading-snug text-slate-500">
-                    Nhấn Enter để dùng giá trị vừa nhập
-                  </span>
-                </button>
-              </li>
-            ) : (
-              <li className="px-2.5 py-2 text-[11px] leading-snug text-slate-400">{resolvedEmpty}</li>
-            )
-          ) : (
-            <>
-              {filtered.map((opt, i) => {
-                const active = i === activeIndex;
-                const selected = opt.toLocaleLowerCase("vi") === value.trim().toLocaleLowerCase("vi");
-                return (
-                  <li key={opt} role="option" aria-selected={selected}>
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActiveIndex(i)}
-                      onClick={() => {
-                        commit(opt);
-                        inputRef.current?.blur();
-                      }}
-                      className={`flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs sm:text-sm transition-colors duration-150 ${
-                        active
-                          ? "bg-blue-50 text-[#0047AB]"
-                          : selected
-                            ? "font-semibold text-[#0047AB]"
-                            : "text-slate-700 hover:bg-slate-100"
-                      }`}
-                    >
-                      <span className={`min-w-0 flex-1 ${mono ? "truncate font-mono" : "whitespace-normal break-words leading-snug"}`}>
-                        {opt}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-              {canCreateTyped && (
-                <li role="option" aria-selected={false} className="mt-1 border-t border-slate-100 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      commit(typedValue);
-                      inputRef.current?.blur();
-                    }}
-                    className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left hover:bg-blue-50"
-                  >
-                    <span className="text-[11px] font-semibold text-[#0047AB]">+ Thêm mới từ form</span>
-                    <span className={`text-xs sm:text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>
-                      {typedValue}
-                    </span>
-                  </button>
-                </li>
-              )}
-            </>
-          )}
-        </ul>
-      )}
+      {mounted && menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }

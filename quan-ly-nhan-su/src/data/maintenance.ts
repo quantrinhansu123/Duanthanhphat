@@ -10,6 +10,8 @@ export type MaintenanceImageAsset = {
   bytes?: number;
 };
 
+export type MaintenanceResult = "Chưa có" | "Đạt" | "Không đạt" | "Cần theo dõi";
+
 export type MaintenanceEvent = {
   id: string;
   createdAt?: string;
@@ -20,6 +22,8 @@ export type MaintenanceEvent = {
   machine: string;
   type: "Bảo dưỡng" | "Sửa chữa" | "Kiểm định" | "Thay phụ tùng";
   status: "Đã xong" | "Đang làm" | "Chờ xác nhận";
+  result?: MaintenanceResult;
+  reminder?: string;
   assignees: MaintenanceAssignee[];
   note?: string;
   images?: string[];

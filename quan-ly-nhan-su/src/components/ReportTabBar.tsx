@@ -2,7 +2,7 @@
 
 import type { Icon } from "@phosphor-icons/react";
 import { REPORT_TABS } from "@/data/reportTabs";
-import { SquaresFour, ShieldCheck, Wrench, Users } from "@/components/icons";
+import { SquaresFour, ShieldCheck, Wrench, Users, CalendarBlank } from "@/components/icons";
 
 type ReportTabBarProps = {
   activeId: string;
@@ -14,6 +14,7 @@ const icons: Record<string, Icon> = {
   "bc-chat-luong": ShieldCheck,
   "bc-may-moc": Wrench,
   "bc-nhan-su": Users,
+  "bc-bao-cao-ngay": CalendarBlank,
 };
 
 export default function ReportTabBar({ activeId, onNavigate }: ReportTabBarProps) {

@@ -7,6 +7,8 @@ export type MachineMaintenanceHistoryRow = {
   title: string;
   type: MaintenanceEvent["type"];
   status: MaintenanceEvent["status"];
+  result?: MaintenanceEvent["result"];
+  reminder?: string;
   durationMin: number;
   assignees: string[];
   note?: string;
@@ -194,6 +196,8 @@ function fromCalendarEvent(e: MaintenanceEvent): MachineMaintenanceHistoryRow {
     title: e.title,
     type: e.type,
     status: e.status,
+    result: e.result,
+    reminder: e.reminder,
     durationMin: e.durationMin,
     assignees: e.assignees.map((a) => a.name),
     note: e.note,

@@ -167,6 +167,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Track daily weld records by timestamp, welder, GPS coordinates, and status",
       },
       {
+        id: "bien-ban-moi-han",
+        label: "Biên bản mối hàn",
+        labelEn: "Weld Acceptance Report",
+        description: "Biên bản nghiệm thu chất lượng mối hàn nhiệt nhôm — bảng chi tiết và xuất bản in",
+        descriptionEn: "Thermite weld quality acceptance report — detailed table and print export",
+      },
+      {
         id: "bc-moi-han-theo-nam",
         label: "Báo cáo mối hàn theo năm",
         labelEn: "Yearly Weld Report",
@@ -222,6 +229,13 @@ export const navigation: NavItem[] = [
         labelEn: "Personnel Report",
         description: "Năng suất theo thợ, theo tổ đội, lịch sử dự án, trạng thái chứng chỉ",
         descriptionEn: "Productivity by welder and crew, project assignments, certificate validity",
+      },
+      {
+        id: "bc-bao-cao-ngay",
+        label: "Báo cáo ngày",
+        labelEn: "Daily Report",
+        description: "Báo cáo công việc ngày: năng suất, máy móc, nhân lực, thiết bị và sự cố",
+        descriptionEn: "Daily work report: productivity, equipment, manpower, and incidents",
       },
     ],
   },
@@ -280,6 +294,9 @@ export function findNavMeta(activeId?: string) {
     const child = group.children.find((c) => c.id === activeId);
     if (child) {
       return {
+        id: child.id,
+        parentId: group.id,
+        parentFirstChildId: group.children[0]?.id ?? child.id,
         parent: group.label,
         parentEn: group.labelEn,
         code: group.code,

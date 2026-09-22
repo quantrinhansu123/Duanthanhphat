@@ -651,7 +651,7 @@ export default function WelderFormModal({
                   <img
                     src={person.photo || "https://ui-avatars.com/api/?name=" + encodeURIComponent(person.name)}
                     alt={person.name}
-                    className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm"
+                    className="h-16 w-16 shrink-0 rounded-xl object-cover ring-2 ring-white shadow-sm"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-slate-900">{person.name}</div>

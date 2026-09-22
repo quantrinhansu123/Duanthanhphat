@@ -1013,7 +1013,7 @@ function MachineDetailModal({
 
               {history.length > 0 ? (
                 <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[1080px] border-collapse text-left text-xs sm:text-sm">
+                  <table className="w-full min-w-[1280px] border-collapse text-left text-xs sm:text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                         <th className="px-3.5 py-2.5">Ngày</th>
@@ -1021,8 +1021,10 @@ function MachineDetailModal({
                         <th className="min-w-[200px] px-3.5 py-2.5">Công việc</th>
                         <th className="px-3.5 py-2.5">Loại</th>
                         <th className="px-3.5 py-2.5">Trạng thái</th>
+                        <th className="px-3.5 py-2.5">Kết quả</th>
                         <th className="px-3.5 py-2.5">Thời lượng</th>
                         <th className="min-w-[180px] px-3.5 py-2.5">Nhân sự sửa chữa</th>
+                        <th className="min-w-[180px] px-3.5 py-2.5">Nhắc nhớ</th>
                         <th className="min-w-[240px] px-3.5 py-2.5">Ghi chú</th>
                         <th className="min-w-[150px] px-3.5 py-2.5">Ảnh</th>
                       </tr>
@@ -1047,8 +1049,14 @@ function MachineDetailModal({
                               {row.status}
                             </span>
                           </td>
+                          <td className="px-3.5 py-3 text-xs font-semibold text-slate-700">
+                            {row.result || "Chưa có"}
+                          </td>
                           <td className="whitespace-nowrap px-3.5 py-3 font-mono text-slate-700 tabular-nums">{row.durationMin} phút</td>
                           <td className="px-3.5 py-3 text-xs sm:text-sm text-slate-700">{row.assignees.join(", ")}</td>
+                          <td className="px-3.5 py-3 text-xs leading-relaxed text-amber-800">
+                            {row.reminder || "—"}
+                          </td>
                           <td className="px-3.5 py-3 text-xs leading-relaxed text-slate-600">
                             {row.note || "—"}
                           </td>

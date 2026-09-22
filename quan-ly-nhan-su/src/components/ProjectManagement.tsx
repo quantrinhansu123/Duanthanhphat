@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaretLeft, CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
+import ComboBoxInput from "@/components/ComboBoxInput";
 import {
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
@@ -83,7 +84,7 @@ const weldStatusStyle: Record<ProjectWeldStatus, string> = {
 
 const statusOptions: Project["status"][] = ["Đang triển khai", "Hoàn thành", "Tạm dừng"];
 
-type DetailTab = "info" | "personnel" | "work" | "progress" | "machines";
+type DetailTab = "info" | "personnel" | "progress" | "machines";
 
 function viDate(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString("vi-VN");
@@ -930,25 +931,52 @@ function ProjectPersonnelTab({
   onStartEdit?: (addAction?: () => void) => void;
 }) {
   const onDuty = rows.filter((p) => p.onDuty).length;
-  const usedNames = new Set(rows.map((row) => row.name));
+
+  // Danh sách sổ xuống = toàn bộ Hồ sơ thợ hàn (bảng nhan_su).
+  const nameOptions = useMemo(() => {
+    return personnelOptions.map((person) => {
+      const name = person.ho_ten.trim();
+      const code = person.ma_nhan_su?.trim();
+      return code ? `${name} (${code})` : name;
+    });
+  }, [personnelOptions]);
+
+  function labelForName(name: string) {
+    const person = personnelOptions.find((option) => option.ho_ten.trim() === name.trim());
+    if (!person) return name;
+    const code = person.ma_nhan_su?.trim();
+    return code ? `${person.ho_ten.trim()} (${code})` : person.ho_ten.trim();
+  }
+
+  function personFromLabel(label: string) {
+    const trimmed = label.trim();
+    const byLabel = personnelOptions.find((person) => {
+      const name = person.ho_ten.trim();
+      const code = person.ma_nhan_su?.trim();
+      return (code ? `${name} (${code})` : name) === trimmed;
+    });
+    if (byLabel) return byLabel;
+    return personnelOptions.find((person) => person.ho_ten.trim() === trimmed);
+  }
 
   function addRow() {
-    const person = personnelOptions.find((option) => !usedNames.has(option.ho_ten.trim()));
-    if (!person) {
-      window.alert(
-        personnelOptions.length === 0
-          ? "Chưa có dữ liệu nhân sự trong hồ sơ."
-          : "Tất cả nhân sự trong hồ sơ đã được gán.",
-      );
+    if (personnelOptions.length === 0) {
+      window.alert("Chưa có dữ liệu trong Hồ sơ thợ hàn. Vào mục Quản lý thợ hàn → Hồ sơ thợ hàn để thêm.");
+      return;
+    }
+    const usedIds = new Set(rows.map((row) => row.id));
+    const available = personnelOptions.filter((option) => !usedIds.has(option.employee_id));
+    if (available.length === 0) {
+      window.alert("Tất cả thợ hàn trong hồ sơ đã được gán cho dự án này.");
       return;
     }
     onChange([
       ...rows,
       {
-        id: person.employee_id,
+        id: `new-${Date.now()}`,
         projectId,
-        name: person.ho_ten.trim(),
-        position: person.chuc_vu?.trim() || person.to_han?.trim() || "",
+        name: "",
+        position: "",
         role: "Nhân viên",
         onDuty: true,
         weldsToday: 0,
@@ -966,6 +994,12 @@ function ProjectPersonnelTab({
 
   return (
     <div>
+      {personnelOptions.length === 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Chưa tải được danh sách từ Hồ sơ thợ hàn. Kiểm tra kết nối Supabase hoặc thêm thợ hàn tại mục{" "}
+          <strong>Quản lý thợ hàn → Hồ sơ thợ hàn</strong>.
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-500">
           <span>
@@ -978,7 +1012,7 @@ function ProjectPersonnelTab({
         </div>
         <TabAddButton label="Thêm nhân sự" readOnly={readOnly} onAdd={addRow} onStartEdit={onStartEdit} />
       </div>
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs">
+      <div className="overflow-visible rounded-xl border border-slate-200/80 bg-white shadow-2xs">
         <table className="w-full border-collapse text-left text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
@@ -997,34 +1031,40 @@ function ProjectPersonnelTab({
               ) : (
                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-3.5 py-2.5">
-                    <select
-                      value={p.name}
-                      onChange={(e) => {
-                        const person = personnelOptions.find((w) => w.ho_ten.trim() === e.target.value);
+                    <ComboBoxInput
+                      strict
+                      mono={false}
+                      value={labelForName(p.name)}
+                      options={
+                        p.name && !nameOptions.includes(labelForName(p.name))
+                          ? [labelForName(p.name), ...nameOptions]
+                          : nameOptions
+                      }
+                      placeholder={
+                        personnelOptions.length === 0
+                          ? "Chưa có dữ liệu Hồ sơ thợ hàn"
+                          : "Gõ tên hoặc mã nhân sự…"
+                      }
+                      emptyLabel="Không tìm thấy trong Hồ sơ thợ hàn"
+                      onChange={(next) => {
+                        const person = personFromLabel(next);
+                        if (!person) return;
+                        const already = rows.some(
+                          (row, i) => i !== index && row.id === person.employee_id,
+                        );
+                        if (already) {
+                          window.alert("Thợ hàn này đã được gán trong danh sách.");
+                          return;
+                        }
                         updateRow(index, {
-                          id: person?.employee_id ?? p.id,
-                          name: e.target.value,
-                          position: person?.chuc_vu?.trim() || person?.to_han?.trim() || p.position,
+                          id: person.employee_id,
+                          name: person.ho_ten.trim(),
+                          position: person.chuc_vu?.trim() || person.to_han?.trim() || "Thợ hàn",
                         });
                       }}
-                      className="h-9 w-full min-w-[140px] rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
-                    >
-                      {personnelOptions.length === 0 ? (
-                        <option value={p.name}>{p.name || "Chưa có dữ liệu nhân sự"}</option>
-                      ) : (
-                        <>
-                          {!personnelOptions.some((option) => option.ho_ten.trim() === p.name) && p.name ? (
-                            <option value={p.name}>{p.name}</option>
-                          ) : null}
-                          {personnelOptions.map((w) => (
-                            <option key={w.employee_id} value={w.ho_ten.trim()}>
-                              {w.ho_ten.trim()}
-                              {w.ma_nhan_su ? ` (${w.ma_nhan_su})` : ""}
-                            </option>
-                          ))}
-                        </>
-                      )}
-                    </select>
+                      className="min-w-[180px]"
+                      inputClassName="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
+                    />
                   </td>
                   <td className="px-3.5 py-2.5 text-slate-700">{p.position}</td>
                   <td className="px-3.5 py-2.5">
@@ -1077,7 +1117,7 @@ function ProjectPersonnelTab({
               <tr>
                 <td colSpan={readOnly ? 5 : 6} className="px-3 py-8 text-center text-xs sm:text-sm text-slate-500">
                   Chưa có nhân sự được gán cho dự án này.
-                  {!readOnly && " Bấm «Thêm nhân sự» để gán từ hồ sơ nhân sự."}
+                  {!readOnly && " Bấm «Thêm nhân sự» rồi chọn từ Hồ sơ thợ hàn."}
                 </td>
               </tr>
             )}
@@ -1455,7 +1495,6 @@ function ProjectModal({
   onClose: closeModal,
   onSave,
   onSavePersonnel,
-  onSaveWork,
   onStartEdit,
   personnelOptions,
   machineOptions,
@@ -1467,7 +1506,6 @@ function ProjectModal({
   onClose: () => void;
   onSave?: (updated: Project) => Promise<void>;
   onSavePersonnel?: (projectId: string, rows: ProjectPersonnel[]) => void;
-  onSaveWork?: (projectId: string, rows: ProjectWeld[]) => void;
   onStartEdit?: () => void;
   personnelOptions: ProjectPersonnelOption[];
   machineOptions: ProjectMachineOption[];
@@ -1481,7 +1519,6 @@ function ProjectModal({
     if (!savingRef.current) closeModal();
   }, [closeModal]);
   const [personnelRows, setPersonnelRows] = useState<ProjectPersonnel[]>([]);
-  const [workRows, setWorkRows] = useState<ProjectWeld[]>([]);
   const [tab, setTab] = useState<DetailTab>("info");
   const pendingAddRef = useRef<(() => void) | null>(null);
 
@@ -1522,13 +1559,11 @@ function ProjectModal({
         ? project.projectPersonnel
         : personnelRowsFromIds(project.id, project.personnelIds ?? [], personnelOptions),
     );
-    setWorkRows(project.projectWelds ?? []);
   }, [project, personnelOptions]);
 
   const readOnly = mode === "view";
   const isCreate = mode === "create";
   const personnelCount = personnelRows.length;
-  const weldCount = workRows.length;
   const progressCount = form.theoreticalProgress?.length ?? 0;
   const machineRuns = useProjectMachineRuns(project.id, project.name, !isCreate);
 
@@ -1538,7 +1573,6 @@ function ProjectModal({
       ? [{ id: "progress" as const, label: "Xem kế hoạch theo ngày", count: progressCount }]
       : [
           { id: "personnel" as const, label: "Nhân sự", count: personnelCount },
-          { id: "work" as const, label: "Công việc", count: weldCount },
           { id: "machines" as const, label: "Lịch chạy máy", count: machineRuns.runs.length },
           { id: "progress" as const, label: "Tiến độ lý thuyết", count: progressCount },
         ]),
@@ -1630,16 +1664,6 @@ function ProjectModal({
               personnelOptions={personnelOptions}
               readOnly={readOnly}
               onChange={setPersonnelRows}
-              onStartEdit={requestEdit}
-            />
-          )}
-          {tab === "work" && (
-            <ProjectWorkTab
-              projectId={project.id}
-              rows={workRows}
-              personnelOptions={personnelOptions}
-              readOnly={readOnly}
-              onChange={setWorkRows}
               onStartEdit={requestEdit}
             />
           )}
@@ -1741,15 +1765,6 @@ function ProjectModal({
               Lưu nhân sự
             </button>
           )}
-          {!readOnly && onSaveWork && tab === "work" && project.id && (
-            <button
-              type="button"
-              onClick={() => onSaveWork(project.id, workRows)}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
-            >
-              Lưu công việc
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -1772,7 +1787,6 @@ export default function ProjectManagement() {
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
   const [personnelOptions, setPersonnelOptions] = useState<ProjectPersonnelOption[]>([]);
   const [machineOptions, setMachineOptions] = useState<ProjectMachineOption[]>([]);
-  const [formOptionsLoaded, setFormOptionsLoaded] = useState(false);
   const [importingExcel, setImportingExcel] = useState(false);
   const [progressRows, setProgressRows] = useState<TheoreticalProgressViewRow[]>([]);
   const [progressLoading, setProgressLoading] = useState(true);
@@ -1780,15 +1794,14 @@ export default function ProjectManagement() {
   const railOptions = useCatalogOptions("Loại ray");
   const weldOptions = useCatalogOptions("Loại mối hàn", "name");
 
+  // Tải sẵn danh sách Hồ sơ thợ hàn (nhan_su) — dùng cho tab Nhân sự / người phụ trách.
   useEffect(() => {
-    if (!modal || formOptionsLoaded) return;
     let active = true;
     Promise.all([loadPersonnelPickerRows(), loadMachinePickerOptions()])
       .then(([personnel, machines]) => {
         if (!active) return;
         setPersonnelOptions(personnel);
         setMachineOptions(machines);
-        setFormOptionsLoaded(true);
       })
       .catch(() => {
         if (!active) return;
@@ -1798,7 +1811,7 @@ export default function ProjectManagement() {
     return () => {
       active = false;
     };
-  }, [modal, formOptionsLoaded]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -2020,17 +2033,15 @@ export default function ProjectManagement() {
   }
 
   function handleSavePersonnel(projectId: string, rows: ProjectPersonnel[]) {
+    const cleaned = rows.filter((row) => row.name.trim() && !row.id.startsWith("new-"));
+    if (cleaned.length === 0 && rows.some((row) => !row.name.trim())) {
+      window.alert("Vui lòng chọn thợ hàn từ Hồ sơ thợ hàn trước khi lưu.");
+      return;
+    }
     setProjects((prev) =>
       prev.map((p) =>
-        p.id === projectId ? { ...p, projectPersonnel: rows, staffCount: rows.length } : p,
+        p.id === projectId ? { ...p, projectPersonnel: cleaned, staffCount: cleaned.length } : p,
       ),
-    );
-    setModal(null);
-  }
-
-  function handleSaveWork(projectId: string, rows: ProjectWeld[]) {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === projectId ? { ...p, projectWelds: rows } : p)),
     );
     setModal(null);
   }
@@ -2439,7 +2450,6 @@ export default function ProjectManagement() {
                 : undefined
           }
           onSavePersonnel={modal.mode === "edit" ? handleSavePersonnel : undefined}
-          onSaveWork={modal.mode === "edit" ? handleSaveWork : undefined}
           onStartEdit={() => setModal((m) => (m ? { ...m, mode: "edit" } : null))}
           personnelOptions={personnelOptions}
           machineOptions={machineOptions}

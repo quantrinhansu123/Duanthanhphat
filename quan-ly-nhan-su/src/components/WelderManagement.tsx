@@ -1024,6 +1024,29 @@ export default function WelderManagement() {
     );
   }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel, machineCatalog]);
 
+  const kanbanColumns = useMemo(() => {
+    const teamOrder = (team: string) => {
+      const m = team.match(/\d+/);
+      return m ? Number(m[0]) : Number.POSITIVE_INFINITY;
+    };
+    const map = new Map<string, Welder[]>();
+    for (const w of filtered) {
+      const team = w.weldingTeam?.trim() || "Chưa phân tổ";
+      const bucket = map.get(team);
+      if (bucket) bucket.push(w);
+      else map.set(team, [w]);
+    }
+    return Array.from(map.entries())
+      .map(([team, welders]) => ({
+        team,
+        welders: [...welders].sort((a, b) => a.name.localeCompare(b.name, "vi")),
+      }))
+      .sort(
+        (a, b) =>
+          teamOrder(a.team) - teamOrder(b.team) || a.team.localeCompare(b.team, "vi"),
+      );
+  }, [filtered]);
+
   const stats = useMemo(() => {
     const total = list.length;
     const active = list.filter((w) => w.status === "Hoạt động").length;
@@ -1310,143 +1333,141 @@ export default function WelderManagement() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs mb-6">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-bold uppercase tracking-wider text-slate-600">
-                <th className="p-3 w-12 text-center">
-                  <input
-                    type="checkbox"
-                    checked={selected.length === filtered.length && filtered.length > 0}
-                    onChange={() => {
-                      if (selected.length === filtered.length) setSelected([]);
-                      else setSelected(filtered.map((w) => w.id));
-                    }}
-                    className="h-4 w-4 accent-[#0047AB] rounded"
-                  />
-                </th>
-                <th className="p-3 min-w-[200px]">{isEn ? "Welder Name & Title" : "Thợ hàn"}</th>
-                <th className="p-3 whitespace-nowrap">{isEn ? "Team" : "Tổ hàn"}</th>
-                <th className="p-3 whitespace-nowrap">{isEn ? "Grade" : "Phân hạng"}</th>
-                <th className="p-3 whitespace-nowrap">{isEn ? "Status" : "Trạng thái"}</th>
-                <th className="p-3 text-right whitespace-nowrap">{isEn ? "Action" : "Thao tác"}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((w) => {
-                const isCurrent = profileOpen && selectedWelder?.id === w.id;
-                return (
-                  <tr
-                    key={w.id}
-                    onClick={() => openWelderProfile(w)}
-                    className={`transition-colors cursor-pointer ${
-                      isCurrent
-                        ? "bg-blue-50/70 border-l-4 border-l-[#0047AB]"
-                        : "hover:bg-slate-50/80"
-                    }`}
-                  >
-                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(w.id)}
-                        onChange={() => {
-                          setSelected((prev) =>
-                            prev.includes(w.id) ? prev.filter((id) => id !== w.id) : [...prev, w.id],
-                          );
-                        }}
-                        className="h-4 w-4 accent-[#0047AB] rounded"
-                      />
-                    </td>
+      {filtered.length === 0 ? (
+        <div className="mb-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm text-slate-500">
+          {isEn ? "No welders match the current filters." : "Không tìm thấy thợ hàn nào phù hợp với bộ lọc."}
+        </div>
+      ) : (
+        <div className="mb-6 table-scroll overflow-x-auto pb-2">
+          <div className="flex min-w-max items-start gap-3.5">
+            {kanbanColumns.map((col) => {
+              const activeCount = col.welders.filter((w) => w.status === "Hoạt động").length;
+              return (
+                <section
+                  key={col.team}
+                  className="flex w-[300px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50/80 shadow-xs"
+                >
+                  <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-2xl border-b border-slate-200 bg-white px-3.5 py-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-bold text-slate-900">{col.team}</h3>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        {col.welders.length} {isEn ? "welders" : "thợ"}
+                        <span className="text-slate-300"> · </span>
+                        <span className="text-emerald-700">{activeCount}</span>{" "}
+                        {isEn ? "active" : "đang hoạt động"}
+                      </p>
+                    </div>
+                    <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[#0047AB]/10 px-2 text-xs font-bold tabular-nums text-[#0047AB]">
+                      {col.welders.length}
+                    </span>
+                  </header>
 
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-9 w-9 flex-none overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-                          <Image src={w.photo} alt={w.name} fill className="object-cover" sizes="36px" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-slate-900 truncate text-xs sm:text-sm">
-                            {w.name}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate">
-                            {localizeBilingual(w.position, isEn)} · {localizeBilingual(w.department, isEn)}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="p-3 whitespace-nowrap">
-                      <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#0047AB]">
-                        {w.weldingTeam}
-                      </span>
-                    </td>
-
-                    <td className="p-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${rankStyle[w.rank] || "bg-slate-100 text-slate-700"}`}>
-                        {w.rank}
-                      </span>
-                    </td>
-
-                    <td className="p-3 whitespace-nowrap">
-                      {w.status === "Hoạt động" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shadow-2xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          {w.status}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold text-rose-700 shadow-2xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                          {w.status}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="inline-flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
+                  <div className="flex max-h-[min(70vh,720px)] flex-col gap-2.5 overflow-y-auto p-2.5">
+                    {col.welders.map((w) => {
+                      const isCurrent = profileOpen && selectedWelder?.id === w.id;
+                      return (
+                        <article
+                          key={w.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => openWelderProfile(w)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              openWelderProfile(w);
+                            }
+                          }}
+                          className={`group cursor-pointer rounded-xl border bg-white p-3 shadow-xs transition-all duration-150 hover:border-[#0047AB]/35 hover:shadow-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 ${
                             isCurrent
-                              ? "bg-[#0047AB] text-white"
-                              : "bg-white border border-slate-300 text-slate-700 hover:border-[#0047AB] hover:text-[#0047AB]"
+                              ? "border-[#0047AB] ring-2 ring-[#0047AB]/20"
+                              : "border-slate-200"
                           }`}
                         >
-                          {isEn ? "View" : "Xem"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditWelder(w)}
-                          className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-[#0047AB] hover:text-[#0047AB] cursor-pointer"
-                          title={isEn ? "Edit" : "Sửa"}
-                        >
-                          <PencilSimple size={15} weight="bold" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteWelder(w)}
-                          className="rounded-lg border border-rose-200 bg-white p-1.5 text-rose-500 hover:bg-rose-50 cursor-pointer"
-                          title={isEn ? "Delete" : "Xóa"}
-                        >
-                          <Trash size={15} weight="bold" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          <div className="flex gap-3">
+                            <div className="relative h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                              <Image
+                                src={w.photo}
+                                alt={w.name}
+                                fill
+                                className="object-cover"
+                                sizes="64px"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-bold text-slate-900">{w.name}</div>
+                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                                {localizeBilingual(w.position, isEn)}
+                              </div>
+                              <div className="mt-1.5 font-mono text-[11px] font-semibold text-[#0047AB]">
+                                {w.weldingId}
+                              </div>
+                            </div>
+                          </div>
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="p-10 text-center text-sm text-slate-500">
-                    Không tìm thấy thợ hàn nào phù hợp với bộ lọc.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                rankStyle[w.rank] || "bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {w.rank}
+                            </span>
+                            {w.status === "Hoạt động" ? (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                {w.status}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                {w.status}
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-slate-100 pt-2 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openWelderProfile(w)}
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
+                                isCurrent
+                                  ? "bg-[#0047AB] text-white"
+                                  : "border border-slate-300 bg-white text-slate-700 hover:border-[#0047AB] hover:text-[#0047AB]"
+                              }`}
+                            >
+                              {isEn ? "View" : "Xem"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditWelder(w)}
+                              className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-500 hover:border-[#0047AB] hover:text-[#0047AB] cursor-pointer"
+                              title={isEn ? "Edit" : "Sửa"}
+                            >
+                              <PencilSimple size={14} weight="bold" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteWelder(w)}
+                              className="rounded-lg border border-rose-200 bg-white p-1.5 text-rose-500 hover:bg-rose-50 cursor-pointer"
+                              title={isEn ? "Delete" : "Xóa"}
+                            >
+                              <Trash size={14} weight="bold" />
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Right drawer: welder profile */}
       {profileOpen && selectedWelder && (
@@ -1465,8 +1486,8 @@ export default function WelderManagement() {
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
               <div className="flex min-w-0 items-center gap-3.5">
-                <div className="relative h-14 w-14 flex-none overflow-hidden rounded-2xl bg-slate-100 ring-2 ring-[#0047AB]/25 shadow-sm">
-                  <Image src={selectedWelder.photo} alt={selectedWelder.name} fill className="object-cover" sizes="56px" />
+                <div className="relative h-20 w-20 flex-none overflow-hidden rounded-xl bg-slate-100 ring-2 ring-[#0047AB]/25 shadow-sm">
+                  <Image src={selectedWelder.photo} alt={selectedWelder.name} fill className="object-cover" sizes="80px" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">

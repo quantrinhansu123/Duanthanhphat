@@ -8,6 +8,7 @@ export const REPORT_TABS: ReportTab[] = [
   { id: "bc-chat-luong", label: "Báo cáo Chất lượng" },
   { id: "bc-may-moc", label: "Báo cáo Máy móc" },
   { id: "bc-nhan-su", label: "Báo cáo Nhân sự" },
+  { id: "bc-bao-cao-ngay", label: "Báo cáo ngày" },
 ];
 
 export function isReportTab(id: string) {

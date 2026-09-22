@@ -16,6 +16,8 @@ type DbMaintenanceRow = {
   cong_viec: string;
   loai: MaintenanceEvent["type"];
   trang_thai: MaintenanceEvent["status"];
+  ket_qua: MaintenanceEvent["result"] | null;
+  nhac_nho: string | null;
   nhan_su: string[] | null;
   ghi_chu: string | null;
   hinh_anh: unknown;
@@ -35,6 +37,8 @@ export type MaintenanceSaveInput = {
   machine: string;
   type: MaintenanceEvent["type"];
   status: MaintenanceEvent["status"];
+  result?: MaintenanceEvent["result"];
+  reminder?: string;
   assigneeNames: string[];
   note?: string;
   imageAssets: MaintenanceImageAsset[];
@@ -50,10 +54,39 @@ const MAINTENANCE_COLUMNS = [
   "cong_viec",
   "loai",
   "trang_thai",
+  "ket_qua",
+  "nhac_nho",
   "nhan_su",
   "ghi_chu",
   "hinh_anh",
 ].join(",");
+
+const MAINTENANCE_COLUMNS_LEGACY = [
+  "id",
+  "created_at",
+  "may_id",
+  "ngay",
+  "gio",
+  "thoi_luong_phut",
+  "cong_viec",
+  "loai",
+  "trang_thai",
+  "nhan_su",
+  "ghi_chu",
+  "hinh_anh",
+].join(",");
+
+function isMissingResultReminderColumn(error: unknown) {
+  const message = formatSupabaseError(error).toLowerCase();
+  return message.includes("ket_qua") || message.includes("nhac_nho");
+}
+
+function normalizeResult(value: unknown): MaintenanceEvent["result"] {
+  if (value === "Đạt" || value === "Không đạt" || value === "Cần theo dõi" || value === "Chưa có") {
+    return value;
+  }
+  return "Chưa có";
+}
 
 function parseImageAssets(value: unknown): MaintenanceImageAsset[] {
   if (!Array.isArray(value)) return [];
@@ -84,6 +117,8 @@ function rowToEvent(row: DbMaintenanceRow, machineCode: string): MaintenanceEven
     machine: machineCode,
     type: row.loai,
     status: row.trang_thai,
+    result: normalizeResult(row.ket_qua),
+    reminder: row.nhac_nho?.trim() || undefined,
     assignees: (row.nhan_su ?? []).map((name) => ({ name, photo: "" })),
     note: row.ghi_chu?.trim() || undefined,
     images: assets.map((asset) => asset.secureUrl),
@@ -119,14 +154,19 @@ export async function loadMaintenanceEvents(): Promise<{
   if (!isSupabaseConfigured()) return { events: seedEvents, source: "seed" };
   try {
     const supabase = createClient();
-    const [machines, maintenance] = await Promise.all([
-      loadMachineCodes(),
-      supabase
+    const machines = await loadMachineCodes();
+    let maintenance = await supabase
+      .from("lich_su_bao_tri_may")
+      .select(MAINTENANCE_COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (maintenance.error && isMissingResultReminderColumn(maintenance.error)) {
+      maintenance = await supabase
         .from("lich_su_bao_tri_may")
-        .select(MAINTENANCE_COLUMNS)
+        .select(MAINTENANCE_COLUMNS_LEGACY)
         .order("created_at", { ascending: false })
-        .order("id", { ascending: false }),
-    ]);
+        .order("id", { ascending: false });
+    }
     if (maintenance.error) throw maintenance.error;
     const codes = new Map(machines.map((machine) => [machine.id, machine.ma_may]));
     const saved = ((maintenance.data ?? []) as unknown as DbMaintenanceRow[]).map((row) =>
@@ -154,12 +194,20 @@ export async function loadMachineMaintenanceEvents(machineCode: string): Promise
   if (!machine.data) return [];
   const machineRow = machine.data as MachineCodeRow;
 
-  const maintenance = await supabase
+  let maintenance = await supabase
     .from("lich_su_bao_tri_may")
     .select(MAINTENANCE_COLUMNS)
     .eq("may_id", machineRow.id)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
+  if (maintenance.error && isMissingResultReminderColumn(maintenance.error)) {
+    maintenance = await supabase
+      .from("lich_su_bao_tri_may")
+      .select(MAINTENANCE_COLUMNS_LEGACY)
+      .eq("may_id", machineRow.id)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+  }
   if (maintenance.error) throw new Error(formatSupabaseError(maintenance.error));
   return ((maintenance.data ?? []) as unknown as DbMaintenanceRow[]).map((row) =>
     rowToEvent(row, machineRow.ma_may),
@@ -185,6 +233,8 @@ function toDbPayload(input: MaintenanceSaveInput, machineId: string) {
     cong_viec: input.title.trim(),
     loai: input.type,
     trang_thai: input.status,
+    ket_qua: normalizeResult(input.result),
+    nhac_nho: input.reminder?.trim() || null,
     nhan_su: input.assigneeNames,
     ghi_chu: input.note?.trim() || null,
     hinh_anh: input.imageAssets,
@@ -199,7 +249,22 @@ export async function saveMaintenanceEvent(input: MaintenanceSaveInput): Promise
   const request = input.id
     ? supabase.from("lich_su_bao_tri_may").update(payload).eq("id", input.id)
     : supabase.from("lich_su_bao_tri_may").insert(payload);
-  const { data, error } = await request.select(MAINTENANCE_COLUMNS).single();
+  let { data, error } = await request.select(MAINTENANCE_COLUMNS).single();
+  if (error && isMissingResultReminderColumn(error)) {
+    const { ket_qua: _ketQua, nhac_nho: _nhacNho, ...legacyPayload } = payload;
+    const legacyRequest = input.id
+      ? supabase.from("lich_su_bao_tri_may").update(legacyPayload).eq("id", input.id)
+      : supabase.from("lich_su_bao_tri_may").insert(legacyPayload);
+    ({ data, error } = await legacyRequest.select(MAINTENANCE_COLUMNS_LEGACY).single());
+    if (!error && data) {
+      const event = rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may);
+      return {
+        ...event,
+        result: normalizeResult(input.result),
+        reminder: input.reminder?.trim() || undefined,
+      };
+    }
+  }
   if (error) throw new Error(formatSupabaseError(error));
   return rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may);
 }

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import {
   CaretDown,
@@ -22,11 +23,16 @@ import {
 } from "@/data/weldingHistory";
 import {
   deleteWeldingHistoryRecord,
+  EMPTY_WELDING_HISTORY_STATS,
   exportAllFilteredWeldingHistory,
   loadWeldingHistoryPage,
+  loadWeldingHistoryStats,
   removeVietnameseTones,
   saveWeldingHistoryRecord,
+  weldingHistoryDefaultDateFrom,
+  WELDING_HISTORY_RECENT_DAYS,
   type WeldingHistoryFilterParams,
+  type WeldingHistoryPageResult,
   type WeldingHistoryStats,
 } from "@/lib/weldingHistoryDb";
 import { createClient } from "@/lib/supabase/client";
@@ -529,22 +535,17 @@ function FilterGroup({
 }
 
 export default function WeldingHistoryList() {
+  const router = useRouter();
   const configuredRails = useCatalogOptions("Loại ray");
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
-  const [stats, setStats] = useState<WeldingHistoryStats>({
-    total: 0,
-    pass: 0,
-    fail: 0,
-    rework: 0,
-    pending: 0,
-    accountingCounts: [],
-  });
+  const [stats, setStats] = useState<WeldingHistoryStats>({ ...EMPTY_WELDING_HISTORY_STATS });
 
   const [queryInput, setQueryInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -558,7 +559,8 @@ export default function WeldingHistoryList() {
 
   const [welder, setWelder] = useState("Tất cả thợ hàn");
   const [result, setResult] = useState("Tất cả kết quả");
-  const [dateFrom, setDateFrom] = useState("");
+  /** Mặc định 90 ngày gần đây để trang mở nhanh; người dùng có thể chọn "Tất cả". */
+  const [dateFrom, setDateFrom] = useState(() => weldingHistoryDefaultDateFrom());
   const [dateTo, setDateTo] = useState("");
   const [machinesSel, setMachinesSel] = useState<string[]>([]);
   const [railsSel, setRailsSel] = useState<string[]>([]);
@@ -575,6 +577,46 @@ export default function WeldingHistoryList() {
   const [allWelders, setAllWelders] = useState<string[]>([]);
   const [welderDirectory, setWelderDirectory] = useState<{ name: string; rank: string }[]>([]);
   const [allProjects, setAllProjects] = useState<string[]>([]);
+
+  const fetchGenRef = useRef(0);
+  const pageCacheRef = useRef<Map<string, WeldingHistoryPageResult>>(new Map());
+  const statsCacheRef = useRef<Map<string, WeldingHistoryStats>>(new Map());
+  const prefetchingRef = useRef<Set<string>>(new Set());
+  const lastFilterKeyRef = useRef("");
+
+  function buildFilterKey(extra?: Partial<WeldingHistoryFilterParams>) {
+    return JSON.stringify({
+      query: debouncedQuery,
+      welder,
+      result,
+      dateFrom,
+      dateTo,
+      machines: machinesSel,
+      rails: railsSel,
+      projects: projectsSel,
+      shifts: shiftsSel,
+      accountingCodes: accountingSel,
+      ...extra,
+    });
+  }
+
+  function buildFilterParams(p: number, ps: number, includeStats = false): WeldingHistoryFilterParams {
+    return {
+      page: p,
+      pageSize: ps,
+      query: debouncedQuery,
+      welder,
+      result,
+      dateFrom,
+      dateTo,
+      machines: machinesSel,
+      rails: railsSel,
+      projects: projectsSel,
+      shifts: shiftsSel,
+      accountingCodes: accountingSel,
+      includeStats,
+    };
+  }
 
   // Tải danh mục thợ hàn & dự án từ DB
   useEffect(() => {
@@ -601,43 +643,114 @@ export default function WeldingHistoryList() {
     loadMaster();
   }, []);
 
-  // Tải dữ liệu trang từ server
-  const fetchData = useCallback(async (p = page, ps = pageSize) => {
-    setLoading(true);
-    const filterParams: WeldingHistoryFilterParams = {
-      page: p,
-      pageSize: ps,
-      query: debouncedQuery,
-      welder,
-      result,
-      dateFrom,
-      dateTo,
-      machines: machinesSel,
-      rails: railsSel,
-      projects: projectsSel,
-      shifts: shiftsSel,
-      accountingCodes: accountingSel,
-    };
-    const res = await loadWeldingHistoryPage(filterParams);
-    setList(res.records);
-    setTotalCount(res.totalCount);
-    setStats(res.stats);
-    if (res.error) {
-      setLoadError(res.error);
-    } else {
-      setLoadError(null);
-    }
-    setLoading(false);
-  }, [page, pageSize, debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel]);
+  // Prefetch trang kế tiếp ngầm để đổi trang gần như tức thì
+  const prefetchPage = useCallback(
+    async (p: number, ps: number) => {
+      if (p < 1) return;
+      const cacheKey = buildFilterKey({ page: p, pageSize: ps });
+      if (pageCacheRef.current.has(cacheKey) || prefetchingRef.current.has(cacheKey)) return;
+      prefetchingRef.current.add(cacheKey);
+      try {
+        const res = await loadWeldingHistoryPage(buildFilterParams(p, ps, false));
+        pageCacheRef.current.set(cacheKey, res);
+      } catch {
+        /* ignore prefetch errors */
+      } finally {
+        prefetchingRef.current.delete(cacheKey);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps mirrored via buildFilterKey inputs
+    [debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel],
+  );
+
+  // Tải dữ liệu trang từ server (không chờ thống kê KPI)
+  const fetchData = useCallback(
+    async (p = page, ps = pageSize) => {
+      const gen = ++fetchGenRef.current;
+      const filterKey = buildFilterKey();
+      if (lastFilterKeyRef.current !== filterKey) {
+        lastFilterKeyRef.current = filterKey;
+        pageCacheRef.current.clear();
+        statsCacheRef.current.clear();
+      }
+      const cacheKey = buildFilterKey({ page: p, pageSize: ps });
+
+      const cached = pageCacheRef.current.get(cacheKey);
+      if (cached) {
+        setList(cached.records);
+        setTotalCount(cached.totalCount);
+        if (cached.error) setLoadError(cached.error);
+        else setLoadError(null);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
+      const filterParams = buildFilterParams(p, ps, false);
+      const res = cached ?? (await loadWeldingHistoryPage(filterParams));
+      if (gen !== fetchGenRef.current) return;
+
+      pageCacheRef.current.set(cacheKey, res);
+      setList(res.records);
+      setTotalCount(res.totalCount);
+      if (res.error) setLoadError(res.error);
+      else setLoadError(null);
+      setLoading(false);
+
+      // Prefetch trang trước/sau ngầm
+      void prefetchPage(p + 1, ps);
+      if (p > 1) void prefetchPage(p - 1, ps);
+
+      // Thống kê KPI tải ngầm (cache theo bộ lọc, không theo trang)
+      const cachedStats = statsCacheRef.current.get(filterKey);
+      if (cachedStats) {
+        setStats(cachedStats);
+        setStatsLoading(false);
+        return;
+      }
+
+      setStatsLoading(true);
+      // Hiển thị tạm total từ count trang trong khi chờ KPI đầy đủ
+      setStats((prev) => ({ ...prev, total: res.totalCount }));
+      try {
+        const nextStats = await loadWeldingHistoryStats(filterParams, res.totalCount);
+        if (gen !== fetchGenRef.current) return;
+        statsCacheRef.current.set(filterKey, nextStats);
+        setStats(nextStats);
+      } catch {
+        if (gen !== fetchGenRef.current) return;
+        setStats({ ...EMPTY_WELDING_HISTORY_STATS, total: res.totalCount });
+      } finally {
+        if (gen === fetchGenRef.current) setStatsLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, pageSize, debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, prefetchPage],
+  );
 
   useEffect(() => {
     fetchData(page, pageSize);
   }, [fetchData, page, pageSize]);
 
-  // Khi bộ lọc thay đổi, quay về trang 1
+  // Khi bộ lọc thay đổi, quay về trang 1 (cache đã xóa trong fetchData)
   useEffect(() => {
     setPage(1);
   }, [debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, pageSize]);
+
+  function applyRecentDays(days: number) {
+    setDateFrom(weldingHistoryDefaultDateFrom(days));
+    setDateTo("");
+  }
+
+  function applyAllDates() {
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  const isPreset30 = !dateTo && dateFrom === weldingHistoryDefaultDateFrom(30);
+  const isPreset90 = !dateTo && dateFrom === weldingHistoryDefaultDateFrom(WELDING_HISTORY_RECENT_DAYS);
+  const isPreset365 = !dateTo && dateFrom === weldingHistoryDefaultDateFrom(365);
+  const isAllDates = !dateFrom && !dateTo;
 
   const welderOptions = useMemo(
     () => ["Tất cả thợ hàn", ...Array.from(new Set([...allWelders, ...list.map((r) => r.welderName)])).filter(Boolean).sort()],
@@ -674,6 +787,8 @@ export default function WeldingHistoryList() {
       setMenuOpen(null);
       return;
     }
+    pageCacheRef.current.clear();
+    statsCacheRef.current.clear();
     await fetchData(page, pageSize);
     setMenuOpen(null);
   }
@@ -695,6 +810,8 @@ export default function WeldingHistoryList() {
       window.alert(`Không thể lưu vào cơ sở dữ liệu Supabase:\n${res.error}\n\nDữ liệu chưa được lưu. Vui lòng kiểm tra lại thông tin.`);
       return;
     }
+    pageCacheRef.current.clear();
+    statsCacheRef.current.clear();
     await fetchData(page, pageSize);
     setModal(null);
   }
@@ -803,8 +920,8 @@ export default function WeldingHistoryList() {
 
   const hasFilter =
     queryInput.trim() ||
-    dateFrom ||
     dateTo ||
+    (dateFrom && dateFrom !== weldingHistoryDefaultDateFrom(WELDING_HISTORY_RECENT_DAYS)) ||
     welder !== "Tất cả thợ hàn" ||
     result !== "Tất cả kết quả" ||
     machinesSel.length > 0 ||
@@ -832,12 +949,16 @@ export default function WeldingHistoryList() {
         <div className="rounded-xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng mối hàn</span>
-            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-[#0047AB]">Bộ lọc</span>
+            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-[#0047AB]">
+              {statsLoading ? "Đang tính…" : isPreset90 ? "90 ngày" : isAllDates ? "Tất cả" : "Bộ lọc"}
+            </span>
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono tabular-nums">
+          <div className={`mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono tabular-nums ${statsLoading ? "opacity-60" : ""}`}>
             {stats.total.toLocaleString("vi-VN")}
           </div>
-          <div className="mt-1 text-xs text-slate-500 font-medium">Khớp danh sách theo bộ lọc</div>
+          <div className="mt-1 text-xs text-slate-500 font-medium">
+            {statsLoading ? "Đang cập nhật thống kê ngầm…" : "Khớp danh sách theo bộ lọc"}
+          </div>
         </div>
 
         <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-xs">
@@ -971,6 +1092,41 @@ export default function WeldingHistoryList() {
             className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
           />
         </label>
+        <div className="mb-0.5 flex flex-wrap items-center gap-1">
+          {(
+            [
+              { label: "30 ngày", days: 30, active: isPreset30 },
+              { label: "90 ngày", days: 90, active: isPreset90 },
+              { label: "1 năm", days: 365, active: isPreset365 },
+            ] as const
+          ).map((preset) => (
+            <button
+              key={preset.days}
+              type="button"
+              onClick={() => applyRecentDays(preset.days)}
+              className={`h-10 rounded-lg px-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                preset.active
+                  ? "bg-[#0047AB] text-white shadow-xs"
+                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              title={`Chỉ tải dữ liệu ${preset.label} gần đây`}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={applyAllDates}
+            className={`h-10 rounded-lg px-2.5 text-xs font-semibold transition-all cursor-pointer ${
+              isAllDates
+                ? "bg-[#0047AB] text-white shadow-xs"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+            title="Tải toàn bộ lịch sử (có thể chậm hơn)"
+          >
+            Tất cả
+          </button>
+        </div>
         <select
           value={welder}
           onChange={(e) => setWelder(e.target.value)}
@@ -996,7 +1152,7 @@ export default function WeldingHistoryList() {
             onClick={() => {
               setQueryInput("");
               setDebouncedQuery("");
-              setDateFrom("");
+              setDateFrom(weldingHistoryDefaultDateFrom());
               setDateTo("");
               setWelder("Tất cả thợ hàn");
               setResult("Tất cả kết quả");
@@ -1173,8 +1329,7 @@ export default function WeldingHistoryList() {
                       <button
                         type="button"
                         onClick={() => {
-                          window.history.pushState(null, "", `/nhat-ky-han?query=${encodeURIComponent(row.weldJoint)}`);
-                          window.dispatchEvent(new PopStateEvent("popstate"));
+                          router.push(`/nhat-ky-han?query=${encodeURIComponent(row.weldJoint)}`);
                         }}
                         className="font-mono text-xs font-bold text-[#0047AB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs hover:bg-blue-100 hover:underline"
                         title="Mở mối hàn trong Nhật ký hàn"

@@ -5,11 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import MaintenanceFormModal, {
   type MaintenanceFormValues,
 } from "@/components/MaintenanceFormModal";
-import { maintenanceEvents as seedEvents, type MaintenanceEvent } from "@/data/maintenance";
+import {
+  maintenanceEvents as seedEvents,
+  type MaintenanceEvent,
+  type MaintenanceResult,
+} from "@/data/maintenance";
 import { Check } from "@/components/icons";
 import { loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const RESULT_OPTIONS: MaintenanceResult[] = ["Chưa có", "Đạt", "Không đạt", "Cần theo dõi"];
 
 const typeColor: Record<MaintenanceEvent["type"], string> = {
   "Bảo dưỡng": "bg-[#0047AB]",
@@ -22,6 +27,13 @@ const statusStyle: Record<MaintenanceEvent["status"], string> = {
   "Đã xong": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Đang làm": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
   "Chờ xác nhận": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
+};
+
+const resultStyle: Record<NonNullable<MaintenanceEvent["result"]>, string> = {
+  "Chưa có": "bg-slate-50 text-slate-600 border border-slate-200 shadow-2xs",
+  "Đạt": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
+  "Không đạt": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
+  "Cần theo dõi": "bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs",
 };
 
 function pad(n: number) {
@@ -76,6 +88,11 @@ export default function MaintenanceCalendar() {
   const [selected, setSelected] = useState(toKey(today.getFullYear(), today.getMonth(), today.getDate()));
   const [openAdd, setOpenAdd] = useState(false);
   const [editingEvent, setEditingEvent] = useState<MaintenanceEvent | null>(null);
+  const [quickEditId, setQuickEditId] = useState<string | null>(null);
+  const [quickResult, setQuickResult] = useState<MaintenanceResult>("Chưa có");
+  const [quickNote, setQuickNote] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState("");
   const [dataError, setDataError] = useState("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -158,6 +175,61 @@ export default function MaintenanceCalendar() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  function openQuickEdit(event: MaintenanceEvent) {
+    setQuickEditId(event.id);
+    setQuickResult(event.result ?? "Chưa có");
+    setQuickNote(event.note ?? "");
+    setQuickError("");
+  }
+
+  function closeQuickEdit() {
+    setQuickEditId(null);
+    setQuickError("");
+    setQuickSaving(false);
+  }
+
+  async function handleQuickSave(event: MaintenanceEvent) {
+    setQuickSaving(true);
+    setQuickError("");
+    try {
+      if (event.persisted) {
+        const saved = await saveMaintenanceEvent({
+          id: event.id,
+          date: event.date,
+          time: event.time,
+          durationMin: event.durationMin,
+          title: event.title,
+          machine: event.machine,
+          type: event.type,
+          status: event.status,
+          result: quickResult,
+          reminder: event.reminder,
+          assigneeNames: event.assignees.map((a) => a.name),
+          note: quickNote.trim(),
+          imageAssets: event.imageAssets ?? [],
+        });
+        setEvents((current) => current.map((item) => (item.id === event.id ? saved : item)));
+      } else {
+        setEvents((current) =>
+          current.map((item) =>
+            item.id === event.id
+              ? {
+                  ...item,
+                  result: quickResult,
+                  note: quickNote.trim() || undefined,
+                }
+              : item,
+          ),
+        );
+      }
+      showToast("Đã cập nhật kết quả / ghi chú");
+      closeQuickEdit();
+    } catch (error) {
+      setQuickError(error instanceof Error ? error.message : "Không lưu được kết quả / ghi chú.");
+      setQuickSaving(false);
+    }
   }
 
   async function handleSave(values: MaintenanceFormValues) {
@@ -320,17 +392,21 @@ export default function MaintenanceCalendar() {
                 </div>
                 <div className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${typeColor[e.type]}`} />
                 <div className="min-w-0 flex-1 rounded-xl border border-slate-200/80 p-3.5 bg-white shadow-2xs">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs sm:text-sm font-bold text-slate-900">{e.title}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        <span className="font-mono font-medium text-slate-700">{e.machine}</span> · {e.type} · <span className="font-mono tabular-nums">{e.durationMin}</span> phút
-                      </div>
+                  <div className="min-w-0">
+                    <div className="text-xs sm:text-sm font-bold text-slate-900">{e.title}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      <span className="font-mono font-medium text-slate-700">{e.machine}</span> · {e.type} · <span className="font-mono tabular-nums">{e.durationMin}</span> phút
                     </div>
-                    <span
-                      className={`flex-none inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[e.status]}`}
-                    >
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[e.status]}`}>
                       {e.status}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[e.result ?? "Chưa có"]}`}
+                    >
+                      Kết quả: {e.result ?? "Chưa có"}
                     </span>
                   </div>
 
@@ -343,11 +419,16 @@ export default function MaintenanceCalendar() {
                     </div>
                     <AssigneeAvatars assignees={e.assignees} size={30} />
                   </div>
-                  {e.note && (
+                  {e.reminder ? (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-800">
+                      <span className="font-semibold">Nhắc nhớ:</span> {e.reminder}
+                    </div>
+                  ) : null}
+                  {e.note && quickEditId !== e.id ? (
                     <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-relaxed text-slate-600">
                       <span className="font-semibold text-slate-700">Ghi chú:</span> {e.note}
                     </div>
-                  )}
+                  ) : null}
                   {e.images?.length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {e.images.map((imageUrl, imageIndex) => (
@@ -357,18 +438,87 @@ export default function MaintenanceCalendar() {
                       ))}
                     </div>
                   ) : null}
-                  {e.persisted && (
-                    <div className="mt-2 flex justify-end">
+
+                  {quickEditId === e.id ? (
+                    <div className="mt-3 space-y-2.5 rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Kết quả
+                        <select
+                          value={quickResult}
+                          onChange={(event) => setQuickResult(event.target.value as MaintenanceResult)}
+                          disabled={quickSaving}
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                        >
+                          {RESULT_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        Ghi chú
+                        <textarea
+                          value={quickNote}
+                          onChange={(event) => setQuickNote(event.target.value)}
+                          disabled={quickSaving}
+                          rows={3}
+                          placeholder="Nhập ghi chú bảo trì…"
+                          className="mt-1 w-full resize-y rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                        />
+                      </label>
+                      {quickError ? (
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-700">
+                          {quickError}
+                        </div>
+                      ) : null}
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          disabled={quickSaving}
+                          onClick={closeQuickEdit}
+                          className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          disabled={quickSaving}
+                          onClick={() => void handleQuickSave(e)}
+                          className="h-8 rounded-lg bg-[#0047AB] px-3 text-xs font-bold text-white hover:bg-[#00388A] disabled:opacity-50"
+                        >
+                          {quickSaving ? "Đang lưu…" : "Lưu"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap justify-end gap-1.5 border-t border-slate-100 pt-2.5">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingEvent(e);
-                          setOpenAdd(true);
-                        }}
+                        onClick={() => openQuickEdit(e)}
+                        className="h-8 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                      >
+                        {e.result && e.result !== "Chưa có" ? "Sửa kết quả" : "Thêm kết quả"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openQuickEdit(e)}
                         className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
-                        Sửa
+                        {e.note ? "Sửa ghi chú" : "Thêm ghi chú"}
                       </button>
+                      {e.persisted ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingEvent(e);
+                            setOpenAdd(true);
+                          }}
+                          className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Sửa đầy đủ
+                        </button>
+                      ) : null}
                     </div>
                   )}
                 </div>

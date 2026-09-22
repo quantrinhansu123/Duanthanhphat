@@ -55,6 +55,8 @@ export type CertificateGroupOption = {
   machine?: string;
   issueDate?: string;
   expiryDate?: string;
+  imageUrl?: string;
+  cloudinaryPublicId?: string;
 };
 
 export type TrainingPersonnelOption = {
@@ -290,7 +292,9 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("chung_chi_nhom")
-      .select("id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at")
+      .select(
+        "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
+      )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
@@ -306,6 +310,8 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
         machine: r.may_ap_dung ?? undefined,
         issueDate: r.ngay_cap ?? undefined,
         expiryDate: r.ngay_het_han ?? undefined,
+        imageUrl: r.secure_url || r.file_chung_chi || undefined,
+        cloudinaryPublicId: r.cloudinary_public_id || undefined,
       });
     }
     if (page.length < pageSize) break;

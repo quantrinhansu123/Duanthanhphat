@@ -21,6 +21,8 @@ export type MaintenanceFormValues = {
   machine: string;
   type: MaintenanceEvent["type"];
   status: MaintenanceEvent["status"];
+  result: NonNullable<MaintenanceEvent["result"]>;
+  reminder: string;
   assigneeNames: string[];
   note: string;
   imageAssets: MaintenanceImageAsset[];
@@ -43,6 +45,8 @@ function emptyForm(defaultDate: string, machine = ""): MaintenanceFormValues {
     machine,
     type: "Bảo dưỡng",
     status: "Chờ xác nhận",
+    result: "Chưa có",
+    reminder: "",
     assigneeNames: [],
     note: "",
     imageAssets: [],
@@ -58,6 +62,8 @@ function formFromEvent(event: MaintenanceEvent): MaintenanceFormValues {
     machine: event.machine,
     type: event.type,
     status: event.status,
+    result: event.result ?? "Chưa có",
+    reminder: event.reminder ?? "",
     assigneeNames: event.assignees.map((assignee) => assignee.name),
     note: event.note ?? "",
     imageAssets: event.imageAssets ?? [],
@@ -241,7 +247,12 @@ export default function MaintenanceFormModal({
     setSaving(true);
     setError("");
     try {
-      await onSubmit({ ...form, title: form.title.trim(), note: form.note.trim() });
+      await onSubmit({
+        ...form,
+        title: form.title.trim(),
+        note: form.note.trim(),
+        reminder: form.reminder.trim(),
+      });
       await Promise.allSettled(
         removedAssets.current.map((asset) => deleteCloudinaryAsset(asset.publicId)),
       );
@@ -277,7 +288,7 @@ export default function MaintenanceFormModal({
               {isEdit ? "Sửa lịch bảo trì" : "Thêm lịch bảo trì"}
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Ghi nhận nhân sự sửa chữa, ghi chú và nhiều ảnh hiện trường
+              Ghi nhận nhân sự, kết quả, nhắc nhớ và nhiều ảnh hiện trường
             </p>
           </div>
           <button
@@ -348,6 +359,35 @@ export default function MaintenanceFormModal({
               <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as MaintenanceEvent["status"] }))} className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20">
                 {(["Chờ xác nhận", "Đang làm", "Đã xong"] as const).map((status) => <option key={status}>{status}</option>)}
               </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+              Kết quả
+              <select
+                value={form.result}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    result: event.target.value as MaintenanceFormValues["result"],
+                  }))
+                }
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              >
+                {(["Chưa có", "Đạt", "Không đạt", "Cần theo dõi"] as const).map((result) => (
+                  <option key={result}>{result}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+              Nhắc nhớ <span className="font-normal text-slate-400">(nếu có)</span>
+              <input
+                value={form.reminder}
+                onChange={(event) => setForm((current) => ({ ...current, reminder: event.target.value }))}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                placeholder="VD: Kiểm tra lại dầu sau 50 giờ"
+              />
             </label>
           </div>
 

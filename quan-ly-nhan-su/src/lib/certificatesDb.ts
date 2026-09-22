@@ -273,7 +273,7 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
   if (error) throw new Error(formatSupabaseError(error));
 }
 
-/** Tạo loại chứng chỉ mới trong danh mục (không bắt buộc gán nhân sự / không ảnh). */
+/** Tạo loại chứng chỉ mới trong danh mục (không bắt buộc gán nhân sự). */
 export async function createCertificateType(input: {
   title: string;
   code?: string;
@@ -283,10 +283,15 @@ export async function createCertificateType(input: {
   employeeIds?: string[];
   issuedAt?: string;
   expiresAt?: string;
+  imageUrl?: string;
+  cloudinaryPublicId?: string;
 }): Promise<{ id: string; name: string }> {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase nên không thể thêm chứng chỉ.");
   const title = input.title.trim();
   if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+  if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
+    throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
+  }
 
   const employeeIds = (input.employeeIds ?? []).filter(Boolean);
   if (employeeIds.length > 0) {
@@ -300,6 +305,8 @@ export async function createCertificateType(input: {
       machine: input.machine,
       certificateNumber: input.code,
       notes: input.notes,
+      imageUrl: input.imageUrl,
+      cloudinaryPublicId: input.cloudinaryPublicId,
     });
     return { id: "", name: title };
   }
@@ -315,6 +322,7 @@ export async function createCertificateType(input: {
     throw new Error(`Loại chứng chỉ "${existing[0].ten_nhom}" đã có trong danh mục.`);
   }
 
+  const imageUrl = input.imageUrl?.trim() || null;
   const { data, error } = await supabase
     .from("chung_chi_nhom")
     .insert({
@@ -323,6 +331,9 @@ export async function createCertificateType(input: {
       don_vi_cap: input.organization?.trim() || null,
       may_ap_dung: input.machine?.trim() || null,
       ghi_chu: input.notes?.trim() || null,
+      file_chung_chi: imageUrl,
+      secure_url: imageUrl,
+      cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
     })
     .select("id, ten_nhom")
     .single();
@@ -338,31 +349,65 @@ export type UpdateCertificateTypeInput = {
   machine?: string;
   notes?: string;
   employeeIds?: string[];
+  imageUrl?: string;
+  cloudinaryPublicId?: string;
 };
 
-/** Cập nhật một loại chứng chỉ và đồng bộ tên cho các chứng chỉ thuộc nhóm đó. */
+/** Cập nhật một loại chứng chỉ và đồng bộ tên/ảnh mẫu cho các chứng chỉ thuộc nhóm đó. */
 export async function updateCertificateType(input: UpdateCertificateTypeInput): Promise<void> {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
   const title = input.title.trim();
   if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+  if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
+    throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
+  }
 
   const supabase = createClient();
+  const groupUpdate: Record<string, string | null> = {
+    ten_nhom: title,
+    ma_nhom: input.code?.trim() || null,
+    don_vi_cap: input.organization?.trim() || null,
+    may_ap_dung: input.machine?.trim() || null,
+    ghi_chu: input.notes?.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.imageUrl !== undefined) {
+    const imageUrl = input.imageUrl.trim() || null;
+    groupUpdate.file_chung_chi = imageUrl;
+    groupUpdate.secure_url = imageUrl;
+  }
+  if (input.cloudinaryPublicId !== undefined) {
+    groupUpdate.cloudinary_public_id = input.cloudinaryPublicId.trim() || null;
+  }
+
   const { error: groupError } = await supabase
     .from("chung_chi_nhom")
-    .update({
-      ten_nhom: title,
-      ma_nhom: input.code?.trim() || null,
-      don_vi_cap: input.organization?.trim() || null,
-      may_ap_dung: input.machine?.trim() || null,
-      ghi_chu: input.notes?.trim() || null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(groupUpdate)
     .eq("id", input.id);
   if (groupError) throw new Error(formatSupabaseError(groupError));
 
+  const certificateUpdate: Record<string, string | null> = {
+    ten_chung_chi: title,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.imageUrl !== undefined) {
+    const imageUrl = input.imageUrl.trim() || null;
+    certificateUpdate.file_chung_chi = imageUrl;
+    certificateUpdate.secure_url = imageUrl;
+  }
+  if (input.cloudinaryPublicId !== undefined) {
+    certificateUpdate.cloudinary_public_id = input.cloudinaryPublicId.trim() || null;
+  }
+  if (input.organization !== undefined) {
+    certificateUpdate.don_vi_cap = input.organization.trim() || null;
+  }
+  if (input.machine !== undefined) {
+    certificateUpdate.may_ap_dung = input.machine.trim() || null;
+  }
+
   const { error: certificateError } = await supabase
     .from("chung_chi")
-    .update({ ten_chung_chi: title, updated_at: new Date().toISOString() })
+    .update(certificateUpdate)
     .eq("nhom_id", input.id);
   if (certificateError) throw new Error(formatSupabaseError(certificateError));
 

@@ -2,75 +2,106 @@
 
 import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { List, Bell, CaretRight } from "@/components/icons";
+import { usePathname, useRouter } from "next/navigation";
+import { List, Bell, CaretRight, ArrowLeft } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import BulkImportList from "@/components/BulkImportList";
-import CertificateManagement from "@/components/CertificateManagement";
-import CompanyCertificateManagement from "@/components/CompanyCertificateManagement";
-import ComplianceStandardsList from "@/components/ComplianceStandardsList";
-import DeploymentHandoverList from "@/components/DeploymentHandoverList";
-import DocumentLibrary from "@/components/DocumentLibrary";
-import ErrorLibrary from "@/components/ErrorLibrary";
-import MachineAssignmentList from "@/components/MachineAssignmentList";
-import MachineList from "@/components/MachineList";
-import MachineReportDashboard from "@/components/MachineReportDashboard";
-import MaintenanceCalendar from "@/components/MaintenanceCalendar";
-import MapView from "@/components/MapView";
-import HomeDashboard from "@/components/HomeDashboard";
-import OverviewDashboard from "@/components/OverviewDashboard";
-import PersonnelReportDashboard from "@/components/PersonnelReportDashboard";
-import ProjectManagement from "@/components/ProjectManagement";
-import QualityReportDashboard from "@/components/QualityReportDashboard";
 import ReportTabBar from "@/components/ReportTabBar";
-import SystemConfiguration from "@/components/SystemConfiguration";
-import TrainingHistoryLookup from "@/components/TrainingHistoryLookup";
-import TrainingList from "@/components/TrainingList";
-import WelderManagement from "@/components/WelderManagement";
-import WeldingJournalList from "@/components/WeldingJournalList";
-import WeldingHistoryList from "@/components/WeldingHistoryList";
-import WeldJointManagement from "@/components/WeldJointManagement";
-import WeldingTrayList from "@/components/WeldingTrayList";
-import YearlyWeldReport from "@/components/YearlyWeldReport";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
+import { prefetchTabModule } from "@/lib/tabModules";
 
-const views: Record<string, React.ReactNode> = {
-  "ho-so-tho-han": <WelderManagement />,
-  "lich-su-han": <WeldingHistoryList />,
-  "khoa-dao-tao": <TrainingList />,
-  "chung-chi": <CertificateManagement />,
-  "chung-chi-cong-ty": <CompanyCertificateManagement />,
-  "tieu-chuan-tcvn": <ComplianceStandardsList />,
-  "tra-cuu-dao-tao": <TrainingHistoryLookup />,
-  "danh-sach-may": <MachineList />,
-  "quan-ly-khay-han": <WeldingTrayList />,
-  "lich-bao-tri": <MaintenanceCalendar />,
-  "thu-vien-loi": <ErrorLibrary mode="machine" />,
-  "phan-cong-may": <MachineAssignmentList />,
-  "bc-tong-quan": <OverviewDashboard />,
-  "bc-san-luong": <OverviewDashboard />,
-  "bc-chat-luong": <QualityReportDashboard />,
-  "bc-may-moc": <MachineReportDashboard />,
-  "bc-nhan-su": <PersonnelReportDashboard />,
-  "quan-ly-du-an": <ProjectManagement />,
-  "quan-ly-moi-han": <WeldJointManagement />,
-  "thu-vien-loi-moi-han": <ErrorLibrary mode="ndt" />,
-  "nhat-ky-han": <WeldingJournalList />,
-  "bc-moi-han-theo-nam": <YearlyWeldReport />,
-  "ban-do": <MapView />,
-  "tai-lieu": <DocumentLibrary />,
-  "trien-khai": <DeploymentHandoverList />,
-  "nhap-hang-loat": <BulkImportList />,
-  "cau-hinh": <SystemConfiguration />,
+function TabLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center px-4">
+      <div className="text-sm font-medium text-slate-500">Đang tải...</div>
+    </div>
+  );
+}
+
+const HomeDashboard = dynamic(() => import("@/components/HomeDashboard"), { loading: TabLoading, ssr: false });
+const WelderManagement = dynamic(() => import("@/components/WelderManagement"), { loading: TabLoading, ssr: false });
+const WeldingHistoryList = dynamic(() => import("@/components/WeldingHistoryList"), { loading: TabLoading, ssr: false });
+const TrainingList = dynamic(() => import("@/components/TrainingList"), { loading: TabLoading, ssr: false });
+const CertificateManagement = dynamic(() => import("@/components/CertificateManagement"), { loading: TabLoading, ssr: false });
+const CompanyCertificateManagement = dynamic(
+  () => import("@/components/CompanyCertificateManagement"), { loading: TabLoading, ssr: false });
+const ComplianceStandardsList = dynamic(
+  () => import("@/components/ComplianceStandardsList"), { loading: TabLoading, ssr: false });
+const TrainingHistoryLookup = dynamic(
+  () => import("@/components/TrainingHistoryLookup"), { loading: TabLoading, ssr: false });
+const MachineList = dynamic(() => import("@/components/MachineList"), { loading: TabLoading, ssr: false });
+const WeldingTrayList = dynamic(() => import("@/components/WeldingTrayList"), { loading: TabLoading, ssr: false });
+const MaintenanceCalendar = dynamic(() => import("@/components/MaintenanceCalendar"), { loading: TabLoading, ssr: false });
+const ErrorLibrary = dynamic(() => import("@/components/ErrorLibrary"), { loading: TabLoading, ssr: false });
+const MachineAssignmentList = dynamic(
+  () => import("@/components/MachineAssignmentList"), { loading: TabLoading, ssr: false });
+const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
+const QualityReportDashboard = dynamic(
+  () => import("@/components/QualityReportDashboard"), { loading: TabLoading, ssr: false });
+const MachineReportDashboard = dynamic(
+  () => import("@/components/MachineReportDashboard"), { loading: TabLoading, ssr: false });
+const PersonnelReportDashboard = dynamic(
+  () => import("@/components/PersonnelReportDashboard"), { loading: TabLoading, ssr: false });
+const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { loading: TabLoading, ssr: false });
+const ProjectManagement = dynamic(() => import("@/components/ProjectManagement"), { loading: TabLoading, ssr: false });
+const WeldJointManagement = dynamic(() => import("@/components/WeldJointManagement"), { loading: TabLoading, ssr: false });
+const WeldingJournalList = dynamic(() => import("@/components/WeldingJournalList"), { loading: TabLoading, ssr: false });
+const WeldAcceptanceReport = dynamic(
+  () => import("@/components/WeldAcceptanceReport"), { loading: TabLoading, ssr: false });
+const YearlyWeldReport = dynamic(() => import("@/components/YearlyWeldReport"), { loading: TabLoading, ssr: false });
+const MapView = dynamic(() => import("@/components/MapView"), { loading: TabLoading, ssr: false });
+const DocumentLibrary = dynamic(() => import("@/components/DocumentLibrary"), { loading: TabLoading, ssr: false });
+const DeploymentHandoverList = dynamic(
+  () => import("@/components/DeploymentHandoverList"), { loading: TabLoading, ssr: false });
+const BulkImportList = dynamic(() => import("@/components/BulkImportList"), { loading: TabLoading, ssr: false });
+const SystemConfiguration = dynamic(
+  () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
+
+const viewRenderers: Record<string, () => React.ReactNode> = {
+  "ho-so-tho-han": () => <WelderManagement />,
+  "lich-su-han": () => <WeldingHistoryList />,
+  "khoa-dao-tao": () => <TrainingList />,
+  "chung-chi": () => <CertificateManagement />,
+  "chung-chi-cong-ty": () => <CompanyCertificateManagement />,
+  "tieu-chuan-tcvn": () => <ComplianceStandardsList />,
+  "tra-cuu-dao-tao": () => <TrainingHistoryLookup />,
+  "danh-sach-may": () => <MachineList />,
+  "quan-ly-khay-han": () => <WeldingTrayList />,
+  "lich-bao-tri": () => <MaintenanceCalendar />,
+  "thu-vien-loi": () => <ErrorLibrary mode="machine" />,
+  "phan-cong-may": () => <MachineAssignmentList />,
+  "bc-tong-quan": () => <OverviewDashboard />,
+  "bc-san-luong": () => <OverviewDashboard />,
+  "bc-chat-luong": () => <QualityReportDashboard />,
+  "bc-may-moc": () => <MachineReportDashboard />,
+  "bc-nhan-su": () => <PersonnelReportDashboard />,
+  "bc-bao-cao-ngay": () => <DailyWorkReport />,
+  "quan-ly-du-an": () => <ProjectManagement />,
+  "quan-ly-moi-han": () => <WeldJointManagement />,
+  "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
+  "nhat-ky-han": () => <WeldingJournalList />,
+  "bien-ban-moi-han": () => <WeldAcceptanceReport />,
+  "bc-moi-han-theo-nam": () => <YearlyWeldReport />,
+  "ban-do": () => <MapView />,
+  "tai-lieu": () => <DocumentLibrary />,
+  "trien-khai": () => <DeploymentHandoverList />,
+  "nhap-hang-loat": () => <BulkImportList />,
+  "cau-hinh": () => <SystemConfiguration />,
 };
 
 type AppShellProps = {
   tab?: string;
 };
+
+function tabFromPath(pathname: string) {
+  const path = pathname.replace(/^\//, "").split("/")[0] ?? "";
+  return isValidTab(path) ? path : "";
+}
 
 function useClientClock(lang: "vi" | "en") {
   const [clock, setClock] = useState<{ time: string; date: string } | null>(null);
@@ -97,30 +128,48 @@ function useClientClock(lang: "vi" | "en") {
 }
 
 export default function AppShell({ tab }: AppShellProps) {
-  const [activeTab, setActiveTab] = useState(tab && isValidTab(tab) ? tab : "");
+  const router = useRouter();
+  const pathname = usePathname();
+  const [activeTab, setActiveTab] = useState(() => {
+    if (tab && isValidTab(tab)) return tab;
+    if (typeof window !== "undefined") return tabFromPath(window.location.pathname);
+    return "";
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  // Đồng bộ tab theo URL Next.js — để nút Back trình duyệt về đúng trang trước.
   useEffect(() => {
-    if (tab && isValidTab(tab)) {
-      setActiveTab(tab);
-    } else if (tab === "" || tab === undefined) {
-      setActiveTab("");
-    }
-  }, [tab]);
+    const fromPath = tabFromPath(pathname);
+    const fromProp = tab && isValidTab(tab) ? tab : "";
+    setActiveTab(fromPath || fromProp);
+  }, [pathname, tab]);
 
+  // Prefetch chunk trang hiện tại + tab anh em trong cùng nhóm (idle).
   useEffect(() => {
-    function handlePopState() {
-      const path = window.location.pathname.replace(/^\//, "");
-      if (isValidTab(path)) {
-        setActiveTab(path);
-      } else {
-        setActiveTab("");
-      }
-    }
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+    const fromPath = tabFromPath(pathname);
+    const currentId = fromPath || (tab && isValidTab(tab) ? tab : "");
+    if (currentId) prefetchTabModule(currentId);
+    else void import("@/components/HomeDashboard").catch(() => undefined);
+
+    const siblings =
+      currentId
+        ? navigation.find((g) => g.children.some((c) => c.id === currentId))?.children.map((c) => c.id) ?? []
+        : navigation.flatMap((g) => g.children.slice(0, 1).map((c) => c.id));
+
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(() => {
+          for (const id of siblings) prefetchTabModule(id);
+        }, { timeout: 2500 })
+      : window.setTimeout(() => {
+          for (const id of siblings) prefetchTabModule(id);
+        }, 800);
+
+    return () => {
+      if (typeof idle === "number" && window.cancelIdleCallback) window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle as number);
+    };
+  }, [pathname, tab]);
 
   const current = activeTab && isValidTab(activeTab) ? activeTab : "";
   const crumb = current ? findNavMeta(current) : null;
@@ -129,19 +178,23 @@ export default function AppShell({ tab }: AppShellProps) {
   const clock = useClientClock(lang);
 
   const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
-  const content = current ? views[current] : null;
+  const content = current ? viewRenderers[current]?.() ?? null : null;
 
   function go(id: string) {
-    if (!id) {
-      setActiveTab("");
-      window.history.pushState(null, "", "/");
-      setMobileNavOpen(false);
+    const targetId = !id ? "" : id === "bc-san-luong" ? "bc-tong-quan" : id;
+    const href = targetId ? `/${targetId}` : "/";
+    if (targetId) prefetchTabModule(targetId);
+    setActiveTab(targetId);
+    setMobileNavOpen(false);
+    router.push(href);
+  }
+
+  function goBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
       return;
     }
-    const targetId = id === "bc-san-luong" ? "bc-tong-quan" : id;
-    setActiveTab(targetId);
-    window.history.pushState(null, "", `/${targetId}`);
-    setMobileNavOpen(false);
+    go("");
   }
 
   return (
@@ -166,12 +219,12 @@ export default function AppShell({ tab }: AppShellProps) {
             aria-label="Đóng menu"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div className="relative z-10 flex h-full w-[280px] max-w-[85vw] flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+          <div className="relative z-10 h-full shadow-xl">
             <Sidebar
               activeId={current}
               collapsed={false}
-              onNavigate={go}
               onClose={() => setMobileNavOpen(false)}
+              onNavigate={go}
             />
           </div>
         </div>
@@ -190,16 +243,51 @@ export default function AppShell({ tab }: AppShellProps) {
               <List size={20} weight="bold" aria-hidden />
             </button>
 
+            {current ? (
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] hover:border-slate-300 transition-all cursor-pointer"
+                aria-label={lang === "en" ? "Go back" : "Quay lại"}
+                title={lang === "en" ? "Back to previous page" : "Về trang trước"}
+              >
+                <ArrowLeft size={16} weight="bold" aria-hidden />
+                <span className="hidden sm:inline">{lang === "en" ? "Back" : "Quay lại"}</span>
+              </button>
+            ) : null}
+
+            {current ? <span className="hidden sm:block h-5 w-px shrink-0 bg-slate-200" aria-hidden /> : null}
+
             {crumb ? (
-              <>
-                <span className="hidden md:inline truncate font-medium text-slate-600">
-                  {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
-                </span>
+              <nav className="flex min-w-0 items-center gap-1.5" aria-label={lang === "en" ? "Breadcrumb" : "Đường dẫn"}>
+                <button
+                  type="button"
+                  onClick={() => go("")}
+                  className="hidden md:inline truncate font-medium text-slate-500 hover:text-[#0047AB] cursor-pointer transition-colors"
+                  title={lang === "en" ? "Home" : "Trang chủ"}
+                >
+                  {lang === "en" ? "Home" : "Trang chủ"}
+                </button>
                 <CaretRight size={12} weight="bold" aria-hidden className="hidden md:inline shrink-0 text-slate-400" />
-                <span className="truncate font-semibold text-slate-900 text-xs sm:text-sm">
+                <button
+                  type="button"
+                  onClick={() => go(crumb.parentFirstChildId)}
+                  className="hidden md:inline truncate font-medium text-slate-500 hover:text-[#0047AB] cursor-pointer transition-colors"
+                  title={lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
+                >
+                  {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
+                </button>
+                <CaretRight size={12} weight="bold" aria-hidden className="hidden md:inline shrink-0 text-slate-400" />
+                <button
+                  type="button"
+                  onClick={() => go(crumb.id)}
+                  className="truncate font-semibold text-slate-900 text-xs sm:text-sm hover:text-[#0047AB] cursor-pointer transition-colors"
+                  aria-current="page"
+                  title={lang === "en" ? (crumb.titleEn || crumb.title) : crumb.title}
+                >
                   {lang === "en" ? (crumb.titleEn || crumb.title) : crumb.title}
-                </span>
-              </>
+                </button>
+              </nav>
             ) : (
               <span className="truncate font-semibold text-slate-800 text-xs sm:text-sm">
                 {lang === "en" ? "Rail Welding Management System" : "Hệ thống Quản lý hàn ray"}
@@ -250,9 +338,13 @@ export default function AppShell({ tab }: AppShellProps) {
           {!reportTab && crumb && (
             <div className="w-full px-4 sm:px-6 pt-4 sm:pt-5">
               <div className="mb-3.5 sm:mb-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                <button
+                  type="button"
+                  onClick={() => go(crumb.parentFirstChildId)}
+                  className="text-xs font-bold uppercase tracking-wider text-[#0047AB] hover:underline cursor-pointer"
+                >
                   {lang === "en" ? (crumb.parentEn || crumb.parent) : crumb.parent}
-                </div>
+                </button>
                 <h1 className="mt-0.5 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
                   {lang === "en" ? (crumb.titleEn || crumb.title) : crumb.title}
                 </h1>
@@ -273,7 +365,10 @@ export default function AppShell({ tab }: AppShellProps) {
                 {(group?.children ?? []).map((child) => {
                   const active = child.id === current;
                   const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
-                  const childDesc = lang === "en" ? (child.descriptionEn || child.description) : child.description;
+                  const childDesc =
+                    lang === "en"
+                      ? child.descriptionEn || child.description || ""
+                      : child.description || "";
                   return (
                     <button
                       key={child.id}

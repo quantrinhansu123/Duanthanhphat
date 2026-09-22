@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   IdentificationCard,
   MagnifyingGlass,
+  CalendarBlank,
   CalendarCheck,
   Bug,
   ListChecks,
@@ -63,6 +64,7 @@ const childIcons: Record<string, Icon> = {
   "chung-chi-cong-ty": SealCheck,
   "tieu-chuan-tcvn": ClipboardText,
   "nhat-ky-han": FileText,
+  "bien-ban-moi-han": ClipboardText,
   "bc-moi-han-theo-nam": ChartLineUp,
   "ban-do": MapTrifold,
   "tai-lieu": Files,
@@ -70,6 +72,7 @@ const childIcons: Record<string, Icon> = {
   "bc-chat-luong": ChartPieSlice,
   "bc-may-moc": ChartLine,
   "bc-nhan-su": Users,
+  "bc-bao-cao-ngay": CalendarBlank,
   "nhap-hang-loat": UploadSimple,
   "cau-hinh": GearSix,
   "trien-khai": Flag,
@@ -279,29 +282,40 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
                       : child.description;
 
                   return (
-                    <button
+                    <div
                       key={child.id}
-                      type="button"
-                      onClick={() => onNavigate(child.id)}
                       title={desc || title}
-                      className={`group/card flex flex-col items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3 py-5 sm:px-4 sm:py-6 text-center shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.18)] hover:ring-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 ${theme.ring}`}
+                      className={`group/card flex flex-col items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3 py-5 sm:px-4 sm:py-6 text-center shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.18)] hover:ring-4 ${theme.ring}`}
                     >
-                      <span
-                        className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg} ${theme.iconShadow} ${theme.soft}`}
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(child.id)}
+                        className="flex w-full flex-col items-center gap-3 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 rounded-xl"
                       >
-                        <ChildIcon size={28} weight="bold" aria-hidden />
-                      </span>
-                      <span className="flex w-full flex-col items-center gap-1">
-                        <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
-                          {title}
+                        <span
+                          className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg} ${theme.iconShadow} ${theme.soft}`}
+                        >
+                          <ChildIcon size={28} weight="bold" aria-hidden />
                         </span>
-                        {desc && (
-                          <span className="line-clamp-2 text-[10px] sm:text-[11px] leading-relaxed text-slate-400 font-medium">
-                            {desc}
+                        <span className="flex w-full flex-col items-center gap-1">
+                          <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
+                            {title}
                           </span>
-                        )}
-                      </span>
-                    </button>
+                          {desc && (
+                            <span className="line-clamp-2 text-[10px] sm:text-[11px] leading-relaxed text-slate-400 font-medium">
+                              {desc}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate(child.id)}
+                        className={`mt-0.5 inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors ${theme.iconBg} hover:brightness-95`}
+                      >
+                        {lang === "en" ? "View" : "Xem"}
+                      </button>
+                    </div>
                   );
                 })}
               </div>

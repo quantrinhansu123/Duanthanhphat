@@ -2,7 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    optimizePackageImports: ["@phosphor-icons/react"],
+    optimizePackageImports: [
+      "@phosphor-icons/react",
+      "xlsx",
+      "leaflet",
+      "react-leaflet",
+      "@react-google-maps/api",
+    ],
   },
   images: {
     remotePatterns: [

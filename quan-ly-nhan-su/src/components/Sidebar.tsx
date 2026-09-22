@@ -4,7 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Icon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { navigation } from "@/data/navigation";
+import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   Users,
@@ -49,6 +51,7 @@ export default function Sidebar({
   onToggle,
   onClose,
 }: SidebarProps) {
+  const router = useRouter();
   const { lang } = useLanguage();
   const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
 
@@ -68,7 +71,14 @@ export default function Sidebar({
     setOpenGroups((prev) => (prev.includes(id) ? [] : [id]));
   }
 
+  function warmTab(id: string) {
+    const target = id === "bc-san-luong" ? "bc-tong-quan" : id;
+    router.prefetch(`/${target}`);
+    prefetchTabModule(target);
+  }
+
   function handleNavigate(id: string) {
+    warmTab(id);
     onNavigate?.(id);
     onClose?.();
   }
@@ -180,6 +190,8 @@ export default function Sidebar({
                         <button
                           key={child.id}
                           type="button"
+                          onMouseEnter={() => warmTab(child.id)}
+                          onFocus={() => warmTab(child.id)}
                           onClick={() => handleNavigate(child.id)}
                           className={`block w-full rounded-lg px-3 py-2 text-left transition-all duration-150 cursor-pointer ${
                             childActive
