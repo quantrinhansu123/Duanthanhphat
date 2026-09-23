@@ -3,11 +3,13 @@ import { v2 as cloudinary } from "cloudinary";
 
 const ALLOWED_FOLDERS = new Set([
   "thanhphat/certificates",
+  "thanhphat/personnel",
   "thanhphat/trainings",
   "thanhphat/machines",
   "thanhphat/vehicles",
   "thanhphat/maintenance",
   "thanhphat/machine-operation-logs",
+  "thanhphat/weld-journal/linked",
 ]);
 
 export async function POST(req: NextRequest) {

@@ -21,6 +21,13 @@ export const WELD_TEST_STATUSES = [
 ] as const;
 export type WeldTestStatus = (typeof WELD_TEST_STATUSES)[number];
 
+export type WeldLinkedImageAsset = {
+  publicId: string;
+  secureUrl: string;
+  name: string;
+  bytes?: number;
+};
+
 export type WeldReportRow = {
   id: string;
   created_at?: string;
@@ -41,6 +48,8 @@ export type WeldReportRow = {
   nguyen_nhan_loi: string | null;
   ghi_chu?: string | null;
   moi_han_lien_ket?: string | null;
+  /** Ảnh Cloudinary gắn khối mối hàn liên kết. */
+  anh_moi_han_lien_ket?: WeldLinkedImageAsset[] | null;
   may_id?: string | null;
   ma_may?: string | null;
   ten_may?: string | null;
@@ -339,6 +348,7 @@ export type WeldJournalInsert = {
   ly_trinh?: string | null;
   ma_khuyet_tat?: string[] | null;
   tinh_trang_thi_nghiem: WeldTestStatus;
+  anh_moi_han_lien_ket?: WeldLinkedImageAsset[] | null;
 };
 
 export type WeldJournalUpdate = WeldJournalInsert & {
@@ -364,13 +374,52 @@ function clarifyWeldJournalError(message: string, certificateName: string): stri
   return message;
 }
 
-/**
- * RPC ghi nhật ký hàn tra cứu chứng chỉ trong bảng `public.chung_chi` và yêu cầu
- * chứng chỉ "Còn hiệu lực" & chưa hết hạn. Theo yêu cầu nghiệp vụ: chỉ cần thợ hàn
- * CÓ chứng chỉ đó trong hồ sơ (bảng nào cũng được) là đủ. Hàm này đảm bảo tồn tại
- * một bản ghi `public.chung_chi` ở trạng thái "Còn hiệu lực" (không hạn) để RPC/trigger
- * liên kết được, bất kể trạng thái/hạn ghi trong hồ sơ gốc.
- */
+export function parseWeldLinkedImageAssets(value: unknown): WeldLinkedImageAsset[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const publicId = String(row.publicId ?? row.public_id ?? "").trim();
+    const secureUrl = String(row.secureUrl ?? row.secure_url ?? "").trim();
+    if (!publicId || !secureUrl) return [];
+    return [{
+      publicId,
+      secureUrl,
+      name: String(row.name ?? publicId.split("/").at(-1) ?? "Ảnh liên kết"),
+      bytes: Number.isFinite(Number(row.bytes)) ? Number(row.bytes) : undefined,
+    }];
+  });
+}
+
+function serializeWeldLinkedImageAssets(assets: WeldLinkedImageAsset[] | null | undefined) {
+  return (assets ?? []).map((asset) => ({
+    publicId: asset.publicId,
+    secureUrl: asset.secureUrl,
+    name: asset.name,
+    ...(asset.bytes != null ? { bytes: asset.bytes } : {}),
+  }));
+}
+
+async function saveWeldLinkedImages(
+  supabase: ReturnType<typeof createClient>,
+  match: { id?: string; ma_lich_su?: string },
+  assets: WeldLinkedImageAsset[] | null | undefined,
+) {
+  const payload = { anh_moi_han_lien_ket: serializeWeldLinkedImageAssets(assets) };
+  let request = supabase.from("lich_su_moi_han").update(payload);
+  if (match.id) request = request.eq("id", match.id);
+  else if (match.ma_lich_su) request = request.eq("ma_lich_su", match.ma_lich_su.trim());
+  else return;
+  const { error } = await request;
+  if (!error) return;
+  if (/anh_moi_han_lien_ket/.test(error.message ?? "")) {
+    throw new Error(
+      "Chưa thể lưu ảnh mối hàn liên kết vì migration_20260923_anh_moi_han_lien_ket.sql chưa được chạy trên Supabase.",
+    );
+  }
+  throw new Error(formatSupabaseError(error));
+}
+
 async function ensureCertificateRecord(
   supabase: ReturnType<typeof createClient>,
   employeeId: string,
@@ -528,6 +577,9 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
     if (verification.error || verification.data?.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
       throw new Error("Nhật ký đã được tạo nhưng chưa xác nhận đúng tình trạng thí nghiệm. Hãy mở lại bản ghi để kiểm tra, không thêm lại.");
     }
+    if (payload.anh_moi_han_lien_ket?.length) {
+      await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
+    }
     return;
   }
 
@@ -547,6 +599,9 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
 
   if (!atomicRpcRes.error) {
     invalidateWeldReportCache();
+    if (payload.anh_moi_han_lien_ket?.length) {
+      await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
+    }
     return;
   }
 
@@ -582,6 +637,15 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
     }
   }
 
+  if (payload.anh_moi_han_lien_ket?.length) {
+    const insertedId = typeof rpcRes.data === "string" ? rpcRes.data : "";
+    await saveWeldLinkedImages(
+      supabase,
+      insertedId ? { id: insertedId } : { ma_lich_su: payload.ma_lich_su },
+      payload.anh_moi_han_lien_ket,
+    );
+  }
+
   invalidateWeldReportCache();
 }
 
@@ -610,6 +674,7 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     hach_toan: payload.hach_toan?.trim() || "HT-SX01",
     ma_khuyet_tat: payload.ma_khuyet_tat?.length ? payload.ma_khuyet_tat : null,
     tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem,
+    anh_moi_han_lien_ket: serializeWeldLinkedImageAssets(payload.anh_moi_han_lien_ket),
   };
   if (certificateId) body.chung_chi_id = certificateId;
 
@@ -619,6 +684,20 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     .eq("id", payload.id)
     .select("id,tinh_trang_thi_nghiem")
     .single();
+  if (error && /anh_moi_han_lien_ket/.test(error.message ?? "") && "anh_moi_han_lien_ket" in body) {
+    delete body.anh_moi_han_lien_ket;
+    if ((payload.anh_moi_han_lien_ket?.length ?? 0) > 0) {
+      throw new Error(
+        "Chưa thể lưu ảnh mối hàn liên kết vì migration_20260923_anh_moi_han_lien_ket.sql chưa được chạy trên Supabase.",
+      );
+    }
+    ({ data, error } = await supabase
+      .from("lich_su_moi_han")
+      .update(body)
+      .eq("id", payload.id)
+      .select("id,tinh_trang_thi_nghiem")
+      .single());
+  }
   if (error && /chung_chi_id/.test(error.message ?? "") && "chung_chi_id" in body) {
     delete body.chung_chi_id;
     ({ data, error } = await supabase
@@ -711,10 +790,21 @@ export type WeldJournalPageResult = {
   untestedCount: number;
 };
 
-const JOURNAL_PAGE_COLUMNS = [
-  ...REPORT_COLUMNS_WITH_TEST_STATUS,
-  "created_at",
-].join(",");
+function journalPageSelect(withCreatedAt: boolean, withLinkedImages: boolean) {
+  const cols = [...REPORT_COLUMNS_WITH_TEST_STATUS] as string[];
+  if (withCreatedAt) cols.push("created_at");
+  if (withLinkedImages) cols.push("anh_moi_han_lien_ket");
+  return cols.join(",");
+}
+
+function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
+  return {
+    ...row,
+    anh_moi_han_lien_ket: parseWeldLinkedImageAssets(row.anh_moi_han_lien_ket),
+  };
+}
+
+let journalHasLinkedImages = true;
 
 type JournalListFilter = {
   query?: string;
@@ -818,10 +908,14 @@ export async function loadWeldJournalPage({
   const filters: JournalListFilter = { query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo };
 
   const journalRequestUsedCreatedAt = journalHasCreatedAt;
+  const journalRequestUsedLinkedImages = journalHasLinkedImages;
   const request = applyJournalListFilters(
     supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select(journalRequestUsedCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","), { count: "exact" })
+      .select(
+        journalPageSelect(journalRequestUsedCreatedAt, journalRequestUsedLinkedImages),
+        { count: "exact" },
+      )
       .order(journalRequestUsedCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false }),
     filters,
@@ -834,6 +928,10 @@ export async function loadWeldJournalPage({
   // dựng query KHÔNG có created_at nên không thể lặp vô hạn.
   if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
+    return loadWeldJournalPage({ page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo });
+  }
+  if (error && journalRequestUsedLinkedImages && /anh_moi_han_lien_ket/.test(error.message ?? "")) {
+    journalHasLinkedImages = false;
     return loadWeldJournalPage({ page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, dateFrom, dateTo });
   }
   if (error) {
@@ -874,7 +972,7 @@ export async function loadWeldJournalPage({
     };
   }
 
-  const rows = (data ?? []) as unknown as WeldReportRow[];
+  const rows = ((data ?? []) as unknown as WeldReportRow[]).map(normalizeJournalRow);
 
   const counts = await Promise.all(WELD_TEST_STATUSES.map(async (status) => {
     if (WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus) && resultFilter !== status) return 0;
@@ -923,10 +1021,11 @@ export async function exportFilteredWeldJournal({
 
   for (let offset = 0; ; offset += pageSize) {
     const exportUsesCreatedAt = journalHasCreatedAt;
+    const exportUsesLinkedImages = journalHasLinkedImages;
     const request = applyJournalListFilters(
       supabase
         .from("bao_cao_moi_han_theo_du_an")
-        .select(exportUsesCreatedAt ? JOURNAL_PAGE_COLUMNS : REPORT_COLUMNS_WITH_TEST_STATUS.join(","))
+        .select(journalPageSelect(exportUsesCreatedAt, exportUsesLinkedImages))
         .order(exportUsesCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
         .order("id", { ascending: false }),
       filters,
@@ -935,7 +1034,12 @@ export async function exportFilteredWeldJournal({
     let { data, error } = await request.range(offset, offset + pageSize - 1);
     if (error && exportUsesCreatedAt && /created_at/.test(error.message ?? "")) {
       journalHasCreatedAt = false;
-      offset -= pageSize; // lặp lại vòng hiện tại với query không có created_at
+      offset -= pageSize;
+      continue;
+    }
+    if (error && exportUsesLinkedImages && /anh_moi_han_lien_ket/.test(error.message ?? "")) {
+      journalHasLinkedImages = false;
+      offset -= pageSize;
       continue;
     }
     if (error && formatSupabaseError(error).includes("ma_khuyet_tat")) {
@@ -954,7 +1058,7 @@ export async function exportFilteredWeldJournal({
       error = fallback.error;
     }
     if (error) throw new Error(formatSupabaseError(error));
-    const pageRows = (data ?? []) as unknown as WeldReportRow[];
+    const pageRows = ((data ?? []) as unknown as WeldReportRow[]).map(normalizeJournalRow);
     rows.push(...pageRows);
     if (pageRows.length < pageSize) return rows;
   }

@@ -34,6 +34,7 @@ import {
   UploadSimple,
   Flag,
   Cube,
+  WarningCircle,
 } from "@/components/icons";
 
 const groupIcons: Record<string, Icon> = {
@@ -51,6 +52,7 @@ const groupIcons: Record<string, Icon> = {
 const childIcons: Record<string, Icon> = {
   "ho-so-tho-han": IdentificationCard,
   "lich-su-han": ClockCounterClockwise,
+  "lich-su-moi-han-loi": WarningCircle,
   "khoa-dao-tao": GraduationCap,
   "tra-cuu-dao-tao": MagnifyingGlass,
   "danh-sach-may": Cube,

@@ -1,9 +1,10 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, Warning, X } from "@/components/icons";
+import { Camera, CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, UploadSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
 import SelectMenu from "@/components/SelectMenu";
 import MultiSelectMenu from "@/components/MultiSelectMenu";
@@ -11,6 +12,7 @@ import { googleOpenPoint, type MapPoint } from "@/data/mapPoints";
 import type { MachineOption } from "@/data/machineAssignments";
 import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { deleteMapPoint, insertMapPoint, linkGpsPointToWeld } from "@/lib/mapPointsDb";
 import {
@@ -32,10 +34,12 @@ import {
   loadJournalProjectOptions,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
+  parseWeldLinkedImageAssets,
   resolveWeldTestStatus,
   syncAllWeldCodes,
   updateWeldJournalEntry,
   type CertifiedWelderOption,
+  type WeldLinkedImageAsset,
   type WeldReportRow,
   type WeldTestStatus,
 } from "@/lib/weldReportData";
@@ -69,6 +73,7 @@ type JournalFormValues = {
   ma_khuyet_tat: string[];
   nguyen_nhan_loi: string;
   moi_han_lien_ket: string;
+  anh_moi_han_lien_ket: WeldLinkedImageAsset[];
   chung_chi_su_dung: string;
   ghi_chu: string;
   toa_do_id: string;
@@ -118,6 +123,7 @@ function emptyJournalForm(
     ma_khuyet_tat: [],
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
+    anh_moi_han_lien_ket: [],
     chung_chi_su_dung: "",
     ghi_chu: "",
     toa_do_id: "",
@@ -144,6 +150,7 @@ function journalRowToForm(
     ma_khuyet_tat: row.ma_khuyet_tat ?? [],
     nguyen_nhan_loi: row.nguyen_nhan_loi ?? "",
     moi_han_lien_ket: row.moi_han_lien_ket ?? "",
+    anh_moi_han_lien_ket: parseWeldLinkedImageAssets(row.anh_moi_han_lien_ket),
     chung_chi_su_dung: row.chung_chi_su_dung ?? "",
     ghi_chu: row.ghi_chu ?? "",
     toa_do_id: gpsPoint?.id ?? "",
@@ -176,7 +183,7 @@ function JournalFormModal({
   saving: boolean;
   unlinkedGpsPoints?: MapPoint[];
   onClose: () => void;
-  onSubmit: (values: JournalFormValues) => void;
+  onSubmit: (values: JournalFormValues) => void | Promise<void>;
 }) {
   const shouldCheckCertificate = mode === "edit";
   const [form, setForm] = useState(() => emptyJournalForm(projects, welders, machines));
@@ -186,6 +193,13 @@ function JournalFormModal({
     { value: string; label: string; isoDate: string }[]
   >([]);
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [extraTab, setExtraTab] = useState<"linked" | "gps">("linked");
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const initialImageIds = useRef(new Set<string>());
+  const removedImages = useRef<WeldLinkedImageAsset[]>([]);
   const railOptions = useCatalogOptions("Loại ray");
 
   useEffect(() => {
@@ -233,7 +247,12 @@ function JournalFormModal({
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && (!wasOpen.current || initializedForm.current !== initial)) {
-      setForm(initial ?? emptyJournalForm(projects, welders, machines));
+      const next = initial ?? emptyJournalForm(projects, welders, machines);
+      setForm(next);
+      initialImageIds.current = new Set(next.anh_moi_han_lien_ket.map((asset) => asset.publicId));
+      removedImages.current = [];
+      setImageError("");
+      setExtraTab("linked");
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
@@ -301,15 +320,73 @@ function JournalFormModal({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && open) onClose();
+      if (e.key === "Escape" && open && !uploadingImages && !saving) {
+        void (async () => {
+          const newAssets = form.anh_moi_han_lien_ket.filter(
+            (asset) => !initialImageIds.current.has(asset.publicId),
+          );
+          await Promise.allSettled(newAssets.map((asset) => deleteCloudinaryAsset(asset.publicId)));
+          onClose();
+        })();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, uploadingImages, saving, form.anh_moi_han_lien_ket]);
 
   if (!open) return null;
 
-  function handleSubmit() {
+  async function uploadLinkedImages(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadingImages(true);
+    setImageError("");
+    const uploaded: WeldLinkedImageAsset[] = [];
+    for (const file of Array.from(files)) {
+      const { result, error: uploadError } = await uploadToCloudinary(
+        file,
+        "thanhphat/weld-journal/linked",
+      );
+      if (!result) {
+        setImageError(uploadError || `Không thể tải ảnh ${file.name}.`);
+        break;
+      }
+      uploaded.push({
+        publicId: result.public_id,
+        secureUrl: result.secure_url,
+        name: result.original_filename || file.name,
+        bytes: result.bytes,
+      });
+    }
+    if (uploaded.length) {
+      setForm((current) => ({
+        ...current,
+        anh_moi_han_lien_ket: [...current.anh_moi_han_lien_ket, ...uploaded],
+      }));
+    }
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    setUploadingImages(false);
+  }
+
+  function removeLinkedImage(asset: WeldLinkedImageAsset) {
+    if (initialImageIds.current.has(asset.publicId)) removedImages.current.push(asset);
+    else void deleteCloudinaryAsset(asset.publicId);
+    setForm((current) => ({
+      ...current,
+      anh_moi_han_lien_ket: current.anh_moi_han_lien_ket.filter((item) => item.publicId !== asset.publicId),
+    }));
+  }
+
+  async function closeAndCleanUp() {
+    if (uploadingImages || saving) return;
+    const newAssets = form.anh_moi_han_lien_ket.filter(
+      (asset) => !initialImageIds.current.has(asset.publicId),
+    );
+    await Promise.allSettled(newAssets.map((asset) => deleteCloudinaryAsset(asset.publicId)));
+    onClose();
+  }
+
+  async function handleSubmit() {
     if (!form.ma_lich_su.trim()) {
       window.alert("Chưa tạo được mã mối hàn. Kiểm tra ngày thực hiện.");
       return;
@@ -346,7 +423,19 @@ function JournalFormModal({
       window.alert("Vui lòng chọn ít nhất một mã khuyết tật hoặc nhập lý do không đạt.");
       return;
     }
-    onSubmit(form);
+    if (uploadingImages) {
+      window.alert("Ảnh đang được tải lên Cloudinary, vui lòng đợi hoàn tất.");
+      return;
+    }
+    try {
+      await onSubmit(form);
+      await Promise.allSettled(
+        removedImages.current.map((asset) => deleteCloudinaryAsset(asset.publicId)),
+      );
+      removedImages.current = [];
+    } catch {
+      /* parent đã alert */
+    }
   }
 
   return (
@@ -355,7 +444,8 @@ function JournalFormModal({
         type="button"
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
         aria-label="Đóng"
-        onClick={onClose}
+        onClick={() => void closeAndCleanUp()}
+        disabled={uploadingImages || saving}
       />
       <div
         role="dialog"
@@ -373,8 +463,9 @@ function JournalFormModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer"
+            onClick={() => void closeAndCleanUp()}
+            disabled={uploadingImages || saving}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 cursor-pointer disabled:opacity-50"
             aria-label="Đóng"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -560,49 +651,239 @@ function JournalFormModal({
             </label>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5 space-y-3">
-            <div className="text-xs sm:text-[13px] font-semibold text-slate-700">Mối hàn liên kết</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="block text-xs font-semibold text-slate-600">
-                Từ ngày
-                <DateField
-                  value={linkDateFrom}
-                  onChange={(val) => {
-                    setLinkDateFrom(val);
-                    if (linkDateTo && val > linkDateTo) setLinkDateTo(val);
-                  }}
-                  className="mt-1"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600">
-                Đến ngày
-                <DateField
-                  value={linkDateTo}
-                  onChange={(val) => {
-                    setLinkDateTo(val);
-                    if (linkDateFrom && val < linkDateFrom) setLinkDateFrom(val);
-                  }}
-                  className="mt-1"
-                />
-              </label>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex border-b border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setExtraTab("linked")}
+                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] ${
+                  extraTab === "linked"
+                    ? "border-[#0047AB] bg-white text-[#0047AB]"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Mối hàn liên kết
+                {(form.moi_han_lien_ket || form.anh_moi_han_lien_ket.length > 0) && (
+                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-[#0047AB]">
+                    {(form.moi_han_lien_ket ? 1 : 0) + form.anh_moi_han_lien_ket.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setExtraTab("gps")}
+                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] ${
+                  extraTab === "gps"
+                    ? "border-[#0047AB] bg-white text-[#0047AB]"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Vị trí & GPS
+                {(form.toa_do_id || form.ly_trinh.trim() || form.kinh_do.trim() || form.vi_do.trim()) && (
+                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">
+                    ✓
+                  </span>
+                )}
+              </button>
             </div>
-            <label className="block text-xs font-semibold text-slate-600">
-              Chọn mối hàn lỗi trong khoảng ngày
-              <SelectMenu
-                value={form.moi_han_lien_ket}
-                onChange={(moi_han_lien_ket) => setForm({ ...form, moi_han_lien_ket })}
-                options={[{ value: "", label: "— Không liên kết —" }, ...failedWeldOptions]}
-                searchable={failedWeldOptions.length > 5}
-                searchPlaceholder="Tìm mã mối hàn..."
-                className="mt-1"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-            <p className="text-[11px] text-slate-500">
-              {failedWeldOptions.length > 0
-                ? `${failedWeldOptions.length} mối hàn lỗi từ ${formatJournalDateIso(linkDateFrom)} đến ${formatJournalDateIso(linkDateTo)}`
-                : "Không có mối hàn lỗi trong khoảng ngày đã chọn."}
-            </p>
+
+            {extraTab === "linked" ? (
+              <div className="space-y-3 bg-slate-50/40 p-3.5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Từ ngày
+                    <DateField
+                      value={linkDateFrom}
+                      onChange={(val) => {
+                        setLinkDateFrom(val);
+                        if (linkDateTo && val > linkDateTo) setLinkDateTo(val);
+                      }}
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Đến ngày
+                    <DateField
+                      value={linkDateTo}
+                      onChange={(val) => {
+                        setLinkDateTo(val);
+                        if (linkDateFrom && val < linkDateFrom) setLinkDateFrom(val);
+                      }}
+                      className="mt-1"
+                    />
+                  </label>
+                </div>
+                <label className="block text-xs font-semibold text-slate-600">
+                  Chọn mối hàn lỗi trong khoảng ngày
+                  <SelectMenu
+                    value={form.moi_han_lien_ket}
+                    onChange={(moi_han_lien_ket) => setForm({ ...form, moi_han_lien_ket })}
+                    options={[{ value: "", label: "— Không liên kết —" }, ...failedWeldOptions]}
+                    searchable={failedWeldOptions.length > 5}
+                    searchPlaceholder="Tìm mã mối hàn..."
+                    className="mt-1"
+                    buttonClassName="h-10 shadow-2xs"
+                  />
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  {failedWeldOptions.length > 0
+                    ? `${failedWeldOptions.length} mối hàn lỗi từ ${formatJournalDateIso(linkDateFrom)} đến ${formatJournalDateIso(linkDateTo)}`
+                    : "Không có mối hàn lỗi trong khoảng ngày đã chọn."}
+                </p>
+
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-slate-600">
+                      Ảnh mối hàn liên kết{" "}
+                      <span className="font-normal text-slate-400">(chụp / chọn nhiều ảnh)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={uploadingImages || saving}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                      >
+                        <Camera size={16} aria-hidden />
+                        Chụp ảnh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        disabled={uploadingImages || saving}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-100 disabled:opacity-50 cursor-pointer"
+                      >
+                        <UploadSimple size={16} aria-hidden />
+                        {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
+                      </button>
+                    </div>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(event) => void uploadLinkedImages(event.target.files)}
+                    />
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => void uploadLinkedImages(event.target.files)}
+                    />
+                  </div>
+                  {imageError && (
+                    <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-medium text-rose-700">
+                      {imageError}
+                    </div>
+                  )}
+                  {form.anh_moi_han_lien_ket.length > 0 ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {form.anh_moi_han_lien_ket.map((asset) => (
+                        <div
+                          key={asset.publicId}
+                          className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                        >
+                          <div className="relative h-24">
+                            <Image
+                              src={asset.secureUrl}
+                              alt={asset.name}
+                              fill
+                              className="object-cover"
+                              sizes="180px"
+                            />
+                          </div>
+                          <div className="truncate px-2 py-1.5 pr-9 text-[11px] text-slate-600" title={asset.name}>
+                            {asset.name}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeLinkedImage(asset)}
+                            disabled={uploadingImages || saving}
+                            className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-rose-600 shadow-sm hover:bg-rose-50 cursor-pointer"
+                            aria-label={`Xóa ${asset.name}`}
+                          >
+                            <TrashSimple size={15} aria-hidden />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-5 text-center text-xs text-slate-400">
+                      Chưa có ảnh. Chụp hoặc chọn nhiều ảnh để lưu lên Cloudinary.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 bg-blue-50/30 p-3.5">
+                <p className="text-[11px] text-slate-500">Tùy chọn — gán điểm GPS có sẵn hoặc nhập tọa độ mới.</p>
+                {unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Gán điểm GPS có sẵn (chưa liên kết)
+                    <SelectMenu
+                      value={form.toa_do_id}
+                      onChange={(id) => {
+                        const pt = unlinkedGpsPoints.find((p) => p.id === id);
+                        if (pt) {
+                          setForm((prev) => ({
+                            ...prev,
+                            toa_do_id: id,
+                            ly_trinh: pt.chainage || prev.ly_trinh,
+                            kinh_do: String(pt.longitude),
+                            vi_do: String(pt.latitude),
+                          }));
+                        } else {
+                          setForm((prev) => ({ ...prev, toa_do_id: "" }));
+                        }
+                      }}
+                      options={[
+                        { value: "", label: "— Nhập mới hoặc không gán điểm có sẵn —" },
+                        ...unlinkedGpsPoints.map((pt) => ({
+                          value: pt.id,
+                          label: `${pt.code} (${pt.chainage}) — ${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
+                        })),
+                      ]}
+                      searchable={unlinkedGpsPoints.length > 5}
+                      searchPlaceholder="Tìm mã hoặc lý trình..."
+                      className="mt-1"
+                      buttonClassName="h-10 shadow-2xs"
+                    />
+                  </label>
+                )}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Lý trình
+                    <input
+                      value={form.ly_trinh}
+                      onChange={(e) => setForm({ ...form, ly_trinh: e.target.value })}
+                      placeholder="Km0+250.00"
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Kinh độ (lon)
+                    <input
+                      value={form.kinh_do}
+                      onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
+                      placeholder="105.8427"
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Vĩ độ (lat)
+                    <input
+                      value={form.vi_do}
+                      onChange={(e) => setForm({ ...form, vi_do: e.target.value })}
+                      placeholder="21.0160"
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           {form.result === "Không đạt" && (
@@ -651,77 +932,6 @@ function JournalFormModal({
             </div>
           )}
 
-          {/* Tọa độ GPS */}
-          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-              Vị trí & Tọa độ GPS (Tùy chọn)
-            </div>
-            {unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
-              <div className="mt-2.5">
-                <label className="block text-xs font-semibold text-slate-600">
-                  Gán điểm GPS có sẵn (chưa liên kết)
-                  <SelectMenu
-                    value={form.toa_do_id}
-                    onChange={(id) => {
-                      const pt = unlinkedGpsPoints.find((p) => p.id === id);
-                      if (pt) {
-                        setForm((prev) => ({
-                          ...prev,
-                          toa_do_id: id,
-                          ly_trinh: pt.chainage || prev.ly_trinh,
-                          kinh_do: String(pt.longitude),
-                          vi_do: String(pt.latitude),
-                        }));
-                      } else {
-                        setForm((prev) => ({ ...prev, toa_do_id: "" }));
-                      }
-                    }}
-                    options={[
-                      { value: "", label: "— Nhập mới hoặc không gán điểm có sẵn —" },
-                      ...unlinkedGpsPoints.map((pt) => ({
-                        value: pt.id,
-                        label: `${pt.code} (${pt.chainage}) — ${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
-                      })),
-                    ]}
-                    searchable={unlinkedGpsPoints.length > 5}
-                    searchPlaceholder="Tìm mã hoặc lý trình..."
-                    className="mt-1"
-                    buttonClassName="h-10 shadow-2xs"
-                  />
-                </label>
-              </div>
-            )}
-            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <label className="block text-xs font-semibold text-slate-600">
-                Lý trình
-                <input
-                  value={form.ly_trinh}
-                  onChange={(e) => setForm({ ...form, ly_trinh: e.target.value })}
-                  placeholder="Km0+250.00"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600">
-                Kinh độ (lon)
-                <input
-                  value={form.kinh_do}
-                  onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
-                  placeholder="105.8427"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600">
-                Vĩ độ (lat)
-                <input
-                  value={form.vi_do}
-                  onChange={(e) => setForm({ ...form, vi_do: e.target.value })}
-                  placeholder="21.0160"
-                  className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
-                />
-              </label>
-            </div>
-          </div>
-
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Ghi chú
             <textarea
@@ -736,19 +946,19 @@ function JournalFormModal({
         <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5 bg-white">
           <button
             type="button"
-            onClick={onClose}
-            disabled={saving}
+            onClick={() => void closeAndCleanUp()}
+            disabled={uploadingImages || saving}
             className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 transition-all duration-150 cursor-pointer shadow-2xs"
           >
             Hủy
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
-            disabled={saving || projects.length === 0 || welders.length === 0 || machines.length === 0}
+            onClick={() => void handleSubmit()}
+            disabled={saving || uploadingImages || projects.length === 0 || welders.length === 0 || machines.length === 0}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs disabled:opacity-60 transition-all duration-150 cursor-pointer"
           >
-            {saving ? "Đang lưu…" : mode === "edit" ? "Lưu thay đổi" : "Thêm nhật ký"}
+            {saving ? "Đang lưu…" : uploadingImages ? "Đang tải ảnh…" : mode === "edit" ? "Lưu thay đổi" : "Thêm nhật ký"}
           </button>
         </div>
       </div>
@@ -756,14 +966,20 @@ function JournalFormModal({
   );
 }
 
-export default function WeldingJournalList() {
+export default function WeldingJournalList({
+  lockedResultFilter,
+  heading = "NHẬT KÝ HÀN",
+}: {
+  lockedResultFilter?: WeldTestStatus;
+  heading?: string;
+} = {}) {
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
-  const [resultFilter, setResultFilter] = useState("Tất cả");
+  const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -1349,6 +1565,7 @@ export default function WeldingJournalList() {
         kinh_do: isNaN(kinhDoNum as number) ? null : kinhDoNum,
         vi_do: isNaN(viDoNum as number) ? null : viDoNum,
         ly_trinh: values.ly_trinh || null,
+        anh_moi_han_lien_ket: values.anh_moi_han_lien_ket,
       });
       setFormOpen(false);
       setEditingRow(null);
@@ -1357,6 +1574,7 @@ export default function WeldingJournalList() {
       showToast("Đã thêm nhật ký hàn");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không thể lưu nhật ký hàn");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -1397,6 +1615,7 @@ export default function WeldingJournalList() {
         kinh_do: isNaN(kinhDoNum as number) ? null : kinhDoNum,
         vi_do: isNaN(viDoNum as number) ? null : viDoNum,
         ly_trinh: values.ly_trinh || null,
+        anh_moi_han_lien_ket: values.anh_moi_han_lien_ket,
       });
 
       if (values.toa_do_id) {
@@ -1424,6 +1643,7 @@ export default function WeldingJournalList() {
       showToast("Đã cập nhật nhật ký hàn");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không thể cập nhật nhật ký hàn");
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -1483,6 +1703,7 @@ export default function WeldingJournalList() {
             value={resultFilter}
             onChange={setResultFilter}
             options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
+            disabled={Boolean(lockedResultFilter)}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
           />
@@ -1588,7 +1809,7 @@ export default function WeldingJournalList() {
 
       <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">NHẬT KÝ HÀN</div>
+          <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">{heading}</div>
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0047AB]">
             {gpsLoading
               ? "Đang ghép GPS…"
@@ -1945,6 +2166,35 @@ export default function WeldingJournalList() {
                   </div>
                 ))}
               </dl>
+
+              {parseWeldLinkedImageAssets(detailRaw?.anh_moi_han_lien_ket).length > 0 && (
+                <div className="mt-3.5 border-t border-slate-100 pt-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Ảnh mối hàn liên kết
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {parseWeldLinkedImageAssets(detailRaw?.anh_moi_han_lien_ket).map((asset) => (
+                      <a
+                        key={asset.publicId}
+                        href={asset.secureUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                      >
+                        <div className="relative h-28">
+                          <Image
+                            src={asset.secureUrl}
+                            alt={asset.name}
+                            fill
+                            className="object-cover transition-transform group-hover:scale-[1.02]"
+                            sizes="200px"
+                          />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-3.5 border-t border-slate-100 pt-3.5">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chứng chỉ sử dụng</div>

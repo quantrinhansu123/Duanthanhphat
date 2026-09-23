@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Welder } from "@/data/welders";
 import type { Machine } from "@/data/machines";
-import { X } from "@/components/icons";
+import { UploadSimple, X } from "@/components/icons";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
+import { uploadToCloudinary } from "@/lib/cloudinaryClient";
 import {
   parseTrainedMachineTokens,
   personTrainedOnMachine,
@@ -108,6 +109,8 @@ export default function WelderFormModal({
     }>
   >([]);
   const [pendingValues, setPendingValues] = useState<WelderFormValues | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
   const initializedFormKey = useRef<string | null>(null);
 
   const configuredRailOptions = useCatalogOptions("Loại ray");
@@ -243,6 +246,25 @@ export default function WelderFormModal({
 
   function set<K extends keyof WelderFormValues>(key: K, value: WelderFormValues[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError(isEn ? "Please choose an image file (JPG, PNG, WebP)." : "Vui lòng chọn file ảnh (JPG, PNG, WebP).");
+      return;
+    }
+    setUploadingPhoto(true);
+    setError("");
+    const res = await uploadToCloudinary(file, "thanhphat/personnel");
+    setUploadingPhoto(false);
+    if (res.result?.secure_url) {
+      set("photo", res.result.secure_url);
+    } else {
+      setError(res.error || (isEn ? "Failed to upload image to Cloudinary." : "Không tải được ảnh lên Cloudinary."));
+    }
+    if (photoFileInputRef.current) photoFileInputRef.current.value = "";
   }
 
   function toggleMachine(machine: Machine) {
@@ -592,14 +614,64 @@ export default function WelderFormModal({
 
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              {isEn ? "Photo URL" : "Ảnh (URL)"}
+              {isEn ? "Photo" : "Ảnh đại diện"}
             </label>
-            <input
-              className={fieldClass}
-              value={form.photo}
-              onChange={(e) => set("photo", e.target.value)}
-              placeholder="https://..."
-            />
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {isEn
+                ? "Paste a link or upload from your computer (Cloudinary)."
+                : "Dán link hoặc tải từ máy (lưu trên Cloudinary)."}
+            </p>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+              {form.photo.trim() ? (
+                <div className="relative h-20 w-20 flex-none overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={form.photo.trim()}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <div className="min-w-0 flex-1 space-y-2">
+                <input
+                  className={fieldClass}
+                  value={form.photo}
+                  onChange={(e) => set("photo", e.target.value)}
+                  placeholder="https://..."
+                  disabled={uploadingPhoto}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={photoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => void handlePhotoFile(e)}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto || Boolean(saving)}
+                    onClick={() => photoFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    <UploadSimple size={14} weight="bold" aria-hidden />
+                    {uploadingPhoto
+                      ? (isEn ? "Uploading…" : "Đang tải lên…")
+                      : (isEn ? "Upload from computer" : "Tải ảnh từ máy")}
+                  </button>
+                  {form.photo.trim() ? (
+                    <button
+                      type="button"
+                      disabled={uploadingPhoto || Boolean(saving)}
+                      onClick={() => set("photo", "")}
+                      className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      {isEn ? "Remove photo" : "Gỡ ảnh"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
 
           {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
@@ -608,7 +680,7 @@ export default function WelderFormModal({
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5">
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || uploadingPhoto}
             onClick={onClose}
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
           >
@@ -616,7 +688,7 @@ export default function WelderFormModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploadingPhoto}
             className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer disabled:opacity-50"
           >
             {saving ? (isEn ? "Saving…" : "Đang lưu…") : isEn ? "Save" : "Lưu"}

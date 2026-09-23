@@ -397,4 +397,14 @@ export const PHRASES: Record<string, string> = {
   "Không có lựa chọn phù hợp": "No matching options",
   "Đóng danh sách": "Close list",
   "Mở danh sách": "Open list",
+  "Ảnh mối hàn liên kết": "Linked weld photos",
+  "Chụp ảnh": "Take photo",
+  "Thêm ảnh": "Add photos",
+  "Đang tải...": "Uploading...",
+  "Đang tải ảnh…": "Uploading photos…",
+  "Lịch sử mối hàn lỗi": "Failed Weld History",
+  "LỊCH SỬ MỐI HÀN LỖI": "FAILED WELD HISTORY",
+  "Vị trí & GPS": "Location & GPS",
+  "Tùy chọn — gán điểm GPS có sẵn hoặc nhập tọa độ mới.":
+    "Optional — link an existing GPS point or enter new coordinates.",
 };

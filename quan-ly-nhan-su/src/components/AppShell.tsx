@@ -26,6 +26,7 @@ function TabLoading() {
 const HomeDashboard = dynamic(() => import("@/components/HomeDashboard"), { loading: TabLoading, ssr: false });
 const WelderManagement = dynamic(() => import("@/components/WelderManagement"), { loading: TabLoading, ssr: false });
 const WeldingHistoryList = dynamic(() => import("@/components/WeldingHistoryList"), { loading: TabLoading, ssr: false });
+const FailedWeldHistoryList = dynamic(() => import("@/components/FailedWeldHistoryList"), { loading: TabLoading, ssr: false });
 const TrainingList = dynamic(() => import("@/components/TrainingList"), { loading: TabLoading, ssr: false });
 const CertificateManagement = dynamic(() => import("@/components/CertificateManagement"), { loading: TabLoading, ssr: false });
 const CompanyCertificateManagement = dynamic(
@@ -65,6 +66,7 @@ const SystemConfiguration = dynamic(
 const viewRenderers: Record<string, () => React.ReactNode> = {
   "ho-so-tho-han": () => <WelderManagement />,
   "lich-su-han": () => <WeldingHistoryList />,
+  "lich-su-moi-han-loi": () => <FailedWeldHistoryList />,
   "khoa-dao-tao": () => <TrainingList />,
   "chung-chi": () => <CertificateManagement />,
   "chung-chi-cong-ty": () => <CompanyCertificateManagement />,

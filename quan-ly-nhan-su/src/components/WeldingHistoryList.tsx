@@ -49,7 +49,7 @@ const resultOptions: WeldingHistoryRecord["result"][] = ["Đạt", "Không đạ
 const shiftOptions: WeldingHistoryRecord["shift"][] = ["Ca 1", "Ca 2", "Ca 3"];
 const defaultMachines = ["KCM007-01", "UN5-150ZC2-01", "KCM007-02", "UN5-150ZC2-02"];
 
-function emptyRecord(): WeldingHistoryRecord {
+function emptyRecord(defaultResult: WeldingHistoryRecord["result"] = "Đạt"): WeldingHistoryRecord {
   // Chỉ điền sẵn ngày (hôm nay) và vài giá trị enum bắt buộc; các trường
   // còn lại để trống cho người dùng tự nhập, tránh dữ liệu mẫu gây hiểu nhầm.
   return {
@@ -64,7 +64,7 @@ function emptyRecord(): WeldingHistoryRecord {
     project: "",
     shift: "Ca 1",
     accountingCode: "",
-    result: "Đạt",
+    result: defaultResult,
   };
 }
 
@@ -534,9 +534,15 @@ function FilterGroup({
   );
 }
 
-export default function WeldingHistoryList() {
+export type WeldingHistoryListProps = {
+  /** Khi đặt, cố định bộ lọc kết quả (vd. trang Lịch sử mối hàn lỗi). */
+  lockedResult?: WeldingHistoryRecord["result"];
+};
+
+export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListProps = {}) {
   const router = useRouter();
   const configuredRails = useCatalogOptions("Loại ray");
+  const failedOnly = lockedResult === "Không đạt";
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -558,7 +564,7 @@ export default function WeldingHistoryList() {
   }, [queryInput]);
 
   const [welder, setWelder] = useState("Tất cả thợ hàn");
-  const [result, setResult] = useState("Tất cả kết quả");
+  const [result, setResult] = useState(lockedResult ?? "Tất cả kết quả");
   /** Mặc định 90 ngày gần đây để trang mở nhanh; người dùng có thể chọn "Tất cả". */
   const [dateFrom, setDateFrom] = useState(() => weldingHistoryDefaultDateFrom());
   const [dateTo, setDateTo] = useState("");
@@ -583,6 +589,10 @@ export default function WeldingHistoryList() {
   const statsCacheRef = useRef<Map<string, WeldingHistoryStats>>(new Map());
   const prefetchingRef = useRef<Set<string>>(new Set());
   const lastFilterKeyRef = useRef("");
+
+  useEffect(() => {
+    if (lockedResult) setResult(lockedResult);
+  }, [lockedResult]);
 
   function buildFilterKey(extra?: Partial<WeldingHistoryFilterParams>) {
     return JSON.stringify({
@@ -908,7 +918,7 @@ export default function WeldingHistoryList() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `${failedOnly ? "Lich_su_moi_han_loi" : "Lich_su_han_theo_tho"}_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -923,7 +933,7 @@ export default function WeldingHistoryList() {
     dateTo ||
     (dateFrom && dateFrom !== weldingHistoryDefaultDateFrom(WELDING_HISTORY_RECENT_DAYS)) ||
     welder !== "Tất cả thợ hàn" ||
-    result !== "Tất cả kết quả" ||
+    (!lockedResult && result !== "Tất cả kết quả") ||
     machinesSel.length > 0 ||
     railsSel.length > 0 ||
     projectsSel.length > 0 ||
@@ -944,11 +954,13 @@ export default function WeldingHistoryList() {
         </div>
       )}
 
-      {/* 4 thẻ KPI thống kê to rõ ràng nổi bật theo Ảnh 12 */}
-      <div className="mb-4 grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* Thẻ KPI thống kê */}
+      <div className={`mb-4 grid grid-cols-2 ${failedOnly ? "lg:grid-cols-2" : "lg:grid-cols-5"} gap-3`}>
         <div className="rounded-xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/80 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng mối hàn</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {failedOnly ? "Tổng mối hàn lỗi" : "Tổng mối hàn"}
+            </span>
             <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-[#0047AB]">
               {statsLoading ? "Đang tính…" : isPreset90 ? "90 ngày" : isAllDates ? "Tất cả" : "Bộ lọc"}
             </span>
@@ -957,10 +969,29 @@ export default function WeldingHistoryList() {
             {stats.total.toLocaleString("vi-VN")}
           </div>
           <div className="mt-1 text-xs text-slate-500 font-medium">
-            {statsLoading ? "Đang cập nhật thống kê ngầm…" : "Khớp danh sách theo bộ lọc"}
+            {statsLoading
+              ? "Đang cập nhật thống kê ngầm…"
+              : failedOnly
+                ? "Chỉ mối hàn kết quả Không đạt"
+                : "Khớp danh sách theo bộ lọc"}
           </div>
         </div>
 
+        {failedOnly ? (
+          <div className="rounded-xl border border-rose-200/80 bg-gradient-to-br from-white to-rose-50/40 p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-rose-700">Không đạt</span>
+              <WarningCircle size={18} weight="fill" className="text-rose-600" />
+            </div>
+            <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-rose-700 font-mono tabular-nums">
+              {stats.fail.toLocaleString("vi-VN")}
+            </div>
+            <div className="mt-1 text-xs text-rose-600 font-medium">
+              Lọc cố định kết quả Không đạt · xem chi tiết bên dưới
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Đạt chuẩn</span>
@@ -1012,6 +1043,8 @@ export default function WeldingHistoryList() {
           </div>
           <div className="mt-1 text-xs text-blue-600 font-medium">Chưa có kết quả · không tính đạt/lỗi</div>
         </div>
+          </>
+        )}
       </div>
 
       {/* Thanh chip thống kê Hạch toán & Nguồn dữ liệu */}
@@ -1136,15 +1169,21 @@ export default function WeldingHistoryList() {
             <option key={w}>{w}</option>
           ))}
         </select>
-        <select
-          value={result}
-          onChange={(e) => setResult(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
+        {lockedResult ? (
+          <div className="inline-flex h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3.5 text-xs sm:text-sm font-semibold text-rose-700 shadow-2xs">
+            Kết quả: {lockedResult}
+          </div>
+        ) : (
+          <select
+            value={result}
+            onChange={(e) => setResult(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        )}
 
         {hasFilter && (
           <button
@@ -1155,7 +1194,7 @@ export default function WeldingHistoryList() {
               setDateFrom(weldingHistoryDefaultDateFrom());
               setDateTo("");
               setWelder("Tất cả thợ hàn");
-              setResult("Tất cả kết quả");
+              setResult(lockedResult ?? "Tất cả kết quả");
               setMachinesSel([]);
               setRailsSel([]);
               setProjectsSel([]);
@@ -1193,10 +1232,10 @@ export default function WeldingHistoryList() {
 
         <button
           type="button"
-          onClick={() => setModal({ record: emptyRecord(), mode: "create" })}
+          onClick={() => setModal({ record: emptyRecord(lockedResult ?? "Đạt"), mode: "create" })}
           className="mb-0.5 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
-          <span className="text-base leading-none">+</span> Thêm mới
+          <span className="text-base leading-none">+</span> {failedOnly ? "Thêm mối lỗi" : "Thêm mới"}
         </button>
       </div>
 

@@ -2,6 +2,7 @@
 export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "ho-so-tho-han": () => import("@/components/WelderManagement"),
   "lich-su-han": () => import("@/components/WeldingHistoryList"),
+  "lich-su-moi-han-loi": () => import("@/components/FailedWeldHistoryList"),
   "khoa-dao-tao": () => import("@/components/TrainingList"),
   "chung-chi": () => import("@/components/CertificateManagement"),
   "chung-chi-cong-ty": () => import("@/components/CompanyCertificateManagement"),

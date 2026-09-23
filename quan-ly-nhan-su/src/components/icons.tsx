@@ -47,6 +47,7 @@ export {
   LockKey,
   DownloadSimple,
   UploadSimple,
+  Camera,
   Export,
   FileArrowUp,
   Funnel,

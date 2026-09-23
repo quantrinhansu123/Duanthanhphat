@@ -18,7 +18,10 @@ import {
   Plus,
   PencilSimple,
   Trash,
+  UploadSimple,
+  Camera,
 } from "@/components/icons";
+import { uploadToCloudinary } from "@/lib/cloudinaryClient";
 import {
   formatCertificateList,
   parseCertificateList,
@@ -376,6 +379,14 @@ export default function WelderManagement() {
   const [replacingDocId, setReplacingDocId] = useState<string | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
+  // Edit photo under profile avatar
+  const [editingPhoto, setEditingPhoto] = useState(false);
+  const [photoDraftUrl, setPhotoDraftUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
+
   function showToast(msg: string) {
     setToast(msg);
     window.setTimeout(() => setToast(""), 3000);
@@ -452,7 +463,12 @@ export default function WelderManagement() {
   useEffect(() => {
     if (!profileOpen) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setProfileOpen(false);
+      if (e.key !== "Escape") return;
+      if (editingPhoto) {
+        cancelEditPhoto();
+        return;
+      }
+      setProfileOpen(false);
     }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -461,15 +477,21 @@ export default function WelderManagement() {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [profileOpen]);
+  }, [profileOpen, editingPhoto]);
 
   function openWelderProfile(welder: Welder) {
     setSelectedWelder(welder);
+    setEditingPhoto(false);
+    setPhotoDraftUrl("");
+    setPhotoError("");
     setProfileOpen(true);
   }
 
   function closeWelderProfile() {
     setProfileOpen(false);
+    setEditingPhoto(false);
+    setPhotoDraftUrl("");
+    setPhotoError("");
     setShowUploadForm(false);
     setShowAddCert(false);
     setSelectedCertGroupIds([]);
@@ -487,6 +509,79 @@ export default function WelderManagement() {
   function openEditWelder(welder: Welder) {
     setEditingWelder(welder);
     setFormOpen(true);
+  }
+
+  function openEditPhoto() {
+    if (!selectedWelder) return;
+    setPhotoDraftUrl(selectedWelder.photo?.startsWith("http") ? selectedWelder.photo : "");
+    setPhotoError("");
+    setEditingPhoto(true);
+  }
+
+  function cancelEditPhoto() {
+    setEditingPhoto(false);
+    setPhotoDraftUrl("");
+    setPhotoError("");
+    setUploadingPhoto(false);
+    if (photoFileInputRef.current) photoFileInputRef.current.value = "";
+  }
+
+  async function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setPhotoError(isEn ? "Please choose an image file (JPG, PNG, WebP)." : "Vui lòng chọn file ảnh (JPG, PNG, WebP).");
+      return;
+    }
+    setUploadingPhoto(true);
+    setPhotoError("");
+    const res = await uploadToCloudinary(file, "thanhphat/personnel");
+    setUploadingPhoto(false);
+    if (res.result?.secure_url) {
+      setPhotoDraftUrl(res.result.secure_url);
+    } else {
+      setPhotoError(res.error || (isEn ? "Failed to upload image to Cloudinary." : "Không tải được ảnh lên Cloudinary."));
+    }
+    if (photoFileInputRef.current) photoFileInputRef.current.value = "";
+  }
+
+  async function handleSavePhoto() {
+    if (!selectedWelder) return;
+    const nextPhoto = photoDraftUrl.trim();
+    if (nextPhoto && !/^https?:\/\//i.test(nextPhoto)) {
+      setPhotoError(isEn ? "Photo URL must start with http:// or https://" : "Link ảnh phải bắt đầu bằng http:// hoặc https://");
+      return;
+    }
+    setSavingPhoto(true);
+    setPhotoError("");
+    try {
+      const row = await upsertPersonnel({
+        employeeId: selectedWelder.id,
+        maNhanSu: selectedWelder.weldingId === "Chưa có mã" ? "" : selectedWelder.weldingId,
+        hoTen: selectedWelder.name,
+        chucVu: selectedWelder.position,
+        donVi: selectedWelder.department === "Chưa cập nhật" ? "" : selectedWelder.department,
+        toHan: selectedWelder.weldingTeam === "Chưa phân tổ" ? "" : selectedWelder.weldingTeam,
+        capBac: selectedWelder.rank === "Chưa phân hạng" ? "" : selectedWelder.rank,
+        loaiRay: selectedWelder.railTypes === "Chưa cập nhật" ? "" : selectedWelder.railTypes,
+        loaiMay: selectedWelder.trainedMachines === "Chưa cập nhật" ? "" : selectedWelder.trainedMachines,
+        kinhNghiem: selectedWelder.experience === "Chưa cập nhật" ? "" : selectedWelder.experience,
+        hinhAnh: nextPhoto,
+        trangThai: selectedWelder.status,
+      });
+      const saved = { ...personnelRowToWelder(row), status: selectedWelder.status };
+      setList((prev) => {
+        const without = prev.filter((item) => item.id !== saved.id);
+        return [...without, saved].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+      });
+      setSelectedWelder(saved);
+      cancelEditPhoto();
+      showToast(isEn ? "Photo updated." : "Đã cập nhật ảnh.");
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : (isEn ? "Failed to save photo" : "Không lưu được ảnh"));
+    } finally {
+      setSavingPhoto(false);
+    }
   }
 
   async function handleSaveWelder(values: WelderFormValues) {
@@ -1485,11 +1580,39 @@ export default function WelderManagement() {
             className="relative z-10 flex h-full w-full max-w-[1120px] xl:max-w-[1280px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-200"
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
-              <div className="flex min-w-0 items-center gap-3.5">
-                <div className="relative h-20 w-20 flex-none overflow-hidden rounded-xl bg-slate-100 ring-2 ring-[#0047AB]/25 shadow-sm">
-                  <Image src={selectedWelder.photo} alt={selectedWelder.name} fill className="object-cover" sizes="80px" />
+              <div className="flex min-w-0 items-start gap-3.5">
+                <div className="flex flex-none flex-col items-center gap-1.5">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-xl bg-slate-100 ring-2 ring-[#0047AB]/25 shadow-sm">
+                    {editingPhoto && photoDraftUrl.trim() ? (
+                      // Native img so pasted links outside Next image allowlist still preview
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={photoDraftUrl.trim()}
+                        alt={selectedWelder.name}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src={selectedWelder.photo}
+                        alt={selectedWelder.name}
+                        fill
+                        className="object-cover"
+                        sizes="80px"
+                      />
+                    )}
+                  </div>
+                  {!editingPhoto ? (
+                    <button
+                      type="button"
+                      onClick={openEditPhoto}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 hover:border-[#0047AB]/40 hover:text-[#0047AB] cursor-pointer shadow-2xs"
+                    >
+                      <Camera size={12} weight="bold" aria-hidden />
+                      {isEn ? "Edit photo" : "Sửa ảnh"}
+                    </button>
+                  ) : null}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 pt-0.5">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
                     {isEn ? "Welder profile" : "Hồ sơ thợ hàn"}
                   </div>
@@ -1536,6 +1659,68 @@ export default function WelderManagement() {
                 </button>
               </div>
             </div>
+
+            {editingPhoto ? (
+              <div className="shrink-0 border-b border-slate-200 bg-slate-50/80 px-5 py-3 sm:px-6">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  {isEn ? "Update photo" : "Cập nhật ảnh"}
+                </div>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  {isEn
+                    ? "Paste an image link or upload from your computer (stored on Cloudinary)."
+                    : "Dán link ảnh hoặc tải từ máy — ảnh được lưu trên Cloudinary."}
+                </p>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    type="url"
+                    value={photoDraftUrl}
+                    onChange={(e) => setPhotoDraftUrl(e.target.value)}
+                    placeholder="https://..."
+                    disabled={uploadingPhoto || savingPhoto}
+                    className="h-9 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 disabled:opacity-50"
+                  />
+                  <input
+                    ref={photoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => void handlePhotoFileChange(e)}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto || savingPhoto}
+                    onClick={() => photoFileInputRef.current?.click()}
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    <UploadSimple size={14} weight="bold" aria-hidden />
+                    {uploadingPhoto
+                      ? (isEn ? "Uploading…" : "Đang tải…")
+                      : (isEn ? "Upload file" : "Tải từ máy")}
+                  </button>
+                </div>
+                {photoError ? (
+                  <div className="mt-2 text-xs font-semibold text-rose-600">{photoError}</div>
+                ) : null}
+                <div className="mt-2.5 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto || savingPhoto}
+                    onClick={cancelEditPhoto}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                  >
+                    {isEn ? "Cancel" : "Hủy"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto || savingPhoto}
+                    onClick={() => void handleSavePhoto()}
+                    className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3 py-1.5 text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                  >
+                    {savingPhoto ? (isEn ? "Saving…" : "Đang lưu…") : (isEn ? "Save photo" : "Lưu ảnh")}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-5">
               <div className="text-xs sm:text-sm text-slate-500">
