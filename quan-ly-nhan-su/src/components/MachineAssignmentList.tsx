@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "@/components/icons";
 import MachineAssignmentFormModal from "@/components/MachineAssignmentFormModal";
@@ -54,6 +55,19 @@ function createLocalSchedule(
   };
 }
 
+function readProjectFilterFromUrl(projects: LookupOption[]) {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const projectId = params.get("projectId")?.trim() || params.get("duAn")?.trim() || "";
+  if (projectId && projects.some((item) => item.id === projectId)) return projectId;
+  const projectName = params.get("project")?.trim() || params.get("du_an")?.trim() || "";
+  if (!projectName) return projectId;
+  const matched = projects.find(
+    (item) => item.label.localeCompare(projectName, "vi", { sensitivity: "accent" }) === 0,
+  );
+  return matched?.id ?? "";
+}
+
 export default function MachineAssignmentList() {
   const [list, setList] = useState<MachineRunSchedule[]>([]);
   const [machines, setMachines] = useState<MachineOption[]>([]);
@@ -63,7 +77,6 @@ export default function MachineAssignmentList() {
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [machineId, setMachineId] = useState("");
@@ -81,6 +94,8 @@ export default function MachineAssignmentList() {
     setPersonnel(bundle.personnel);
     setSource(bundle.source);
     setLoadError(bundle.error ?? "");
+    const fromUrl = readProjectFilterFromUrl(bundle.projects);
+    if (fromUrl) setProjectId(fromUrl);
     setLoading(false);
   }, []);
 
@@ -89,27 +104,15 @@ export default function MachineAssignmentList() {
   }, [reload]);
 
   const filtered = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase("vi");
     return list.filter((row) => {
       if (dateFrom && row.date < dateFrom) return false;
       if (dateTo && row.date > dateTo) return false;
       if (machineId && row.machineId !== machineId) return false;
       if (projectId && row.projectId !== projectId) return false;
       if (personId && row.personInChargeId !== personId) return false;
-      if (!keyword) return true;
-      return [
-        row.machineCode,
-        row.machineName,
-        row.location,
-        row.projectName,
-        row.personInChargeName,
-        row.machineCondition,
-        row.conditionDescription,
-        row.recommendation,
-      ]
-        .some((value) => value.toLocaleLowerCase("vi").includes(keyword));
+      return true;
     });
-  }, [list, query, dateFrom, dateTo, machineId, projectId, personId]);
+  }, [list, dateFrom, dateTo, machineId, projectId, personId]);
 
   const machineHours = useMemo(() => {
     const totals = new Map<string, { label: string; hours: number }>();
@@ -124,15 +127,57 @@ export default function MachineAssignmentList() {
     return Array.from(totals.values()).sort((a, b) => b.hours - a.hours);
   }, [filtered]);
 
+  const oilReport = useMemo(() => {
+    const byMachine = new Map<string, {
+      label: string;
+      liters: number;
+      pumpOpens: number;
+      runs: number;
+    }>();
+    let totalLiters = 0;
+    let pumpOpenCount = 0;
+    for (const row of filtered) {
+      totalLiters += row.fuelAddedLiters;
+      if (row.pumpOpened) pumpOpenCount += 1;
+      const current = byMachine.get(row.machineId) ?? {
+        label: `${row.machineCode} · ${row.machineName}`,
+        liters: 0,
+        pumpOpens: 0,
+        runs: 0,
+      };
+      current.liters += row.fuelAddedLiters;
+      current.runs += 1;
+      if (row.pumpOpened) current.pumpOpens += 1;
+      byMachine.set(row.machineId, current);
+    }
+    return {
+      totalLiters,
+      pumpOpenCount,
+      byMachine: Array.from(byMachine.values()).sort((a, b) => b.liters - a.liters),
+    };
+  }, [filtered]);
+
   const totalHours = filtered.reduce((sum, row) => sum + row.operatingHours, 0);
   const issueCount = filtered.filter(
     (row) => row.machineCondition.trim().toLocaleLowerCase("vi") !== "bình thường",
   ).length;
-  const hasFilter = Boolean(query || dateFrom || dateTo || machineId || projectId || personId);
+  const hasFilter = Boolean(dateFrom || dateTo || machineId || projectId || personId);
+  const selectedProject = projects.find((item) => item.id === projectId);
 
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  function syncProjectToUrl(nextProjectId: string) {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (nextProjectId) url.searchParams.set("projectId", nextProjectId);
+    else url.searchParams.delete("projectId");
+    url.searchParams.delete("duAn");
+    url.searchParams.delete("project");
+    url.searchParams.delete("du_an");
+    window.history.replaceState({}, "", url.toString());
   }
 
   async function handleSave(values: MachineRunScheduleFormValues) {
@@ -205,9 +250,11 @@ export default function MachineAssignmentList() {
           <div className="mt-1.5 text-xs text-slate-400">Giờ máy đã ghi nhận</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Máy có hoạt động</div>
-          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-emerald-700">{machineHours.length}</div>
-          <div className="mt-1.5 text-xs text-slate-400">Trên {machines.length} máy trong danh mục</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng dầu đã đổ</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-emerald-700">
+            {oilReport.totalLiters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+          </div>
+          <div className="mt-1.5 text-xs text-slate-400">Lít · theo bộ lọc hiện tại</div>
         </div>
       </div>
 
@@ -236,30 +283,85 @@ export default function MachineAssignmentList() {
         </div>
       </section>
 
+      <section className="mb-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Báo cáo dầu</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Tổng dầu đổ và số lần mở bơm theo máy{selectedProject ? ` · dự án ${selectedProject.label}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs sm:text-sm">
+            <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-800">
+              Tổng đổ: {oilReport.totalLiters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} lít
+            </span>
+            <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
+              Mở bơm: {oilReport.pumpOpenCount}/{filtered.length} lượt
+            </span>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {oilReport.byMachine.map((item) => (
+            <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+              <div className="truncate text-xs font-semibold text-slate-700 sm:text-sm" title={item.label}>{item.label}</div>
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-mono text-sm font-bold tabular-nums text-emerald-700">
+                  {item.liters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} lít
+                </span>
+                <span className="text-xs text-slate-500">
+                  {item.runs} lượt · bơm {item.pumpOpens}
+                </span>
+              </div>
+            </div>
+          ))}
+          {!loading && oilReport.byMachine.length === 0 && (
+            <div className="text-sm text-slate-500">Chưa có dữ liệu dầu theo máy.</div>
+          )}
+        </div>
+      </section>
+
       <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm máy, vị trí, dự án…"
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm xl:col-span-2"
-          />
+        <div className="mb-3">
+          <h2 className="text-sm font-bold text-slate-900">Nhật ký chạy máy</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Lọc theo dự án, máy, người phụ trách và khoảng ngày</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <select
+            value={projectId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProjectId(next);
+              syncProjectToUrl(next);
+            }}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            aria-label="Lọc theo dự án"
+          >
+            <option value="">Tất cả dự án</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.label}</option>)}
+          </select>
           <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Từ ngày" />
           <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Đến ngày" />
           <select value={machineId} onChange={(event) => setMachineId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Lọc theo máy">
             <option value="">Tất cả máy</option>
             {machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.code}</option>)}
           </select>
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Lọc theo dự án">
-            <option value="">Tất cả dự án</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.label}</option>)}
-          </select>
-          <select value={personId} onChange={(event) => setPersonId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm xl:col-start-5" aria-label="Lọc theo người phụ trách">
+          <select value={personId} onChange={(event) => setPersonId(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm" aria-label="Lọc theo người phụ trách">
             <option value="">Tất cả người phụ trách</option>
             {personnel.map((person) => <option key={person.id} value={person.id}>{person.label}</option>)}
           </select>
           {hasFilter && (
-            <button type="button" onClick={() => { setQuery(""); setDateFrom(""); setDateTo(""); setMachineId(""); setProjectId(""); setPersonId(""); }} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setMachineId("");
+                setProjectId("");
+                setPersonId("");
+                syncProjectToUrl("");
+              }}
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm xl:col-start-5"
+            >
               Xóa bộ lọc
             </button>
           )}
@@ -275,7 +377,7 @@ export default function MachineAssignmentList() {
                 <th className="px-3.5 py-3">Tên máy</th>
                 <th className="px-3.5 py-3">Vị trí</th>
                 <th className="px-3.5 py-3 text-right">Số giờ hoạt động</th>
-                <th className="px-3.5 py-3">Vận hành</th>
+                <th className="px-3.5 py-3">Vận hành / Dầu</th>
                 <th className="px-3.5 py-3">Tình trạng máy</th>
                 <th className="px-3.5 py-3">Mô tả / Đề nghị</th>
                 <th className="px-3.5 py-3 text-center">Ảnh</th>
@@ -316,11 +418,27 @@ export default function MachineAssignmentList() {
                       <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-[#0047AB]">{row.imageAssets.length}</span>
                     ) : "—"}
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.projectName}</td>
+                  <td className="px-3.5 py-3">
+                    {row.projectId ? (
+                      <Link
+                        href={`/phan-cong-may?projectId=${encodeURIComponent(row.projectId)}`}
+                        onClick={() => {
+                          setProjectId(row.projectId);
+                          syncProjectToUrl(row.projectId);
+                        }}
+                        className="font-medium text-[#0047AB] hover:underline"
+                        title="Lọc nhật ký chạy máy theo dự án này"
+                      >
+                        {row.projectName}
+                      </Link>
+                    ) : (
+                      <span className="text-slate-700">{row.projectName}</span>
+                    )}
+                  </td>
                   <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>
                   <td className="px-3.5 py-3">
                     <div className="flex justify-end gap-1">
-                      <button type="button" onClick={() => setModal({ mode: "view", row })} className="rounded-lg px-2.5 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50">Xem</button>
+                      <button type="button" onClick={() => setModal({ mode: "view", row })} className="rounded-lg px-2.5 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50">Nhật ký</button>
                       <button type="button" onClick={() => setModal({ mode: "edit", row })} className="rounded-lg px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-100">Sửa</button>
                       <button type="button" disabled={saving} onClick={() => void handleDelete(row)} className="rounded-lg px-2.5 py-1.5 font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50">Xóa</button>
                     </div>

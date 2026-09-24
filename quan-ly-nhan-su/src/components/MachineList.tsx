@@ -10,6 +10,9 @@ import {
 import type { MaintenanceEvent } from "@/data/maintenance";
 import {
   machines as seedMachines,
+  getMachineCategory,
+  machineCategoryFieldMatrix,
+  MACHINE_CATEGORIES,
   type Machine,
   type EquipmentAsset,
   type WeldingUnitDetail,
@@ -34,7 +37,6 @@ import ComboBoxInput from "@/components/ComboBoxInput";
 import SelectMenu from "@/components/SelectMenu";
 import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
-import { useProjectsData } from "@/hooks/useProjectsData";
 import {
   appendTrainedMachineToken,
   loadPersonnelCertificateRows,
@@ -42,6 +44,7 @@ import {
   updatePersonnelTrainedMachines,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
+import Link from "next/link";
 
 type DetailTab = "welding" | "transport" | "history" | "personnel";
 
@@ -67,7 +70,6 @@ const maintStatusStyle: Record<MachineMaintenanceHistoryRow["status"], string> =
 
 const statusOptions: Machine["status"][] = ["Đang làm việc", "Sẵn sàng", "Bảo trì", "Hỏng"];
 const modelOptions = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
-const NO_PROJECT_LABEL = "Chưa gắn dự án";
 const WELDING_TECH_OPTIONS = [
   "Flash Butt Welding – FBW (Hàn tiếp xúc đối đầu)",
   "Hàn nhiệt nhôm (Thermit)",
@@ -680,7 +682,7 @@ function MachineDetailModal({
               {machine.name}
             </h2>
             <div className="mt-0.5 text-xs text-slate-500">
-              Vị trí: <strong className="text-slate-700">{machine.location}</strong> · Dự án: <strong className="text-slate-700">{machine.currentProject || "—"}</strong>
+              {getMachineCategory(machine)} · Tên NSX: <strong className="text-slate-700">{machine.weldingUnit?.manufacturer || machine.manufacturer || "—"}</strong>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -717,7 +719,7 @@ function MachineDetailModal({
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            🚛 Phương tiện vận chuyển (Transport Unit)
+            🚛 Phương tiện vận chuyển
           </button>
           <button
             type="button"
@@ -759,23 +761,15 @@ function MachineDetailModal({
             <div className="space-y-5">
               {/* Ảnh máy hàn */}
               <div className="space-y-2.5">
-                <div className="relative mx-auto h-[180px] w-full max-w-[420px] overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md sm:h-[200px]">
+                <div className="relative mx-auto h-[240px] w-full max-w-[640px] overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md sm:h-[300px]">
                   <Image
                     src={activeWeldingImg}
-                    alt={weldingUnit?.name || machine.name}
+                    alt=""
                     fill
                     className="object-cover"
-                    sizes="420px"
+                    sizes="640px"
                     priority
                   />
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-xs font-mono">
-                      {weldingUnit?.code || machine.code}
-                    </span>
-                  </div>
-                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/80 px-2 py-0.5 text-[11px] text-white backdrop-blur-xs font-mono">
-                    Đầu hàn: {weldingUnit?.model || machine.model}
-                  </div>
                 </div>
 
                 {weldingGallery.length > 1 && (
@@ -788,11 +782,11 @@ function MachineDetailModal({
                           key={idx}
                           type="button"
                           onClick={() => setActiveWeldingImg(img)}
-                          className={`relative h-11 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
+                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
                             isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30" : "border-slate-200 opacity-70 hover:opacity-100"
                           }`}
                         >
-                          <Image src={img} alt={`Góc máy ${idx + 1}`} fill className="object-cover" sizes="64px" />
+                          <Image src={img} alt="" fill className="object-cover" sizes="80px" />
                         </button>
                       );
                     })}
@@ -809,11 +803,16 @@ function MachineDetailModal({
                   <DetailRow label="Mã thiết bị hàn" value={<span className="font-mono font-bold text-[#0047AB]">{weldingUnit?.code || machine.code}</span>} />
                   <DetailRow label="Tên đầu hàn" value={weldingUnit?.name || machine.name} />
                   <DetailRow label="Model đầu hàn" value={<span className="font-mono font-bold text-slate-800">{weldingUnit?.model || machine.model}</span>} />
-                  <DetailRow label="Số Serial đầu hàn" value={<span className="font-mono text-slate-700">{weldingUnit?.serial || machine.serialNumber}</span>} />
-                  <DetailRow label="Nhà sản xuất" value={weldingUnit?.manufacturer || machine.manufacturer} />
-                  <DetailRow label="Công nghệ hàn" value={<span className="font-semibold text-[#0047AB]">{machine.weldingTechnology}</span>} />
-                  <DetailRow label="Loại ray hỗ trợ" value={<span className="font-mono">{machine.supportedRails}</span>} />
-                  <DetailRow label="Năng suất thiết kế" value={<span className="font-bold text-emerald-700">{machine.weldingCapacity}</span>} />
+                  <DetailRow label="Tên NSX" value={weldingUnit?.manufacturer || machine.manufacturer || "—"} />
+                  <DetailRow label="Quy trình hàn" value={<span className="font-semibold text-[#0047AB]">{machine.weldingTechnology || "—"}</span>} />
+                  <DetailRow label="Loại ray hàn" value={<span className="font-mono">{machine.supportedRails || "—"}</span>} />
+                  {machineCategoryFieldMatrix(getMachineCategory(machine)).weight && (
+                    <DetailRow label="Tải trọng" value={<span className="font-mono">{String(machine.specs?.weight || transportUnit?.specs?.weight || "—")}</span>} />
+                  )}
+                  {machineCategoryFieldMatrix(getMachineCategory(machine)).dimensions && (
+                    <DetailRow label="Kích thước" value={<span className="font-mono">{String(machine.specs?.dimensions || transportUnit?.specs?.dimensions || "—")}</span>} />
+                  )}
+                  <DetailRow label="Năng suất thiết kế" value={<span className="font-bold text-emerald-700">{machine.weldingCapacity || "—"}</span>} />
                   <DetailRow label="Tổng giờ hoạt động" value={<span className="font-mono tabular-nums">{`${machine.operatingHours.toLocaleString("vi-VN")} giờ`}</span>} />
                   <DetailRow label="Tổng mối hàn đã thực hiện" value={<span className="font-mono tabular-nums text-slate-900">{`${machine.weldCount.toLocaleString("vi-VN")} mối`}</span>} />
                 </div>
@@ -871,16 +870,21 @@ function MachineDetailModal({
 
           {tab === "transport" && (
             <div className="space-y-5">
-              {/* Ảnh phương tiện vận chuyển */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-[#0047AB]">
+                <span>Quản lý đầy đủ phương tiện đã tách ra menu riêng.</span>
+                <Link href="/quan-ly-phuong-tien" className="font-semibold underline hover:text-[#00388A]">
+                  Mở Quản lý phương tiện
+                </Link>
+              </div>
               <div className="space-y-2.5">
-                <div className="relative mx-auto h-[180px] w-full max-w-[420px] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-md sm:h-[200px]">
+                <div className="relative mx-auto h-[240px] w-full max-w-[640px] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-md sm:h-[300px]">
                   {activeTransportImg ? (
                     <Image
                       src={activeTransportImg}
-                      alt={transportUnit?.name || "Phương tiện vận chuyển"}
+                      alt=""
                       fill
                       className="object-cover"
-                      sizes="420px"
+                      sizes="640px"
                       priority
                     />
                   ) : (
@@ -888,19 +892,6 @@ function MachineDetailModal({
                       Chưa cập nhật ảnh phương tiện
                     </div>
                   )}
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    <span className="inline-flex items-center rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-xs font-mono">
-                      {transportUnit?.code || "Chưa cập nhật"}
-                    </span>
-                    {transportUnit?.plateNumber && (
-                      <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-400/95 px-2 py-0.5 text-[11px] font-bold text-slate-900 font-mono shadow-2xs">
-                        {transportUnit.plateNumber}
-                      </span>
-                    )}
-                  </div>
-                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/80 px-2 py-0.5 text-[11px] text-white backdrop-blur-xs font-mono">
-                    {transportUnit?.model || "Chưa cập nhật model"}
-                  </div>
                 </div>
 
                 {transportGallery.length > 1 && (
@@ -913,11 +904,11 @@ function MachineDetailModal({
                           key={idx}
                           type="button"
                           onClick={() => setActiveTransportImg(img)}
-                          className={`relative h-11 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
+                          className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all cursor-pointer ${
                             isActive ? "border-[#0047AB] ring-2 ring-[#0047AB]/30" : "border-slate-200 opacity-70 hover:opacity-100"
                           }`}
                         >
-                          <Image src={img} alt={`Góc xe ${idx + 1}`} fill className="object-cover" sizes="64px" />
+                          <Image src={img} alt="" fill className="object-cover" sizes="80px" />
                         </button>
                       );
                     })}
@@ -925,69 +916,19 @@ function MachineDetailModal({
                 )}
               </div>
 
-              {/* Thông tin hồ sơ phương tiện vận chuyển */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
                 <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  Hồ sơ phương tiện vận chuyển / Xe
+                  Hồ sơ phương tiện vận chuyển
                 </h3>
                 <div className="divide-y divide-slate-100">
                   <DetailRow label="Mã phương tiện" value={<span className="font-mono font-bold text-[#0047AB]">{transportUnit?.code || "—"}</span>} />
                   <DetailRow label="Tên phương tiện" value={transportUnit?.name || "—"} />
                   <DetailRow label="Model / Dòng xe" value={<span className="font-mono font-bold text-slate-800">{transportUnit?.model || "—"}</span>} />
                   <DetailRow label="Biển số / Mã đăng kiểm" value={<span className="font-mono font-bold text-amber-700">{transportUnit?.plateNumber || "—"}</span>} />
-                  <DetailRow label="Số khung / Serial" value={<span className="font-mono text-slate-700">{transportUnit?.serial || "—"}</span>} />
-                  <DetailRow label="Nhà sản xuất xe" value={transportUnit?.manufacturer || "—"} />
-                </div>
-              </div>
-
-              {/* Thông số phương tiện theo đúng tài liệu ảnh 3 */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-2xs">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                    Thông số phương tiện kỹ thuật (Vehicle Specifications)
-                  </h3>
-                  <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                    Vehicle Specs
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm">
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Phạm vi hoạt động (Application of work)</span>
-                    <span className="font-semibold text-slate-900 text-right">{String(transportUnit?.specs.applicationWork || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Tiêu chuẩn khí thải (Emission standard)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.emissionStandard || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Số trục (Number of axles)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{transportUnit?.specs.axes ? `${String(transportUnit.specs.axes)} trục` : "—"}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Độ dốc kẹp lớn nhất (Max clamping gradient)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.clampingGradient || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Tốc độ chạy đường bộ (Speed on road)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.speedRoad || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Tốc độ chạy trên ray (Speed on rail)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.speedRail || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Khổ đường (Gauge)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.gauge || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1">
-                    <span className="text-slate-500">Tổng trọng lượng (Total weight)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.weight || "—")}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-200/80 py-1.5 px-1 sm:col-span-2">
-                    <span className="text-slate-500">Kích thước (Dimensions L×W×H)</span>
-                    <span className="font-semibold text-slate-900 font-mono text-right">{String(transportUnit?.specs.dimensions || "—")}</span>
-                  </div>
+                  <DetailRow label="Tên NSX" value={transportUnit?.manufacturer || "—"} />
+                  <DetailRow label="Tải trọng" value={<span className="font-mono">{String(transportUnit?.specs?.weight || "—")}</span>} />
+                  <DetailRow label="Kích thước" value={<span className="font-mono">{String(transportUnit?.specs?.dimensions || "—")}</span>} />
+                  <DetailRow label="Khổ đường" value={<span className="font-mono">{String(transportUnit?.specs?.gauge || "—")}</span>} />
                 </div>
               </div>
             </div>
@@ -1324,47 +1265,11 @@ function MachineFormModal({
     };
   });
 
-  const [formTab, setFormTab] = useState<"assembly" | "vehicle">("assembly");
   const [isUploading, setIsUploading] = useState(false);
   const isCreate = mode === "create";
   const railOptions = useCatalogOptions("Loại ray");
-  const { projects } = useProjectsData();
-
-  const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelCertificateRow[]>([]);
-  useEffect(() => {
-    let active = true;
-    loadPersonnelCertificateRows()
-      .then((rows) => {
-        if (active) setPersonnelDirectory(rows);
-      })
-      .catch(() => {
-        if (active) setPersonnelDirectory([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const teamOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const row of personnelDirectory) {
-      const team = row.to_han?.trim();
-      if (team && team !== "Chưa phân tổ") set.add(team);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [personnelDirectory]);
-
-  const personOptions = useMemo(() => {
-    const team = form.team?.trim();
-    const set = new Set<string>();
-    for (const row of personnelDirectory) {
-      const name = row.ho_ten?.trim();
-      if (!name) continue;
-      if (team && row.to_han?.trim() !== team) continue;
-      set.add(name);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [personnelDirectory, form.team]);
+  const category = getMachineCategory(form);
+  const fields = machineCategoryFieldMatrix(category);
   const selectedRails = form.supportedRails
     .split(/[,;|/]+/)
     .map((value) => value.trim())
@@ -1401,10 +1306,6 @@ function MachineFormModal({
       window.alert("Vui lòng nhập mã máy.");
       return;
     }
-    if (!form.location.trim()) {
-      window.alert("Vui lòng nhập vị trí hiện tại của máy.");
-      return;
-    }
 
     // Đảm bảo đồng bộ ảnh máy chính từ weldingUnit
     const syncImage = form.weldingUnit?.coverImage || form.image;
@@ -1412,8 +1313,12 @@ function MachineFormModal({
 
     onSave({
       ...form,
+      manufacturer: form.manufacturer.trim(),
       image: syncImage,
       gallery: syncGallery,
+      weldingUnit: form.weldingUnit
+        ? { ...form.weldingUnit, manufacturer: form.manufacturer.trim() }
+        : form.weldingUnit,
     });
   }
 
@@ -1436,10 +1341,10 @@ function MachineFormModal({
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-              {isCreate ? "Thêm tổ hợp thiết bị mới" : "Chỉnh sửa tổ hợp thiết bị & máy"}
+              {isCreate ? "Thêm máy hàn mới" : "Thông tin máy hàn"}
             </div>
             <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900 truncate">
-              {isCreate ? "Tổ hợp thiết bị mới" : form.name}
+              {isCreate ? "Máy hàn mới" : form.name}
             </h2>
           </div>
           <button
@@ -1453,39 +1358,10 @@ function MachineFormModal({
           </button>
         </div>
 
-        {/* Tab chuyển đổi giữa Phần Tổ Hợp / Máy hàn & Phần Xe vận chuyển */}
-        <div className="flex border-b border-slate-200 px-5 sm:px-6 bg-slate-50 gap-2">
-          <button
-            type="button"
-            onClick={() => setFormTab("assembly")}
-            className={`border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
-              formTab === "assembly"
-                ? "border-[#0047AB] text-[#0047AB] bg-white"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            ⚡ 1. Tổ hợp & Máy hàn
-          </button>
-          <button
-            type="button"
-            onClick={() => setFormTab("vehicle")}
-            className={`border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
-              formTab === "vehicle"
-                ? "border-[#0047AB] text-[#0047AB] bg-white"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            🚛 2. Phương tiện vận chuyển / Xe
-          </button>
-        </div>
-
-        {/* Form Body */}
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
-          {formTab === "assembly" ? (
-            <div className="space-y-4">
-              {/* Quản lý ảnh máy hàn */}
+          <div className="space-y-4">
               <ImageUploader
-                title="Ảnh máy hàn (Cloudinary: thanhphat/machines)"
+                title="Ảnh máy hàn"
                 folder="thanhphat/machines"
                 coverImage={form.weldingUnit?.coverImage || form.image}
                 coverAsset={form.weldingUnit?.coverAsset}
@@ -1512,10 +1388,14 @@ function MachineFormModal({
                 onUploadingChange={setIsUploading}
               />
 
-              {/* Thông tin định danh tổ hợp */}
+              <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-[#0047AB]">
+                Phương tiện vận chuyển quản lý tại menu riêng →{" "}
+                <a href="/quan-ly-phuong-tien" className="font-semibold underline">Quản lý phương tiện</a>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Mã tổ hợp / Mã máy
+                  Mã máy
                   <input
                     value={form.code}
                     onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -1524,7 +1404,7 @@ function MachineFormModal({
                   />
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Model tổ hợp
+                  Model
                   <ComboBoxInput
                     value={form.model}
                     onChange={(model) => setForm({ ...form, model })}
@@ -1533,89 +1413,29 @@ function MachineFormModal({
                     className="mt-1.5"
                     inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                   />
-                  <span className="mt-1 block text-[11px] font-medium text-slate-500">
-                    Có thể thêm mới trực tiếp từ form — Enter hoặc chọn “+ Thêm mới từ form”
-                  </span>
                 </label>
               </div>
 
               <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                Tên tổ hợp máy hàn
+                Tên máy hàn
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="VD: Tổ hợp máy hàn ray lưu động KCM-007..."
+                  placeholder="VD: Máy hàn tiếp xúc đối đầu..."
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                 />
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Công nghệ hàn
-                  <ComboBoxInput
-                    value={form.weldingTechnology}
-                    onChange={(weldingTechnology) => setForm({ ...form, weldingTechnology })}
-                    options={[...techSuggestions, ...WELDING_TECH_OPTIONS]}
-                    placeholder="Chọn công nghệ có sẵn hoặc nhập công nghệ mới"
-                    mono={false}
-                    className="mt-1.5"
-                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
-                  <span className="mt-1 block text-[11px] font-medium text-slate-500">
-                    Có thể thêm mới trực tiếp từ form — Enter hoặc chọn “+ Thêm mới từ form”
-                  </span>
-                </label>
-                <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Loại ray hỗ trợ
-                  <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
-                    {railOptions.map((rail) => (
-                      <label key={rail} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 font-mono text-xs text-slate-700 hover:bg-slate-50">
-                        <input type="checkbox" checked={selectedRails.includes(rail)} onChange={() => toggleRail(rail)} className="h-4 w-4 accent-[#0047AB]" />
-                        {rail}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Vị trí hiện tại
+                  Tên NSX
                   <input
-                    value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    placeholder="VD: Km 15+200 · Ga Hà Nội"
+                    value={form.manufacturer}
+                    onChange={(e) => setForm({ ...form, manufacturer: e.target.value })}
+                    placeholder="VD: Chengdu Aigre Technology / TCW"
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Dự án đang phục vụ
-                  <ComboBoxInput
-                    strict
-                    mono={false}
-                    value={form.currentProject || NO_PROJECT_LABEL}
-                    onChange={(next) =>
-                      setForm({
-                        ...form,
-                        currentProject: next === NO_PROJECT_LABEL ? "" : next,
-                      })
-                    }
-                    options={[
-                      NO_PROJECT_LABEL,
-                      ...(form.currentProject &&
-                      !projects.some((project) => project.name === form.currentProject)
-                        ? [form.currentProject]
-                        : []),
-                      ...projects.map((project) => project.name),
-                    ]}
-                    placeholder={NO_PROJECT_LABEL}
-                    className="mt-1.5"
-                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Trạng thái
                   <SelectMenu
@@ -1629,82 +1449,72 @@ function MachineFormModal({
                     buttonClassName="h-10 font-medium shadow-2xs"
                   />
                 </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Số serial đầu hàn
-                  <input
-                    value={form.weldingUnit?.serial || form.serialNumber}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        serialNumber: val,
-                        weldingUnit: prev.weldingUnit
-                          ? { ...prev.weldingUnit, serial: val }
-                          : undefined,
-                      }));
-                    }}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
-                  />
-                </label>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {fields.weldingProcess && (
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Tổ vận hành
+                  Quy trình hàn
                   <ComboBoxInput
-                    strict
+                    value={form.weldingTechnology}
+                    onChange={(weldingTechnology) => setForm({ ...form, weldingTechnology })}
+                    options={[...techSuggestions, ...WELDING_TECH_OPTIONS]}
+                    placeholder="Chọn quy trình hàn"
                     mono={false}
-                    value={form.team}
-                    onChange={(team) =>
-                      setForm((prev) => {
-                        const stillValid =
-                          !team.trim() ||
-                          !prev.personInCharge ||
-                          personnelDirectory.some(
-                            (row) =>
-                              row.ho_ten?.trim() === prev.personInCharge &&
-                              row.to_han?.trim() === team.trim(),
-                          );
-                        return stillValid
-                          ? { ...prev, team }
-                          : { ...prev, team, personInCharge: "", operator: "" };
-                      })
-                    }
-                    options={[
-                      ...(form.team && !teamOptions.includes(form.team) ? [form.team] : []),
-                      ...teamOptions,
-                    ]}
-                    placeholder="Chọn tổ vận hành..."
-                    emptyLabel="Không tìm thấy tổ phù hợp"
                     className="mt-1.5"
                     inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
                   />
                 </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Người phụ trách / Vận hành
-                  <ComboBoxInput
-                    strict
-                    mono={false}
-                    value={form.personInCharge}
-                    onChange={(next) =>
-                      setForm({ ...form, personInCharge: next, operator: next })
-                    }
-                    options={[
-                      ...(form.personInCharge && !personOptions.includes(form.personInCharge)
-                        ? [form.personInCharge]
-                        : []),
-                      ...personOptions,
-                    ]}
-                    placeholder="Chọn người phụ trách..."
-                    emptyLabel="Không tìm thấy nhân sự phù hợp"
-                    className="mt-1.5"
-                    inputClassName="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
-                </label>
-              </div>
+              )}
+
+              {fields.railType && (
+                <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                  Loại ray hàn
+                  <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
+                    {railOptions.map((rail) => (
+                      <label key={rail} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 font-mono text-xs text-slate-700 hover:bg-slate-50">
+                        <input type="checkbox" checked={selectedRails.includes(rail)} onChange={() => toggleRail(rail)} className="h-4 w-4 accent-[#0047AB]" />
+                        {rail}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(fields.weight || fields.dimensions) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {fields.weight && (
+                    <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                      Tải trọng
+                      <input
+                        value={String(form.specs?.weight ?? "")}
+                        onChange={(e) => setForm({
+                          ...form,
+                          specs: { ...form.specs, weight: e.target.value },
+                        })}
+                        placeholder="VD: 32 ton"
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
+                      />
+                    </label>
+                  )}
+                  {fields.dimensions && (
+                    <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                      Kích thước
+                      <input
+                        value={String(form.specs?.dimensions ?? "")}
+                        onChange={(e) => setForm({
+                          ...form,
+                          specs: { ...form.specs, dimensions: e.target.value },
+                        })}
+                        placeholder="VD: 8300 × 2500 × 950 mm"
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
 
               <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                Ghi chú tổ hợp
+                Ghi chú
                 <textarea
                   value={form.note}
                   onChange={(e) => setForm({ ...form, note: e.target.value })}
@@ -1712,310 +1522,7 @@ function MachineFormModal({
                   className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] resize-y"
                 />
               </label>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Quản lý ảnh xe vận chuyển */}
-              <ImageUploader
-                title="Ảnh phương tiện vận chuyển (Cloudinary: thanhphat/vehicles)"
-                folder="thanhphat/vehicles"
-                coverImage={form.transportUnit?.coverImage || ""}
-                coverAsset={form.transportUnit?.coverAsset}
-                gallery={form.transportUnit?.gallery || []}
-                galleryAssets={form.transportUnit?.galleryAssets}
-                onChangeCover={(url, asset) => {
-                  setForm((prev) => ({
-                    ...prev,
-                    transportUnit: prev.transportUnit
-                      ? { ...prev.transportUnit, coverImage: url, coverAsset: asset }
-                      : undefined,
-                  }));
-                }}
-                onChangeGallery={(urls, assets) => {
-                  setForm((prev) => ({
-                    ...prev,
-                    transportUnit: prev.transportUnit
-                      ? { ...prev.transportUnit, gallery: urls, galleryAssets: assets }
-                      : undefined,
-                  }));
-                }}
-                onUploadingChange={setIsUploading}
-              />
-
-              {/* Thông tin cơ bản xe */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Mã phương tiện
-                  <input
-                    value={form.transportUnit?.code || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        transportUnit: prev.transportUnit
-                          ? { ...prev.transportUnit, code: val }
-                          : undefined,
-                      }));
-                    }}
-                    placeholder="VD: TU-UN5-CARRIER-01"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
-                  />
-                </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Biển số / Mã đăng ký xe
-                  <input
-                    value={form.transportUnit?.plateNumber || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        transportUnit: prev.transportUnit
-                          ? { ...prev.transportUnit, plateNumber: val }
-                          : undefined,
-                      }));
-                    }}
-                    placeholder="VD: ĐS-TP-1501 hoặc 29H-882.16"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Tên phương tiện
-                  <input
-                    value={form.transportUnit?.name || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        transportUnit: prev.transportUnit
-                          ? { ...prev.transportUnit, name: val }
-                          : undefined,
-                      }));
-                    }}
-                    placeholder="VD: Toa xe chuyên dùng trên ray"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
-                </label>
-                <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                  Model / Dòng xe
-                  <input
-                    value={form.transportUnit?.model || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setForm((prev) => ({
-                        ...prev,
-                        transportUnit: prev.transportUnit
-                          ? { ...prev.transportUnit, model: val }
-                          : undefined,
-                      }));
-                    }}
-                    placeholder="VD: Toa xe chuyên dùng hoặc Volvo FMX 330"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                  />
-                </label>
-              </div>
-
-              {/* Bộ thông số kỹ thuật riêng của phương tiện */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  Bộ thông số phương tiện
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Phạm vi hoạt động (Application of work)
-                    <input
-                      value={form.transportUnit?.specs.applicationWork || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, applicationWork: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: On rail / stationary"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Tiêu chuẩn khí thải (Emission standard)
-                    <input
-                      value={form.transportUnit?.specs.emissionStandard || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, emissionStandard: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: Euro V"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Số trục (Number of axles)
-                    <input
-                      value={String(form.transportUnit?.specs.axes ?? "")}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, axes: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 4"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Độ dốc kẹp lớn nhất (Clamping gradient)
-                    <input
-                      value={form.transportUnit?.specs.clampingGradient || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, clampingGradient: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 5%"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Tốc độ chạy đường bộ (Speed on road)
-                    <input
-                      value={form.transportUnit?.specs.speedRoad || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, speedRoad: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: — (Không tự hành) hoặc 80 km/h"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Tốc độ chạy trên ray (Speed on rail)
-                    <input
-                      value={form.transportUnit?.specs.speedRail || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, speedRail: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 20 km/h"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Khổ đường (Gauge)
-                    <input
-                      value={form.transportUnit?.specs.gauge || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, gauge: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 1435 mm"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Tổng trọng lượng (Total weight)
-                    <input
-                      value={form.transportUnit?.specs.weight || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, weight: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 32 ton"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-
-                  <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">
-                    Kích thước DxRxC (Dimensions)
-                    <input
-                      value={form.transportUnit?.specs.dimensions || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          transportUnit: prev.transportUnit
-                            ? {
-                                ...prev.transportUnit,
-                                specs: { ...prev.transportUnit.specs, dimensions: val },
-                              }
-                            : undefined,
-                        }));
-                      }}
-                      placeholder="VD: 8300 × 2500 × 950 mm"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Modal Footer */}
@@ -2129,6 +1636,21 @@ export default function MachineList() {
   const running = list.filter((m) => m.status === "Đang làm việc").length;
   const ready = list.filter((m) => m.status === "Sẵn sàng").length;
   const maint = list.filter((m) => m.status === "Bảo trì").length;
+  const broken = list.filter((m) => m.status === "Hỏng").length;
+
+  const typeSummary = useMemo(() => {
+    return MACHINE_CATEGORIES.map((category) => {
+      const rows = list.filter((m) => getMachineCategory(m) === category);
+      return {
+        category,
+        total: rows.length,
+        working: rows.filter((m) => m.status === "Đang làm việc").length,
+        ready: rows.filter((m) => m.status === "Sẵn sàng").length,
+        maint: rows.filter((m) => m.status === "Bảo trì").length,
+        broken: rows.filter((m) => m.status === "Hỏng").length,
+      };
+    });
+  }, [list]);
 
   function openEdit(machine: Machine) {
     setDetail(null);
@@ -2210,15 +1732,58 @@ export default function MachineList() {
           Đang đồng bộ danh sách máy từ Supabase…
         </div>
       )}
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-slate-600">
-        <span>
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{list.length}</strong> máy
-        </span>
-        <span className="text-slate-300">|</span>
-        <span>
-          <strong className="font-semibold text-[#0047AB] font-mono tabular-nums">{running}</strong> đang làm việc · <span className="font-medium text-emerald-700 font-mono tabular-nums">{ready}</span> sẵn sàng · <span className="font-medium text-amber-700 font-mono tabular-nums">{maint}</span> bảo trì
-        </span>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng số máy</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{list.length}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Đang hoạt động</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-[#0047AB]">{running}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="text-xs font-bold uppercase tracking-wider text-amber-700">Đang bảo trì</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-amber-700">{maint}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="text-xs font-bold uppercase tracking-wider text-emerald-700">Đang rảnh</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-emerald-700">{ready}</div>
+          {broken > 0 && <div className="mt-1 text-xs text-rose-600">{broken} hỏng</div>}
+        </div>
       </div>
+
+      <section className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-bold text-slate-900">Bảng tổng hợp số lượng các loại máy</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Danh sách thiết bị theo loại · Nhiệt nhôm / Flash Butt / Phương tiện</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <th className="px-4 py-2.5">Loại thiết bị</th>
+                <th className="px-3.5 py-2.5 text-right">Số lượng</th>
+                <th className="px-3.5 py-2.5 text-right">Đang làm việc</th>
+                <th className="px-3.5 py-2.5 text-right">Sẵn sàng</th>
+                <th className="px-3.5 py-2.5 text-right">Bảo trì</th>
+                <th className="px-3.5 py-2.5 text-right">Hỏng</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {typeSummary.map((row) => (
+                <tr key={row.category} className="hover:bg-slate-50/80">
+                  <td className="px-4 py-2.5 font-semibold text-slate-900">{row.category}</td>
+                  <td className="px-3.5 py-2.5 text-right font-mono font-bold tabular-nums text-[#0047AB]">{row.total}</td>
+                  <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-slate-700">{row.working}</td>
+                  <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-emerald-700">{row.ready}</td>
+                  <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-amber-700">{row.maint}</td>
+                  <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-rose-600">{row.broken}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <div className="relative min-w-[240px] flex-1">
@@ -2265,11 +1830,8 @@ export default function MachineList() {
                     </span>
                   )}
 
-                  <div className="relative h-[56px] w-[96px] sm:h-[64px] sm:w-[112px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
-                    <Image src={m.image} alt={m.name} fill className="object-cover" sizes="112px" />
-                    <span className="absolute bottom-1 right-1 rounded bg-slate-900/85 px-1.5 py-0.5 text-[11px] font-bold font-mono text-white tracking-wide">
-                      {m.code}
-                    </span>
+                  <div className="relative h-[88px] w-[140px] sm:h-[104px] sm:w-[168px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
+                    <Image src={m.image} alt="" fill className="object-cover" sizes="168px" />
                   </div>
 
                   <div className="min-w-0 flex-1 pt-0.5">
@@ -2277,7 +1839,13 @@ export default function MachineList() {
                       {m.name}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      <strong className="text-slate-700 font-semibold">{m.model}</strong> · {m.location} · <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
+                      <strong className="font-mono font-semibold text-[#0047AB]">{m.code}</strong>
+                      {" · "}
+                      <strong className="text-slate-700 font-semibold">{m.model}</strong>
+                      {" · "}
+                      {getMachineCategory(m)}
+                      {" · "}
+                      <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span

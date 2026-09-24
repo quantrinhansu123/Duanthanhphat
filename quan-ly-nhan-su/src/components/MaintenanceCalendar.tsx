@@ -6,7 +6,6 @@ import MaintenanceFormModal, {
   type MaintenanceFormValues,
 } from "@/components/MaintenanceFormModal";
 import {
-  maintenanceEvents as seedEvents,
   type MaintenanceEvent,
   type MaintenanceResult,
 } from "@/data/maintenance";
@@ -83,7 +82,7 @@ function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent
 
 export default function MaintenanceCalendar() {
   const today = useMemo(() => new Date(), []);
-  const [events, setEvents] = useState<MaintenanceEvent[]>(seedEvents);
+  const [events, setEvents] = useState<MaintenanceEvent[]>([]);
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(toKey(today.getFullYear(), today.getMonth(), today.getDate()));
   const [openAdd, setOpenAdd] = useState(false);
@@ -251,7 +250,7 @@ export default function MaintenanceCalendar() {
     <main className="w-full px-4 sm:px-6 pb-8">
       {dataError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 sm:text-sm">
-          Chưa tải được dữ liệu bảo trì từ Supabase: {dataError}. Hãy chạy migration lịch sử bảo trì mới.
+          Chưa tải được dữ liệu bảo trì từ Supabase: {dataError}
         </div>
       )}
       <div className="mb-4 flex flex-wrap items-center gap-3">

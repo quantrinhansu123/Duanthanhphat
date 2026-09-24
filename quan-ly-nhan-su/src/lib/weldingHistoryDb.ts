@@ -37,6 +37,8 @@ export interface ViewWeldHistoryRow {
   so_luong_loi?: number | null;
   ten_may?: string | null;
   loai_ray?: string | null;
+  loai_moi_han?: string | null;
+  cong_nghe_han?: string | null;
   ten_du_an?: string | null;
   ca_han?: string | null;
   hach_toan?: string | null;
@@ -117,6 +119,8 @@ function mapSupabaseRow(row: SupabaseWeldRow, idx: number): WeldingHistoryRecord
     accountingCode:
       row.hach_toan ||
       (idx % 4 === 0 ? "HT-SX01" : idx % 4 === 1 ? "HT-SX02" : idx % 4 === 2 ? "HT-M01" : "HT-TN01"),
+    method: row.cong_nghe_han || "FBW",
+    weldType: row.loai_moi_han || "Sản xuất",
     result,
   };
 }
@@ -134,6 +138,8 @@ function mapViewRow(row: ViewWeldHistoryRow, _idx: number): WeldingHistoryRecord
     project: row.ten_du_an || "ĐSCT Bắc – Nam",
     shift: (row.ca_han || "Ca 1") as WeldingHistoryRecord["shift"],
     accountingCode: row.hach_toan || "HT-SX01",
+    method: row.cong_nghe_han || "FBW",
+    weldType: row.loai_moi_han || "Sản xuất",
     result: (row.ket_qua || "Đạt") as WeldingHistoryRecord["result"],
   };
 }
@@ -186,6 +192,10 @@ export interface WeldingHistoryFilterParams {
   projects?: string[];
   shifts?: string[];
   accountingCodes?: string[];
+  /** Công nghệ hàn: FBW / ATW */
+  methods?: string[];
+  /** Loại hàn: Sản xuất / Thử nghiệm / Đào tạo */
+  weldTypes?: string[];
   /** Khi false: chỉ lấy trang danh sách, bỏ qua thống kê KPI (load nhanh hơn). */
   includeStats?: boolean;
 }
@@ -248,6 +258,8 @@ function filterInMemoryRecords(
     if (params.projects && params.projects.length > 0 && !params.projects.includes(r.project)) return false;
     if (params.shifts && params.shifts.length > 0 && !params.shifts.includes(r.shift)) return false;
     if (params.accountingCodes && params.accountingCodes.length > 0 && !params.accountingCodes.includes(r.accountingCode)) return false;
+    if (params.methods && params.methods.length > 0 && !params.methods.includes(r.method)) return false;
+    if (params.weldTypes && params.weldTypes.length > 0 && !params.weldTypes.includes(r.weldType)) return false;
 
     if (tokens.length > 0) {
       const haystack = removeVietnameseTones(
@@ -298,29 +310,35 @@ async function computeViewStats(
   searchTokens: string[],
   total: number,
 ): Promise<WeldingHistoryStats> {
-  const { data: statsData, error: statsError } = await supabase.rpc("thong_ke_lich_su_moi_han", {
-    p_date_from: params.dateFrom || null,
-    p_date_to: params.dateTo || null,
-    p_welder: params.welder && params.welder !== "Tất cả thợ hàn" ? params.welder : null,
-    p_result: params.result && params.result !== "Tất cả kết quả" ? params.result : null,
-    p_machines: params.machines?.length ? params.machines : null,
-    p_rails: params.rails?.length ? params.rails : null,
-    p_projects: params.projects?.length ? params.projects : null,
-    p_shifts: params.shifts?.length ? params.shifts : null,
-    p_accounting_codes: params.accountingCodes?.length ? params.accountingCodes : null,
-    p_query: params.query?.trim() || null,
-  });
+  const hasMethodOrTypeFilter =
+    (params.methods?.length ?? 0) > 0 || (params.weldTypes?.length ?? 0) > 0;
 
-  if (!statsError && Array.isArray(statsData) && statsData.length > 0) {
-    const row = statsData[0] as WeldingHistoryStatsRpcRow;
-    return {
-      total: Number(row.tong ?? total),
-      pass: Number(row.dat ?? 0),
-      fail: Number(row.khong_dat ?? 0),
-      rework: Number(row.sua_chua ?? 0),
-      pending: Number(row.cho_thi_nghiem ?? 0),
-      accountingCounts: parseAccountingStats(row.thong_ke_hach_toan),
-    };
+  // RPC chưa nhận công nghệ/loại hàn — bỏ qua khi đang lọc các trường này.
+  if (!hasMethodOrTypeFilter) {
+    const { data: statsData, error: statsError } = await supabase.rpc("thong_ke_lich_su_moi_han", {
+      p_date_from: params.dateFrom || null,
+      p_date_to: params.dateTo || null,
+      p_welder: params.welder && params.welder !== "Tất cả thợ hàn" ? params.welder : null,
+      p_result: params.result && params.result !== "Tất cả kết quả" ? params.result : null,
+      p_machines: params.machines?.length ? params.machines : null,
+      p_rails: params.rails?.length ? params.rails : null,
+      p_projects: params.projects?.length ? params.projects : null,
+      p_shifts: params.shifts?.length ? params.shifts : null,
+      p_accounting_codes: params.accountingCodes?.length ? params.accountingCodes : null,
+      p_query: params.query?.trim() || null,
+    });
+
+    if (!statsError && Array.isArray(statsData) && statsData.length > 0) {
+      const row = statsData[0] as WeldingHistoryStatsRpcRow;
+      return {
+        total: Number(row.tong ?? total),
+        pass: Number(row.dat ?? 0),
+        fail: Number(row.khong_dat ?? 0),
+        rework: Number(row.sua_chua ?? 0),
+        pending: Number(row.cho_thi_nghiem ?? 0),
+        accountingCounts: parseAccountingStats(row.thong_ke_hach_toan),
+      };
+    }
   }
 
   // RPC không dùng được → quét view theo trang.
@@ -344,6 +362,8 @@ async function computeViewStats(
     if (params.projects?.length) allQuery = allQuery.in("ten_du_an", params.projects);
     if (params.shifts?.length) allQuery = allQuery.in("ca_han", params.shifts);
     if (params.accountingCodes?.length) allQuery = allQuery.in("hach_toan", params.accountingCodes);
+    if (params.methods?.length) allQuery = allQuery.in("cong_nghe_han", params.methods);
+    if (params.weldTypes?.length) allQuery = allQuery.in("loai_moi_han", params.weldTypes);
     if (searchTokens.length > 0) {
       searchTokens.forEach((tok) => {
         allQuery = allQuery.ilike("tim_kiem_khong_dau", `%${tok}%`);
@@ -362,8 +382,9 @@ async function computeViewStats(
     if (rows.length < statsPageSize) break;
   }
 
+  const scanned = pass + fail + rework + pending;
   return {
-    total,
+    total: scanned || total,
     pass,
     fail,
     rework,
@@ -424,6 +445,8 @@ export async function loadWeldingHistoryPage(
     if (params.projects && params.projects.length > 0) viewQuery = viewQuery.in("ten_du_an", params.projects);
     if (params.shifts && params.shifts.length > 0) viewQuery = viewQuery.in("ca_han", params.shifts);
     if (params.accountingCodes && params.accountingCodes.length > 0) viewQuery = viewQuery.in("hach_toan", params.accountingCodes);
+    if (params.methods && params.methods.length > 0) viewQuery = viewQuery.in("cong_nghe_han", params.methods);
+    if (params.weldTypes && params.weldTypes.length > 0) viewQuery = viewQuery.in("loai_moi_han", params.weldTypes);
 
     if (searchTokens.length > 0) {
       searchTokens.forEach((tok) => {
@@ -454,6 +477,8 @@ export async function loadWeldingHistoryPage(
       if (params.projects && params.projects.length > 0) legacyQuery = legacyQuery.in("ten_du_an", params.projects);
       if (params.shifts && params.shifts.length > 0) legacyQuery = legacyQuery.in("ca_han", params.shifts);
       if (params.accountingCodes && params.accountingCodes.length > 0) legacyQuery = legacyQuery.in("hach_toan", params.accountingCodes);
+      if (params.methods && params.methods.length > 0) legacyQuery = legacyQuery.in("cong_nghe_han", params.methods);
+      if (params.weldTypes && params.weldTypes.length > 0) legacyQuery = legacyQuery.in("loai_moi_han", params.weldTypes);
       const rawSearch = sanitizePostgrestSearch(params.query);
       if (rawSearch) {
         legacyQuery = legacyQuery.or(`ma_lich_su.ilike.%${rawSearch}%,moi_han_lien_ket.ilike.%${rawSearch}%,ghi_chu.ilike.%${rawSearch}%,ten_tho_han.ilike.%${rawSearch}%,ten_du_an.ilike.%${rawSearch}%,ten_may.ilike.%${rawSearch}%,hach_toan.ilike.%${rawSearch}%`);
@@ -539,6 +564,8 @@ export async function loadWeldingHistoryPage(
     if (params.dateTo) pageQuery = pageQuery.lte("ngay_thuc_hien", params.dateTo);
     if (params.rails?.length) pageQuery = pageQuery.in("loai_ray", params.rails);
     if (params.accountingCodes?.length) pageQuery = pageQuery.in("hach_toan", params.accountingCodes);
+    if (params.methods?.length) pageQuery = pageQuery.in("cong_nghe_han", params.methods);
+    if (params.weldTypes?.length) pageQuery = pageQuery.in("loai_moi_han", params.weldTypes);
 
     const { data, error, count } = await pageQuery.range(fromIndex, toIndex);
     if (error) {
@@ -574,6 +601,8 @@ export async function loadWeldingHistoryPage(
       if (params.dateTo) statsQuery = statsQuery.lte("ngay_thuc_hien", params.dateTo);
       if (params.rails?.length) statsQuery = statsQuery.in("loai_ray", params.rails);
       if (params.accountingCodes?.length) statsQuery = statsQuery.in("hach_toan", params.accountingCodes);
+      if (params.methods?.length) statsQuery = statsQuery.in("cong_nghe_han", params.methods);
+      if (params.weldTypes?.length) statsQuery = statsQuery.in("loai_moi_han", params.weldTypes);
       const { data: more, error: moreErr } = await statsQuery.range(offset, offset + rawPageSize - 1);
       if (moreErr) break;
       const moreRows = (more ?? []) as unknown as SupabaseWeldRow[];
@@ -600,6 +629,8 @@ export async function loadWeldingHistoryPage(
     if (params.dateTo) baseQuery = baseQuery.lte("ngay_thuc_hien", params.dateTo);
     if (params.rails?.length) baseQuery = baseQuery.in("loai_ray", params.rails);
     if (params.accountingCodes?.length) baseQuery = baseQuery.in("hach_toan", params.accountingCodes);
+    if (params.methods?.length) baseQuery = baseQuery.in("cong_nghe_han", params.methods);
+    if (params.weldTypes?.length) baseQuery = baseQuery.in("loai_moi_han", params.weldTypes);
 
     const { data, error } = await baseQuery.range(offset, offset + rawPageSize - 1);
     if (error) {
@@ -662,6 +693,8 @@ export async function exportAllFilteredWeldingHistory(
       if (params.projects?.length) viewQuery = viewQuery.in("ten_du_an", params.projects);
       if (params.shifts?.length) viewQuery = viewQuery.in("ca_han", params.shifts);
       if (params.accountingCodes?.length) viewQuery = viewQuery.in("hach_toan", params.accountingCodes);
+      if (params.methods?.length) viewQuery = viewQuery.in("cong_nghe_han", params.methods);
+      if (params.weldTypes?.length) viewQuery = viewQuery.in("loai_moi_han", params.weldTypes);
 
       if (searchTokens.length > 0) {
         searchTokens.forEach((tok) => {
@@ -686,6 +719,8 @@ export async function exportAllFilteredWeldingHistory(
           if (params.projects?.length) fallbackQ = fallbackQ.in("ten_du_an", params.projects);
           if (params.shifts?.length) fallbackQ = fallbackQ.in("ca_han", params.shifts);
           if (params.accountingCodes?.length) fallbackQ = fallbackQ.in("hach_toan", params.accountingCodes);
+          if (params.methods?.length) fallbackQ = fallbackQ.in("cong_nghe_han", params.methods);
+          if (params.weldTypes?.length) fallbackQ = fallbackQ.in("loai_moi_han", params.weldTypes);
           const rawSearch = sanitizePostgrestSearch(params.query);
           if (rawSearch) {
             fallbackQ = fallbackQ.or(`ma_lich_su.ilike.%${rawSearch}%,moi_han_lien_ket.ilike.%${rawSearch}%,ghi_chu.ilike.%${rawSearch}%,ten_tho_han.ilike.%${rawSearch}%,ten_du_an.ilike.%${rawSearch}%,ten_may.ilike.%${rawSearch}%,hach_toan.ilike.%${rawSearch}%`);
@@ -919,6 +954,7 @@ export async function saveWeldingHistoryRecord(
         tinh_trang_thi_nghiem: testStatus,
         moi_han_lien_ket: linkedJoint,
         ghi_chu: noteContent,
+        ca_han: record.shift,
         nguon_du_lieu: "lich-su-han",
       };
 
@@ -930,11 +966,20 @@ export async function saveWeldingHistoryRecord(
         // Try inserting with hach_toan
         try {
           const payloadWithHt = { ...basePayload, hach_toan: record.accountingCode };
-          const { data, error } = await supabase
+          let { data, error } = await supabase
             .from("lich_su_moi_han")
             .insert(payloadWithHt)
             .select("id")
             .single();
+
+          if (error && /ca_han/.test(error.message ?? "") && "ca_han" in payloadWithHt) {
+            delete (payloadWithHt as { ca_han?: string }).ca_han;
+            ({ data, error } = await supabase
+              .from("lich_su_moi_han")
+              .insert(payloadWithHt)
+              .select("id")
+              .single());
+          }
 
           if (error) {
             dbError = formatSupabaseError(error);
@@ -957,6 +1002,7 @@ export async function saveWeldingHistoryRecord(
           so_luong_loi: errorCount,
           tinh_trang_thi_nghiem: testStatus,
           ghi_chu: noteContent,
+          ca_han: record.shift,
         };
         if (duAnId) updatePayload.du_an_id = duAnId;
         if (thoHanId) updatePayload.tho_han_id = thoHanId;
@@ -964,10 +1010,18 @@ export async function saveWeldingHistoryRecord(
 
         try {
           const payloadWithHt = { ...updatePayload, hach_toan: record.accountingCode };
-          const { error } = await supabase
+          let { error } = await supabase
             .from("lich_su_moi_han")
             .update(payloadWithHt)
             .eq("id", record.id);
+
+          if (error && /ca_han/.test(error.message ?? "") && "ca_han" in payloadWithHt) {
+            delete (payloadWithHt as { ca_han?: string }).ca_han;
+            ({ error } = await supabase
+              .from("lich_su_moi_han")
+              .update(payloadWithHt)
+              .eq("id", record.id));
+          }
 
           if (error) {
             dbError = formatSupabaseError(error);

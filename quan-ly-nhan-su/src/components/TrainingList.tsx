@@ -12,6 +12,7 @@ import {
   fetchTrainingCourseDetail,
   fetchTrainingCourses,
   fetchTrainingPersonnelOptions,
+  formatTotalTrainingHours,
   isTrainingAssetReferenced,
   saveTrainingCourse,
   type CertificateGroupOption,
@@ -20,6 +21,7 @@ import {
   type TrainingAsset,
 } from "@/lib/trainingDb";
 import { deleteCloudinaryAsset, uploadCloudinaryAsset } from "@/lib/cloudinaryClient";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 const resultStyle: Record<string, string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -51,11 +53,12 @@ function TrainingFormModal({
   onSubmitSuccess: () => void;
 }) {
   const isEdit = Boolean(initial);
+  const railOptions = useCatalogOptions("Loại ray");
+  const methodOptions = useCatalogOptions("Phương pháp hàn", "code");
   const [form, setForm] = useState({
     title: initial?.title ?? "",
     trainerName: initial?.trainer === "Chưa chỉ định" ? "" : initial?.trainer ?? "",
     date: initial ? viToISO(initial.date) : "",
-    duration: initial && initial.duration !== "0:00" ? initial.duration : "",
     location: initial && initial.location !== "Chưa cập nhật" ? initial.location : "",
     result: initial?.result ?? "Đạt",
     description: initial?.description ?? "",
@@ -63,14 +66,22 @@ function TrainingFormModal({
     certGroupId: initial?.certificateGroupId ?? "",
     manufacturerHours: initial?.manufacturerHours != null ? String(initial.manufacturerHours) : "",
     selfTrainingHours: initial?.selfTrainingHours != null ? String(initial.selfTrainingHours) : "",
+    railType: initial?.railType ?? "",
+    weldMethod: initial?.weldMethod ?? "",
+    videoUrl: initial?.videoUrl ?? "",
     participantsCount:
       initial?.participantsCount != null ? String(initial.participantsCount) : "",
   });
 
+  const computedDuration = formatTotalTrainingHours(form.manufacturerHours, form.selfTrainingHours);
+
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnail ?? DEFAULT_THUMBNAIL);
   const [cloudinaryPublicId, setCloudinaryPublicId] = useState(initial?.cloudinaryPublicId ?? "");
-  const [assets, setAssets] = useState<TrainingAsset[]>(initial?.assets ?? []);
+  const [assets, setAssets] = useState<TrainingAsset[]>(
+    (initial?.assets ?? []).filter((a) => a.resourceType !== "video"),
+  );
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const [attendeeList, setAttendeeList] = useState<{
     id: string;
@@ -82,9 +93,10 @@ function TrainingFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = useCallback(async () => {
-    if (saving || uploadingImg) return;
+    if (saving || uploadingImg || uploadingVideo) return;
     const initialIds = new Set((initial?.assets ?? []).map((asset) => asset.publicId));
     for (const asset of assets) {
       if (!initialIds.has(asset.publicId)) {
@@ -92,15 +104,15 @@ function TrainingFormModal({
       }
     }
     onClose();
-  }, [assets, initial?.assets, onClose, saving, uploadingImg]);
+  }, [assets, initial?.assets, onClose, saving, uploadingImg, uploadingVideo]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !saving && !uploadingImg) void handleClose();
+      if (e.key === "Escape" && !saving && !uploadingImg && !uploadingVideo) void handleClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleClose, saving, uploadingImg]);
+  }, [handleClose, saving, uploadingImg, uploadingVideo]);
 
   function set<K extends keyof typeof form>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -115,6 +127,10 @@ function TrainingFormModal({
     const uploaded: TrainingAsset[] = [];
     const errors: string[] = [];
     for (const file of files) {
+      if (file.type.startsWith("video/")) {
+        errors.push(`${file.name}: Dùng mục Video bên dưới để thêm 1 video.`);
+        continue;
+      }
       const uploadRes = await uploadCloudinaryAsset(file, "thanhphat/trainings");
       if (!uploadRes.result) {
         errors.push(`${file.name}: ${uploadRes.error || "Không tải được"}`);
@@ -123,7 +139,7 @@ function TrainingFormModal({
       const asset: TrainingAsset = {
         publicId: uploadRes.result.public_id,
         secureUrl: uploadRes.result.secure_url,
-        resourceType: uploadRes.result.resource_type || (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "raw"),
+        resourceType: uploadRes.result.resource_type || (file.type.startsWith("image/") ? "image" : "raw"),
         name: file.name,
         mimeType: file.type || undefined,
         bytes: uploadRes.result.bytes ?? file.size,
@@ -138,6 +154,26 @@ function TrainingFormModal({
     setUploadingImg(false);
     e.target.value = "";
     if (errors.length) setError(errors.join("\n"));
+  }
+
+  async function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setError("Vui lòng chọn file video.");
+      e.target.value = "";
+      return;
+    }
+    setUploadingVideo(true);
+    setError("");
+    const uploadRes = await uploadCloudinaryAsset(file, "thanhphat/trainings");
+    setUploadingVideo(false);
+    e.target.value = "";
+    if (uploadRes.result?.secure_url) {
+      set("videoUrl", uploadRes.result.secure_url);
+    } else {
+      setError(uploadRes.error || "Không tải được video lên Cloudinary.");
+    }
   }
 
   async function handleSubmit() {
@@ -159,7 +195,7 @@ function TrainingFormModal({
       id: initial?.id,
       title: form.title.trim(),
       date: form.date,
-      duration: form.duration.trim(),
+      duration: computedDuration,
       location: form.location.trim(),
       description: form.description.trim(),
       trainerName: form.trainerName.trim() || undefined,
@@ -171,6 +207,9 @@ function TrainingFormModal({
       manufacturerHours: Number(form.manufacturerHours) || 0,
       selfTrainingHours: Number(form.selfTrainingHours) || 0,
       participantsCount: attendeeList.length,
+      videoUrl: form.videoUrl.trim(),
+      railType: form.railType.trim(),
+      weldMethod: form.weldMethod.trim(),
       attendees: attendeeList.map((a) => ({
         employeeId: a.id,
         result: a.result,
@@ -235,9 +274,9 @@ function TrainingFormModal({
             </div>
           )}
 
-          {/* Ảnh đại diện, tài liệu và video khóa học */}
+          {/* Ảnh đại diện & tài liệu khóa học */}
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ảnh, tài liệu &amp; video khóa học</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ảnh &amp; tài liệu khóa học</label>
             <div className="mt-2 flex items-center gap-4">
               <div className="relative h-24 w-40 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-2xs">
                 <Image src={thumbnailUrl} alt="Thumbnail" fill className="object-cover" />
@@ -246,7 +285,7 @@ function TrainingFormModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                   multiple
                   onChange={handleAssetUpload}
                   className="hidden"
@@ -254,11 +293,11 @@ function TrainingFormModal({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImg}
+                  disabled={uploadingImg || uploadingVideo}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs disabled:opacity-50"
                 >
                   <UploadSimple size={14} weight="bold" />
-                  {uploadingImg ? "Đang tải các tệp..." : "Thêm nhiều tệp"}
+                  {uploadingImg ? "Đang tải các tệp..." : "Thêm ảnh / tài liệu"}
                 </button>
                 <button
                   type="button"
@@ -298,7 +337,54 @@ function TrainingFormModal({
                 ))}
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-slate-500">Chọn nhiều ảnh, video hoặc tài liệu trong một lần.</p>
+            <p className="mt-1.5 text-[11px] text-slate-500">Chọn nhiều ảnh hoặc tài liệu trong một lần.</p>
+          </div>
+
+          {/* 1 video bài giảng */}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Video bài giảng (1 video)</label>
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="url"
+                className={fieldClass}
+                value={form.videoUrl}
+                onChange={(e) => set("videoUrl", e.target.value)}
+                placeholder="https://... (link video)"
+                disabled={uploadingVideo}
+              />
+              <input
+                ref={videoFileInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => void handleVideoUpload(e)}
+              />
+              <button
+                type="button"
+                disabled={uploadingVideo || uploadingImg || saving}
+                onClick={() => videoFileInputRef.current?.click()}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <UploadSimple size={14} weight="bold" />
+                {uploadingVideo ? "Đang tải…" : "Tải video"}
+              </button>
+            </div>
+            {form.videoUrl.trim() ? (
+              <div className="mt-1.5 flex items-center gap-2 text-xs">
+                <a href={form.videoUrl.trim()} target="_blank" rel="noreferrer" className="font-semibold text-[#0047AB] hover:underline truncate">
+                  Xem video đã gắn
+                </a>
+                <button
+                  type="button"
+                  onClick={() => set("videoUrl", "")}
+                  className="font-semibold text-rose-600 hover:underline cursor-pointer"
+                >
+                  Gỡ video
+                </button>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-slate-500">Dán link hoặc tải 1 file video lên Cloudinary.</p>
+            )}
           </div>
 
           <div>
@@ -333,14 +419,36 @@ function TrainingFormModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Thời lượng</label>
-              <input
-                type="text"
-                className={fieldClass}
-                value={form.duration}
-                onChange={(e) => set("duration", e.target.value)}
-                placeholder="VD: 4:00 (4 giờ)"
-              />
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Loại ray</label>
+              <select className={fieldClass} value={form.railType} onChange={(e) => set("railType", e.target.value)}>
+                <option value="">— Chọn loại ray —</option>
+                {railOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Công nghệ hàn</label>
+              <select className={fieldClass} value={form.weldMethod} onChange={(e) => set("weldMethod", e.target.value)}>
+                <option value="">— Chọn công nghệ —</option>
+                {(methodOptions.length > 0 ? methodOptions : ["FBW", "ATW"]).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Thời lượng (giờ) = NSX + tự đào tạo
+              </label>
+              <div
+                className={`${fieldClass} flex items-center bg-slate-50 text-slate-800 font-mono font-semibold cursor-not-allowed`}
+                aria-readonly="true"
+              >
+                {computedDuration} giờ
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Địa điểm</label>
@@ -575,7 +683,7 @@ function TrainingFormModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || uploadingImg || uploadingVideo}
             className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-60"
           >
             {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Tạo khóa học"}
@@ -644,7 +752,7 @@ function TrainingDetailModal({
           <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
             <Image src={course.thumbnail} alt={course.title} fill className="object-cover" />
             <div className="absolute bottom-2.5 right-2.5 rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
-              {course.duration}
+              {course.duration} giờ
             </div>
           </div>
 
@@ -655,14 +763,38 @@ function TrainingDetailModal({
             <span className="inline-flex items-center rounded-full bg-blue-50 text-[#0047AB] border border-blue-200 px-2.5 py-0.5 text-xs font-semibold">
               {course.participantsCount} người tham gia
             </span>
+            {course.railType ? (
+              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
+                Loại ray: {course.railType}
+              </span>
+            ) : null}
+            {course.weldMethod ? (
+              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
+                {course.weldMethod}
+              </span>
+            ) : null}
             {course.certificateGroupName && (
               <span className="inline-flex items-center rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
                 Cấp: {course.certificateGroupName}
               </span>
             )}
+            {course.videoUrl ? (
+              <a
+                href={course.videoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-full bg-[#0047AB] px-2.5 py-0.5 text-xs font-semibold text-white hover:bg-[#00388A]"
+              >
+                Xem video
+              </a>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thời lượng</div>
+              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.duration} giờ</div>
+            </div>
             <div>
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ đào tạo NSX</div>
               <div className="mt-1 font-semibold text-slate-800 font-mono">{course.manufacturerHours} giờ</div>
@@ -670,10 +802,6 @@ function TrainingDetailModal({
             <div>
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ tự đào tạo</div>
               <div className="mt-1 font-semibold text-slate-800 font-mono">{course.selfTrainingHours} giờ</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Người tham gia</div>
-              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.participantsCount}</div>
             </div>
           </div>
 
@@ -806,6 +934,11 @@ function TrainingDetailModal({
 
 export default function TrainingList() {
   const [query, setQuery] = useState("");
+  const [resultFilter, setResultFilter] = useState("Tất cả kết quả");
+  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
+  const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
+  const railFilterOptions = useCatalogOptions("Loại ray");
+  const methodFilterOptions = useCatalogOptions("Phương pháp hàn", "code");
   const [courses, setCourses] = useState<DbTrainingCourse[]>([]);
   const [certGroups, setCertGroups] = useState<CertificateGroupOption[]>([]);
   const [personnel, setPersonnel] = useState<TrainingPersonnelOption[]>([]);
@@ -850,14 +983,17 @@ export default function TrainingList() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = !q
-      ? courses
-      : courses.filter(
-          (c) =>
-            c.title.toLowerCase().includes(q) ||
-            c.trainer.toLowerCase().includes(q) ||
-            c.date.includes(q),
-        );
+    const base = courses.filter((c) => {
+      const matchQ =
+        !q ||
+        c.title.toLowerCase().includes(q) ||
+        c.trainer.toLowerCase().includes(q) ||
+        c.date.includes(q);
+      const matchResult = resultFilter === "Tất cả kết quả" || c.result === resultFilter;
+      const matchRail = railFilter === "Tất cả loại ray" || (c.railType || "") === railFilter;
+      const matchMethod = methodFilter === "Tất cả công nghệ" || (c.weldMethod || "") === methodFilter;
+      return matchQ && matchResult && matchRail && matchMethod;
+    });
     // Mặc định sắp theo ngày đào tạo mới nhất -> cũ nhất (khóa chưa có ngày xếp cuối).
     return [...base].sort((a, b) => {
       if (a.dateIso && b.dateIso) return b.dateIso.localeCompare(a.dateIso);
@@ -865,7 +1001,7 @@ export default function TrainingList() {
       if (b.dateIso) return 1;
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
-  }, [query, courses]);
+  }, [query, courses, resultFilter, railFilter, methodFilter]);
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -997,24 +1133,56 @@ export default function TrainingList() {
           Không tải được dữ liệu đào tạo: {loadError}
         </div>
       )}
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
+      <div className="mb-4 flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
         <div className="relative min-w-[240px] flex-1">
           <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm theo tên khóa, người đào tạo, ngày..."
-            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300/90 bg-white text-slate-900 placeholder:text-slate-400 shadow-xs transition-all duration-150 hover:border-slate-400 focus:outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
           />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <select
+            value={resultFilter}
+            onChange={(e) => setResultFilter(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+          >
+            {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+          <select
+            value={railFilter}
+            onChange={(e) => setRailFilter(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+          >
+            {["Tất cả loại ray", ...railFilterOptions].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+          <select
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+          >
+            {["Tất cả công nghệ", ...(methodFilterOptions.length ? methodFilterOptions : ["FBW", "ATW"])].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
         </div>
         <button
           type="button"
           onClick={() => setOpenAdd(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer"
         >
           <Plus size={16} weight="bold" />
           Thêm khóa đào tạo
         </button>
+        <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
+          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
+        </span>
       </div>
 
       {/* Grid danh sách khóa học */}
@@ -1046,8 +1214,21 @@ export default function TrainingList() {
                     {c.result}
                   </span>
                 </div>
-                <div className="absolute bottom-2.5 right-2.5 rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
-                  {c.duration}
+                <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
+                  {c.videoUrl ? (
+                    <a
+                      href={c.videoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded bg-[#0047AB]/90 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-[#00388A]"
+                    >
+                      Video
+                    </a>
+                  ) : null}
+                  <div className="rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
+                    {c.duration} giờ
+                  </div>
                 </div>
               </div>
 

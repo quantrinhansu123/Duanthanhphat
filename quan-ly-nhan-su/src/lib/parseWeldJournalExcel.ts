@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
-import type { WeldReportRow, WeldTestStatus } from "@/lib/weldReportData";
+import type { WeldReportRow, WeldShift, WeldTestStatus } from "@/lib/weldReportData";
+import { normalizeWeldShift } from "@/lib/weldReportData";
 
 export type WeldJournalExcelRow = {
   ngay_thuc_hien: string;
@@ -13,6 +14,7 @@ export type WeldJournalExcelRow = {
   cong_nghe_han: "FBW" | "ATW";
   loai_moi_han: WeldReportRow["loai_moi_han"];
   tinh_trang_thi_nghiem: WeldTestStatus;
+  ca_han: WeldShift;
   chung_chi_su_dung: string;
   moi_han_lien_ket: string;
   nguyen_nhan_loi: string;
@@ -49,6 +51,7 @@ const HEADER_ALIASES: Record<keyof WeldJournalExcelRow, string[]> = {
     "result",
     "ket_qua",
   ],
+  ca_han: ["ca_han", "ca hàn", "ca han", "ca", "shift"],
   chung_chi_su_dung: ["chung_chi_su_dung", "chứng chỉ sử dụng", "chung chi su dung", "certificate"],
   moi_han_lien_ket: ["moi_han_lien_ket", "mối hàn liên kết", "moi han lien ket", "linked_weld"],
   nguyen_nhan_loi: ["nguyen_nhan_loi", "lý do không đạt", "ly do khong dat", "nguyen nhan loi"],
@@ -153,6 +156,7 @@ export function downloadWeldJournalExcelTemplate() {
     "cong_nghe_han",
     "loai_moi_han",
     "tinh_trang_thi_nghiem",
+    "ca_han",
     "chung_chi_su_dung",
     "moi_han_lien_ket",
     "nguyen_nhan_loi",
@@ -175,6 +179,7 @@ export function downloadWeldJournalExcelTemplate() {
     "FBW",
     "Sản xuất",
     "Chờ thí nghiệm",
+    "Ca 1",
     "",
     "",
     "",
@@ -284,6 +289,7 @@ export async function parseWeldJournalExcel(file: File): Promise<WeldJournalExce
       cong_nghe_han,
       loai_moi_han,
       tinh_trang_thi_nghiem: status,
+      ca_han: cols.ca_han >= 0 ? normalizeWeldShift(line[cols.ca_han]) : "Ca 1",
       chung_chi_su_dung:
         cols.chung_chi_su_dung >= 0 ? String(line[cols.chung_chi_su_dung] ?? "").trim() : "",
       moi_han_lien_ket:

@@ -36,11 +36,15 @@ const ComplianceStandardsList = dynamic(
 const TrainingHistoryLookup = dynamic(
   () => import("@/components/TrainingHistoryLookup"), { loading: TabLoading, ssr: false });
 const MachineList = dynamic(() => import("@/components/MachineList"), { loading: TabLoading, ssr: false });
+const TransportVehicleList = dynamic(
+  () => import("@/components/TransportVehicleList"), { loading: TabLoading, ssr: false });
 const WeldingTrayList = dynamic(() => import("@/components/WeldingTrayList"), { loading: TabLoading, ssr: false });
 const MaintenanceCalendar = dynamic(() => import("@/components/MaintenanceCalendar"), { loading: TabLoading, ssr: false });
 const ErrorLibrary = dynamic(() => import("@/components/ErrorLibrary"), { loading: TabLoading, ssr: false });
 const MachineAssignmentList = dynamic(
   () => import("@/components/MachineAssignmentList"), { loading: TabLoading, ssr: false });
+const SparePartsList = dynamic(
+  () => import("@/components/SparePartsList"), { loading: TabLoading, ssr: false });
 const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
 const QualityReportDashboard = dynamic(
   () => import("@/components/QualityReportDashboard"), { loading: TabLoading, ssr: false });
@@ -73,10 +77,12 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "tieu-chuan-tcvn": () => <ComplianceStandardsList />,
   "tra-cuu-dao-tao": () => <TrainingHistoryLookup />,
   "danh-sach-may": () => <MachineList />,
+  "quan-ly-phuong-tien": () => <TransportVehicleList />,
   "quan-ly-khay-han": () => <WeldingTrayList />,
   "lich-bao-tri": () => <MaintenanceCalendar />,
   "thu-vien-loi": () => <ErrorLibrary mode="machine" />,
   "phan-cong-may": () => <MachineAssignmentList />,
+  "phu-tung-thay-the": () => <SparePartsList />,
   "bc-tong-quan": () => <OverviewDashboard />,
   "bc-san-luong": () => <OverviewDashboard />,
   "bc-chat-luong": () => <QualityReportDashboard />,

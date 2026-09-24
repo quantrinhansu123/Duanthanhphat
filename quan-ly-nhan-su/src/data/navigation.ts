@@ -37,8 +37,8 @@ export const navigation: NavItem[] = [
       },
       {
         id: "lich-su-moi-han-loi",
-        label: "Lịch sử mối hàn lỗi",
-        labelEn: "Failed Weld History",
+        label: "Danh sách mối hàn lỗi",
+        labelEn: "Failed Weld List",
         description: "Danh sách mối hàn không đạt theo thợ, máy, dự án và thời gian",
         descriptionEn: "List of failed welds by welder, machine, project, and date",
       },
@@ -50,6 +50,13 @@ export const navigation: NavItem[] = [
     label: "Đào tạo & chứng chỉ",
     labelEn: "Training & Certificates",
     children: [
+      {
+        id: "khoa-dao-tao",
+        label: "Danh sách khóa đào tạo",
+        labelEn: "Training Courses",
+        description: "Ngày đào tạo, nội dung, người đào tạo, học viên, kết quả",
+        descriptionEn: "Training date, curriculum, trainer, attendees, evaluation results",
+      },
       {
         id: "tra-cuu-dao-tao",
         label: "Tra cứu lịch sử đào tạo",
@@ -64,13 +71,6 @@ export const navigation: NavItem[] = [
         description: "Ngày cấp, ngày hết hạn, file đính kèm chứng chỉ theo thợ hàn",
         descriptionEn: "Issue date, expiry date, and attached certificate files by welder",
       },
-      {
-        id: "khoa-dao-tao",
-        label: "Danh sách khóa đào tạo",
-        labelEn: "Training Courses",
-        description: "Ngày đào tạo, nội dung, người đào tạo, học viên, kết quả",
-        descriptionEn: "Training date, curriculum, trainer, attendees, evaluation results",
-      },
     ],
   },
   {
@@ -80,6 +80,13 @@ export const navigation: NavItem[] = [
     labelEn: "Machine Management",
     children: [
       {
+        id: "phan-cong-may",
+        label: "Lịch chạy máy",
+        labelEn: "Machine Run Schedule",
+        description: "Nhật ký chạy máy theo dự án: ngày, máy, giờ hoạt động, dầu và tình trạng",
+        descriptionEn: "Machine run journal by project: date, machine, hours, fuel, and condition",
+      },
+      {
         id: "danh-sach-may",
         label: "Danh sách máy hàn",
         labelEn: "Welding Machines",
@@ -87,11 +94,18 @@ export const navigation: NavItem[] = [
         descriptionEn: "Machine code, model, current location, operating status, and weld count",
       },
       {
+        id: "quan-ly-phuong-tien",
+        label: "Quản lý phương tiện",
+        labelEn: "Vehicle Management",
+        description: "Phương tiện vận chuyển: NSX, tải trọng, kích thước và khổ đường",
+        descriptionEn: "Transport vehicles: manufacturer, load capacity, dimensions, and track gauge",
+      },
+      {
         id: "lich-bao-tri",
         label: "Lịch bảo trì",
         labelEn: "Maintenance Schedule",
-        description: "Kế hoạch bảo dưỡng, lịch sử sửa chữa, phụ tùng thay thế",
-        descriptionEn: "Preventive maintenance plan, repair history, and spare parts",
+        description: "Kế hoạch bảo dưỡng, lịch sử sửa chữa và kiểm định",
+        descriptionEn: "Preventive maintenance plan, repair history, and inspections",
       },
       {
         id: "thu-vien-loi",
@@ -101,11 +115,11 @@ export const navigation: NavItem[] = [
         descriptionEn: "Catalogue of equipment faults: overall, crane, hydraulic pump, and welding unit",
       },
       {
-        id: "phan-cong-may",
-        label: "Lịch chạy máy",
-        labelEn: "Machine Run Schedule",
-        description: "Ngày, máy, lý trình, số giờ hoạt động, dự án và người phụ trách",
-        descriptionEn: "Date, machine, chainage, running hours, project, and engineer in charge",
+        id: "phu-tung-thay-the",
+        label: "Phụ tùng thay thế",
+        labelEn: "Replacement Parts",
+        description: "Danh mục phụ tùng theo nhà sản xuất, model máy tương thích và tồn kho",
+        descriptionEn: "Spare parts by manufacturer, compatible machine models, and stock levels",
       },
     ],
   },

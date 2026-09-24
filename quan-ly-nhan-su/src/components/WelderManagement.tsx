@@ -1111,10 +1111,15 @@ export default function WelderManagement() {
       const m = team.match(/\d+/);
       return m ? Number(m[0]) : Number.POSITIVE_INFINITY;
     };
+    const rankOrder = (rank: string) => {
+      const m = rank.match(/(\d+)/);
+      return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+    };
     return [...rows].sort(
       (a, b) =>
         teamOrder(a.weldingTeam) - teamOrder(b.weldingTeam) ||
         a.weldingTeam.localeCompare(b.weldingTeam, "vi") ||
+        rankOrder(a.rank) - rankOrder(b.rank) ||
         a.name.localeCompare(b.name, "vi"),
     );
   }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel, machineCatalog]);
@@ -1131,10 +1136,18 @@ export default function WelderManagement() {
       if (bucket) bucket.push(w);
       else map.set(team, [w]);
     }
+    const rankOrder = (rank: string) => {
+      const m = rank.match(/(\d+)/);
+      return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+    };
     return Array.from(map.entries())
       .map(([team, welders]) => ({
         team,
-        welders: [...welders].sort((a, b) => a.name.localeCompare(b.name, "vi")),
+        welders: [...welders].sort(
+          (a, b) =>
+            rankOrder(a.rank) - rankOrder(b.rank) ||
+            a.name.localeCompare(b.name, "vi"),
+        ),
       }))
       .sort(
         (a, b) =>
@@ -2188,7 +2201,7 @@ export default function WelderManagement() {
               <div className="rounded-2xl border border-slate-300 bg-slate-50/50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">10. Tài liệu hồ sơ</h3>
+                    <h3 className="text-sm font-bold text-slate-900">10. Dữ liệu cá nhân</h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">Google Drive PDF</p>
                   </div>
                   <div className="flex items-center gap-1.5">

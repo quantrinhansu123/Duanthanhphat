@@ -1,5 +1,6 @@
 import {
   maintenanceEvents as seedEvents,
+  type MaintenanceAssignee,
   type MaintenanceEvent,
   type MaintenanceImageAsset,
 } from "@/data/maintenance";
@@ -26,6 +27,11 @@ type DbMaintenanceRow = {
 type MachineCodeRow = {
   id: string;
   ma_may: string;
+};
+
+type PersonnelPhotoRow = {
+  ho_ten: string;
+  hinh_anh: string | null;
 };
 
 export type MaintenanceSaveInput = {
@@ -105,7 +111,33 @@ function parseImageAssets(value: unknown): MaintenanceImageAsset[] {
   });
 }
 
-function rowToEvent(row: DbMaintenanceRow, machineCode: string): MaintenanceEvent {
+function sortEvents(events: MaintenanceEvent[]) {
+  return [...events].sort(
+    (a, b) =>
+      (b.createdAt ?? `${b.date}T${b.time}`).localeCompare(
+        a.createdAt ?? `${a.date}T${a.time}`,
+      ),
+  );
+}
+
+function resolveAssignees(
+  names: string[] | null | undefined,
+  photosByName: Map<string, string>,
+): MaintenanceAssignee[] {
+  return (names ?? []).map((name) => {
+    const trimmed = name.trim();
+    return {
+      name: trimmed,
+      photo: photosByName.get(trimmed.toLocaleLowerCase("vi")) || "",
+    };
+  });
+}
+
+function rowToEvent(
+  row: DbMaintenanceRow,
+  machineCode: string,
+  photosByName: Map<string, string> = new Map(),
+): MaintenanceEvent {
   const assets = parseImageAssets(row.hinh_anh);
   return {
     id: row.id,
@@ -119,23 +151,12 @@ function rowToEvent(row: DbMaintenanceRow, machineCode: string): MaintenanceEven
     status: row.trang_thai,
     result: normalizeResult(row.ket_qua),
     reminder: row.nhac_nho?.trim() || undefined,
-    assignees: (row.nhan_su ?? []).map((name) => ({ name, photo: "" })),
+    assignees: resolveAssignees(row.nhan_su, photosByName),
     note: row.ghi_chu?.trim() || undefined,
     images: assets.map((asset) => asset.secureUrl),
     imageAssets: assets,
     persisted: true,
   };
-}
-
-function mergeEvents(primary: MaintenanceEvent[], fallback: MaintenanceEvent[]) {
-  const merged = new Map<string, MaintenanceEvent>();
-  for (const event of [...fallback, ...primary]) merged.set(event.id, event);
-  return Array.from(merged.values()).sort(
-    (a, b) =>
-      (b.createdAt ?? `${b.date}T${b.time}`).localeCompare(
-        a.createdAt ?? `${a.date}T${a.time}`,
-      ),
-  );
 }
 
 async function loadMachineCodes() {
@@ -146,15 +167,45 @@ async function loadMachineCodes() {
   return (data ?? []) as MachineCodeRow[];
 }
 
+async function loadPersonnelPhotosByName() {
+  const photosByName = new Map<string, string>();
+  if (!isSupabaseConfigured()) return photosByName;
+  const supabase = createClient();
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("nhan_su")
+      .select("ho_ten,hinh_anh")
+      .order("ho_ten", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(formatSupabaseError(error));
+    const page = (data ?? []) as PersonnelPhotoRow[];
+    for (const row of page) {
+      const name = row.ho_ten?.trim();
+      if (!name) continue;
+      const key = name.toLocaleLowerCase("vi");
+      if (photosByName.has(key)) continue;
+      photosByName.set(key, row.hinh_anh?.trim() || "");
+    }
+    if (page.length < pageSize) break;
+  }
+  return photosByName;
+}
+
 export async function loadMaintenanceEvents(): Promise<{
   events: MaintenanceEvent[];
   source: "supabase" | "seed";
   error?: string;
 }> {
+  // Chỉ dùng seed khi chưa cấu hình Supabase. Khi đã kết nối DB thì không trộn
+  // dữ liệu mock (tránh hiện nhân sự giả như Phạm Văn Minh trên lịch thật).
   if (!isSupabaseConfigured()) return { events: seedEvents, source: "seed" };
   try {
     const supabase = createClient();
-    const machines = await loadMachineCodes();
+    const [machines, photosByName] = await Promise.all([
+      loadMachineCodes(),
+      loadPersonnelPhotosByName().catch(() => new Map<string, string>()),
+    ]);
     let maintenance = await supabase
       .from("lich_su_bao_tri_may")
       .select(MAINTENANCE_COLUMNS)
@@ -170,13 +221,13 @@ export async function loadMaintenanceEvents(): Promise<{
     if (maintenance.error) throw maintenance.error;
     const codes = new Map(machines.map((machine) => [machine.id, machine.ma_may]));
     const saved = ((maintenance.data ?? []) as unknown as DbMaintenanceRow[]).map((row) =>
-      rowToEvent(row, codes.get(row.may_id) ?? "Chưa xác định"),
+      rowToEvent(row, codes.get(row.may_id) ?? "Chưa xác định", photosByName),
     );
-    return { events: mergeEvents(saved, seedEvents), source: "supabase" };
+    return { events: sortEvents(saved), source: "supabase" };
   } catch (error) {
     return {
-      events: seedEvents,
-      source: "seed",
+      events: [],
+      source: "supabase",
       error: formatSupabaseError(error),
     };
   }
@@ -193,6 +244,9 @@ export async function loadMachineMaintenanceEvents(machineCode: string): Promise
   if (machine.error) throw new Error(formatSupabaseError(machine.error));
   if (!machine.data) return [];
   const machineRow = machine.data as MachineCodeRow;
+  const photosByName = await loadPersonnelPhotosByName().catch(
+    () => new Map<string, string>(),
+  );
 
   let maintenance = await supabase
     .from("lich_su_bao_tri_may")
@@ -210,7 +264,7 @@ export async function loadMachineMaintenanceEvents(machineCode: string): Promise
   }
   if (maintenance.error) throw new Error(formatSupabaseError(maintenance.error));
   return ((maintenance.data ?? []) as unknown as DbMaintenanceRow[]).map((row) =>
-    rowToEvent(row, machineRow.ma_may),
+    rowToEvent(row, machineRow.ma_may, photosByName),
   );
 }
 
@@ -257,7 +311,10 @@ export async function saveMaintenanceEvent(input: MaintenanceSaveInput): Promise
       : supabase.from("lich_su_bao_tri_may").insert(legacyPayload);
     ({ data, error } = await legacyRequest.select(MAINTENANCE_COLUMNS_LEGACY).single());
     if (!error && data) {
-      const event = rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may);
+      const photosByName = await loadPersonnelPhotosByName().catch(
+        () => new Map<string, string>(),
+      );
+      const event = rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may, photosByName);
       return {
         ...event,
         result: normalizeResult(input.result),
@@ -266,5 +323,8 @@ export async function saveMaintenanceEvent(input: MaintenanceSaveInput): Promise
     }
   }
   if (error) throw new Error(formatSupabaseError(error));
-  return rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may);
+  const photosByName = await loadPersonnelPhotosByName().catch(
+    () => new Map<string, string>(),
+  );
+  return rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may, photosByName);
 }

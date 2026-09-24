@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaretLeft, CaretRight, DotsThree, MagnifyingGlass, X } from "@/components/icons";
 import ComboBoxInput from "@/components/ComboBoxInput";
@@ -1412,10 +1413,12 @@ function useProjectMachineRuns(projectId: string, projectName: string, enabled: 
 }
 
 function ProjectMachineRunsTab({
+  projectId,
   runs,
   loading,
   error,
 }: {
+  projectId: string;
   runs: MachineRunSchedule[];
   loading: boolean;
   error: string;
@@ -1433,18 +1436,28 @@ function ProjectMachineRunsTab({
           {error}
         </div>
       )}
-      <p className="text-xs text-slate-500">
-        Dữ liệu lấy từ trang <span className="font-semibold text-slate-700">Quản lý máy móc › Lịch chạy máy</span>.
-        {runs.length > 0 && (
-          <>
-            {" "}Tổng{" "}
-            <span className="font-mono font-semibold tabular-nums text-slate-900">
-              {totalHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
-            </span>{" "}
-            giờ trên {runs.length} lượt chạy.
-          </>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
+          Dữ liệu lấy từ trang <span className="font-semibold text-slate-700">Quản lý máy móc › Lịch chạy máy</span>.
+          {runs.length > 0 && (
+            <>
+              {" "}Tổng{" "}
+              <span className="font-mono font-semibold tabular-nums text-slate-900">
+                {totalHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+              </span>{" "}
+              giờ trên {runs.length} lượt chạy.
+            </>
+          )}
+        </p>
+        {projectId && (
+          <Link
+            href={`/phan-cong-may?projectId=${encodeURIComponent(projectId)}`}
+            className="inline-flex h-8 items-center rounded-lg border border-[#0047AB]/25 bg-blue-50 px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-100"
+          >
+            Mở nhật ký chạy máy
+          </Link>
         )}
-      </p>
+      </div>
 
       {runs.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
@@ -1669,6 +1682,7 @@ function ProjectModal({
           )}
           {tab === "machines" && (
             <ProjectMachineRunsTab
+              projectId={project.id}
               runs={machineRuns.runs}
               loading={machineRuns.loading}
               error={machineRuns.error}

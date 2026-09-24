@@ -10,6 +10,10 @@ export type WeldingHistoryRecord = {
   project: string;
   shift: "Ca 1" | "Ca 2" | "Ca 3";
   accountingCode: string; // Mã hạch toán
+  /** Công nghệ hàn: FBW / ATW */
+  method: string;
+  /** Loại hàn: Sản xuất / Thử nghiệm / Đào tạo */
+  weldType: string;
   result: "Đạt" | "Không đạt" | "Sửa chữa" | "Chờ thí nghiệm";
 };
 
@@ -41,6 +45,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án đường sắt Bắc Nam",
     shift: "Ca 1",
     accountingCode: "HT-SX01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -55,6 +61,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án ga Đà Nẵng",
     shift: "Ca 2",
     accountingCode: "HT-SX02",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -69,6 +77,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Tuyến metro số 1",
     shift: "Ca 1",
     accountingCode: "HT-M01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Sửa chữa",
   },
   {
@@ -83,6 +93,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án đường sắt Bắc Nam",
     shift: "Ca 3",
     accountingCode: "HT-SX01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -97,6 +109,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án đường sắt Bắc Nam",
     shift: "Ca 2",
     accountingCode: "HT-SX01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -111,6 +125,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Khu vực depot Hà Nội",
     shift: "Ca 1",
     accountingCode: "HT-TN01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Không đạt",
   },
   {
@@ -125,6 +141,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án ga Đà Nẵng",
     shift: "Ca 3",
     accountingCode: "HT-SX02",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -139,6 +157,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Dự án ga Đà Nẵng",
     shift: "Ca 1",
     accountingCode: "HT-SX02",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -153,6 +173,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Tuyến metro số 1",
     shift: "Ca 2",
     accountingCode: "HT-M01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Đạt",
   },
   {
@@ -167,6 +189,8 @@ export const weldingHistory: WeldingHistoryRecord[] = [
     project: "Khu vực depot Hà Nội",
     shift: "Ca 1",
     accountingCode: "HT-SC01",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: "Sửa chữa",
   },
 ];

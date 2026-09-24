@@ -28,6 +28,11 @@ export type MaintenanceFormValues = {
   imageAssets: MaintenanceImageAsset[];
 };
 
+type AssigneeOption = MaintenanceAssignee & {
+  code?: string;
+  status?: string | null;
+};
+
 type MaintenanceFormModalProps = {
   open: boolean;
   onClose: () => void;
@@ -85,7 +90,7 @@ export default function MaintenanceFormModal({
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [assigneeOptions, setAssigneeOptions] = useState<MaintenanceAssignee[]>([]);
+  const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([]);
   const [machines, setMachines] = useState<string[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState("");
@@ -111,10 +116,14 @@ export default function MaintenanceFormModal({
     Promise.all([loadPersonnelCertificateRows(), loadMachineOptions()])
       .then(([personnel, machineOptions]) => {
         if (!active) return;
+        // Chỉ lấy hồ sơ nhân sự thật từ bảng nhan_su (bỏ trạng thái Khóa).
         const people = personnel
+          .filter((row) => (row.trang_thai ?? "Hoạt động") !== "Khóa")
           .map((row) => ({
             name: row.ho_ten.trim(),
             photo: row.hinh_anh?.trim() || "",
+            code: row.ma_nhan_su?.trim() || "",
+            status: row.trang_thai,
           }))
           .filter((row) => row.name)
           .sort((a, b) => a.name.localeCompare(b.name, "vi"));
@@ -126,7 +135,7 @@ export default function MaintenanceFormModal({
         const selectedNames = initialEvent?.assignees.map((a) => a.name) ?? [];
         const missing = selectedNames
           .filter((name) => !uniquePeople.some((person) => person.name === name))
-          .map((name) => ({ name, photo: "" }));
+          .map((name) => ({ name, photo: "", code: "" }));
         setAssigneeOptions(missing.length ? [...uniquePeople, ...missing] : uniquePeople);
         setForm((current) => {
           if (initialEvent) return current;
@@ -162,9 +171,13 @@ export default function MaintenanceFormModal({
   });
 
   const filteredAssignees = useMemo(() => {
-    const q = assigneeQuery.trim().toLowerCase();
+    const q = assigneeQuery.trim().toLocaleLowerCase("vi");
     if (!q) return assigneeOptions;
-    return assigneeOptions.filter((assignee) => assignee.name.toLowerCase().includes(q));
+    return assigneeOptions.filter((assignee) => {
+      const name = assignee.name.toLocaleLowerCase("vi");
+      const code = (assignee.code || "").toLocaleLowerCase("vi");
+      return name.includes(q) || code.includes(q);
+    });
   }, [assigneeOptions, assigneeQuery]);
 
   if (!open) return null;
@@ -400,7 +413,7 @@ export default function MaintenanceFormModal({
               <input
                 value={assigneeQuery}
                 onChange={(event) => setAssigneeQuery(event.target.value)}
-                placeholder="Tìm theo tên nhân sự…"
+                placeholder="Tìm theo tên hoặc mã nhân sự…"
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </div>
@@ -417,9 +430,16 @@ export default function MaintenanceFormModal({
                 filteredAssignees.map((assignee) => {
                   const checked = form.assigneeNames.includes(assignee.name);
                   return (
-                    <label key={assignee.name} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${checked ? "bg-blue-50 font-semibold text-[#0047AB]" : "text-slate-700 hover:bg-white"}`}>
+                    <label key={`${assignee.code || "na"}-${assignee.name}`} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${checked ? "bg-blue-50 font-semibold text-[#0047AB]" : "text-slate-700 hover:bg-white"}`}>
                       <input type="checkbox" checked={checked} onChange={() => toggleAssignee(assignee.name)} className="h-4 w-4 accent-[#0047AB]" />
-                      <span className="truncate">{assignee.name}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="block truncate">{assignee.name}</span>
+                        {assignee.code ? (
+                          <span className="block truncate font-mono text-[10px] font-medium text-slate-400">
+                            {assignee.code}
+                          </span>
+                        ) : null}
+                      </span>
                     </label>
                   );
                 })

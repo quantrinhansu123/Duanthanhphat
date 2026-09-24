@@ -41,7 +41,10 @@ import {
   type CertifiedWelderOption,
   type WeldLinkedImageAsset,
   type WeldReportRow,
+  type WeldShift,
   type WeldTestStatus,
+  WELD_SHIFTS,
+  resolveWeldShift,
 } from "@/lib/weldReportData";
 import { buildWeldCodePrefix, normalizeWeldSitePrefix, suggestWeldCode } from "@/lib/weldCode";
 import {
@@ -63,6 +66,7 @@ type JournalProjectOption = { id: string; label: string; ma_du_an: string };
 type JournalFormValues = {
   ma_lich_su: string;
   performedAt: string;
+  ca_han: WeldShift;
   du_an_id: string;
   tho_han_id: string;
   may_id: string;
@@ -113,6 +117,7 @@ function emptyJournalForm(
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
+    ca_han: "Ca 1",
     du_an_id: project?.id ?? "",
     tho_han_id: welder?.id ?? "",
     may_id: machine?.id ?? "",
@@ -140,6 +145,7 @@ function journalRowToForm(
   return {
     ma_lich_su: row.ma_lich_su,
     performedAt: `${(row.ngay_thuc_hien?.slice(0, 10) || `${row.nam_thuc_hien}-01-01`)}T08:00`,
+    ca_han: resolveWeldShift(row),
     du_an_id: row.du_an_id,
     tho_han_id: row.tho_han_id,
     may_id: row.may_id || "",
@@ -419,8 +425,8 @@ function JournalFormModal({
       window.alert("Vui lòng chọn máy thực hiện mối hàn.");
       return;
     }
-    if (form.result === "Không đạt" && form.ma_khuyet_tat.length === 0 && !form.nguyen_nhan_loi.trim()) {
-      window.alert("Vui lòng chọn ít nhất một mã khuyết tật hoặc nhập lý do không đạt.");
+    if (form.result === "Không đạt" && form.ma_khuyet_tat.length === 0 && !form.ghi_chu.trim()) {
+      window.alert("Vui lòng chọn ít nhất một mã khuyết tật hoặc nhập ghi chú.");
       return;
     }
     if (uploadingImages) {
@@ -475,19 +481,20 @@ function JournalFormModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700 sm:col-span-2">
-              Mã mối hàn
-              <input
-                readOnly
-                value={form.ma_lich_su}
-                placeholder={`${sitePrefix}FBW1208260001`}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
-              />
-              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Tự tạo: mã dự án + công nghệ + ngày/tháng/năm (2 số) + số TT (VD: {sitePrefix}FBW1208260001)
-              </span>
-            </label>
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Mã mối hàn
+            <input
+              readOnly
+              value={form.ma_lich_su}
+              placeholder={`${sitePrefix}FBW1208260001`}
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
+            />
+            <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+              Tự tạo: mã dự án + công nghệ + ngày/tháng/năm (2 số) + số TT (VD: {sitePrefix}FBW1208260001)
+            </span>
+          </label>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày giờ
               <DateField
@@ -495,6 +502,16 @@ function JournalFormModal({
                 value={form.performedAt}
                 onChange={(performedAt) => setForm({ ...form, performedAt })}
                 className="mt-1.5"
+              />
+            </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Ca hàn
+              <SelectMenu
+                value={form.ca_han}
+                onChange={(ca_han) => setForm({ ...form, ca_han: ca_han as WeldShift })}
+                options={WELD_SHIFTS.map((value) => ({ value, label: value }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -890,7 +907,7 @@ function JournalFormModal({
             <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-rose-800">
-                  Mã khuyết tật mối hàn (NDT) — Chọn một hoặc nhiều mã
+                  Mã khuyết tật mối hàn (NDT)
                 </label>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {NDT_DEFECTS.map((defect) => {
@@ -910,25 +927,14 @@ function JournalFormModal({
                             ? "bg-rose-600 text-white shadow-xs"
                             : "bg-white text-slate-700 border border-slate-300 hover:border-rose-300 hover:bg-rose-50"
                         }`}
+                        title={`${defect.code} — ${defectLabels[defect.code] || defect.nameEn}`}
                       >
-                        <span className="font-mono">{defect.code}</span>
-                        <span className="font-normal opacity-90 text-[11px]">— {defectLabels[defect.code] || defect.nameEn}</span>
+                        <span>{defectLabels[defect.code] || defect.code}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-
-              <label className="block text-xs font-semibold text-slate-700">
-                Ghi chú bổ sung về lỗi (tùy chọn)
-                <textarea
-                  value={form.nguyen_nhan_loi}
-                  onChange={(e) => setForm({ ...form, nguyen_nhan_loi: e.target.value })}
-                  rows={2}
-                  placeholder="Ghi chú thêm về vị trí khuyết tật, nguyên nhân..."
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 resize-y"
-                />
-              </label>
             </div>
           )}
 
@@ -973,6 +979,7 @@ export default function WeldingJournalList({
   lockedResultFilter?: WeldTestStatus;
   heading?: string;
 } = {}) {
+  const failedWeldMode = lockedResultFilter === "Không đạt";
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
@@ -1014,6 +1021,10 @@ export default function WeldingJournalList({
   const [machineError, setMachineError] = useState("");
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
   const [projectOptions, setProjectOptions] = useState<JournalProjectOption[]>([]);
+
+  useEffect(() => {
+    if (lockedResultFilter) setResultFilter(lockedResultFilter);
+  }, [lockedResultFilter]);
 
   useEffect(() => {
     const initialQuery = new URLSearchParams(window.location.search).get("query")?.trim() || "";
@@ -1156,6 +1167,8 @@ export default function WeldingJournalList({
         weldName: displayWeldCode(row.ma_lich_su),
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
+        weldType: row.loai_moi_han,
+        weldMethod: row.cong_nghe_han,
         location: gpsPoint
           ? `${gpsPoint.chainage} · ${gpsPoint.latitude.toFixed(6)}, ${gpsPoint.longitude.toFixed(6)}`
           : "Chưa liên kết GPS",
@@ -1163,10 +1176,11 @@ export default function WeldingJournalList({
         failureReason: pass
           ? "—"
           : (row.ma_khuyet_tat && row.ma_khuyet_tat.length > 0)
-            ? `${row.ma_khuyet_tat.join(", ")}${row.nguyen_nhan_loi ? ` · ${row.nguyen_nhan_loi}` : ""}`
-            : (row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân"),
+            ? row.ma_khuyet_tat.map((code) => defectLabels[code] || code).join(", ")
+            : (row.nguyen_nhan_loi?.trim() || row.ghi_chu?.trim() || "Chưa ghi nguyên nhân"),
         resultType: pass ? ("pass" as const) : ("fail" as const),
         testStatus,
+        shift: resolveWeldShift(row),
       };
     });
   }, [rows, gpsPoints]);
@@ -1284,6 +1298,7 @@ export default function WeldingJournalList({
           "Tên máy": row.ten_may?.trim() || "",
           "Mã dự án": row.ma_du_an,
           "Dự án": row.du_an,
+          "Ca hàn": resolveWeldShift(row),
           "Loại ray": row.loai_ray,
           "Công nghệ hàn": row.cong_nghe_han,
           "Loại mối hàn": row.loai_moi_han,
@@ -1301,9 +1316,9 @@ export default function WeldingJournalList({
       worksheet["!cols"] = [
         { wch: 7 }, { wch: 17 }, { wch: 38 }, { wch: 25 }, { wch: 22 },
         { wch: 16 }, { wch: 24 }, { wch: 15 }, { wch: 45 }, { wch: 18 },
-        { wch: 30 }, { wch: 16 }, { wch: 48 }, { wch: 13 }, { wch: 16 },
-        { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
-        { wch: 36 }, { wch: 14 }, { wch: 36 },
+        { wch: 30 }, { wch: 16 }, { wch: 48 }, { wch: 10 }, { wch: 13 },
+        { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
+        { wch: 20 }, { wch: 36 }, { wch: 14 }, { wch: 36 },
       ];
       if (worksheet["!ref"]) worksheet["!autofilter"] = { ref: worksheet["!ref"] };
 
@@ -1512,6 +1527,7 @@ export default function WeldingJournalList({
             kinh_do: row.kinh_do,
             vi_do: row.vi_do,
             ly_trinh: row.ly_trinh || null,
+            ca_han: row.ca_han,
           });
           inserted += 1;
         } catch (insertError) {
@@ -1554,7 +1570,7 @@ export default function WeldingJournalList({
         ma_khuyet_tat: values.result === "Không đạt" ? values.ma_khuyet_tat : [],
         tinh_trang_thi_nghiem: values.result,
         nguyen_nhan_loi: values.result === "Không đạt"
-          ? (values.nguyen_nhan_loi.trim() || values.ma_khuyet_tat.join(", "))
+          ? (values.ma_khuyet_tat.join(", ") || values.ghi_chu.trim() || null)
           : null,
         ghi_chu: values.ghi_chu || null,
         moi_han_lien_ket: values.moi_han_lien_ket || null,
@@ -1566,6 +1582,7 @@ export default function WeldingJournalList({
         vi_do: isNaN(viDoNum as number) ? null : viDoNum,
         ly_trinh: values.ly_trinh || null,
         anh_moi_han_lien_ket: values.anh_moi_han_lien_ket,
+        ca_han: values.ca_han,
       });
       setFormOpen(false);
       setEditingRow(null);
@@ -1604,7 +1621,7 @@ export default function WeldingJournalList({
         ma_khuyet_tat: values.result === "Không đạt" ? values.ma_khuyet_tat : [],
         tinh_trang_thi_nghiem: values.result,
         nguyen_nhan_loi: values.result === "Không đạt"
-          ? (values.nguyen_nhan_loi.trim() || values.ma_khuyet_tat.join(", "))
+          ? (values.ma_khuyet_tat.join(", ") || values.ghi_chu.trim() || null)
           : null,
         ghi_chu: values.ghi_chu || null,
         moi_han_lien_ket: values.moi_han_lien_ket || null,
@@ -1616,6 +1633,7 @@ export default function WeldingJournalList({
         vi_do: isNaN(viDoNum as number) ? null : viDoNum,
         ly_trinh: values.ly_trinh || null,
         anh_moi_han_lien_ket: values.anh_moi_han_lien_ket,
+        ca_han: values.ca_han,
       });
 
       if (values.toa_do_id) {
@@ -1670,21 +1688,30 @@ export default function WeldingJournalList({
         <span><strong className="font-semibold text-amber-700 font-mono tabular-nums">{pendingCount.toLocaleString("vi-VN")}</strong> chờ thí nghiệm</span>
         <span><strong className="font-semibold text-slate-700 font-mono tabular-nums">{untestedCount.toLocaleString("vi-VN")}</strong> không thí nghiệm</span>
         <span className="text-slate-300">|</span>
-        <span>{testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm · Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong></span>
+        <span>
+          {testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm
+          {!failedWeldMode ? (
+            <>
+              {" · "}Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong>
+            </>
+          ) : null}
+        </span>
       </div>
 
       <div className="mb-4 space-y-2.5">
        <div className="grid grid-cols-2 gap-2.5 items-end">
-        <div className="relative col-span-2 min-w-0">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm ID, thợ hàn, máy, dự án…"
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-          />
-        </div>
+        {!failedWeldMode ? (
+          <div className="relative col-span-2 min-w-0">
+            <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Tìm ID, thợ hàn, máy, dự án…"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+            />
+          </div>
+        ) : null}
         <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700">
           Dự án
           <MultiSelectMenu
@@ -1741,7 +1768,7 @@ export default function WeldingJournalList({
               setDateFrom("");
               setDateTo("");
             }}
-            className="col-span-2 inline-flex h-10 w-full items-center justify-center self-end rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer sm:text-sm"
+            className="col-span-2 lg:col-span-1 inline-flex h-10 w-full items-center justify-center self-end rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer sm:text-sm"
           >
             Xóa ngày
           </button>
@@ -1784,26 +1811,30 @@ export default function WeldingJournalList({
           <DownloadSimple size={16} weight="bold" aria-hidden />
           {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
         </button>
-        <button
-          type="button"
-          onClick={handleSyncAllCodes}
-          disabled={syncingCodes || saving || loading}
-          title={syncProgress || "Đồng bộ mã mối hàn theo bộ lọc hiện tại"}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
-        >
-          {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingRow(null);
-            setEditingForm(null);
-            setFormOpen(true);
-          }}
-          className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-        >
-          <span className="text-base leading-none">+</span> Thêm nhật ký
-        </button>
+        {!failedWeldMode ? (
+          <>
+            <button
+              type="button"
+              onClick={handleSyncAllCodes}
+              disabled={syncingCodes || saving || loading}
+              title={syncProgress || "Đồng bộ mã mối hàn theo bộ lọc hiện tại"}
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
+            >
+              {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingRow(null);
+                setEditingForm(null);
+                setFormOpen(true);
+              }}
+              className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+            >
+              <span className="text-base leading-none">+</span> Thêm nhật ký
+            </button>
+          </>
+        ) : null}
        </div>
       </div>
 
@@ -1842,7 +1873,7 @@ export default function WeldingJournalList({
                   </span>
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
-                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate}</div>
+                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
                   <span className="truncate">🏗️ {w.project}</span>
                   <span className={`truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
@@ -1858,23 +1889,35 @@ export default function WeldingJournalList({
           ))}
           {pageRows.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-300 px-3 py-10 text-center text-sm text-slate-500">
-              Không có nhật ký hàn phù hợp với bộ lọc.
+              {lockedResultFilter === "Không đạt"
+                ? "Không có mối hàn lỗi phù hợp với bộ lọc."
+                : "Không có nhật ký hàn phù hợp với bộ lọc."}
             </div>
           )}
         </div>
 
         <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className="w-full min-w-[1390px] border-collapse text-left">
+          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1340px]" : "min-w-[1450px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
+                <th className="p-2.5 font-semibold">Ca hàn</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
-                <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
+                {!failedWeldMode ? (
+                  <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
+                ) : null}
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Mã mối hàn</th>
                 <th className="p-2.5 font-semibold">Mối hàn liên kết</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
-                <th className="p-2.5 font-semibold">Vị trí</th>
+                {failedWeldMode ? (
+                  <>
+                    <th className="p-2.5 font-semibold">Loại mối hàn</th>
+                    <th className="p-2.5 font-semibold">Công nghệ</th>
+                  </>
+                ) : (
+                  <th className="p-2.5 font-semibold">Vị trí</th>
+                )}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
                 <th className="p-2.5 font-semibold">Tình trạng</th>
                 <th className="p-2.5 font-semibold">Thao tác</th>
@@ -1888,12 +1931,15 @@ export default function WeldingJournalList({
                   className="cursor-pointer text-xs sm:text-sm text-slate-700 hover:bg-blue-50/50 transition-colors"
                 >
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
+                  <td className="p-2.5 whitespace-nowrap font-semibold text-slate-800">{w.shift}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
-                  <td className="p-2.5">
-                    <span className={`line-clamp-2 text-xs leading-relaxed ${w.certificateLinked ? "text-emerald-700" : "text-amber-700"}`} title={w.certificate}>
-                      {w.certificate}
-                    </span>
-                  </td>
+                  {!failedWeldMode ? (
+                    <td className="p-2.5">
+                      <span className={`line-clamp-2 text-xs leading-relaxed ${w.certificateLinked ? "text-emerald-700" : "text-amber-700"}`} title={w.certificate}>
+                        {w.certificate}
+                      </span>
+                    </td>
+                  ) : null}
                   <td className="p-2.5 max-w-[190px]">
                     <span className={`line-clamp-2 text-xs font-semibold ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`} title={w.machine}>
                       {w.machine}
@@ -1910,6 +1956,12 @@ export default function WeldingJournalList({
                       {w.project}
                     </span>
                   </td>
+                  {failedWeldMode ? (
+                    <>
+                      <td className="p-2.5 whitespace-nowrap text-xs text-slate-700">{w.weldType}</td>
+                      <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{w.weldMethod}</td>
+                    </>
+                  ) : (
                   <td className="p-2.5 max-w-[200px]">
                     {w.mapUrl ? (
                       <div className="flex flex-col gap-1">
@@ -1938,6 +1990,7 @@ export default function WeldingJournalList({
                       <span className="text-xs text-slate-400">{w.location}</span>
                     )}
                   </td>
+                  )}
                   <td
                     className={`p-2.5 max-w-[180px] ${w.resultType === "fail" ? "line-clamp-2 text-xs font-medium text-rose-700" : "text-slate-400"}`}
                   >
@@ -1997,8 +2050,10 @@ export default function WeldingJournalList({
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-slate-500">
-                    Không có nhật ký hàn phù hợp với bộ lọc.
+                  <td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-500">
+                    {lockedResultFilter === "Không đạt"
+                      ? "Không có mối hàn lỗi phù hợp với bộ lọc."
+                      : "Không có nhật ký hàn phù hợp với bộ lọc."}
                   </td>
                 </tr>
               )}
@@ -2149,6 +2204,7 @@ export default function WeldingJournalList({
               <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                 {[
                   ["Ngày thực hiện", detailView.performedDate],
+                  ["Ca hàn", detailView.shift],
                   ["Người trực tiếp hàn", detailView.operator],
                   ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
                   ["Tổ hàn", detailRaw?.to_han || "—"],

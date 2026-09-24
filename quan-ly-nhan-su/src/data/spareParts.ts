@@ -1,0 +1,175 @@
+export type SparePartStatus = "Còn hàng" | "Sắp hết" | "Hết hàng" | "Đặt hàng";
+
+export type SparePart = {
+  id: string;
+  code: string;
+  name: string;
+  manufacturer: string;
+  compatibleModels: string[];
+  category: string;
+  unit: string;
+  stockQty: number;
+  minStock: number;
+  unitPriceVnd: number;
+  status: SparePartStatus;
+  note: string;
+};
+
+export const sparePartCategories = [
+  "Điện cực / má kẹp",
+  "Thủy lực",
+  "Làm mát",
+  "Điện – điều khiển",
+  "Cơ khí",
+  "Khác",
+] as const;
+
+export const spareParts: SparePart[] = [
+  {
+    id: "sp-1",
+    code: "PT-DE-UIC60",
+    name: "Bộ điện cực hàn tiếp xúc UIC60",
+    manufacturer: "Chengdu Aigre Technology",
+    compatibleModels: ["UN5-150ZC2-C6", "KCM-007 (K922-1)"],
+    category: "Điện cực / má kẹp",
+    unit: "bộ",
+    stockQty: 4,
+    minStock: 2,
+    unitPriceVnd: 28_500_000,
+    status: "Còn hàng",
+    note: "Điện cực đồng hợp kim theo catalogue Aigre / TCW.",
+  },
+  {
+    id: "sp-2",
+    code: "PT-MK-CU",
+    name: "Má kẹp đồng hợp kim định vị ray",
+    manufacturer: "Chengdu Aigre Technology / TCW",
+    compatibleModels: ["KCM-007 (K922-1)", "UN5-150ZC2-C6"],
+    category: "Điện cực / má kẹp",
+    unit: "cặp",
+    stockQty: 2,
+    minStock: 2,
+    unitPriceVnd: 12_800_000,
+    status: "Sắp hết",
+    note: "Thay khi mòn bề mặt tiếp xúc sau ~1.200 mối hàn.",
+  },
+  {
+    id: "sp-3",
+    code: "PT-PHOT-XL",
+    name: "Phớt xi lanh thủy lực kẹp ray",
+    manufacturer: "Chengdu Aigre Technology",
+    compatibleModels: ["UN5-150ZC2-C6", "KCM-007 (K922-1)"],
+    category: "Thủy lực",
+    unit: "bộ",
+    stockQty: 6,
+    minStock: 3,
+    unitPriceVnd: 3_200_000,
+    status: "Còn hàng",
+    note: "Dùng khi bảo dưỡng hệ thống thủy lực kẹp / nâng hạ.",
+  },
+  {
+    id: "sp-4",
+    code: "PT-LOC-DL",
+    name: "Lọc dầu thủy lực chính",
+    manufacturer: "TCW",
+    compatibleModels: ["KCM-007 (K922-1)", "UN5-150ZC2-C6"],
+    category: "Thủy lực",
+    unit: "cái",
+    stockQty: 8,
+    minStock: 4,
+    unitPriceVnd: 1_450_000,
+    status: "Còn hàng",
+    note: "Định kỳ thay theo giờ máy hoặc khi áp suất lọc cao.",
+  },
+  {
+    id: "sp-5",
+    code: "PT-BOM-HL",
+    name: "Bơm thủy lực áp suất cao",
+    manufacturer: "Chengdu Aigre Technology",
+    compatibleModels: ["UN5-150ZC2-C6"],
+    category: "Thủy lực",
+    unit: "cái",
+    stockQty: 1,
+    minStock: 1,
+    unitPriceVnd: 95_000_000,
+    status: "Sắp hết",
+    note: "Phụ tùng nhà sản xuất — đặt trước 4–6 tuần.",
+  },
+  {
+    id: "sp-6",
+    code: "PT-ONG-HL",
+    name: "Ống mềm thủy lực áp suất cao",
+    manufacturer: "TCW",
+    compatibleModels: ["KCM-007 (K922-1)", "UN5-150ZC2-C6"],
+    category: "Thủy lực",
+    unit: "cái",
+    stockQty: 0,
+    minStock: 2,
+    unitPriceVnd: 2_100_000,
+    status: "Hết hàng",
+    note: "Ưu tiên nhập lại — thường hỏng khi rò dầu công trường.",
+  },
+  {
+    id: "sp-7",
+    code: "PT-QLM",
+    name: "Quạt / bơm làm mát máy biến áp hàn",
+    manufacturer: "Chengdu Aigre Technology",
+    compatibleModels: ["UN5-150ZC2-C6", "KCM-007 (K922-1)"],
+    category: "Làm mát",
+    unit: "bộ",
+    stockQty: 2,
+    minStock: 1,
+    unitPriceVnd: 18_600_000,
+    status: "Còn hàng",
+    note: "Theo khuyến cáo bảo dưỡng 500h của nhà sản xuất.",
+  },
+  {
+    id: "sp-8",
+    code: "PT-CB-NHIET",
+    name: "Cảm biến nhiệt độ mối hàn đối đầu",
+    manufacturer: "Chengdu Aigre Technology / TCW",
+    compatibleModels: ["KCM-007 (K922-1)", "UN5-150ZC2-C6"],
+    category: "Điện – điều khiển",
+    unit: "cái",
+    stockQty: 3,
+    minStock: 2,
+    unitPriceVnd: 4_750_000,
+    status: "Còn hàng",
+    note: "Hiệu chuẩn lại sau mỗi lần thay.",
+  },
+  {
+    id: "sp-9",
+    code: "PT-KM-RAY",
+    name: "Bộ khuôn kẹp định vị ray UIC60",
+    manufacturer: "TCW",
+    compatibleModels: ["KCM-007 (K922-1)"],
+    category: "Cơ khí",
+    unit: "bộ",
+    stockQty: 1,
+    minStock: 1,
+    unitPriceVnd: 42_000_000,
+    status: "Đặt hàng",
+    note: "Đang đặt theo catalogue TCW — giao dự kiến 15 ngày.",
+  },
+  {
+    id: "sp-10",
+    code: "PT-DAU-HL",
+    name: "Dầu thủy lực ISO VG 46 (thùng 200L)",
+    manufacturer: "Shell / theo khuyến cáo Aigre",
+    compatibleModels: ["KCM-007 (K922-1)", "UN5-150ZC2-C6"],
+    category: "Thủy lực",
+    unit: "thùng",
+    stockQty: 3,
+    minStock: 2,
+    unitPriceVnd: 8_900_000,
+    status: "Còn hàng",
+    note: "Dùng cho đổ dầu / thay dầu định kỳ theo nhật ký chạy máy.",
+  },
+];
+
+export function deriveSparePartStatus(stockQty: number, minStock: number, current?: SparePartStatus): SparePartStatus {
+  if (current === "Đặt hàng") return "Đặt hàng";
+  if (stockQty <= 0) return "Hết hàng";
+  if (stockQty <= minStock) return "Sắp hết";
+  return "Còn hàng";
+}

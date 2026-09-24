@@ -7,6 +7,7 @@ import {
   fetchWelderTrainingHistory,
   type DbTrainingHistoryRecord,
 } from "@/lib/trainingDb";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 const resultStyle: Record<DbTrainingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -20,6 +21,9 @@ const statusStyle: Record<DbTrainingHistoryRecord["status"], string> = {
   "Không hoàn thành": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
 };
 
+const selectClass =
+  "h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer";
+
 export default function TrainingHistoryLookup() {
   const [records, setRecords] = useState<DbTrainingHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,6 +33,10 @@ export default function TrainingHistoryLookup() {
   const [course, setCourse] = useState("Tất cả khóa đào tạo");
   const [result, setResult] = useState("Tất cả kết quả");
   const [status, setStatus] = useState("Tất cả trạng thái");
+  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
+  const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
+  const railOptions = useCatalogOptions("Loại ray");
+  const methodOptions = useCatalogOptions("Phương pháp hàn", "code");
 
   useEffect(() => {
     let cancelled = false;
@@ -76,63 +84,61 @@ export default function TrainingHistoryLookup() {
       const matchCourse = course === "Tất cả khóa đào tạo" || row.courseTitle === course;
       const matchResult = result === "Tất cả kết quả" || row.result === result;
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
-      return matchQ && matchType && matchCourse && matchResult && matchStatus;
+      const matchRail = railFilter === "Tất cả loại ray" || (row.railType || "") === railFilter;
+      const matchMethod = methodFilter === "Tất cả công nghệ" || (row.weldMethod || "") === methodFilter;
+      return matchQ && matchType && matchCourse && matchResult && matchStatus && matchRail && matchMethod;
     });
-  }, [records, query, personType, course, result, status]);
+  }, [records, query, personType, course, result, status, railFilter, methodFilter]);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
-      <div className="mb-4 flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm theo mã, họ tên, khóa đào tạo, người đào tạo..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
+      <div className="mb-4 flex flex-col gap-2.5">
+        <div className="flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5">
+          <div className="relative min-w-[240px] flex-1">
+            <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Tìm theo mã, họ tên, khóa đào tạo, người đào tạo..."
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+            />
+          </div>
+          <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
+            <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
+          </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <select
-            value={personType}
-            onChange={(e) => setPersonType(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
             {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
-          <select
-            value={course}
-            onChange={(e) => setCourse(e.target.value)}
-            className="h-10 max-w-[220px] truncate rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
+          <select value={course} onChange={(e) => setCourse(e.target.value)} className={`${selectClass} max-w-full truncate`}>
             {courseOptions.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-          <select
-            value={result}
-            onChange={(e) => setResult(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
+          <select value={result} onChange={(e) => setResult(e.target.value)} className={selectClass}>
             {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
               <option key={r}>{r}</option>
             ))}
           </select>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass}>
             {["Tất cả trạng thái", "Hoàn thành", "Đang học", "Không hoàn thành"].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
+          <select value={railFilter} onChange={(e) => setRailFilter(e.target.value)} className={selectClass}>
+            {["Tất cả loại ray", ...railOptions].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={selectClass}>
+            {["Tất cả công nghệ", ...(methodOptions.length ? methodOptions : ["FBW", "ATW"])].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
         </div>
-        <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
-        </span>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
@@ -142,7 +148,7 @@ export default function TrainingHistoryLookup() {
           </div>
         )}
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1580px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1680px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Mã</th>
@@ -150,6 +156,8 @@ export default function TrainingHistoryLookup() {
                 <th className="px-3.5 py-3">Đối tượng</th>
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Khóa đào tạo</th>
+                <th className="px-3.5 py-3">Loại ray</th>
+                <th className="px-3.5 py-3">Công nghệ</th>
                 <th className="px-3.5 py-3">Người đào tạo</th>
                 <th className="px-3.5 py-3">Ngày đào tạo</th>
                 <th className="px-3.5 py-3">Thời lượng</th>
@@ -181,9 +189,13 @@ export default function TrainingHistoryLookup() {
                   <td className="max-w-[240px] px-3.5 py-3 text-slate-700">
                     <div className="line-clamp-2 font-medium">{row.courseTitle}</div>
                   </td>
+                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap">{row.railType || "—"}</td>
+                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono">{row.weldMethod || "—"}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.trainer}</td>
                   <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.date}</td>
-                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.duration}</td>
+                  <td className="px-3.5 py-3 text-slate-900 whitespace-nowrap font-mono text-xs sm:text-sm font-semibold tabular-nums">
+                    {row.duration}
+                  </td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono tabular-nums">{row.manufacturerHours.toLocaleString("vi-VN")}</td>
                   <td className="px-3.5 py-3 text-slate-700 font-mono tabular-nums">{row.selfTrainingHours.toLocaleString("vi-VN")}</td>
                   <td className="px-3.5 py-3">
@@ -212,14 +224,14 @@ export default function TrainingHistoryLookup() {
               ))}
               {isLoading && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={16} className="px-4 py-12 text-center text-slate-500">
                     Đang tải lịch sử đào tạo từ CSDL...
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={16} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>
                   </td>
                 </tr>

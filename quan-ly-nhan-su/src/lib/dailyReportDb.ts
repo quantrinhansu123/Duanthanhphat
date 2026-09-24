@@ -3,11 +3,23 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
 export type WorkSection = "hom_nay" | "ngay_tiep_theo";
 
+export type DailyWorkType = {
+  id: string;
+  ma: string;
+  ten: string;
+  moTa: string;
+  thuTu: number;
+  loaiMayMacDinh: string;
+  donViMacDinh: string;
+  active: boolean;
+};
+
 export type DailyWorkItem = {
   id: string;
   baoCaoId: string;
   phan: WorkSection;
   thuTu: number;
+  congViecId: string;
   hangMuc: string;
   tuyenHa: string;
   tuyenThuong: string;
@@ -64,6 +76,7 @@ export type DailyReportHeader = {
 
 export type DailyReportBundle = {
   header: DailyReportHeader | null;
+  workTypes: DailyWorkType[];
   workToday: DailyWorkItem[];
   workNext: DailyWorkItem[];
   equipment: DailyEquipmentItem[];
@@ -81,6 +94,7 @@ type WorkRowDb = {
   bao_cao_id: string;
   phan: WorkSection;
   thu_tu: number;
+  cong_viec_id?: string | null;
   hang_muc: string | null;
   tuyen_ha: string | null;
   tuyen_thuong: string | null;
@@ -111,6 +125,17 @@ type WorkRowDb = {
   nl_bat_dau: string | null;
   nl_ket_thuc: string | null;
   ghi_chu: string | null;
+};
+
+type WorkTypeRowDb = {
+  id: string;
+  ma: string;
+  ten: string;
+  mo_ta: string | null;
+  thu_tu: number;
+  loai_may_mac_dinh: string | null;
+  don_vi_mac_dinh: string | null;
+  active: boolean;
 };
 
 type EquipmentRowDb = {
@@ -168,6 +193,7 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     baoCaoId: row.bao_cao_id,
     phan: row.phan,
     thuTu: row.thu_tu,
+    congViecId: row.cong_viec_id ?? "",
     hangMuc: row.hang_muc ?? "",
     tuyenHa: row.tuyen_ha ?? "",
     tuyenThuong: row.tuyen_thuong ?? "",
@@ -193,6 +219,74 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     nlKetThuc: row.nl_ket_thuc ?? "",
     ghiChu: row.ghi_chu ?? "",
   };
+}
+
+function mapWorkType(row: WorkTypeRowDb): DailyWorkType {
+  return {
+    id: row.id,
+    ma: row.ma,
+    ten: row.ten,
+    moTa: row.mo_ta ?? "",
+    thuTu: row.thu_tu,
+    loaiMayMacDinh: row.loai_may_mac_dinh ?? "",
+    donViMacDinh: row.don_vi_mac_dinh ?? "mối hàn",
+    active: row.active,
+  };
+}
+
+export const DEFAULT_WORK_TYPES: DailyWorkType[] = [
+  {
+    id: "a1111111-1111-4111-8111-111111111101",
+    ma: "HAN-NN",
+    ten: "Hàn nhiệt nhôm trên tuyến",
+    moTa: "Công việc hàn nhiệt nhôm (ATW) trên tuyến đường sắt",
+    thuTu: 1,
+    loaiMayMacDinh: "Máy phát điện 5KVA",
+    donViMacDinh: "mối hàn",
+    active: true,
+  },
+  {
+    id: "a1111111-1111-4111-8111-111111111102",
+    ma: "HAN-CGM-TUYEN",
+    ten: "Hàn cháy giáp mép trên tuyến",
+    moTa: "Hàn tiếp xúc đối đầu (FBW) trên tuyến",
+    thuTu: 2,
+    loaiMayMacDinh: "Máy hàn ray",
+    donViMacDinh: "mối hàn",
+    active: true,
+  },
+  {
+    id: "a1111111-1111-4111-8111-111111111103",
+    ma: "HAN-CGM-BAI",
+    ten: "Hàn cháy giáp mép tại bãi hàn",
+    moTa: "Hàn tiếp xúc đối đầu (FBW) tại bãi hàn",
+    thuTu: 3,
+    loaiMayMacDinh: "Máy hàn ray",
+    donViMacDinh: "mối hàn",
+    active: true,
+  },
+];
+
+export async function loadWorkTypes(): Promise<{ types: DailyWorkType[]; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { types: DEFAULT_WORK_TYPES, error: "Chưa cấu hình Supabase — dùng danh mục mẫu" };
+  }
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("danh_muc_cong_viec_bao_cao")
+      .select("id,ma,ten,mo_ta,thu_tu,loai_may_mac_dinh,don_vi_mac_dinh,active")
+      .eq("active", true)
+      .order("thu_tu", { ascending: true });
+    if (error) throw error;
+    const types = (data as WorkTypeRowDb[] | null)?.map(mapWorkType) ?? [];
+    return { types: types.length > 0 ? types : DEFAULT_WORK_TYPES };
+  } catch (error) {
+    return {
+      types: DEFAULT_WORK_TYPES,
+      error: formatSupabaseError(error),
+    };
+  }
 }
 
 function mapEquipment(row: EquipmentRowDb): DailyEquipmentItem {
@@ -273,71 +367,28 @@ const EMPTY_MANPOWER = {
 };
 
 function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
-  return [
-    {
-      id: uid(),
-      baoCaoId,
-      phan: "hom_nay",
-      thuTu: 1,
-      hangMuc: "Hàn nhiệt nhôm trên tuyến",
-      tuyenHa: "",
-      tuyenThuong: "",
-      donVi: "mối hàn",
-      denHomQua: "",
-      homNay: "",
-      tichLuy: "",
-      thietKe: "",
-      loaiMay: "Máy phát điện 5KVA",
-      mayBatDau: "",
-      mayKetThuc: "",
-      ...EMPTY_MANPOWER,
-      nlBatDau: "",
-      nlKetThuc: "",
-      ghiChu: "",
-    },
-    {
-      id: uid(),
-      baoCaoId,
-      phan: "hom_nay",
-      thuTu: 2,
-      hangMuc: "Hàn cháy giáp mép trên tuyến",
-      tuyenHa: "",
-      tuyenThuong: "",
-      donVi: "mối hàn",
-      denHomQua: "",
-      homNay: "",
-      tichLuy: "",
-      thietKe: "",
-      loaiMay: "Máy hàn ray",
-      mayBatDau: "",
-      mayKetThuc: "",
-      ...EMPTY_MANPOWER,
-      nlBatDau: "",
-      nlKetThuc: "",
-      ghiChu: "",
-    },
-    {
-      id: uid(),
-      baoCaoId,
-      phan: "hom_nay",
-      thuTu: 3,
-      hangMuc: "Hàn cháy giáp mép tại bãi hàn",
-      tuyenHa: "",
-      tuyenThuong: "",
-      donVi: "mối hàn",
-      denHomQua: "",
-      homNay: "",
-      tichLuy: "",
-      thietKe: "",
-      loaiMay: "Máy hàn ray",
-      mayBatDau: "",
-      mayKetThuc: "",
-      ...EMPTY_MANPOWER,
-      nlBatDau: "",
-      nlKetThuc: "",
-      ghiChu: "",
-    },
-  ];
+  return DEFAULT_WORK_TYPES.map((type, index) => ({
+    id: uid(),
+    baoCaoId,
+    phan: "hom_nay" as const,
+    thuTu: index + 1,
+    congViecId: type.id,
+    hangMuc: type.ten,
+    tuyenHa: "",
+    tuyenThuong: "",
+    donVi: type.donViMacDinh,
+    denHomQua: "",
+    homNay: "",
+    tichLuy: "",
+    thietKe: "",
+    loaiMay: type.loaiMayMacDinh,
+    mayBatDau: "",
+    mayKetThuc: "",
+    ...EMPTY_MANPOWER,
+    nlBatDau: "",
+    nlKetThuc: "",
+    ghiChu: "",
+  }));
 }
 
 async function ensureHeaderSupabase(
@@ -409,13 +460,20 @@ function ensureHeaderLocal(ngayBaoCao: string, ngayTiepTheo?: string | null): Da
 }
 
 export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBundle> {
+  const workTypesBundle = await loadWorkTypes();
+  const withTypes = (bundle: Omit<DailyReportBundle, "workTypes">): DailyReportBundle => ({
+    ...bundle,
+    workTypes: workTypesBundle.types,
+    error: bundle.error || workTypesBundle.error,
+  });
+
   if (!isSupabaseConfigured()) {
     const store = readLocal();
     let header = store.headers.find((h) => h.ngayBaoCao === ngayBaoCao && !h.duAnId) ?? null;
     if (!header && store.headers.length === 0 && store.work.length === 0) {
       header = ensureHeaderLocal(ngayBaoCao);
       const refreshed = readLocal();
-      return {
+      return withTypes({
         header,
         workToday: refreshed.work.filter((w) => w.baoCaoId === header!.id && w.phan === "hom_nay"),
         workNext: refreshed.work.filter((w) => w.baoCaoId === header!.id && w.phan === "ngay_tiep_theo"),
@@ -423,9 +481,9 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
         incidents: refreshed.incidents.filter((i) => i.baoCaoId === header!.id),
         source: "local",
         error: "Chưa cấu hình Supabase — đang dùng bộ nhớ cục bộ",
-      };
+      });
     }
-    return {
+    return withTypes({
       header,
       workToday: header
         ? store.work.filter((w) => w.baoCaoId === header!.id && w.phan === "hom_nay")
@@ -437,7 +495,7 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
       incidents: header ? store.incidents.filter((i) => i.baoCaoId === header!.id) : [],
       source: "local",
       error: "Chưa cấu hình Supabase — đang dùng bộ nhớ cục bộ",
-    };
+    });
   }
 
   try {
@@ -451,14 +509,14 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
 
     if (headerRes.error) throw headerRes.error;
     if (!headerRes.data) {
-      return {
+      return withTypes({
         header: null,
         workToday: [],
         workNext: [],
         equipment: [],
         incidents: [],
         source: "supabase",
-      };
+      });
     }
 
     const header = mapHeader(headerRes.data as HeaderRowDb);
@@ -485,16 +543,16 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
     if (incRes.error) throw incRes.error;
 
     const work = ((workRes.data ?? []) as WorkRowDb[]).map(mapWork);
-    return {
+    return withTypes({
       header,
       workToday: work.filter((w) => w.phan === "hom_nay"),
       workNext: work.filter((w) => w.phan === "ngay_tiep_theo"),
       equipment: ((eqRes.data ?? []) as EquipmentRowDb[]).map(mapEquipment),
       incidents: ((incRes.data ?? []) as IncidentRowDb[]).map(mapIncident),
       source: "supabase",
-    };
+    });
   } catch (error) {
-    return {
+    return withTypes({
       header: null,
       workToday: [],
       workNext: [],
@@ -502,7 +560,7 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
       incidents: [],
       source: "local",
       error: formatSupabaseError(error),
-    };
+    });
   }
 }
 
@@ -541,6 +599,7 @@ export async function insertWorkItem(
     bao_cao_id: header.id,
     phan,
     thu_tu: (countRes.count ?? 0) + 1,
+    cong_viec_id: input.congViecId || null,
     hang_muc: input.hangMuc,
     tuyen_ha: input.tuyenHa || null,
     tuyen_thuong: input.tuyenThuong || null,
@@ -694,17 +753,18 @@ export async function deleteIncidentItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export function emptyWorkInput(): WorkItemInput {
+export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
   return {
-    hangMuc: "",
+    congViecId: workType?.id ?? "",
+    hangMuc: workType?.ten ?? "",
     tuyenHa: "",
     tuyenThuong: "",
-    donVi: "mối hàn",
+    donVi: workType?.donViMacDinh || "mối hàn",
     denHomQua: "",
     homNay: "",
     tichLuy: "",
     thietKe: "",
-    loaiMay: "",
+    loaiMay: workType?.loaiMayMacDinh ?? "",
     mayBatDau: "",
     mayKetThuc: "",
     ...EMPTY_MANPOWER,

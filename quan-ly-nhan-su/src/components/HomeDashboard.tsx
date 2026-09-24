@@ -34,6 +34,8 @@ import {
   UploadSimple,
   Flag,
   Cube,
+  Package,
+  Train,
   WarningCircle,
 } from "@/components/icons";
 
@@ -56,9 +58,11 @@ const childIcons: Record<string, Icon> = {
   "khoa-dao-tao": GraduationCap,
   "tra-cuu-dao-tao": MagnifyingGlass,
   "danh-sach-may": Cube,
+  "quan-ly-phuong-tien": Train,
   "lich-bao-tri": CalendarCheck,
   "thu-vien-loi": Bug,
   "phan-cong-may": ListChecks,
+  "phu-tung-thay-the": Package,
   "quan-ly-moi-han": Lightning,
   "thu-vien-loi-moi-han": Bug,
   "quan-ly-du-an": Buildings,

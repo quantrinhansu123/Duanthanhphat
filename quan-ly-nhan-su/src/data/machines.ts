@@ -156,6 +156,41 @@ export type Machine = {
 
 export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
 
+/** Phân loại thiết bị theo ma trận thông tin NSX / ray / quy trình / tải trọng… */
+export type MachineCategory = "Nhiệt nhôm" | "Flash Butt" | "Phương tiện";
+
+export const MACHINE_CATEGORIES: MachineCategory[] = ["Nhiệt nhôm", "Flash Butt", "Phương tiện"];
+
+export function getMachineCategory(machine: Pick<Machine, "type" | "name" | "weldingTechnology" | "model">): MachineCategory {
+  const blob = [machine.type, machine.name, machine.weldingTechnology, machine.model]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("vi");
+  if (
+    blob.includes("phương tiện") ||
+    blob.includes("xe chuyên") ||
+    blob.includes("transport") ||
+    (blob.includes("road-rail") && blob.includes("carrier"))
+  ) {
+    return "Phương tiện";
+  }
+  if (blob.includes("nhiệt nhôm") || blob.includes("thermit") || blob.includes("atw")) {
+    return "Nhiệt nhôm";
+  }
+  return "Flash Butt";
+}
+
+export function machineCategoryFieldMatrix(category: MachineCategory) {
+  return {
+    manufacturer: true,
+    railType: category !== "Phương tiện",
+    weldingProcess: category !== "Phương tiện",
+    weight: category !== "Nhiệt nhôm",
+    dimensions: category !== "Nhiệt nhôm",
+    gauge: category === "Phương tiện",
+  } as const;
+}
+
 export const machineModelImages: Record<string, string> = {
   "KCM-007 (K922-1)": "/may-han/kcm007.jpg",
   KCM007: "/may-han/kcm007.jpg",

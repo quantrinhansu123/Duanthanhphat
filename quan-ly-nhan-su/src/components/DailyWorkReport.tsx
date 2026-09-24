@@ -17,6 +17,7 @@ import {
   type DailyEquipmentItem,
   type DailyIncidentItem,
   type DailyWorkItem,
+  type DailyWorkType,
   type EquipmentItemInput,
   type IncidentItemInput,
   type WorkItemInput,
@@ -24,10 +25,10 @@ import {
 } from "@/lib/dailyReportDb";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 
-type SubTab = "hom-nay" | "tiep-theo" | "thiet-bi" | "su-co";
+type SubTab = { kind: "job"; workTypeId: string } | { kind: "thiet-bi" } | { kind: "su-co" };
 
 type ModalState =
-  | { kind: "work"; phan: WorkSection }
+  | { kind: "work"; phan: WorkSection; workType: DailyWorkType }
   | { kind: "equipment" }
   | { kind: "incident" };
 
@@ -39,13 +40,6 @@ type PersonnelOption = {
 };
 
 type ManpowerRole = "cht" | "ky_su" | "lai_may" | "tho_van_hanh" | "cong_nhan";
-
-const SUB_TABS: { id: SubTab; label: string; short: string }[] = [
-  { id: "hom-nay", label: "Công việc hôm nay", short: "A. Hôm nay" },
-  { id: "tiep-theo", label: "Công việc ngày tiếp theo", short: "B. Tiếp theo" },
-  { id: "thiet-bi", label: "Thiết bị sử dụng", short: "Thiết bị" },
-  { id: "su-co", label: "Sự cố — Khó khăn", short: "Sự cố" },
-];
 
 const ROLE_KEYWORDS: Record<ManpowerRole, string[]> = {
   cht: ["cht", "chỉ huy trưởng", "chi huy truong", "chỉ huy"],
@@ -141,6 +135,7 @@ function WorkFormModal({
   title,
   saving,
   personnel,
+  workType,
   onClose,
   onSubmit,
 }: {
@@ -148,19 +143,20 @@ function WorkFormModal({
   title: string;
   saving: boolean;
   personnel: PersonnelOption[];
+  workType: DailyWorkType | null;
   onClose: () => void;
   onSubmit: (values: WorkItemInput) => Promise<void>;
 }) {
   const titleId = useId();
-  const [form, setForm] = useState<WorkItemInput>(emptyWorkInput);
+  const [form, setForm] = useState<WorkItemInput>(() => emptyWorkInput(workType));
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(emptyWorkInput());
+      setForm(emptyWorkInput(workType));
       setError("");
     }
-  }, [open]);
+  }, [open, workType]);
 
   if (!open) return null;
 
@@ -176,7 +172,11 @@ function WorkFormModal({
     }
     setError("");
     try {
-      await onSubmit(form);
+      await onSubmit({
+        ...form,
+        congViecId: workType?.id || form.congViecId,
+        hangMuc: workType?.ten || form.hangMuc,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu");
     }
@@ -195,7 +195,12 @@ function WorkFormModal({
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto px-4 py-4 sm:px-5 space-y-3">
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
-          <Field label="Hạng mục công việc *" value={form.hangMuc} onChange={(v) => patch({ hangMuc: v })} />
+          <div>
+            <span className={labelCls}>Công việc</span>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+              {workType?.ten || form.hangMuc || "—"}
+            </div>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Tuyến hạ" value={form.tuyenHa} onChange={(v) => patch({ tuyenHa: v })} />
             <Field label="Tuyến thượng" value={form.tuyenThuong} onChange={(v) => patch({ tuyenThuong: v })} />
@@ -484,7 +489,12 @@ function WorkTable({
 export default function DailyWorkReport() {
   const today = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const [activeTab, setActiveTab] = useState<SubTab>("hom-nay");
+  const [workTypes, setWorkTypes] = useState<DailyWorkType[]>([]);
+  const [activeTab, setActiveTab] = useState<SubTab>({
+    kind: "job",
+    workTypeId: "a1111111-1111-4111-8111-111111111101",
+  });
+  const [workSection, setWorkSection] = useState<WorkSection>("hom_nay");
   const [reportDate, setReportDate] = useState(
     `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
   );
@@ -502,11 +512,22 @@ export default function DailyWorkReport() {
   const reload = useCallback(async (date: string) => {
     setLoading(true);
     const bundle = await loadDailyReport(date);
+    setWorkTypes(bundle.workTypes);
     setWorkToday(bundle.workToday);
     setWorkNext(bundle.workNext);
     setEquipment(bundle.equipment);
     setIncidents(bundle.incidents);
     setLoadError(bundle.error ?? "");
+    setActiveTab((current) => {
+      if (current.kind === "job") {
+        const still = bundle.workTypes.some((t) => t.id === current.workTypeId);
+        if (still) return current;
+      }
+      if (current.kind === "thiet-bi" || current.kind === "su-co") return current;
+      return bundle.workTypes[0]
+        ? { kind: "job", workTypeId: bundle.workTypes[0].id }
+        : { kind: "thiet-bi" };
+    });
     setLoading(false);
   }, []);
 
@@ -542,29 +563,64 @@ export default function DailyWorkReport() {
     window.setTimeout(() => setToast(""), 2200);
   }
 
+  const activeWorkType =
+    activeTab.kind === "job"
+      ? workTypes.find((t) => t.id === activeTab.workTypeId) ?? null
+      : null;
+
+  function matchesWorkType(row: DailyWorkItem, type: DailyWorkType) {
+    if (row.congViecId && row.congViecId === type.id) return true;
+    return row.hangMuc.trim().toLocaleLowerCase("vi") === type.ten.trim().toLocaleLowerCase("vi");
+  }
+
+  const filteredToday = activeWorkType
+    ? workToday.filter((row) => matchesWorkType(row, activeWorkType))
+    : [];
+  const filteredNext = activeWorkType
+    ? workNext.filter((row) => matchesWorkType(row, activeWorkType))
+    : [];
+  const activeWorkRows = workSection === "hom_nay" ? filteredToday : filteredNext;
+
   function openAdd() {
-    if (activeTab === "hom-nay") setModal({ kind: "work", phan: "hom_nay" });
-    else if (activeTab === "tiep-theo") setModal({ kind: "work", phan: "ngay_tiep_theo" });
-    else if (activeTab === "thiet-bi") setModal({ kind: "equipment" });
+    if (activeTab.kind === "job" && activeWorkType) {
+      setModal({ kind: "work", phan: workSection, workType: activeWorkType });
+    } else if (activeTab.kind === "thiet-bi") setModal({ kind: "equipment" });
     else setModal({ kind: "incident" });
   }
 
   const panelTitle =
-    activeTab === "hom-nay"
-      ? "A. Công việc ngày hôm nay"
-      : activeTab === "tiep-theo"
-        ? "B. Công việc ngày tiếp theo"
-        : activeTab === "thiet-bi"
-          ? "Thiết bị sử dụng"
-          : "Sự cố — Khó khăn — Vướng mắc";
+    activeTab.kind === "job"
+      ? activeWorkType?.ten || "Công việc"
+      : activeTab.kind === "thiet-bi"
+        ? "Thiết bị sử dụng"
+        : "Sự cố — Khó khăn — Vướng mắc";
+
+  const tabs: { key: string; label: string; short: string; tab: SubTab }[] = [
+    ...workTypes.map((type) => ({
+      key: `job:${type.id}`,
+      label: type.ten,
+      short: type.ma,
+      tab: { kind: "job" as const, workTypeId: type.id },
+    })),
+    { key: "thiet-bi", label: "Thiết bị sử dụng", short: "Thiết bị", tab: { kind: "thiet-bi" } },
+    { key: "su-co", label: "Sự cố — Khó khăn", short: "Sự cố", tab: { kind: "su-co" } },
+  ];
+
+  function isActiveTab(tab: SubTab) {
+    if (tab.kind !== activeTab.kind) return false;
+    if (tab.kind === "job" && activeTab.kind === "job") return tab.workTypeId === activeTab.workTypeId;
+    return true;
+  }
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
       {loadError && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 sm:text-sm">
-          <div className="font-semibold">Chế độ cục bộ</div>
+          <div className="font-semibold">Chế độ cục bộ / cảnh báo dữ liệu</div>
           <div className="mt-0.5">
-            Chạy file <span className="font-mono">supabase/bao_cao_ngay.sql</span> trên Supabase để lưu server. {loadError}
+            Chạy <span className="font-mono">supabase/bao_cao_ngay.sql</span> và{" "}
+            <span className="font-mono">supabase/migration_20260924_danh_muc_cong_viec_bao_cao.sql</span> trên Supabase.
+            {" "}{loadError}
           </div>
         </div>
       )}
@@ -572,7 +628,7 @@ export default function DailyWorkReport() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
-          <p className="mt-0.5 text-xs text-slate-500">Bảng danh sách công việc đã nhập theo từng phần.</p>
+          <p className="mt-0.5 text-xs text-slate-500">Mỗi công việc là một tab — nhập A hôm nay / B tiếp theo trong từng tab.</p>
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
           Ngày báo cáo
@@ -588,26 +644,26 @@ export default function DailyWorkReport() {
       <div className="mb-4">
         <div className="table-scroll overflow-x-auto">
           <div
-            className="inline-flex min-w-max sm:min-w-0 sm:w-full gap-1 rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-xs"
+            className="inline-flex min-w-max gap-1 rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-xs"
             role="tablist"
           >
-            {SUB_TABS.map((tab) => {
-              const active = tab.id === activeTab;
+            {tabs.map((item) => {
+              const active = isActiveTab(item.tab);
               return (
                 <button
-                  key={tab.id}
+                  key={item.key}
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex shrink-0 sm:flex-1 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047ab]/25 ${
+                  onClick={() => setActiveTab(item.tab)}
+                  className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047ab]/25 ${
                     active
                       ? "bg-[#0047AB] text-white shadow-xs"
                       : "text-slate-600 hover:bg-white hover:text-slate-900"
                   }`}
                 >
-                  <span className="sm:hidden">{tab.short}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{item.short}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
                 </button>
               );
             })}
@@ -619,7 +675,10 @@ export default function DailyWorkReport() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-bold text-slate-900">{panelTitle}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Ngày: {displayDate(reportDate)}</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Ngày: {displayDate(reportDate)}
+              {activeWorkType?.moTa ? ` · ${activeWorkType.moTa}` : ""}
+            </p>
           </div>
           <button
             type="button"
@@ -631,29 +690,42 @@ export default function DailyWorkReport() {
           </button>
         </div>
 
+        {activeTab.kind === "job" && (
+          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            {([
+              { id: "hom_nay" as const, label: "A. Hôm nay" },
+              { id: "ngay_tiep_theo" as const, label: "B. Ngày tiếp theo" },
+            ]).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setWorkSection(item.id)}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                  workSection === item.id
+                    ? "bg-white text-[#0047AB] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading ? (
           <div className="py-12 text-center text-sm text-slate-500">Đang tải...</div>
-        ) : activeTab === "hom-nay" ? (
+        ) : activeTab.kind === "job" ? (
           <WorkTable
-            rows={workToday}
+            rows={activeWorkRows}
             onDelete={async (id) => {
               if (!window.confirm("Xóa hạng mục này?")) return;
               await deleteWorkItem(id);
-              setWorkToday((rows) => rows.filter((r) => r.id !== id));
+              if (workSection === "hom_nay") setWorkToday((rows) => rows.filter((r) => r.id !== id));
+              else setWorkNext((rows) => rows.filter((r) => r.id !== id));
               showToast("Đã xóa hạng mục");
             }}
           />
-        ) : activeTab === "tiep-theo" ? (
-          <WorkTable
-            rows={workNext}
-            onDelete={async (id) => {
-              if (!window.confirm("Xóa hạng mục này?")) return;
-              await deleteWorkItem(id);
-              setWorkNext((rows) => rows.filter((r) => r.id !== id));
-              showToast("Đã xóa hạng mục");
-            }}
-          />
-        ) : activeTab === "thiet-bi" ? (
+        ) : activeTab.kind === "thiet-bi" ? (
           equipment.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
               Chưa có thiết bị. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập.
@@ -746,9 +818,14 @@ export default function DailyWorkReport() {
 
       <WorkFormModal
         open={modal?.kind === "work"}
-        title={modal?.kind === "work" && modal.phan === "ngay_tiep_theo" ? "Thêm công việc ngày tiếp theo" : "Thêm công việc hôm nay"}
+        title={
+          modal?.kind === "work"
+            ? `Thêm · ${modal.workType.ten} · ${modal.phan === "ngay_tiep_theo" ? "Ngày tiếp theo" : "Hôm nay"}`
+            : "Thêm công việc"
+        }
         saving={saving}
         personnel={personnel}
+        workType={modal?.kind === "work" ? modal.workType : null}
         onClose={() => setModal(null)}
         onSubmit={async (values) => {
           if (!modal || modal.kind !== "work") return;

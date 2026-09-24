@@ -36,6 +36,12 @@ export type DbTrainingCourse = {
   result: string;
   thumbnail: string;
   cloudinaryPublicId?: string | null;
+  /** Link 1 video bài giảng. */
+  videoUrl?: string;
+  /** Loại ray áp dụng khóa học. */
+  railType?: string;
+  /** Công nghệ / phương pháp hàn (FBW, ATW, ...). */
+  weldMethod?: string;
   participantsCount: number;
   manufacturerHours: number;
   selfTrainingHours: number;
@@ -86,6 +92,9 @@ export type DbTrainingHistoryRecord = {
   certificateDate: string;
   manufacturerHours: number;
   selfTrainingHours: number;
+  railType?: string;
+  weldMethod?: string;
+  videoUrl?: string;
 };
 
 export type SaveTrainingCourseInput = {
@@ -105,6 +114,9 @@ export type SaveTrainingCourseInput = {
   manufacturerHours?: number;
   selfTrainingHours?: number;
   participantsCount?: number;
+  videoUrl?: string;
+  railType?: string;
+  weldMethod?: string;
   attendees: {
     employeeId: string;
     result: "Đạt" | "Không đạt" | "Đang học";
@@ -132,6 +144,9 @@ interface RawCourseListRow {
   tong_gio_nha_san_xuat?: number | string | null;
   tong_gio_tu_dao_tao?: number | string | null;
   tong_nguoi_tham_gia?: number | string | null;
+  link_video?: string | null;
+  loai_ray?: string | null;
+  cong_nghe_han?: string | null;
 }
 
 interface RawAttendeeRow {
@@ -163,11 +178,22 @@ const COURSE_COLUMNS_BASE = `
 `;
 const COURSE_COLUMNS_WITH_ASSETS = `${COURSE_COLUMNS_BASE},nguoi_dao_tao_ten,tai_lieu`;
 const COURSE_COLUMNS_FULL = `${COURSE_COLUMNS_WITH_ASSETS},tong_gio_nha_san_xuat,tong_gio_tu_dao_tao,tong_nguoi_tham_gia`;
+const COURSE_COLUMNS_EXTENDED = `${COURSE_COLUMNS_FULL},link_video,loai_ray,cong_nghe_han`;
 
 function toNonNegNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return fallback;
   return n;
+}
+
+/** Thời lượng (giờ) = giờ NSX + giờ tự đào tạo. */
+export function totalTrainingHours(manufacturerHours: unknown, selfTrainingHours: unknown): number {
+  return toNonNegNumber(manufacturerHours) + toNonNegNumber(selfTrainingHours);
+}
+
+export function formatTotalTrainingHours(manufacturerHours: unknown, selfTrainingHours: unknown): string {
+  const total = totalTrainingHours(manufacturerHours, selfTrainingHours);
+  return total > 0 ? String(total) : "0";
 }
 
 function parseTrainingAssets(value: unknown): TrainingAsset[] {
@@ -205,12 +231,22 @@ async function fetchAllCourseRows(): Promise<RawCourseListRow[]> {
   for (let offset = 0; ; offset += pageSize) {
     const primary = await supabase
       .from("dao_tao")
-      .select(COURSE_COLUMNS_FULL)
+      .select(COURSE_COLUMNS_EXTENDED)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     let data: RawCourseListRow[] | null = primary.data as unknown as RawCourseListRow[] | null;
     let error = primary.error;
+    if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
+      const withHours = await supabase
+        .from("dao_tao")
+        .select(COURSE_COLUMNS_FULL)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      data = withHours.data as unknown as RawCourseListRow[] | null;
+      error = withHours.error;
+    }
     if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
       const withAssets = await supabase
         .from("dao_tao")
@@ -472,9 +508,12 @@ export async function fetchWelderTrainingHistory(): Promise<{
       courseTitle: course.ten_khoa_hoc,
       trainer: course.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       date: formatTrainingDate(course.ngay),
-      duration: course.thoi_luong || "0:00",
+      duration: formatTotalTrainingHours(course.tong_gio_nha_san_xuat, course.tong_gio_tu_dao_tao),
       manufacturerHours: toNonNegNumber(course.tong_gio_nha_san_xuat),
       selfTrainingHours: toNonNegNumber(course.tong_gio_tu_dao_tao),
+      railType: course.loai_ray?.trim() || "",
+      weldMethod: course.cong_nghe_han?.trim() || "",
+      videoUrl: course.link_video?.trim() || "",
       result: (attendee.ket_qua as DbTrainingHistoryRecord["result"]) || "Đang học",
       status: (attendee.trang_thai as DbTrainingHistoryRecord["status"]) || "Đang học",
       certificate: certificate?.name || "Chưa cấp",
@@ -531,7 +570,7 @@ export async function fetchTrainingCourses(): Promise<{
       trainerId: trainer?.id,
       date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
       dateIso: row.ngay ? row.ngay.slice(0, 10) : "",
-      duration: row.thoi_luong || "0:00",
+      duration: formatTotalTrainingHours(row.tong_gio_nha_san_xuat, row.tong_gio_tu_dao_tao),
       location: row.dia_diem || "Chưa cập nhật",
       description: row.mo_ta || "",
       result: row.ket_qua || "Đạt",
@@ -539,6 +578,9 @@ export async function fetchTrainingCourses(): Promise<{
         row.hinh_anh ||
         "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=480&h=270&q=80",
       cloudinaryPublicId: row.cloudinary_public_id,
+      videoUrl: row.link_video?.trim() || "",
+      railType: row.loai_ray?.trim() || "",
+      weldMethod: row.cong_nghe_han?.trim() || "",
       participantsCount:
         row.tong_nguoi_tham_gia != null
           ? Math.round(toNonNegNumber(row.tong_nguoi_tham_gia))
@@ -565,11 +607,21 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
   const supabase = createClient();
   const primary = await supabase
     .from("dao_tao")
-    .select(COURSE_COLUMNS_FULL)
+    .select(COURSE_COLUMNS_EXTENDED)
     .eq("id", courseId)
     .single();
   let data: RawCourseDetailRow | null = primary.data as unknown as RawCourseDetailRow | null;
   let error = primary.error;
+
+  if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
+    const withHours = await supabase
+      .from("dao_tao")
+      .select(COURSE_COLUMNS_FULL)
+      .eq("id", courseId)
+      .single();
+    data = withHours.data as unknown as RawCourseDetailRow | null;
+    error = withHours.error;
+  }
 
   if (error && (error.code === "42703" || error.code === "PGRST204" || error.message.includes("column"))) {
     const withAssets = await supabase
@@ -657,7 +709,7 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
     trainerId: trainer?.id,
     date: row.ngay ? new Date(row.ngay + "T00:00:00").toLocaleDateString("vi-VN") : "Chưa cập nhật",
     dateIso: row.ngay ? row.ngay.slice(0, 10) : "",
-    duration: row.thoi_luong || "0:00",
+    duration: formatTotalTrainingHours(row.tong_gio_nha_san_xuat, row.tong_gio_tu_dao_tao),
     location: row.dia_diem || "Chưa cập nhật",
     description: row.mo_ta || "",
     result: row.ket_qua || "Đạt",
@@ -665,6 +717,9 @@ export async function fetchTrainingCourseDetail(courseId: string): Promise<{
       row.hinh_anh ||
       "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=480&h=270&q=80",
     cloudinaryPublicId: row.cloudinary_public_id,
+    videoUrl: row.link_video?.trim() || "",
+    railType: row.loai_ray?.trim() || "",
+    weldMethod: row.cong_nghe_han?.trim() || "",
     participantsCount:
       row.tong_nguoi_tham_gia != null
         ? Math.round(toNonNegNumber(row.tong_nguoi_tham_gia))
@@ -690,6 +745,10 @@ async function patchTrainingExtraFields(
     manufacturerHours: number;
     selfTrainingHours: number;
     participantsCount: number;
+    videoUrl?: string | null;
+    railType?: string | null;
+    weldMethod?: string | null;
+    duration?: string | null;
   },
 ): Promise<{ error?: string }> {
   const payload: Record<string, unknown> = {
@@ -698,6 +757,10 @@ async function patchTrainingExtraFields(
     tong_gio_nha_san_xuat: fields.manufacturerHours,
     tong_gio_tu_dao_tao: fields.selfTrainingHours,
     tong_nguoi_tham_gia: fields.participantsCount,
+    thoi_luong: fields.duration?.trim() || formatTotalTrainingHours(fields.manufacturerHours, fields.selfTrainingHours),
+    link_video: fields.videoUrl?.trim() || null,
+    loai_ray: fields.railType?.trim() || null,
+    cong_nghe_han: fields.weldMethod?.trim() || null,
     updated_at: new Date().toISOString(),
   };
 
@@ -705,40 +768,54 @@ async function patchTrainingExtraFields(
   if (!full.error) return {};
 
   if (full.error.code === "42703" || full.error.message.includes("column")) {
-    const withoutHours = await supabase
-      .from("dao_tao")
-      .update({
-        nguoi_dao_tao_ten: payload.nguoi_dao_tao_ten,
-        tai_lieu: payload.tai_lieu,
-        updated_at: payload.updated_at,
-      })
-      .eq("id", courseId);
-    if (!withoutHours.error) {
+    const withoutNew = { ...payload };
+    delete withoutNew.link_video;
+    delete withoutNew.loai_ray;
+    delete withoutNew.cong_nghe_han;
+    const mid = await supabase.from("dao_tao").update(withoutNew).eq("id", courseId);
+    if (!mid.error) {
       return {
         error:
-          "Cần chạy migration_20260908_gio_dao_tao_tham_gia.sql trên Supabase để lưu giờ NSX, giờ tự đào tạo và tổng người tham gia.",
+          "Cần chạy migration_20260923_dao_tao_video_bo_loc.sql trên Supabase để lưu video, loại ray và công nghệ hàn.",
       };
     }
-    if (withoutHours.error.code === "42703" || withoutHours.error.message.includes("column")) {
-      const baseOnly = await supabase
+    if (mid.error.code === "42703" || mid.error.message.includes("column")) {
+      const withoutHours = await supabase
         .from("dao_tao")
         .update({
-          tong_gio_nha_san_xuat: fields.manufacturerHours,
-          tong_gio_tu_dao_tao: fields.selfTrainingHours,
-          tong_nguoi_tham_gia: fields.participantsCount,
+          nguoi_dao_tao_ten: payload.nguoi_dao_tao_ten,
+          tai_lieu: payload.tai_lieu,
           updated_at: payload.updated_at,
         })
         .eq("id", courseId);
-      if (!baseOnly.error) return {};
-      if (baseOnly.error.code === "42703" || baseOnly.error.message.includes("column")) {
+      if (!withoutHours.error) {
         return {
           error:
             "Cần chạy migration_20260908_gio_dao_tao_tham_gia.sql trên Supabase để lưu giờ NSX, giờ tự đào tạo và tổng người tham gia.",
         };
       }
-      return { error: baseOnly.error.message };
+      if (withoutHours.error.code === "42703" || withoutHours.error.message.includes("column")) {
+        const baseOnly = await supabase
+          .from("dao_tao")
+          .update({
+            tong_gio_nha_san_xuat: fields.manufacturerHours,
+            tong_gio_tu_dao_tao: fields.selfTrainingHours,
+            tong_nguoi_tham_gia: fields.participantsCount,
+            updated_at: payload.updated_at,
+          })
+          .eq("id", courseId);
+        if (!baseOnly.error) return {};
+        if (baseOnly.error.code === "42703" || baseOnly.error.message.includes("column")) {
+          return {
+            error:
+              "Cần chạy migration_20260908_gio_dao_tao_tham_gia.sql trên Supabase để lưu giờ NSX, giờ tự đào tạo và tổng người tham gia.",
+          };
+        }
+        return { error: baseOnly.error.message };
+      }
+      return { error: withoutHours.error.message };
     }
-    return { error: withoutHours.error.message };
+    return { error: mid.error.message };
   }
 
   return { error: full.error.message };
@@ -753,11 +830,12 @@ async function saveTrainingCourseDirect(input: SaveTrainingCourseInput): Promise
   const manufacturerHours = toNonNegNumber(input.manufacturerHours);
   const selfTrainingHours = toNonNegNumber(input.selfTrainingHours);
   const participantsCount = Math.round(toNonNegNumber(input.participantsCount));
+  const duration = formatTotalTrainingHours(manufacturerHours, selfTrainingHours);
 
   const row: Record<string, unknown> = {
     ten_khoa_hoc: input.title.trim(),
     ngay: input.date || null,
-    thoi_luong: input.duration?.trim() || null,
+    thoi_luong: duration,
     dia_diem: input.location?.trim() || null,
     mo_ta: input.description?.trim() || null,
     nguoi_dao_tao: input.trainerId || null,
@@ -772,6 +850,9 @@ async function saveTrainingCourseDirect(input: SaveTrainingCourseInput): Promise
     tong_gio_nha_san_xuat: manufacturerHours,
     tong_gio_tu_dao_tao: selfTrainingHours,
     tong_nguoi_tham_gia: participantsCount,
+    link_video: input.videoUrl?.trim() || null,
+    loai_ray: input.railType?.trim() || null,
+    cong_nghe_han: input.weldMethod?.trim() || null,
     nguoi_tham_gia: input.attendees.map((a) => a.employeeId),
     updated_at: new Date().toISOString(),
   };
@@ -793,6 +874,9 @@ async function saveTrainingCourseDirect(input: SaveTrainingCourseInput): Promise
       tong_nguoi_tham_gia: _c,
       nguoi_dao_tao_ten: _d,
       tai_lieu: _e,
+      link_video: _f,
+      loai_ray: _g,
+      cong_nghe_han: _h,
       ...baseRow
     } = row;
     result = await tryWrite(baseRow);
@@ -804,10 +888,14 @@ async function saveTrainingCourseDirect(input: SaveTrainingCourseInput): Promise
         manufacturerHours,
         selfTrainingHours,
         participantsCount,
+        videoUrl: input.videoUrl,
+        railType: input.railType,
+        weldMethod: input.weldMethod,
+        duration,
       });
       // Nếu thiếu cột giờ thì vẫn cho lưu khóa; báo lỗi cột ở bước sau chỉ khi cần
-      if (patch.error?.includes("migration_20260908")) {
-        // tiếp tục sync học viên, trả cảnh báo sau nếu muốn — ưu tiên lưu được khóa
+      if (patch.error?.includes("migration_20260908") || patch.error?.includes("migration_20260923")) {
+        // tiếp tục sync học viên — ưu tiên lưu được khóa
       } else if (patch.error) {
         return { error: patch.error };
       }
@@ -867,11 +955,16 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
       (a.result === "Đạt" ? "Hoàn thành" : a.result === "Không đạt" ? "Không hoàn thành" : "Đang học"),
   }));
 
+  const manufacturerHours = toNonNegNumber(input.manufacturerHours);
+  const selfTrainingHours = toNonNegNumber(input.selfTrainingHours);
+  const participantsCount = Math.round(toNonNegNumber(input.participantsCount));
+  const duration = formatTotalTrainingHours(manufacturerHours, selfTrainingHours);
+
   const rpcParams = {
     p_dao_tao_id: input.id || null,
     p_ten_khoa_hoc: input.title.trim(),
     p_ngay: input.date || null,
-    p_thoi_luong: input.duration?.trim() || null,
+    p_thoi_luong: duration,
     p_dia_diem: input.location?.trim() || null,
     p_mo_ta: input.description?.trim() || null,
     p_nguoi_dao_tao: input.trainerId || null,
@@ -884,10 +977,6 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
     p_hoc_vien: formattedAttendees,
   };
 
-  const manufacturerHours = toNonNegNumber(input.manufacturerHours);
-  const selfTrainingHours = toNonNegNumber(input.selfTrainingHours);
-  const participantsCount = Math.round(toNonNegNumber(input.participantsCount));
-
   const v2 = await supabase.rpc("luu_khoa_dao_tao_va_cap_chung_chi_v2", {
     ...rpcParams,
     p_nguoi_dao_tao_ten: input.trainerName?.trim() || null,
@@ -897,7 +986,22 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
     p_tong_nguoi_tham_gia: participantsCount,
   });
 
-  if (!v2.error) return { id: v2.data as string };
+  if (!v2.error) {
+    const courseId = v2.data as string;
+    const patch = await patchTrainingExtraFields(supabase, courseId, {
+      trainerName: input.trainerName,
+      assets: input.assets,
+      manufacturerHours,
+      selfTrainingHours,
+      participantsCount,
+      videoUrl: input.videoUrl,
+      railType: input.railType,
+      weldMethod: input.weldMethod,
+      duration,
+    });
+    if (patch.error && !patch.error.includes("migration_")) return { error: patch.error };
+    return { id: courseId };
+  }
 
   // Không bỏ nhóm chứng chỉ đã chọn khi RPC lỗi: transaction phải báo thất bại.
   if (/v_nhom/i.test(v2.error.message)) {
@@ -919,8 +1023,12 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
         manufacturerHours,
         selfTrainingHours,
         participantsCount,
+        videoUrl: input.videoUrl,
+        railType: input.railType,
+        weldMethod: input.weldMethod,
+        duration,
       });
-      if (patch.error?.includes("migration_20260908")) return { id: courseId };
+      if (patch.error?.includes("migration_20260908") || patch.error?.includes("migration_20260923")) return { id: courseId };
       if (patch.error) return { error: patch.error };
       return { id: courseId };
     }
@@ -954,8 +1062,12 @@ export async function saveTrainingCourse(input: SaveTrainingCourseInput): Promis
     manufacturerHours,
     selfTrainingHours,
     participantsCount,
+    videoUrl: input.videoUrl,
+    railType: input.railType,
+    weldMethod: input.weldMethod,
+    duration,
   });
-  if (patch.error?.includes("migration_20260908")) return { id: courseId };
+  if (patch.error?.includes("migration_20260908") || patch.error?.includes("migration_20260923")) return { id: courseId };
   if (patch.error) return { error: patch.error };
 
   return { id: courseId };

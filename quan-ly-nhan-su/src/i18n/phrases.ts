@@ -43,6 +43,11 @@ export const PHRASES: Record<string, string> = {
   "Thư viện lỗi máy": "Machine Fault Library",
   "Thư viện lỗi mối hàn": "Weld Fault Library",
   "Lịch chạy máy": "Machine Run Schedule",
+  "Phụ tùng thay thế": "Replacement Parts",
+  "Quản lý phương tiện": "Vehicle Management",
+  "Báo cáo dầu": "Fuel / oil report",
+  "Nhật ký chạy máy": "Machine run journal",
+  "Mở nhật ký chạy máy": "Open machine run journal",
   "Danh sách dự án": "Projects",
   "Quản lý mối hàn": "Weld Joint Management",
   "Nhật ký hàn": "Welding Journal",
@@ -70,8 +75,12 @@ export const PHRASES: Record<string, string> = {
   "Tra cứu lịch sử đào tạo theo thợ hàn": "Look up training history by welder",
   "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn":
     "Machine code, model, current location, status and weld count",
-  "Kế hoạch bảo dưỡng, lịch sử sửa chữa, phụ tùng thay thế":
-    "Maintenance plans, repair history, replacement parts",
+  "Kế hoạch bảo dưỡng, lịch sử sửa chữa và kiểm định":
+    "Maintenance plans, repair history and inspections",
+  "Danh mục phụ tùng theo nhà sản xuất, model máy tương thích và tồn kho":
+    "Spare parts by manufacturer, compatible machine models and stock levels",
+  "Nhật ký chạy máy theo dự án: ngày, máy, giờ hoạt động, dầu và tình trạng":
+    "Machine run journal by project: date, machine, hours, fuel and condition",
   "Danh mục mã lỗi máy móc, mối hàn, cách xử lý và mức độ nghiêm trọng":
     "Catalogue of machine and weld fault codes, remedies and severity",
   "Ngày, máy, lý trình, số giờ hoạt động, dự án và người phụ trách":
@@ -372,6 +381,10 @@ export const PHRASES: Record<string, string> = {
   "Đến ngày": "To date",
   "Tất cả": "All",
   "Ngày giờ": "Date & time",
+  "Ca hàn": "Welding shift",
+  "Ca 1": "Shift 1",
+  "Ca 2": "Shift 2",
+  "Ca 3": "Shift 3",
   "Chứng chỉ sử dụng": "Certificate used",
   "Máy thực hiện": "Machine used",
   "Công nghệ": "Technology",

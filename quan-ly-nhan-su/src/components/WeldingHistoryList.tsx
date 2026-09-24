@@ -64,8 +64,69 @@ function emptyRecord(defaultResult: WeldingHistoryRecord["result"] = "Đạt"): 
     project: "",
     shift: "Ca 1",
     accountingCode: "",
+    method: "FBW",
+    weldType: "Sản xuất",
     result: defaultResult,
   };
+}
+
+const WELD_METHOD_OPTIONS = ["FBW", "ATW"];
+const WELD_TYPE_OPTIONS = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
+
+type ExportColumnKey =
+  | "date"
+  | "welderName"
+  | "rank"
+  | "weldJoint"
+  | "machine"
+  | "railType"
+  | "project"
+  | "shift"
+  | "method"
+  | "weldType"
+  | "result";
+
+const EXPORT_COLUMN_OPTIONS: { key: ExportColumnKey; label: string }[] = [
+  { key: "date", label: "Ngày" },
+  { key: "welderName", label: "Người trực tiếp hàn" },
+  { key: "rank", label: "Hạng" },
+  { key: "weldJoint", label: "Mã mối hàn" },
+  { key: "machine", label: "Máy" },
+  { key: "railType", label: "Loại ray" },
+  { key: "project", label: "Dự án" },
+  { key: "shift", label: "Ca" },
+  { key: "method", label: "Công nghệ hàn" },
+  { key: "weldType", label: "Loại hàn" },
+  { key: "result", label: "Kết quả" },
+];
+
+const DEFAULT_EXPORT_COLUMNS: ExportColumnKey[] = EXPORT_COLUMN_OPTIONS.map((c) => c.key);
+
+function exportCellValue(row: WeldingHistoryRecord, key: ExportColumnKey): string | number {
+  switch (key) {
+    case "date":
+      return formatWeldingDate(row.date);
+    case "welderName":
+      return row.welderName;
+    case "rank":
+      return row.rank;
+    case "weldJoint":
+      return row.weldJoint;
+    case "machine":
+      return row.machine;
+    case "railType":
+      return row.railType;
+    case "project":
+      return row.project;
+    case "shift":
+      return row.shift;
+    case "method":
+      return row.method;
+    case "weldType":
+      return row.weldType;
+    case "result":
+      return row.result;
+  }
 }
 
 type ComboOption = { value: string; label: string; hint?: string };
@@ -547,21 +608,13 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportPickerOpen, setExportPickerOpen] = useState(false);
+  const [exportColumns, setExportColumns] = useState<ExportColumnKey[]>(DEFAULT_EXPORT_COLUMNS);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
   const [stats, setStats] = useState<WeldingHistoryStats>({ ...EMPTY_WELDING_HISTORY_STATS });
-
-  const [queryInput, setQueryInput] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(queryInput);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [queryInput]);
 
   const [welder, setWelder] = useState("Tất cả thợ hàn");
   const [result, setResult] = useState(lockedResult ?? "Tất cả kết quả");
@@ -572,7 +625,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
   const [railsSel, setRailsSel] = useState<string[]>([]);
   const [projectsSel, setProjectsSel] = useState<string[]>([]);
   const [shiftsSel, setShiftsSel] = useState<string[]>([]);
-  const [accountingSel, setAccountingSel] = useState<string[]>([]);
+  const [methodsSel, setMethodsSel] = useState<string[]>([]);
+  const [weldTypesSel, setWeldTypesSel] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{
@@ -596,7 +650,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
 
   function buildFilterKey(extra?: Partial<WeldingHistoryFilterParams>) {
     return JSON.stringify({
-      query: debouncedQuery,
       welder,
       result,
       dateFrom,
@@ -605,7 +658,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
       rails: railsSel,
       projects: projectsSel,
       shifts: shiftsSel,
-      accountingCodes: accountingSel,
+      methods: methodsSel,
+      weldTypes: weldTypesSel,
       ...extra,
     });
   }
@@ -614,7 +668,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     return {
       page: p,
       pageSize: ps,
-      query: debouncedQuery,
       welder,
       result,
       dateFrom,
@@ -623,7 +676,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
       rails: railsSel,
       projects: projectsSel,
       shifts: shiftsSel,
-      accountingCodes: accountingSel,
+      methods: methodsSel,
+      weldTypes: weldTypesSel,
       includeStats,
     };
   }
@@ -670,7 +724,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deps mirrored via buildFilterKey inputs
-    [debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel],
+    [welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, methodsSel, weldTypesSel],
   );
 
   // Tải dữ liệu trang từ server (không chờ thống kê KPI)
@@ -735,7 +789,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page, pageSize, debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, prefetchPage],
+    [page, pageSize, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, methodsSel, weldTypesSel, prefetchPage],
   );
 
   useEffect(() => {
@@ -745,7 +799,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
   // Khi bộ lọc thay đổi, quay về trang 1 (cache đã xóa trong fetchData)
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, accountingSel, pageSize]);
+  }, [welder, result, dateFrom, dateTo, machinesSel, railsSel, projectsSel, shiftsSel, methodsSel, weldTypesSel, pageSize]);
 
   function applyRecentDays(days: number) {
     setDateFrom(weldingHistoryDefaultDateFrom(days));
@@ -782,12 +836,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     () => Array.from(new Set([...shiftOptions, ...list.map((r) => r.shift)])).filter(Boolean).sort(),
     [list],
   );
-  const accountingOptions = useMemo(() => {
-    const fromSeeds = DEFAULT_ACCOUNTING_CODES.map((o) => o.code);
-    const fromStats = stats.accountingCounts.map(([code]) => code);
-    const fromList = list.map((r) => r.accountingCode).filter(Boolean);
-    return Array.from(new Set([...fromSeeds, ...fromStats, ...fromList])).sort();
-  }, [list, stats.accountingCounts]);
 
   async function handleDelete(record: WeldingHistoryRecord) {
     if (!window.confirm(`Xóa bản ghi "${record.weldJoint}"?`)) return;
@@ -826,12 +874,15 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     setModal(null);
   }
 
-  // Xuất toàn bộ dữ liệu đã lọc ra Excel
+  // Xuất toàn bộ dữ liệu đã lọc ra Excel (theo cột đã chọn)
   async function exportExcel() {
+    if (exportColumns.length === 0) {
+      window.alert("Vui lòng chọn ít nhất một cột để xuất Excel.");
+      return;
+    }
     try {
       setExporting(true);
       const allRows = await exportAllFilteredWeldingHistory({
-        query: debouncedQuery,
         welder,
         result,
         dateFrom,
@@ -840,27 +891,23 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         rails: railsSel,
         projects: projectsSel,
         shifts: shiftsSel,
-        accountingCodes: accountingSel,
+        methods: methodsSel,
+        weldTypes: weldTypesSel,
       });
 
-      const data = allRows.map((r, idx) => ({
-        STT: idx + 1,
-        Ngày: formatWeldingDate(r.date),
-        "Welding ID": r.weldingId,
-        "Người trực tiếp hàn": r.welderName,
-        Hạng: r.rank,
-        "Mối hàn": r.weldJoint,
-        "Máy hàn": r.machine,
-        "Loại ray": r.railType,
-        "Dự án": r.project,
-        Ca: r.shift,
-        "Hạch toán": r.accountingCode || "—",
-        "Kết quả": r.result,
-      }));
+      const selectedMeta = EXPORT_COLUMN_OPTIONS.filter((c) => exportColumns.includes(c.key));
+      const data = allRows.map((r, idx) => {
+        const row: Record<string, string | number> = { STT: idx + 1 };
+        for (const col of selectedMeta) {
+          row[col.label] = exportCellValue(r, col.key);
+        }
+        return row;
+      });
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Lịch sử hàn");
       XLSX.writeFile(wb, `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      setExportPickerOpen(false);
     } catch (err) {
       window.alert("Lỗi xuất Excel: " + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -868,12 +915,15 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     }
   }
 
-  // Xuất toàn bộ dữ liệu đã lọc ra CSV
+  // Xuất toàn bộ dữ liệu đã lọc ra CSV (theo cột đã chọn)
   async function exportCsv() {
+    if (exportColumns.length === 0) {
+      window.alert("Vui lòng chọn ít nhất một cột để xuất.");
+      return;
+    }
     try {
       setExporting(true);
       const allRows = await exportAllFilteredWeldingHistory({
-        query: debouncedQuery,
         welder,
         result,
         dateFrom,
@@ -882,36 +932,20 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         rails: railsSel,
         projects: projectsSel,
         shifts: shiftsSel,
-        accountingCodes: accountingSel,
+        methods: methodsSel,
+        weldTypes: weldTypesSel,
       });
 
-      const headers = [
-        "STT",
-        "Ngày",
-        "Welding ID",
-        "Người trực tiếp hàn",
-        "Hạng",
-        "Mối hàn",
-        "Máy hàn",
-        "Loại ray",
-        "Dự án",
-        "Ca",
-        "Hạch toán",
-        "Kết quả",
-      ];
+      const selectedMeta = EXPORT_COLUMN_OPTIONS.filter((c) => exportColumns.includes(c.key));
+      const headers = ["STT", ...selectedMeta.map((c) => c.label)];
       const rows = allRows.map((r, idx) => [
         idx + 1,
-        formatWeldingDate(r.date),
-        r.weldingId,
-        `"${r.welderName}"`,
-        r.rank,
-        r.weldJoint,
-        `"${r.machine}"`,
-        r.railType,
-        `"${r.project}"`,
-        r.shift,
-        r.accountingCode || "",
-        r.result,
+        ...selectedMeta.map((c) => {
+          const value = exportCellValue(r, c.key);
+          return typeof value === "string" && (value.includes(",") || value.includes('"'))
+            ? `"${value.replace(/"/g, '""')}"`
+            : value;
+        }),
       ]);
       const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -929,7 +963,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
   }
 
   const hasFilter =
-    queryInput.trim() ||
     dateTo ||
     (dateFrom && dateFrom !== weldingHistoryDefaultDateFrom(WELDING_HISTORY_RECENT_DAYS)) ||
     welder !== "Tất cả thợ hàn" ||
@@ -938,10 +971,16 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     railsSel.length > 0 ||
     projectsSel.length > 0 ||
     shiftsSel.length > 0 ||
-    accountingSel.length > 0;
+    methodsSel.length > 0 ||
+    weldTypesSel.length > 0;
 
   const advancedFilterCount =
-    machinesSel.length + railsSel.length + projectsSel.length + shiftsSel.length + accountingSel.length;
+    machinesSel.length +
+    railsSel.length +
+    projectsSel.length +
+    shiftsSel.length +
+    methodsSel.length +
+    weldTypesSel.length;
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
@@ -1047,66 +1086,15 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         )}
       </div>
 
-      {/* Thanh chip thống kê Hạch toán & Nguồn dữ liệu */}
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-bold text-[#0047AB] uppercase tracking-wide mr-1">
-              Thống kê Hạch toán:
-            </span>
-            {stats.accountingCounts.map(([code, count]) => {
-              const active = accountingSel.includes(code);
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setAccountingSel((prev) => toggleValue(prev, code))}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-mono transition-all cursor-pointer ${
-                    active
-                      ? "bg-[#0047AB] text-white font-bold ring-2 ring-[#0047AB]/20 shadow-xs"
-                      : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium"
-                  }`}
-                  title={`Lọc theo mã ${code}`}
-                >
-                  <span>{code}</span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.2 text-[11px] font-bold tabular-nums ${
-                      active ? "bg-white/30 text-white" : "bg-white text-slate-700 shadow-2xs"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-            {accountingSel.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setAccountingSel([])}
-                className="ml-1 text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
-              >
-                Bỏ lọc ({accountingSel.length})
-              </button>
-            )}
-          </div>
-
-          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Nguồn dữ liệu: Supabase
-          </span>
-        </div>
+      {/* Nguồn dữ liệu */}
+      <div className="mb-4 flex justify-end">
+        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          Nguồn dữ liệu: Supabase
+        </span>
       </div>
 
       {/* Thanh bộ lọc chính */}
       <div className="mb-3 flex flex-wrap items-end gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={queryInput}
-            onChange={(e) => setQueryInput(e.target.value)}
-            placeholder="Tìm theo mối hàn, thợ hàn, máy, dự án, mã hạch toán..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
           Từ ngày
           <input
@@ -1160,15 +1148,19 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             Tất cả
           </button>
         </div>
-        <select
-          value={welder}
-          onChange={(e) => setWelder(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          {welderOptions.map((w) => (
-            <option key={w}>{w}</option>
-          ))}
-        </select>
+        <div className="mb-0.5 min-w-[220px] w-[240px] [&_.relative]:mt-0">
+          <FormCombo
+            value={welder === "Tất cả thợ hàn" ? "" : welder}
+            options={welderOptions
+              .filter((w) => w !== "Tất cả thợ hàn")
+              .map((w) => ({ value: w, label: w }))}
+            placeholder="Tất cả thợ hàn"
+            searchable
+            searchPlaceholder="Gõ để tìm tên thợ hàn..."
+            emptyText="Không tìm thấy thợ hàn"
+            onChange={(value) => setWelder(value || "Tất cả thợ hàn")}
+          />
+        </div>
         {lockedResult ? (
           <div className="inline-flex h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3.5 text-xs sm:text-sm font-semibold text-rose-700 shadow-2xs">
             Kết quả: {lockedResult}
@@ -1189,8 +1181,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           <button
             type="button"
             onClick={() => {
-              setQueryInput("");
-              setDebouncedQuery("");
               setDateFrom(weldingHistoryDefaultDateFrom());
               setDateTo("");
               setWelder("Tất cả thợ hàn");
@@ -1199,7 +1189,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               setRailsSel([]);
               setProjectsSel([]);
               setShiftsSel([]);
-              setAccountingSel([]);
+              setMethodsSel([]);
+              setWeldTypesSel([]);
             }}
             className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
           >
@@ -1210,10 +1201,10 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         {/* Nút Xuất Excel & CSV */}
         <button
           type="button"
-          onClick={exportExcel}
+          onClick={() => setExportPickerOpen(true)}
           disabled={exporting}
           className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-800 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
-          title="Xuất toàn bộ bảng dữ liệu đã lọc ra file Excel"
+          title="Chọn cột dữ liệu tải xuống Excel"
         >
           <DownloadSimple size={16} weight="bold" />
           <span>{exporting ? "Đang xuất..." : "Xuất Excel"}</span>
@@ -1228,14 +1219,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         >
           <Export size={16} weight="bold" />
           <span>{exporting ? "Đang xuất..." : "CSV"}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setModal({ record: emptyRecord(lockedResult ?? "Đạt"), mode: "create" })}
-          className="mb-0.5 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
-        >
-          <span className="text-base leading-none">+</span> {failedOnly ? "Thêm mối lỗi" : "Thêm mới"}
         </button>
       </div>
 
@@ -1254,8 +1237,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               aria-hidden
               className={`text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
             />
-            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết &amp; Hạch toán</span>
-            <span className="text-xs text-slate-500">Máy · Loại ray · Dự án · Ca · Mã hạch toán</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết</span>
+            <span className="text-xs text-slate-500">Công nghệ hàn · Loại hàn · Máy · Loại ray · Dự án · Ca</span>
             {advancedFilterCount > 0 && (
               <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white shadow-2xs font-mono tabular-nums">
                 {advancedFilterCount} đang chọn
@@ -1269,13 +1252,20 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
 
         {filtersOpen && (
           <div className="border-t border-slate-200 p-3.5 bg-slate-50/70">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
               <FilterGroup
-                title="Hạch toán"
-                options={accountingOptions}
-                selected={accountingSel}
-                onChange={setAccountingSel}
-                onClear={() => setAccountingSel([])}
+                title="Công nghệ hàn"
+                options={WELD_METHOD_OPTIONS}
+                selected={methodsSel}
+                onChange={setMethodsSel}
+                onClear={() => setMethodsSel([])}
+              />
+              <FilterGroup
+                title="Loại hàn"
+                options={WELD_TYPE_OPTIONS}
+                selected={weldTypesSel}
+                onChange={setWeldTypesSel}
+                onClear={() => setWeldTypesSel([])}
               />
               <FilterGroup
                 title="Máy hàn"
@@ -1315,7 +1305,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
                     setRailsSel([]);
                     setProjectsSel([]);
                     setShiftsSel([]);
-                    setAccountingSel([]);
+                    setMethodsSel([]);
+                    setWeldTypesSel([]);
                   }}
                   className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer transition-colors"
                 >
@@ -1327,14 +1318,13 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         )}
       </div>
 
-      {/* Bảng: Ngày | Welding ID | Người trực tiếp hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Kết quả | Thao tác */}
+      {/* Bảng: Ngày | Người trực tiếp hàn | Hạng | Mối hàn | Máy | Loại ray | Dự án | Ca | Kết quả | Thao tác */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
           <table className="w-max min-w-full border-collapse text-left text-xs sm:text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
-                <th className="px-3.5 py-3">Welding ID</th>
                 <th className="px-3.5 py-3">Người trực tiếp hàn</th>
                 <th className="px-3.5 py-3">Hạng</th>
                 <th className="px-3.5 py-3">Mã mối hàn</th>
@@ -1349,7 +1339,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
                     <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-600">
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#0047AB] border-t-transparent" />
                       Đang tải dữ liệu lịch sử mối hàn từ Supabase...
@@ -1360,7 +1350,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               {!loading && list.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-medium font-mono text-slate-900">{formatWeldingDate(row.date)}</td>
-                  <td className="px-3.5 py-3 font-mono text-xs text-slate-500">{row.weldingId}</td>
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{row.welderName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.rank}</td>
                   <td className="px-3.5 py-3">
@@ -1435,9 +1424,9 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               ))}
               {!loading && list.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500 whitespace-normal">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử hàn</div>
-                    <div className="mt-1 text-xs text-slate-400">Thử thay đổi từ khóa hoặc thiết lập lại bộ lọc.</div>
+                    <div className="mt-1 text-xs text-slate-400">Thử thay đổi bộ lọc ngày, thợ hàn hoặc lọc chi tiết.</div>
                   </td>
                 </tr>
               )}
@@ -1550,6 +1539,96 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           onClose={() => setModal(null)}
           onSave={modal.mode !== "view" ? handleSave : undefined}
         />
+      )}
+
+      {exportPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            aria-label="Đóng"
+            onClick={() => setExportPickerOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Xuất Excel</div>
+                <h2 className="mt-0.5 text-base font-bold text-slate-900">Chọn cột dữ liệu tải xuống</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportPickerOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                aria-label="Đóng"
+              >
+                <X size={18} weight="bold" aria-hidden />
+              </button>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto px-5 py-4 space-y-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportColumns(DEFAULT_EXPORT_COLUMNS)}
+                  className="text-xs font-semibold text-[#0047AB] hover:underline cursor-pointer"
+                >
+                  Chọn tất cả
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportColumns([])}
+                  className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
+                >
+                  Bỏ chọn tất cả
+                </button>
+              </div>
+              {EXPORT_COLUMN_OPTIONS.map((col) => {
+                const checked = exportColumns.includes(col.key);
+                return (
+                  <label
+                    key={col.key}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        setExportColumns((prev) =>
+                          prev.includes(col.key)
+                            ? prev.filter((k) => k !== col.key)
+                            : [...prev, col.key],
+                        )
+                      }
+                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
+                    />
+                    <span className={checked ? "font-semibold text-slate-900" : ""}>{col.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setExportPickerOpen(false)}
+                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={exportExcel}
+                disabled={exporting || exportColumns.length === 0}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-4 text-sm font-semibold text-white cursor-pointer"
+              >
+                <DownloadSimple size={16} weight="bold" />
+                {exporting ? "Đang xuất..." : "Tải Excel"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
