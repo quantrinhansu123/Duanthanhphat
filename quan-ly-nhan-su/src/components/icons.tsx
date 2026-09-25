@@ -105,4 +105,6 @@ export {
   Link,
   DotOutline,
   CaretCircleRight,
+  Play,
+  VideoCamera,
 } from "@phosphor-icons/react";

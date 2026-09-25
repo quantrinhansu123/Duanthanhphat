@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
-import { Check, Clock, ClockCounterClockwise, MagnifyingGlass, PencilSimple, Plus, TrashSimple, UploadSimple, Users, Warning, X } from "@/components/icons";
+import { Check, Clock, ClockCounterClockwise, MagnifyingGlass, PencilSimple, Play, Plus, TrashSimple, UploadSimple, Users, VideoCamera, Warning, X } from "@/components/icons";
 import {
   deleteTrainingCourse,
   fetchCertificateGroups,
@@ -37,6 +37,107 @@ function viToISO(value: string) {
   if (!m) return "";
   const [, d, mo, y] = m;
   return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+/** Chuyển URL video (YouTube / Drive / file trực tiếp) sang dạng phát được trong modal. */
+function resolveTrainingVideo(url: string): {
+  kind: "youtube" | "drive" | "file" | "external";
+  src: string;
+} | null {
+  const raw = url.trim();
+  if (!raw) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { kind: "external", src: raw };
+  }
+  const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+
+  if (host === "youtu.be") {
+    const id = parsed.pathname.split("/").filter(Boolean)[0];
+    if (id) return { kind: "youtube", src: `https://www.youtube.com/embed/${id}` };
+  }
+  if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+    const fromWatch = parsed.searchParams.get("v");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const fromEmbed = parts[0] === "embed" || parts[0] === "shorts" || parts[0] === "live" ? parts[1] : "";
+    const id = fromWatch || fromEmbed;
+    if (id) return { kind: "youtube", src: `https://www.youtube.com/embed/${id}` };
+  }
+
+  if (host === "drive.google.com") {
+    const fileMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/);
+    const id = fileMatch?.[1] || parsed.searchParams.get("id");
+    if (id) return { kind: "drive", src: `https://drive.google.com/file/d/${id}/preview` };
+  }
+
+  const path = parsed.pathname.toLowerCase();
+  if (/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(path) || host.includes("cloudinary.com") || host.includes("res.cloudinary.com")) {
+    return { kind: "file", src: raw };
+  }
+
+  return { kind: "external", src: raw };
+}
+
+function TrainingVideoPlayer({ url, title }: { url: string; title: string }) {
+  const resolved = resolveTrainingVideo(url);
+  if (!resolved) {
+    return (
+      <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+        Chưa có video bài giảng cho khóa này.
+      </div>
+    );
+  }
+
+  if (resolved.kind === "youtube" || resolved.kind === "drive") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-black shadow-2xs">
+        <div className="relative aspect-video w-full">
+          <iframe
+            src={resolved.src}
+            title={title}
+            className="absolute inset-0 h-full w-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (resolved.kind === "file") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-black shadow-2xs">
+        <video
+          key={resolved.src}
+          src={resolved.src}
+          controls
+          playsInline
+          className="aspect-video w-full bg-black"
+          preload="metadata"
+        >
+          Trình duyệt không phát được video này.
+        </video>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-center">
+      <VideoCamera size={28} className="text-[#0047AB]" weight="duotone" aria-hidden />
+      <p className="text-sm text-slate-600">Không nhúng được link này trong trang. Mở tab mới để xem.</p>
+      <a
+        href={resolved.src}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#00388A]"
+      >
+        <Play size={14} weight="fill" aria-hidden />
+        Mở video
+      </a>
+    </div>
+  );
 }
 
 function TrainingFormModal({
@@ -315,9 +416,18 @@ function TrainingFormModal({
               <div className="mt-3 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
                 {assets.map((asset) => (
                   <div key={asset.publicId} className="flex items-center justify-between gap-3 rounded-md bg-white px-2.5 py-2 text-xs">
-                    <a href={asset.secureUrl} target="_blank" rel="noreferrer" className="min-w-0 truncate font-medium text-[#0047AB] hover:underline">
-                      {asset.name}
-                    </a>
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={asset.secureUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate font-medium text-[#0047AB] underline"
+                        title={asset.secureUrl}
+                      >
+                        {asset.secureUrl}
+                      </a>
+                      <div className="mt-0.5 truncate text-[10px] text-slate-500">{asset.name}</div>
+                    </div>
                     <button
                       type="button"
                       onClick={async () => {
@@ -340,16 +450,18 @@ function TrainingFormModal({
             <p className="mt-1.5 text-[11px] text-slate-500">Chọn nhiều ảnh hoặc tài liệu trong một lần.</p>
           </div>
 
-          {/* 1 video bài giảng */}
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Video bài giảng (1 video)</label>
-            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+          {/* Link / tải 1 video bài giảng — tách riêng khỏi ảnh & tài liệu */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+              Link video bài giảng (1 video)
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
                 type="url"
-                className={fieldClass}
+                className={`${fieldClass} mt-0 border-[#0047AB]/30 bg-white`}
                 value={form.videoUrl}
                 onChange={(e) => set("videoUrl", e.target.value)}
-                placeholder="https://... (link video)"
+                placeholder="Dán link video tại đây — https://..."
                 disabled={uploadingVideo}
               />
               <input
@@ -363,15 +475,15 @@ function TrainingFormModal({
                 type="button"
                 disabled={uploadingVideo || uploadingImg || saving}
                 onClick={() => videoFileInputRef.current?.click()}
-                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer shadow-2xs disabled:opacity-50"
               >
                 <UploadSimple size={14} weight="bold" />
                 {uploadingVideo ? "Đang tải…" : "Tải video"}
               </button>
             </div>
             {form.videoUrl.trim() ? (
-              <div className="mt-1.5 flex items-center gap-2 text-xs">
-                <a href={form.videoUrl.trim()} target="_blank" rel="noreferrer" className="font-semibold text-[#0047AB] hover:underline truncate">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <a href={form.videoUrl.trim()} target="_blank" rel="noreferrer" className="font-semibold text-[#0047AB] hover:underline truncate max-w-full">
                   Xem video đã gắn
                 </a>
                 <button
@@ -383,7 +495,9 @@ function TrainingFormModal({
                 </button>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-slate-500">Dán link hoặc tải 1 file video lên Cloudinary.</p>
+              <p className="mt-2 text-[11px] text-slate-600">
+                Dán URL (YouTube, Drive, Cloudinary…) hoặc tải 1 file video lên Cloudinary.
+              </p>
             )}
           </div>
 
@@ -703,6 +817,9 @@ function TrainingDetailModal({
   onClose: () => void;
   onEdit: () => void;
 }) {
+  const [tab, setTab] = useState<"info" | "video">("info");
+  const hasVideo = Boolean(course.videoUrl?.trim());
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -717,14 +834,14 @@ function TrainingDetailModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex max-h-[90dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
+        className="relative z-10 flex max-h-[94dvh] w-full max-w-[1100px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in-50 zoom-in-95 duration-150"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-7 py-4 bg-white">
           <div className="min-w-0 pr-2">
             <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
               Khóa đào tạo · {course.date}
             </div>
-            <h2 className="mt-0.5 text-base sm:text-lg font-bold leading-snug text-slate-900">
+            <h2 className="mt-0.5 text-lg sm:text-xl font-bold leading-snug text-slate-900">
               {course.title}
             </h2>
           </div>
@@ -748,177 +865,245 @@ function TrainingDetailModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-4">
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
-            <Image src={course.thumbnail} alt={course.title} fill className="object-cover" />
-            <div className="absolute bottom-2.5 right-2.5 rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
-              {course.duration} giờ
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[course.result] ?? resultStyle["Đạt"]}`}>
-              Kết quả: {course.result}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-blue-50 text-[#0047AB] border border-blue-200 px-2.5 py-0.5 text-xs font-semibold">
-              {course.participantsCount} người tham gia
-            </span>
-            {course.railType ? (
-              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
-                Loại ray: {course.railType}
-              </span>
-            ) : null}
-            {course.weldMethod ? (
-              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
-                {course.weldMethod}
-              </span>
-            ) : null}
-            {course.certificateGroupName && (
-              <span className="inline-flex items-center rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
-                Cấp: {course.certificateGroupName}
-              </span>
-            )}
-            {course.videoUrl ? (
-              <a
-                href={course.videoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center rounded-full bg-[#0047AB] px-2.5 py-0.5 text-xs font-semibold text-white hover:bg-[#00388A]"
+        <div
+          className="flex shrink-0 gap-1 border-b border-slate-200 px-5 sm:px-7"
+          role="tablist"
+          aria-label="Chi tiết khóa đào tạo"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "info"}
+            onClick={() => setTab("info")}
+            className={`-mb-px border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+              tab === "info"
+                ? "border-[#0047AB] text-[#0047AB]"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            Thông tin
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "video"}
+            onClick={() => setTab("video")}
+            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+              tab === "video"
+                ? "border-[#0047AB] text-[#0047AB]"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Play size={15} weight={tab === "video" ? "fill" : "regular"} aria-hidden />
+            Phát video
+            {hasVideo ? (
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  tab === "video" ? "bg-blue-50 text-[#0047AB]" : "bg-slate-100 text-slate-600"
+                }`}
               >
-                Xem video
-              </a>
+                1
+              </span>
             ) : null}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thời lượng</div>
-              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.duration} giờ</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ đào tạo NSX</div>
-              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.manufacturerHours} giờ</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ tự đào tạo</div>
-              <div className="mt-1 font-semibold text-slate-800 font-mono">{course.selfTrainingHours} giờ</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Người đào tạo</div>
-              <div className="mt-1 font-semibold text-slate-800">{course.trainer}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Địa điểm</div>
-              <div className="mt-1 font-semibold text-slate-800">{course.location}</div>
-            </div>
-          </div>
-
-          {course.description && (
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Mô tả</div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{course.description}</p>
-            </div>
-          )}
-
-          {course.topics.length > 0 && (
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Nội dung đào tạo</div>
-              <ul className="space-y-1 text-xs sm:text-sm text-slate-700">
-                {course.topics.map((tp, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-[#0047AB]">•</span>
-                    <span>{tp}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {course.assets.length > 0 && (
-            <div>
-              <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
-                Tài liệu &amp; video ({course.assets.length})
-              </div>
-              <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
-                {course.assets.map((asset) => (
-                  <a
-                    key={asset.publicId}
-                    href={asset.secureUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs hover:bg-blue-50"
-                  >
-                    <span className="min-w-0 truncate font-semibold text-[#0047AB]">{asset.name}</span>
-                    <span className="shrink-0 uppercase text-slate-400">{asset.resourceType}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Danh sách học viên thực tế */}
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              <span>Danh sách học viên ({course.attendees?.length ?? 0} người)</span>
-            </div>
-            {(!course.attendees || course.attendees.length === 0) ? (
-              <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
-                Chưa có danh sách học viên cho khóa này.
-              </div>
-            ) : (
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase">
-                    <tr>
-                      <th className="px-3 py-2">Họ tên</th>
-                      <th className="px-3 py-2">Loại</th>
-                      <th className="px-3 py-2">Kết quả</th>
-                      <th className="px-3 py-2">Chứng chỉ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {course.attendees.map((att) => (
-                      <tr key={att.id} className="hover:bg-slate-50/60">
-                        <td className="px-3 py-2">
-                          <Link
-                            href="/ho-so-tho-han"
-                            className="font-semibold text-slate-900 hover:text-[#0047AB] hover:underline"
-                          >
-                            {att.name}
-                          </Link>
-                          <div className="text-[11px] text-slate-400 font-mono">{att.weldingId}</div>
-                        </td>
-                        <td className="px-3 py-2 text-slate-600">{att.role}</td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${resultStyle[att.result] ?? ""}`}>
-                            {att.result}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {att.certificateName ? (
-                            <Link
-                              href={`/chung-chi?certificateId=${att.certificateId || ""}`}
-                              className="font-semibold text-[#0047AB] hover:underline"
-                            >
-                              {att.certificateName}
-                            </Link>
-                          ) : (
-                            <span className="text-slate-400">Chưa cấp</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          </button>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end border-t border-slate-200 px-5 sm:px-6 py-3 bg-slate-50">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-7 py-5">
+          {tab === "video" ? (
+            <div className="space-y-3">
+              <TrainingVideoPlayer url={course.videoUrl ?? ""} title={course.title} />
+              {hasVideo ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="truncate max-w-full font-mono">{course.videoUrl}</span>
+                  <a
+                    href={course.videoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 font-semibold text-[#0047AB] hover:underline"
+                  >
+                    Mở tab mới
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Chưa gắn video. Bấm <strong>Chỉnh sửa</strong> rồi dán link hoặc tải video bài giảng.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
+                <Image src={course.thumbnail} alt={course.title} fill className="object-cover" />
+                <div className="absolute bottom-2.5 right-2.5 rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
+                  {course.duration} giờ
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[course.result] ?? resultStyle["Đạt"]}`}>
+                  Kết quả: {course.result}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-blue-50 text-[#0047AB] border border-blue-200 px-2.5 py-0.5 text-xs font-semibold">
+                  {course.participantsCount} người tham gia
+                </span>
+                {course.railType ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
+                    Loại ray: {course.railType}
+                  </span>
+                ) : null}
+                {course.weldMethod ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold">
+                    {course.weldMethod}
+                  </span>
+                ) : null}
+                {course.certificateGroupName && (
+                  <span className="inline-flex items-center rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
+                    Cấp: {course.certificateGroupName}
+                  </span>
+                )}
+                {hasVideo ? (
+                  <button
+                    type="button"
+                    onClick={() => setTab("video")}
+                    className="inline-flex items-center gap-1 rounded-full bg-[#0047AB] px-2.5 py-0.5 text-xs font-semibold text-white hover:bg-[#00388A] cursor-pointer"
+                  >
+                    <Play size={12} weight="fill" aria-hidden />
+                    Phát video
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thời lượng</div>
+                  <div className="mt-1 font-semibold text-slate-800 font-mono">{course.duration} giờ</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ đào tạo NSX</div>
+                  <div className="mt-1 font-semibold text-slate-800 font-mono">{course.manufacturerHours} giờ</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Giờ tự đào tạo</div>
+                  <div className="mt-1 font-semibold text-slate-800 font-mono">{course.selfTrainingHours} giờ</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 text-xs sm:text-sm">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Người đào tạo</div>
+                  <div className="mt-1 font-semibold text-slate-800">{course.trainer}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Địa điểm</div>
+                  <div className="mt-1 font-semibold text-slate-800">{course.location}</div>
+                </div>
+              </div>
+
+              {course.description && (
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Mô tả</div>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{course.description}</p>
+                </div>
+              )}
+
+              {course.topics.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Nội dung đào tạo</div>
+                  <ul className="space-y-1 text-xs sm:text-sm text-slate-700">
+                    {course.topics.map((tp, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-[#0047AB]">•</span>
+                        <span>{tp}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {course.assets.length > 0 && (
+                <div>
+                  <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Tài liệu &amp; ảnh ({course.assets.length})
+                  </div>
+                  <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
+                    {course.assets.map((asset) => (
+                      <a
+                        key={asset.publicId}
+                        href={asset.secureUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs hover:bg-blue-50"
+                        title={asset.secureUrl}
+                      >
+                        <span className="min-w-0 truncate font-semibold text-[#0047AB] underline">{asset.secureUrl}</span>
+                        <span className="shrink-0 uppercase text-slate-400">{asset.resourceType}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  <span>Danh sách học viên ({course.attendees?.length ?? 0} người)</span>
+                </div>
+                {(!course.attendees || course.attendees.length === 0) ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
+                    Chưa có danh sách học viên cho khóa này.
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase">
+                        <tr>
+                          <th className="px-3 py-2">Họ tên</th>
+                          <th className="px-3 py-2">Loại</th>
+                          <th className="px-3 py-2">Kết quả</th>
+                          <th className="px-3 py-2">Chứng chỉ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {course.attendees.map((att) => (
+                          <tr key={att.id} className="hover:bg-slate-50/60">
+                            <td className="px-3 py-2">
+                              <Link
+                                href="/ho-so-tho-han"
+                                className="font-semibold text-slate-900 hover:text-[#0047AB] hover:underline"
+                              >
+                                {att.name}
+                              </Link>
+                              <div className="text-[11px] text-slate-400 font-mono">{att.weldingId}</div>
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">{att.role}</td>
+                            <td className="px-3 py-2">
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${resultStyle[att.result] ?? ""}`}>
+                                {att.result}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {att.certificateName ? (
+                                <Link
+                                  href={`/chung-chi?certificateId=${att.certificateId || ""}`}
+                                  className="font-semibold text-[#0047AB] hover:underline"
+                                >
+                                  {att.certificateName}
+                                </Link>
+                              ) : (
+                                <span className="text-slate-400">Chưa cấp</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end border-t border-slate-200 px-5 sm:px-7 py-3 bg-slate-50">
           <button
             type="button"
             onClick={onClose}

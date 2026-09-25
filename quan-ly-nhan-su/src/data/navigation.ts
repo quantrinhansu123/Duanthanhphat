@@ -83,8 +83,8 @@ export const navigation: NavItem[] = [
         id: "phan-cong-may",
         label: "Lịch chạy máy",
         labelEn: "Machine Run Schedule",
-        description: "Nhật ký chạy máy theo dự án: ngày, máy, giờ hoạt động, dầu và tình trạng",
-        descriptionEn: "Machine run journal by project: date, machine, hours, fuel, and condition",
+        description: "Tổng hợp từ nhật ký hàn: ngày, máy, ca, giờ ước tính, số mối theo dự án",
+        descriptionEn: "Aggregated from weld journal: date, machine, shift, estimated hours, welds by project",
       },
       {
         id: "danh-sach-may",

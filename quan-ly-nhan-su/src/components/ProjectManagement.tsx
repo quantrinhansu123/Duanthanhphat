@@ -1438,14 +1438,15 @@ function ProjectMachineRunsTab({
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">
-          Dữ liệu lấy từ trang <span className="font-semibold text-slate-700">Quản lý máy móc › Lịch chạy máy</span>.
+          Tổng hợp từ <span className="font-semibold text-slate-700">Nhật ký hàn</span>
+          {" "}(trang Quản lý máy móc › Lịch chạy máy).
           {runs.length > 0 && (
             <>
               {" "}Tổng{" "}
               <span className="font-mono font-semibold tabular-nums text-slate-900">
                 {totalHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
               </span>{" "}
-              giờ trên {runs.length} lượt chạy.
+              giờ ước tính trên {runs.length} lượt.
             </>
           )}
         </p>
@@ -1461,7 +1462,7 @@ function ProjectMachineRunsTab({
 
       {runs.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-          Chưa có lịch chạy máy nào gắn với dự án này.
+          Chưa có hoạt động máy từ nhật ký hàn gắn với dự án này.
         </p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -1471,9 +1472,10 @@ function ProjectMachineRunsTab({
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <th className="px-3.5 py-2.5">Ngày</th>
                   <th className="px-3.5 py-2.5">Tên máy</th>
-                  <th className="px-3.5 py-2.5">Vị trí</th>
-                  <th className="px-3.5 py-2.5 text-right">Số giờ</th>
-                  <th className="px-3.5 py-2.5">Người phụ trách</th>
+                  <th className="px-3.5 py-2.5">Ca</th>
+                  <th className="px-3.5 py-2.5 text-right">Mối</th>
+                  <th className="px-3.5 py-2.5 text-right">Giờ ước tính</th>
+                  <th className="px-3.5 py-2.5">Thợ hàn</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1484,8 +1486,11 @@ function ProjectMachineRunsTab({
                       <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
                       <div className="text-xs text-slate-500">{row.machineName}</div>
                     </td>
-                    <td className="px-3.5 py-2.5 text-xs text-slate-700 whitespace-nowrap">
-                      {row.location}
+                    <td className="px-3.5 py-2.5 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                      {(row.shifts ?? []).join(", ") || "—"}
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-[#0047AB]">
+                      {(row.weldCount ?? 0).toLocaleString("vi-VN")}
                     </td>
                     <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-slate-900">
                       {row.operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}

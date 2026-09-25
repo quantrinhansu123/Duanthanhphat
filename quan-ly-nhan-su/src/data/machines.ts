@@ -154,7 +154,7 @@ export type Machine = {
   technicalDocs?: MachineTechnicalDocs;
 };
 
-export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6"] as const;
+export const MACHINE_MODELS = ["KCM-007 (K922-1)", "UN5-150ZC2-C6", "Goldschmitd"] as const;
 
 /** Phân loại thiết bị theo ma trận thông tin NSX / ray / quy trình / tải trọng… */
 export type MachineCategory = "Nhiệt nhôm" | "Flash Butt" | "Phương tiện";

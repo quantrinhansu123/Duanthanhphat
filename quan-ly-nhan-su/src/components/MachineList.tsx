@@ -21,6 +21,7 @@ import {
 import {
   CaretRight,
   MagnifyingGlass,
+  Package,
   Plus,
   Trash,
   UploadSimple,
@@ -38,6 +39,10 @@ import SelectMenu from "@/components/SelectMenu";
 import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
+  spareParts as seedSpareParts,
+  type SparePartStatus,
+} from "@/data/spareParts";
+import {
   appendTrainedMachineToken,
   loadPersonnelCertificateRows,
   personTrainedOnMachine,
@@ -46,7 +51,37 @@ import {
 } from "@/lib/personnelCertificatesDb";
 import Link from "next/link";
 
-type DetailTab = "welding" | "transport" | "history" | "personnel";
+type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares";
+
+const spareStatusStyle: Record<SparePartStatus, string> = {
+  "Còn hàng": "border-emerald-200 bg-emerald-50 text-emerald-700",
+  "Sắp hết": "border-amber-200 bg-amber-50 text-amber-800",
+  "Hết hàng": "border-rose-200 bg-rose-50 text-rose-700",
+  "Đặt hàng": "border-blue-200 bg-blue-50 text-[#0047AB]",
+};
+
+function normalizeModelToken(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function sparePartFitsMachine(part: { compatibleModels: string[] }, machine: Machine) {
+  const machineModels = [machine.model, machine.weldingUnit?.model]
+    .map((item) => (item || "").trim())
+    .filter(Boolean)
+    .map(normalizeModelToken);
+  if (machineModels.length === 0) return false;
+  return part.compatibleModels.some((model) => {
+    const token = normalizeModelToken(model);
+    if (!token) return false;
+    return machineModels.some(
+      (mm) => mm === token || mm.includes(token) || token.includes(mm),
+    );
+  });
+}
+
+function formatSpareVnd(value: number) {
+  return value.toLocaleString("vi-VN");
+}
 
 const statusStyle: Record<Machine["status"], string> = {
   "Đang làm việc": "bg-blue-50 text-[#0047AB] border border-blue-200 shadow-2xs",
@@ -537,6 +572,11 @@ function MachineDetailModal({
     [personnelRows, machine.code, machine.model],
   );
 
+  const compatibleSpareParts = useMemo(
+    () => seedSpareParts.filter((part) => sparePartFitsMachine(part, machine)),
+    [machine],
+  );
+
   const availablePersonnel = useMemo(
     () =>
       personnelRows.filter(
@@ -750,6 +790,25 @@ function MachineDetailModal({
             {trainedPersonnel.length > 0 && (
               <span className="ml-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold font-mono text-emerald-700">
                 {trainedPersonnel.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("spares")}
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+              tab === "spares"
+                ? "border-[#0047AB] text-[#0047AB] bg-white"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Package size={14} weight={tab === "spares" ? "fill" : "regular"} aria-hidden />
+              Phụ tùng thay thế
+            </span>
+            {compatibleSpareParts.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-bold font-mono text-amber-800">
+                {compatibleSpareParts.length}
               </span>
             )}
           </button>
@@ -1188,6 +1247,90 @@ function MachineDetailModal({
               )}
             </div>
           )}
+
+          {tab === "spares" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs sm:text-sm text-slate-500">
+                  Phụ tùng tương thích model{" "}
+                  <span className="font-mono font-semibold text-[#0047AB]">
+                    {machine.weldingUnit?.model || machine.model || "—"}
+                  </span>
+                  {" · "}
+                  <strong className="font-semibold text-slate-900 font-mono tabular-nums">
+                    {compatibleSpareParts.length}
+                  </strong>{" "}
+                  mã
+                </div>
+                <Link
+                  href="/phu-tung-thay-the"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Mở danh mục phụ tùng
+                  <CaretRight size={14} weight="bold" aria-hidden />
+                </Link>
+              </div>
+
+              {compatibleSpareParts.length > 0 ? (
+                <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                        <th className="px-3.5 py-2.5">Mã</th>
+                        <th className="min-w-[200px] px-3.5 py-2.5">Tên phụ tùng</th>
+                        <th className="px-3.5 py-2.5">Nhóm</th>
+                        <th className="px-3.5 py-2.5">NSX</th>
+                        <th className="px-3.5 py-2.5">Tồn</th>
+                        <th className="px-3.5 py-2.5">Đơn giá</th>
+                        <th className="px-3.5 py-2.5">Trạng thái</th>
+                        <th className="min-w-[180px] px-3.5 py-2.5">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {compatibleSpareParts.map((part) => (
+                        <tr key={part.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                          <td className="whitespace-nowrap px-3.5 py-3 font-mono font-semibold text-[#0047AB]">
+                            {part.code}
+                          </td>
+                          <td className="px-3.5 py-3 font-semibold text-slate-900">{part.name}</td>
+                          <td className="px-3.5 py-3 text-slate-600">{part.category}</td>
+                          <td className="px-3.5 py-3 text-slate-600">{part.manufacturer}</td>
+                          <td className="whitespace-nowrap px-3.5 py-3 font-mono tabular-nums text-slate-800">
+                            {part.stockQty} {part.unit}
+                            <div className="text-[11px] text-slate-400">Min {part.minStock}</div>
+                          </td>
+                          <td className="whitespace-nowrap px-3.5 py-3 font-mono tabular-nums text-slate-800">
+                            {formatSpareVnd(part.unitPriceVnd)} ₫
+                          </td>
+                          <td className="px-3.5 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${spareStatusStyle[part.status]}`}
+                            >
+                              {part.status}
+                            </span>
+                          </td>
+                          <td className="px-3.5 py-3 text-xs leading-relaxed text-slate-600">
+                            {part.note || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-12 text-center text-xs sm:text-sm text-slate-500">
+                  Chưa có phụ tùng gắn với model này.
+                  <div className="mt-1">
+                    Thêm trong mục{" "}
+                    <Link href="/phu-tung-thay-the" className="font-semibold text-[#0047AB] hover:underline">
+                      Phụ tùng thay thế
+                    </Link>{" "}
+                    và chọn model tương thích.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1595,7 +1738,9 @@ export default function MachineList() {
             ? "history"
             : tabRaw === "transport"
               ? "transport"
-              : "welding";
+              : tabRaw === "spares" || tabRaw === "phu-tung"
+                ? "spares"
+                : "welding";
       if (mayCode) {
         const pool = result.machines.length > 0 ? result.machines : seedMachines;
         const match = pool.find(

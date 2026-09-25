@@ -32,6 +32,16 @@ export type MachineRunSchedule = {
   conditionDescription: string;
   recommendation: string;
   imageAssets: MachineOperationImageAsset[];
+  /** Nguồn dòng — journal = tổng hợp từ nhật ký hàn (chỉ đọc). */
+  source?: "journal" | "manual";
+  weldCount?: number;
+  failedWeldCount?: number;
+  shifts?: string[];
+  journalEntryCount?: number;
+  /** Phương pháp hàn (FBW / ATW) — từ nhật ký. */
+  weldMethod?: string;
+  /** Loại mối hàn (Sản xuất / Thử nghiệm / Đào tạo). */
+  weldType?: string;
 };
 
 export type MachineOption = {
