@@ -299,22 +299,45 @@ export async function loadMachineCatalog(): Promise<{
 }
 
 /** Chỉ mã + tên máy cho form dự án — tránh select(*) nặng. */
-export async function loadMachinePickerOptions(): Promise<Array<{ code: string; name: string }>> {
+export async function loadMachinePickerOptions(): Promise<
+  Array<{ code: string; name: string; weldingTechnology?: string }>
+> {
   if (!isSupabaseConfigured()) {
-    return seedMachines.map((machine) => ({ code: machine.code, name: machine.name }));
+    return seedMachines.map((machine) => ({
+      code: machine.code,
+      name: machine.name,
+      weldingTechnology: machine.weldingTechnology,
+    }));
   }
   const supabase = createClient();
   const { data, error } = await supabase
     .from("thiet_bi")
-    .select("ma_may,ten_may")
+    .select("ma_may,ten_may,cong_nghe_han")
     .order("ma_may", { ascending: true });
   if (error) {
-    return seedMachines.map((machine) => ({ code: machine.code, name: machine.name }));
+    const fallback = await supabase
+      .from("thiet_bi")
+      .select("ma_may,ten_may")
+      .order("ma_may", { ascending: true });
+    if (fallback.error) {
+      return seedMachines.map((machine) => ({
+        code: machine.code,
+        name: machine.name,
+        weldingTechnology: machine.weldingTechnology,
+      }));
+    }
+    return (fallback.data ?? [])
+      .map((row) => ({
+        code: String(row.ma_may ?? "").trim(),
+        name: String(row.ten_may ?? "").trim() || String(row.ma_may ?? "").trim(),
+      }))
+      .filter((row) => row.code);
   }
   return (data ?? [])
     .map((row) => ({
       code: String(row.ma_may ?? "").trim(),
       name: String(row.ten_may ?? "").trim() || String(row.ma_may ?? "").trim(),
+      weldingTechnology: String(row.cong_nghe_han ?? "").trim() || undefined,
     }))
     .filter((row) => row.code);
 }

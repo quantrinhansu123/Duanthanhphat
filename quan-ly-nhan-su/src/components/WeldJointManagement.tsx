@@ -101,6 +101,8 @@ export default function WeldJointManagement() {
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [project, setProject] = useState("Tất cả dự án");
+  const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
+  const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -131,7 +133,14 @@ export default function WeldJointManagement() {
     let active = true;
     setLoading(true);
     setError("");
-    loadWeldJournalPage({ page, pageSize: PAGE_SIZE, query: appliedQuery, project })
+    loadWeldJournalPage({
+      page,
+      pageSize: PAGE_SIZE,
+      query: appliedQuery,
+      project,
+      weldTypeFilter,
+      weldMethodFilter,
+    })
       .then((result) => {
         if (!active) return;
         setRows(result.rows);
@@ -149,9 +158,9 @@ export default function WeldJointManagement() {
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, project]);
+  }, [page, appliedQuery, project, weldTypeFilter, weldMethodFilter]);
 
-  useEffect(() => setPage(1), [appliedQuery, project]);
+  useEffect(() => setPage(1), [appliedQuery, project, weldTypeFilter, weldMethodFilter]);
 
   const comboGroups = useMemo(() => groupRowsByCombo(rows), [rows]);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -198,7 +207,7 @@ export default function WeldJointManagement() {
         </span>
       </div>
 
-      <div className="mb-4 flex flex-col gap-2.5 sm:flex-row">
+      <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
         <div className="relative min-w-[260px] flex-1">
           <MagnifyingGlass
             aria-hidden
@@ -223,6 +232,27 @@ export default function WeldJointManagement() {
               {item.label}
             </option>
           ))}
+        </select>
+        <select
+          value={weldTypeFilter}
+          onChange={(event) => setWeldTypeFilter(event.target.value)}
+          aria-label="Loại mối hàn"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
+        >
+          <option value="Tất cả">Tất cả loại mối</option>
+          <option value="Sản xuất">Sản xuất</option>
+          <option value="Thử nghiệm">Thử nghiệm</option>
+          <option value="Đào tạo">Đào tạo</option>
+        </select>
+        <select
+          value={weldMethodFilter}
+          onChange={(event) => setWeldMethodFilter(event.target.value)}
+          aria-label="Công nghệ hàn"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
+        >
+          <option value="Tất cả">Tất cả công nghệ</option>
+          <option value="FBW">FBW</option>
+          <option value="ATW">ATW</option>
         </select>
       </div>
 

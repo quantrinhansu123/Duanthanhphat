@@ -43,7 +43,7 @@ import { REPORT_MACHINES } from "@/lib/weldReportData";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 const PROGRESS_PAGE_SIZE = 50;
-type ProjectMachineOption = { code: string; name: string };
+type ProjectMachineOption = { code: string; name: string; weldingTechnology?: string };
 type ProjectPersonnelOption = Pick<
   PersonnelCertificateRow,
   "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han"
@@ -1799,6 +1799,8 @@ export default function ProjectManagement() {
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState("");
+  const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
+  const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const projectMenuRef = useRef<HTMLDivElement>(null);
@@ -1905,6 +1907,16 @@ export default function ProjectManagement() {
       .filter((p) => !q || p.name.toLowerCase().includes(q));
   }, [list, projectSearch]);
 
+  const machineMethodByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const machine of machineOptions) {
+      const blob = `${machine.code} ${machine.name} ${machine.weldingTechnology ?? ""}`.toLocaleUpperCase("vi");
+      if (/\bFBW\b/.test(blob) || blob.includes("FLASH BUTT")) map.set(machine.code, "FBW");
+      else if (/\bATW\b/.test(blob) || blob.includes("ALUMINOTHERMIC") || blob.includes("NHIỆT ALUMIN")) map.set(machine.code, "ATW");
+    }
+    return map;
+  }, [machineOptions]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list.filter((p) => {
@@ -1919,9 +1931,15 @@ export default function ProjectManagement() {
       const matchDate =
         (!dateFrom || (p.endDate ?? "") >= dateFrom) &&
         (!dateTo || (p.startDate ?? "") <= dateTo);
-      return matchQ && matchStatus && matchProject && matchDate;
+      const matchWeldType =
+        weldTypeFilter === "Tất cả" ||
+        (p.weldTypes ?? []).some((item) => item.trim().toLocaleLowerCase("vi") === weldTypeFilter.toLocaleLowerCase("vi"));
+      const matchWeldMethod =
+        weldMethodFilter === "Tất cả" ||
+        (p.machineTypes ?? []).some((code) => machineMethodByCode.get(code) === weldMethodFilter);
+      return matchQ && matchStatus && matchProject && matchDate && matchWeldType && matchWeldMethod;
     });
-  }, [list, query, status, projectFilter, dateFrom, dateTo]);
+  }, [list, query, status, projectFilter, dateFrom, dateTo, weldTypeFilter, weldMethodFilter, machineMethodByCode]);
 
   const activeCount = list.filter((p) => p.status === "Đang triển khai").length;
 
@@ -2243,6 +2261,29 @@ export default function ProjectManagement() {
           <option>Đang triển khai</option>
           <option>Hoàn thành</option>
           <option>Tạm dừng</option>
+        </select>
+
+        <select
+          value={weldTypeFilter}
+          onChange={(e) => setWeldTypeFilter(e.target.value)}
+          aria-label="Loại mối hàn"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+        >
+          <option value="Tất cả">Tất cả loại mối</option>
+          <option value="Sản xuất">Sản xuất</option>
+          <option value="Thử nghiệm">Thử nghiệm</option>
+          <option value="Đào tạo">Đào tạo</option>
+        </select>
+
+        <select
+          value={weldMethodFilter}
+          onChange={(e) => setWeldMethodFilter(e.target.value)}
+          aria-label="Công nghệ hàn"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+        >
+          <option value="Tất cả">Tất cả công nghệ</option>
+          <option value="FBW">FBW</option>
+          <option value="ATW">ATW</option>
         </select>
 
         {/* Lọc theo dự án */}

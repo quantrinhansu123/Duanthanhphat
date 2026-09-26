@@ -988,6 +988,8 @@ export default function WeldingJournalList({
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
+  const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
+  const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -1094,6 +1096,8 @@ export default function WeldingJournalList({
       projects: projectFilter,
       resultFilter,
       linkedWeldFilter,
+      weldTypeFilter,
+      weldMethodFilter,
       dateFrom,
       dateTo,
     })
@@ -1122,7 +1126,7 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, dateFrom, dateTo, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, reloadToken]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
@@ -1218,7 +1222,7 @@ export default function WeldingJournalList({
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, dateFrom, dateTo]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -1259,6 +1263,8 @@ export default function WeldingJournalList({
         projects: projectFilter,
         resultFilter,
         linkedWeldFilter,
+        weldTypeFilter,
+        weldMethodFilter,
         dateFrom,
         dateTo,
       });
@@ -1344,6 +1350,8 @@ export default function WeldingJournalList({
       projectFilter.length === 1 ? `dự án "${projectFilter[0]}"` : projectFilter.length > 1 ? `${projectFilter.length} dự án` : null,
       resultFilter !== "Tất cả" ? `tình trạng "${resultFilter}"` : null,
       linkedWeldFilter !== "Tất cả" ? `mối hàn "${linkedWeldFilter.toLocaleLowerCase("vi")}"` : null,
+      weldTypeFilter !== "Tất cả" ? `loại mối "${weldTypeFilter}"` : null,
+      weldMethodFilter !== "Tất cả" ? `công nghệ "${weldMethodFilter}"` : null,
       appliedQuery ? `tìm kiếm "${appliedQuery}"` : null,
       dateFrom || dateTo
         ? `ngày ${dateFrom || "…"} → ${dateTo || "…"}`
@@ -1371,6 +1379,8 @@ export default function WeldingJournalList({
           projects: projectFilter,
           resultFilter,
           linkedWeldFilter,
+          weldTypeFilter,
+          weldMethodFilter,
           dateFrom,
           dateTo,
         },
@@ -1741,6 +1751,26 @@ export default function WeldingJournalList({
             value={linkedWeldFilter}
             onChange={setLinkedWeldFilter}
             options={["Tất cả", "Có liên kết", "Chưa liên kết"].map((v) => ({ value: v, label: v }))}
+            className="mt-1"
+            buttonClassName="h-10 shadow-2xs"
+          />
+        </div>
+        <div className="min-w-0 text-xs font-semibold text-slate-700">
+          Loại mối hàn
+          <SelectMenu
+            value={weldTypeFilter}
+            onChange={setWeldTypeFilter}
+            options={["Tất cả", "Sản xuất", "Thử nghiệm", "Đào tạo"].map((v) => ({ value: v, label: v }))}
+            className="mt-1"
+            buttonClassName="h-10 shadow-2xs"
+          />
+        </div>
+        <div className="min-w-0 text-xs font-semibold text-slate-700">
+          Công nghệ hàn
+          <SelectMenu
+            value={weldMethodFilter}
+            onChange={setWeldMethodFilter}
+            options={["Tất cả", "FBW", "ATW"].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
           />
