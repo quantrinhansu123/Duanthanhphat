@@ -1679,23 +1679,23 @@ export default function WeldingJournalList({
         <span>
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{total.toLocaleString("vi-VN")}</strong> bản ghi
         </span>
-        <span className="text-slate-300">|</span>
-        <span>
-          <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount.toLocaleString("vi-VN")}</strong> đạt ·{" "}
-          <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount.toLocaleString("vi-VN")}</strong> không đạt
-        </span>
-        <span className="text-slate-300">|</span>
-        <span><strong className="font-semibold text-amber-700 font-mono tabular-nums">{pendingCount.toLocaleString("vi-VN")}</strong> chờ thí nghiệm</span>
-        <span><strong className="font-semibold text-slate-700 font-mono tabular-nums">{untestedCount.toLocaleString("vi-VN")}</strong> không thí nghiệm</span>
-        <span className="text-slate-300">|</span>
-        <span>
-          {testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm
-          {!failedWeldMode ? (
-            <>
+        {!failedWeldMode ? (
+          <>
+            <span className="text-slate-300">|</span>
+            <span>
+              <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount.toLocaleString("vi-VN")}</strong> đạt ·{" "}
+              <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount.toLocaleString("vi-VN")}</strong> không đạt
+            </span>
+            <span className="text-slate-300">|</span>
+            <span><strong className="font-semibold text-amber-700 font-mono tabular-nums">{pendingCount.toLocaleString("vi-VN")}</strong> chờ thí nghiệm</span>
+            <span><strong className="font-semibold text-slate-700 font-mono tabular-nums">{untestedCount.toLocaleString("vi-VN")}</strong> không thí nghiệm</span>
+            <span className="text-slate-300">|</span>
+            <span>
+              {testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm
               {" · "}Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong>
-            </>
-          ) : null}
-        </span>
+            </span>
+          </>
+        ) : null}
       </div>
 
       <div className="mb-4 space-y-2.5">
