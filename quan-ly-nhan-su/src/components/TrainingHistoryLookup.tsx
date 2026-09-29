@@ -7,7 +7,6 @@ import {
   fetchWelderTrainingHistory,
   type DbTrainingHistoryRecord,
 } from "@/lib/trainingDb";
-import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
 const resultStyle: Record<DbTrainingHistoryRecord["result"], string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -33,10 +32,6 @@ export default function TrainingHistoryLookup() {
   const [course, setCourse] = useState("Tất cả khóa đào tạo");
   const [result, setResult] = useState("Tất cả kết quả");
   const [status, setStatus] = useState("Tất cả trạng thái");
-  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
-  const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
-  const railOptions = useCatalogOptions("Loại ray");
-  const methodOptions = useCatalogOptions("Phương pháp hàn", "code");
 
   useEffect(() => {
     let cancelled = false;
@@ -84,11 +79,9 @@ export default function TrainingHistoryLookup() {
       const matchCourse = course === "Tất cả khóa đào tạo" || row.courseTitle === course;
       const matchResult = result === "Tất cả kết quả" || row.result === result;
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
-      const matchRail = railFilter === "Tất cả loại ray" || (row.railType || "") === railFilter;
-      const matchMethod = methodFilter === "Tất cả công nghệ" || (row.weldMethod || "") === methodFilter;
-      return matchQ && matchType && matchCourse && matchResult && matchStatus && matchRail && matchMethod;
+      return matchQ && matchType && matchCourse && matchResult && matchStatus;
     });
-  }, [records, query, personType, course, result, status, railFilter, methodFilter]);
+  }, [records, query, personType, course, result, status]);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
@@ -107,7 +100,7 @@ export default function TrainingHistoryLookup() {
             <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
             {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
               <option key={t}>{t}</option>
@@ -128,16 +121,6 @@ export default function TrainingHistoryLookup() {
               <option key={s}>{s}</option>
             ))}
           </select>
-          <select value={railFilter} onChange={(e) => setRailFilter(e.target.value)} className={selectClass}>
-            {["Tất cả loại ray", ...railOptions].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={selectClass}>
-            {["Tất cả công nghệ", ...(methodOptions.length ? methodOptions : ["FBW", "ATW"])].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -148,7 +131,7 @@ export default function TrainingHistoryLookup() {
           </div>
         )}
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1680px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1480px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Mã</th>
@@ -156,8 +139,6 @@ export default function TrainingHistoryLookup() {
                 <th className="px-3.5 py-3">Đối tượng</th>
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Khóa đào tạo</th>
-                <th className="px-3.5 py-3">Loại ray</th>
-                <th className="px-3.5 py-3">Công nghệ</th>
                 <th className="px-3.5 py-3">Người đào tạo</th>
                 <th className="px-3.5 py-3">Ngày đào tạo</th>
                 <th className="px-3.5 py-3">Thời lượng</th>
@@ -189,8 +170,6 @@ export default function TrainingHistoryLookup() {
                   <td className="max-w-[240px] px-3.5 py-3 text-slate-700">
                     <div className="line-clamp-2 font-medium">{row.courseTitle}</div>
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap">{row.railType || "—"}</td>
-                  <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono">{row.weldMethod || "—"}</td>
                   <td className="px-3.5 py-3 text-slate-700">{row.trainer}</td>
                   <td className="px-3.5 py-3 text-slate-700 whitespace-nowrap font-mono text-xs sm:text-sm">{row.date}</td>
                   <td className="px-3.5 py-3 text-slate-900 whitespace-nowrap font-mono text-xs sm:text-sm font-semibold tabular-nums">
@@ -224,14 +203,14 @@ export default function TrainingHistoryLookup() {
               ))}
               {isLoading && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
                     Đang tải lịch sử đào tạo từ CSDL...
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>
                   </td>
                 </tr>

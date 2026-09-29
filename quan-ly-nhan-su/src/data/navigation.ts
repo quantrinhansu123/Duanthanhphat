@@ -76,8 +76,8 @@ export const navigation: NavItem[] = [
         id: "phan-cong-may",
         label: "Lịch chạy máy",
         labelEn: "Machine Run Schedule",
-        description: "Tổng hợp từ nhật ký hàn và ghi cấp dầu hàng ngày theo máy",
-        descriptionEn: "Aggregated from weld journal plus daily fuel supply by machine",
+        description: "Tổng hợp từ nhật ký hàn và báo cáo mức dầu trên từng dòng lịch",
+        descriptionEn: "Aggregated from weld journal with per-row oil level reports",
       },
       {
         id: "danh-sach-may",

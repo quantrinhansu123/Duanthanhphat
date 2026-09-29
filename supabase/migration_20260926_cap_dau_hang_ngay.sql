@@ -9,6 +9,7 @@ create table if not exists public.cap_dau_hang_ngay (
   so_lit numeric(10, 2) not null default 0
     check (so_lit >= 0),
   bom_mo boolean not null default false,
+  don_vi text not null default 'lít',
   nguoi_cap uuid references public.nhan_su (employee_id) on delete set null,
   ghi_chu text,
   constraint cap_dau_hang_ngay_unique_may_ngay unique (may, ngay)
@@ -27,11 +28,13 @@ create trigger trg_cap_dau_hang_ngay_updated_at
   execute function public.set_updated_at();
 
 comment on table public.cap_dau_hang_ngay is
-  'Nhật ký cấp / đổ dầu hàng ngày theo từng máy';
+  'Báo cáo mức dầu theo máy / ngày';
 comment on column public.cap_dau_hang_ngay.so_lit is
-  'Số lít dầu đã cấp trong ngày';
+  'Mức dầu tại thời điểm báo cáo (theo đơn vị don_vi)';
 comment on column public.cap_dau_hang_ngay.bom_mo is
-  'Bơm được mở khi cấp dầu';
+  'Cột cũ (không dùng trên UI báo cáo mức dầu)';
+comment on column public.cap_dau_hang_ngay.don_vi is
+  'Đơn vị đo mức dầu (vd: lít, %, cm)';
 
 create or replace view public.bao_cao_cap_dau_hang_ngay
 with (security_invoker = true)
@@ -44,6 +47,7 @@ select
   tb.ten_may,
   cd.so_lit,
   cd.bom_mo,
+  cd.don_vi,
   ns.employee_id as nguoi_cap_id,
   ns.ma_nhan_su,
   ns.ho_ten as nguoi_cap,
