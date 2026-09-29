@@ -155,8 +155,8 @@ export default function TransportVehicleList() {
           },
         },
       };
-      const saved = await updateMachineInDb(next);
-      setMachines((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      await updateMachineInDb(next);
+      setMachines((current) => current.map((item) => (item.id === next.id ? next : item)));
       setEditing(null);
       showToast("Đã cập nhật phương tiện");
     } catch (err) {

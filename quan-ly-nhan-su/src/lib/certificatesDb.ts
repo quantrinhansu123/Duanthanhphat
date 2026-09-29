@@ -372,6 +372,7 @@ export async function createCertificateType(input: {
     error = retry.error;
   }
   if (error) throw new Error(formatSupabaseError(error));
+  if (!data) throw new Error("Không tạo được loại chứng chỉ.");
   return { id: data.id as string, name: data.ten_nhom as string };
 }
 

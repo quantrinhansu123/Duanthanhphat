@@ -43,11 +43,12 @@ import {
   type SparePartStatus,
 } from "@/data/spareParts";
 import {
+  appendTrainedMachineToken,
   loadPersonnelCertificateRows,
   personTrainedOnMachine,
+  updatePersonnelTrainedMachines,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
-import { loadCertificateRegistry, type Certificate } from "@/lib/certificatesDb";
 import Link from "next/link";
 
 type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares";
@@ -62,36 +63,6 @@ type MachineTrainedPerson = {
   machinesLabel: string;
   certificatesLabel: string;
 };
-
-function machineMatchTargets(machine: Machine) {
-  const model = machine.weldingUnit?.model || machine.model || "";
-  const names = [
-    machine.name,
-    machine.type,
-    machine.weldingTechnology,
-    machine.weldingUnit?.name,
-    typeof machine.weldingUnit?.specs?.weldingTechnology === "string"
-      ? machine.weldingUnit.specs.weldingTechnology
-      : "",
-  ]
-    .map((value) => value?.trim() || "")
-    .filter(Boolean);
-  return names.length > 0
-    ? names.map((name) => ({ code: machine.code, model, name }))
-    : [{ code: machine.code, model, name: machine.name || "" }];
-}
-
-function certificateMatchesMachine(cert: Certificate, machine: Machine): boolean {
-  if (cert.status === "Thu hồi") return false;
-  const haystacks = [cert.machine, cert.title].filter(
-    (value): value is string => Boolean(value?.trim()),
-  );
-  if (haystacks.length === 0) return false;
-  const targets = machineMatchTargets(machine);
-  return haystacks.some((haystack) =>
-    targets.some((target) => personTrainedOnMachine(haystack, target)),
-  );
-}
 
 const spareStatusStyle: Record<SparePartStatus, string> = {
   "Còn hàng": "border-emerald-200 bg-emerald-50 text-emerald-700",
