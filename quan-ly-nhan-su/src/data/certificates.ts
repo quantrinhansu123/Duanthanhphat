@@ -23,6 +23,8 @@ export type Certificate = {
   groupId?: string;
   organization?: string;
   machine?: string;
+  /** Mối hàn / công nghệ áp dụng (FBW, ATW, Sản xuất, …). */
+  weldScope?: string;
   certificateNumber?: string;
   notes?: string;
   /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */

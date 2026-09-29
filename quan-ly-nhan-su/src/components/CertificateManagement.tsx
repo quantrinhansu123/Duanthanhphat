@@ -36,6 +36,20 @@ import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import MachineSelect, { type MachineSelectOption } from "@/components/MachineSelect";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 
+const WELD_SCOPE_OPTIONS = ["FBW", "ATW", "Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
+
+function parseWeldScopeTokens(value?: string | null): string[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(/[,;|/·]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function serializeWeldScope(tokens: string[]): string {
+  return tokens.join(", ");
+}
+
 type CertHolder = {
   id: string;
   createdAt: string;
@@ -228,6 +242,12 @@ function CertificateDetailModal({
                     <span className="text-right font-semibold text-slate-800">{cert.machine}</span>
                   </div>
                 ) : null}
+                {cert.weldScope ? (
+                  <div className="flex items-center justify-between gap-4 py-2.5 text-xs sm:text-sm">
+                    <span className="text-slate-500">Mối hàn áp dụng</span>
+                    <span className="text-right font-semibold text-slate-800">{cert.weldScope}</span>
+                  </div>
+                ) : null}
                 {cert.notes ? (
                   <div className="flex items-start justify-between gap-4 py-2.5 text-xs sm:text-sm">
                     <span className="shrink-0 text-slate-500">Ghi chú</span>
@@ -355,6 +375,7 @@ export default function CertificateManagement() {
     code: "",
     organization: "",
     machine: "",
+    weldScope: [] as string[],
     notes: "",
     holderIds: [] as string[],
     imageUrl: "",
@@ -684,11 +705,13 @@ export default function CertificateManagement() {
   }
 
   function openAddModal() {
+    setEditTarget(null);
     setForm({
       title: "",
       code: "",
       organization: "",
       machine: "",
+      weldScope: [],
       notes: "",
       holderIds: [],
       imageUrl: "",
@@ -697,19 +720,21 @@ export default function CertificateManagement() {
     initialEditImageRef.current = { imageUrl: "", cloudinaryPublicId: "" };
     setHolderQuery("");
     setFormError("");
+    setActionError("");
     setAddOpen(true);
   }
 
   function openEditModal(row: CertificateTypeRow) {
-    if (!row.group) return;
-    const imageUrl = row.group.imageUrl || "";
-    const cloudinaryPublicId = row.group.cloudinaryPublicId || "";
+    setAddOpen(false);
+    const imageUrl = row.group?.imageUrl || "";
+    const cloudinaryPublicId = row.group?.cloudinaryPublicId || "";
     setEditTarget(row);
     setForm({
       title: row.title,
-      code: row.group.code || "",
-      organization: row.group.issuer || "",
-      machine: row.group.machine || "",
+      code: row.group?.code || "",
+      organization: row.group?.issuer || "",
+      machine: row.group?.machine || "",
+      weldScope: parseWeldScopeTokens(row.group?.weldScope),
       notes: "",
       holderIds: row.holders.map((holder) => holder.id),
       imageUrl,
@@ -717,6 +742,7 @@ export default function CertificateManagement() {
     });
     initialEditImageRef.current = { imageUrl, cloudinaryPublicId };
     setHolderQuery("");
+    setFormError("");
     setActionError("");
   }
 
@@ -772,21 +798,38 @@ export default function CertificateManagement() {
 
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!editTarget?.group) return;
+    if (!editTarget) return;
     setSaving(true);
     setActionError("");
+    const isCatalogEdit = Boolean(editTarget.group?.id);
     try {
-      await updateCertificateType({
-        id: editTarget.group.id,
-        title: form.title,
-        code: form.code,
-        organization: form.organization,
-        machine: form.machine,
-        notes: form.notes,
-        employeeIds: form.holderIds,
-        imageUrl: form.imageUrl,
-        cloudinaryPublicId: form.cloudinaryPublicId,
-      });
+      if (isCatalogEdit && editTarget.group) {
+        await updateCertificateType({
+          id: editTarget.group.id,
+          title: form.title,
+          code: form.code,
+          organization: form.organization,
+          machine: form.machine,
+          weldScope: serializeWeldScope(form.weldScope),
+          notes: form.notes,
+          employeeIds: form.holderIds,
+          imageUrl: form.imageUrl,
+          cloudinaryPublicId: form.cloudinaryPublicId,
+        });
+      } else {
+        // Dữ liệu cũ (chỉ có trên hồ sơ thợ) → đưa vào danh mục rồi gắn lại nhân sự.
+        await createCertificateType({
+          title: form.title.trim() || editTarget.title,
+          code: form.code,
+          organization: form.organization,
+          machine: form.machine,
+          weldScope: serializeWeldScope(form.weldScope),
+          notes: form.notes,
+          employeeIds: form.holderIds,
+          imageUrl: form.imageUrl,
+          cloudinaryPublicId: form.cloudinaryPublicId,
+        });
+      }
       const removedInitialPublicId = initialEditImageRef.current.cloudinaryPublicId.trim();
       if (
         removedInitialPublicId &&
@@ -795,7 +838,11 @@ export default function CertificateManagement() {
         await deleteCloudinaryAsset(removedInitialPublicId);
       }
       setEditTarget(null);
-      showToast("Đã cập nhật loại chứng chỉ.");
+      showToast(
+        isCatalogEdit
+          ? "Đã cập nhật loại chứng chỉ."
+          : "Đã đưa chứng chỉ cũ vào danh mục và cập nhật.",
+      );
       await reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không thể cập nhật loại chứng chỉ.");
@@ -853,17 +900,13 @@ export default function CertificateManagement() {
         code: form.code,
         organization: form.organization,
         machine: form.machine,
+        weldScope: serializeWeldScope(form.weldScope),
         notes: form.notes,
-        employeeIds: form.holderIds,
         imageUrl: form.imageUrl,
         cloudinaryPublicId: form.cloudinaryPublicId,
       });
       setAddOpen(false);
-      showToast(
-        form.holderIds.length > 0
-          ? `Đã thêm chứng chỉ và gán cho ${form.holderIds.length} thợ hàn.`
-          : "Đã thêm loại chứng chỉ mới vào danh mục.",
-      );
+      showToast("Đã thêm loại chứng chỉ mới vào danh mục.");
       await reload();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Không thêm được chứng chỉ");
@@ -1118,17 +1161,17 @@ export default function CertificateManagement() {
                           )}
                         </td>
                         <td className="px-2 py-3">
-                          {row.group ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openEditModal(row)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] focus:outline-none focus:ring-2 focus:ring-[#0047AB]/30"
-                                aria-label={`Sửa loại chứng chỉ ${row.title}`}
-                                title="Sửa"
-                              >
-                                <PencilSimple size={16} weight="bold" />
-                              </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(row)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] focus:outline-none focus:ring-2 focus:ring-[#0047AB]/30"
+                              aria-label={`Sửa loại chứng chỉ ${row.title}`}
+                              title={row.group ? "Sửa" : "Sửa / đưa vào danh mục"}
+                            >
+                              <PencilSimple size={16} weight="bold" />
+                            </button>
+                            {row.group ? (
                               <button
                                 type="button"
                                 onClick={() => { setDeleteTarget(row); setActionError(""); }}
@@ -1138,10 +1181,12 @@ export default function CertificateManagement() {
                               >
                                 <TrashSimple size={16} weight="bold" />
                               </button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-slate-400">Dữ liệu cũ</span>
-                          )}
+                            ) : (
+                              <span className="px-1 text-[11px] text-slate-400" title="Chứng chỉ chỉ có trên hồ sơ thợ, chưa có trong danh mục">
+                                Cũ
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-2 py-3">
                           {row.holders.length > 0 ? (
@@ -1222,7 +1267,13 @@ export default function CertificateManagement() {
                 <div className="text-[11px] font-bold uppercase tracking-wider text-[#0047AB]">
                   Danh mục chứng chỉ
                 </div>
-                <h2 className="text-base font-bold text-slate-900">{editTarget ? "Sửa loại chứng chỉ" : "Thêm chứng chỉ mới"}</h2>
+                <h2 className="text-base font-bold text-slate-900">
+                  {editTarget
+                    ? editTarget.group
+                      ? "Sửa loại chứng chỉ"
+                      : "Sửa / đưa chứng chỉ cũ vào danh mục"
+                    : "Thêm chứng chỉ mới"}
+                </h2>
               </div>
               <button
                 type="button"
@@ -1290,6 +1341,45 @@ export default function CertificateManagement() {
               </div>
 
               <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Mối hàn áp dụng
+                </label>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {WELD_SCOPE_OPTIONS.map((option) => {
+                    const checked = form.weldScope.includes(option);
+                    return (
+                      <label
+                        key={option}
+                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                          checked
+                            ? "border-[#0047AB] bg-blue-50 text-[#0047AB]"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setForm((f) => ({
+                              ...f,
+                              weldScope: checked
+                                ? f.weldScope.filter((item) => item !== option)
+                                : [...f.weldScope, option],
+                            }))
+                          }
+                          className="h-3.5 w-3.5 rounded accent-[#0047AB]"
+                        />
+                        {option}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Chọn công nghệ (FBW/ATW) và/hoặc loại mối hàn mà chứng chỉ này áp dụng.
+                </p>
+              </div>
+
+              <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ghi chú</label>
                 <input
                   className={fieldClass}
@@ -1346,6 +1436,7 @@ export default function CertificateManagement() {
                 </div>
               </div>
 
+              {editTarget ? (
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -1394,9 +1485,10 @@ export default function CertificateManagement() {
                   )}
                 </div>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Có thể chỉ thêm loại chứng chỉ vào danh mục, hoặc chọn thợ hàn để gán ngay.
+                  Chọn thợ hàn để gán loại chứng chỉ này.
                 </p>
               </div>
+              ) : null}
 
               {(editTarget ? actionError : formError) && <div className="text-xs font-semibold text-rose-600">{editTarget ? actionError : formError}</div>}
             </div>

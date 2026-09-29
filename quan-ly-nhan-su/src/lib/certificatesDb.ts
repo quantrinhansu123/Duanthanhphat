@@ -21,6 +21,7 @@ export type CertificateDbRow = {
   don_vi_cap?: string | null;
   so_chung_chi?: string | null;
   may_ap_dung?: string | null;
+  moi_han_ap_dung?: string | null;
   ghi_chu?: string | null;
   cloudinary_public_id?: string | null;
   secure_url?: string | null;
@@ -80,6 +81,7 @@ const CERTIFICATE_COLUMNS = [
   "don_vi_cap",
   "so_chung_chi",
   "may_ap_dung",
+  "moi_han_ap_dung",
   "ghi_chu",
   "cloudinary_public_id",
   "secure_url",
@@ -167,6 +169,7 @@ function dbRowToCertificate(
     groupId: row.nhom_id || undefined,
     organization: row.don_vi_cap || undefined,
     machine: row.may_ap_dung || undefined,
+    weldScope: row.moi_han_ap_dung || undefined,
     certificateNumber: row.so_chung_chi || undefined,
     notes: row.ghi_chu || undefined,
   };
@@ -184,12 +187,18 @@ export async function loadCertificateRegistry(): Promise<CertificateRegistry> {
     (async () => {
       const rows: CertificateDbRow[] = [];
       const pageSize = 1000;
+      let selectCols = CERTIFICATE_COLUMNS;
       for (let offset = 0; ; offset += pageSize) {
         const { data, error } = await supabase
           .from("chung_chi")
-          .select(CERTIFICATE_COLUMNS)
+          .select(selectCols)
           .order("created_at", { ascending: false })
           .range(offset, offset + pageSize - 1);
+        if (error && /moi_han_ap_dung/.test(error.message ?? "") && selectCols.includes("moi_han_ap_dung")) {
+          selectCols = CERTIFICATE_COLUMNS.replace(",moi_han_ap_dung", "");
+          offset -= pageSize;
+          continue;
+        }
         if (error) throw new Error(formatSupabaseError(error));
         const page = (data ?? []) as unknown as CertificateDbRow[];
         rows.push(...page);
@@ -279,6 +288,7 @@ export async function createCertificateType(input: {
   code?: string;
   organization?: string;
   machine?: string;
+  weldScope?: string;
   notes?: string;
   employeeIds?: string[];
   issuedAt?: string;
@@ -294,6 +304,7 @@ export async function createCertificateType(input: {
   }
 
   const employeeIds = (input.employeeIds ?? []).filter(Boolean);
+  const weldScope = input.weldScope?.trim() || null;
   if (employeeIds.length > 0) {
     await createPersonnelCertificates({
       title,
@@ -308,6 +319,17 @@ export async function createCertificateType(input: {
       imageUrl: input.imageUrl,
       cloudinaryPublicId: input.cloudinaryPublicId,
     });
+    if (weldScope) {
+      const supabase = createClient();
+      await supabase
+        .from("chung_chi_nhom")
+        .update({ moi_han_ap_dung: weldScope })
+        .ilike("ten_nhom", title);
+      await supabase
+        .from("chung_chi")
+        .update({ moi_han_ap_dung: weldScope })
+        .ilike("ten_chung_chi", title);
+    }
     return { id: "", name: title };
   }
 
@@ -323,20 +345,32 @@ export async function createCertificateType(input: {
   }
 
   const imageUrl = input.imageUrl?.trim() || null;
-  const { data, error } = await supabase
+  const insertPayload: Record<string, string | null> = {
+    ten_nhom: title,
+    ma_nhom: input.code?.trim() || null,
+    don_vi_cap: input.organization?.trim() || null,
+    may_ap_dung: input.machine?.trim() || null,
+    moi_han_ap_dung: weldScope,
+    ghi_chu: input.notes?.trim() || null,
+    file_chung_chi: imageUrl,
+    secure_url: imageUrl,
+    cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
+  };
+  let { data, error } = await supabase
     .from("chung_chi_nhom")
-    .insert({
-      ten_nhom: title,
-      ma_nhom: input.code?.trim() || null,
-      don_vi_cap: input.organization?.trim() || null,
-      may_ap_dung: input.machine?.trim() || null,
-      ghi_chu: input.notes?.trim() || null,
-      file_chung_chi: imageUrl,
-      secure_url: imageUrl,
-      cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
-    })
+    .insert(insertPayload)
     .select("id, ten_nhom")
     .single();
+  if (error && /moi_han_ap_dung/.test(error.message ?? "")) {
+    const { moi_han_ap_dung: _ignored, ...withoutWeldScope } = insertPayload;
+    const retry = await supabase
+      .from("chung_chi_nhom")
+      .insert(withoutWeldScope)
+      .select("id, ten_nhom")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
   if (error) throw new Error(formatSupabaseError(error));
   return { id: data.id as string, name: data.ten_nhom as string };
 }
@@ -347,6 +381,7 @@ export type UpdateCertificateTypeInput = {
   code?: string;
   organization?: string;
   machine?: string;
+  weldScope?: string;
   notes?: string;
   employeeIds?: string[];
   imageUrl?: string;
@@ -368,6 +403,7 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
     ma_nhom: input.code?.trim() || null,
     don_vi_cap: input.organization?.trim() || null,
     may_ap_dung: input.machine?.trim() || null,
+    moi_han_ap_dung: input.weldScope?.trim() || null,
     ghi_chu: input.notes?.trim() || null,
     updated_at: new Date().toISOString(),
   };
@@ -384,7 +420,15 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
     .from("chung_chi_nhom")
     .update(groupUpdate)
     .eq("id", input.id);
-  if (groupError) throw new Error(formatSupabaseError(groupError));
+  if (groupError) {
+    if (/moi_han_ap_dung/.test(groupError.message ?? "")) {
+      const { moi_han_ap_dung: _ignored, ...withoutWeldScope } = groupUpdate;
+      const retry = await supabase.from("chung_chi_nhom").update(withoutWeldScope).eq("id", input.id);
+      if (retry.error) throw new Error(formatSupabaseError(retry.error));
+    } else {
+      throw new Error(formatSupabaseError(groupError));
+    }
+  }
 
   const certificateUpdate: Record<string, string | null> = {
     ten_chung_chi: title,
@@ -404,12 +448,23 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
   if (input.machine !== undefined) {
     certificateUpdate.may_ap_dung = input.machine.trim() || null;
   }
+  if (input.weldScope !== undefined) {
+    certificateUpdate.moi_han_ap_dung = input.weldScope.trim() || null;
+  }
 
   const { error: certificateError } = await supabase
     .from("chung_chi")
     .update(certificateUpdate)
     .eq("nhom_id", input.id);
-  if (certificateError) throw new Error(formatSupabaseError(certificateError));
+  if (certificateError) {
+    if (/moi_han_ap_dung/.test(certificateError.message ?? "") && "moi_han_ap_dung" in certificateUpdate) {
+      const { moi_han_ap_dung: _ignored, ...withoutWeldScope } = certificateUpdate;
+      const retry = await supabase.from("chung_chi").update(withoutWeldScope).eq("nhom_id", input.id);
+      if (retry.error) throw new Error(formatSupabaseError(retry.error));
+    } else {
+      throw new Error(formatSupabaseError(certificateError));
+    }
+  }
 
   if (input.employeeIds === undefined) return;
 

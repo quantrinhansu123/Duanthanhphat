@@ -35,13 +35,6 @@ export const navigation: NavItem[] = [
         description: "Lịch sử hàn theo từng thợ, tổng số thợ phục vụ thống kê",
         descriptionEn: "Welding history per welder, total welders for analytics and reporting",
       },
-      {
-        id: "lich-su-moi-han-loi",
-        label: "Danh sách mối hàn lỗi",
-        labelEn: "Failed Weld List",
-        description: "Danh sách mối hàn không đạt theo thợ, máy, dự án và thời gian",
-        descriptionEn: "List of failed welds by welder, machine, project, and date",
-      },
     ],
   },
   {
@@ -128,6 +121,13 @@ export const navigation: NavItem[] = [
         labelEn: "Weld Joint Management",
         description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
         descriptionEn: "List of welds categorized by rail section and corresponding qualifications",
+      },
+      {
+        id: "lich-su-moi-han-loi",
+        label: "Danh sách mối hàn lỗi",
+        labelEn: "Failed Weld List",
+        description: "Danh sách mối hàn không đạt theo thợ, máy, dự án và thời gian",
+        descriptionEn: "List of failed welds by welder, machine, project, and date",
       },
     ],
   },

@@ -59,6 +59,8 @@ export type CertificateGroupOption = {
   code?: string;
   issuer?: string;
   machine?: string;
+  /** Mối hàn / công nghệ áp dụng (FBW, ATW, Sản xuất, …). */
+  weldScope?: string;
   issueDate?: string;
   expiryDate?: string;
   imageUrl?: string;
@@ -329,12 +331,43 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
     const { data, error } = await supabase
       .from("chung_chi_nhom")
       .select(
-        "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
+        "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, moi_han_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
       )
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Cột moi_han_ap_dung có thể chưa có trên môi trường cũ — fallback không chọn cột này.
+      if (/moi_han_ap_dung/.test(error.message ?? "")) {
+        const fallback = await supabase
+          .from("chung_chi_nhom")
+          .select(
+            "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
+          )
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        if (fallback.error) throw new Error(fallback.error.message);
+        const page = fallback.data ?? [];
+        for (const r of page) {
+          byId.set(r.id, {
+            id: r.id,
+            name: r.ten_nhom,
+            createdAt: r.created_at,
+            code: r.ma_nhom ?? undefined,
+            issuer: r.don_vi_cap ?? undefined,
+            machine: r.may_ap_dung ?? undefined,
+            issueDate: r.ngay_cap ?? undefined,
+            expiryDate: r.ngay_het_han ?? undefined,
+            imageUrl: r.secure_url || r.file_chung_chi || undefined,
+            cloudinaryPublicId: r.cloudinary_public_id || undefined,
+          });
+        }
+        if (page.length < pageSize) break;
+        continue;
+      }
+      throw new Error(error.message);
+    }
     const page = data ?? [];
     for (const r of page) {
       byId.set(r.id, {
@@ -344,6 +377,7 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
         code: r.ma_nhom ?? undefined,
         issuer: r.don_vi_cap ?? undefined,
         machine: r.may_ap_dung ?? undefined,
+        weldScope: (r as { moi_han_ap_dung?: string | null }).moi_han_ap_dung ?? undefined,
         issueDate: r.ngay_cap ?? undefined,
         expiryDate: r.ngay_het_han ?? undefined,
         imageUrl: r.secure_url || r.file_chung_chi || undefined,
