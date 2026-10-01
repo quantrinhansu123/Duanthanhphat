@@ -1,30 +1,27 @@
 import { NextResponse } from "next/server";
 import {
-  GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
-  formatGoogleDriveError,
-  isGoogleDriveConfigured,
-  listDriveDocuments,
-} from "@/lib/googleDrive/server";
+  DOCUMENT_SETUP_MESSAGE,
+  isDocumentStorageConfigured,
+  listStoredDocuments,
+} from "@/lib/documentStorage";
 
 export async function GET() {
-  if (!isGoogleDriveConfigured()) {
+  if (!isDocumentStorageConfigured()) {
     return NextResponse.json(
       {
         configured: false,
         items: [],
-        message: GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
+        message: "Chưa cấu hình Supabase. Thêm NEXT_PUBLIC_SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY.",
       },
       { status: 200 },
     );
   }
 
   try {
-    const items = await listDriveDocuments();
+    const items = await listStoredDocuments();
     return NextResponse.json({ configured: true, items });
   } catch (error: unknown) {
-    return NextResponse.json(
-      { configured: true, items: [], error: formatGoogleDriveError(error) },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : DOCUMENT_SETUP_MESSAGE;
+    return NextResponse.json({ configured: true, items: [], error: message }, { status: 500 });
   }
 }

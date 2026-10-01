@@ -14,7 +14,10 @@ import {
   fetchTrainingPersonnelOptions,
   formatTotalTrainingHours,
   isTrainingAssetReferenced,
+  parseTrainingVideoUrls,
   saveTrainingCourse,
+  serializeTrainingVideoUrls,
+  TRAINING_VIDEO_SLOT_COUNT,
   type CertificateGroupOption,
   type DbTrainingCourse,
   type TrainingPersonnelOption,
@@ -169,7 +172,6 @@ function TrainingFormModal({
     selfTrainingHours: initial?.selfTrainingHours != null ? String(initial.selfTrainingHours) : "",
     railType: initial?.railType ?? "",
     weldMethod: initial?.weldMethod ?? "",
-    videoUrl: initial?.videoUrl ?? "",
     participantsCount:
       initial?.participantsCount != null ? String(initial.participantsCount) : "",
   });
@@ -183,6 +185,10 @@ function TrainingFormModal({
   );
   const [uploadingImg, setUploadingImg] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const initialVideos = parseTrainingVideoUrls(initial?.videoUrl);
+  const [videoUrls, setVideoUrls] = useState<string[]>(initialVideos.length > 0 ? initialVideos : [""]);
+  const [videoUploadIndex, setVideoUploadIndex] = useState(0);
+  const videoUploadIndexRef = useRef(0);
 
   const [attendeeList, setAttendeeList] = useState<{
     id: string;
@@ -229,7 +235,7 @@ function TrainingFormModal({
     const errors: string[] = [];
     for (const file of files) {
       if (file.type.startsWith("video/")) {
-        errors.push(`${file.name}: Dùng mục Video bên dưới để thêm 1 video.`);
+        errors.push(`${file.name}: Dùng mục Link video bài giảng để thêm video.`);
         continue;
       }
       const uploadRes = await uploadCloudinaryAsset(file, "thanhphat/trainings");
@@ -271,7 +277,9 @@ function TrainingFormModal({
     setUploadingVideo(false);
     e.target.value = "";
     if (uploadRes.result?.secure_url) {
-      set("videoUrl", uploadRes.result.secure_url);
+      const url = uploadRes.result.secure_url;
+      const slot = videoUploadIndexRef.current;
+      setVideoUrls((current) => current.map((item, index) => (index === slot ? url : item)));
     } else {
       setError(uploadRes.error || "Không tải được video lên Cloudinary.");
     }
@@ -308,7 +316,7 @@ function TrainingFormModal({
       manufacturerHours: Number(form.manufacturerHours) || 0,
       selfTrainingHours: Number(form.selfTrainingHours) || 0,
       participantsCount: attendeeList.length,
-      videoUrl: form.videoUrl.trim(),
+      videoUrl: serializeTrainingVideoUrls(videoUrls) ?? "",
       railType: form.railType.trim(),
       weldMethod: form.weldMethod.trim(),
       attendees: attendeeList.map((a) => ({
@@ -450,55 +458,69 @@ function TrainingFormModal({
             <p className="mt-1.5 text-[11px] text-slate-500">Chọn nhiều ảnh hoặc tài liệu trong một lần.</p>
           </div>
 
-          {/* Link / tải 1 video bài giảng — tách riêng khỏi ảnh & tài liệu */}
           <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-              Link video bài giảng (1 video)
-            </label>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                type="url"
-                className={`${fieldClass} mt-0 border-[#0047AB]/30 bg-white`}
-                value={form.videoUrl}
-                onChange={(e) => set("videoUrl", e.target.value)}
-                placeholder="Dán link video tại đây — https://..."
-                disabled={uploadingVideo}
-              />
-              <input
-                ref={videoFileInputRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) => void handleVideoUpload(e)}
-              />
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
+                Link video bài giảng
+              </label>
               <button
                 type="button"
-                disabled={uploadingVideo || uploadingImg || saving}
-                onClick={() => videoFileInputRef.current?.click()}
-                className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                disabled={videoUrls.length >= TRAINING_VIDEO_SLOT_COUNT || uploadingVideo || saving}
+                onClick={() => setVideoUrls((current) => (current.length >= TRAINING_VIDEO_SLOT_COUNT ? current : [...current, ""]))}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#0047AB] bg-white px-2.5 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <UploadSimple size={14} weight="bold" />
-                {uploadingVideo ? "Đang tải…" : "Tải video"}
+                <Plus size={13} weight="bold" />
+                Thêm video
               </button>
             </div>
-            {form.videoUrl.trim() ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <a href={form.videoUrl.trim()} target="_blank" rel="noreferrer" className="font-semibold text-[#0047AB] hover:underline truncate max-w-full">
-                  Xem video đã gắn
-                </a>
-                <button
-                  type="button"
-                  onClick={() => set("videoUrl", "")}
-                  className="font-semibold text-rose-600 hover:underline cursor-pointer"
-                >
-                  Gỡ video
-                </button>
-              </div>
-            ) : (
-              <p className="mt-2 text-[11px] text-slate-600">
-                Dán URL (YouTube, Drive, Cloudinary…) hoặc tải 1 file video lên Cloudinary.
-              </p>
-            )}
+            <input
+              ref={videoFileInputRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => void handleVideoUpload(e)}
+            />
+            <div className="mt-2 space-y-2">
+              {videoUrls.map((url, index) => (
+                <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    type="url"
+                    className={`${fieldClass} mt-0 border-[#0047AB]/30 bg-white`}
+                    value={url}
+                    onChange={(e) => setVideoUrls((current) => current.map((item, itemIndex) => (itemIndex === index ? e.target.value : item)))}
+                    placeholder={`Video ${index + 1} — https://...`}
+                    disabled={uploadingVideo}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingVideo || uploadingImg || saving}
+                    onClick={() => {
+                      videoUploadIndexRef.current = index;
+                      setVideoUploadIndex(index);
+                      videoFileInputRef.current?.click();
+                    }}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    <UploadSimple size={14} weight="bold" />
+                    {uploadingVideo && videoUploadIndex === index ? "Đang tải…" : "Tải video"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={uploadingVideo || saving}
+                    onClick={() => setVideoUrls((current) => {
+                      const next = current.filter((_, itemIndex) => itemIndex !== index);
+                      return next.length > 0 ? next : [""];
+                    })}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer disabled:opacity-50"
+                  >
+                    Gỡ
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-600">
+              Dán URL hoặc tải file. Tối đa {TRAINING_VIDEO_SLOT_COUNT} video.
+            </p>
           </div>
 
           <div>
@@ -818,7 +840,10 @@ function TrainingDetailModal({
   onEdit: () => void;
 }) {
   const [tab, setTab] = useState<"info" | "video">("info");
-  const hasVideo = Boolean(course.videoUrl?.trim());
+  const videos = parseTrainingVideoUrls(course.videoUrl);
+  const [activeVideo, setActiveVideo] = useState(0);
+  const hasVideo = videos.length > 0;
+  const playingUrl = videos[activeVideo] ?? videos[0] ?? "";
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -902,7 +927,7 @@ function TrainingDetailModal({
                   tab === "video" ? "bg-blue-50 text-[#0047AB]" : "bg-slate-100 text-slate-600"
                 }`}
               >
-                1
+                {videos.length}
               </span>
             ) : null}
           </button>
@@ -911,12 +936,30 @@ function TrainingDetailModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-7 py-5">
           {tab === "video" ? (
             <div className="space-y-3">
-              <TrainingVideoPlayer url={course.videoUrl ?? ""} title={course.title} />
+              <TrainingVideoPlayer url={playingUrl} title={course.title} />
+              {videos.length > 1 ? (
+                <div className="flex flex-wrap gap-2">
+                  {videos.map((url, index) => (
+                    <button
+                      key={`${url}-${index}`}
+                      type="button"
+                      onClick={() => setActiveVideo(index)}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                        index === activeVideo
+                          ? "border-[#0047AB] bg-blue-50 text-[#0047AB]"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      Video {index + 1}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {hasVideo ? (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span className="truncate max-w-full font-mono">{course.videoUrl}</span>
+                  <span className="truncate max-w-full font-mono">{playingUrl}</span>
                   <a
-                    href={course.videoUrl}
+                    href={playingUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="shrink-0 font-semibold text-[#0047AB] hover:underline"
@@ -1120,7 +1163,7 @@ function TrainingDetailModal({
 export default function TrainingList() {
   const [query, setQuery] = useState("");
   const [resultFilter, setResultFilter] = useState("Tất cả kết quả");
-  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
+  const [railFilter, setRailFilter] = useState("Tất cả loại hàn");
   const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
   const railFilterOptions = useCatalogOptions("Loại ray");
   const methodFilterOptions = useCatalogOptions("Phương pháp hàn", "code");
@@ -1175,7 +1218,7 @@ export default function TrainingList() {
         c.trainer.toLowerCase().includes(q) ||
         c.date.includes(q);
       const matchResult = resultFilter === "Tất cả kết quả" || c.result === resultFilter;
-      const matchRail = railFilter === "Tất cả loại ray" || (c.railType || "") === railFilter;
+      const matchRail = railFilter === "Tất cả loại hàn" || (c.railType || "") === railFilter;
       const matchMethod = methodFilter === "Tất cả công nghệ" || (c.weldMethod || "") === methodFilter;
       return matchQ && matchResult && matchRail && matchMethod;
     });
@@ -1338,24 +1381,32 @@ export default function TrainingList() {
               <option key={r}>{r}</option>
             ))}
           </select>
-          <select
-            value={railFilter}
-            onChange={(e) => setRailFilter(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-          >
-            {["Tất cả loại ray", ...railFilterOptions].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-          >
-            {["Tất cả công nghệ", ...(methodFilterOptions.length ? methodFilterOptions : ["FBW", "ATW"])].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Công nghệ
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+              aria-label="Lọc theo công nghệ hàn"
+            >
+              {["Tất cả công nghệ", ...(methodFilterOptions.length ? methodFilterOptions : ["FBW", "ATW"])].map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Loại hàn
+            <select
+              value={railFilter}
+              onChange={(e) => setRailFilter(e.target.value)}
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+              aria-label="Lọc theo loại hàn"
+            >
+              {["Tất cả loại hàn", ...railFilterOptions].map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </label>
         </div>
         <button
           type="button"
@@ -1379,7 +1430,9 @@ export default function TrainingList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((c) => (
+          {filtered.map((c) => {
+            const courseVideos = parseTrainingVideoUrls(c.videoUrl);
+            return (
             <div
               key={c.id}
               className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md transition-all duration-200"
@@ -1400,15 +1453,15 @@ export default function TrainingList() {
                   </span>
                 </div>
                 <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
-                  {c.videoUrl ? (
+                  {courseVideos[0] ? (
                     <a
-                      href={c.videoUrl}
+                      href={courseVideos[0]}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="rounded bg-[#0047AB]/90 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-[#00388A]"
                     >
-                      Video
+                      Video{courseVideos.length > 1 ? ` ${courseVideos.length}` : ""}
                     </a>
                   ) : null}
                   <div className="rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-white">
@@ -1479,7 +1532,8 @@ export default function TrainingList() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

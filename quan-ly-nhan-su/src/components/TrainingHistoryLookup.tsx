@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MagnifyingGlass } from "@/components/icons";
+import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
   fetchWelderTrainingHistory,
   type DbTrainingHistoryRecord,
@@ -32,6 +33,10 @@ export default function TrainingHistoryLookup() {
   const [course, setCourse] = useState("Tất cả khóa đào tạo");
   const [result, setResult] = useState("Tất cả kết quả");
   const [status, setStatus] = useState("Tất cả trạng thái");
+  const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
+  const [railFilter, setRailFilter] = useState("Tất cả loại hàn");
+  const methodOptions = useCatalogOptions("Phương pháp hàn", "code");
+  const railOptions = useCatalogOptions("Loại ray");
 
   useEffect(() => {
     let cancelled = false;
@@ -79,9 +84,11 @@ export default function TrainingHistoryLookup() {
       const matchCourse = course === "Tất cả khóa đào tạo" || row.courseTitle === course;
       const matchResult = result === "Tất cả kết quả" || row.result === result;
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
-      return matchQ && matchType && matchCourse && matchResult && matchStatus;
+      const matchMethod = methodFilter === "Tất cả công nghệ" || (row.weldMethod || "") === methodFilter;
+      const matchRail = railFilter === "Tất cả loại hàn" || (row.railType || "") === railFilter;
+      return matchQ && matchType && matchCourse && matchResult && matchStatus && matchMethod && matchRail;
     });
-  }, [records, query, personType, course, result, status]);
+  }, [records, query, personType, course, result, status, methodFilter, railFilter]);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
@@ -100,7 +107,7 @@ export default function TrainingHistoryLookup() {
             <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
             {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
               <option key={t}>{t}</option>
@@ -121,6 +128,22 @@ export default function TrainingHistoryLookup() {
               <option key={s}>{s}</option>
             ))}
           </select>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Công nghệ
+            <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={selectClass} aria-label="Lọc theo công nghệ hàn">
+              {["Tất cả công nghệ", ...(methodOptions.length ? methodOptions : ["FBW", "ATW"])].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Loại hàn
+            <select value={railFilter} onChange={(e) => setRailFilter(e.target.value)} className={selectClass} aria-label="Lọc theo loại hàn">
+              {["Tất cả loại hàn", ...railOptions].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 

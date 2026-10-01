@@ -239,14 +239,100 @@ export async function loadMachineReportSummary(): Promise<MachineReportSummary[]
   }));
 }
 
-/** Bundle lịch chạy máy — tổng hợp từ nhật ký hàn (không nhập tay). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type AssignmentDbRow = {
+  id: string;
+  ngay: string;
+  may_id: string | null;
+  ma_may: string;
+  ten_may: string | null;
+  du_an_id: string | null;
+  ten_du_an: string | null;
+  tho_han_id: string | null;
+  ten_tho_han: string | null;
+  cong_nghe_han: string | null;
+  loai_moi_han: string | null;
+  ca: string[] | null;
+  so_moi_han: number | null;
+  so_moi_loi: number | null;
+  so_ban_ghi: number | null;
+};
+
+function asUuid(value: string) {
+  return UUID_RE.test(value) ? value : null;
+}
+
+function assignmentGroupKey(row: {
+  date: string;
+  machineCode: string;
+  projectId: string;
+  personInChargeId: string;
+  weldMethod?: string;
+  weldType?: string;
+}) {
+  return [
+    row.date,
+    row.machineCode,
+    row.projectId,
+    row.personInChargeId,
+    row.weldMethod || "",
+    row.weldType || "",
+  ].join("|");
+}
+
+function missingAssignmentTableMessage(error: unknown) {
+  const message = formatSupabaseError(error);
+  if (/phan_cong_may|schema cache|42P01|PGRST205/i.test(message)) {
+    return "Chưa có bảng phan_cong_may. Chạy supabase/migration_20261001_phan_cong_may.sql trên Supabase.";
+  }
+  return message;
+}
+
+function mapAssignmentRow(row: AssignmentDbRow): MachineRunSchedule {
+  const shifts = row.ca ?? [];
+  const weldCount = Number(row.so_moi_han) || 0;
+  const failedWeldCount = Number(row.so_moi_loi) || 0;
+  const machineCode = row.ma_may || "Chưa gán máy";
+  return {
+    id: row.id,
+    date: String(row.ngay).slice(0, 10),
+    machineId: row.may_id || `code:${machineCode}`,
+    machineCode,
+    machineName: row.ten_may || machineCode,
+    location: "—",
+    operatingHours: Math.max(shifts.length, 1) * HOURS_PER_WELD_SHIFT,
+    projectId: row.du_an_id || "",
+    projectName: row.ten_du_an || "Chưa gắn dự án",
+    personInChargeId: row.tho_han_id || "",
+    personInChargeName: row.ten_tho_han || "Chưa xác định",
+    fuelAddedLiters: 0,
+    pumpOpened: false,
+    machineCondition: failedWeldCount > 0 ? "Có mối lỗi" : "Bình thường",
+    conditionDescription: `${weldCount} mối · ${failedWeldCount} lỗi · ${Number(row.so_ban_ghi) || 0} bản ghi nhật ký`,
+    recommendation: shifts.length ? `Ca: ${shifts.join(", ")}` : "",
+    imageAssets: [],
+    source: "journal",
+    weldCount,
+    failedWeldCount,
+    shifts,
+    journalEntryCount: Number(row.so_ban_ghi) || 0,
+    weldMethod: row.cong_nghe_han || "—",
+    weldType: row.loai_moi_han || "—",
+  };
+}
+
+/** Danh sách đã lưu trong phan_cong_may. Không tổng hợp nhật ký khi mở trang. */
 export async function loadMachineRunScheduleBundle(): Promise<MachineRunScheduleBundle> {
   if (!isSupabaseConfigured()) return seedBundle("Chưa cấu hình Supabase");
 
   const supabase = createClient();
   try {
-    const [journalRows, machineResult, projectResult, personnelResult] = await Promise.all([
-      loadWeldReportRows(undefined, undefined, { mode: "full" }),
+    const [assignmentResult, machineResult, projectResult, personnelResult] = await Promise.all([
+      supabase
+        .from("phan_cong_may")
+        .select("id,ngay,may_id,ma_may,ten_may,du_an_id,ten_du_an,tho_han_id,ten_tho_han,cong_nghe_han,loai_moi_han,ca,so_moi_han,so_moi_loi,so_ban_ghi")
+        .order("ngay", { ascending: false }),
       supabase.from("thiet_bi").select("id,ma_may,ten_may,thong_so").order("ma_may", { ascending: true }),
       supabase.from("du_an").select("id,du_an").order("du_an", { ascending: true }),
       supabase.from("nhan_su").select("employee_id,ho_ten").order("ho_ten", { ascending: true }),
@@ -261,13 +347,78 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
       name: row.ten_may,
       oilQuota: readOilQuota(row.thong_so),
     }));
-    const machineById = new Map(machines.map((m) => [m.id, m]));
-    const machineByCode = new Map(machines.map((m) => [m.code.toLowerCase(), m]));
+    const projects = ((projectResult.data ?? []) as ProjectRow[]).map((row) => ({
+      id: row.id,
+      label: row.du_an,
+    }));
+    const personnel = ((personnelResult.data ?? []) as PersonnelRow[]).map((row) => ({
+      id: row.employee_id,
+      label: row.ho_ten,
+    }));
 
-    const schedules = aggregateWeldJournalToSchedules(journalRows).map((row) => {
-      const fromId = machineById.get(row.machineId);
-      const fromCode = machineByCode.get(row.machineCode.toLowerCase());
-      const machine = fromId ?? fromCode;
+    if (assignmentResult.error) {
+      return {
+        schedules: [],
+        machines,
+        projects,
+        personnel,
+        source: "supabase",
+        error: missingAssignmentTableMessage(assignmentResult.error),
+      };
+    }
+
+    const machineById = new Map(machines.map((machine) => [machine.id, machine]));
+    const schedules = ((assignmentResult.data ?? []) as AssignmentDbRow[]).map((row) => {
+      const schedule = mapAssignmentRow(row);
+      const machine = schedule.machineId ? machineById.get(schedule.machineId) : undefined;
+      if (!machine) return schedule;
+      return {
+        ...schedule,
+        machineCode: machine.code,
+        machineName: machine.name || schedule.machineName,
+      };
+    });
+
+    return { schedules, machines, projects, personnel, source: "supabase" };
+  } catch (error) {
+    return {
+      schedules: [],
+      machines: [],
+      projects: [],
+      personnel: [],
+      source: "supabase",
+      error: formatSupabaseError(error),
+    };
+  }
+}
+
+/** Tổng hợp nhật ký hàn trong khoảng ngày và ghi vào phan_cong_may. */
+export async function importMachineRunReport(dateFrom: string, dateTo: string) {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    throw new Error("Chọn từ ngày và đến ngày.");
+  }
+  if (dateFrom > dateTo) throw new Error("Từ ngày phải trước hoặc bằng đến ngày.");
+
+  const supabase = createClient();
+  const [journalRows, machineResult] = await Promise.all([
+    loadWeldReportRows(dateFrom, dateTo, { mode: "full" }),
+    supabase.from("thiet_bi").select("id,ma_may,ten_may"),
+  ]);
+  if (machineResult.error) throw new Error(formatSupabaseError(machineResult.error));
+
+  const machines = ((machineResult.data ?? []) as EquipmentRow[]).map((row) => ({
+    id: row.id,
+    code: row.ma_may,
+    name: row.ten_may,
+  }));
+  const machineById = new Map(machines.map((machine) => [machine.id, machine]));
+  const machineByCode = new Map(machines.map((machine) => [machine.code.toLowerCase(), machine]));
+
+  const schedules = aggregateWeldJournalToSchedules(journalRows)
+    .filter((row) => row.date >= dateFrom && row.date <= dateTo)
+    .map((row) => {
+      const machine = machineById.get(row.machineId) ?? machineByCode.get(row.machineCode.toLowerCase());
       if (!machine) return row;
       return {
         ...row,
@@ -277,48 +428,74 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
       };
     });
 
-    const knownIds = new Set(machines.map((m) => m.id));
-    for (const row of schedules) {
-      if (!knownIds.has(row.machineId)) {
-        machines.push({ id: row.machineId, code: row.machineCode, name: row.machineName });
-        knownIds.add(row.machineId);
-      }
-    }
+  const { error: deleteError } = await supabase
+    .from("phan_cong_may")
+    .delete()
+    .gte("ngay", dateFrom)
+    .lte("ngay", dateTo);
+  if (deleteError) throw new Error(missingAssignmentTableMessage(deleteError));
 
-    const projects = ((projectResult.data ?? []) as ProjectRow[]).map((row) => ({
-      id: row.id,
-      label: row.du_an,
-    }));
-    const knownProjects = new Set(projects.map((p) => p.id));
-    for (const row of schedules) {
-      if (row.projectId && !knownProjects.has(row.projectId)) {
-        projects.push({ id: row.projectId, label: row.projectName });
-        knownProjects.add(row.projectId);
-      }
-    }
+  const payload = schedules.map((row) => ({
+    ngay: row.date,
+    may_id: asUuid(row.machineId),
+    ma_may: row.machineCode || "Chưa gán máy",
+    ten_may: row.machineName || row.machineCode || "",
+    du_an_id: asUuid(row.projectId),
+    ten_du_an: row.projectName || "",
+    tho_han_id: asUuid(row.personInChargeId),
+    ten_tho_han: row.personInChargeName || "",
+    cong_nghe_han: row.weldMethod || "",
+    loai_moi_han: row.weldType || "",
+    ca: row.shifts ?? [],
+    so_moi_han: row.weldCount ?? 0,
+    so_moi_loi: row.failedWeldCount ?? 0,
+    so_ban_ghi: row.journalEntryCount ?? 0,
+    nhom: assignmentGroupKey(row),
+  }));
 
-    const personnel = ((personnelResult.data ?? []) as PersonnelRow[]).map((row) => ({
-      id: row.employee_id,
-      label: row.ho_ten,
-    }));
-    const knownPeople = new Set(personnel.map((p) => p.id));
-    for (const row of schedules) {
-      if (row.personInChargeId && !knownPeople.has(row.personInChargeId)) {
-        personnel.push({ id: row.personInChargeId, label: row.personInChargeName });
-        knownPeople.add(row.personInChargeId);
-      }
-    }
-
-    return {
-      schedules,
-      machines,
-      projects,
-      personnel,
-      source: "supabase",
-    };
-  } catch (error) {
-    return seedBundle(formatSupabaseError(error));
+  const batchSize = 200;
+  for (let offset = 0; offset < payload.length; offset += batchSize) {
+    const { error } = await supabase.from("phan_cong_may").insert(payload.slice(offset, offset + batchSize));
+    if (error) throw new Error(missingAssignmentTableMessage(error));
   }
+
+  return payload.length;
+}
+
+/** Nhật ký hàn thuộc đúng một dòng phân công đã lưu. */
+export async function loadScheduleJournalDetails(schedule: MachineRunSchedule): Promise<WeldReportRow[]> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase");
+  const supabase = createClient();
+  const pageSize = 1000;
+  const rows: WeldReportRow[] = [];
+
+  for (let from = 0; from < 20000; from += pageSize) {
+    let request = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("id,ma_lich_su,du_an_id,du_an,ngay_thuc_hien,loai_moi_han,cong_nghe_han,so_luong_thuc_hien,so_luong_loi,tho_han_id,ten_tho_han,may_id,ma_may,ten_may,ca_han,tinh_trang_thi_nghiem,nguyen_nhan_loi")
+      .eq("ngay_thuc_hien", schedule.date)
+      .order("ma_lich_su", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (schedule.projectId) request = request.eq("du_an_id", schedule.projectId);
+    if (schedule.personInChargeId) request = request.eq("tho_han_id", schedule.personInChargeId);
+    if (schedule.weldMethod && schedule.weldMethod !== "—") request = request.eq("cong_nghe_han", schedule.weldMethod);
+    if (schedule.weldType && schedule.weldType !== "—") request = request.eq("loai_moi_han", schedule.weldType);
+
+    const { data, error } = await request;
+    if (error) throw new Error(formatSupabaseError(error));
+    const chunk = (data ?? []) as WeldReportRow[];
+    rows.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
+
+  return rows.filter((row) => {
+    const machineCode = row.ma_may?.trim() || "Chưa gán máy";
+    if (schedule.machineId && !schedule.machineId.startsWith("code:")) {
+      return row.may_id === schedule.machineId || machineCode === schedule.machineCode;
+    }
+    return machineCode === schedule.machineCode;
+  });
 }
 
 export async function insertMachineRunSchedule(_values: MachineRunScheduleFormValues) {

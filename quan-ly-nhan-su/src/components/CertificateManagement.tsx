@@ -51,6 +51,20 @@ function serializeWeldScope(tokens: string[]): string {
   return tokens.join(", ");
 }
 
+function matchesCertificateMeta(
+  machine: string | undefined,
+  weldScope: string | undefined,
+  techFilter: string,
+  machineFilter: string,
+  weldTypeFilter: string,
+) {
+  const tokens = parseWeldScopeTokens(weldScope);
+  if (techFilter && !tokens.includes(techFilter)) return false;
+  if (weldTypeFilter && !tokens.includes(weldTypeFilter)) return false;
+  if (machineFilter && (machine || "") !== machineFilter) return false;
+  return true;
+}
+
 type CertHolder = {
   id: string;
   createdAt: string;
@@ -364,6 +378,9 @@ export default function CertificateManagement() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
+  const [techFilter, setTechFilter] = useState("");
+  const [machineFilter, setMachineFilter] = useState("");
+  const [weldTypeFilter, setWeldTypeFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [detailCert, setDetailCert] = useState<Certificate | null>(null);
   const [listTab, setListTab] = useState<"types" | "owners">("types");
@@ -521,8 +538,9 @@ export default function CertificateManagement() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("vi");
-    if (!q) return certificateTypes;
     return certificateTypes.filter((row) => {
+      if (!matchesCertificateMeta(row.group?.machine, row.group?.weldScope, techFilter, machineFilter, weldTypeFilter)) return false;
+      if (!q) return true;
       if (row.title.toLocaleLowerCase("vi").includes(q)) return true;
       return row.holders.some(
         (h) =>
@@ -530,7 +548,7 @@ export default function CertificateManagement() {
           h.code.toLocaleLowerCase("vi").includes(q),
       );
     });
-  }, [certificateTypes, query]);
+  }, [certificateTypes, query, techFilter, machineFilter, weldTypeFilter]);
 
   const filteredWeldersForForm = useMemo(() => {
     const q = holderQuery.trim().toLocaleLowerCase("vi");
@@ -687,19 +705,38 @@ export default function CertificateManagement() {
 
   const filteredOwners = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("vi");
-    if (!q) return ownerRows;
-    return ownerRows.filter((row) => {
-      if (
-        row.name.toLocaleLowerCase("vi").includes(q) ||
-        row.code.toLocaleLowerCase("vi").includes(q) ||
-        row.team.toLocaleLowerCase("vi").includes(q) ||
-        row.position.toLocaleLowerCase("vi").includes(q)
-      ) {
-        return true;
-      }
-      return row.certificates.some((c) => c.title.toLocaleLowerCase("vi").includes(q));
-    });
-  }, [ownerRows, query]);
+    const typeByTitle = new Map(certificateTypes.map((row) => [normalizeCertTitle(row.title), row]));
+    const hasMeta = Boolean(techFilter || machineFilter || weldTypeFilter);
+    return ownerRows
+      .map((row) => {
+        const certificates = hasMeta
+          ? row.certificates.filter((item) => {
+              const typeRow = typeByTitle.get(normalizeCertTitle(item.title));
+              return matchesCertificateMeta(
+                item.cert.machine || typeRow?.group?.machine,
+                item.cert.weldScope || typeRow?.group?.weldScope,
+                techFilter,
+                machineFilter,
+                weldTypeFilter,
+              );
+            })
+          : row.certificates;
+        return { ...row, certificates };
+      })
+      .filter((row) => {
+        if (hasMeta && row.certificates.length === 0) return false;
+        if (!q) return true;
+        if (
+          row.name.toLocaleLowerCase("vi").includes(q) ||
+          row.code.toLocaleLowerCase("vi").includes(q) ||
+          row.team.toLocaleLowerCase("vi").includes(q) ||
+          row.position.toLocaleLowerCase("vi").includes(q)
+        ) {
+          return true;
+        }
+        return row.certificates.some((c) => c.title.toLocaleLowerCase("vi").includes(q));
+      });
+  }, [ownerRows, certificateTypes, query, techFilter, machineFilter, weldTypeFilter]);
 
   function openHolderDetail(title: string, holder: CertHolder) {
     setDetailCert(resolveHolderCertificate(title, holder));
@@ -1020,6 +1057,40 @@ export default function CertificateManagement() {
             className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300/90 bg-white text-slate-900 placeholder:text-slate-400 shadow-xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
           />
         </div>
+        <select
+          value={techFilter}
+          onChange={(event) => setTechFilter(event.target.value)}
+          className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
+          aria-label="Lọc theo công nghệ"
+        >
+          <option value="">Tất cả công nghệ</option>
+          <option value="FBW">FBW</option>
+          <option value="ATW">ATW</option>
+        </select>
+        <select
+          value={machineFilter}
+          onChange={(event) => setMachineFilter(event.target.value)}
+          className="h-9 max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
+          aria-label="Lọc theo máy"
+        >
+          <option value="">Tất cả máy</option>
+          {machineOptions.map((machine) => (
+            <option key={machine.code} value={machine.code}>
+              {machine.code}
+            </option>
+          ))}
+        </select>
+        <select
+          value={weldTypeFilter}
+          onChange={(event) => setWeldTypeFilter(event.target.value)}
+          className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
+          aria-label="Lọc theo loại mối hàn"
+        >
+          <option value="">Tất cả loại mối hàn</option>
+          <option value="Sản xuất">Sản xuất</option>
+          <option value="Thử nghiệm">Thử nghiệm</option>
+          <option value="Đào tạo">Đào tạo</option>
+        </select>
         <Link
           href="/ho-so-tho-han"
           className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50"

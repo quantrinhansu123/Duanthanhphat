@@ -179,12 +179,8 @@ export default function OverviewDashboard() {
     (appliedFilters.dateFrom.slice(5) !== "01-01" || appliedFilters.dateTo.slice(5) !== "12-31");
   const detailQueryFrom = canQueryDetailByDate ? appliedFilters.dateFrom : undefined;
   const detailQueryTo = canQueryDetailByDate ? appliedFilters.dateTo : undefined;
-  // Dữ liệu lịch sử chỉ có năm không có `ngay_thuc_hien`, nên các khoảng ngày
-  // bao trọn cả năm vẫn tải toàn bộ để không làm mất dòng cũ. Khoảng hẹp
-  // (ví dụ 2026-09-10 → 2026-09-10) được lọc ngay tại DB.
-  const { rows, loading, error } = useWeldReportData(detailQueryFrom, detailQueryTo, { mode: "overview" });
-  // Rollup theo ngày chỉ vài dòng nên được tải song song, dùng để vẽ nhanh trong
-  // lúc bảng chi tiết (máy/nhân sự/lỗi) còn đang phân trang nền.
+  // Rollup theo ngày và các COUNT tổng hợp đủ cho màn "Tất cả dữ liệu".
+  // Không tải hàng vạn dòng nhật ký ở chế độ này — đó là phần làm trang đứng.
   const {
     rows: dailyRollupRows,
     source: dailyRollupSource,
@@ -200,6 +196,28 @@ export default function OverviewDashboard() {
     source: overviewAggregateSource,
     loading: overviewAggregateLoading,
   } = useOverviewAggregates(appliedFilters, isUnfilteredOverview);
+  const fastRollupReady =
+    !dailyRollupLoading &&
+    dailyRollupSource !== "unavailable" &&
+    // Rollup chưa có chiều nhân sự/máy nên không được dùng khi đang lọc hai chiều này.
+    appliedFilters.personnel.length === 0 &&
+    appliedFilters.machines.length === 0;
+  const fastAggregateReady =
+    isUnfilteredOverview &&
+    !overviewAggregateLoading &&
+    overviewAggregateSource === "supabase";
+  const canSkipJournal = fastAggregateReady && fastRollupReady;
+  const needsJournalRows = isUnfilteredOverview
+    ? !overviewAggregateLoading && !dailyRollupLoading && !canSkipJournal
+    : true;
+  // Dữ liệu lịch sử chỉ có năm không có `ngay_thuc_hien`, nên các khoảng ngày
+  // bao trọn cả năm vẫn tải toàn bộ để không làm mất dòng cũ. Khoảng hẹp
+  // (ví dụ 2026-09-10 → 2026-09-10) được lọc ngay tại DB.
+  const { rows, loading, error } = useWeldReportData(
+    needsJournalRows ? detailQueryFrom : undefined,
+    needsJournalRows ? detailQueryTo : undefined,
+    { mode: "overview", enabled: needsJournalRows },
+  );
   const {
     projects,
     setProjects,
@@ -309,20 +327,10 @@ export default function OverviewDashboard() {
     return maxDate;
   }, [selectedRows, todayIso]);
 
-  const detailReady = !loading && !error;
-  const fastRollupReady =
-    !dailyRollupLoading &&
-    dailyRollupSource !== "unavailable" &&
-    // Rollup chưa có chiều nhân sự/máy nên không được dùng khi đang lọc hai chiều này.
-    appliedFilters.personnel.length === 0 &&
-    appliedFilters.machines.length === 0;
-  const fastAggregateReady =
-    isUnfilteredOverview &&
-    !overviewAggregateLoading &&
-    overviewAggregateSource === "supabase";
-  const showFastAggregate = !detailReady && fastAggregateReady;
-  const showFastDaily = !detailReady && !showFastAggregate && fastRollupReady;
-  const showFastCharts = fastRollupReady && (showFastAggregate || showFastDaily);
+  const detailReady = needsJournalRows ? !loading && !error : canSkipJournal;
+  const showFastAggregate = canSkipJournal || (!detailReady && fastAggregateReady);
+  const showFastDaily = !canSkipJournal && !detailReady && !showFastAggregate && fastRollupReady;
+  const showFastCharts = fastRollupReady && (canSkipJournal || showFastAggregate || showFastDaily);
 
   const chartDateRange = useMemo(() => {
     return resolveChartDateRange(
@@ -507,11 +515,18 @@ export default function OverviewDashboard() {
         if (!months.has(key)) months.set(key, { value: 0, target: 0 });
         return months.get(key)!;
       };
-      for (const row of selectedRows) {
-        const date = getJournalRowDateIso(row);
-        // Dữ liệu chỉ có năm được giữ trong một mốc riêng, không gán tháng giả.
-        const key = date ? date.slice(0, 7) : `${row.nam_thuc_hien}`;
-        get(key).value += 1;
+      if (canSkipJournal) {
+        for (const row of fastRollupRows) {
+          if (!row.ngay_thuc_hien) continue;
+          get(row.ngay_thuc_hien.slice(0, 7)).value += Math.max(0, Number(row.so_moi ?? row.so_luong_thuc_hien ?? 0));
+        }
+      } else {
+        for (const row of selectedRows) {
+          const date = getJournalRowDateIso(row);
+          // Dữ liệu chỉ có năm được giữ trong một mốc riêng, không gán tháng giả.
+          const key = date ? date.slice(0, 7) : `${row.nam_thuc_hien}`;
+          get(key).value += 1;
+        }
       }
       for (const project of selectedProjects) {
         for (const row of project.theoreticalProgress ?? []) {
@@ -546,7 +561,7 @@ export default function OverviewDashboard() {
       dates: dailySeries.map((point) => point.date),
       unitLabel: "ngày",
     };
-  }, [chartViewMode, dailySeries, dailyTargets, dailyValues, yearlySeries, selectedRows, selectedProjects, isAllDates, filterFrom, filterTo]);
+  }, [canSkipJournal, chartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, yearlySeries, selectedRows, selectedProjects, isAllDates, filterFrom, filterTo]);
   const cumulativeChartPeriod = useMemo(() => {
     if (cumulativeChartViewMode === "daily") {
       return {
@@ -578,16 +593,23 @@ export default function OverviewDashboard() {
       if (!months.has(key)) months.set(key, { value: 0, target: 0 });
       return months.get(key)!;
     };
-    selectedRows.forEach((row, index) => {
-      const date = getJournalRowDateIso(row, index);
-      if (!date || date > asOf) return;
-      const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
-      if (project) {
-        const start = planStartDate(project);
-        if (start && (start > asOf || date < start)) return;
+    if (canSkipJournal) {
+      for (const row of fastRollupRows) {
+        if (!row.ngay_thuc_hien || row.ngay_thuc_hien > asOf) continue;
+        get(row.ngay_thuc_hien.slice(0, 7)).value += Math.max(0, Number(row.so_moi ?? row.so_luong_thuc_hien ?? 0));
       }
-      get(date.slice(0, 7)).value += 1;
-    });
+    } else {
+      selectedRows.forEach((row, index) => {
+        const date = getJournalRowDateIso(row, index);
+        if (!date || date > asOf) return;
+        const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
+        if (project) {
+          const start = planStartDate(project);
+          if (start && (start > asOf || date < start)) return;
+        }
+        get(date.slice(0, 7)).value += 1;
+      });
+    }
     selectedProjects.forEach((project) => {
       (project.theoreticalProgress ?? []).forEach((row) => {
         if (!row.ngay || row.ngay.length < 7) return;
@@ -615,7 +637,7 @@ export default function OverviewDashboard() {
       fullLabels: keys.map(label),
       dates: keys.map((key) => `${key}-01`),
     };
-  }, [cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, todayIso, yearlySeries]);
+  }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, todayIso, yearlySeries]);
 
   const cumulativeChart = useMemo(() => {
     const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
@@ -1322,12 +1344,16 @@ export default function OverviewDashboard() {
             : yearError
               ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
               : loading || yearLoading || projectsLoading
-                ? showFastAggregate
+                ? canSkipJournal
+                  ? `Đang hoàn thiện số liệu dự án · ${fmt(total)} mối`
+                  : showFastAggregate
                   ? `Đang hiển thị tổng hợp nhanh · ${fmt(total)} mối · chi tiết máy/lỗi đang tải nền…`
                   : showFastDaily
                   ? `Đang hiển thị nhanh theo ngày · ${fmt(total)} mối có ngày thực hiện · đang tải chi tiết…`
                   : "Đang tải dữ liệu Supabase…"
-                : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(projectCount)} dự án (bảng Dự án) · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`}
+                : canSkipJournal
+                  ? `Nhật ký hàn · ${fmt(total)} mối · ${fmt(projectCount)} dự án · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`
+                  : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(projectCount)} dự án (bảng Dự án) · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`}
       </div>
 
       {/* Top KPI Cards */}

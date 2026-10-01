@@ -430,3 +430,10 @@ export const NDT_DEFECTS: NdtDefect[] = [
 export function findNdtDefect(code: string): NdtDefect | undefined {
   return NDT_DEFECTS.find((item) => item.code === code);
 }
+
+/** Tên cột tiếng Việt hoặc tiếng Anh trong thư viện mã NDT. */
+export function ndtDefectLabel(code: string, lang: "vi" | "en") {
+  const item = findNdtDefect(code);
+  if (!item) return code;
+  return lang === "en" ? item.nameEn || item.nameVi || code : item.nameVi || item.nameEn || code;
+}

@@ -1679,7 +1679,7 @@ function MachineFormModal({
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
                 />
                 <span className="mt-1 block text-[11px] font-medium text-slate-500">
-                  Cuối ngày dưới mức này sẽ cảnh báo Cấp dầu cho Chỉ huy trưởng.
+                  Cuối ngày dưới mức này sẽ cảnh báo Cấp dầu cho Chỉ huy trưởng và Quản trị viên.
                 </span>
               </label>
 

@@ -12,9 +12,13 @@ create table if not exists public.tai_lieu (
   file_path   text not null,
   file_url    text not null,
   file_size   bigint,
+  thuoc_tinh  jsonb not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+alter table public.tai_lieu
+  add column if not exists thuoc_tinh jsonb not null default '{}'::jsonb;
 
 comment on table public.tai_lieu is 'Danh mục tài liệu PDF';
 
@@ -53,6 +57,12 @@ create policy "anon_read_tai_lieu_storage"
 drop policy if exists "anon_insert_tai_lieu_storage" on storage.objects;
 create policy "anon_insert_tai_lieu_storage"
   on storage.objects for insert to anon
+  with check (bucket_id = 'tai-lieu');
+
+drop policy if exists "anon_update_tai_lieu_storage" on storage.objects;
+create policy "anon_update_tai_lieu_storage"
+  on storage.objects for update to anon
+  using (bucket_id = 'tai-lieu')
   with check (bucket_id = 'tai-lieu');
 
 drop policy if exists "anon_delete_tai_lieu_storage" on storage.objects;

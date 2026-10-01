@@ -103,28 +103,6 @@ export const navigation: NavItem[] = [
     ],
   },
   {
-    id: "moi-han",
-    code: "14",
-    label: "Quản lý mối hàn",
-    labelEn: "Weld Management",
-    children: [
-      {
-        id: "quan-ly-moi-han",
-        label: "Quản lý mối hàn",
-        labelEn: "Weld Joint Management",
-        description: "Danh sách mối hàn theo ray hàn và chứng chỉ liên quan",
-        descriptionEn: "List of welds categorized by rail section and corresponding qualifications",
-      },
-      {
-        id: "lich-su-moi-han-loi",
-        label: "Danh sách mối hàn lỗi",
-        labelEn: "Failed Weld List",
-        description: "Danh sách mối hàn không đạt theo thợ, máy, dự án và thời gian",
-        descriptionEn: "List of failed welds by welder, machine, project, and date",
-      },
-    ],
-  },
-  {
     id: "du-an",
     code: "12",
     label: "Quản lý dự án",
@@ -280,6 +258,13 @@ export const navigation: NavItem[] = [
         labelEn: "Weld Defect Codes (NDT)",
         description: "Danh mục mã lỗi NDT: LOF, LOP, C, S, Po, La và tên chuẩn tiếng Anh",
         descriptionEn: "NDT defect codes: LOF, LOP, C, S, Po, La with English standard names",
+      },
+      {
+        id: "lich-su-moi-han-loi",
+        label: "Danh sách mối hàn lỗi",
+        labelEn: "Failed Weld List",
+        description: "Danh sách mối hàn không đạt theo thợ, máy, dự án và thời gian",
+        descriptionEn: "List of failed welds by welder, machine, project, and date",
       },
       {
         id: "trien-khai",

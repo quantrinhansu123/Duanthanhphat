@@ -1,57 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidDriveFileId } from "@/lib/googleDrive/server";
 import {
-  GOOGLE_DRIVE_CONFIGURATION_MESSAGE,
-  formatGoogleDriveError,
-  getDriveDocumentBuffer,
-  isValidDriveFileId,
-  isGoogleDriveConfigured,
-  trashDriveDocument,
-  updateDriveDocument,
-} from "@/lib/googleDrive/server";
+  deleteStoredDocument,
+  getStoredDocumentBuffer,
+  isDocumentStorageConfigured,
+  updateStoredDocument,
+} from "@/lib/documentStorage";
 
 type RouteParams = {
   params: Promise<{ fileId: string }>;
 };
 
-/** Xem / tải PDF qua proxy server (iframe + nút Tải về). ?download=1 để tải về. */
+function notConfigured() {
+  return NextResponse.json(
+    { error: "Chưa cấu hình Supabase để lưu tài liệu." },
+    { status: 503 },
+  );
+}
+
 export async function GET(req: NextRequest, { params }: RouteParams) {
-  if (!isGoogleDriveConfigured()) {
-    return NextResponse.json(
-      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
-      { status: 503 },
-    );
-  }
+  if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {
     const { fileId } = await params;
     if (!isValidDriveFileId(fileId)) {
       return NextResponse.json({ error: "Mã tài liệu không hợp lệ." }, { status: 400 });
     }
-
     const wantDownload = req.nextUrl.searchParams.get("download") === "1";
-    const { name, mimeType, buffer } = await getDriveDocumentBuffer(fileId);
+    const { name, mimeType, buffer } = await getStoredDocumentBuffer(fileId);
     const safeName = name.replace(/[^\w.\- ()]+/g, "_");
-
-    const headers = new Headers({
-      "Content-Type": mimeType || "application/pdf",
-      "Cache-Control": "private, max-age=60",
-      "Content-Length": String(buffer.byteLength),
-      "Content-Disposition": `${wantDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+    return new NextResponse(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": mimeType || "application/pdf",
+        "Cache-Control": "private, max-age=60",
+        "Content-Length": String(buffer.byteLength),
+        "Content-Disposition": `${wantDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+      },
     });
-
-    return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
   } catch (error: unknown) {
-    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Không xem được tài liệu.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
-  if (!isGoogleDriveConfigured()) {
-    return NextResponse.json(
-      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
-      { status: 503 },
-    );
-  }
+  if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {
     const { fileId } = await params;
@@ -64,32 +58,26 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (name === undefined && description === undefined) {
       return NextResponse.json({ error: "Không có nội dung cần cập nhật." }, { status: 400 });
     }
-    const updated = await updateDriveDocument(fileId, {
-      name,
-      description,
-    });
-    return NextResponse.json({ item: updated });
+    const item = await updateStoredDocument(fileId, { name, description });
+    return NextResponse.json({ item });
   } catch (error: unknown) {
-    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Không cập nhật được tài liệu.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  if (!isGoogleDriveConfigured()) {
-    return NextResponse.json(
-      { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },
-      { status: 503 },
-    );
-  }
+  if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {
     const { fileId } = await params;
     if (!isValidDriveFileId(fileId)) {
       return NextResponse.json({ error: "Mã tài liệu không hợp lệ." }, { status: 400 });
     }
-    await trashDriveDocument(fileId);
+    await deleteStoredDocument(fileId);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    return NextResponse.json({ error: formatGoogleDriveError(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Không xóa được tài liệu.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

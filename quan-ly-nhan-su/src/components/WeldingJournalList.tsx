@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
-import { Camera, CaretRight, DownloadSimple, MagnifyingGlass, MapPin, PencilSimple, TrashSimple, UploadSimple, Warning, X } from "@/components/icons";
+import { Camera, CaretRight, DownloadSimple, MapPin, PencilSimple, TrashSimple, UploadSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
 import SelectMenu from "@/components/SelectMenu";
 import MultiSelectMenu from "@/components/MultiSelectMenu";
@@ -54,10 +54,8 @@ import {
   hasCertificate,
   parseCertificateList,
 } from "@/lib/weldingCertificates";
-import { NDT_DEFECTS } from "@/data/error-library";
-const defectLabels: Record<string, string> = {
-  LOF: "Không ngấu", LOP: "Không thấu", C: "Nứt", S: "Ngậm xỉ", Po: "Rỗ khí", La: "Phân lớp",
-};
+import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
@@ -195,6 +193,7 @@ function JournalFormModal({
   onSubmit: (values: JournalFormValues) => void | Promise<void>;
 }) {
   const shouldCheckCertificate = mode === "edit";
+  const { lang } = useLanguage();
   const [form, setForm] = useState(() => emptyJournalForm(projects, welders, machines));
   const [linkDateFrom, setLinkDateFrom] = useState(() => defaultLinkDateRange().from);
   const [linkDateTo, setLinkDateTo] = useState(() => defaultLinkDateRange().to);
@@ -952,6 +951,7 @@ function JournalFormModal({
                 <div className="mt-2 flex flex-wrap gap-2">
                   {NDT_DEFECTS.map((defect) => {
                     const isSelected = form.ma_khuyet_tat.includes(defect.code);
+                    const label = ndtDefectLabel(defect.code, lang);
                     return (
                       <button
                         key={defect.code}
@@ -967,9 +967,10 @@ function JournalFormModal({
                             ? "bg-rose-600 text-white shadow-xs"
                             : "bg-white text-slate-700 border border-slate-300 hover:border-rose-300 hover:bg-rose-50"
                         }`}
-                        title={`${defect.code} — ${defectLabels[defect.code] || defect.nameEn}`}
+                        title={`${defect.code} — ${label}`}
+                        data-no-i18n="true"
                       >
-                        <span>{defectLabels[defect.code] || defect.code}</span>
+                        <span>{label}</span>
                       </button>
                     );
                   })}
@@ -1020,10 +1021,10 @@ export default function WeldingJournalList({
   heading?: string;
 } = {}) {
   const failedWeldMode = lockedResultFilter === "Không đạt";
+  const { lang } = useLanguage();
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
-  const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
@@ -1083,20 +1084,10 @@ export default function WeldingJournalList({
     const initialQuery = params.get("query")?.trim() || params.get("q")?.trim() || "";
     const from = params.get("from")?.trim() || "";
     const to = params.get("to")?.trim() || from;
-    if (initialQuery) {
-      setQuery(initialQuery);
-      setAppliedQuery(initialQuery);
-    }
+    if (initialQuery) setAppliedQuery(initialQuery);
     if (/^\d{4}-\d{2}-\d{2}$/.test(from)) setDateFrom(from);
     if (/^\d{4}-\d{2}-\d{2}$/.test(to)) setDateTo(to);
   }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setAppliedQuery(query.trim());
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [query]);
 
   useEffect(() => {
     let active = true;
@@ -1255,14 +1246,14 @@ export default function WeldingJournalList({
         failureReason: pass
           ? "—"
           : (row.ma_khuyet_tat && row.ma_khuyet_tat.length > 0)
-            ? row.ma_khuyet_tat.map((code) => defectLabels[code] || code).join(", ")
+            ? row.ma_khuyet_tat.map((code) => ndtDefectLabel(code, lang)).join(", ")
             : (row.nguyen_nhan_loi?.trim() || row.ghi_chu?.trim() || "Chưa ghi nguyên nhân"),
         resultType: pass ? ("pass" as const) : ("fail" as const),
         testStatus,
         shift: resolveWeldShift(row),
       };
     });
-  }, [rows, gpsPoints, machineWeldCodes]);
+  }, [lang, rows, gpsPoints, machineWeldCodes]);
 
   const gpsPointForRow = useCallback(
     (raw: WeldReportRow) =>
@@ -1847,18 +1838,6 @@ export default function WeldingJournalList({
 
       <div className="mb-4 space-y-2.5">
        <div className="grid grid-cols-2 gap-2.5 items-end">
-        {!failedWeldMode ? (
-          <div className="relative col-span-2 min-w-0">
-            <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm ID, thợ hàn, máy, dự án…"
-              className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-            />
-          </div>
-        ) : null}
         <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700">
           Dự án
           <MultiSelectMenu
@@ -2054,6 +2033,7 @@ export default function WeldingJournalList({
                 <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
                   <span className="truncate">🏗️ {w.project}</span>
+                  <span className="whitespace-nowrap">{w.weldType}</span>
                   <span className={`truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
                 </div>
                 {w.resultType === "fail" && (
@@ -2075,7 +2055,7 @@ export default function WeldingJournalList({
         </div>
 
         <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1340px]" : "min-w-[1450px]"}`}>
+          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1340px]" : "min-w-[1560px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
@@ -2088,11 +2068,9 @@ export default function WeldingJournalList({
                 <th className="p-2.5 font-semibold">Mã mối hàn</th>
                 <th className="p-2.5 font-semibold">Mã theo máy</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
+                <th className="whitespace-nowrap p-2.5 font-semibold">Loại mối hàn</th>
                 {failedWeldMode ? (
-                  <>
-                    <th className="p-2.5 font-semibold">Loại mối hàn</th>
-                    <th className="p-2.5 font-semibold">Công nghệ</th>
-                  </>
+                  <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
                 <th className="p-2.5 font-semibold">Tình trạng</th>
@@ -2128,11 +2106,9 @@ export default function WeldingJournalList({
                       {w.project}
                     </span>
                   </td>
+                  <td className="p-2.5 whitespace-nowrap text-xs text-slate-700">{w.weldType}</td>
                   {failedWeldMode ? (
-                    <>
-                      <td className="p-2.5 whitespace-nowrap text-xs text-slate-700">{w.weldType}</td>
-                      <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{w.weldMethod}</td>
-                    </>
+                    <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{w.weldMethod}</td>
                   ) : null}
                   <td
                     className={`p-2.5 max-w-[180px] ${w.resultType === "fail" ? "line-clamp-2 text-xs font-medium text-rose-700" : "text-slate-400"}`}

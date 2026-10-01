@@ -6,8 +6,15 @@ create table if not exists public.thong_bao (
   tieu_de text not null,
   noi_dung text not null,
   loai text not null default 'cap_dau',
-  da_doc boolean not null default false
+  da_doc boolean not null default false,
+  doi_tuong text not null default 'chi_huy_truong,quan_tri'
 );
+
+alter table public.thong_bao
+  add column if not exists doi_tuong text not null default 'chi_huy_truong,quan_tri';
+
+comment on column public.thong_bao.doi_tuong is
+  'Người nhận cảnh báo cấp dầu: chi_huy_truong,quan_tri';
 
 alter table public.thong_bao enable row level security;
 

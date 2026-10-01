@@ -21,7 +21,6 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "bc-nhan-su": () => import("@/components/PersonnelReportDashboard"),
   "bc-bao-cao-ngay": () => import("@/components/DailyWorkReport"),
   "quan-ly-du-an": () => import("@/components/ProjectManagement"),
-  "quan-ly-moi-han": () => import("@/components/WeldJointManagement"),
   "thu-vien-loi-moi-han": () => import("@/components/ErrorLibrary"),
   "nhat-ky-han": () => import("@/components/WeldingJournalList"),
   "bien-ban-moi-han": () => import("@/components/WeldAcceptanceReport"),

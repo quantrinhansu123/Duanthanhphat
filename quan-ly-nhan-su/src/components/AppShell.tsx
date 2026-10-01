@@ -15,6 +15,7 @@ import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 import { prefetchTabModule } from "@/lib/tabModules";
+import { canReceiveOilAlert } from "@/lib/viewerAccess";
 
 function TabLoading() {
   return (
@@ -53,7 +54,6 @@ const PersonnelReportDashboard = dynamic(
   () => import("@/components/PersonnelReportDashboard"), { loading: TabLoading, ssr: false });
 const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { loading: TabLoading, ssr: false });
 const ProjectManagement = dynamic(() => import("@/components/ProjectManagement"), { loading: TabLoading, ssr: false });
-const WeldJointManagement = dynamic(() => import("@/components/WeldJointManagement"), { loading: TabLoading, ssr: false });
 const WeldingJournalList = dynamic(() => import("@/components/WeldingJournalList"), { loading: TabLoading, ssr: false });
 const WeldAcceptanceReport = dynamic(
   () => import("@/components/WeldAcceptanceReport"), { loading: TabLoading, ssr: false });
@@ -88,7 +88,6 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-nhan-su": () => <PersonnelReportDashboard />,
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
   "quan-ly-du-an": () => <ProjectManagement />,
-  "quan-ly-moi-han": () => <WeldJointManagement />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
   "nhat-ky-han": () => <WeldingJournalList />,
   "bien-ban-moi-han": () => <WeldAcceptanceReport />,
@@ -307,7 +306,9 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="capitalize text-[11px] sm:text-xs font-medium text-slate-500">{clock?.date ?? (lang === "en" ? "Loading..." : "Đang tải...")}</div>
             </div>
             <LanguageSwitcher />
-            <NotificationBell label={lang === "en" ? "Notifications" : "Thông báo"} />
+            {canReceiveOilAlert() ? (
+              <NotificationBell label={lang === "en" ? "Notifications" : "Thông báo"} />
+            ) : null}
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
               <div className="hidden md:block text-right leading-tight">
                 <div className="text-xs sm:text-sm font-semibold text-slate-900">Nguyễn Đắc Công</div>

@@ -1794,7 +1794,6 @@ export default function ProjectManagement() {
   const { projects: list, setProjects, loading, error, source, reload } = useProjectsData({
     includeProgress: false,
   });
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -1918,14 +1917,7 @@ export default function ProjectManagement() {
   }, [machineOptions]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return list.filter((p) => {
-      const matchQ =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.manager.toLowerCase().includes(q) ||
-        p.plant.toLowerCase().includes(q) ||
-        p.location.toLowerCase().includes(q);
       const matchStatus = status === "Tất cả trạng thái" || p.status === status;
       const matchProject = projectFilter.length === 0 || projectFilter.includes(p.id);
       const matchDate =
@@ -1937,9 +1929,9 @@ export default function ProjectManagement() {
       const matchWeldMethod =
         weldMethodFilter === "Tất cả" ||
         (p.machineTypes ?? []).some((code) => machineMethodByCode.get(code) === weldMethodFilter);
-      return matchQ && matchStatus && matchProject && matchDate && matchWeldType && matchWeldMethod;
+      return matchStatus && matchProject && matchDate && matchWeldType && matchWeldMethod;
     });
-  }, [list, query, status, projectFilter, dateFrom, dateTo, weldTypeFilter, weldMethodFilter, machineMethodByCode]);
+  }, [list, status, projectFilter, dateFrom, dateTo, weldTypeFilter, weldMethodFilter, machineMethodByCode]);
 
   const activeCount = list.filter((p) => p.status === "Đang triển khai").length;
 
@@ -2243,15 +2235,6 @@ export default function ProjectManagement() {
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm tên dự án, người phụ trách, lý trình..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -2396,14 +2379,14 @@ export default function ProjectManagement() {
           <table className="w-full min-w-[1320px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <th className="px-4 py-3">Tên dự án</th>
-                <th className="min-w-[190px] px-3.5 py-3">Vị trí</th>
-                <th className="px-3.5 py-3">Người phụ trách</th>
+                <th className="min-w-[220px] px-4 py-3">Tên dự án</th>
+                <th className="min-w-[120px] px-3.5 py-3">Vị trí</th>
+                <th className="whitespace-nowrap px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3 text-right">Tổng mối hàn dự kiến</th>
                 <th className="px-3.5 py-3 text-right">Số ngày</th>
-                <th className="min-w-[190px] px-3.5 py-3">Thời gian dự án</th>
+                <th className="whitespace-nowrap px-3.5 py-3">Thời gian dự án</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
                 <th className="w-12 px-2 py-3" aria-label="Thao tác" />
               </tr>
@@ -2411,11 +2394,11 @@ export default function ProjectManagement() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors duration-150">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{p.name}</td>
-                  <td className="px-3.5 py-3 text-xs text-slate-700">
+                  <td className="max-w-[280px] px-4 py-3 font-semibold text-slate-900">{p.name}</td>
+                  <td className="max-w-[160px] px-3.5 py-3 text-xs text-slate-700">
                     {p.location}
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{p.manager}</td>
+                  <td className="whitespace-nowrap px-3.5 py-3 text-slate-700">{p.manager}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.staffCount}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.machineCount}</td>
                   <td className="px-3.5 py-3 text-right font-semibold font-mono tabular-nums text-[#0047AB]">

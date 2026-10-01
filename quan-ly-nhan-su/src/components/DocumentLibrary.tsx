@@ -114,7 +114,7 @@ export default function DocumentLibrary() {
     setDescription("");
     if (fileRef.current) fileRef.current.value = "";
     setShowForm(false);
-    setStatusMsg(`Tải lên Google Drive thành công: ${title || file.name}`);
+    setStatusMsg(`Đã lưu vào bucket: ${title || file.name}`);
     await reload();
   }
 
@@ -144,7 +144,7 @@ export default function DocumentLibrary() {
     setReplaceProgress(null);
 
     if (!res.success) {
-      setErrorMsg(res.error || "Thay thế file trên Google Drive thất bại.");
+      setErrorMsg(res.error || "Thay thế file thất bại.");
       return;
     }
 
@@ -156,7 +156,7 @@ export default function DocumentLibrary() {
   }
 
   async function handleDelete(doc: DriveDocumentItem) {
-    if (!confirm(`Chuyển tài liệu "${doc.name}" vào thùng rác Google Drive?`)) return;
+    if (!confirm(`Xóa tài liệu "${doc.name}"?`)) return;
     setSaving(true);
     setErrorMsg(null);
     const res = await deleteDriveDocument(doc.id);
@@ -223,7 +223,7 @@ export default function DocumentLibrary() {
     <main className="w-full px-4 sm:px-6 pb-8">
       {!configured && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-[#0047AB] shadow-xs">
-          <strong>Lưu ý cấu hình Google Drive:</strong> {configNotice || "Cần cấu hình OAuth Google Drive và thư mục đích trên máy chủ."}
+          <strong>Lưu ý:</strong> {configNotice || "Cần cấu hình Supabase và chạy supabase/tai_lieu.sql để tạo bucket tài liệu."}
         </div>
       )}
 
@@ -240,11 +240,11 @@ export default function DocumentLibrary() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm text-slate-500">
         <div>
-          <strong className="font-mono tabular-nums text-slate-900">{filtered.length}</strong> tài liệu PDF (Google Drive)
+          <strong className="font-mono tabular-nums text-slate-900">{filtered.length}</strong> tài liệu PDF
           {loading ? " · đang tải…" : ""}
         </div>
         <div className="text-xs text-slate-400">
-          Resumable Upload & Patch trực tiếp lên Google Drive · Ghi appProperties & Checksum MD5
+          Lưu PDF trên bucket Supabase tai-lieu
         </div>
       </div>
 
@@ -291,7 +291,7 @@ export default function DocumentLibrary() {
           className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs animate-in fade-in-50 duration-150"
         >
           <div className="text-sm sm:text-base font-bold text-slate-900 mb-3">
-            Tải tài liệu PDF mới lên Google Drive
+            Tải tài liệu PDF mới
           </div>
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div>
@@ -329,7 +329,7 @@ export default function DocumentLibrary() {
           {uploadProgress !== null && (
             <div className="mt-3">
               <div className="flex justify-between text-xs font-semibold text-[#0047AB] mb-1">
-                <span>Đang tải lên Drive...</span>
+                <span>Đang tải lên bucket...</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -367,7 +367,7 @@ export default function DocumentLibrary() {
         >
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm sm:text-base font-bold text-slate-900">
-              Chỉnh sửa thông tin tài liệu trên Google Drive
+              Chỉnh sửa thông tin tài liệu
             </div>
             <button
               type="button"
@@ -434,7 +434,7 @@ export default function DocumentLibrary() {
           <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in-50 zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
               <div className="font-bold text-slate-900">
-                Thay thế tệp tài liệu trên Google Drive
+                Thay thế tệp tài liệu
               </div>
               <button
                 type="button"
@@ -466,14 +466,14 @@ export default function DocumentLibrary() {
                   required
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Nội dung file mới sẽ được cập nhật trực tiếp vào ID tài liệu hiện tại trên Google Drive mà không đổi link chia sẻ. Checksum MD5 sẽ được tự động tính toán lại.
+                  Nội dung file mới ghi đè file hiện tại trong bucket, link xem tài liệu không đổi.
                 </p>
               </div>
 
               {replaceProgress !== null && (
                 <div className="mb-4">
                   <div className="flex justify-between text-xs font-semibold text-amber-700 mb-1">
-                    <span>Đang cập nhật nội dung file lên Drive...</span>
+                    <span>Đang cập nhật nội dung file...</span>
                     <span>{replaceProgress}%</span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -523,7 +523,7 @@ export default function DocumentLibrary() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
-                    {loading ? "Đang tải dữ liệu từ Google Drive…" : "Chưa có tài liệu nào trong thư mục Google Drive"}
+                    {loading ? "Đang tải tài liệu…" : "Chưa có tài liệu nào trong bucket"}
                   </td>
                 </tr>
               ) : (

@@ -11,11 +11,12 @@ import {
 export function useWeldReportData(
   dateFrom?: string,
   dateTo?: string,
-  options?: LoadWeldReportOptions,
+  options?: LoadWeldReportOptions & { enabled?: boolean },
 ) {
   const mode = options?.mode ?? "full";
+  const enabled = options?.enabled !== false;
   const [rows, setRows] = useState<WeldReportRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -24,6 +25,13 @@ export function useWeldReportData(
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setRows([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     let active = true;
     setLoading(true);
     setError("");
@@ -43,7 +51,7 @@ export function useWeldReportData(
     return () => {
       active = false;
     };
-  }, [dateFrom, dateTo, mode, reloadKey]);
+  }, [dateFrom, dateTo, enabled, mode, reloadKey]);
 
   return { rows, loading, error, refetch };
 }

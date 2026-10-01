@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 
-/** Gửi tin Zalo OA tới Chỉ huy trưởng. Bỏ qua nếu chưa cấu hình token. */
+/** Gửi tin Zalo OA tới Chỉ huy trưởng và quản trị viên. Bỏ qua nếu chưa cấu hình token. */
 export async function POST(request: Request) {
   const token = process.env.ZALO_OA_ACCESS_TOKEN?.trim();
-  const recipients = (process.env.ZALO_COMMANDER_USER_IDS ?? "")
-    .split(",")
+  const recipients = [
+    ...(process.env.ZALO_COMMANDER_USER_IDS ?? "").split(","),
+    ...(process.env.ZALO_ADMIN_USER_IDS ?? "").split(","),
+  ]
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((id, index, all) => all.indexOf(id) === index);
   if (!token || recipients.length === 0) {
     return NextResponse.json({ sent: false, reason: "chua-cau-hinh-zalo" });
   }

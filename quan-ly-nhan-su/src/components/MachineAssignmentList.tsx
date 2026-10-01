@@ -9,7 +9,8 @@ import {
   type MachineOption,
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
-import { loadMachineRunScheduleBundle } from "@/lib/machineRunSchedulesDb";
+import { importMachineRunReport, loadMachineRunScheduleBundle, loadScheduleJournalDetails } from "@/lib/machineRunSchedulesDb";
+import { resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import {
   deleteDailyFuel,
   formatFuelDate,
@@ -80,6 +81,15 @@ export default function MachineAssignmentList() {
   const [fuelForm, setFuelForm] = useState<DailyFuelFormValues>(emptyOilForm("", ""));
   const [fuelFormError, setFuelFormError] = useState("");
   const [toast, setToast] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [detailSchedule, setDetailSchedule] = useState<MachineRunSchedule | null>(null);
+  const [detailRows, setDetailRows] = useState<WeldReportRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
 
   const reloadFuel = useCallback(async () => {
     const result = await loadDailyFuelRows();
@@ -140,6 +150,49 @@ export default function MachineAssignmentList() {
   const hasFilter = Boolean(
     dateFrom || dateTo || machineId || projectId || personId || weldMethod || weldType,
   );
+
+  function openDetail(row: MachineRunSchedule) {
+    setDetailSchedule(row);
+    setDetailRows([]);
+    setDetailError("");
+    setDetailLoading(true);
+    void loadScheduleJournalDetails(row)
+      .then((rows) => setDetailRows(rows))
+      .catch((error) => setDetailError(error instanceof Error ? error.message : "Không tải được danh sách"))
+      .finally(() => setDetailLoading(false));
+  }
+
+  function openReport() {
+    setReportFrom(dateFrom);
+    setReportTo(dateTo);
+    setReportError("");
+    setReportOpen(true);
+  }
+
+  async function handleImportReport() {
+    if (!reportFrom || !reportTo) {
+      setReportError("Chọn từ ngày và đến ngày.");
+      return;
+    }
+    if (reportFrom > reportTo) {
+      setReportError("Từ ngày phải trước hoặc bằng đến ngày.");
+      return;
+    }
+    setReportSaving(true);
+    setReportError("");
+    try {
+      const count = await importMachineRunReport(reportFrom, reportTo);
+      setReportOpen(false);
+      setDateFrom(reportFrom);
+      setDateTo(reportTo);
+      await reload();
+      showToast(`Đã lưu ${count.toLocaleString("vi-VN")} dòng báo cáo`);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Không lấy được báo cáo");
+    } finally {
+      setReportSaving(false);
+    }
+  }
 
   function showToast(message: string) {
     setToast(message);
@@ -205,7 +258,7 @@ export default function MachineAssignmentList() {
       if (belowQuota && machine) {
         const message = `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu ${fuelForm.liters.toLocaleString("vi-VN")} ${fuelForm.unit} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`;
         await notifyCommanderOilLow(message);
-        showToast(`Cấp dầu — đã báo Chỉ huy trưởng · ${machine.code}`);
+        showToast(`Cấp dầu — đã báo Chỉ huy trưởng và Quản trị viên · ${machine.code}`);
       } else {
         showToast(fuelEditId ? "Đã cập nhật báo cáo mức dầu" : "Đã ghi báo cáo mức dầu");
       }
@@ -243,6 +296,16 @@ export default function MachineAssignmentList() {
   return (
     <main className="w-full px-4 pb-8 sm:px-6">
       <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-slate-900">Lịch chạy máy</h2>
+          <button
+            type="button"
+            onClick={openReport}
+            className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm"
+          >
+            Lấy báo cáo
+          </button>
+        </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <select
             value={projectId}
@@ -349,17 +412,12 @@ export default function MachineAssignmentList() {
       </section>
 
       <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs text-slate-600">
-        <span className="font-semibold text-[#0047AB]">Lịch chạy máy</span>
-        {" · lấy từ "}
-        <Link href="/nhat-ky-han" className="font-semibold text-[#0047AB] hover:underline">
-          Nhật ký hàn
-        </Link>
-        {" · báo cáo mức dầu ghi trên từng dòng."}
+        Danh sách chỉ hiện báo cáo đã lưu. Bấm <span className="font-semibold text-[#0047AB]">Lấy báo cáo</span> để tổng hợp nhật ký hàn theo khoảng ngày rồi ghi vào Supabase.
       </div>
 
       {loadError && (
         <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
-          Không tải được nhật ký hàn: {loadError}
+          Không tải được báo cáo đã lưu: {loadError}
         </div>
       )}
 
@@ -395,118 +453,6 @@ export default function MachineAssignmentList() {
         </div>
       </div>
 
-      <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-        <div className="mb-3">
-          <h2 className="text-sm font-bold text-slate-900">Lịch chạy máy (tổng hợp từ nhật ký hàn)</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Lọc theo dự án, phương pháp hàn, loại mối hàn, máy, thợ và khoảng ngày
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <select
-            value={projectId}
-            onChange={(event) => {
-              const next = event.target.value;
-              setProjectId(next);
-              syncProjectToUrl(next);
-            }}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo dự án"
-          >
-            <option value="">Tất cả dự án</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={weldMethod}
-            onChange={(event) => setWeldMethod(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo phương pháp hàn"
-          >
-            <option value="">Tất cả phương pháp hàn</option>
-            {WELD_METHOD_OPTIONS.map((method) => (
-              <option key={method} value={method}>
-                {method}
-              </option>
-            ))}
-          </select>
-          <select
-            value={weldType}
-            onChange={(event) => setWeldType(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo loại mối hàn"
-          >
-            <option value="">Tất cả loại mối hàn</option>
-            {WELD_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <select
-            value={machineId}
-            onChange={(event) => setMachineId(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo máy"
-          >
-            <option value="">Tất cả máy</option>
-            {machines.map((machine) => (
-              <option key={machine.id} value={machine.id}>
-                {machine.code}
-              </option>
-            ))}
-          </select>
-          <select
-            value={personId}
-            onChange={(event) => setPersonId(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo thợ hàn"
-          >
-            <option value="">Tất cả thợ hàn</option>
-            {personnel.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.label}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => setDateFrom(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Từ ngày"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(event) => setDateTo(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Đến ngày"
-          />
-          {hasFilter && (
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom("");
-                setDateTo("");
-                setMachineId("");
-                setProjectId("");
-                setPersonId("");
-                setWeldMethod("");
-                setWeldType("");
-                syncProjectToUrl("");
-              }}
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
-            >
-              Xóa bộ lọc
-            </button>
-          )}
-        </div>
-      </section>
-
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1200px] border-collapse text-left text-xs sm:text-sm">
@@ -516,7 +462,7 @@ export default function MachineAssignmentList() {
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3">PP hàn</th>
                 <th className="px-3.5 py-3">Loại mối</th>
-                <th className="px-3.5 py-3">Ca</th>
+                <th className="whitespace-nowrap px-3.5 py-3">Ca</th>
                 <th className="px-3.5 py-3 text-right">Mối hàn</th>
                 <th className="px-3.5 py-3 text-right">Lỗi</th>
                 <th className="px-3.5 py-3">Dự án</th>
@@ -547,7 +493,7 @@ export default function MachineAssignmentList() {
                     {row.weldMethod || "—"}
                   </td>
                   <td className="px-3.5 py-3 text-slate-700">{row.weldType || "—"}</td>
-                  <td className="px-3.5 py-3 text-xs font-semibold text-slate-700">
+                  <td className="whitespace-nowrap px-3.5 py-3 text-xs font-semibold text-slate-700">
                     {(row.shifts ?? []).join(", ") || "—"}
                   </td>
                   <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-[#0047AB]">
@@ -603,12 +549,13 @@ export default function MachineAssignmentList() {
                     )}
                   </td>
                   <td className="px-3.5 py-3 text-right">
-                    <Link
-                      href={`/nhat-ky-han?query=${encodeURIComponent(row.machineCode)}&from=${encodeURIComponent(row.date)}&to=${encodeURIComponent(row.date)}`}
+                    <button
+                      type="button"
+                      onClick={() => openDetail(row)}
                       className="rounded-lg px-2.5 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50"
                     >
-                      Nhật ký hàn
-                    </Link>
+                      Chi tiết
+                    </button>
                   </td>
                 </tr>
                 );
@@ -616,14 +563,14 @@ export default function MachineAssignmentList() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
-                    Chưa có dữ liệu tổng hợp từ nhật ký hàn phù hợp bộ lọc.
+                    Chưa có báo cáo đã lưu. Bấm Lấy báo cáo, chọn từ ngày đến ngày.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
                   <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
-                    Đang tổng hợp từ nhật ký hàn…
+                    Đang tải báo cáo đã lưu…
                   </td>
                 </tr>
               )}
@@ -631,6 +578,177 @@ export default function MachineAssignmentList() {
           </table>
         </div>
       </div>
+
+      {detailSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            aria-label="Đóng"
+            onClick={() => setDetailSchedule(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Chi tiết nhật ký hàn</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {formatScheduleDate(detailSchedule.date)}
+                  {" · "}
+                  <span className="font-mono font-semibold text-[#0047AB]">{detailSchedule.machineCode}</span>
+                  {" · "}
+                  {detailSchedule.weldMethod || "—"}
+                  {" · "}
+                  {detailSchedule.weldType || "—"}
+                  {" · "}
+                  {detailSchedule.projectName}
+                  {" · "}
+                  {detailSchedule.personInChargeName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailSchedule(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Đóng"
+              >
+                <X size={18} weight="bold" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto">
+              {detailError && (
+                <div className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                  {detailError}
+                </div>
+              )}
+              {detailLoading ? (
+                <div className="px-4 py-12 text-center text-sm text-slate-500">Đang tải danh sách…</div>
+              ) : (
+                <table className="w-full min-w-[760px] border-collapse text-left text-xs sm:text-sm">
+                  <thead className="sticky top-0 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    <tr>
+                      <th className="px-4 py-2.5">Mã mối hàn</th>
+                      <th className="whitespace-nowrap px-3 py-2.5">Ca</th>
+                      <th className="px-3 py-2.5">Máy</th>
+                      <th className="px-3 py-2.5">Thợ hàn</th>
+                      <th className="px-3 py-2.5 text-right">Số lượng</th>
+                      <th className="px-3 py-2.5 text-right">Lỗi</th>
+                      <th className="px-3 py-2.5">Tình trạng</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detailRows.map((item) => {
+                      const status = resolveWeldTestStatus(item);
+                      return (
+                        <tr key={item.id}>
+                          <td className="px-4 py-2.5 font-mono font-semibold text-[#0047AB]">{item.ma_lich_su}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-800">{item.ca_han || "—"}</td>
+                          <td className="px-3 py-2.5 font-mono text-slate-800">{item.ma_may || "Chưa gán máy"}</td>
+                          <td className="px-3 py-2.5 text-slate-900">{item.ten_tho_han}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums">{item.so_luong_thuc_hien.toLocaleString("vi-VN")}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums text-rose-600">{item.so_luong_loi.toLocaleString("vi-VN")}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={status === "Đạt" ? "font-semibold text-emerald-700" : status === "Không đạt" ? "font-semibold text-rose-700" : "text-slate-600"}>
+                              {status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!detailLoading && !detailError && detailRows.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                          Không có nhật ký hàn khớp dòng này.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            aria-label="Đóng"
+            onClick={() => !reportSaving && setReportOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white p-5 shadow-xl sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Lấy báo cáo</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Tổng hợp nhật ký hàn trong khoảng ngày và ghi vào Supabase. Lấy lại cùng khoảng sẽ thay dữ liệu cũ.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={reportSaving}
+                onClick={() => setReportOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Đóng"
+              >
+                <X size={18} weight="bold" />
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block text-xs font-semibold text-slate-700">
+                Từ ngày
+                <input
+                  type="date"
+                  value={reportFrom}
+                  onChange={(event) => setReportFrom(event.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700">
+                Đến ngày
+                <input
+                  type="date"
+                  value={reportTo}
+                  onChange={(event) => setReportTo(event.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                />
+              </label>
+            </div>
+            {reportError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                {reportError}
+              </div>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={reportSaving}
+                onClick={() => setReportOpen(false)}
+                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={reportSaving}
+                onClick={() => void handleImportReport()}
+                className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
+              >
+                {reportSaving ? "Đang tổng hợp…" : "Tổng hợp"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {fuelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">

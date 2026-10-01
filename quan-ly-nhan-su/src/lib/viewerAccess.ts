@@ -13,3 +13,12 @@ export function canViewUnitPrice(
   const text = `${viewer.note} ${viewer.fullName}`.toLocaleLowerCase("vi");
   return LEADERSHIP_TITLES.some((title) => text.includes(title));
 }
+
+/** Cảnh báo cấp dầu: Chỉ huy trưởng và quản trị viên. */
+export function canReceiveOilAlert(
+  viewer: Pick<InitialAccount, "role" | "note" | "fullName"> = currentViewer,
+) {
+  if (viewer.role === "Quản trị") return true;
+  const text = `${viewer.note} ${viewer.fullName}`.toLocaleLowerCase("vi");
+  return text.includes("chỉ huy trưởng");
+}

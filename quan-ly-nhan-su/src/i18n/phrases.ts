@@ -48,7 +48,6 @@ export const PHRASES: Record<string, string> = {
   "Nhật ký chạy máy": "Machine run journal",
   "Mở nhật ký chạy máy": "Open machine run journal",
   "Danh sách dự án": "Projects",
-  "Quản lý mối hàn": "Weld Joint Management",
   "Nhật ký hàn": "Welding Journal",
   "Báo cáo mối hàn theo năm": "Yearly Weld Report",
   "Quản lý mối hàn theo GPS": "Weld Joints by GPS",

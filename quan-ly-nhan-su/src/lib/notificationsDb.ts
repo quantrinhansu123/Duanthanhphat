@@ -44,17 +44,24 @@ export async function markNotificationsRead(ids: string[]) {
   await supabase.from("thong_bao").update({ da_doc: true }).in("id", ids);
 }
 
-/** Ghi thông báo trên app và gọi Zalo nếu đã cấu hình OA. */
+/** Ghi thông báo trên app cho Chỉ huy trưởng và quản trị viên, rồi gọi Zalo nếu đã cấu hình OA. */
 export async function notifyCommanderOilLow(message: string) {
   const title = "Cấp dầu";
   if (isSupabaseConfigured()) {
     const supabase = createClient();
-    await supabase.from("thong_bao").insert({
+    const payload = {
       tieu_de: title,
       noi_dung: message,
       loai: "cap_dau",
       da_doc: false,
-    });
+      doi_tuong: "chi_huy_truong,quan_tri",
+    };
+    const { error } = await supabase.from("thong_bao").insert(payload);
+    if (error && /doi_tuong/.test(error.message ?? "")) {
+      const { doi_tuong, ...withoutAudience } = payload;
+      void doi_tuong;
+      await supabase.from("thong_bao").insert(withoutAudience);
+    }
   }
   try {
     await fetch("/api/notify-zalo", {
