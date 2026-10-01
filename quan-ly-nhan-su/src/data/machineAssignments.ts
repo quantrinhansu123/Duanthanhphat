@@ -48,6 +48,7 @@ export type MachineOption = {
   id: string;
   code: string;
   name: string;
+  oilQuota?: number | null;
 };
 
 export type LookupOption = {

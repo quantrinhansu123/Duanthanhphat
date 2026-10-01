@@ -26,34 +26,19 @@ export type DailyFuelFormValues = {
   note: string;
 };
 
-type ViewRow = {
+type FuelTableRow = {
   id: string;
   ngay: string;
-  may_id: string;
-  ma_may: string;
-  ten_may: string;
+  may: string;
   so_lit: number | string;
   don_vi?: string | null;
-  nguoi_cap_id: string | null;
   nguoi_cap: string | null;
   ghi_chu: string | null;
   created_at: string;
 };
 
-function mapRow(row: ViewRow): DailyFuelRow {
-  return {
-    id: row.id,
-    date: row.ngay,
-    machineId: row.may_id,
-    machineCode: row.ma_may,
-    machineName: row.ten_may,
-    liters: Number(row.so_lit) || 0,
-    unit: row.don_vi?.trim() || "lít",
-    personId: row.nguoi_cap_id?.trim() || "",
-    personName: row.nguoi_cap?.trim() || "—",
-    note: row.ghi_chu?.trim() || "",
-    createdAt: row.created_at,
-  };
+function isMissingUnitColumn(message: string) {
+  return /don_vi/i.test(message) && /schema cache|column|does not exist|42703/i.test(message);
 }
 
 export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error?: string }> {
@@ -61,32 +46,61 @@ export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error
     return { rows: [], error: "Chưa cấu hình Supabase" };
   }
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("bao_cao_cap_dau_hang_ngay")
-    .select("id,ngay,may_id,ma_may,ten_may,so_lit,don_vi,nguoi_cap_id,nguoi_cap,ghi_chu,created_at")
+  const withUnit = await supabase
+    .from("cap_dau_hang_ngay")
+    .select("id,ngay,may,so_lit,don_vi,nguoi_cap,ghi_chu,created_at")
     .order("ngay", { ascending: false })
     .order("id", { ascending: false });
 
-  if (error) {
-    const message = formatSupabaseError(error);
-    if (/bao_cao_cap_dau_hang_ngay|cap_dau_hang_ngay|relation|does not exist|42P01/i.test(message)) {
+  let tableRows = (withUnit.data ?? []) as FuelTableRow[];
+  if (withUnit.error) {
+    const message = formatSupabaseError(withUnit.error);
+    if (/cap_dau_hang_ngay|relation|does not exist|42P01/i.test(message)) {
       return {
         rows: [],
         error:
           "Cần chạy migration_20260926_cap_dau_hang_ngay.sql trên Supabase để bật báo cáo mức dầu.",
       };
     }
-    if (/don_vi/i.test(message)) {
-      return {
-        rows: [],
-        error:
-          "Cần chạy migration_20260929_cap_dau_don_vi.sql trên Supabase để bật đơn vị mức dầu.",
-      };
-    }
-    return { rows: [], error: message };
+    if (!isMissingUnitColumn(message)) return { rows: [], error: message };
+    const plain = await supabase
+      .from("cap_dau_hang_ngay")
+      .select("id,ngay,may,so_lit,nguoi_cap,ghi_chu,created_at")
+      .order("ngay", { ascending: false })
+      .order("id", { ascending: false });
+    if (plain.error) return { rows: [], error: formatSupabaseError(plain.error) };
+    tableRows = (plain.data ?? []) as FuelTableRow[];
   }
 
-  return { rows: ((data ?? []) as ViewRow[]).map(mapRow) };
+  const [machines, people] = await Promise.all([
+    supabase.from("thiet_bi").select("id,ma_may,ten_may"),
+    supabase.from("nhan_su").select("employee_id,ho_ten"),
+  ]);
+  const machineById = new Map(
+    ((machines.data ?? []) as { id: string; ma_may: string; ten_may: string }[]).map((row) => [row.id, row]),
+  );
+  const personById = new Map(
+    ((people.data ?? []) as { employee_id: string; ho_ten: string }[]).map((row) => [row.employee_id, row.ho_ten]),
+  );
+
+  return {
+    rows: tableRows.map((row) => {
+      const machine = machineById.get(row.may);
+      return {
+        id: row.id,
+        date: row.ngay,
+        machineId: row.may,
+        machineCode: machine?.ma_may || "—",
+        machineName: machine?.ten_may || "",
+        liters: Number(row.so_lit) || 0,
+        unit: row.don_vi?.trim() || "lít",
+        personId: row.nguoi_cap?.trim() || "",
+        personName: (row.nguoi_cap && personById.get(row.nguoi_cap)?.trim()) || "—",
+        note: row.ghi_chu?.trim() || "",
+        createdAt: row.created_at,
+      };
+    }),
+  };
 }
 
 export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string) {
@@ -94,7 +108,7 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string) 
     throw new Error("Chưa cấu hình Supabase");
   }
   const supabase = createClient();
-  const payload = {
+  const payload: Record<string, unknown> = {
     ngay: values.date,
     may: values.machineId,
     so_lit: Math.max(0, Number(values.liters) || 0),
@@ -104,15 +118,16 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string) 
     ghi_chu: values.note.trim() || null,
   };
 
-  if (id) {
-    const { error } = await supabase.from("cap_dau_hang_ngay").update(payload).eq("id", id);
-    if (error) throw new Error(formatSupabaseError(error));
-    return;
-  }
+  const write = async (body: Record<string, unknown>) => {
+    if (id) return supabase.from("cap_dau_hang_ngay").update(body).eq("id", id);
+    return supabase.from("cap_dau_hang_ngay").upsert(body, { onConflict: "may,ngay" });
+  };
 
-  const { error } = await supabase.from("cap_dau_hang_ngay").upsert(payload, {
-    onConflict: "may,ngay",
-  });
+  let { error } = await write(payload);
+  if (error && isMissingUnitColumn(formatSupabaseError(error))) {
+    const { don_vi: _unit, ...withoutUnit } = payload;
+    ({ error } = await write(withoutUnit));
+  }
   if (error) throw new Error(formatSupabaseError(error));
 }
 

@@ -153,7 +153,10 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
     const q = query.trim().toLowerCase();
     if (!q) return NDT_DEFECTS;
     return NDT_DEFECTS.filter(
-      (d) => d.code.toLowerCase().includes(q) || d.nameEn.toLowerCase().includes(q),
+      (d) =>
+        d.code.toLowerCase().includes(q) ||
+        d.nameVi.toLocaleLowerCase("vi").includes(q) ||
+        d.nameEn.toLowerCase().includes(q),
     );
   }, [query]);
 
@@ -462,7 +465,8 @@ function NdtTable({
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="w-28 whitespace-nowrap px-4 py-3">Mã lỗi</th>
-                <th className="min-w-[300px] px-3.5 py-3">Tên tiếng Anh (Standard)</th>
+                <th className="min-w-[180px] px-3.5 py-3">Tên lỗi</th>
+                <th className="min-w-[240px] px-3.5 py-3">Tên tiếng Anh (Standard)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -485,12 +489,13 @@ function NdtTable({
                       {item.code}
                     </span>
                   </td>
+                  <td className="px-3.5 py-3.5 font-semibold text-slate-900">{item.nameVi}</td>
                   <td className="px-3.5 py-3.5 font-mono font-semibold text-slate-900">{item.nameEn}</td>
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={2} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={3} className="px-4 py-12 text-center text-slate-500">
                     Không tìm thấy mã khuyết tật phù hợp.
                   </td>
                 </tr>
@@ -524,7 +529,7 @@ function ErrorDetailModal({
 
   const title =
     detail.kind === "ndt"
-      ? `${detail.item.code} · ${detail.item.nameEn}`
+      ? `${detail.item.code} · ${detail.item.nameVi}`
       : detail.item.symptom;
   const subtitle =
     detail.kind === "ndt"
@@ -629,6 +634,7 @@ function ErrorDetailModal({
                       {detail.item.code}
                     </span>
                   </DetailField>
+                  <DetailField label="Tên lỗi">{detail.item.nameVi}</DetailField>
                   <DetailField label="Tên chuẩn (EN)">{detail.item.nameEn}</DetailField>
                 </div>
                 <DetailField label="Mô tả">

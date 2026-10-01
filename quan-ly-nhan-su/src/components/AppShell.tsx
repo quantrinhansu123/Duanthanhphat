@@ -5,9 +5,10 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { List, Bell, CaretRight, ArrowLeft } from "@/components/icons";
+import { List, CaretRight, ArrowLeft } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import NotificationBell from "@/components/NotificationBell";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import ReportTabBar from "@/components/ReportTabBar";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
@@ -36,8 +37,6 @@ const ComplianceStandardsList = dynamic(
 const TrainingHistoryLookup = dynamic(
   () => import("@/components/TrainingHistoryLookup"), { loading: TabLoading, ssr: false });
 const MachineList = dynamic(() => import("@/components/MachineList"), { loading: TabLoading, ssr: false });
-const TransportVehicleList = dynamic(
-  () => import("@/components/TransportVehicleList"), { loading: TabLoading, ssr: false });
 const WeldingTrayList = dynamic(() => import("@/components/WeldingTrayList"), { loading: TabLoading, ssr: false });
 const MaintenanceCalendar = dynamic(() => import("@/components/MaintenanceCalendar"), { loading: TabLoading, ssr: false });
 const ErrorLibrary = dynamic(() => import("@/components/ErrorLibrary"), { loading: TabLoading, ssr: false });
@@ -77,7 +76,6 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "tieu-chuan-tcvn": () => <ComplianceStandardsList />,
   "tra-cuu-dao-tao": () => <TrainingHistoryLookup />,
   "danh-sach-may": () => <MachineList />,
-  "quan-ly-phuong-tien": () => <TransportVehicleList />,
   "quan-ly-khay-han": () => <WeldingTrayList />,
   "lich-bao-tri": () => <MaintenanceCalendar />,
   "thu-vien-loi": () => <ErrorLibrary mode="machine" />,
@@ -309,14 +307,7 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="capitalize text-[11px] sm:text-xs font-medium text-slate-500">{clock?.date ?? (lang === "en" ? "Loading..." : "Đang tải...")}</div>
             </div>
             <LanguageSwitcher />
-            <button
-              className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#0047AB]/20 focus:outline-hidden"
-              type="button"
-              aria-label={lang === "en" ? "Notifications" : "Thông báo"}
-            >
-              <Bell size={18} weight="regular" aria-hidden />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#0047AB] ring-2 ring-white" />
-            </button>
+            <NotificationBell label={lang === "en" ? "Notifications" : "Thông báo"} />
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
               <div className="hidden md:block text-right leading-tight">
                 <div className="text-xs sm:text-sm font-semibold text-slate-900">Nguyễn Đắc Công</div>

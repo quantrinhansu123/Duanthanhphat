@@ -66,6 +66,8 @@ export type WeldingUnitSpecs = {
   weldingTechnology?: string;
   coolingCapacity?: string;
   oilTankCapacity?: string;
+  /** Định mức dầu cuối ngày (lít). Dưới mức này thì cảnh báo cấp dầu. */
+  oilQuota?: number | string;
   powerSupply?: string;
   [key: string]: unknown;
 };

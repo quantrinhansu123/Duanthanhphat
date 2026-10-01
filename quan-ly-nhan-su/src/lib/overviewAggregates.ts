@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import {
-  NDT_DEFECT_MAP,
   WELD_TEST_STATUSES,
   type AppliedReportFilters,
   type ErrorReasonRow,
@@ -21,6 +20,9 @@ export type OverviewAggregateSummary = {
   tested: number;
   fbw: number;
   atw: number;
+  productionTotal: number;
+  productionPassed: number;
+  productionFailed: number;
 };
 
 export type OverviewMachineAggregate = {
@@ -44,6 +46,7 @@ export type OverviewAggregateResult = {
   projectRows: OverviewProjectAggregate[];
   errorReasonRows: ErrorReasonRow[];
   doneBeforePlanYear: number;
+  productionThisPlanYear: number;
   source: "supabase" | "unavailable";
   error?: string;
 };
@@ -60,6 +63,9 @@ const EMPTY_SUMMARY: OverviewAggregateSummary = {
   tested: 0,
   fbw: 0,
   atw: 0,
+  productionTotal: 0,
+  productionPassed: 0,
+  productionFailed: 0,
 };
 
 export const EMPTY_OVERVIEW_AGGREGATE: OverviewAggregateResult = {
@@ -68,6 +74,7 @@ export const EMPTY_OVERVIEW_AGGREGATE: OverviewAggregateResult = {
   projectRows: [],
   errorReasonRows: [],
   doneBeforePlanYear: 0,
+  productionThisPlanYear: 0,
   source: "unavailable",
 };
 
@@ -104,22 +111,12 @@ async function countRows(
   return result.count ?? 0;
 }
 
-function makeErrorReasonRows(rows: Array<{ nguyen_nhan_loi?: string | null; ma_khuyet_tat?: unknown; so_luong_loi?: number | null }>) {
+function makeErrorReasonRows(rows: Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null; tinh_trang_thi_nghiem?: string | null }>) {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    if (Number(row.so_luong_loi ?? 0) <= 0) continue;
-    const codes = Array.isArray(row.ma_khuyet_tat)
-      ? row.ma_khuyet_tat.map((code) => String(code)).filter(Boolean)
-      : [];
-    if (codes.length > 0) {
-      for (const code of codes) {
-        const label = NDT_DEFECT_MAP[code] || code;
-        counts.set(label, (counts.get(label) ?? 0) + 1);
-      }
-    } else {
-      const label = row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân";
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
+    if (Number(row.so_luong_loi ?? 0) <= 0 && row.tinh_trang_thi_nghiem !== "Không đạt") continue;
+    const label = row.nguyen_nhan_loi?.trim() || "Chưa ghi lý do không đạt";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   const max = Math.max(...counts.values(), 0);
   if (!max) return [];
@@ -135,14 +132,13 @@ async function loadErrorReasons(
 ): Promise<ErrorReasonRow[]> {
   let query = supabase
     .from("bao_cao_moi_han_theo_du_an")
-    .select("nguyen_nhan_loi,ma_khuyet_tat,so_luong_loi")
-    .gt("so_luong_loi", 0)
+    .select("nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem")
+    .or("tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0")
     .limit(1000);
   query = applyFilters(query, filters);
   const result = await query;
-  // ma_khuyet_tat is optional on older deployments. The fallback still gives
-  // the same reason grouping for the legacy rows.
-  if (result.error && /ma_khuyet_tat/.test(result.error.message ?? "")) {
+  // Older deployments may not have the explicit test-result column.
+  if (result.error && /tinh_trang_thi_nghiem/.test(result.error.message ?? "")) {
     let fallback = supabase
       .from("bao_cao_moi_han_theo_du_an")
       .select("nguyen_nhan_loi,so_luong_loi")
@@ -154,7 +150,7 @@ async function loadErrorReasons(
     return makeErrorReasonRows((fallbackResult.data ?? []) as Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null }>);
   }
   if (result.error) throw result.error;
-  return makeErrorReasonRows((result.data ?? []) as Array<{ nguyen_nhan_loi?: string | null; ma_khuyet_tat?: unknown; so_luong_loi?: number | null }>);
+  return makeErrorReasonRows((result.data ?? []) as Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null; tinh_trang_thi_nghiem?: string | null }>);
 }
 
 async function loadProjectAggregates(
@@ -233,17 +229,27 @@ async function loadOverviewAggregatesUncached(
     const fbwPromise = countRows(supabase, filters, (query) => query.eq("cong_nghe_han", "FBW"));
     const atwPromise = countRows(supabase, filters, (query) => query.eq("cong_nghe_han", "ATW"));
     const reworkPromise = countRows(supabase, filters, (query) => query.not("moi_han_lien_ket", "is", null).neq("moi_han_lien_ket", ""));
+    const productionTotalPromise = countRows(supabase, filters, (query) => query.eq("loai_moi_han", "Sản xuất"));
+    const productionPassedPromise = countRows(supabase, filters, (query) =>
+      query.eq("loai_moi_han", "Sản xuất").eq("tinh_trang_thi_nghiem", "Đạt"),
+    );
+    const productionFailedPromise = countRows(supabase, filters, (query) =>
+      query.eq("loai_moi_han", "Sản xuất").eq("tinh_trang_thi_nghiem", "Không đạt"),
+    );
 
-    const [total, statuses, fbw, atw, rework, errorReasonRows, projectRows, machineRows, yearRows] = await Promise.all([
+    const [total, statuses, fbw, atw, rework, productionTotal, productionPassed, productionFailed, errorReasonRows, projectRows, machineRows, yearRows] = await Promise.all([
       totalPromise,
       statusPromise,
       fbwPromise,
       atwPromise,
       reworkPromise,
+      productionTotalPromise,
+      productionPassedPromise,
+      productionFailedPromise,
       loadErrorReasons(supabase, filters).catch(() => []),
       loadProjectAggregates(supabase).catch(() => []),
       loadMachineAggregates().catch(() => []),
-      supabase.from("tong_moi_han_nam").select("nam,tong_moi_han").order("nam", { ascending: true }),
+      supabase.from("tong_moi_han_nam").select("nam,tong_moi_han,san_xuat").order("nam", { ascending: true }),
     ]);
 
     const [pending, passed, failed, untested] = statuses;
@@ -257,11 +263,21 @@ async function loadOverviewAggregatesUncached(
       tested: passed + failed,
       fbw,
       atw,
+      productionTotal,
+      productionPassed,
+      productionFailed,
     };
+    const yearlySummaries = (yearRows.data ?? []) as Array<{ nam?: number; tong_moi_han?: number; san_xuat?: number }>;
     const doneBeforePlanYear = yearRows.error
       ? 0
-      : ((yearRows.data ?? []) as Array<{ nam?: number; tong_moi_han?: number }>).reduce(
+      : yearlySummaries.reduce(
           (sum, row) => (Number(row.nam) < currentYear ? sum + Number(row.tong_moi_han ?? 0) : sum),
+          0,
+        );
+    const productionThisPlanYear = yearRows.error
+      ? 0
+      : yearlySummaries.reduce(
+          (sum, row) => (Number(row.nam) === currentYear ? sum + Number(row.san_xuat ?? 0) : sum),
           0,
         );
 
@@ -271,6 +287,7 @@ async function loadOverviewAggregatesUncached(
       projectRows,
       errorReasonRows,
       doneBeforePlanYear,
+      productionThisPlanYear,
       source: "supabase",
       error: yearRows.error ? formatSupabaseError(yearRows.error) : undefined,
     };

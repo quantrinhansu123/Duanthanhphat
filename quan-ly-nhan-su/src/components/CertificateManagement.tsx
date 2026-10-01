@@ -25,6 +25,7 @@ import {
 } from "@/lib/certificatesDb";
 import {
   loadPersonnelCertificateRows,
+  updatePersonnelCertificates,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import {
@@ -852,11 +853,26 @@ export default function CertificateManagement() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget?.group) return;
+    if (!deleteTarget) return;
     setSaving(true);
     setActionError("");
     try {
-      await deleteCertificateType(deleteTarget.group.id);
+      if (deleteTarget.group) {
+        await deleteCertificateType(deleteTarget.group.id);
+      } else {
+        const key = normalizeCertTitle(deleteTarget.title);
+        const affected = personnelRows.filter((row) =>
+          parseCertificateList(row.chung_chi).some((title) => normalizeCertTitle(title) === key),
+        );
+        await Promise.all(
+          affected.map((row) =>
+            updatePersonnelCertificates(
+              row.employee_id,
+              parseCertificateList(row.chung_chi).filter((title) => normalizeCertTitle(title) !== key),
+            ),
+          ),
+        );
+      }
       const deletedTitle = deleteTarget.title;
       setDeleteTarget(null);
       showToast(`Đã xóa loại chứng chỉ “${deletedTitle}”.`);
@@ -1171,21 +1187,15 @@ export default function CertificateManagement() {
                             >
                               <PencilSimple size={16} weight="bold" />
                             </button>
-                            {row.group ? (
-                              <button
-                                type="button"
-                                onClick={() => { setDeleteTarget(row); setActionError(""); }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                aria-label={`Xóa loại chứng chỉ ${row.title}`}
-                                title="Xóa"
-                              >
-                                <TrashSimple size={16} weight="bold" />
-                              </button>
-                            ) : (
-                              <span className="px-1 text-[11px] text-slate-400" title="Chứng chỉ chỉ có trên hồ sơ thợ, chưa có trong danh mục">
-                                Cũ
-                              </span>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => { setDeleteTarget(row); setActionError(""); }}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300"
+                              aria-label={`Xóa loại chứng chỉ ${row.title}`}
+                              title={row.group ? "Xóa" : "Xóa chứng chỉ cũ khỏi hồ sơ thợ"}
+                            >
+                              <TrashSimple size={16} weight="bold" />
+                            </button>
                           </div>
                         </td>
                         <td className="px-2 py-3">
@@ -1518,7 +1528,7 @@ export default function CertificateManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5" role="alertdialog" aria-modal="true" aria-labelledby="delete-certificate-title">
           <button type="button" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => !saving && setDeleteTarget(null)} aria-label="Đóng" />
           <div className="relative z-10 w-full max-w-[460px] rounded-2xl border border-rose-200 bg-white shadow-2xl">
-            <div className="px-5 py-4"><h2 id="delete-certificate-title" className="text-base font-bold text-slate-900">Xóa loại chứng chỉ?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Thao tác này sẽ xóa loại <strong>{deleteTarget.title}</strong> và toàn bộ hồ sơ chứng chỉ thuộc loại này. Không thể khôi phục.</p>{actionError && <div className="mt-3 text-xs font-semibold text-rose-600">{actionError}</div>}</div>
+            <div className="px-5 py-4"><h2 id="delete-certificate-title" className="text-base font-bold text-slate-900">Xóa loại chứng chỉ?</h2><p className="mt-2 text-sm leading-6 text-slate-600">{deleteTarget.group ? <>Thao tác này sẽ xóa loại <strong>{deleteTarget.title}</strong> và toàn bộ hồ sơ chứng chỉ thuộc loại này. Không thể khôi phục.</> : <>Thao tác này sẽ gỡ <strong>{deleteTarget.title}</strong> khỏi hồ sơ của các thợ đang gắn. Không thể khôi phục.</>}</p>{actionError && <div className="mt-3 text-xs font-semibold text-rose-600">{actionError}</div>}</div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3.5"><button type="button" disabled={saving} onClick={() => setDeleteTarget(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Hủy</button><button type="button" disabled={saving} onClick={() => void handleDelete()} className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50">{saving ? "Đang xóa…" : "Xóa chứng chỉ"}</button></div>
           </div>
         </div>

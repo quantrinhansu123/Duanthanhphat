@@ -414,17 +414,17 @@ export type NdtDefectCode = "LOF" | "LOP" | "C" | "S" | "Po" | "La";
 
 export type NdtDefect = {
   code: NdtDefectCode;
+  nameVi: string;
   nameEn: string;
 };
 
-// Ảnh 11 chỉ cung cấp mã và tên tiếng Anh; không suy diễn thêm bản dịch/mức độ.
 export const NDT_DEFECTS: NdtDefect[] = [
-  { code: "LOF", nameEn: "Lack of fusion" },
-  { code: "LOP", nameEn: "Lack of Penetration" },
-  { code: "C", nameEn: "Crack" },
-  { code: "S", nameEn: "Slag" },
-  { code: "Po", nameEn: "Porosity" },
-  { code: "La", nameEn: "Lamination" },
+  { code: "LOF", nameVi: "Không ngấu", nameEn: "Lack of fusion" },
+  { code: "LOP", nameVi: "Không thấu", nameEn: "Lack of Penetration" },
+  { code: "C", nameVi: "Nứt", nameEn: "Crack" },
+  { code: "S", nameVi: "Ngậm xỉ", nameEn: "Slag" },
+  { code: "Po", nameVi: "Rỗ khí", nameEn: "Porosity" },
+  { code: "La", nameVi: "Phân lớp", nameEn: "Lamination" },
 ];
 
 export function findNdtDefect(code: string): NdtDefect | undefined {

@@ -1,4 +1,4 @@
--- Đồng bộ mã mối hàn: PHQ + FBW/ATW + DDMMYY + số TT (0001…)
+-- Đồng bộ mã mối hàn: FBW/ATW + 5 số (ATW00001). Số TT theo từng công nghệ.
 -- Chạy trong Supabase SQL Editor (có thể chạy lại an toàn).
 
 create or replace function public.dong_bo_ma_moi_han()
@@ -32,12 +32,7 @@ begin
   select
     ranked.id,
     ranked.old_code,
-    'PHQ'
-      || ranked.cong_nghe_han
-      || to_char(ranked.ngay, 'DD')
-      || to_char(ranked.ngay, 'MM')
-      || to_char(ranked.ngay, 'YY')
-      || lpad(ranked.seq::text, 4, '0') as new_code
+    ranked.cong_nghe_han || lpad(ranked.seq::text, 5, '0') as new_code
   from (
     select
       ls.id,
@@ -45,10 +40,8 @@ begin
       ls.cong_nghe_han,
       coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)) as ngay,
       row_number() over (
-        partition by
-          ls.cong_nghe_han,
-          coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1))
-        order by ls.ma_lich_su, ls.id
+        partition by ls.cong_nghe_han
+        order by coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)), ls.ma_lich_su, ls.id
       ) as seq
     from public.lich_su_moi_han ls
   ) ranked;

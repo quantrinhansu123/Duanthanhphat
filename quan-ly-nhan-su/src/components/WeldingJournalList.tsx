@@ -32,11 +32,12 @@ import {
   insertWeldJournalEntry,
   invalidateWeldReportCache,
   loadJournalProjectOptions,
+  loadMachineWeldCodeMap,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
   parseWeldLinkedImageAssets,
   resolveWeldTestStatus,
-  syncAllWeldCodes,
+  updateWeldJournalShifts,
   updateWeldJournalEntry,
   type CertifiedWelderOption,
   type WeldLinkedImageAsset,
@@ -46,7 +47,7 @@ import {
   WELD_SHIFTS,
   resolveWeldShift,
 } from "@/lib/weldReportData";
-import { buildWeldCodePrefix, normalizeWeldSitePrefix, suggestWeldCode } from "@/lib/weldCode";
+import { buildMachineWeldCode, buildWeldCodePrefix, normalizeWeldSitePrefix, suggestWeldCode } from "@/lib/weldCode";
 import {
   describeCertificateRequirement,
   eligibleCertificatesForWeld,
@@ -174,6 +175,7 @@ function JournalFormModal({
   welders,
   machines,
   existingCodes,
+  machineWeldCode = "",
   saving,
   unlinkedGpsPoints = [],
   onClose,
@@ -186,6 +188,7 @@ function JournalFormModal({
   welders: CertifiedWelderOption[];
   machines: MachineOption[];
   existingCodes: string[];
+  machineWeldCode?: string;
   saving: boolean;
   unlinkedGpsPoints?: MapPoint[];
   onClose: () => void;
@@ -199,6 +202,7 @@ function JournalFormModal({
     { value: string; label: string; isoDate: string }[]
   >([]);
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
+  const [machineCodePreview, setMachineCodePreview] = useState("");
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
   const [extraTab, setExtraTab] = useState<"linked" | "gps">("linked");
@@ -296,6 +300,30 @@ function JournalFormModal({
     if (!nextCode || form.ma_lich_su === nextCode) return;
     setForm((prev) => ({ ...prev, ma_lich_su: nextCode }));
   }, [mode, open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes, sitePrefix]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (mode === "edit") {
+      setMachineCodePreview(machineWeldCode);
+      return;
+    }
+    const machine = machines.find((item) => item.id === form.may_id);
+    if (!machine?.code) {
+      setMachineCodePreview("");
+      return;
+    }
+    let active = true;
+    loadMachineWeldCodeMap([machine.id])
+      .then((map) => {
+        if (active) setMachineCodePreview(buildMachineWeldCode(machine.code, map.size + 1));
+      })
+      .catch(() => {
+        if (active) setMachineCodePreview("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, mode, form.may_id, machines, machineWeldCode]);
 
   useEffect(() => {
     const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
@@ -486,11 +514,23 @@ function JournalFormModal({
             <input
               readOnly
               value={form.ma_lich_su}
-              placeholder={`${sitePrefix}FBW1208260001`}
+              placeholder="ATW00001"
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
             />
             <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-              Tự tạo: mã dự án + công nghệ + ngày/tháng/năm (2 số) + số TT (VD: {sitePrefix}FBW1208260001)
+              Tự tạo: loại (FBW/ATW) + 5 số. VD: ATW00001
+            </span>
+          </label>
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Mã theo máy
+            <input
+              readOnly
+              value={machineCodePreview}
+              placeholder="Chọn máy để tạo mã"
+              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
+            />
+            <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+              Mã máy + số thứ tự 5 số trên máy đó. VD: KCM0070100001
             </span>
           </label>
 
@@ -994,6 +1034,7 @@ export default function WeldingJournalList({
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<WeldReportRow[]>([]);
+  const [machineWeldCodes, setMachineWeldCodes] = useState<Map<string, string>>(new Map());
   const [total, setTotal] = useState(0);
   const [passCount, setPassCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
@@ -1008,8 +1049,17 @@ export default function WeldingJournalList({
   const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [syncingCodes, setSyncingCodes] = useState(false);
-  const [syncProgress, setSyncProgress] = useState("");
+  const [autoFillOpen, setAutoFillOpen] = useState(false);
+  const [autoFillProjectId, setAutoFillProjectId] = useState("");
+  const [autoFillDate, setAutoFillDate] = useState("");
+  const [autoFillShifts, setAutoFillShifts] = useState({ "Ca 1": true, "Ca 2": true });
+  const [autoFillShiftTimes, setAutoFillShiftTimes] = useState({
+    "Ca 1": { start: "06:00", end: "14:00" },
+    "Ca 2": { start: "14:00", end: "22:00" },
+  });
+  const [autoFillRows, setAutoFillRows] = useState<WeldReportRow[] | null>(null);
+  const [autoFillLoading, setAutoFillLoading] = useState(false);
+  const [autoFillSaving, setAutoFillSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
@@ -1029,11 +1079,16 @@ export default function WeldingJournalList({
   }, [lockedResultFilter]);
 
   useEffect(() => {
-    const initialQuery = new URLSearchParams(window.location.search).get("query")?.trim() || "";
+    const params = new URLSearchParams(window.location.search);
+    const initialQuery = params.get("query")?.trim() || params.get("q")?.trim() || "";
+    const from = params.get("from")?.trim() || "";
+    const to = params.get("to")?.trim() || from;
     if (initialQuery) {
       setQuery(initialQuery);
       setAppliedQuery(initialQuery);
     }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from)) setDateFrom(from);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) setDateTo(to);
   }, []);
 
   useEffect(() => {
@@ -1128,6 +1183,25 @@ export default function WeldingJournalList({
     };
   }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, reloadToken]);
 
+  useEffect(() => {
+    const ids = rows.map((row) => row.may_id).filter((id): id is string => Boolean(id));
+    if (!ids.length) {
+      setMachineWeldCodes(new Map());
+      return;
+    }
+    let active = true;
+    loadMachineWeldCodeMap(ids)
+      .then((map) => {
+        if (active) setMachineWeldCodes(map);
+      })
+      .catch(() => {
+        if (active) setMachineWeldCodes(new Map());
+      });
+    return () => {
+      active = false;
+    };
+  }, [rows]);
+
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
     () => projectOptions.map((item) => item.label),
@@ -1169,6 +1243,7 @@ export default function WeldingJournalList({
           ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
           : "Chưa gán máy",
         weldName: displayWeldCode(row.ma_lich_su),
+        machineCode: machineWeldCodes.get(row.id) || "—",
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
         weldType: row.loai_moi_han,
@@ -1187,7 +1262,7 @@ export default function WeldingJournalList({
         shift: resolveWeldShift(row),
       };
     });
-  }, [rows, gpsPoints]);
+  }, [rows, gpsPoints, machineWeldCodes]);
 
   const gpsPointForRow = useCallback(
     (raw: WeldReportRow) =>
@@ -1281,6 +1356,10 @@ export default function WeldingJournalList({
         gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
       );
 
+      const machineCodeById = await loadMachineWeldCodeMap(
+        exportRows.map((row) => row.may_id).filter((id): id is string => Boolean(id)),
+      );
+
       const data = exportRows.map((row, index) => {
         const codeKey = row.ma_lich_su.trim().toLocaleLowerCase("vi");
         const gpsPoint =
@@ -1295,6 +1374,7 @@ export default function WeldingJournalList({
           "Ngày thực hiện": isoDate ? formatJournalDateIso(isoDate) : `Chỉ có năm ${row.nam_thuc_hien}`,
           "Mã bản ghi": row.id,
           "Mã mối hàn": row.ma_lich_su,
+          "Mã theo máy": machineCodeById.get(row.id) || "",
           "Mối hàn liên kết": row.moi_han_lien_ket?.trim() || "",
           "Welding ID": row.ma_nhan_su,
           "Người trực tiếp hàn": row.ten_tho_han,
@@ -1344,58 +1424,115 @@ export default function WeldingJournalList({
     }
   }
 
-  async function handleSyncAllCodes() {
-    if (syncingCodes || saving) return;
-    const filterParts = [
-      projectFilter.length === 1 ? `dự án "${projectFilter[0]}"` : projectFilter.length > 1 ? `${projectFilter.length} dự án` : null,
-      resultFilter !== "Tất cả" ? `tình trạng "${resultFilter}"` : null,
-      linkedWeldFilter !== "Tất cả" ? `mối hàn "${linkedWeldFilter.toLocaleLowerCase("vi")}"` : null,
-      weldTypeFilter !== "Tất cả" ? `loại mối "${weldTypeFilter}"` : null,
-      weldMethodFilter !== "Tất cả" ? `công nghệ "${weldMethodFilter}"` : null,
-      appliedQuery ? `tìm kiếm "${appliedQuery}"` : null,
-      dateFrom || dateTo
-        ? `ngày ${dateFrom || "…"} → ${dateTo || "…"}`
-        : null,
-    ].filter(Boolean);
-    const scopeText =
-      filterParts.length > 0
-        ? `Chỉ đồng bộ ${total.toLocaleString("vi-VN")} bản ghi theo bộ lọc hiện tại (${filterParts.join(", ")}).`
-        : `Đồng bộ toàn bộ ${total.toLocaleString("vi-VN")} bản ghi đang hiển thị (không có bộ lọc).`;
-    const ok = window.confirm(
-      `${scopeText}\n\nChuẩn mã: Mã dự án + Công nghệ + ngày/tháng/năm (2 số) + số thứ tự.\nThao tác này sẽ ghi đè mã hiện tại trong database.`,
-    );
-    if (!ok) return;
-    if (total === 0) {
-      window.alert("Không có bản ghi nào trong bộ lọc hiện tại để đồng bộ.");
+  async function handleAutoFillLookup() {
+    const selectedProject = projectOptions.find((item) => item.id === autoFillProjectId);
+    if (!selectedProject) {
+      window.alert("Vui lòng chọn dự án để tra cứu.");
       return;
     }
-    setSyncingCodes(true);
-    setSyncProgress("Bắt đầu đồng bộ…");
+    if (!autoFillDate) {
+      window.alert("Vui lòng chọn ngày thực hiện để tra cứu.");
+      return;
+    }
+    if (!autoFillShifts["Ca 1"] && !autoFillShifts["Ca 2"]) {
+      window.alert("Vui lòng chọn ít nhất một ca.");
+      return;
+    }
+    for (const shift of ["Ca 1", "Ca 2"] as const) {
+      if (!autoFillShifts[shift]) continue;
+      const { start, end } = autoFillShiftTimes[shift];
+      if (!start || !end || start === end) {
+        window.alert(`Vui lòng chọn giờ bắt đầu và kết thúc hợp lệ cho ${shift}.`);
+        return;
+      }
+    }
+    setAutoFillLoading(true);
+    setAutoFillRows(null);
     try {
-      const result = await syncAllWeldCodes(
-        (message) => setSyncProgress(message),
-        {
-          query: appliedQuery,
-          projects: projectFilter,
-          resultFilter,
-          linkedWeldFilter,
-          weldTypeFilter,
-          weldMethodFilter,
-          dateFrom,
-          dateTo,
-        },
-      );
-      refetch();
-      showToast(
-        result.updated === 0
-          ? `Không cần đổi mã · ${result.total.toLocaleString("vi-VN")} bản ghi đã đúng chuẩn`
-          : `Đã đồng bộ ${result.updated.toLocaleString("vi-VN")}/${result.total.toLocaleString("vi-VN")} mã mối hàn theo bộ lọc`,
-      );
+      const found = await exportFilteredWeldJournal({
+        projects: [selectedProject.label],
+        resultFilter: "Tất cả",
+        linkedWeldFilter: "Tất cả",
+        weldTypeFilter: "Tất cả",
+        weldMethodFilter: "Tất cả",
+        dateFrom: autoFillDate,
+        dateTo: autoFillDate,
+      });
+      setAutoFillRows(found);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể đồng bộ mã mối hàn");
+      window.alert(err instanceof Error ? err.message : "Không thể tra cứu nhật ký của dự án");
     } finally {
-      setSyncingCodes(false);
-      setSyncProgress("");
+      setAutoFillLoading(false);
+    }
+  }
+
+  const autoFillDays = useMemo(() => {
+    const byDate = new Map<string, WeldReportRow[]>();
+    for (const row of autoFillRows ?? []) {
+      const date = row.ngay_thuc_hien?.slice(0, 10) ?? "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      const dayRows = byDate.get(date) ?? [];
+      dayRows.push(row);
+      byDate.set(date, dayRows);
+    }
+    const durationHours = (shift: "Ca 1" | "Ca 2") => {
+      const { start, end } = autoFillShiftTimes[shift];
+      if (!start || !end || start === end) return 0;
+      const [startHour, startMinute] = start.split(":").map(Number);
+      const [endHour, endMinute] = end.split(":").map(Number);
+      const startValue = startHour * 60 + startMinute;
+      const endValue = endHour * 60 + endMinute;
+      return ((endValue - startValue + 1440) % 1440) / 60;
+    };
+    return Array.from(byDate, ([date, dayRows]) => {
+      dayRows.sort((a, b) =>
+        (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.ma_lich_su.localeCompare(b.ma_lich_su),
+      );
+      const ca1Hours = autoFillShifts["Ca 1"] ? durationHours("Ca 1") : 0;
+      const ca2Hours = autoFillShifts["Ca 2"] ? durationHours("Ca 2") : 0;
+      const ca1Count = ca1Hours + ca2Hours === 0
+        ? 0
+        : Math.round(dayRows.length * ca1Hours / (ca1Hours + ca2Hours));
+      const ca2Count = dayRows.length - ca1Count;
+      return { date, rows: dayRows, ca1Count, ca2Count };
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  }, [autoFillRows, autoFillShifts, autoFillShiftTimes]);
+
+  async function handleAutoFillApply() {
+    if (!autoFillRows || autoFillSaving) return;
+    const assignments: Array<{ id: string; shift: WeldShift }> = [];
+    for (const day of autoFillDays) {
+      const ca1Count = day.ca1Count;
+      day.rows.forEach((row, index) => {
+        assignments.push({ id: row.id, shift: index < ca1Count ? "Ca 1" : "Ca 2" });
+      });
+    }
+    if (!assignments.length) {
+      window.alert("Không có nhật ký có ngày thực hiện để tự động điền ca.");
+      return;
+    }
+    const selectedProject = projectOptions.find((item) => item.id === autoFillProjectId);
+    const missingDateCount = autoFillRows.length - assignments.length;
+    const chosenShifts = (["Ca 1", "Ca 2"] as const).filter((shift) => autoFillShifts[shift]);
+    const shiftSummary = chosenShifts.map((shift) => {
+      const { start, end } = autoFillShiftTimes[shift];
+      return `${shift} (${start}–${end})`;
+    }).join(", ");
+    const ok = window.confirm(
+      `Tự động phân ${assignments.length.toLocaleString("vi-VN")} mối của dự án "${selectedProject?.label ?? ""}" trong ngày ${autoFillDate} vào ${shiftSummary}. Tỷ lệ chia dựa trên thời lượng ca đã chọn.${missingDateCount ? `\nBỏ qua ${missingDateCount.toLocaleString("vi-VN")} bản ghi thiếu ngày thực hiện.` : ""}\n\nCa hiện tại của các bản ghi này sẽ bị ghi đè. Tiếp tục?`,
+    );
+    if (!ok) return;
+    setAutoFillSaving(true);
+    try {
+      await updateWeldJournalShifts(assignments);
+      setAutoFillOpen(false);
+      setAutoFillRows(null);
+      refetch();
+      showToast(`Đã tự động điền ca cho ${assignments.length.toLocaleString("vi-VN")} mối`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không thể tự động điền ca");
+    } finally {
+      setAutoFillSaving(false);
     }
   }
 
@@ -1845,12 +1982,18 @@ export default function WeldingJournalList({
           <>
             <button
               type="button"
-              onClick={handleSyncAllCodes}
-              disabled={syncingCodes || saving || loading}
-              title={syncProgress || "Đồng bộ mã mối hàn theo bộ lọc hiện tại"}
+              onClick={() => {
+                const currentProject = projectOptions.find((item) => projectFilter.includes(item.label));
+                setAutoFillProjectId(currentProject?.id ?? "");
+                setAutoFillDate(dateFrom === dateTo ? dateFrom : dateFrom || dateTo || defaultPerformedAt().slice(0, 10));
+                setAutoFillRows(null);
+                setAutoFillOpen(true);
+              }}
+              disabled={saving || loading}
+              title="Chia đều nhật ký từng ngày giữa Ca 1 và Ca 2"
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
             >
-              {syncingCodes ? (syncProgress || "Đang đồng bộ…") : "Đồng bộ mã mối hàn"}
+              Tự động điền ca
             </button>
             <button
               type="button"
@@ -1889,7 +2032,12 @@ export default function WeldingJournalList({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
+                  <span className="min-w-0">
+                    <span className="block font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
+                    {w.machineCode !== "—" && (
+                      <span className="block font-mono text-[11px] text-slate-500 truncate">{w.machineCode}</span>
+                    )}
+                  </span>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${
                     w.testStatus === "Đạt"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -1938,16 +2086,14 @@ export default function WeldingJournalList({
                 ) : null}
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Mã mối hàn</th>
-                <th className="p-2.5 font-semibold">Mối hàn liên kết</th>
+                <th className="p-2.5 font-semibold">Mã theo máy</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
                 {failedWeldMode ? (
                   <>
                     <th className="p-2.5 font-semibold">Loại mối hàn</th>
                     <th className="p-2.5 font-semibold">Công nghệ</th>
                   </>
-                ) : (
-                  <th className="p-2.5 font-semibold">Vị trí</th>
-                )}
+                ) : null}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
                 <th className="p-2.5 font-semibold">Tình trạng</th>
                 <th className="p-2.5 font-semibold">Thao tác</th>
@@ -1976,11 +2122,7 @@ export default function WeldingJournalList({
                     </span>
                   </td>
                   <td className="p-2.5 font-mono font-semibold text-[#0047AB]">{w.weldName}</td>
-                  <td className="p-2.5 font-mono text-xs text-slate-700 max-w-[160px]">
-                    <span className="line-clamp-2" title={w.linkedWeld}>
-                      {w.linkedWeld}
-                    </span>
-                  </td>
+                  <td className="p-2.5 font-mono text-xs font-semibold text-slate-800">{w.machineCode}</td>
                   <td className="p-2.5 max-w-[220px]">
                     <span className="line-clamp-2" title={w.project}>
                       {w.project}
@@ -1991,36 +2133,7 @@ export default function WeldingJournalList({
                       <td className="p-2.5 whitespace-nowrap text-xs text-slate-700">{w.weldType}</td>
                       <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{w.weldMethod}</td>
                     </>
-                  ) : (
-                  <td className="p-2.5 max-w-[200px]">
-                    {w.mapUrl ? (
-                      <div className="flex flex-col gap-1">
-                        <a
-                          href={w.mapUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={w.location}
-                          onClick={(e) => e.stopPropagation()}
-                          className="line-clamp-1 text-xs font-medium text-[#0047AB] hover:underline"
-                        >
-                          {w.location}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/ban-do?weldId=${encodeURIComponent(w.id)}&from=nhat-ky-han`);
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                        >
-                          📍 Xem trên bản đồ
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">{w.location}</span>
-                    )}
-                  </td>
-                  )}
+                  ) : null}
                   <td
                     className={`p-2.5 max-w-[180px] ${w.resultType === "fail" ? "line-clamp-2 text-xs font-medium text-rose-700" : "text-slate-400"}`}
                   >
@@ -2080,7 +2193,7 @@ export default function WeldingJournalList({
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={13} className="px-3 py-10 text-center text-sm text-slate-500">
                     {lockedResultFilter === "Không đạt"
                       ? "Không có mối hàn lỗi phù hợp với bộ lọc."
                       : "Không có nhật ký hàn phù hợp với bộ lọc."}
@@ -2239,6 +2352,7 @@ export default function WeldingJournalList({
                   ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
                   ["Tổ hàn", detailRaw?.to_han || "—"],
                   ["Dự án", detailView.project],
+                  ["Mã theo máy", detailView.machineCode],
                   ["Máy", detailView.machine],
                   ["Loại ray", detailRaw?.loai_ray || "—"],
                   ["Công nghệ hàn", detailRaw?.cong_nghe_han || "—"],
@@ -2362,6 +2476,149 @@ export default function WeldingJournalList({
         </div>
       )}
 
+      {autoFillOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-3 sm:p-6">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Tự động điền ca hàn</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Tra cứu mối của một ngày theo dự án và chia theo các ca đã chọn.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { if (!autoFillSaving) setAutoFillOpen(false); }}
+                disabled={autoFillSaving}
+                aria-label="Đóng"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4 overflow-y-auto px-5 py-4">
+              <label className="block text-xs font-semibold text-slate-700">
+                Dự án
+                <select
+                  value={autoFillProjectId}
+                  onChange={(event) => { setAutoFillProjectId(event.target.value); setAutoFillRows(null); }}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 shadow-2xs outline-none transition focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                >
+                  <option value="">Chọn dự án cần tra cứu</option>
+                  {projectOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}{item.ma_du_an ? ` · ${item.ma_du_an}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-slate-700">
+                Ngày thực hiện
+                <input
+                  type="date"
+                  value={autoFillDate}
+                  onChange={(event) => { setAutoFillDate(event.target.value); setAutoFillRows(null); }}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-700">Chọn ca và giờ làm</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Có thể chọn một hoặc cả hai ca. Nếu chọn một ca, toàn bộ mối trong ngày sẽ được gán vào ca đó.</p>
+                </div>
+                {(["Ca 1", "Ca 2"] as const).map((shift) => (
+                  <div key={shift} className={`rounded-xl border p-3 ${autoFillShifts[shift] ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-white"}`}>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={autoFillShifts[shift]}
+                        onChange={(event) => {
+                          setAutoFillShifts((current) => ({ ...current, [shift]: event.target.checked }));
+                          setAutoFillRows(null);
+                        }}
+                        className="h-4 w-4 accent-[#0047AB]"
+                      />
+                      {shift} {shift === "Ca 1" ? "· sáng" : "· tối"}
+                    </label>
+                    {autoFillShifts[shift] && (
+                      <div className="mt-3 grid grid-cols-2 gap-3 pl-6">
+                        <label className="block text-xs font-medium text-slate-600">
+                          Giờ bắt đầu
+                          <input
+                            type="time"
+                            value={autoFillShiftTimes[shift].start}
+                            onChange={(event) => {
+                              setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], start: event.target.value } }));
+                              setAutoFillRows(null);
+                            }}
+                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                          />
+                        </label>
+                        <label className="block text-xs font-medium text-slate-600">
+                          Giờ kết thúc
+                          <input
+                            type="time"
+                            value={autoFillShiftTimes[shift].end}
+                            onChange={(event) => {
+                              setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], end: event.target.value } }));
+                              setAutoFillRows(null);
+                            }}
+                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-900">
+                Hệ thống tra cứu mối hàn đúng ngày đã chọn. Số mối được chia theo thời lượng của các ca đã chọn; nếu hai ca cùng 8 giờ thì số mối được chia gần bằng nhau.
+              </div>
+
+              {autoFillRows && (
+                <div className="rounded-xl border border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 text-sm">
+                    <span className="font-semibold text-slate-800">Kết quả tra cứu</span>
+                    <span className="text-slate-600">
+                      {autoFillRows.length.toLocaleString("vi-VN")} mối · {autoFillDays.length} ngày · {autoFillRows.length - autoFillDays.reduce((sum, day) => sum + day.rows.length, 0)} thiếu ngày
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {autoFillDays.length ? autoFillDays.map((day) => (
+                      <div key={day.date} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-0">
+                        <span className="font-medium text-slate-700">{day.date}</span>
+                        <span className="text-slate-600">Tổng {day.rows.length}</span>
+                        <span className="text-right text-slate-600">{autoFillShifts["Ca 1"] ? `Ca 1: ${day.ca1Count}` : null}{autoFillShifts["Ca 1"] && autoFillShifts["Ca 2"] ? " · " : null}{autoFillShifts["Ca 2"] ? `Ca 2: ${day.ca2Count}` : null}</span>
+                      </div>
+                    )) : (
+                      <p className="px-3 py-4 text-center text-xs text-slate-500">Không có mối nào có ngày thực hiện trong phạm vi này.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setAutoFillOpen(false)}
+                disabled={autoFillSaving || autoFillLoading}
+                className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => void (autoFillRows ? handleAutoFillApply() : handleAutoFillLookup())}
+                disabled={autoFillLoading || autoFillSaving || !autoFillProjectId || !autoFillDate || (autoFillRows !== null && autoFillDays.length === 0)}
+                className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-60"
+              >
+                {autoFillLoading ? "Đang tra cứu…" : autoFillSaving ? "Đang điền…" : "Tự động điền"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <JournalFormModal
         open={formOpen}
         mode={editingRow ? "edit" : "create"}
@@ -2370,6 +2627,7 @@ export default function WeldingJournalList({
         welders={welderOptions}
         machines={machineOptions}
         existingCodes={rows.map((row) => row.ma_lich_su)}
+        machineWeldCode={editingRow ? machineWeldCodes.get(editingRow.id) || "" : ""}
         saving={saving}
         unlinkedGpsPoints={
           editingRow

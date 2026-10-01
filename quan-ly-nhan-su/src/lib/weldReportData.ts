@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
-import { planWeldCodeAssignments } from "@/lib/weldCode";
+import { buildMachineWeldCode, planWeldCodeAssignments } from "@/lib/weldCode";
 import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
 import { invalidateWeldDailyRollupCache } from "@/lib/weldDailyStats";
 
@@ -166,11 +166,42 @@ export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]>
     .from("bao_cao_moi_han_theo_du_an")
     .select("ma_lich_su")
     .ilike("ma_lich_su", `${value}%`)
-    .limit(2000);
+    .order("ma_lich_su", { ascending: false })
+    .limit(200);
   if (error) throw new Error(formatSupabaseError(error));
   return (data ?? [])
     .map((row) => String((row as { ma_lich_su?: string }).ma_lich_su ?? "").trim())
     .filter(Boolean);
+}
+
+/** Mã theo máy của từng bản ghi: mã máy + số thứ tự 5 số trên máy đó. */
+export async function loadMachineWeldCodeMap(machineIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const ids = Array.from(new Set(machineIds.map((id) => id.trim()).filter(Boolean)));
+  if (!ids.length || !isSupabaseConfigured()) return map;
+  const supabase = createClient();
+  const pageSize = 1000;
+  const rows: { id: string; may_id: string; ma_may: string; ngay_thuc_hien: string | null }[] = [];
+  for (let from = 0; from < 20000; from += pageSize) {
+    const { data, error } = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("id,may_id,ma_may,ngay_thuc_hien")
+      .in("may_id", ids)
+      .order("ngay_thuc_hien", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error || !data?.length) break;
+    rows.push(...(data as { id: string; may_id: string; ma_may: string; ngay_thuc_hien: string | null }[]));
+    if (data.length < pageSize) break;
+  }
+  const seq = new Map<string, number>();
+  for (const row of rows) {
+    const next = (seq.get(row.may_id) ?? 0) + 1;
+    seq.set(row.may_id, next);
+    const code = buildMachineWeldCode(row.ma_may || "", next);
+    if (code) map.set(row.id, code);
+  }
+  return map;
 }
 
 export type WeldCodeSyncResult = {
@@ -461,6 +492,36 @@ async function saveWeldShift(
     );
   }
   throw new Error(formatSupabaseError(error));
+}
+
+/** Ghi ca hàng loạt cho các bản ghi nhật ký đã được phân chia theo ngày. */
+export async function updateWeldJournalShifts(
+  assignments: Array<{ id: string; shift: WeldShift }>,
+) {
+  if (!assignments.length) return;
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể cập nhật ca hàn.");
+  }
+  const supabase = createClient();
+  for (let offset = 0; offset < assignments.length; offset += 100) {
+    const batch = assignments.slice(offset, offset + 100);
+    for (const shift of WELD_SHIFTS) {
+      const ids = batch.filter((item) => item.shift === shift).map((item) => item.id);
+      if (!ids.length) continue;
+      const { error } = await supabase
+        .from("lich_su_moi_han")
+        .update({ ca_han: shift })
+        .in("id", ids);
+      if (!error) continue;
+      if (/ca_han/.test(error.message ?? "")) {
+        throw new Error(
+          "Chưa thể lưu ca hàn vì migration_20260924_ca_han_nhat_ky_han.sql chưa được chạy trên Supabase.",
+        );
+      }
+      throw new Error(formatSupabaseError(error));
+    }
+  }
+  invalidateWeldReportCache();
 }
 
 async function ensureCertificateRecord(
@@ -1542,6 +1603,21 @@ export function summarizeJournalRows(rows: WeldReportRow[]): WeldSummary & { pen
   return { total: rows.length, errors: failed, passed, pending, untested, tested: passed + failed, fbw, atw };
 }
 
+/** Mối sản xuất: Đạt / Không đạt và tỷ lệ chỉ tính trên nhóm này. */
+export function summarizeProductionWelds(rows: WeldReportRow[]) {
+  let total = 0;
+  let passed = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (row.loai_moi_han !== "Sản xuất") continue;
+    total += 1;
+    const testStatus = resolveWeldTestStatus(row);
+    if (testStatus === "Đạt") passed += 1;
+    else if (testStatus === "Không đạt") failed += 1;
+  }
+  return { total, passed, failed, tested: passed + failed };
+}
+
 export function hasLinkedWeld(row: WeldReportRow): boolean {
   return Boolean(row.moi_han_lien_ket?.trim());
 }
@@ -1675,6 +1751,22 @@ export function groupJournalErrorReasons(rows: WeldReportRow[], limit = 6): Erro
       count,
       pct: Math.round((count / max) * 100),
     }));
+}
+
+/** Nhóm lỗi theo đúng trường "Lý do không đạt" trên nhật ký hàn. */
+export function groupJournalFailureReasons(rows: WeldReportRow[], limit = 6): ErrorReasonRow[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.so_luong_loi <= 0 && row.tinh_trang_thi_nghiem !== "Không đạt") continue;
+    const reason = row.nguyen_nhan_loi?.trim() || "Chưa ghi lý do không đạt";
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  if (counts.size === 0) return [];
+  const max = Math.max(...counts.values());
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count, pct: Math.round((count / max) * 100) }));
 }
 
 /** Nhóm nguyên nhân lỗi thật từ nhật ký hàn. */

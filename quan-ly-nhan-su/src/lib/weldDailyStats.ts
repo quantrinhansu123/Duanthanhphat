@@ -208,6 +208,23 @@ export function summarizeWeldDailyRollupRows(rows: WeldDailyRollupRow[]): WeldDa
   return summary;
 }
 
+/** Mối sản xuất trên bản tổng hợp theo ngày — dùng khi nhật ký chi tiết chưa tải xong. */
+export function summarizeProductionRollup(rows: WeldDailyRollupRow[]) {
+  let total = 0;
+  let passed = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (row.loai_moi_han !== "Sản xuất") continue;
+    const count = rowTotal(row);
+    const errors = rowErrors(row);
+    const rowPassed = row.so_dat == null ? Math.max(0, count - errors) : Math.max(0, Number(row.so_dat));
+    total += count;
+    passed += rowPassed;
+    failed += errors;
+  }
+  return { total, passed, failed, tested: passed + failed };
+}
+
 export function buildWeldDailyRollupSeries(
   rows: WeldDailyRollupRow[],
   dateFrom: string,

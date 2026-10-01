@@ -603,6 +603,8 @@ export type WeldingHistoryListProps = {
 export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListProps = {}) {
   const router = useRouter();
   const configuredRails = useCatalogOptions("Loại ray");
+  const configuredWeldTypes = useCatalogOptions("Loại mối hàn", "name");
+  const configuredMethods = useCatalogOptions("Phương pháp hàn", "code");
   const failedOnly = lockedResult === "Không đạt";
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1176,6 +1178,32 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             ))}
           </select>
         )}
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Loại hàn
+          <select
+            value={weldTypesSel.length === 1 ? weldTypesSel[0] : ""}
+            onChange={(e) => setWeldTypesSel(e.target.value ? [e.target.value] : [])}
+            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <option value="">Tất cả</option>
+            {(configuredWeldTypes.length > 0 ? configuredWeldTypes : WELD_TYPE_OPTIONS).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          Phương pháp hàn
+          <select
+            value={methodsSel.length === 1 ? methodsSel[0] : ""}
+            onChange={(e) => setMethodsSel(e.target.value ? [e.target.value] : [])}
+            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <option value="">Tất cả</option>
+            {(configuredMethods.length > 0 ? configuredMethods : WELD_METHOD_OPTIONS).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
 
         {hasFilter && (
           <button
@@ -1238,7 +1266,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               className={`text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
             />
             <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết</span>
-            <span className="text-xs text-slate-500">Công nghệ hàn · Loại hàn · Máy · Loại ray · Dự án · Ca</span>
+            <span className="text-xs text-slate-500">Phương pháp hàn · Loại hàn · Máy · Loại ray · Dự án · Ca</span>
             {advancedFilterCount > 0 && (
               <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white shadow-2xs font-mono tabular-nums">
                 {advancedFilterCount} đang chọn
@@ -1254,15 +1282,15 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           <div className="border-t border-slate-200 p-3.5 bg-slate-50/70">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
               <FilterGroup
-                title="Công nghệ hàn"
-                options={WELD_METHOD_OPTIONS}
+                title="Phương pháp hàn"
+                options={configuredMethods.length > 0 ? configuredMethods : WELD_METHOD_OPTIONS}
                 selected={methodsSel}
                 onChange={setMethodsSel}
                 onClear={() => setMethodsSel([])}
               />
               <FilterGroup
                 title="Loại hàn"
-                options={WELD_TYPE_OPTIONS}
+                options={configuredWeldTypes.length > 0 ? configuredWeldTypes : WELD_TYPE_OPTIONS}
                 selected={weldTypesSel}
                 onChange={setWeldTypesSel}
                 onClear={() => setWeldTypesSel([])}

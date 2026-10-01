@@ -1,13 +1,21 @@
-/** Mã mối hàn: {mã dự án}{công nghệ}{DD}{MM}{YY}{số TT} — VD: PHQFBW1208260001 */
+/** Mã mối hàn: {công nghệ}{5 số} — VD: ATW00001, FBW00001 */
 
 export const WELD_CODE_SITE_PREFIX = "PHQ";
+export const WELD_CODE_SEQUENCE_WIDTH = 5;
 
 export function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-export function padWeldSequence(n: number, width = 4) {
+export function padWeldSequence(n: number, width = WELD_CODE_SEQUENCE_WIDTH) {
   return String(n).padStart(width, "0");
+}
+
+/** Mã theo máy: mã máy + 5 số thứ tự trên máy đó. VD: KCM0070100001 */
+export function buildMachineWeldCode(machineCode: string, sequence: number) {
+  const machine = machineCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!machine || !Number.isFinite(sequence) || sequence < 1) return "";
+  return `${machine}${padWeldSequence(sequence)}`;
 }
 
 /** Chuẩn hóa mã dự án dùng làm tiền tố mã mối hàn. */
@@ -27,13 +35,10 @@ export function weldCodeDateParts(performedAt: string): { day: string; month: st
 
 export function buildWeldCodePrefix(
   method: string,
-  performedAt: string,
-  sitePrefix = WELD_CODE_SITE_PREFIX,
+  _performedAt?: string,
+  _sitePrefix?: string,
 ) {
-  const parts = weldCodeDateParts(performedAt);
-  if (!parts) return "";
-  const tech = method.trim().toUpperCase() || "FBW";
-  return `${normalizeWeldSitePrefix(sitePrefix)}${tech}${parts.day}${parts.month}${parts.year}`;
+  return method.trim().toUpperCase() || "FBW";
 }
 
 export function buildWeldCode(

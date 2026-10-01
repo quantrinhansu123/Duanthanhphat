@@ -23,7 +23,7 @@ import {
   countReworkWelds,
   filterWeldReportRows,
   getJournalRowDateIso,
-  groupJournalErrorReasons,
+  groupJournalFailureReasons,
   groupJournalRows,
   machineForRow,
   REPORT_MACHINES,
@@ -31,12 +31,14 @@ import {
   REPORT_PERIOD_START,
   resolveChartDateRange,
   summarizeJournalRows,
+  summarizeProductionWelds,
 } from "@/lib/weldReportData";
 import { projectDurationDays } from "@/lib/projectsDb";
 import { filterYearTotals } from "@/lib/tongMoiHanNamDb";
 import {
   buildWeldDailyRollupSeries,
   filterWeldDailyRollupRows,
+  summarizeProductionRollup,
   summarizeWeldDailyRollupRows,
 } from "@/lib/weldDailyStats";
 
@@ -101,6 +103,27 @@ function planWeldsInRange(
   const totalDays = projectDurationDays(project.startDate, project.endDate);
   if (overlapDays <= 0 || totalDays <= 0 || project.plannedWeldCount <= 0) return 0;
   return Math.round(project.plannedWeldCount * (overlapDays / totalDays));
+}
+
+function planStartDate(project: { startDate?: string; theoreticalProgress?: { ngay: string }[] }) {
+  let start = "";
+  for (const row of project.theoreticalProgress ?? []) {
+    if (row.ngay && (!start || row.ngay < start)) start = row.ngay;
+  }
+  return start || project.startDate || "";
+}
+
+function projectHasPlan(project: { plannedWeldCount: number; theoreticalProgress?: { so_moi_han: number }[] }) {
+  if (project.plannedWeldCount > 0) return true;
+  return (project.theoreticalProgress ?? []).some((row) => row.so_moi_han > 0);
+}
+
+function foldVi(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+}
+
+function isPhuQuocProject(name: string) {
+  return foldVi(name).includes("phu quoc");
 }
 
 function gaugeDash(pctVal: number) {
@@ -172,7 +195,8 @@ export default function OverviewDashboard() {
     machineRows: overviewAggregateMachines,
     projectRows: overviewAggregateProjects,
     errorReasonRows: overviewAggregateErrorReasons,
-    doneBeforePlanYear: overviewAggregateDoneBeforePlanYear,
+    doneBeforePlanYear: overviewDoneBeforePlanYear,
+    productionThisPlanYear: overviewProductionThisPlanYear,
     source: overviewAggregateSource,
     loading: overviewAggregateLoading,
   } = useOverviewAggregates(appliedFilters, isUnfilteredOverview);
@@ -530,6 +554,7 @@ export default function OverviewDashboard() {
         targets: dailyTargets,
         labels: dailySeries.map((point) => viDateShort(point.date)),
         fullLabels: dailySeries.map((point) => viDate(point.date)),
+        dates: dailySeries.map((point) => point.date),
       };
     }
     if (cumulativeChartViewMode === "yearly") {
@@ -538,70 +563,109 @@ export default function OverviewDashboard() {
         targets: yearlySeries.map((point) => point.target),
         labels: yearlySeries.map((point) => point.year),
         fullLabels: yearlySeries.map((point) => `Năm ${point.year}`),
+        dates: yearlySeries.map((point) => point.date),
       };
     }
 
+    const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
+    const projectByKey = new Map<string, (typeof selectedProjects)[number]>();
+    for (const project of selectedProjects) {
+      projectByKey.set(project.id, project);
+      projectByKey.set(project.name, project);
+    }
     const months = new Map<string, { value: number; target: number }>();
     const get = (key: string) => {
       if (!months.has(key)) months.set(key, { value: 0, target: 0 });
       return months.get(key)!;
     };
-    selectedRows.forEach((row) => {
-      const date = getJournalRowDateIso(row);
-      get(date ? date.slice(0, 7) : `${row.nam_thuc_hien}`).value += 1;
+    selectedRows.forEach((row, index) => {
+      const date = getJournalRowDateIso(row, index);
+      if (!date || date > asOf) return;
+      const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
+      if (project) {
+        const start = planStartDate(project);
+        if (start && (start > asOf || date < start)) return;
+      }
+      get(date.slice(0, 7)).value += 1;
     });
     selectedProjects.forEach((project) => {
       (project.theoreticalProgress ?? []).forEach((row) => {
+        if (!row.ngay || row.ngay.length < 7) return;
         if (isAllDates || (row.ngay >= filterFrom && row.ngay <= filterTo)) {
           get(row.ngay.slice(0, 7)).target += row.so_moi_han;
         }
       });
     });
-    const keys = [...months.keys()].sort();
-    const label = (key: string) => key.length === 4 ? `${key} (chưa rõ tháng)` : `${key.slice(5)}/${key.slice(0, 4)}`;
+    const known = [...months.keys()].filter((key) => /^\d{4}-\d{2}$/.test(key)).sort();
+    if (known.length > 0) {
+      const cursor = new Date(`${known[0]}-01T00:00:00`);
+      const end = new Date(`${known[known.length - 1]}-01T00:00:00`);
+      while (cursor <= end) {
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+        get(key);
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+    const keys = [...months.keys()].filter((key) => /^\d{4}-\d{2}$/.test(key)).sort();
+    const label = (key: string) => `${key.slice(5)}/${key.slice(0, 4)}`;
     return {
       values: keys.map((key) => months.get(key)!.value),
       targets: keys.map((key) => months.get(key)!.target),
       labels: keys.map(label),
       fullLabels: keys.map(label),
+      dates: keys.map((key) => `${key}-01`),
     };
-  }, [cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, yearlySeries]);
+  }, [cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, todayIso, yearlySeries]);
 
   const cumulativeChart = useMemo(() => {
+    const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
+    const asOfKey = cumulativeChartViewMode === "yearly"
+      ? asOf.slice(0, 4)
+      : cumulativeChartViewMode === "monthly"
+        ? asOf.slice(0, 7)
+        : asOf;
     let actual = 0;
     let target = 0;
-    const actualValues = cumulativeChartPeriod.values.map((value) => (actual += value));
+    let lastActualIndex = -1;
+    const actualValues = cumulativeChartPeriod.values.map((value, index) => {
+      const date = cumulativeChartPeriod.dates[index] ?? "";
+      const key = cumulativeChartViewMode === "yearly"
+        ? date.slice(0, 4)
+        : cumulativeChartViewMode === "monthly"
+          ? date.slice(0, 7)
+          : date;
+      if (key && key <= asOfKey) {
+        actual += value;
+        lastActualIndex = index;
+      }
+      return actual;
+    });
     const targetValues = cumulativeChartPeriod.targets.map((value) => (target += value));
     const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, 1) / 10) * 10);
-    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target };
-  }, [cumulativeChartPeriod]);
+    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
+  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso]);
 
+  const PLAN_YEAR = Number(todayIso.slice(0, 4));
+  const planYearStart = `${PLAN_YEAR}-01-01`;
+  const planYearEnd = `${PLAN_YEAR}-12-31`;
+  // Thẻ tiến độ chỉ xét phần giao giữa bộ lọc đang chọn và năm hiện tại.
+  const asOfDate = isAllDates || todayIso < filterTo ? todayIso : filterTo;
+  const progressFrom = filterFrom > planYearStart ? filterFrom : planYearStart;
+  const progressTo = asOfDate < planYearEnd ? asOfDate : planYearEnd;
+  const hasProgressRange = progressFrom <= progressTo;
   const plannedTarget = useMemo(
     () => {
-      // Luôn cộng đủ mọi dự án đang chọn; lọc tất cả → KH đầy đủ từng dự án.
-      if (isAllDates) {
-        return selectedProjects.reduce((sum, project) => sum + projectPlanTotal(project), 0);
-      }
-      return selectedProjects.reduce(
-        (sum, project) => sum + planWeldsInRange(project, filterFrom, filterTo),
-        0,
-      );
+      if (!hasProgressRange) return 0;
+      return selectedProjects.reduce((sum, project) => sum + planWeldsInRange(project, planYearStart, planYearEnd), 0);
     },
-    [filterFrom, filterTo, isAllDates, selectedProjects],
+    [hasProgressRange, planYearEnd, planYearStart, selectedProjects],
   );
-  // Kế hoạch đến hôm nay (hoặc đến dateTo nếu kỳ đã kết thúc) — dùng cho % tiến độ theo kỳ lọc.
-  const asOfDate = isAllDates || todayIso < filterTo ? todayIso : filterTo;
+  // Kế hoạch của năm hiện tại đến ngày chốt (hoặc đến cuối bộ lọc nếu kỳ đã kết thúc).
   const plannedToDate = useMemo(
-    () => {
-      if (isAllDates) {
-        return selectedProjects.reduce((sum, project) => sum + planWeldsInRange(project, project.startDate, asOfDate), 0);
-      }
-      return selectedProjects.reduce(
-        (sum, project) => sum + planWeldsInRange(project, filterFrom, asOfDate),
-        0,
-      );
-    },
-    [asOfDate, filterFrom, isAllDates, selectedProjects],
+    () => hasProgressRange
+      ? selectedProjects.reduce((sum, project) => sum + planWeldsInRange(project, progressFrom, progressTo), 0)
+      : 0,
+    [hasProgressRange, progressFrom, progressTo, selectedProjects],
   );
   const yesterdayDate = new Date(`${todayIso}T00:00:00`);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
@@ -621,7 +685,7 @@ export default function OverviewDashboard() {
       );
   const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0);
   const errorReasonRows = useMemo(
-    () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalErrorReasons(selectedRows),
+    () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalFailureReasons(selectedRows),
     [overviewAggregateErrorReasons, selectedRows, showFastAggregate],
   );
 
@@ -638,11 +702,22 @@ export default function OverviewDashboard() {
     : showFastDaily
       ? fastSummary.rework
       : countReworkWelds(selectedRows);
+  const productionWelds = useMemo(() => {
+    if (showFastAggregate) {
+      return {
+        total: overviewAggregateSummary.productionTotal,
+        passed: overviewAggregateSummary.productionPassed,
+        failed: overviewAggregateSummary.productionFailed,
+        tested: overviewAggregateSummary.productionPassed + overviewAggregateSummary.productionFailed,
+      };
+    }
+    if (showFastDaily) return summarizeProductionRollup(fastRollupRows);
+    return summarizeProductionWelds(selectedRows);
+  }, [fastRollupRows, overviewAggregateSummary, selectedRows, showFastAggregate, showFastDaily]);
 
-  // Thực tế theo đúng các dự án đang xét (toàn bộ khi lọc tất cả).
+  // Sản lượng sản xuất thực tế trong năm hiện tại và khoảng ngày đang xét.
   const progressActual = useMemo(() => {
-    if (showFastAggregate) return overviewAggregateSummary.total;
-    if (selectedProjects.length === 0) return total;
+    if (showFastAggregate && isAllDates) return overviewProductionThisPlanYear;
     const projectByKey = new Map<string, (typeof selectedProjects)[number]>();
     for (const project of selectedProjects) {
       projectByKey.set(project.id, project);
@@ -650,36 +725,38 @@ export default function OverviewDashboard() {
     }
     let count = 0;
     selectedRows.forEach((row, index) => {
+      if (row.loai_moi_han !== "Sản xuất") return;
       const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
-      if (!project) return;
+      if (selectedProjects.length > 0 && !project) return;
+      if (project) {
+        const start = planStartDate(project);
+        if (start && start > progressTo) return;
+      }
       const iso = getJournalRowDateIso(row, index);
       if (iso) {
-        // Chỉ giới hạn theo ngày dự án khi có đủ ngày bắt đầu / kết thúc.
-        if (project.startDate && iso < project.startDate) return;
-        if (project.endDate && iso > project.endDate) return;
-        if (!isAllDates && (iso < filterFrom || iso > asOfDate)) return;
+        if (!hasProgressRange || iso < progressFrom || iso > progressTo) return;
+        if (project?.startDate && iso < project.startDate) return;
+        if (project?.endDate && iso > project.endDate) return;
       } else if (!isAllDates) {
-        // Dữ liệu chỉ có năm: chỉ tính khi bộ lọc bao trọn năm đó (tránh 1 năm → cả tháng).
-        const yearStart = `${row.nam_thuc_hien}-01-01`;
-        const yearEnd = `${row.nam_thuc_hien}-12-31`;
-        if (filterFrom > yearStart || filterTo < yearEnd) return;
+        const rowYearStart = `${row.nam_thuc_hien}-01-01`;
+        const rowYearEnd = `${row.nam_thuc_hien}-12-31`;
+        if (Number(row.nam_thuc_hien) !== PLAN_YEAR || progressFrom > rowYearStart || progressTo < rowYearEnd) return;
+      } else if (Number(row.nam_thuc_hien) !== PLAN_YEAR) {
+        return;
+      } else if (!hasProgressRange || progressFrom > planYearStart || progressTo < planYearEnd) {
+        // Dữ liệu chỉ có năm không thể lọc an toàn đến một ngày cụ thể.
+        return;
       }
       count += 1;
     });
     return count;
-  }, [asOfDate, filterFrom, filterTo, isAllDates, overviewAggregateSummary.total, selectedProjects, selectedRows, showFastAggregate, total]);
+  }, [hasProgressRange, isAllDates, overviewProductionThisPlanYear, planYearEnd, planYearStart, progressFrom, progressTo, selectedProjects, selectedRows, showFastAggregate]);
 
   // Mục tiêu: đủ KH mọi dự án (lọc tất cả) hoặc KH trong kỳ lọc.
   const target =
-    isAllDates
-      ? plannedTarget > 0
-        ? plannedTarget
-        : progressActual
-      : plannedToDate > 0
-        ? plannedToDate
-        : plannedTarget > 0
-          ? plannedTarget
-          : progressActual;
+    (isAllDates ? plannedTarget : plannedToDate) > 0
+      ? isAllDates ? plannedTarget : plannedToDate
+      : progressActual;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -706,24 +783,57 @@ export default function OverviewDashboard() {
   }, [filterFrom, filterTo, selectedProjects]);
   const plannedDays = plannedDaySet.size;
   const quota = plannedDays > 0 ? plannedTarget / plannedDays : dailySeries.length > 0 ? total / dailySeries.length : 0;
+  const fixedDailyQuota = useMemo(() => {
+    let welds = 0;
+    let days = 0;
+    if (!hasProgressRange) return 0;
+    for (const project of selectedProjects) {
+      const plannedRows = (project.theoreticalProgress ?? []).filter(
+        (row) => row.so_moi_han > 0 && row.ngay >= planYearStart && row.ngay <= planYearEnd,
+      );
+      if (plannedRows.length > 0) {
+        welds += plannedRows.reduce((sum, row) => sum + row.so_moi_han, 0);
+        days += plannedRows.length;
+        continue;
+      }
+      if (project.plannedWeldCount > 0 && project.startDate && project.endDate) {
+        const overlapStart = project.startDate > planYearStart ? project.startDate : planYearStart;
+        const overlapEnd = project.endDate < planYearEnd ? project.endDate : planYearEnd;
+        const count = projectDurationDays(overlapStart, overlapEnd);
+        if (count > 0) {
+          welds += planWeldsInRange(project, planYearStart, planYearEnd);
+          days += count;
+        }
+      }
+    }
+    return days > 0 ? welds / days : 0;
+  }, [hasProgressRange, planYearEnd, planYearStart, selectedProjects]);
+  const evaluableProjects = useMemo(
+    () => selectedProjects.filter((project) => {
+      if (!projectHasPlan(project)) return false;
+      const start = planStartDate(project);
+      return Boolean(start) && start <= asOfDate;
+    }),
+    [asOfDate, selectedProjects],
+  );
 
   const progressPctNum = target > 0 ? (progressActual / target) * 100 : 0;
   const progressPct = formatPctNumber(progressPctNum);
-  const actualToDate = selectedRows.filter((row) => {
-    const project = selectedProjects.find((p) => p.id === row.du_an_id || p.name === row.du_an);
-    if (!project) return false;
-    const date = getJournalRowDateIso(row);
-    if (!date) return row.nam_thuc_hien < Number(asOfDate.slice(0, 4));
-    return date <= asOfDate && date >= project.startDate && date <= project.endDate;
-  }).length;
+  const statusPlannedToDate = evaluableProjects.reduce(
+    (sum, project) => sum + (hasProgressRange ? planWeldsInRange(project, progressFrom, progressTo) : 0),
+    0,
+  );
+  const actualToDate = progressActual;
   const progressStatus =
-    plannedToDate <= 0
-      ? { label: "CHƯA ĐẾN KỲ KẾ HOẠCH", tone: "slate" as const }
-      : actualToDate > plannedToDate
-        ? { label: "VƯỢT TIẾN ĐỘ", tone: "emerald" as const }
-        : actualToDate === plannedToDate
-          ? { label: "ĐÚNG TIẾN ĐỘ", tone: "emerald" as const }
-          : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const };
+    selectedProjects.length === 0 || evaluableProjects.length === 0
+      ? null
+      : statusPlannedToDate <= 0
+        ? { label: "CHƯA ĐẾN KỲ KẾ HOẠCH", tone: "slate" as const }
+        : actualToDate > statusPlannedToDate
+          ? { label: "VƯỢT TIẾN ĐỘ", tone: "emerald" as const }
+          : actualToDate === statusPlannedToDate
+            ? { label: "ĐÚNG TIẾN ĐỘ", tone: "emerald" as const }
+            : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const };
 
   const chart = useMemo(() => {
     // Tháng và năm dùng toàn bộ kỳ lọc; Ngày giữ cửa sổ xem gần nhất.
@@ -1101,28 +1211,34 @@ export default function OverviewDashboard() {
   );
 
   // Card DỰ ÁN:
-  // - Đã thực hiện = số mối nhật ký các năm trước năm hiện tại (thực tế)
-  // - KH dự kiến = tổng mối hàn dự kiến của các dự án
-  // - KH năm <năm> = chỉ kế hoạch tiến độ trong đúng năm hiện tại
-  const PLAN_YEAR = new Date().getFullYear();
-  const plannedWeldsTotal = useMemo(
-    () => selectedProjects.reduce((sum, project) => sum + projectPlanTotal(project), 0),
-    [selectedProjects],
-  );
-  const plannedWeldsThisYear = useMemo(
-    () =>
-      selectedProjects.reduce(
-        (sum, project) =>
-          sum + planWeldsInRange(project, `${PLAN_YEAR}-01-01`, `${PLAN_YEAR}-12-31`),
-        0,
-      ),
-    [PLAN_YEAR, selectedProjects],
-  );
+  // - Đã thực hiện = số mối nhật ký của các năm trước năm hiện tại
+  // - KH dự kiến năm hiện tại = số mối sản xuất đã thực hiện + KH năm hiện tại
+  // - KH năm = kế hoạch Phú Quốc từ 1/11 đến 31/12 của năm hiện tại
   const doneBeforePlanYear = useMemo(
     () => showFastAggregate
-      ? overviewAggregateDoneBeforePlanYear
-      : selectedRows.reduce((sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum), 0),
-    [PLAN_YEAR, overviewAggregateDoneBeforePlanYear, selectedRows, showFastAggregate],
+      ? overviewDoneBeforePlanYear
+      : selectedRows.reduce(
+          (sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum),
+          0,
+        ),
+    [PLAN_YEAR, overviewDoneBeforePlanYear, selectedRows, showFastAggregate],
+  );
+  const productionDoneThisYear = useMemo(
+    () => showFastAggregate
+      ? overviewProductionThisPlanYear
+      : selectedRows.reduce(
+          (sum, row) => Number(row.nam_thuc_hien) === PLAN_YEAR && row.loai_moi_han === "Sản xuất" ? sum + 1 : sum,
+          0,
+        ),
+    [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
+  );
+  const planYearPhuQuoc = useMemo(
+    () =>
+      selectedProjects.reduce((sum, project) => {
+        if (!isPhuQuocProject(project.name)) return sum;
+        return sum + planWeldsInRange(project, `${PLAN_YEAR}-11-01`, `${PLAN_YEAR}-12-31`);
+      }, 0),
+    [PLAN_YEAR, selectedProjects],
   );
 
   const projectChartRows = useMemo(
@@ -1234,14 +1350,17 @@ export default function OverviewDashboard() {
                   Đã thực hiện:{" "}
                   <span className="font-mono font-semibold text-slate-700">{fmt(doneBeforePlanYear)}</span> mối
                 </div>
+                <div className="text-slate-500">
+                  Đã thực hiện {PLAN_YEAR} (Sản xuất):{" "}
+                  <span className="font-mono font-semibold text-slate-700">{fmt(productionDoneThisYear)}</span> mối
+                </div>
                 <div className="text-violet-700 font-medium">
-                  KH dự kiến:{" "}
-                  <span className="font-mono font-semibold">{fmt(plannedWeldsTotal)}</span> mối
+                  KH dự kiến {PLAN_YEAR}:{" "}
+                  <span className="font-mono font-semibold">{fmt(productionDoneThisYear + planYearPhuQuoc)}</span> mối
                 </div>
                 <div className="text-slate-500">
                   KH năm {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold text-slate-700">{fmt(plannedWeldsThisYear)}</span>{" "}
-                  mối
+                  <span className="font-mono font-semibold text-slate-700">{fmt(planYearPhuQuoc)}</span> mối
                 </div>
               </div>
             ) : (
@@ -1270,10 +1389,10 @@ export default function OverviewDashboard() {
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
               {showFastAggregate
-                ? "Tổng hợp nhanh từ DB · chi tiết đang tải nền"
+                ? "Tổng các loại mối hàn · chi tiết đang tải nền"
                 : showFastDaily
-                  ? "Tạm tính theo ngày · chi tiết đang tải"
-                  : "Trong khoảng ngày đang lọc"}
+                  ? "Tổng các loại mối hàn · chi tiết đang tải"
+                  : "Tổng các loại mối hàn"}
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
@@ -1338,12 +1457,12 @@ export default function OverviewDashboard() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {fmt(passed)}
+                {fmt(productionWelds.passed)}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{visibleSummary.tested > 0 ? pctComma(passed, visibleSummary.tested) : "—"}</span> số mối đã thí nghiệm
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{productionWelds.tested > 0 ? pctComma(productionWelds.passed, productionWelds.tested) : "—"}</span> số mối sx đã thí nghiệm
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1359,12 +1478,12 @@ export default function OverviewDashboard() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {failed}
+                {fmt(productionWelds.failed)}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{visibleSummary.tested > 0 ? pctComma(failed, visibleSummary.tested) : "—"}</span> lỗi / số mối đã thí nghiệm
+              <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{productionWelds.total > 0 ? pctComma(productionWelds.failed, productionWelds.total) : "—"}</span> lỗi / tổng mối hàn sx
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
@@ -1376,19 +1495,14 @@ export default function OverviewDashboard() {
           <div className="mt-2 text-3xl font-bold font-mono">{fmt(rework)} <span className="text-xs text-slate-400">mối</span></div>
           <div className="mt-2 text-xs text-slate-500">Có mối hàn liên kết</div>
         </div>
-        {[
-          { label: "CHỜ THÍ NGHIỆM", count: visibleSummary.pending, color: "text-amber-700" },
-          { label: "KHÔNG THÍ NGHIỆM", count: visibleSummary.untested, color: "text-slate-600" },
-        ].map((item) => (
-          <div key={item.label} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-            <div className={`text-xs font-bold tracking-wider ${item.color}`}>{item.label}</div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(item.count)}</span>
-              <span className="text-xs text-slate-400">mối</span>
-            </div>
-            <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+          <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ THÍ NGHIỆM</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(visibleSummary.pending)}</span>
+            <span className="text-xs text-slate-400">mối</span>
           </div>
-        ))}
+          <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
+        </div>
       </div>
 
       {/* Tổng quan */}
@@ -1430,8 +1544,8 @@ export default function OverviewDashboard() {
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {isAllDates
-                  ? `Mục tiêu ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
-                  : `Mục tiêu đến ${viDate(asOfDate)}: ${fmt(target)} mối`}
+                  ? `Mục tiêu năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
+                  : `Mục tiêu năm ${PLAN_YEAR} đến ${viDate(asOfDate)}: ${fmt(target)} mối`}
               </div>
             </div>
 
@@ -1449,43 +1563,46 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Kế hoạch trung bình/ngày</div>
                 <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {quota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+                    {fixedDailyQuota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
                   </span>
                   <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Kế hoạch trong kỳ</div>
-                <div className="flex items-baseline gap-1 whitespace-nowrap">
-                  <span className="text-base sm:text-lg font-bold font-mono text-emerald-700">
-                    {fmt(plannedTarget)}
-                  </span>
-                  <span className="text-xs text-slate-400">mối</span>
-                </div>
-              </div>
-              <div>
                 <div className="mb-1 text-xs text-slate-500">Trạng thái</div>
-                <div
-                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold tracking-wide shadow-2xs ${
-                    progressStatus.tone === "emerald"
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                      : progressStatus.tone === "amber"
-                        ? "bg-amber-50 border-amber-200 text-amber-800"
-                        : "bg-slate-50 border-slate-200 text-slate-600"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      progressStatus.tone === "emerald"
-                        ? "bg-emerald-500"
-                        : progressStatus.tone === "amber"
-                          ? "bg-amber-500"
-                          : "bg-slate-400"
-                    }`}
-                  />
-                  {progressStatus.label}
-                </div>
-                <p className="mt-2 text-xs text-slate-500">Đến {viDate(asOfDate)}: thực tế {fmt(actualToDate)} / kế hoạch {fmt(plannedToDate)} mối.</p>
+                {progressStatus ? (
+                  <>
+                    <div
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold tracking-wide shadow-2xs ${
+                        progressStatus.tone === "emerald"
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          : progressStatus.tone === "amber"
+                            ? "bg-amber-50 border-amber-200 text-amber-800"
+                            : "bg-slate-50 border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                          progressStatus.tone === "emerald"
+                            ? "bg-emerald-500"
+                            : progressStatus.tone === "amber"
+                              ? "bg-amber-500"
+                              : "bg-slate-400"
+                        }`}
+                      />
+                      {progressStatus.label}
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                      Chú thích: {isAllDates
+                        ? `Năm ${PLAN_YEAR} đến ${viDate(asOfDate)}`
+                        : `${viDate(progressFrom)}–${viDate(progressTo)}`} · thực hiện {fmt(actualToDate)} / kế hoạch {fmt(statusPlannedToDate)} mối hàn.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-500">
+                    {selectedProjects.length === 0 ? "Không có dự án để đánh giá" : "Chưa đến ngày bắt đầu kế hoạch"}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1891,7 +2008,7 @@ export default function OverviewDashboard() {
                   >
                     {row.name}
                   </span>
-                  <span className="font-mono text-xs tabular-nums text-slate-500">{fmt(row.count)}</span>
+                  <span className="shrink-0 font-mono text-sm sm:text-base font-bold tabular-nums text-slate-700">{fmt(row.count)}</span>
                 </div>
               ))
             ) : (
@@ -1952,26 +2069,35 @@ export default function OverviewDashboard() {
                     <svg viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
                       {[0.5, 52, 104, 156, 208, 259.5].map((y) => <line key={y} x1="0" y1={y} x2="500" y2={y} stroke={y === 259.5 ? "#cbd5e1" : "#f1f5f9"} strokeWidth="1" />)}
                       {cumulativeChart.actualValues.map((actual, index) => {
+                        const showActual = index <= cumulativeChart.lastActualIndex;
+                        const actualValue = showActual ? actual : 0;
                         const target = cumulativeChart.targetValues[index] ?? 0;
                         const band = 500 / cumulativeChart.actualValues.length;
-                        const blueH = actual > 0 ? Math.max(2, actual / cumulativeChart.max * 260) : 0;
-                        const yellowH = target > actual ? Math.max(2, (target - actual) / cumulativeChart.max * 260) : 0;
+                        const blueH = showActual && actualValue > 0 ? Math.max(2, actualValue / cumulativeChart.max * 260) : 0;
+                        const yellowH = target > actualValue ? Math.max(2, (target - actualValue) / cumulativeChart.max * 260) : 0;
                         return <g key={index}>
                           {yellowH > 0 && <rect x={band * index + band * .27} y={260 - blueH - yellowH} width={band * .46} height={yellowH} fill="#fcd34d" />}
                           {blueH > 0 && <rect x={band * index + band * .27} y={260 - blueH} width={band * .46} height={blueH} fill="#3b82f6" />}
                         </g>;
                       })}
-                      {([cumulativeChart.targetValues, cumulativeChart.actualValues] as const).map((values, lineIndex) => (
+                      <path
+                        d={cumulativeChart.targetValues.map((value, index) => `${index ? "L" : "M"} ${(500 / cumulativeChart.targetValues.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}
+                        fill="none"
+                        stroke="#e08e0b"
+                        strokeWidth="2.25"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {cumulativeChart.lastActualIndex >= 0 ? (
                         <path
-                          key={lineIndex}
-                          d={values.map((value, index) => `${index ? "L" : "M"} ${(500 / values.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}
+                          d={cumulativeChart.actualValues.slice(0, cumulativeChart.lastActualIndex + 1).map((value, index) => `${index ? "L" : "M"} ${(500 / cumulativeChart.actualValues.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}
                           fill="none"
-                          stroke={lineIndex === 0 ? "#e08e0b" : "#2563eb"}
+                          stroke="#2563eb"
                           strokeWidth="2.25"
                           strokeLinecap="round"
                           vectorEffect="non-scaling-stroke"
                         />
-                      ))}
+                      ) : null}
                     </svg>
                     <div className="relative h-12 pt-2">
                       {cumulativeChartPeriod.labels.map((label, index) => ({ label, index })).filter(({ index }) => cumulativeChartPeriod.labels.length <= 8 || index % Math.ceil(cumulativeChartPeriod.labels.length / 8) === 0).map(({ label, index }) => (

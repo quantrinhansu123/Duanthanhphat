@@ -44,7 +44,6 @@ export const PHRASES: Record<string, string> = {
   "Thư viện lỗi mối hàn": "Weld Fault Library",
   "Lịch chạy máy": "Machine Run Schedule",
   "Phụ tùng thay thế": "Replacement Parts",
-  "Quản lý phương tiện": "Vehicle Management",
   "Báo cáo dầu": "Fuel / oil report",
   "Nhật ký chạy máy": "Machine run journal",
   "Mở nhật ký chạy máy": "Open machine run journal",

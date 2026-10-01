@@ -87,13 +87,6 @@ export const navigation: NavItem[] = [
         descriptionEn: "Machine code, model, current location, operating status, and weld count",
       },
       {
-        id: "quan-ly-phuong-tien",
-        label: "Quản lý phương tiện",
-        labelEn: "Vehicle Management",
-        description: "Phương tiện vận chuyển: NSX, tải trọng, kích thước và khổ đường",
-        descriptionEn: "Transport vehicles: manufacturer, load capacity, dimensions, and track gauge",
-      },
-      {
         id: "lich-bao-tri",
         label: "Lịch bảo trì",
         labelEn: "Maintenance Schedule",

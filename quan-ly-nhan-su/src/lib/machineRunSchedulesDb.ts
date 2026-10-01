@@ -19,7 +19,7 @@ import {
 /** Mỗi ca hàn quy ước ~8 giờ máy khi tổng hợp từ nhật ký. */
 export const HOURS_PER_WELD_SHIFT = 8;
 
-type EquipmentRow = { id: string; ma_may: string; ten_may: string };
+type EquipmentRow = { id: string; ma_may: string; ten_may: string; thong_so?: unknown };
 type ProjectRow = { id: string; du_an: string };
 type PersonnelRow = { employee_id: string; ho_ten: string };
 
@@ -70,6 +70,13 @@ export type MachineRunScheduleBundle = {
   source: "supabase" | "seed";
   error?: string;
 };
+
+function readOilQuota(thongSo: unknown): number | null {
+  if (!thongSo || typeof thongSo !== "object") return null;
+  const raw = (thongSo as Record<string, unknown>).oilQuota;
+  const value = typeof raw === "number" ? raw : Number(String(raw ?? "").replace(",", "."));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
 
 /** Gom bản ghi nhật ký hàn → 1 dòng / (ngày · máy · dự án · thợ · PP hàn · loại mối). */
 export function aggregateWeldJournalToSchedules(rows: WeldReportRow[]): MachineRunSchedule[] {
@@ -240,7 +247,7 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
   try {
     const [journalRows, machineResult, projectResult, personnelResult] = await Promise.all([
       loadWeldReportRows(undefined, undefined, { mode: "full" }),
-      supabase.from("thiet_bi").select("id,ma_may,ten_may").order("ma_may", { ascending: true }),
+      supabase.from("thiet_bi").select("id,ma_may,ten_may,thong_so").order("ma_may", { ascending: true }),
       supabase.from("du_an").select("id,du_an").order("du_an", { ascending: true }),
       supabase.from("nhan_su").select("employee_id,ho_ten").order("ho_ten", { ascending: true }),
     ]);
@@ -252,6 +259,7 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
       id: row.id,
       code: row.ma_may,
       name: row.ten_may,
+      oilQuota: readOilQuota(row.thong_so),
     }));
     const machineById = new Map(machines.map((m) => [m.id, m]));
     const machineByCode = new Map(machines.map((m) => [m.code.toLowerCase(), m]));

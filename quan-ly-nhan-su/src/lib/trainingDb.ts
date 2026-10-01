@@ -1,6 +1,46 @@
 import { createClient } from "@/lib/supabase/client";
 import type { CloudinaryResourceType } from "@/lib/cloudinaryClient";
 
+export const TRAINING_VIDEO_SLOT_COUNT = 5;
+
+export function parseTrainingVideoUrls(value?: string | null): string[] {
+  const raw = (value ?? "").trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+          .slice(0, TRAINING_VIDEO_SLOT_COUNT);
+      }
+    } catch {
+      // Giữ nguyên nếu không phải JSON.
+    }
+  }
+  if (raw.includes("\n")) {
+    return raw
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, TRAINING_VIDEO_SLOT_COUNT);
+  }
+  return [raw];
+}
+
+export function serializeTrainingVideoUrls(urls: string[]): string | null {
+  const clean = urls.map((item) => item.trim()).filter(Boolean).slice(0, TRAINING_VIDEO_SLOT_COUNT);
+  if (clean.length === 0) return null;
+  if (clean.length === 1) return clean[0];
+  return JSON.stringify(clean);
+}
+
+function videoFieldsFromLink(value?: string | null) {
+  const videoUrls = parseTrainingVideoUrls(value);
+  return { videoUrl: videoUrls[0] ?? "", videoUrls };
+}
+
 export type TrainingAsset = {
   publicId: string;
   secureUrl: string;
@@ -36,8 +76,10 @@ export type DbTrainingCourse = {
   result: string;
   thumbnail: string;
   cloudinaryPublicId?: string | null;
-  /** Link 1 video bài giảng. */
+  /** Link video đầu tiên — giữ tương thích chỗ chỉ hiện 1 video. */
   videoUrl?: string;
+  /** Tối đa 5 link video bài giảng. */
+  videoUrls?: string[];
   /** Loại ray áp dụng khóa học. */
   railType?: string;
   /** Công nghệ / phương pháp hàn (FBW, ATW, ...). */
@@ -117,6 +159,7 @@ export type SaveTrainingCourseInput = {
   selfTrainingHours?: number;
   participantsCount?: number;
   videoUrl?: string;
+  videoUrls?: string[];
   railType?: string;
   weldMethod?: string;
   attendees: {

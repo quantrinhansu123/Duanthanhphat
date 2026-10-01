@@ -19,6 +19,7 @@ import {
   type TransportUnitDetail,
 } from "@/data/machines";
 import {
+  CaretDown,
   CaretRight,
   MagnifyingGlass,
   Package,
@@ -49,6 +50,7 @@ import {
   updatePersonnelTrainedMachines,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
+import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Link from "next/link";
 
 type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares";
@@ -524,6 +526,7 @@ function MachineDetailModal({
   const [personSearch, setPersonSearch] = useState("");
   const [personSuggestOpen, setPersonSuggestOpen] = useState(false);
   const [savingPersonnel, setSavingPersonnel] = useState(false);
+  const showUnitPrice = canViewUnitPrice();
 
   // Welding images
   const weldingCover = machine.weldingUnit?.coverImage || machine.image || defaultMachineImage;
@@ -940,12 +943,6 @@ function MachineDetailModal({
 
           {tab === "transport" && (
             <div className="space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-[#0047AB]">
-                <span>Quản lý đầy đủ phương tiện đã tách ra menu riêng.</span>
-                <Link href="/quan-ly-phuong-tien" className="font-semibold underline hover:text-[#00388A]">
-                  Mở Quản lý phương tiện
-                </Link>
-              </div>
               <div className="space-y-2.5">
                 <div className="relative mx-auto h-[240px] w-full max-w-[640px] overflow-hidden rounded-xl bg-slate-100 border border-slate-200 shadow-md sm:h-[300px]">
                   {activeTransportImg ? (
@@ -1292,7 +1289,7 @@ function MachineDetailModal({
                         <th className="px-3.5 py-2.5">Nhóm</th>
                         <th className="px-3.5 py-2.5">NSX</th>
                         <th className="px-3.5 py-2.5">Tồn</th>
-                        <th className="px-3.5 py-2.5">Đơn giá</th>
+                        {showUnitPrice ? <th className="px-3.5 py-2.5">Đơn giá</th> : null}
                         <th className="px-3.5 py-2.5">Trạng thái</th>
                         <th className="min-w-[180px] px-3.5 py-2.5">Ghi chú</th>
                       </tr>
@@ -1310,9 +1307,11 @@ function MachineDetailModal({
                             {part.stockQty} {part.unit}
                             <div className="text-[11px] text-slate-400">Min {part.minStock}</div>
                           </td>
-                          <td className="whitespace-nowrap px-3.5 py-3 font-mono tabular-nums text-slate-800">
-                            {formatSpareVnd(part.unitPriceVnd)} ₫
-                          </td>
+                          {showUnitPrice ? (
+                            <td className="whitespace-nowrap px-3.5 py-3 font-mono tabular-nums text-slate-800">
+                              {formatSpareVnd(part.unitPriceVnd)} ₫
+                            </td>
+                          ) : null}
                           <td className="px-3.5 py-3">
                             <span
                               className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${spareStatusStyle[part.status]}`}
@@ -1542,11 +1541,6 @@ function MachineFormModal({
                 onUploadingChange={setIsUploading}
               />
 
-              <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-[#0047AB]">
-                Phương tiện vận chuyển quản lý tại menu riêng →{" "}
-                <a href="/quan-ly-phuong-tien" className="font-semibold underline">Quản lý phương tiện</a>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Mã máy
@@ -1668,6 +1662,28 @@ function MachineFormModal({
               )}
 
               <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Định mức dầu (lít)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.specs?.oilQuota ?? ""}
+                  onChange={(e) => setForm({
+                    ...form,
+                    specs: {
+                      ...form.specs,
+                      oilQuota: e.target.value === "" ? undefined : Number(e.target.value),
+                    },
+                  })}
+                  placeholder="Mức dầu cuối ngày tối thiểu, VD: 20"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] font-mono"
+                />
+                <span className="mt-1 block text-[11px] font-medium text-slate-500">
+                  Cuối ngày dưới mức này sẽ cảnh báo Cấp dầu cho Chỉ huy trưởng.
+                </span>
+              </label>
+
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                 Ghi chú
                 <textarea
                   value={form.note}
@@ -1718,6 +1734,7 @@ export default function MachineList() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Machine | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("welding");
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
@@ -1974,7 +1991,7 @@ export default function MachineList() {
           {filtered.map((m) => {
             const selected = activeId === m.id;
             return (
-              <li key={m.id} className={`flex items-start ${selected ? "bg-blue-50/70" : "hover:bg-slate-50/80"} transition-colors duration-150`}>
+              <li key={m.id} className={`flex flex-wrap items-start ${selected ? "bg-blue-50/70" : "hover:bg-slate-50/80"} transition-colors duration-150`}>
                 <button
                   type="button"
                   onClick={() => openDetail(m)}
@@ -2002,6 +2019,15 @@ export default function MachineList() {
                       {getMachineCategory(m)}
                       {" · "}
                       <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
+                      {Number(m.specs?.oilQuota) > 0 && (
+                        <>
+                          {" · "}
+                          Định mức dầu{" "}
+                          <span className="font-mono font-semibold text-slate-700">
+                            {Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span
@@ -2026,6 +2052,16 @@ export default function MachineList() {
                 <div className="relative flex shrink-0 items-center gap-1 px-3 py-3.5">
                   <button
                     type="button"
+                    onClick={() => setExpandedId((current) => current === m.id ? null : m.id)}
+                    aria-label={expandedId === m.id ? `Thu gọn ${m.name}` : `Hiện thông tin ${m.name}`}
+                    aria-expanded={expandedId === m.id}
+                    className="rounded-lg p-2 text-slate-600 hover:bg-blue-50 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer"
+                    title={expandedId === m.id ? "Thu gọn thông tin" : "Hiện thông tin bên dưới"}
+                  >
+                    <CaretDown size={17} weight="bold" className={`transition-transform duration-200 ${expandedId === m.id ? "rotate-180" : ""}`} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       openEdit(m);
@@ -2042,6 +2078,77 @@ export default function MachineList() {
                     Xóa
                   </button>
                 </div>
+
+                {expandedId === m.id && (() => {
+                  const vehicle = m.transportUnit;
+                  const vehicleImages = vehicle?.gallery?.length
+                    ? vehicle.gallery
+                    : vehicle?.coverImage
+                      ? [vehicle.coverImage]
+                      : getMachineCategory(m) === "Phương tiện" && m.image
+                        ? [m.image]
+                        : [];
+                  const vehicleCover = vehicle?.coverImage || vehicleImages[0] || "";
+                  const info: Array<[string, string]> = [
+                    ["Mã máy", m.code],
+                    ["Model", m.model],
+                    ["Loại thiết bị", getMachineCategory(m)],
+                    ["Trạng thái", m.status],
+                    ["Vị trí", m.location],
+                    ["Dự án hiện tại", m.currentProject],
+                    ["Người vận hành", m.operator],
+                    ["Người phụ trách", m.personInCharge],
+                    ["Tổ", m.team],
+                    ["Năm lắp đặt", m.yearInstalled ? String(m.yearInstalled) : ""],
+                    ["Giờ hoạt động", m.operatingHours ? `${m.operatingHours.toLocaleString("vi-VN")} giờ` : ""],
+                    ["Công nghệ hàn", m.weldingTechnology],
+                    ["Năng suất thiết kế", m.weldingCapacity],
+                    ["Biển số xe", vehicle?.plateNumber || ""],
+                    ["Model xe", vehicle?.model || ""],
+                    ["Tải trọng xe", String(vehicle?.specs?.weight || "")],
+                    ["Định mức dầu", Number(m.specs?.oilQuota) > 0 ? `${Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít` : ""],
+                  ];
+                  return (
+                    <div className="basis-full border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-6">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.85fr)]">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#0047AB]">Thông tin thiết bị</h3>
+                          <dl className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+                            {info.filter(([, value]) => Boolean(value)).map(([label, value]) => (
+                              <div key={label} className="flex justify-between gap-3 border-b border-slate-100 py-2 text-xs">
+                                <dt className="text-slate-500">{label}</dt>
+                                <dd className="text-right font-medium text-slate-800">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                          {m.note && <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">{m.note}</p>}
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                          <div className="mb-2.5 flex items-center justify-between gap-2">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Ảnh xe / phương tiện</h3>
+                            {vehicle?.plateNumber && <span className="font-mono text-xs font-semibold text-slate-600">{vehicle.plateNumber}</span>}
+                          </div>
+                          <div className="relative h-48 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:h-56">
+                            {vehicleCover ? (
+                              <Image src={vehicleCover} alt={vehicle?.name || `Ảnh ${m.name}`} fill className="object-contain" sizes="(max-width: 1024px) 100vw, 40vw" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center px-4 text-center text-xs text-slate-500">Chưa có ảnh xe được cập nhật.</div>
+                            )}
+                          </div>
+                          {vehicleImages.length > 1 && (
+                            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                              {vehicleImages.map((imageUrl, index) => (
+                                <a key={`${imageUrl}-${index}`} href={imageUrl} target="_blank" rel="noreferrer" className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md border border-slate-200">
+                                  <Image src={imageUrl} alt={`Ảnh xe ${index + 1}`} fill className="object-cover" sizes="80px" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </li>
             );
           })}

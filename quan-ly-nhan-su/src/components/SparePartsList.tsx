@@ -10,6 +10,7 @@ import {
   type SparePartStatus,
 } from "@/data/spareParts";
 import { MACHINE_MODELS } from "@/data/machines";
+import { canViewUnitPrice } from "@/lib/viewerAccess";
 
 type ModalState =
   | { mode: "add" }
@@ -153,6 +154,7 @@ export default function SparePartsList() {
   }
 
   const readOnly = modal?.mode === "view";
+  const showUnitPrice = canViewUnitPrice();
 
   return (
     <main className="w-full px-4 pb-8 sm:px-6">
@@ -265,7 +267,7 @@ export default function SparePartsList() {
                 <th className="px-3.5 py-3">Model máy</th>
                 <th className="px-3.5 py-3">Nhóm</th>
                 <th className="px-3.5 py-3 text-right">Tồn kho</th>
-                <th className="px-3.5 py-3 text-right">Đơn giá</th>
+                {showUnitPrice ? <th className="px-3.5 py-3 text-right">Đơn giá</th> : null}
                 <th className="px-3.5 py-3">Trạng thái</th>
                 <th className="px-3.5 py-3 text-right">Thao tác</th>
               </tr>
@@ -291,9 +293,11 @@ export default function SparePartsList() {
                   <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-900">
                     {row.stockQty.toLocaleString("vi-VN")} {row.unit}
                   </td>
-                  <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-700">
-                    {formatVnd(row.unitPriceVnd)} ₫
-                  </td>
+                  {showUnitPrice ? (
+                    <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-700">
+                      {formatVnd(row.unitPriceVnd)} ₫
+                    </td>
+                  ) : null}
                   <td className="px-3.5 py-3">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyle[row.status]}`}>
                       {row.status}
@@ -310,7 +314,7 @@ export default function SparePartsList() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={showUnitPrice ? 8 : 7} className="px-4 py-12 text-center text-sm text-slate-500">
                     Chưa có phụ tùng phù hợp.
                   </td>
                 </tr>
@@ -434,17 +438,19 @@ export default function SparePartsList() {
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] disabled:bg-slate-100 sm:text-sm"
                   />
                 </label>
-                <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
-                  Đơn giá (₫)
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.unitPriceVnd}
-                    disabled={readOnly}
-                    onChange={(event) => setForm((current) => ({ ...current, unitPriceVnd: Number(event.target.value) }))}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] disabled:bg-slate-100 sm:text-sm"
-                  />
-                </label>
+                {showUnitPrice ? (
+                  <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+                    Đơn giá (₫)
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.unitPriceVnd}
+                      disabled={readOnly}
+                      onChange={(event) => setForm((current) => ({ ...current, unitPriceVnd: Number(event.target.value) }))}
+                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] disabled:bg-slate-100 sm:text-sm"
+                    />
+                  </label>
+                ) : null}
               </div>
               <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
                 Trạng thái
