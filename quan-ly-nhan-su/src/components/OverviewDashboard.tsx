@@ -73,16 +73,6 @@ function pctComma(n: number, total: number) {
   return `${((n / total) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`;
 }
 
-/** Tổng KH một dự án: lấy max(tổng dự kiến, tổng tiến độ lý thuyết) để không sót dự án. */
-function projectPlanTotal(project: {
-  plannedWeldCount: number;
-  theoreticalProgress?: { ngay: string; so_moi_han: number }[];
-}) {
-  const fromCount = Math.max(0, project.plannedWeldCount || 0);
-  const fromTheo = (project.theoreticalProgress ?? []).reduce((sum, row) => sum + row.so_moi_han, 0);
-  return Math.max(fromCount, fromTheo);
-}
-
 /** Mối hàn dự kiến trong kỳ, chỉ cộng các dòng tiến độ lý thuyết đã lưu. */
 function scheduledWeldsInRange(
   project: { theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
@@ -94,28 +84,6 @@ function scheduledWeldsInRange(
     if (row.ngay >= from && row.ngay <= to) sum += row.so_moi_han;
   }
   return sum;
-}
-
-/** Kế hoạch mối hàn của 1 dự án trong khoảng [from, to], có fallback theo tỷ lệ ngày. */
-function planWeldsInRange(
-  project: { startDate: string; endDate: string; plannedWeldCount: number; theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
-  from: string,
-  to: string,
-) {
-  const progress = project.theoreticalProgress ?? [];
-  if (progress.length > 0) {
-    return progress.reduce(
-      (sum, row) => (row.ngay >= from && row.ngay <= to ? sum + row.so_moi_han : sum),
-      0,
-    );
-  }
-
-  const overlapStart = project.startDate > from ? project.startDate : from;
-  const overlapEnd = project.endDate < to ? project.endDate : to;
-  const overlapDays = projectDurationDays(overlapStart, overlapEnd);
-  const totalDays = projectDurationDays(project.startDate, project.endDate);
-  if (overlapDays <= 0 || totalDays <= 0 || project.plannedWeldCount <= 0) return 0;
-  return Math.round(project.plannedWeldCount * (overlapDays / totalDays));
 }
 
 function planStartDate(project: { startDate?: string; theoreticalProgress?: { ngay: string }[] }) {
@@ -250,7 +218,7 @@ export default function OverviewDashboard() {
     setProjects,
     loading: projectsLoading,
     error: projectsError,
-  } = useProjectsData({ includeProgress: true });
+  } = useProjectsData({ includeProgress: false });
   const {
     years: yearTotals,
     byProject: yearByProject,
@@ -809,8 +777,11 @@ export default function OverviewDashboard() {
     return count;
   }, [hasProgressRange, isAllDates, overviewProductionThisPlanYear, planYearEnd, planYearStart, progressFrom, progressTo, selectedProjects, selectedRows, showFastAggregate]);
 
-  // Mẫu số là mối hàn dự kiến của năm, không lấy số đã thực hiện khi kế hoạch chưa về.
-  const target = isAllDates ? plannedTarget : plannedToDate;
+  // Mẫu số là tổng mối hàn dự kiến đã lưu trên từng dự án.
+  const target = useMemo(
+    () => selectedProjects.reduce((sum, project) => sum + Math.max(0, Math.round(project.plannedWeldCount || 0)), 0),
+    [selectedProjects],
+  );
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -1198,7 +1169,7 @@ export default function OverviewDashboard() {
           maDuAn: project.code || sourceProject?.maDuAn || "",
           location: sourceProject?.location || "",
           status: sourceProject?.status || "Từ bảng tổng hợp",
-          planned: sourceProject ? projectPlanTotal(sourceProject) : project.total,
+          planned: Math.max(0, Math.round(sourceProject?.plannedWeldCount || 0)),
           count: productionById.get(project.id) ?? productionByName.get(project.name) ?? 0,
           passed: project.passed,
           errors: project.errors,
@@ -1226,9 +1197,7 @@ export default function OverviewDashboard() {
         maDuAn: project.maDuAn || "",
         location: project.location || "",
         status: project.status,
-        planned: isAllDates
-          ? projectPlanTotal(project)
-          : planWeldsInRange(project, filterFrom, filterTo),
+        planned: Math.max(0, Math.round(project.plannedWeldCount || 0)),
         count: weld?.total ?? 0,
         passed: weld?.passed ?? 0,
         errors: weld?.errors ?? 0,
@@ -1268,11 +1237,8 @@ export default function OverviewDashboard() {
     : selectedProjects.length;
   const plannedWeldsAll = useMemo(
     () =>
-      selectedProjects.reduce((sum, project) => {
-        if (isAllDates) return sum + projectPlanTotal(project);
-        return sum + planWeldsInRange(project, filterFrom, filterTo);
-      }, 0),
-    [filterFrom, filterTo, isAllDates, selectedProjects],
+      selectedProjects.reduce((sum, project) => sum + Math.max(0, Math.round(project.plannedWeldCount || 0)), 0),
+    [selectedProjects],
   );
 
   // Card DỰ ÁN:
@@ -1603,9 +1569,7 @@ export default function OverviewDashboard() {
                 {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {isAllDates
-                  ? `Mục tiêu năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
-                  : `Mục tiêu năm ${PLAN_YEAR} đến ${viDate(asOfDate)}: ${fmt(target)} mối`}
+                {`Tổng mối hàn dự kiến · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
               </div>
             </div>
 
@@ -2024,7 +1988,7 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất
+            Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất · dự kiến là tổng mối hàn dự kiến của dự án
           </p>
 
           <div className="mt-3.5 flex justify-center">
