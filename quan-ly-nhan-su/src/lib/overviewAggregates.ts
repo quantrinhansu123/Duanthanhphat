@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import {
+  groupJournalDefectStats,
   WELD_TEST_STATUSES,
   type AppliedReportFilters,
+  type DefectStatSource,
   type ErrorReasonRow,
 } from "@/lib/weldReportData";
 import {
@@ -111,46 +113,30 @@ async function countRows(
   return result.count ?? 0;
 }
 
-function makeErrorReasonRows(rows: Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null; tinh_trang_thi_nghiem?: string | null }>) {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    if (Number(row.so_luong_loi ?? 0) <= 0 && row.tinh_trang_thi_nghiem !== "Không đạt") continue;
-    const label = row.nguyen_nhan_loi?.trim() || "Chưa ghi lý do không đạt";
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  const max = Math.max(...counts.values(), 0);
-  if (!max) return [];
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([label, count]) => ({ label, count, pct: Math.round((count / max) * 100) }));
-}
-
 async function loadErrorReasons(
   supabase: ReturnType<typeof createClient>,
   filters: Partial<AppliedReportFilters>,
 ): Promise<ErrorReasonRow[]> {
-  let query = supabase
-    .from("bao_cao_moi_han_theo_du_an")
-    .select("nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem")
-    .or("tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0")
-    .limit(1000);
-  query = applyFilters(query, filters);
-  const result = await query;
-  // Older deployments may not have the explicit test-result column.
-  if (result.error && /tinh_trang_thi_nghiem/.test(result.error.message ?? "")) {
-    let fallback = supabase
+  const columns = ["ma_khuyet_tat,nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem", "nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem", "nguyen_nhan_loi,so_luong_loi"];
+  let lastError: { message?: string } | null = null;
+  for (const columnList of columns) {
+    let query = supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select("nguyen_nhan_loi,so_luong_loi")
-      .gt("so_luong_loi", 0)
+      .select(columnList)
+      .or(columnList.includes("tinh_trang_thi_nghiem") ? "tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0" : "so_luong_loi.gt.0")
       .limit(1000);
-    fallback = applyFilters(fallback, filters);
-    const fallbackResult = await fallback;
-    if (fallbackResult.error) throw fallbackResult.error;
-    return makeErrorReasonRows((fallbackResult.data ?? []) as Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null }>);
+    query = applyFilters(query, filters);
+    const result = await query;
+    if (!result.error) {
+      return groupJournalDefectStats((result.data ?? []) as DefectStatSource[]);
+    }
+    lastError = result.error;
+    const message = result.error.message ?? "";
+    const missingDefect = columnList.includes("ma_khuyet_tat") && /ma_khuyet_tat/.test(message);
+    const missingStatus = columnList.includes("tinh_trang_thi_nghiem") && /tinh_trang_thi_nghiem/.test(message);
+    if (!missingDefect && !missingStatus) throw result.error;
   }
-  if (result.error) throw result.error;
-  return makeErrorReasonRows((result.data ?? []) as Array<{ nguyen_nhan_loi?: string | null; so_luong_loi?: number | null; tinh_trang_thi_nghiem?: string | null }>);
+  throw lastError ?? new Error("Không tải được thống kê khuyết tật");
 }
 
 async function loadProjectAggregates(

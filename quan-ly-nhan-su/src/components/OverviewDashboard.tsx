@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Buildings,
   CalendarBlank,
@@ -23,7 +23,7 @@ import {
   countReworkWelds,
   filterWeldReportRows,
   getJournalRowDateIso,
-  groupJournalFailureReasons,
+  groupJournalDefectStats,
   groupJournalRows,
   machineForRow,
   REPORT_MACHINES,
@@ -83,6 +83,19 @@ function projectPlanTotal(project: {
   return Math.max(fromCount, fromTheo);
 }
 
+/** Mối hàn dự kiến trong kỳ, chỉ cộng các dòng tiến độ lý thuyết đã lưu. */
+function scheduledWeldsInRange(
+  project: { theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
+  from: string,
+  to: string,
+) {
+  let sum = 0;
+  for (const row of project.theoreticalProgress ?? []) {
+    if (row.ngay >= from && row.ngay <= to) sum += row.so_moi_han;
+  }
+  return sum;
+}
+
 /** Kế hoạch mối hàn của 1 dự án trong khoảng [from, to], có fallback theo tỷ lệ ngày. */
 function planWeldsInRange(
   project: { startDate: string; endDate: string; plannedWeldCount: number; theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
@@ -113,17 +126,31 @@ function planStartDate(project: { startDate?: string; theoreticalProgress?: { ng
   return start || project.startDate || "";
 }
 
+function projectPlanYear(project: { startDate?: string; theoreticalProgress?: { ngay: string }[] }) {
+  const year = Number(planStartDate(project).slice(0, 4));
+  return Number.isInteger(year) && year >= 1900 ? year : null;
+}
+
+function compareProjectYearDesc(
+  a: { year: number | null; name: string },
+  b: { year: number | null; name: string },
+) {
+  if (a.year == null && b.year == null) return a.name.localeCompare(b.name, "vi");
+  if (a.year == null) return 1;
+  if (b.year == null) return -1;
+  return b.year - a.year || a.name.localeCompare(b.name, "vi");
+}
+
 function projectHasPlan(project: { plannedWeldCount: number; theoreticalProgress?: { so_moi_han: number }[] }) {
   if (project.plannedWeldCount > 0) return true;
   return (project.theoreticalProgress ?? []).some((row) => row.so_moi_han > 0);
 }
 
-function foldVi(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-}
-
-function isPhuQuocProject(name: string) {
-  return foldVi(name).includes("phu quoc");
+function projectStatusClass(status: string) {
+  if (status === "Hoàn thành") return "border-blue-200 bg-blue-50 text-[#0047AB]";
+  if (status === "Đang triển khai") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "Tạm dừng") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function gaugeDash(pctVal: number) {
@@ -223,7 +250,7 @@ export default function OverviewDashboard() {
     setProjects,
     loading: projectsLoading,
     error: projectsError,
-  } = useProjectsData({ includeProgress: false });
+  } = useProjectsData({ includeProgress: true });
   const {
     years: yearTotals,
     byProject: yearByProject,
@@ -372,6 +399,11 @@ export default function OverviewDashboard() {
       }),
     [appliedFilters.projects, filterFrom, filterTo, isAllDates, projects],
   );
+  // Đường trend dùng số liệu mới ngay. Bảng và các ô phía dưới nhận bản trì hoãn
+  // để không chặn lần vẽ biểu đồ.
+  const detailRows = useDeferredValue(selectedRows);
+  const detailProjects = useDeferredValue(selectedProjects);
+  const detailsPending = detailRows !== selectedRows || detailProjects !== selectedProjects;
   const dailyTargets = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const project of selectedProjects) {
@@ -384,6 +416,7 @@ export default function OverviewDashboard() {
   }, [chartDateRange.from, chartDateRange.to, dailySeries, selectedProjects]);
 
   const yearlySeries = useMemo(() => {
+    if (chartViewMode !== "yearly" && cumulativeChartViewMode !== "yearly") return [];
     // Hạch toán theo đúng bộ lọc: gom từ nhật ký đã lọc (ngày/dự án/nhân sự/máy/PP/loại mối).
     const byYear = new Map<string, { value: number; defects: number }>();
     selectedRows.forEach((row, index) => {
@@ -501,6 +534,8 @@ export default function OverviewDashboard() {
     appliedFilters.personnel,
     appliedFilters.projects,
     appliedFilters.weldTypes,
+    chartViewMode,
+    cumulativeChartViewMode,
     selectedProjects,
     selectedRows,
     yearByPersonnel,
@@ -678,14 +713,14 @@ export default function OverviewDashboard() {
   const plannedTarget = useMemo(
     () => {
       if (!hasProgressRange) return 0;
-      return selectedProjects.reduce((sum, project) => sum + planWeldsInRange(project, planYearStart, planYearEnd), 0);
+      return selectedProjects.reduce((sum, project) => sum + scheduledWeldsInRange(project, planYearStart, planYearEnd), 0);
     },
     [hasProgressRange, planYearEnd, planYearStart, selectedProjects],
   );
   // Kế hoạch của năm hiện tại đến ngày chốt (hoặc đến cuối bộ lọc nếu kỳ đã kết thúc).
   const plannedToDate = useMemo(
     () => hasProgressRange
-      ? selectedProjects.reduce((sum, project) => sum + planWeldsInRange(project, progressFrom, progressTo), 0)
+      ? selectedProjects.reduce((sum, project) => sum + scheduledWeldsInRange(project, progressFrom, progressTo), 0)
       : 0,
     [hasProgressRange, progressFrom, progressTo, selectedProjects],
   );
@@ -707,8 +742,8 @@ export default function OverviewDashboard() {
       );
   const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0);
   const errorReasonRows = useMemo(
-    () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalFailureReasons(selectedRows),
-    [overviewAggregateErrorReasons, selectedRows, showFastAggregate],
+    () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalDefectStats(detailRows),
+    [detailRows, overviewAggregateErrorReasons, showFastAggregate],
   );
 
   const visibleSummary = showFastAggregate
@@ -774,11 +809,8 @@ export default function OverviewDashboard() {
     return count;
   }, [hasProgressRange, isAllDates, overviewProductionThisPlanYear, planYearEnd, planYearStart, progressFrom, progressTo, selectedProjects, selectedRows, showFastAggregate]);
 
-  // Mục tiêu: đủ KH mọi dự án (lọc tất cả) hoặc KH trong kỳ lọc.
-  const target =
-    (isAllDates ? plannedTarget : plannedToDate) > 0
-      ? isAllDates ? plannedTarget : plannedToDate
-      : progressActual;
+  // Mẫu số là mối hàn dự kiến của năm, không lấy số đã thực hiện khi kế hoạch chưa về.
+  const target = isAllDates ? plannedTarget : plannedToDate;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -813,22 +845,11 @@ export default function OverviewDashboard() {
       const plannedRows = (project.theoreticalProgress ?? []).filter(
         (row) => row.so_moi_han > 0 && row.ngay >= planYearStart && row.ngay <= planYearEnd,
       );
-      if (plannedRows.length > 0) {
-        welds += plannedRows.reduce((sum, row) => sum + row.so_moi_han, 0);
-        days += plannedRows.length;
-        continue;
-      }
-      if (project.plannedWeldCount > 0 && project.startDate && project.endDate) {
-        const overlapStart = project.startDate > planYearStart ? project.startDate : planYearStart;
-        const overlapEnd = project.endDate < planYearEnd ? project.endDate : planYearEnd;
-        const count = projectDurationDays(overlapStart, overlapEnd);
-        if (count > 0) {
-          welds += planWeldsInRange(project, planYearStart, planYearEnd);
-          days += count;
-        }
-      }
+      if (plannedRows.length === 0) continue;
+      welds += plannedRows.reduce((sum, row) => sum + row.so_moi_han, 0);
+      days += plannedRows.length;
     }
-    return days > 0 ? welds / days : 0;
+    return days > 0 ? Math.ceil(welds / days) : 0;
   }, [hasProgressRange, planYearEnd, planYearStart, selectedProjects]);
   const evaluableProjects = useMemo(
     () => selectedProjects.filter((project) => {
@@ -842,7 +863,7 @@ export default function OverviewDashboard() {
   const progressPctNum = target > 0 ? (progressActual / target) * 100 : 0;
   const progressPct = formatPctNumber(progressPctNum);
   const statusPlannedToDate = evaluableProjects.reduce(
-    (sum, project) => sum + (hasProgressRange ? planWeldsInRange(project, progressFrom, progressTo) : 0),
+    (sum, project) => sum + (hasProgressRange ? scheduledWeldsInRange(project, progressFrom, progressTo) : 0),
     0,
   );
   const actualToDate = progressActual;
@@ -921,9 +942,12 @@ export default function OverviewDashboard() {
       linePath = `M ${pts[0].cx} ${pts[0].cy} ` + pts.slice(1).map((p) => `L ${p.cx} ${p.cy}`).join(" ");
     }
 
-    const cumValues = slice.map((_, index) =>
-      slice.slice(0, index + 1).reduce((sum, value) => sum + value, 0),
-    );
+    const cumValues: number[] = [];
+    let cumRunning = 0;
+    for (const value of slice) {
+      cumRunning += value;
+      cumValues.push(cumRunning);
+    }
     const totalCum = cumValues[cumValues.length - 1] || 0;
 
     const targetPts = targetSlice.map((value, idx) => {
@@ -934,9 +958,12 @@ export default function OverviewDashboard() {
     const targetLinePath = targetPts.length > 0
       ? `M ${targetPts[0].cx} ${targetPts[0].cy} ${targetPts.slice(1).map((point) => `L ${point.cx} ${point.cy}`).join(" ")}`
       : "";
-    const targetCumValues = targetSlice.map((_, index) =>
-      targetSlice.slice(0, index + 1).reduce((sum, value) => sum + value, 0),
-    );
+    const targetCumValues: number[] = [];
+    let targetCumRunning = 0;
+    for (const value of targetSlice) {
+      targetCumRunning += value;
+      targetCumValues.push(targetCumRunning);
+    }
     const totalTargetCum = targetCumValues[targetCumValues.length - 1] || 0;
 
     const maxCumVal = Math.max(500, Math.ceil(Math.max(totalCum, totalTargetCum, ...cumValues, ...targetCumValues) / 500) * 500);
@@ -1154,7 +1181,7 @@ export default function OverviewDashboard() {
   const projectRows = useMemo(() => {
     if (showFastAggregate && overviewAggregateProjects.length > 0) {
       return overviewAggregateProjects.map((project, index) => {
-        const sourceProject = selectedProjects.find(
+        const sourceProject = detailProjects.find(
           (item) => item.id === project.id || item.name === project.name,
         );
         return {
@@ -1169,17 +1196,18 @@ export default function OverviewDashboard() {
           errors: project.errors,
           color: PROJECT_COLORS[index % PROJECT_COLORS.length],
           fromTable: true,
+          year: sourceProject ? projectPlanYear(sourceProject) : null,
         };
-      });
+      }).sort(compareProjectYearDesc);
     }
     const weldByName = new Map(
-      groupJournalRows(selectedRows, (row) => row.du_an.trim() || "Chưa gắn dự án").map((row) => [
+      groupJournalRows(detailRows, (row) => row.du_an.trim() || "Chưa gắn dự án").map((row) => [
         row.name,
         row,
       ]),
     );
 
-    const fromDuAn = selectedProjects.map((project, index) => {
+    const fromDuAn = detailProjects.map((project, index) => {
       const weld = weldByName.get(project.name);
       return {
         id: project.id,
@@ -1195,6 +1223,7 @@ export default function OverviewDashboard() {
         errors: weld?.errors ?? 0,
         color: PROJECT_COLORS[index % PROJECT_COLORS.length],
         fromTable: true,
+        year: projectPlanYear(project),
       };
     });
 
@@ -1213,12 +1242,15 @@ export default function OverviewDashboard() {
         errors: weld.errors,
         color: PROJECT_COLORS[(fromDuAn.length + index) % PROJECT_COLORS.length],
         fromTable: false,
+        year: weld.rows.reduce<number | null>((min, row) => {
+          const year = Number(row.nam_thuc_hien);
+          if (!Number.isInteger(year) || year < 1900) return min;
+          return min === null || year < min ? year : min;
+        }, null),
       }));
 
-    return [...fromDuAn, ...orphans].sort(
-      (a, b) => b.count - a.count || a.name.localeCompare(b.name, "vi"),
-    );
-  }, [filterFrom, filterTo, isAllDates, overviewAggregateProjects, selectedProjects, selectedRows, showFastAggregate]);
+    return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
+  }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate]);
 
   const projectCount = showFastAggregate && overviewAggregateProjects.length > 0
     ? overviewAggregateProjects.length
@@ -1234,8 +1266,8 @@ export default function OverviewDashboard() {
 
   // Card DỰ ÁN:
   // - Đã thực hiện = số mối nhật ký của các năm trước năm hiện tại
-  // - KH dự kiến năm hiện tại = số mối sản xuất đã thực hiện + KH năm hiện tại
-  // - KH năm = kế hoạch Phú Quốc từ 1/11 đến 31/12 của năm hiện tại
+  // - KH năm = mối hàn dự kiến của mọi dự án trong năm hiện tại (cùng mẫu số đồng hồ)
+  // - KH dự kiến = Đã thực hiện + Đã thực hiện năm (Sản xuất)
   const doneBeforePlanYear = useMemo(
     () => showFastAggregate
       ? overviewDoneBeforePlanYear
@@ -1254,15 +1286,6 @@ export default function OverviewDashboard() {
         ),
     [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
   );
-  const planYearPhuQuoc = useMemo(
-    () =>
-      selectedProjects.reduce((sum, project) => {
-        if (!isPhuQuocProject(project.name)) return sum;
-        return sum + planWeldsInRange(project, `${PLAN_YEAR}-11-01`, `${PLAN_YEAR}-12-31`);
-      }, 0),
-    [PLAN_YEAR, selectedProjects],
-  );
-
   const projectChartRows = useMemo(
     () => projectRows.filter((row) => row.count > 0),
     [projectRows],
@@ -1305,14 +1328,14 @@ export default function OverviewDashboard() {
           };
         });
     }
-    const todayRows = selectedRows.filter(
+    const todayRows = detailRows.filter(
       (row, index) => getJournalRowDateIso(row, index) === todayIso,
     );
     const todayByMachine = new Map(
       groupJournalRows(todayRows, machineForRow).map((machine) => [machine.name, machine.total]),
     );
 
-    return groupJournalRows(selectedRows, machineForRow)
+    return groupJournalRows(detailRows, machineForRow)
       .sort((a, b) => REPORT_MACHINES.indexOf(a.name as (typeof REPORT_MACHINES)[number]) - REPORT_MACHINES.indexOf(b.name as (typeof REPORT_MACHINES)[number]))
       .map((machine) => {
         const passRate = machine.total > 0 ? Math.round((machine.passed / machine.total) * 100) : 0;
@@ -1326,7 +1349,7 @@ export default function OverviewDashboard() {
           availColor: passRate >= 90 ? "#15803d" : "#d97706",
         };
       });
-  }, [overviewAggregateMachines, selectedRows, showFastAggregate, todayIso]);
+  }, [detailRows, overviewAggregateMachines, showFastAggregate, todayIso]);
 
   const statusRows = [
     { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
@@ -1382,11 +1405,11 @@ export default function OverviewDashboard() {
                 </div>
                 <div className="text-violet-700 font-medium">
                   KH dự kiến {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold">{fmt(productionDoneThisYear + planYearPhuQuoc)}</span> mối
+                  <span className="font-mono font-semibold">{fmt(doneBeforePlanYear + productionDoneThisYear)}</span> mối
                 </div>
                 <div className="text-slate-500">
                   KH năm {PLAN_YEAR}:{" "}
-                  <span className="font-mono font-semibold text-slate-700">{fmt(planYearPhuQuoc)}</span> mối
+                  <span className="font-mono font-semibold text-slate-700">{fmt(plannedTarget)}</span> mối
                 </div>
               </div>
             ) : (
@@ -1589,7 +1612,7 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Kế hoạch trung bình/ngày</div>
                 <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {fixedDailyQuota.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}
+                    {fmt(fixedDailyQuota)}
                   </span>
                   <span className="text-xs text-slate-400">mối/ngày</span>
                 </div>
@@ -1986,11 +2009,11 @@ export default function OverviewDashboard() {
               MỐI HÀN THEO DỰ ÁN
             </div>
             <div className="text-[11px] font-semibold text-slate-500">
-              <span className="font-mono text-[#0047AB]">{fmt(projectChartRows.length)}</span> dự án
+              <span className="font-mono text-[#0047AB]">{fmt(projectRows.length)}</span> dự án
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Báo cáo sản lượng theo dự án trong kỳ lọc
+            Xếp theo năm bắt đầu dự án
           </p>
 
           <div className="mt-3.5 flex justify-center">
@@ -2020,23 +2043,41 @@ export default function OverviewDashboard() {
             </div>
           </div>
 
-          <div className="mt-4 flex max-h-[190px] flex-col gap-2 overflow-y-auto">
-            {projectChartRows.length > 0 ? (
-              projectChartRows.map((row) => (
-                <div key={row.id} className="flex items-center gap-2 text-xs sm:text-sm">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: row.color }}
-                  />
-                  <span
-                    className="min-w-0 flex-1 line-clamp-2 break-words font-medium leading-snug text-slate-700"
-                    title={row.name}
-                  >
-                    {row.name}
-                  </span>
-                  <span className="shrink-0 font-mono text-sm sm:text-base font-bold tabular-nums text-slate-700">{fmt(row.count)}</span>
-                </div>
-              ))
+          <div className="mt-4 flex max-h-[220px] flex-col gap-2.5 overflow-y-auto">
+            {projectRows.length > 0 ? (
+              projectRows.map((row, index) => {
+                const progressPct = row.planned > 0 ? Math.min(100, (row.count / row.planned) * 100) : 0;
+                const yearLabel = row.year ? String(row.year) : "Chưa có năm";
+                const showYear = index === 0 || projectRows[index - 1]?.year !== row.year;
+                return (
+                  <div key={row.id} className="text-xs sm:text-sm">
+                    {showYear ? (
+                      <div className="mb-1 font-mono text-[11px] font-semibold text-[#0047AB]">{yearLabel}</div>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: row.color }}
+                      />
+                      <span
+                        className="min-w-0 flex-1 truncate font-medium leading-snug text-slate-700"
+                        title={row.name}
+                      >
+                        {row.name}
+                      </span>
+                      <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-slate-700">
+                        {fmt(row.count)}/{fmt(row.planned)}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 ml-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${progressPct}%`, background: row.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
             ) : (
               <div className="py-4 text-center text-xs text-slate-500">Chưa có dữ liệu dự án</div>
             )}
@@ -2188,6 +2229,7 @@ export default function OverviewDashboard() {
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
               Nguồn bảng Dự án · KH và sản lượng đều theo kỳ / bộ lọc đang chọn
+              {detailsPending ? " · đang tính các ô chi tiết…" : ""}
             </p>
           </div>
           <div className="text-xs font-semibold text-slate-600">
@@ -2242,7 +2284,7 @@ export default function OverviewDashboard() {
                         {row.maDuAn || "—"}
                       </td>
                       <td className="px-3.5 py-3">
-                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                        <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${projectStatusClass(row.status)}`}>
                           {row.status}
                         </span>
                       </td>
@@ -2341,6 +2383,7 @@ export default function OverviewDashboard() {
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
             LỖI HÀN PHỔ BIẾN
           </div>
+          <p className="mt-0.5 text-xs text-slate-500">Theo mã khuyết tật NDT</p>
           <div className="mt-3 flex flex-col gap-2.5">
             {errorReasonRows.length > 0 ? (
               errorReasonRows.map((err) => (
@@ -2363,7 +2406,7 @@ export default function OverviewDashboard() {
               ))
             ) : (
               <div className="py-6 text-center text-sm text-slate-500">
-                Không có lỗi trong nhật ký hàn đã lọc.
+                Không có khuyết tật trong nhật ký hàn đã lọc.
               </div>
             )}
           </div>

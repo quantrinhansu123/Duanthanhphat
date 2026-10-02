@@ -11,7 +11,7 @@ import {
   filterWeldReportRows,
   formatJournalDateIso,
   getJournalRowDateIso,
-  groupJournalErrorReasons,
+  groupJournalDefectStats,
   groupJournalRows,
   summarizeJournalRows,
   type QuarterlyPassRatePoint,
@@ -363,16 +363,12 @@ export default function QualityReportDashboard() {
   ], [passed, failed, rework]);
 
   const currentDefectCategories = useMemo(() => {
-    const reasons = groupJournalErrorReasons(errorRows, DEFECT_META.length);
-    if (reasons.length === 0) {
-      return DEFECT_META.map((defect) => ({ ...defect, count: 0 }));
-    }
-    return reasons.map((reason, index) => ({
+    return groupJournalDefectStats(selectedRows, 12).map((reason, index) => ({
       name: reason.label,
       count: reason.count,
       color: DEFECT_META[index % DEFECT_META.length].color,
     }));
-  }, [errorRows]);
+  }, [selectedRows]);
 
   const totalDefects = useMemo(() => {
     return currentDefectCategories.reduce((s, d) => s + d.count, 0);
@@ -488,13 +484,18 @@ export default function QualityReportDashboard() {
                 <Warning size={16} weight="fill" aria-hidden className="shrink-0 text-rose-600" />
                 <span>Phân loại lỗi</span>
               </div>
-              <div className="mt-0.5 text-xs text-slate-500">Khuyết tật phát hiện qua NDT/UT và ngoại quan</div>
+              <div className="mt-0.5 text-xs text-slate-500">Theo mã khuyết tật NDT</div>
             </div>
             <span className="shrink-0 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold font-mono text-rose-700 tabular-nums shadow-2xs">
               {totalDefects} lỗi
             </span>
           </div>
           <div className="mt-4 flex flex-col gap-3">
+            {currentDefectCategories.length === 0 ? (
+              <div className="py-6 text-center text-sm text-slate-500">
+                Không có khuyết tật trong nhật ký hàn đã lọc.
+              </div>
+            ) : null}
             {currentDefectCategories.map((d) => {
               const pct = totalDefects > 0 ? ((d.count / totalDefects) * 100).toFixed(1) : "0.0";
               const w = (d.count / maxDefect) * 100;

@@ -1,3 +1,4 @@
+import { ndtDefectLabel } from "@/data/error-library";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { buildMachineWeldCode, planWeldCodeAssignments } from "@/lib/weldCode";
@@ -1767,6 +1768,72 @@ export function groupJournalFailureReasons(rows: WeldReportRow[], limit = 6): Er
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([label, count]) => ({ label, count, pct: Math.round((count / max) * 100) }));
+}
+
+const NDT_DEFECT_CODES = ["LOF", "LOP", "C", "S", "Po", "La"] as const;
+
+export type DefectStatSource = {
+  so_luong_loi?: number | null;
+  tinh_trang_thi_nghiem?: string | null;
+  ma_khuyet_tat?: string[] | null;
+  nguyen_nhan_loi?: string | null;
+};
+
+function canonicalDefectCode(token: string) {
+  const trimmed = token.trim();
+  return NDT_DEFECT_CODES.find((code) => code.toLowerCase() === trimmed.toLowerCase()) ?? null;
+}
+
+/** Mã khuyết tật đã lưu, hoặc danh sách mã NDT ghi trong lý do không đạt. */
+export function defectCodesFromRow(row: DefectStatSource): string[] {
+  const stored = (row.ma_khuyet_tat ?? [])
+    .map((code) => canonicalDefectCode(String(code)))
+    .filter((code): code is (typeof NDT_DEFECT_CODES)[number] => code !== null);
+  if (stored.length > 0) return stored;
+
+  const reason = row.nguyen_nhan_loi?.trim() ?? "";
+  if (!reason) return [];
+  const parts = reason.split(/[,;/|]+/).map((part) => part.trim()).filter(Boolean);
+  const parsed: string[] = [];
+  for (const part of parts) {
+    const code = canonicalDefectCode(part);
+    if (!code) return [];
+    parsed.push(code);
+  }
+  return parsed;
+}
+
+export function defectStatLabel(code: string) {
+  const name = ndtDefectLabel(code, "vi");
+  return name && name !== code ? `${name} (${code})` : code;
+}
+
+/** Đếm từng mã khuyết tật NDT. Một mối có nhiều mã thì mỗi mã được tính một lần. */
+export function groupJournalDefectStats(rows: DefectStatSource[], limit = 7): ErrorReasonRow[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (Number(row.so_luong_loi ?? 0) <= 0 && row.tinh_trang_thi_nghiem !== "Không đạt") continue;
+    const codes = defectCodesFromRow(row);
+    if (codes.length === 0) {
+      const label = "Chưa ghi khuyết tật";
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+      continue;
+    }
+    for (const code of codes) {
+      const label = defectStatLabel(code);
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+  if (counts.size === 0) return [];
+  const max = Math.max(...counts.values());
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, count]) => ({
+      label,
+      count,
+      pct: Math.round((count / max) * 100),
+    }));
 }
 
 /** Nhóm nguyên nhân lỗi thật từ nhật ký hàn. */
