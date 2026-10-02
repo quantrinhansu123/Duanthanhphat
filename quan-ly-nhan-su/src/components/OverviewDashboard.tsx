@@ -1180,6 +1180,14 @@ export default function OverviewDashboard() {
 
   const projectRows = useMemo(() => {
     if (showFastAggregate && overviewAggregateProjects.length > 0) {
+      const productionById = new Map<string, number>();
+      const productionByName = new Map<string, number>();
+      for (const row of yearByProject) {
+        const amount = Number(row.san_xuat ?? 0);
+        if (row.du_an_id) productionById.set(row.du_an_id, (productionById.get(row.du_an_id) ?? 0) + amount);
+        const name = row.du_an?.trim();
+        if (name) productionByName.set(name, (productionByName.get(name) ?? 0) + amount);
+      }
       return overviewAggregateProjects.map((project, index) => {
         const sourceProject = detailProjects.find(
           (item) => item.id === project.id || item.name === project.name,
@@ -1191,7 +1199,7 @@ export default function OverviewDashboard() {
           location: sourceProject?.location || "",
           status: sourceProject?.status || "Từ bảng tổng hợp",
           planned: sourceProject ? projectPlanTotal(sourceProject) : project.total,
-          count: project.total,
+          count: productionById.get(project.id) ?? productionByName.get(project.name) ?? 0,
           passed: project.passed,
           errors: project.errors,
           color: PROJECT_COLORS[index % PROJECT_COLORS.length],
@@ -1201,7 +1209,10 @@ export default function OverviewDashboard() {
       }).sort(compareProjectYearDesc);
     }
     const weldByName = new Map(
-      groupJournalRows(detailRows, (row) => row.du_an.trim() || "Chưa gắn dự án").map((row) => [
+      groupJournalRows(
+        detailRows.filter((row) => row.loai_moi_han === "Sản xuất"),
+        (row) => row.du_an.trim() || "Chưa gắn dự án",
+      ).map((row) => [
         row.name,
         row,
       ]),
@@ -1250,7 +1261,7 @@ export default function OverviewDashboard() {
       }));
 
     return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
-  }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate]);
+  }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate, yearByProject]);
 
   const projectCount = showFastAggregate && overviewAggregateProjects.length > 0
     ? overviewAggregateProjects.length
@@ -2013,7 +2024,7 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Xếp theo năm bắt đầu dự án
+            Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất
           </p>
 
           <div className="mt-3.5 flex justify-center">
@@ -2248,7 +2259,7 @@ export default function OverviewDashboard() {
                   <th className="min-w-[110px] px-3.5 py-2.5">Mã</th>
                   <th className="min-w-[120px] px-3.5 py-2.5">Trạng thái</th>
                   <th className="px-3.5 py-2.5 text-right">{isAllDates ? "KH dự kiến" : "KH kỳ lọc"}</th>
-                  <th className="px-3.5 py-2.5 text-right">Thực hiện</th>
+                  <th className="px-3.5 py-2.5 text-right">Thực hiện SX</th>
                   <th className="px-3.5 py-2.5 text-right">Đạt</th>
                   <th className="px-3.5 py-2.5 text-right">Lỗi</th>
                   <th className="min-w-[120px] px-3.5 py-2.5">Tỷ lệ đạt / đã test</th>
