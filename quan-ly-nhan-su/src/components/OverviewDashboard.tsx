@@ -30,6 +30,7 @@ import {
   REPORT_PERIOD_END,
   REPORT_PERIOD_START,
   resolveChartDateRange,
+  resolveWeldTestStatus,
   summarizeJournalRows,
   summarizeProductionWelds,
 } from "@/lib/weldReportData";
@@ -112,6 +113,28 @@ function compareProjectYearDesc(
 function projectHasPlan(project: { plannedWeldCount: number; theoreticalProgress?: { so_moi_han: number }[] }) {
   if (project.plannedWeldCount > 0) return true;
   return (project.theoreticalProgress ?? []).some((row) => row.so_moi_han > 0);
+}
+
+/** Mức mối/ngày lặp lại nhiều nhất trong kỳ — kế hoạch đều như 22 mối/ngày. */
+function typicalDailyPlan(
+  project: { theoreticalProgress?: { ngay: string; so_moi_han: number }[] },
+  from: string,
+  to: string,
+) {
+  const counts = new Map<number, number>();
+  for (const row of project.theoreticalProgress ?? []) {
+    if (row.so_moi_han <= 0 || row.ngay < from || row.ngay > to) continue;
+    counts.set(row.so_moi_han, (counts.get(row.so_moi_han) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount || (count === bestCount && value > best)) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 function projectStatusClass(status: string) {
@@ -845,24 +868,68 @@ export default function OverviewDashboard() {
     }),
     [asOfDate, selectedProjects],
   );
+  // Dự án đã kết thúc không còn là mẫu số tiến độ hiện tại.
+  const liveProjects = useMemo(
+    () => evaluableProjects.filter((project) => !project.endDate || project.endDate >= asOfDate),
+    [asOfDate, evaluableProjects],
+  );
+  const upcomingProjects = useMemo(
+    () => selectedProjects.filter((project) => {
+      if (!projectHasPlan(project)) return false;
+      const start = planStartDate(project);
+      return Boolean(start) && start > asOfDate;
+    }),
+    [asOfDate, selectedProjects],
+  );
+  const upcomingDailyPlan = upcomingProjects.reduce(
+    (sum, project) => sum + typicalDailyPlan(project, planYearStart, planYearEnd),
+    0,
+  );
+  const yearPendingEvaluation = useMemo(() => {
+    let pending = 0;
+    selectedRows.forEach((row, index) => {
+      if (row.loai_moi_han === "Đào tạo") return;
+      const iso = getJournalRowDateIso(row, index);
+      const inYear = iso
+        ? iso >= planYearStart && iso <= asOfDate
+        : Number(row.nam_thuc_hien) === PLAN_YEAR;
+      if (!inYear) return;
+      if (resolveWeldTestStatus(row) === "Chờ thí nghiệm") pending += 1;
+    });
+    return pending;
+  }, [PLAN_YEAR, asOfDate, planYearStart, selectedRows]);
 
   const progressPctNum = target > 0 ? (progressActual / target) * 100 : 0;
   const progressPct = formatPctNumber(progressPctNum);
-  const statusPlannedToDate = evaluableProjects.reduce(
+  const statusPlannedToDate = liveProjects.reduce(
     (sum, project) => sum + (hasProgressRange ? scheduledWeldsInRange(project, progressFrom, progressTo) : 0),
     0,
   );
   const actualToDate = progressActual;
+  const behindReasons = [
+    ...(upcomingProjects.length > 0 ? ["Chưa triển khai"] : []),
+    ...(yearPendingEvaluation > 0 ? ["Chưa đánh giá"] : []),
+  ];
   const progressStatus =
-    selectedProjects.length === 0 || evaluableProjects.length === 0
+    selectedProjects.length === 0
       ? null
-      : statusPlannedToDate <= 0
-        ? { label: "CHƯA ĐẾN KỲ KẾ HOẠCH", tone: "slate" as const }
-        : actualToDate > statusPlannedToDate
-          ? { label: "VƯỢT TIẾN ĐỘ", tone: "emerald" as const }
-          : actualToDate === statusPlannedToDate
-            ? { label: "ĐÚNG TIẾN ĐỘ", tone: "emerald" as const }
-            : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const };
+      : behindReasons.length > 0 && liveProjects.length === 0
+        ? {
+            label: "CHẬM TIẾN ĐỘ",
+            tone: "amber" as const,
+            reason: behindReasons.join(" hoặc "),
+            plan: upcomingDailyPlan,
+            planUnit: "mối/ngày" as const,
+          }
+        : liveProjects.length === 0
+          ? null
+          : statusPlannedToDate <= 0
+            ? { label: "CHƯA ĐẾN KỲ KẾ HOẠCH", tone: "slate" as const, reason: "", plan: 0, planUnit: "mối" as const }
+            : actualToDate > statusPlannedToDate
+              ? { label: "VƯỢT TIẾN ĐỘ", tone: "emerald" as const, reason: "", plan: statusPlannedToDate, planUnit: "mối" as const }
+              : actualToDate === statusPlannedToDate
+                ? { label: "ĐÚNG TIẾN ĐỘ", tone: "emerald" as const, reason: "", plan: statusPlannedToDate, planUnit: "mối" as const }
+                : { label: "CHẬM TIẾN ĐỘ", tone: "amber" as const, reason: "", plan: statusPlannedToDate, planUnit: "mối" as const };
 
   const chart = useMemo(() => {
     // Tháng và năm dùng toàn bộ kỳ lọc; Ngày giữ cửa sổ xem gần nhất.
@@ -1608,9 +1675,11 @@ export default function OverviewDashboard() {
                       {progressStatus.label}
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-slate-600">
-                      Chú thích: {isAllDates
-                        ? `Năm ${PLAN_YEAR} đến ${viDate(asOfDate)}`
-                        : `${viDate(progressFrom)}–${viDate(progressTo)}`} · thực hiện {fmt(actualToDate)} / kế hoạch {fmt(statusPlannedToDate)} mối hàn.
+                      {progressStatus.reason
+                        ? `Chú thích: ${progressStatus.reason} · kế hoạch ${fmt(progressStatus.plan)} ${progressStatus.planUnit}`
+                        : `Chú thích: ${isAllDates
+                          ? `Năm ${PLAN_YEAR} đến ${viDate(asOfDate)}`
+                          : `${viDate(progressFrom)}–${viDate(progressTo)}`} · thực hiện ${fmt(actualToDate)} / kế hoạch ${fmt(progressStatus.plan)} ${progressStatus.planUnit}`}
                     </p>
                   </>
                 ) : (
