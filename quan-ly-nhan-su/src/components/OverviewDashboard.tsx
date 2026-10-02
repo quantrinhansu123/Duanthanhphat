@@ -777,7 +777,6 @@ export default function OverviewDashboard() {
     return count;
   }, [hasProgressRange, isAllDates, overviewProductionThisPlanYear, planYearEnd, planYearStart, progressFrom, progressTo, selectedProjects, selectedRows, showFastAggregate]);
 
-  // Cùng công thức thẻ KH dự kiến: đã thực hiện các năm trước + sản xuất năm nay.
   const doneBeforePlanYear = useMemo(
     () => showFastAggregate
       ? overviewDoneBeforePlanYear
@@ -796,7 +795,8 @@ export default function OverviewDashboard() {
         ),
     [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
   );
-  const target = doneBeforePlanYear + productionDoneThisYear;
+  // Mẫu số đồng hồ tiến độ sản xuất = KH năm (lịch mối hàn trong năm hiện tại).
+  const target = plannedTarget;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -1560,7 +1560,7 @@ export default function OverviewDashboard() {
                 {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {`KH dự kiến ${PLAN_YEAR} · đã thực hiện + sản xuất ${PLAN_YEAR}: ${fmt(target)} mối`}
+                {`KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
               </div>
             </div>
 
