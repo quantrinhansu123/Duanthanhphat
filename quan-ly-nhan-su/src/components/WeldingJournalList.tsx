@@ -660,12 +660,12 @@ function JournalFormModal({
                   : []),
                 ...machines.map((machine) => ({
                   value: machine.id,
-                  label: `${machine.code} · ${machine.name}`,
+                  label: machine.name.trim() || machine.code,
                 })),
               ]}
               searchable={machines.length > 5}
               placeholder={machines.length === 0 ? "Chưa có danh mục máy" : "— Chọn máy thực hiện —"}
-              searchPlaceholder="Tìm máy theo mã hoặc tên..."
+              searchPlaceholder="Tìm máy theo tên..."
               className="mt-1.5"
               buttonClassName="h-10 shadow-2xs"
             />
@@ -1230,9 +1230,7 @@ export default function WeldingJournalList({
         operator: row.ten_tho_han?.trim() || "—",
         certificate,
         certificateLinked,
-        machine: row.ma_may
-          ? `${row.ma_may}${row.ten_may ? ` · ${row.ten_may}` : ""}`
-          : "Chưa gán máy",
+        machine: row.ten_may?.trim() || row.ma_may?.trim() || "Chưa gán máy",
         weldName: displayWeldCode(row.ma_lich_su),
         machineCode: machineWeldCodes.get(row.id) || "—",
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
