@@ -777,11 +777,26 @@ export default function OverviewDashboard() {
     return count;
   }, [hasProgressRange, isAllDates, overviewProductionThisPlanYear, planYearEnd, planYearStart, progressFrom, progressTo, selectedProjects, selectedRows, showFastAggregate]);
 
-  // Mẫu số là tổng mối hàn dự kiến đã lưu trên từng dự án.
-  const target = useMemo(
-    () => selectedProjects.reduce((sum, project) => sum + Math.max(0, Math.round(project.plannedWeldCount || 0)), 0),
-    [selectedProjects],
+  // Cùng công thức thẻ KH dự kiến: đã thực hiện các năm trước + sản xuất năm nay.
+  const doneBeforePlanYear = useMemo(
+    () => showFastAggregate
+      ? overviewDoneBeforePlanYear
+      : selectedRows.reduce(
+          (sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum),
+          0,
+        ),
+    [PLAN_YEAR, overviewDoneBeforePlanYear, selectedRows, showFastAggregate],
   );
+  const productionDoneThisYear = useMemo(
+    () => showFastAggregate
+      ? overviewProductionThisPlanYear
+      : selectedRows.reduce(
+          (sum, row) => Number(row.nam_thuc_hien) === PLAN_YEAR && row.loai_moi_han === "Sản xuất" ? sum + 1 : sum,
+          0,
+        ),
+    [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
+  );
+  const target = doneBeforePlanYear + productionDoneThisYear;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -1237,26 +1252,8 @@ export default function OverviewDashboard() {
 
   // Card DỰ ÁN:
   // - Đã thực hiện = số mối nhật ký của các năm trước năm hiện tại
-  // - KH năm = mối hàn dự kiến của mọi dự án trong năm hiện tại (cùng mẫu số đồng hồ)
-  // - KH dự kiến = Đã thực hiện + Đã thực hiện năm (Sản xuất)
-  const doneBeforePlanYear = useMemo(
-    () => showFastAggregate
-      ? overviewDoneBeforePlanYear
-      : selectedRows.reduce(
-          (sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum),
-          0,
-        ),
-    [PLAN_YEAR, overviewDoneBeforePlanYear, selectedRows, showFastAggregate],
-  );
-  const productionDoneThisYear = useMemo(
-    () => showFastAggregate
-      ? overviewProductionThisPlanYear
-      : selectedRows.reduce(
-          (sum, row) => Number(row.nam_thuc_hien) === PLAN_YEAR && row.loai_moi_han === "Sản xuất" ? sum + 1 : sum,
-          0,
-        ),
-    [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
-  );
+  // - KH năm = mối hàn dự kiến của mọi dự án trong năm hiện tại
+  // - KH dự kiến = Đã thực hiện + Đã thực hiện năm (Sản xuất), cùng mẫu số tiến độ sản xuất
   const projectChartRows = useMemo(
     () => projectRows.filter((row) => row.count > 0),
     [projectRows],
@@ -1563,7 +1560,7 @@ export default function OverviewDashboard() {
                 {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {`Tổng mối hàn dự kiến trên bảng dự án · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
+                {`KH dự kiến ${PLAN_YEAR} · đã thực hiện + sản xuất ${PLAN_YEAR}: ${fmt(target)} mối`}
               </div>
             </div>
 
