@@ -1150,44 +1150,34 @@ export default function OverviewDashboard() {
   }
 
   const projectRows = useMemo(() => {
-    if (showFastAggregate && overviewAggregateProjects.length > 0) {
-      const productionById = new Map<string, number>();
-      const productionByName = new Map<string, number>();
+    const productionById = new Map<string, number>();
+    const productionByName = new Map<string, number>();
+    const qualityById = new Map<string, { passed: number; errors: number }>();
+    const qualityByName = new Map<string, { passed: number; errors: number }>();
+    if (showFastAggregate) {
       for (const row of yearByProject) {
         const amount = Number(row.san_xuat ?? 0);
         if (row.du_an_id) productionById.set(row.du_an_id, (productionById.get(row.du_an_id) ?? 0) + amount);
         const name = row.du_an?.trim();
         if (name) productionByName.set(name, (productionByName.get(name) ?? 0) + amount);
       }
-      return overviewAggregateProjects.map((project, index) => {
-        const sourceProject = detailProjects.find(
-          (item) => item.id === project.id || item.name === project.name,
-        );
-        return {
-          id: project.id,
-          name: project.name,
-          maDuAn: project.code || sourceProject?.maDuAn || "",
-          location: sourceProject?.location || "",
-          status: sourceProject?.status || "Từ bảng tổng hợp",
-          planned: Math.max(0, Math.round(sourceProject?.plannedWeldCount || 0)),
-          count: productionById.get(project.id) ?? productionByName.get(project.name) ?? 0,
-          passed: project.passed,
-          errors: project.errors,
-          color: PROJECT_COLORS[index % PROJECT_COLORS.length],
-          fromTable: true,
-          year: sourceProject ? projectPlanYear(sourceProject) : null,
-        };
-      }).sort(compareProjectYearDesc);
+      for (const project of overviewAggregateProjects) {
+        const quality = { passed: project.passed, errors: project.errors };
+        qualityById.set(project.id, quality);
+        qualityByName.set(project.name, quality);
+      }
     }
-    const weldByName = new Map(
-      groupJournalRows(
-        detailRows.filter((row) => row.loai_moi_han === "Sản xuất"),
-        (row) => row.du_an.trim() || "Chưa gắn dự án",
-      ).map((row) => [
-        row.name,
-        row,
-      ]),
-    );
+    const weldByName = showFastAggregate
+      ? new Map<string, { total: number; passed: number; errors: number; rows: { nam_thuc_hien?: number | null }[] }>()
+      : new Map(
+          groupJournalRows(
+            detailRows.filter((row) => row.loai_moi_han === "Sản xuất"),
+            (row) => row.du_an.trim() || "Chưa gắn dự án",
+          ).map((row) => [
+            row.name,
+            row,
+          ]),
+        );
 
     const fromDuAn = detailProjects.map((project, index) => {
       const weld = weldByName.get(project.name);
@@ -1198,9 +1188,15 @@ export default function OverviewDashboard() {
         location: project.location || "",
         status: project.status,
         planned: Math.max(0, Math.round(project.plannedWeldCount || 0)),
-        count: weld?.total ?? 0,
-        passed: weld?.passed ?? 0,
-        errors: weld?.errors ?? 0,
+        count: showFastAggregate
+          ? (productionById.get(project.id) ?? productionByName.get(project.name) ?? 0)
+          : (weld?.total ?? 0),
+        passed: showFastAggregate
+          ? (qualityById.get(project.id)?.passed ?? qualityByName.get(project.name)?.passed ?? 0)
+          : (weld?.passed ?? 0),
+        errors: showFastAggregate
+          ? (qualityById.get(project.id)?.errors ?? qualityByName.get(project.name)?.errors ?? 0)
+          : (weld?.errors ?? 0),
         color: PROJECT_COLORS[index % PROJECT_COLORS.length],
         fromTable: true,
         year: projectPlanYear(project),
@@ -1230,11 +1226,9 @@ export default function OverviewDashboard() {
       }));
 
     return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
-  }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate, yearByProject]);
+  }, [detailProjects, detailRows, overviewAggregateProjects, showFastAggregate, yearByProject]);
 
-  const projectCount = showFastAggregate && overviewAggregateProjects.length > 0
-    ? overviewAggregateProjects.length
-    : selectedProjects.length;
+  const projectCount = selectedProjects.length;
   const plannedWeldsAll = useMemo(
     () =>
       selectedProjects.reduce((sum, project) => sum + Math.max(0, Math.round(project.plannedWeldCount || 0)), 0),
@@ -1569,7 +1563,7 @@ export default function OverviewDashboard() {
                 {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {`Tổng mối hàn dự kiến · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
+                {`Tổng mối hàn dự kiến trên bảng dự án · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
               </div>
             </div>
 
