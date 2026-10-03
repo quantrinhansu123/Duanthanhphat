@@ -21,6 +21,7 @@ import {
   buildDailyJournalSeries,
   buildDonutArcs,
   countReworkWelds,
+  displayWeldCode,
   filterWeldReportRows,
   getJournalRowDateIso,
   groupJournalDefectStats,
@@ -33,6 +34,7 @@ import {
   resolveWeldTestStatus,
   summarizeJournalRows,
   summarizeProductionWelds,
+  type WeldReportRow,
 } from "@/lib/weldReportData";
 import { filterYearTotals } from "@/lib/tongMoiHanNamDb";
 import {
@@ -59,6 +61,37 @@ type ChartDayPoint = {
 const PROJECT_COLORS = ["#0047AB", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
 
 const CHART_ZOOM_MAX = 8;
+const LOOKUP_PAGE_SIZE = 80;
+
+type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending";
+
+const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
+  projects: "Dự án",
+  all: "Tổng mối hàn",
+  today: "Hôm nay",
+  latest: "Ngày gần nhất",
+  passed: "Đạt",
+  failed: "Không đạt",
+  rework: "Mối hàn lại",
+  pending: "Chờ thí nghiệm",
+};
+
+function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
+  if (kind === "all") return rows;
+  if (kind === "today") return rows.filter((row, index) => getJournalRowDateIso(row, index) === todayIso);
+  if (kind === "latest") {
+    return latestDate ? rows.filter((row, index) => getJournalRowDateIso(row, index) === latestDate) : [];
+  }
+  if (kind === "passed") {
+    return rows.filter((row) => row.loai_moi_han === "Sản xuất" && resolveWeldTestStatus(row) === "Đạt");
+  }
+  if (kind === "failed") {
+    return rows.filter((row) => row.loai_moi_han === "Sản xuất" && resolveWeldTestStatus(row) === "Không đạt");
+  }
+  if (kind === "rework") return rows.filter((row) => Boolean(row.moi_han_lien_ket?.trim()));
+  if (kind === "pending") return rows.filter((row) => resolveWeldTestStatus(row) === "Chờ thí nghiệm");
+  return [];
+}
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString("vi-VN");
@@ -186,6 +219,7 @@ function sampleChartLabels(labels: string[], maxCount: number) {
 }
 
 export default function OverviewDashboard() {
+  const [lookup, setLookup] = useState<ReportLookupKind | null>(null);
   const { appliedFilters } = useReportFilters();
   const isAllDates = !appliedFilters.dateFrom && !appliedFilters.dateTo;
   const isUnfilteredOverview =
@@ -233,7 +267,7 @@ export default function OverviewDashboard() {
     overviewAggregateSource === "supabase";
   const canSkipJournal = fastAggregateReady && fastRollupReady;
   const needsJournalRows = isUnfilteredOverview
-    ? !overviewAggregateLoading && !dailyRollupLoading && !canSkipJournal
+    ? (!overviewAggregateLoading && !dailyRollupLoading && !canSkipJournal) || (lookup !== null && lookup !== "projects")
     : true;
   // Dữ liệu lịch sử chỉ có năm không có `ngay_thuc_hien`, nên các khoảng ngày
   // bao trọn cả năm vẫn tải toàn bộ để không làm mất dòng cũ. Khoảng hẹp
@@ -787,7 +821,7 @@ export default function OverviewDashboard() {
   );
   // Tử số tiến độ sản xuất = Đã thực hiện (các năm trước) + Đã thực hiện năm nay (Sản xuất).
   const progressActual = doneBeforePlanYear + productionDoneThisYear;
-  // Không lọc ngày: mẫu số là kế hoạch cả năm hiện tại.
+  // Không lọc ngày: mẫu số là tổng kế hoạch của mọi dự án, mọi năm.
   // Có lọc ngày: mẫu số là toàn bộ mối dự kiến trong kỳ, kể cả ngày chưa tới.
   const plannedInPeriod = useMemo(
     () => selectedProjects.reduce(
@@ -796,7 +830,14 @@ export default function OverviewDashboard() {
     ),
     [filterFrom, filterTo, selectedProjects],
   );
-  const target = isAllDates ? plannedTarget : plannedInPeriod;
+  const plannedAll = useMemo(
+    () => selectedProjects.reduce((sum, project) => {
+      const scheduled = scheduledWeldsInRange(project, "0000-01-01", "9999-12-31");
+      return sum + (scheduled > 0 ? scheduled : Math.max(0, Math.round(project.plannedWeldCount || 0)));
+    }, 0),
+    [selectedProjects],
+  );
+  const target = isAllDates ? plannedAll : plannedInPeriod;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -1386,7 +1427,7 @@ export default function OverviewDashboard() {
       {/* Top KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card: Dự án */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("projects")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-violet-700 uppercase">
               DỰ ÁN
@@ -1422,10 +1463,10 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-200">
             <Buildings size={24} weight="fill" aria-hidden />
           </div>
-        </div>
+        </button>
 
         {/* Card 1: Tổng mối hàn */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("all")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-[#0047AB] uppercase">
               TỔNG MỐI HÀN
@@ -1447,10 +1488,10 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
-        </div>
+        </button>
 
         {/* Card 2: Hôm nay */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("today")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
               HÔM NAY
@@ -1468,10 +1509,10 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CalendarCheck size={24} weight="fill" aria-hidden />
           </div>
-        </div>
+        </button>
 
         {/* Card 3: Ngày gần nhất trong kỳ lọc */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("latest")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-indigo-700 uppercase">
               NGÀY GẦN NHẤT
@@ -1496,10 +1537,10 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
             <ChartBar size={24} weight="fill" aria-hidden />
           </div>
-        </div>
+        </button>
 
         {/* Card 4: Đạt */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("passed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
               ĐẠT
@@ -1517,10 +1558,10 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle size={24} weight="fill" aria-hidden />
           </div>
-        </div>
+        </button>
 
         {/* Card 5: Không đạt */}
-        <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
+        <button type="button" onClick={() => setLookup("failed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-rose-700 uppercase">
               KHÔNG ĐẠT
@@ -1538,20 +1579,20 @@ export default function OverviewDashboard() {
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
             <XCircle size={24} weight="fill" aria-hidden />
           </div>
-        </div>
-        <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-xs">
+        </button>
+        <button type="button" onClick={() => setLookup("rework")} className="w-full cursor-pointer rounded-xl border border-amber-200 bg-white p-4 text-left shadow-xs transition-all hover:border-amber-300 hover:shadow-sm">
           <div className="text-xs font-bold text-amber-700">MỐI HÀN LẠI</div>
           <div className="mt-2 text-3xl font-bold font-mono">{fmt(rework)} <span className="text-xs text-slate-400">mối</span></div>
           <div className="mt-2 text-xs text-slate-500">Có mối hàn liên kết</div>
-        </div>
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+        </button>
+        <button type="button" onClick={() => setLookup("pending")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ THÍ NGHIỆM</div>
           <div className="mt-2 flex items-baseline gap-1.5">
             <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(visibleSummary.pending)}</span>
             <span className="text-xs text-slate-400">mối</span>
           </div>
           <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
-        </div>
+        </button>
       </div>
 
       {/* Tổng quan */}
@@ -1593,8 +1634,8 @@ export default function OverviewDashboard() {
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {isAllDates
-                  ? `Đã thực hiện + ${PLAN_YEAR} · KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
-                  : `Đã thực hiện + ${PLAN_YEAR} trong kỳ · ${viDate(progressFrom)}–${viDate(progressTo)} · ${fmt(target)} mối`}
+                  ? `Đã thực hiện + ${PLAN_YEAR} · KH tất cả · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
+                  : `Đã thực hiện + ${PLAN_YEAR} trong kỳ · KH kỳ lọc ${viDate(filterFrom)}–${viDate(filterTo)} · ${fmt(target)} mối`}
               </div>
             </div>
 
@@ -2577,6 +2618,172 @@ export default function OverviewDashboard() {
             </button>
           ))}
         </div>
+      </div>
+      {lookup ? (
+        <ReportLookupDialog
+          kind={lookup}
+          loading={lookup !== "projects" && loading && selectedRows.length === 0}
+          welds={weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          projects={selectedProjects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            code: project.maDuAn || "",
+            status: project.status,
+            plannedYear: scheduledWeldsInRange(project, `${PLAN_YEAR}-01-01`, `${PLAN_YEAR}-12-31`),
+          }))}
+          onClose={() => setLookup(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReportLookupDialog({
+  kind,
+  loading,
+  welds,
+  projects,
+  onClose,
+}: {
+  kind: ReportLookupKind;
+  loading: boolean;
+  welds: WeldReportRow[];
+  projects: { id: string; name: string; code: string; status: string; plannedYear: number }[];
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const isProjects = kind === "projects";
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const needle = query.trim().toLocaleLowerCase("vi");
+  const projectRows = useMemo(() => {
+    if (!needle) return projects;
+    return projects.filter((project) =>
+      `${project.name} ${project.code} ${project.status}`.toLocaleLowerCase("vi").includes(needle),
+    );
+  }, [needle, projects]);
+  const weldRows = useMemo(() => {
+    if (!needle) return welds;
+    return welds.filter((row) =>
+      [
+        displayWeldCode(row.ma_lich_su),
+        row.du_an,
+        row.ten_tho_han,
+        row.ma_may,
+        row.ten_may,
+        row.loai_moi_han,
+        row.cong_nghe_han,
+        row.moi_han_lien_ket,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("vi")
+        .includes(needle),
+    );
+  }, [needle, welds]);
+  const total = isProjects ? projectRows.length : weldRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / LOOKUP_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const start = (safePage - 1) * LOOKUP_PAGE_SIZE;
+  const pageProjects = projectRows.slice(start, start + LOOKUP_PAGE_SIZE);
+  const pageWelds = weldRows.slice(start, start + LOOKUP_PAGE_SIZE);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <button type="button" aria-label="Đóng" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-labelledby="report-lookup-title" className="relative z-10 flex max-h-[min(760px,90vh)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div>
+            <h2 id="report-lookup-title" className="text-base font-bold text-slate-900">{LOOKUP_TITLES[kind]}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{fmt(total)} dòng theo bộ lọc đang chọn</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 cursor-pointer">Đóng</button>
+        </div>
+        <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+            placeholder={isProjects ? "Tìm tên dự án, mã, trạng thái" : "Tìm mã mối, dự án, thợ, máy"}
+            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-hidden focus:border-[#0047AB]"
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          {loading ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">Đang tải các dòng để tra cứu…</p>
+          ) : total === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">Không có dòng nào khớp ô này.</p>
+          ) : isProjects ? (
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Dự án</th>
+                  <th className="px-4 py-2.5">Mã</th>
+                  <th className="px-4 py-2.5">Trạng thái</th>
+                  <th className="px-4 py-2.5 text-right">KH năm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pageProjects.map((project) => (
+                  <tr key={project.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-900">{project.name}</td>
+                    <td className="px-4 py-2.5 font-mono text-slate-600">{project.code || "—"}</td>
+                    <td className="px-4 py-2.5">{project.status}</td>
+                    <td className="px-4 py-2.5 text-right font-mono tabular-nums">{fmt(project.plannedYear)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Ngày</th>
+                  <th className="px-4 py-2.5">Mã mối</th>
+                  <th className="px-4 py-2.5">Dự án</th>
+                  <th className="px-4 py-2.5">Thợ hàn</th>
+                  <th className="px-4 py-2.5">Máy</th>
+                  <th className="px-4 py-2.5">Loại</th>
+                  <th className="px-4 py-2.5">Thí nghiệm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pageWelds.map((row, index) => {
+                  const date = getJournalRowDateIso(row, start + index);
+                  return (
+                    <tr key={row.id || `${row.ma_lich_su}-${start + index}`} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 font-mono whitespace-nowrap">{date ? viDate(date) : row.nam_thuc_hien || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono text-[#0047AB]">{displayWeldCode(row.ma_lich_su)}</td>
+                      <td className="px-4 py-2.5">{row.du_an || "—"}</td>
+                      <td className="px-4 py-2.5">{row.ten_tho_han || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono">{row.ten_may || row.ma_may || "—"}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">{row.loai_moi_han}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">{resolveWeldTestStatus(row)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {pageCount > 1 ? (
+          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm sm:px-5">
+            <span className="text-slate-500">Trang {safePage}/{pageCount}</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 cursor-pointer">Trước</button>
+              <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 cursor-pointer">Sau</button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
