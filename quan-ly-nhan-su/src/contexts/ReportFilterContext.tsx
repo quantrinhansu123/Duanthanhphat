@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   REPORT_PERIOD_END,
   REPORT_PERIOD_START,
@@ -218,12 +218,23 @@ export function ReportFilterProvider({ children }: { children: ReactNode }) {
     });
   }, [appliedFilters, appliedPeriodMode]);
 
-  // Tự áp dụng bộ lọc (debounce nhẹ) — mọi tab báo cáo hạch toán đúng theo lựa chọn hiện tại.
   const clearFilters = useCallback(() => {
     setDraft(EMPTY_DRAFT);
     setAppliedFilters(toApplied(EMPTY_DRAFT));
     setAppliedPeriodMode("day");
   }, []);
+
+  // Mọi tab báo cáo đọc appliedFilters. Áp ngay lựa chọn trên thanh lọc,
+  // không chờ bấm "Lọc tất cả", để tiến độ và các khối bên dưới đổi theo.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const normalized = normalizeForMode(draft);
+      const next = toApplied(normalized);
+      setAppliedFilters((prev) => (sameFilters(prev, next) ? prev : next));
+      setAppliedPeriodMode((prev) => (prev === normalized.periodMode ? prev : normalized.periodMode));
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [draft]);
 
   const draftAsApplied = useMemo(() => toApplied(draft), [draft]);
   const isDirty =
