@@ -696,10 +696,13 @@ export default function OverviewDashboard() {
   const PLAN_YEAR = Number(todayIso.slice(0, 4));
   const planYearStart = `${PLAN_YEAR}-01-01`;
   const planYearEnd = `${PLAN_YEAR}-12-31`;
-  // Thẻ tiến độ chỉ xét phần giao giữa bộ lọc đang chọn và năm hiện tại.
+  // Không lọc ngày: tiến độ năm hiện tại đến hôm nay.
+  // Có lọc ngày: đúng khoảng đã chọn, cắt tại hôm nay nếu kỳ còn ở tương lai.
   const asOfDate = isAllDates || todayIso < filterTo ? todayIso : filterTo;
-  const progressFrom = filterFrom > planYearStart ? filterFrom : planYearStart;
-  const progressTo = asOfDate < planYearEnd ? asOfDate : planYearEnd;
+  const progressFrom = isAllDates ? planYearStart : filterFrom;
+  const progressTo = isAllDates
+    ? (todayIso < planYearEnd ? todayIso : planYearEnd)
+    : asOfDate;
   const hasProgressRange = progressFrom <= progressTo;
   const plannedTarget = useMemo(
     () => {
@@ -788,7 +791,7 @@ export default function OverviewDashboard() {
       } else if (!isAllDates) {
         const rowYearStart = `${row.nam_thuc_hien}-01-01`;
         const rowYearEnd = `${row.nam_thuc_hien}-12-31`;
-        if (Number(row.nam_thuc_hien) !== PLAN_YEAR || progressFrom > rowYearStart || progressTo < rowYearEnd) return;
+        if (!hasProgressRange || progressFrom > rowYearStart || progressTo < rowYearEnd) return;
       } else if (Number(row.nam_thuc_hien) !== PLAN_YEAR) {
         return;
       } else if (!hasProgressRange || progressFrom > planYearStart || progressTo < planYearEnd) {
@@ -818,8 +821,9 @@ export default function OverviewDashboard() {
         ),
     [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
   );
-  // Mẫu số đồng hồ tiến độ sản xuất = KH năm (lịch mối hàn trong năm hiện tại).
-  const target = plannedTarget;
+  // Không lọc ngày: mẫu số là kế hoạch cả năm hiện tại.
+  // Có lọc ngày: mẫu số là kế hoạch trong khoảng đang chọn.
+  const target = isAllDates ? plannedTarget : plannedToDate;
   const plannedDaySet = useMemo(() => {
     const days = new Set<string>();
     for (const project of selectedProjects) {
@@ -851,15 +855,17 @@ export default function OverviewDashboard() {
     let days = 0;
     if (!hasProgressRange) return 0;
     for (const project of selectedProjects) {
+      const quotaFrom = isAllDates ? planYearStart : filterFrom;
+      const quotaTo = isAllDates ? planYearEnd : filterTo;
       const plannedRows = (project.theoreticalProgress ?? []).filter(
-        (row) => row.so_moi_han > 0 && row.ngay >= planYearStart && row.ngay <= planYearEnd,
+        (row) => row.so_moi_han > 0 && row.ngay >= quotaFrom && row.ngay <= quotaTo,
       );
       if (plannedRows.length === 0) continue;
       welds += plannedRows.reduce((sum, row) => sum + row.so_moi_han, 0);
       days += plannedRows.length;
     }
     return days > 0 ? Math.ceil(welds / days) : 0;
-  }, [hasProgressRange, planYearEnd, planYearStart, selectedProjects]);
+  }, [filterFrom, filterTo, hasProgressRange, isAllDates, planYearEnd, planYearStart, selectedProjects]);
   const evaluableProjects = useMemo(
     () => selectedProjects.filter((project) => {
       if (!projectHasPlan(project)) return false;
@@ -901,7 +907,10 @@ export default function OverviewDashboard() {
 
   const progressPctNum = target > 0 ? (progressActual / target) * 100 : 0;
   const progressPct = formatPctNumber(progressPctNum);
-  const statusPlannedToDate = liveProjects.reduce(
+  // Khi đang lọc, so tiến độ trên đúng dự án và khoảng ngày đã chọn,
+  // kể cả dự án đã kết thúc trong kỳ đó.
+  const statusScope = isUnfilteredOverview ? liveProjects : selectedProjects;
+  const statusPlannedToDate = statusScope.reduce(
     (sum, project) => sum + (hasProgressRange ? scheduledWeldsInRange(project, progressFrom, progressTo) : 0),
     0,
   );
@@ -913,7 +922,7 @@ export default function OverviewDashboard() {
   const progressStatus =
     selectedProjects.length === 0
       ? null
-      : behindReasons.length > 0 && liveProjects.length === 0
+      : isUnfilteredOverview && behindReasons.length > 0 && liveProjects.length === 0
         ? {
             label: "CHẬM TIẾN ĐỘ",
             tone: "amber" as const,
@@ -921,7 +930,7 @@ export default function OverviewDashboard() {
             plan: upcomingDailyPlan,
             planUnit: "mối/ngày" as const,
           }
-        : liveProjects.length === 0
+        : statusScope.length === 0
           ? null
           : statusPlannedToDate <= 0
             ? { label: "CHƯA ĐẾN KỲ KẾ HOẠCH", tone: "slate" as const, reason: "", plan: 0, planUnit: "mối" as const }
@@ -1269,7 +1278,9 @@ export default function OverviewDashboard() {
         maDuAn: project.maDuAn || "",
         location: project.location || "",
         status: project.status,
-        planned: Math.max(0, Math.round(project.plannedWeldCount || 0)),
+        planned: isAllDates
+          ? Math.max(0, Math.round(project.plannedWeldCount || 0))
+          : scheduledWeldsInRange(project, filterFrom, filterTo),
         count: showFastAggregate
           ? (productionById.get(project.id) ?? productionByName.get(project.name) ?? 0)
           : (weld?.total ?? 0),
@@ -1308,13 +1319,20 @@ export default function OverviewDashboard() {
       }));
 
     return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
-  }, [detailProjects, detailRows, overviewAggregateProjects, showFastAggregate, yearByProject]);
+  }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate, yearByProject]);
 
   const projectCount = selectedProjects.length;
   const plannedWeldsAll = useMemo(
     () =>
       selectedProjects.reduce((sum, project) => sum + Math.max(0, Math.round(project.plannedWeldCount || 0)), 0),
     [selectedProjects],
+  );
+  const plannedInPeriod = useMemo(
+    () => selectedProjects.reduce(
+      (sum, project) => sum + scheduledWeldsInRange(project, filterFrom, filterTo),
+      0,
+    ),
+    [filterFrom, filterTo, selectedProjects],
   );
 
   // Card DỰ ÁN:
@@ -1450,7 +1468,7 @@ export default function OverviewDashboard() {
             ) : (
               <div className="mt-2.5 text-xs text-violet-700 font-medium">
                 KH trong kỳ lọc:{" "}
-                <span className="font-mono font-semibold">{fmt(plannedWeldsAll)}</span> mối
+                <span className="font-mono font-semibold">{fmt(plannedInPeriod)}</span> mối
               </div>
             )}
           </div>
@@ -1627,7 +1645,9 @@ export default function OverviewDashboard() {
                 {fmt(progressActual)} / {fmt(target)}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {`KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
+                {isAllDates
+                  ? `KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
+                  : `${viDate(progressFrom)}–${viDate(progressTo)} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
               </div>
             </div>
 
@@ -2048,7 +2068,9 @@ export default function OverviewDashboard() {
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất · dự kiến là tổng mối hàn dự kiến của dự án
+            {isAllDates
+              ? "Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất · dự kiến là tổng mối hàn dự kiến của dự án"
+              : `Xếp theo năm bắt đầu · thực tế và dự kiến trong kỳ ${viDate(filterFrom)}–${viDate(filterTo)}`}
           </p>
 
           <div className="mt-3.5 flex justify-center">
