@@ -159,9 +159,8 @@ export default function MachineReportDashboard() {
       const stat = machineStatsByCode.get(code);
       const report = machineSummaryByCode.get(code);
       // Tỷ lệ lỗi trên số mối đã có kết quả thí nghiệm (bỏ mối đang chờ KQ).
-      const errorRate = stat?.tested
-        ? ((stat.errors / stat.tested) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 2 })
-        : "0";
+      const errorRateValue = stat?.tested ? (stat.errors / stat.tested) * 100 : 0;
+      const errorRate = errorRateValue.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
       const status = normalizeMachineStatus(report?.status ?? machine.status ?? "Sẵn sàng");
       const operatingHours = report?.operatingHours ?? machine.operatingHours ?? 0;
       return {
@@ -177,6 +176,7 @@ export default function MachineReportDashboard() {
         operatingHours,
         hours: operatingHours.toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
         errorRate: `${errorRate}%`,
+        errorRateValue,
         status,
       };
     });
@@ -500,12 +500,12 @@ export default function MachineReportDashboard() {
             </div>
             <div className="table-scroll overflow-x-auto mt-3.5">
               <div className="min-w-[660px]">
-                <div className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <div className="grid grid-cols-[1.1fr_1.1fr_0.9fr_0.8fr_0.9fr_1.1fr] gap-x-2 border-b border-slate-200 bg-slate-50/80 p-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-slate-900">
                   <div>Máy</div>
                   <div>Vị trí hiện tại</div>
-                  <div>Mối hàn</div>
-                  <div>Giờ chạy</div>
-                  <div>Tỷ lệ lỗi</div>
+                  <div className="text-[#0047AB]">Mối hàn</div>
+                  <div className="text-sky-700">Giờ chạy</div>
+                  <div className="text-rose-700">Tỷ lệ lỗi</div>
                   <div className="text-right">Trạng thái</div>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -521,10 +521,10 @@ export default function MachineReportDashboard() {
                       >
                         {m.code}
                       </Link>
-                      <div className="truncate" title={m.location}>{m.location}</div>
-                      <div className="font-mono tabular-nums">{m.welds}</div>
-                      <div className="font-mono tabular-nums">{m.hours}</div>
-                      <div className="font-mono tabular-nums">{m.errorRate}</div>
+                      <div className="truncate font-medium text-slate-800" title={m.location}>{m.location}</div>
+                      <div className="font-mono font-bold tabular-nums text-[#0047AB]">{m.welds}</div>
+                      <div className="font-mono font-bold tabular-nums text-sky-700">{m.hours}</div>
+                      <div className={`font-mono font-bold tabular-nums ${m.errorRateValue <= 0 ? "text-emerald-700" : m.errorRateValue < 5 ? "text-amber-700" : "text-rose-700"}`}>{m.errorRate}</div>
                       <div className="text-right">
                         <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${MACHINE_STATUS_STYLES[m.status]}`}>
                           {m.status}

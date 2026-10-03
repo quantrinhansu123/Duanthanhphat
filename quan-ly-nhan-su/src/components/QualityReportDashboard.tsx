@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Warning } from "@/components/icons";
-import { NDT_DEFECTS } from "@/data/error-library";
+import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
   buildQuarterlyPassRateSeries,
   countReworkWelds,
+  defectCodesFromRow,
   filterWeldReportRows,
   formatJournalDateIso,
   getJournalRowDateIso,
@@ -24,6 +25,28 @@ const DEFECT_META = NDT_DEFECTS.map((defect, index) => ({
 
 function fmt(n: number) {
   return n.toLocaleString("vi-VN");
+}
+
+/** Loại lỗi trên báo cáo = tên loại khuyết tật (tiếng Việt) của mã NDT. */
+function defectTypeNames(row: { ma_khuyet_tat?: string[] | null; nguyen_nhan_loi?: string | null; so_luong_loi?: number | null; tinh_trang_thi_nghiem?: string | null }) {
+  const codes = defectCodesFromRow(row);
+  if (codes.length > 0) return codes.map((code) => ndtDefectLabel(code, "vi"));
+
+  const reason = row.nguyen_nhan_loi?.trim() ?? "";
+  if (!reason) return [];
+  const names: string[] = [];
+  for (const part of reason.split(/[,;/|]+/)) {
+    const token = part.trim().toLocaleLowerCase("vi");
+    if (!token) continue;
+    const hit = NDT_DEFECTS.find((item) =>
+      item.nameVi.toLocaleLowerCase("vi") === token
+      || item.nameEn.toLocaleLowerCase("vi") === token
+      || `${item.nameVi} (${item.code})`.toLocaleLowerCase("vi") === token
+      || `${item.nameEn} (${item.code})`.toLocaleLowerCase("vi") === token,
+    );
+    if (hit && !names.includes(hit.nameVi)) names.push(hit.nameVi);
+  }
+  return names;
 }
 
 function QualityKpiGrid({
@@ -420,17 +443,12 @@ export default function QualityReportDashboard() {
     const defects = [];
     for (const [index, row] of errorRows.entries()) {
       const isoDate = getJournalRowDateIso(row, index);
-      const ndtNames = (row.ma_khuyet_tat ?? []).map((code) => {
-        const defect = NDT_DEFECTS.find((item) => item.code === code);
-        return defect ? `${defect.nameEn} (${defect.code})` : code;
-      });
+      const typeNames = defectTypeNames(row);
       defects.push({
         id: row.id,
         date: formatJournalDateIso(isoDate),
         weldJoint: row.ma_lich_su,
-        defectType: ndtNames.length > 0
-          ? ndtNames.join(", ")
-          : row.nguyen_nhan_loi?.trim() || "Chưa ghi nguyên nhân",
+        defectType: typeNames.length > 0 ? typeNames.join(", ") : "Chưa ghi khuyết tật",
         welder: row.ten_tho_han,
         plant: row.du_an,
         severity: "Chưa phân loại" as const,
@@ -484,7 +502,7 @@ export default function QualityReportDashboard() {
                 <Warning size={16} weight="fill" aria-hidden className="shrink-0 text-rose-600" />
                 <span>Phân loại lỗi</span>
               </div>
-              <div className="mt-0.5 text-xs text-slate-500">Theo mã khuyết tật NDT</div>
+              <div className="mt-0.5 text-xs text-slate-500">Theo loại khuyết tật</div>
             </div>
             <span className="shrink-0 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-xs font-bold font-mono text-rose-700 tabular-nums shadow-2xs">
               {totalDefects} lỗi
@@ -615,7 +633,7 @@ export default function QualityReportDashboard() {
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Ngày</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Mối hàn</th>
-                <th className="px-3.5 py-2.5 whitespace-nowrap">Loại lỗi</th>
+                <th className="px-3.5 py-2.5 whitespace-nowrap">Loại khuyết tật</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Thợ hàn</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Dự án</th>
                 <th className="px-3.5 py-2.5 whitespace-nowrap">Mức độ</th>
