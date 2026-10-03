@@ -785,20 +785,8 @@ export default function OverviewDashboard() {
         ),
     [PLAN_YEAR, overviewProductionThisPlanYear, selectedRows, showFastAggregate],
   );
-  // Tử số tiến độ sản xuất = đúng "Đã thực hiện năm (Sản xuất)".
-  // Có lọc ngày thì chỉ lấy phần sản xuất nằm trong kỳ đó.
-  const progressActual = useMemo(() => {
-    if (isAllDates) return productionDoneThisYear;
-    return selectedRows.reduce((sum, row, index) => {
-      if (row.loai_moi_han !== "Sản xuất") return sum;
-      const iso = getJournalRowDateIso(row, index);
-      if (iso) return iso >= filterFrom && iso <= filterTo ? sum + 1 : sum;
-      const rowYearStart = `${row.nam_thuc_hien}-01-01`;
-      const rowYearEnd = `${row.nam_thuc_hien}-12-31`;
-      if (filterFrom > rowYearStart || filterTo < rowYearEnd) return sum;
-      return sum + 1;
-    }, 0);
-  }, [filterFrom, filterTo, isAllDates, productionDoneThisYear, selectedRows]);
+  // Tử số tiến độ sản xuất = Đã thực hiện (các năm trước) + Đã thực hiện năm nay (Sản xuất).
+  const progressActual = doneBeforePlanYear + productionDoneThisYear;
   // Không lọc ngày: mẫu số là kế hoạch cả năm hiện tại.
   // Có lọc ngày: mẫu số là toàn bộ mối dự kiến trong kỳ, kể cả ngày chưa tới.
   const plannedInPeriod = useMemo(
@@ -1605,8 +1593,8 @@ export default function OverviewDashboard() {
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {isAllDates
-                  ? `KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
-                  : `${viDate(progressFrom)}–${viDate(progressTo)} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`}
+                  ? `Đã thực hiện + ${PLAN_YEAR} · KH năm ${PLAN_YEAR} · ${fmt(selectedProjects.length)} dự án: ${fmt(target)} mối`
+                  : `Đã thực hiện + ${PLAN_YEAR} trong kỳ · ${viDate(progressFrom)}–${viDate(progressTo)} · ${fmt(target)} mối`}
               </div>
             </div>
 
