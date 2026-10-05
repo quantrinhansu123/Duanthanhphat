@@ -1263,20 +1263,27 @@ export default function OverviewDashboard() {
         qualityByName.set(project.name, quality);
       }
     }
-    const weldByName = showFastAggregate
-      ? new Map<string, { total: number; passed: number; errors: number; rows: { nam_thuc_hien?: number | null }[] }>()
+    const productionByJournalName = showFastAggregate
+      ? new Map<string, { total: number; rows: { nam_thuc_hien?: number | null }[] }>()
       : new Map(
           groupJournalRows(
             detailRows.filter((row) => row.loai_moi_han === "Sản xuất"),
             (row) => row.du_an.trim() || "Chưa gắn dự án",
-          ).map((row) => [
-            row.name,
-            row,
-          ]),
+          ).map((row) => [row.name, row]),
+        );
+    // Đạt / Lỗi lấy mọi loại mối đã có kết quả. Mối chờ thí nghiệm không tính đạt.
+    const qualityByJournalName = showFastAggregate
+      ? new Map<string, { passed: number; errors: number; rows: { nam_thuc_hien?: number | null }[] }>()
+      : new Map(
+          groupJournalRows(
+            detailRows,
+            (row) => row.du_an.trim() || "Chưa gắn dự án",
+          ).map((row) => [row.name, row]),
         );
 
     const fromDuAn = detailProjects.map((project, index) => {
-      const weld = weldByName.get(project.name);
+      const production = productionByJournalName.get(project.name);
+      const quality = qualityByJournalName.get(project.name);
       return {
         id: project.id,
         name: project.name,
@@ -1288,13 +1295,13 @@ export default function OverviewDashboard() {
           : scheduledWeldsInRange(project, filterFrom, filterTo),
         count: showFastAggregate
           ? (productionById.get(project.id) ?? productionByName.get(project.name) ?? 0)
-          : (weld?.total ?? 0),
+          : (production?.total ?? 0),
         passed: showFastAggregate
           ? (qualityById.get(project.id)?.passed ?? qualityByName.get(project.name)?.passed ?? 0)
-          : (weld?.passed ?? 0),
+          : (quality?.passed ?? 0),
         errors: showFastAggregate
           ? (qualityById.get(project.id)?.errors ?? qualityByName.get(project.name)?.errors ?? 0)
-          : (weld?.errors ?? 0),
+          : (quality?.errors ?? 0),
         color: PROJECT_COLORS[index % PROJECT_COLORS.length],
         fromTable: true,
         year: projectPlanYear(project),
@@ -1302,26 +1309,32 @@ export default function OverviewDashboard() {
     });
 
     const known = new Set(fromDuAn.map((row) => row.name));
-    const orphans = [...weldByName.entries()]
-      .filter(([name]) => name && !known.has(name))
-      .map(([name, weld], index) => ({
+    const orphanNames = new Set([...productionByJournalName.keys(), ...qualityByJournalName.keys()]);
+    const orphans = [...orphanNames]
+      .filter((name) => name && !known.has(name))
+      .map((name, index) => {
+        const production = productionByJournalName.get(name);
+        const quality = qualityByJournalName.get(name);
+        const yearRows = quality?.rows ?? production?.rows ?? [];
+        return {
         id: `journal-${name}`,
         name,
         maDuAn: "",
         location: "",
         status: "Từ nhật ký hàn",
         planned: 0,
-        count: weld.total,
-        passed: weld.passed,
-        errors: weld.errors,
+        count: production?.total ?? 0,
+        passed: quality?.passed ?? 0,
+        errors: quality?.errors ?? 0,
         color: PROJECT_COLORS[(fromDuAn.length + index) % PROJECT_COLORS.length],
         fromTable: false,
-        year: weld.rows.reduce<number | null>((min, row) => {
+        year: yearRows.reduce<number | null>((min, row) => {
           const year = Number(row.nam_thuc_hien);
           if (!Number.isInteger(year) || year < 1900) return min;
           return min === null || year < min ? year : min;
         }, null),
-      }));
+        };
+      });
 
     return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
   }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate, yearByProject]);
@@ -2273,7 +2286,7 @@ export default function OverviewDashboard() {
               MỐI HÀN THEO DỰ ÁN — CHI TIẾT
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Nguồn bảng Dự án · KH và sản lượng đều theo kỳ / bộ lọc đang chọn
+              Thực hiện SX chỉ tính mối sản xuất. Đạt và Lỗi chỉ tính mối đã có kết quả thí nghiệm; mối chờ thí nghiệm không tính là đạt.
             </p>
           </div>
           <div className="text-xs font-semibold text-slate-600">

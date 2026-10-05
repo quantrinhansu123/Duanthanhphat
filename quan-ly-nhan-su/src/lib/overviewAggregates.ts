@@ -139,13 +139,54 @@ async function loadErrorReasons(
   throw lastError ?? new Error("Không tải được thống kê khuyết tật");
 }
 
+type ProjectTestQuality = { passed: number; errors: number };
+
+/**
+ * Đạt / Không đạt theo từng dự án, đếm bản ghi có kết quả thí nghiệm.
+ * Không dùng tong_dat (= tổng − số lỗi): mối "Chờ thí nghiệm" có số lỗi bằng 0
+ * nên công thức đó biến cả nhóm đang chờ thành đạt.
+ */
+async function loadProjectTestQuality(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Map<string, ProjectTestQuality>> {
+  const pageSize = 1000;
+  const byProject = new Map<string, ProjectTestQuality>();
+  for (let from = 0; ; from += pageSize) {
+    const result = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("id,du_an_id,tinh_trang_thi_nghiem")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (result.error) throw result.error;
+    const rows = (result.data ?? []) as Array<{
+      du_an_id?: string | null;
+      tinh_trang_thi_nghiem?: string | null;
+    }>;
+    for (const row of rows) {
+      const status = row.tinh_trang_thi_nghiem ?? "";
+      if (status !== "Đạt" && status !== "Không đạt") continue;
+      const id = String(row.du_an_id ?? "");
+      if (!id) continue;
+      const current = byProject.get(id) ?? { passed: 0, errors: 0 };
+      if (status === "Đạt") current.passed += 1;
+      else current.errors += 1;
+      byProject.set(id, current);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return byProject;
+}
+
 async function loadProjectAggregates(
   supabase: ReturnType<typeof createClient>,
 ): Promise<OverviewProjectAggregate[]> {
-  const result = await supabase
-    .from("tong_moi_han_nam_du_an")
-    .select("du_an_id,ma_du_an,du_an,tong_moi_han,tong_loi,tong_dat")
-    .order("du_an", { ascending: true });
+  const [result, qualityByProject] = await Promise.all([
+    supabase
+      .from("tong_moi_han_nam_du_an")
+      .select("du_an_id,ma_du_an,du_an,tong_moi_han")
+      .order("du_an", { ascending: true }),
+    loadProjectTestQuality(supabase),
+  ]);
   if (result.error) throw result.error;
   const byProject = new Map<string, OverviewProjectAggregate>();
   for (const raw of result.data ?? []) {
@@ -154,12 +195,11 @@ async function loadProjectAggregates(
       ma_du_an?: string | null;
       du_an?: string | null;
       tong_moi_han?: number | null;
-      tong_loi?: number | null;
-      tong_dat?: number | null;
     };
     const id = String(row.du_an_id ?? row.du_an ?? "");
     const name = String(row.du_an ?? "").trim();
     if (!id || !name) continue;
+    const quality = qualityByProject.get(id);
     const current = byProject.get(id) ?? {
       id,
       code: String(row.ma_du_an ?? "").trim(),
@@ -169,8 +209,8 @@ async function loadProjectAggregates(
       errors: 0,
     };
     current.total += Number(row.tong_moi_han ?? 0);
-    current.errors += Number(row.tong_loi ?? 0);
-    current.passed += Number(row.tong_dat ?? Math.max(0, Number(row.tong_moi_han ?? 0) - Number(row.tong_loi ?? 0)));
+    current.passed = quality?.passed ?? 0;
+    current.errors = quality?.errors ?? 0;
     byProject.set(id, current);
   }
   return [...byProject.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "vi"));

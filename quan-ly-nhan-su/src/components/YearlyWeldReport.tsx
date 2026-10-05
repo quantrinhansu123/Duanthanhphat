@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
-import { filterWeldReportRows, type WeldReportRow } from "@/lib/weldReportData";
+import { filterWeldReportRows, resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import type {
   TongMoiHanNamDuAnRow,
   TongMoiHanNamNhanSuRow,
@@ -24,9 +24,11 @@ function emptyYearRow(year: number): TongMoiHanNamRow {
 function addWeld(row: TongMoiHanNamRow, weld: WeldReportRow) {
   const total = Number(weld.so_luong_thuc_hien || 0);
   const errors = Number(weld.so_luong_loi || 0);
+  const status = resolveWeldTestStatus(weld);
   row.tong_moi_han += total;
   row.tong_loi += errors;
-  row.tong_dat += total - errors;
+  // Chỉ mối đã kết luận Đạt. Mối chờ thí nghiệm có số lỗi = 0 nên không được cộng vào đạt.
+  row.tong_dat += status === "Đạt" ? total : 0;
   if (weld.cong_nghe_han === "FBW") {
     row.fbw += total;
     row.loi_fbw += errors;
