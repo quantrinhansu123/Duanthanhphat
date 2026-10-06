@@ -1013,6 +1013,286 @@ function JournalFormModal({
   );
 }
 
+function listIsoDates(from: string, to: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) return [];
+  const dates: string[] = [];
+  const cursor = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  while (cursor <= end) {
+    const year = cursor.getFullYear();
+    const month = String(cursor.getMonth() + 1).padStart(2, "0");
+    const day = String(cursor.getDate()).padStart(2, "0");
+    dates.push(`${year}-${month}-${day}`);
+    cursor.setDate(cursor.getDate() + 1);
+    if (dates.length > 31) break;
+  }
+  return dates;
+}
+
+type BulkFillValues = {
+  du_an_id: string;
+  dateFrom: string;
+  dateTo: string;
+  count: number;
+  tho_han_id: string;
+  may_id: string;
+  loai_ray: string;
+  cong_nghe_han: WeldReportRow["cong_nghe_han"];
+  loai_moi_han: WeldReportRow["loai_moi_han"];
+  result: WeldTestStatus;
+  ca_han: WeldShift;
+  chung_chi_su_dung: string;
+};
+
+function BulkFillJournalDialog({
+  projects,
+  welders,
+  machines,
+  saving,
+  progress,
+  onClose,
+  onSubmit,
+}: {
+  projects: JournalProjectOption[];
+  welders: CertifiedWelderOption[];
+  machines: MachineOption[];
+  saving: boolean;
+  progress: string;
+  onClose: () => void;
+  onSubmit: (values: BulkFillValues) => void | Promise<void>;
+}) {
+  const railOptions = useCatalogOptions("Loại ray");
+  const today = defaultPerformedAt().slice(0, 10);
+  const [values, setValues] = useState<BulkFillValues>(() => {
+    const project = projects[0];
+    const internal = isInternalTrainingProject(project?.label ?? "");
+    return {
+      du_an_id: project?.id ?? "",
+      dateFrom: today,
+      dateTo: today,
+      count: 1,
+      tho_han_id: welders[0]?.id ?? "",
+      may_id: machines[0]?.id ?? "",
+      loai_ray: railOptions[0] || "P50",
+      cong_nghe_han: "FBW",
+      loai_moi_han: internal ? "Đào tạo" : "Sản xuất",
+      result: internal ? "Không thí nghiệm" : "Chờ thí nghiệm",
+      ca_han: "Ca 1",
+      chung_chi_su_dung: welders[0]?.certificates[0] ?? "",
+    };
+  });
+  const welder = welders.find((item) => item.id === values.tho_han_id);
+  const certificates = welder?.certificates ?? [];
+  const dates = listIsoDates(values.dateFrom, values.dateTo);
+  const spanTooLong = values.dateFrom && values.dateTo && values.dateFrom <= values.dateTo && dates.length > 31;
+  const totalRows = dates.length * Math.max(0, values.count);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-3 sm:p-6">
+      <form
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (saving) return;
+          void onSubmit(values);
+        }}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Điền mối hàn theo ngày</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Chọn dự án, các ngày cần điền và số mối mỗi ngày. Thông số còn lại giống khi thêm một mối mới. Xác nhận xong, hệ thống tạo đủ số mối đó cho từng ngày.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Đóng"
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-3.5 overflow-y-auto px-5 py-4">
+          <label className="block text-xs font-semibold text-slate-700">
+            Dự án
+            <SelectMenu
+              value={values.du_an_id}
+              onChange={(du_an_id) => {
+                const internal = isInternalTrainingProject(projects.find((item) => item.id === du_an_id)?.label ?? "");
+                setValues((current) => ({
+                  ...current,
+                  du_an_id,
+                  loai_moi_han: internal ? "Đào tạo" : current.loai_moi_han === "Đào tạo" ? "Sản xuất" : current.loai_moi_han,
+                  result: internal ? "Không thí nghiệm" : current.result === "Không thí nghiệm" ? "Chờ thí nghiệm" : current.result,
+                }));
+              }}
+              options={projects.map((item) => ({ value: item.id, label: item.ma_du_an ? `${item.label} · ${item.ma_du_an}` : item.label }))}
+              placeholder="Chọn dự án"
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="block text-xs font-semibold text-slate-700">
+              Từ ngày
+              <DateField
+                value={values.dateFrom}
+                onChange={(dateFrom) => setValues((current) => ({ ...current, dateFrom }))}
+                className="mt-1.5"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Đến ngày
+              <DateField
+                value={values.dateTo}
+                onChange={(dateTo) => setValues((current) => ({ ...current, dateTo }))}
+                className="mt-1.5"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Số mối mỗi ngày
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={values.count}
+                onChange={(event) => setValues((current) => ({ ...current, count: Number(event.target.value) }))}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+          </div>
+          <p className="text-xs font-medium text-[#0047AB]">
+            {spanTooLong
+              ? "Chỉ điền tối đa 31 ngày mỗi lần."
+              : dates.length > 0 && values.count > 0
+                ? `${dates.length.toLocaleString("vi-VN")} ngày × ${values.count.toLocaleString("vi-VN")} mối = ${totalRows.toLocaleString("vi-VN")} bản ghi. Mã mối được tạo tự động.`
+                : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              Người trực tiếp hàn
+              <SelectMenu
+                value={values.tho_han_id}
+                onChange={(tho_han_id) => {
+                  const next = welders.find((item) => item.id === tho_han_id);
+                  setValues((current) => ({
+                    ...current,
+                    tho_han_id,
+                    chung_chi_su_dung: next?.certificates.includes(current.chung_chi_su_dung)
+                      ? current.chung_chi_su_dung
+                      : next?.certificates[0] ?? "",
+                  }));
+                }}
+                options={welders.map((item) => ({ value: item.id, label: item.label }))}
+                searchable
+                placeholder="Chọn thợ hàn"
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Chứng chỉ sử dụng
+              <SelectMenu
+                value={values.chung_chi_su_dung}
+                onChange={(chung_chi_su_dung) => setValues((current) => ({ ...current, chung_chi_su_dung }))}
+                options={certificates.map((item) => ({ value: item, label: item }))}
+                placeholder={certificates.length === 0 ? "Nhân sự chưa có chứng chỉ" : "Chọn chứng chỉ"}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+          </div>
+          <label className="block text-xs font-semibold text-slate-700">
+            Máy thực hiện
+            <SelectMenu
+              value={values.may_id}
+              onChange={(may_id) => setValues((current) => ({ ...current, may_id }))}
+              options={machines.map((item) => ({ value: item.id, label: item.name.trim() || item.code }))}
+              searchable={machines.length > 5}
+              placeholder="Chọn máy"
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              Ca hàn
+              <SelectMenu
+                value={values.ca_han}
+                onChange={(ca_han) => setValues((current) => ({ ...current, ca_han: ca_han as WeldShift }))}
+                options={WELD_SHIFTS.map((item) => ({ value: item, label: item }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Tình trạng thí nghiệm
+              <SelectMenu
+                value={values.result}
+                onChange={(result) => setValues((current) => ({ ...current, result: result as WeldTestStatus }))}
+                options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((item) => ({ value: item, label: item }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="block text-xs font-semibold text-slate-700">
+              Loại ray
+              <SelectMenu
+                value={values.loai_ray}
+                onChange={(loai_ray) => setValues((current) => ({ ...current, loai_ray }))}
+                options={(railOptions.length > 0 ? railOptions : ["P50"]).map((item) => ({ value: item, label: item }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Công nghệ
+              <SelectMenu
+                value={values.cong_nghe_han}
+                onChange={(cong_nghe_han) => setValues((current) => ({ ...current, cong_nghe_han: cong_nghe_han as BulkFillValues["cong_nghe_han"] }))}
+                options={["FBW", "ATW"].map((item) => ({ value: item, label: item }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Loại mối
+              <SelectMenu
+                value={values.loai_moi_han}
+                onChange={(loai_moi_han) => setValues((current) => ({ ...current, loai_moi_han: loai_moi_han as BulkFillValues["loai_moi_han"] }))}
+                options={["Sản xuất", "Thử nghiệm", "Đào tạo"].map((item) => ({ value: item, label: item }))}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Hủy
+          </button>
+          <button
+            type="submit"
+            disabled={saving || spanTooLong || totalRows < 1 || !values.du_an_id || !values.tho_han_id || !values.may_id || !values.chung_chi_su_dung}
+            className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? (progress || "Đang điền…") : "Điền mối"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function WeldingJournalList({
   lockedResultFilter,
   heading = "NHẬT KÝ HÀN",
@@ -1051,6 +1331,9 @@ export default function WeldingJournalList({
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [autoFillOpen, setAutoFillOpen] = useState(false);
+  const [bulkFillOpen, setBulkFillOpen] = useState(false);
+  const [bulkFillSaving, setBulkFillSaving] = useState(false);
+  const [bulkFillProgress, setBulkFillProgress] = useState("");
   const [autoFillProjectId, setAutoFillProjectId] = useState("");
   const [autoFillDate, setAutoFillDate] = useState("");
   const [autoFillShifts, setAutoFillShifts] = useState({ "Ca 1": true, "Ca 2": true });
@@ -1687,6 +1970,74 @@ export default function WeldingJournalList({
     }
   }
 
+  async function handleBulkFill(values: BulkFillValues) {
+    const dates = listIsoDates(values.dateFrom, values.dateTo);
+    const count = Math.round(values.count);
+    if (!values.du_an_id || !values.tho_han_id || !values.may_id || !values.chung_chi_su_dung) {
+      window.alert("Chọn đủ dự án, thợ hàn, chứng chỉ và máy.");
+      return;
+    }
+    if (dates.length === 0 || dates.length > 31 || count < 1 || count > 100) {
+      window.alert("Chọn khoảng ngày tối đa 31 ngày và số mối mỗi ngày từ 1 đến 100.");
+      return;
+    }
+    const total = dates.length * count;
+    const project = projectOptions.find((item) => item.id === values.du_an_id);
+    const confirmed = window.confirm(
+      `Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project?.label ?? ""}", từ ${formatJournalDateIso(values.dateFrom)} đến ${formatJournalDateIso(values.dateTo)}.\nTổng ${total.toLocaleString("vi-VN")} bản ghi. Tiếp tục?`,
+    );
+    if (!confirmed) return;
+
+    setBulkFillSaving(true);
+    setBulkFillProgress("");
+    try {
+      const sitePrefix = normalizeWeldSitePrefix(project?.ma_du_an);
+      const prefix = buildWeldCodePrefix(values.cong_nghe_han, `${values.dateFrom}T08:00`, sitePrefix);
+      const usedCodes = new Set(await loadWeldCodesWithPrefix(prefix));
+      let done = 0;
+      for (const date of dates) {
+        for (let index = 0; index < count; index += 1) {
+          const maLichSu = suggestWeldCode(values.cong_nghe_han, `${date}T08:00`, [...usedCodes], sitePrefix);
+          usedCodes.add(maLichSu);
+          await insertWeldJournalEntry({
+            ma_lich_su: maLichSu,
+            du_an_id: values.du_an_id,
+            tho_han_id: values.tho_han_id,
+            nam_thuc_hien: Number(date.slice(0, 4)),
+            ngay_thuc_hien: date,
+            loai_ray: values.loai_ray,
+            loai_moi_han: values.loai_moi_han,
+            cong_nghe_han: values.cong_nghe_han,
+            so_luong_loi: values.result === "Không đạt" ? 1 : 0,
+            ma_khuyet_tat: [],
+            tinh_trang_thi_nghiem: values.result,
+            nguyen_nhan_loi: null,
+            ghi_chu: null,
+            moi_han_lien_ket: null,
+            may_id: values.may_id,
+            chung_chi_su_dung: values.chung_chi_su_dung,
+            hach_toan: "HT-SX01",
+            toa_do_id: null,
+            kinh_do: null,
+            vi_do: null,
+            ly_trinh: null,
+            ca_han: values.ca_han,
+          });
+          done += 1;
+          setBulkFillProgress(`Đang điền ${done.toLocaleString("vi-VN")}/${total.toLocaleString("vi-VN")}`);
+        }
+      }
+      setBulkFillOpen(false);
+      refetch();
+      showToast(`Đã điền ${done.toLocaleString("vi-VN")} mối hàn`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không điền được mối hàn");
+    } finally {
+      setBulkFillSaving(false);
+      setBulkFillProgress("");
+    }
+  }
+
   async function handleCreate(values: JournalFormValues) {
     setSaving(true);
     try {
@@ -1971,6 +2322,15 @@ export default function WeldingJournalList({
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
             >
               Tự động điền ca
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkFillOpen(true)}
+              disabled={saving || loading || bulkFillSaving}
+              title="Tạo nhiều mối cùng thông số cho các ngày đã chọn"
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-[#0047AB] bg-white px-4 text-xs font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
+            >
+              Điền mối theo ngày
             </button>
             <button
               type="button"
@@ -2448,6 +2808,18 @@ export default function WeldingJournalList({
             </div>
           </div>
         </div>
+      )}
+
+      {bulkFillOpen && (
+        <BulkFillJournalDialog
+          projects={projectOptions}
+          welders={personnelWelderOptions}
+          machines={machineOptions}
+          saving={bulkFillSaving}
+          progress={bulkFillProgress}
+          onClose={() => { if (!bulkFillSaving) setBulkFillOpen(false); }}
+          onSubmit={handleBulkFill}
+        />
       )}
 
       {autoFillOpen && (

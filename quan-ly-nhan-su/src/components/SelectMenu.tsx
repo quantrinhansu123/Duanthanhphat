@@ -179,9 +179,9 @@ export default function SelectMenu({
         <div
           ref={menuRef}
           style={menuStyle}
-          className="z-[70] flex flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
+          className="z-[100] flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
         >
-          <div className="flex flex-col gap-0.5 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="px-2.5 py-3 text-center text-xs text-slate-400">{t(emptyLabel)}</div>
             ) : (
