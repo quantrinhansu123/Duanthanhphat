@@ -142,9 +142,8 @@ async function loadErrorReasons(
 type ProjectTestQuality = { passed: number; errors: number };
 
 /**
- * Đạt / Không đạt theo từng dự án, đếm bản ghi có kết quả thí nghiệm.
- * Không dùng tong_dat (= tổng − số lỗi): mối "Chờ thí nghiệm" có số lỗi bằng 0
- * nên công thức đó biến cả nhóm đang chờ thành đạt.
+ * Đạt / Không đạt theo từng dự án, chỉ trên mối sản xuất đã có kết quả.
+ * Mối thử nghiệm không vào đây. Mối sản xuất "Chờ thí nghiệm" cũng không tính đạt.
  */
 async function loadProjectTestQuality(
   supabase: ReturnType<typeof createClient>,
@@ -154,15 +153,17 @@ async function loadProjectTestQuality(
   for (let from = 0; ; from += pageSize) {
     const result = await supabase
       .from("bao_cao_moi_han_theo_du_an")
-      .select("id,du_an_id,tinh_trang_thi_nghiem")
+      .select("id,du_an_id,loai_moi_han,tinh_trang_thi_nghiem")
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (result.error) throw result.error;
     const rows = (result.data ?? []) as Array<{
       du_an_id?: string | null;
+      loai_moi_han?: string | null;
       tinh_trang_thi_nghiem?: string | null;
     }>;
     for (const row of rows) {
+      if (row.loai_moi_han !== "Sản xuất") continue;
       const status = row.tinh_trang_thi_nghiem ?? "";
       if (status !== "Đạt" && status !== "Không đạt") continue;
       const id = String(row.du_an_id ?? "");

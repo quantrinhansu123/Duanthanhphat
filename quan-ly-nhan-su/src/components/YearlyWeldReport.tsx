@@ -25,10 +25,11 @@ function addWeld(row: TongMoiHanNamRow, weld: WeldReportRow) {
   const total = Number(weld.so_luong_thuc_hien || 0);
   const errors = Number(weld.so_luong_loi || 0);
   const status = resolveWeldTestStatus(weld);
+  const isProduction = weld.loai_moi_han === "Sản xuất";
   row.tong_moi_han += total;
-  row.tong_loi += errors;
-  // Chỉ mối đã kết luận Đạt. Mối chờ thí nghiệm có số lỗi = 0 nên không được cộng vào đạt.
-  row.tong_dat += status === "Đạt" ? total : 0;
+  row.tong_loi += isProduction && status === "Không đạt" ? total : 0;
+  // Đạt / lỗi chỉ tính mối sản xuất đã có kết quả. Chờ thí nghiệm không tính đạt.
+  row.tong_dat += isProduction && status === "Đạt" ? total : 0;
   if (weld.cong_nghe_han === "FBW") {
     row.fbw += total;
     row.loi_fbw += errors;

@@ -781,8 +781,6 @@ export default function OverviewDashboard() {
       ? fastSummary
       : summary;
   const total = visibleSummary.total;
-  const passed = visibleSummary.passed;
-  const failed = visibleSummary.errors;
   const rework = showFastAggregate
     ? overviewAggregateSummary.rework
     : showFastDaily
@@ -1264,26 +1262,16 @@ export default function OverviewDashboard() {
       }
     }
     const productionByJournalName = showFastAggregate
-      ? new Map<string, { total: number; rows: { nam_thuc_hien?: number | null }[] }>()
+      ? new Map<string, { total: number; passed: number; errors: number; rows: { nam_thuc_hien?: number | null }[] }>()
       : new Map(
           groupJournalRows(
             detailRows.filter((row) => row.loai_moi_han === "Sản xuất"),
             (row) => row.du_an.trim() || "Chưa gắn dự án",
           ).map((row) => [row.name, row]),
         );
-    // Đạt / Lỗi lấy mọi loại mối đã có kết quả. Mối chờ thí nghiệm không tính đạt.
-    const qualityByJournalName = showFastAggregate
-      ? new Map<string, { passed: number; errors: number; rows: { nam_thuc_hien?: number | null }[] }>()
-      : new Map(
-          groupJournalRows(
-            detailRows,
-            (row) => row.du_an.trim() || "Chưa gắn dự án",
-          ).map((row) => [row.name, row]),
-        );
 
     const fromDuAn = detailProjects.map((project, index) => {
       const production = productionByJournalName.get(project.name);
-      const quality = qualityByJournalName.get(project.name);
       return {
         id: project.id,
         name: project.name,
@@ -1298,10 +1286,10 @@ export default function OverviewDashboard() {
           : (production?.total ?? 0),
         passed: showFastAggregate
           ? (qualityById.get(project.id)?.passed ?? qualityByName.get(project.name)?.passed ?? 0)
-          : (quality?.passed ?? 0),
+          : (production?.passed ?? 0),
         errors: showFastAggregate
           ? (qualityById.get(project.id)?.errors ?? qualityByName.get(project.name)?.errors ?? 0)
-          : (quality?.errors ?? 0),
+          : (production?.errors ?? 0),
         color: PROJECT_COLORS[index % PROJECT_COLORS.length],
         fromTable: true,
         year: projectPlanYear(project),
@@ -1309,13 +1297,9 @@ export default function OverviewDashboard() {
     });
 
     const known = new Set(fromDuAn.map((row) => row.name));
-    const orphanNames = new Set([...productionByJournalName.keys(), ...qualityByJournalName.keys()]);
-    const orphans = [...orphanNames]
-      .filter((name) => name && !known.has(name))
-      .map((name, index) => {
-        const production = productionByJournalName.get(name);
-        const quality = qualityByJournalName.get(name);
-        const yearRows = quality?.rows ?? production?.rows ?? [];
+    const orphans = [...productionByJournalName.entries()]
+      .filter(([name]) => name && !known.has(name))
+      .map(([name, production], index) => {
         return {
         id: `journal-${name}`,
         name,
@@ -1323,12 +1307,12 @@ export default function OverviewDashboard() {
         location: "",
         status: "Từ nhật ký hàn",
         planned: 0,
-        count: production?.total ?? 0,
-        passed: quality?.passed ?? 0,
-        errors: quality?.errors ?? 0,
+        count: production.total,
+        passed: production.passed,
+        errors: production.errors,
         color: PROJECT_COLORS[(fromDuAn.length + index) % PROJECT_COLORS.length],
         fromTable: false,
-        year: yearRows.reduce<number | null>((min, row) => {
+        year: production.rows.reduce<number | null>((min, row) => {
           const year = Number(row.nam_thuc_hien);
           if (!Number.isInteger(year) || year < 1900) return min;
           return min === null || year < min ? year : min;
@@ -1358,8 +1342,8 @@ export default function OverviewDashboard() {
   );
 
   const statusDonutArcs = useMemo(
-    () => buildDonutArcs([passed, rework, failed]),
-    [passed, rework, failed],
+    () => buildDonutArcs([productionWelds.passed, rework, productionWelds.failed]),
+    [productionWelds.failed, productionWelds.passed, rework],
   );
 
   const machineRows = useMemo(() => {
@@ -1410,9 +1394,9 @@ export default function OverviewDashboard() {
   }, [detailRows, overviewAggregateMachines, showFastAggregate, todayIso]);
 
   const statusRows = [
-    { name: "Đạt", color: "#15803d", value: fmt(passed), pct: pctComma(passed, total) },
+    { name: "Đạt SX", color: "#15803d", value: fmt(productionWelds.passed), pct: pctComma(productionWelds.passed, productionWelds.tested) },
     { name: "Hàn lại", color: "#d97706", value: fmt(rework), pct: pctComma(rework, total) },
-    { name: "Không đạt", color: "#dc2626", value: fmt(failed), pct: pctComma(failed, total) },
+    { name: "Không đạt SX", color: "#dc2626", value: fmt(productionWelds.failed), pct: pctComma(productionWelds.failed, productionWelds.tested) },
   ];
 
   return (
@@ -1426,15 +1410,13 @@ export default function OverviewDashboard() {
               ? `Tổng hợp năm: ${yearError} · chạy supabase/tong_moi_han_nam.sql`
               : loading || yearLoading || projectsLoading
                 ? canSkipJournal
-                  ? `Đang hoàn thiện số liệu dự án · ${fmt(total)} mối`
+                  ? "Đang hoàn thiện số liệu dự án"
                   : showFastAggregate
-                  ? `Đang hiển thị tổng hợp nhanh · ${fmt(total)} mối · chi tiết máy/lỗi đang tải nền…`
+                  ? "Đang hiển thị tổng hợp nhanh · chi tiết máy/lỗi đang tải nền…"
                   : showFastDaily
-                  ? `Đang hiển thị nhanh theo ngày · ${fmt(total)} mối có ngày thực hiện · đang tải chi tiết…`
+                  ? "Đang hiển thị nhanh theo ngày · chi tiết đang tải…"
                   : "Đang tải dữ liệu Supabase…"
-                : canSkipJournal
-                  ? `Nhật ký hàn · ${fmt(total)} mối · ${fmt(projectCount)} dự án · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`
-                  : `Nhật ký hàn · ${selectedRows.length} bản ghi · ${fmt(projectCount)} dự án (bảng Dự án) · ${fmt(passed)} đạt · ${fmt(failed)} không đạt`}
+                : `${fmt(projectCount)} dự án`}
       </div>
 
       {/* Top KPI Cards */}
@@ -1482,7 +1464,7 @@ export default function OverviewDashboard() {
         <button type="button" onClick={() => setLookup("all")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-[#0047AB] uppercase">
-              TỔNG MỐI HÀN
+              TỔNG MỐI HÀN THỰC HIỆN
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
@@ -1491,11 +1473,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              {showFastAggregate
-                ? "Tổng các loại mối hàn · chi tiết đang tải nền"
-                : showFastDaily
-                  ? "Tổng các loại mối hàn · chi tiết đang tải"
-                  : "Tổng các loại mối hàn"}
+              Toàn bộ bản ghi
             </div>
           </div>
           <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
@@ -2096,7 +2074,7 @@ export default function OverviewDashboard() {
                 {fmt(projectChartTotal)}
               </div>
               <div className="absolute left-0 right-0 top-[66px] text-center text-xs font-medium text-slate-500">
-                Tổng
+                SX
               </div>
             </div>
           </div>
@@ -2286,12 +2264,12 @@ export default function OverviewDashboard() {
               MỐI HÀN THEO DỰ ÁN — CHI TIẾT
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Thực hiện SX chỉ tính mối sản xuất. Đạt và Lỗi chỉ tính mối đã có kết quả thí nghiệm; mối chờ thí nghiệm không tính là đạt.
+              Chỉ đếm mối sản xuất. Đạt và Lỗi chỉ tính mối sản xuất đã có kết quả; mối chờ thí nghiệm không tính là đạt.
             </p>
           </div>
           <div className="text-xs font-semibold text-slate-600">
             <span className="font-mono text-[#0047AB]">{fmt(projectCount)}</span> dự án ·{" "}
-            <span className="font-mono text-[#0047AB]">{fmt(projectRows.reduce((s, r) => s + r.count, 0))}</span> mối
+            <span className="font-mono text-[#0047AB]">{fmt(projectRows.reduce((s, r) => s + r.count, 0))}</span> mối SX
           </div>
         </div>
 
@@ -2522,10 +2500,10 @@ export default function OverviewDashboard() {
                 ) : null}
               </svg>
               <div className="absolute top-[38px] left-0 right-0 text-center text-base sm:text-lg font-bold font-mono text-slate-900 leading-none tabular-nums">
-                {fmt(total)}
+                {fmt(productionWelds.tested)}
               </div>
               <div className="absolute top-[56px] left-0 right-0 text-center text-xs text-slate-500 font-medium">
-                Tổng
+                SX đã test
               </div>
             </div>
           </div>
