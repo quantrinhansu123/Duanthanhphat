@@ -1,7 +1,13 @@
-/** Mã mối hàn: {công nghệ}{5 số} — VD: ATW00001, FBW00001 */
+/** Mã mối hàn: {mã dự án}-{công nghệ}-{loại}{số TT}
+ * VD: PHQ-ATW-SX001, PHQ-ATW-TN002, PHQ-ATW-DT001
+ * Số TT đếm riêng theo dự án + phương pháp + loại mối (SX/TN/DT).
+ */
 
 export const WELD_CODE_SITE_PREFIX = "PHQ";
-export const WELD_CODE_SEQUENCE_WIDTH = 5;
+export const WELD_CODE_SEQUENCE_WIDTH = 3;
+export const MACHINE_WELD_CODE_SEQUENCE_WIDTH = 5;
+
+export type WeldPurposeCode = "SX" | "TN" | "DT";
 
 export function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -15,13 +21,21 @@ export function padWeldSequence(n: number, width = WELD_CODE_SEQUENCE_WIDTH) {
 export function buildMachineWeldCode(machineCode: string, sequence: number) {
   const machine = machineCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!machine || !Number.isFinite(sequence) || sequence < 1) return "";
-  return `${machine}${padWeldSequence(sequence)}`;
+  return `${machine}${padWeldSequence(sequence, MACHINE_WELD_CODE_SEQUENCE_WIDTH)}`;
 }
 
 /** Chuẩn hóa mã dự án dùng làm tiền tố mã mối hàn. */
 export function normalizeWeldSitePrefix(value?: string | null) {
   const trimmed = (value ?? "").trim().toUpperCase();
   return trimmed || WELD_CODE_SITE_PREFIX;
+}
+
+/** SX = Sản xuất, TN = Thử nghiệm, DT = Đào tạo */
+export function weldPurposeShortCode(loaiMoiHan?: string | null): WeldPurposeCode {
+  const value = (loaiMoiHan ?? "").trim().toLocaleLowerCase("vi");
+  if (value === "thử nghiệm") return "TN";
+  if (value === "đào tạo") return "DT";
+  return "SX";
 }
 
 /** Tách ngày từ datetime-local / ISO thành DD, MM, YY. */
@@ -33,12 +47,17 @@ export function weldCodeDateParts(performedAt: string): { day: string; month: st
   return { day, month, year: yyyy.slice(-2) };
 }
 
+/** Tiền tố đếm: mã dự án + công nghệ + loại mối. */
 export function buildWeldCodePrefix(
   method: string,
   _performedAt?: string,
-  _sitePrefix?: string,
+  sitePrefix?: string,
+  loaiMoiHan?: string | null,
 ) {
-  return method.trim().toUpperCase() || "FBW";
+  const methodPart = method.trim().toUpperCase() || "FBW";
+  const site = normalizeWeldSitePrefix(sitePrefix);
+  const purpose = weldPurposeShortCode(loaiMoiHan);
+  return `${site}-${methodPart}-${purpose}`;
 }
 
 export function buildWeldCode(
@@ -46,20 +65,22 @@ export function buildWeldCode(
   performedAt: string,
   sequence: number,
   sitePrefix = WELD_CODE_SITE_PREFIX,
+  loaiMoiHan?: string | null,
 ) {
-  const prefix = buildWeldCodePrefix(method, performedAt, sitePrefix);
+  const prefix = buildWeldCodePrefix(method, performedAt, sitePrefix, loaiMoiHan);
   if (!prefix || !Number.isFinite(sequence) || sequence < 1) return "";
   return `${prefix}${padWeldSequence(sequence)}`;
 }
 
-/** Lấy số TT lớn nhất đã dùng cho cùng tiền tố mã dự án + công nghệ + ngày. */
+/** Lấy số TT lớn nhất đã dùng cho cùng tiền tố (dự án + công nghệ + loại). */
 export function nextWeldSequence(existingCodes: string[], prefix: string) {
   if (!prefix) return 1;
+  const needle = prefix.toUpperCase();
   let max = 0;
   for (const code of existingCodes) {
     const value = code.trim().toUpperCase();
-    if (!value.startsWith(prefix.toUpperCase())) continue;
-    const suffix = value.slice(prefix.length);
+    if (!value.startsWith(needle)) continue;
+    const suffix = value.slice(needle.length);
     if (!/^\d+$/.test(suffix)) continue;
     max = Math.max(max, Number(suffix));
   }
@@ -71,10 +92,17 @@ export function suggestWeldCode(
   performedAt: string,
   existingCodes: string[],
   sitePrefix = WELD_CODE_SITE_PREFIX,
+  loaiMoiHan?: string | null,
 ) {
-  const prefix = buildWeldCodePrefix(method, performedAt, sitePrefix);
+  const prefix = buildWeldCodePrefix(method, performedAt, sitePrefix, loaiMoiHan);
   if (!prefix) return "";
-  return buildWeldCode(method, performedAt, nextWeldSequence(existingCodes, prefix), sitePrefix);
+  return buildWeldCode(
+    method,
+    performedAt,
+    nextWeldSequence(existingCodes, prefix),
+    sitePrefix,
+    loaiMoiHan,
+  );
 }
 
 export type WeldCodeSourceRow = {
@@ -85,9 +113,11 @@ export type WeldCodeSourceRow = {
   isoDate: string;
   /** Mã dự án — tiền tố mã mối hàn */
   sitePrefix?: string | null;
+  /** Loại mối: Sản xuất / Thử nghiệm / Đào tạo */
+  loai_moi_han?: string | null;
 };
 
-/** Lập kế hoạch mã mới cho các bản ghi (số TT theo mã dự án + ngày + công nghệ). */
+/** Lập kế hoạch mã mới (số TT theo dự án + công nghệ + loại mối). */
 export function planWeldCodeAssignments(
   rows: WeldCodeSourceRow[],
   options?: {
@@ -109,20 +139,24 @@ export function planWeldCodeAssignments(
   const enriched = rows
     .map((row) => {
       const sitePrefix = normalizeWeldSitePrefix(row.sitePrefix || fallbackSitePrefix);
+      const loai_moi_han = row.loai_moi_han?.trim() || "Sản xuất";
       return {
         ...row,
         sitePrefix,
-        prefix: buildWeldCodePrefix(row.cong_nghe_han, row.isoDate, sitePrefix),
+        loai_moi_han,
+        prefix: buildWeldCodePrefix(row.cong_nghe_han, row.isoDate, sitePrefix, loai_moi_han),
       };
     })
     .filter((row) => row.prefix)
     .sort((a, b) => {
-      const byDate = a.isoDate.localeCompare(b.isoDate);
-      if (byDate !== 0) return byDate;
       const bySite = a.sitePrefix.localeCompare(b.sitePrefix);
       if (bySite !== 0) return bySite;
       const byMethod = a.cong_nghe_han.localeCompare(b.cong_nghe_han);
       if (byMethod !== 0) return byMethod;
+      const byType = a.loai_moi_han.localeCompare(b.loai_moi_han, "vi");
+      if (byType !== 0) return byType;
+      const byDate = a.isoDate.localeCompare(b.isoDate);
+      if (byDate !== 0) return byDate;
       const byCode = a.ma_lich_su.localeCompare(b.ma_lich_su, "vi");
       if (byCode !== 0) return byCode;
       return a.id.localeCompare(b.id);
@@ -141,7 +175,7 @@ export function planWeldCodeAssignments(
     return {
       id: row.id,
       oldCode: row.ma_lich_su,
-      newCode: buildWeldCode(row.cong_nghe_han, row.isoDate, next, row.sitePrefix),
+      newCode: buildWeldCode(row.cong_nghe_han, row.isoDate, next, row.sitePrefix, row.loai_moi_han),
     };
   });
 }

@@ -243,7 +243,7 @@ async function updateWeldCodesInBatches(
   }
 }
 
-/** Đồng bộ mã mối hàn theo chuẩn: mã dự án + công nghệ + DDMMYY + số TT.
+/** Đồng bộ mã mối hàn theo chuẩn: mã dự án + công nghệ + loại mối + số TT.
  * Chỉ đổi các bản ghi khớp bộ lọc (nếu có).
  */
 export async function syncAllWeldCodes(
@@ -277,6 +277,7 @@ export async function syncAllWeldCodes(
       cong_nghe_han: row.cong_nghe_han,
       isoDate: row.ngay_thuc_hien?.slice(0, 10) || `${row.nam_thuc_hien}-01-01`,
       sitePrefix: row.ma_du_an,
+      loai_moi_han: row.loai_moi_han,
     })),
     { reservedCodes },
   );

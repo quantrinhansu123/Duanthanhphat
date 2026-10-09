@@ -1,4 +1,5 @@
--- Đồng bộ mã mối hàn: FBW/ATW + 5 số (ATW00001). Số TT theo từng công nghệ.
+-- Đồng bộ mã mối hàn: {mã dự án}-{công nghệ}-{SX|TN|DT}{3 số}.
+-- VD: PHQ-ATW-SX001, PHQ-ATW-TN001. Số TT theo dự án + công nghệ + loại mối.
 -- Chạy trong Supabase SQL Editor (có thể chạy lại an toàn).
 
 create or replace function public.dong_bo_ma_moi_han()
@@ -32,18 +33,33 @@ begin
   select
     ranked.id,
     ranked.old_code,
-    ranked.cong_nghe_han || lpad(ranked.seq::text, 5, '0') as new_code
+    ranked.site_prefix || '-' || ranked.cong_nghe_han || '-' || ranked.purpose_code
+      || lpad(ranked.seq::text, 3, '0') as new_code
   from (
     select
       ls.id,
       ls.ma_lich_su as old_code,
-      ls.cong_nghe_han,
+      upper(btrim(coalesce(nullif(da.ma_du_an, ''), 'PHQ'))) as site_prefix,
+      upper(btrim(coalesce(nullif(ls.cong_nghe_han, ''), 'FBW'))) as cong_nghe_han,
+      case
+        when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('thử nghiệm', 'thu nghiem') then 'TN'
+        when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('đào tạo', 'dao tao') then 'DT'
+        else 'SX'
+      end as purpose_code,
       coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)) as ngay,
       row_number() over (
-        partition by ls.cong_nghe_han
+        partition by
+          upper(btrim(coalesce(nullif(da.ma_du_an, ''), 'PHQ'))),
+          upper(btrim(coalesce(nullif(ls.cong_nghe_han, ''), 'FBW'))),
+          case
+            when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('thử nghiệm', 'thu nghiem') then 'TN'
+            when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('đào tạo', 'dao tao') then 'DT'
+            else 'SX'
+          end
         order by coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)), ls.ma_lich_su, ls.id
       ) as seq
     from public.lich_su_moi_han ls
+    left join public.du_an da on da.id = ls.du_an_id
   ) ranked;
 
   select count(*) into v_updated

@@ -273,7 +273,7 @@ function JournalFormModal({
   useEffect(() => {
     if (!open) return;
     if (mode === "edit") return;
-    const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt, sitePrefix);
+    const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt, sitePrefix, form.loai_moi_han);
     if (!prefix) {
       setPrefixCodes([]);
       return;
@@ -289,16 +289,32 @@ function JournalFormModal({
     return () => {
       active = false;
     };
-  }, [mode, open, form.cong_nghe_han, form.performedAt, sitePrefix]);
+  }, [mode, open, form.cong_nghe_han, form.performedAt, form.loai_moi_han, sitePrefix]);
 
   useEffect(() => {
     if (!open) return;
     if (mode === "edit") return;
     const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
-    const nextCode = suggestWeldCode(form.cong_nghe_han, form.performedAt, codes, sitePrefix);
+    const nextCode = suggestWeldCode(
+      form.cong_nghe_han,
+      form.performedAt,
+      codes,
+      sitePrefix,
+      form.loai_moi_han,
+    );
     if (!nextCode || form.ma_lich_su === nextCode) return;
     setForm((prev) => ({ ...prev, ma_lich_su: nextCode }));
-  }, [mode, open, form.cong_nghe_han, form.performedAt, form.ma_lich_su, existingCodes, prefixCodes, sitePrefix]);
+  }, [
+    mode,
+    open,
+    form.cong_nghe_han,
+    form.performedAt,
+    form.loai_moi_han,
+    form.ma_lich_su,
+    existingCodes,
+    prefixCodes,
+    sitePrefix,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -513,11 +529,11 @@ function JournalFormModal({
             <input
               readOnly
               value={form.ma_lich_su}
-              placeholder="ATW00001"
+              placeholder="PHQ-ATW-SX001"
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono"
             />
             <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-              Tự tạo: loại (FBW/ATW) + 5 số. VD: ATW00001
+              Tự tạo theo dự án + phương pháp + loại mối (SX/TN/DT). VD: PHQ-ATW-SX001, PHQ-ATW-TN001
             </span>
           </label>
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1908,6 +1924,7 @@ export default function WeldingJournalList({
             row.cong_nghe_han,
             `${row.ngay_thuc_hien}T08:00`,
             sitePrefix,
+            row.loai_moi_han,
           );
           const existing = await loadWeldCodesWithPrefix(prefix);
           const allExisting = [...existing, ...usedCodes];
@@ -1916,6 +1933,7 @@ export default function WeldingJournalList({
             `${row.ngay_thuc_hien}T08:00`,
             allExisting,
             sitePrefix,
+            row.loai_moi_han,
           );
         }
         usedCodes.add(maLichSu);
@@ -1992,12 +2010,23 @@ export default function WeldingJournalList({
     setBulkFillProgress("");
     try {
       const sitePrefix = normalizeWeldSitePrefix(project?.ma_du_an);
-      const prefix = buildWeldCodePrefix(values.cong_nghe_han, `${values.dateFrom}T08:00`, sitePrefix);
+      const prefix = buildWeldCodePrefix(
+        values.cong_nghe_han,
+        `${values.dateFrom}T08:00`,
+        sitePrefix,
+        values.loai_moi_han,
+      );
       const usedCodes = new Set(await loadWeldCodesWithPrefix(prefix));
       let done = 0;
       for (const date of dates) {
         for (let index = 0; index < count; index += 1) {
-          const maLichSu = suggestWeldCode(values.cong_nghe_han, `${date}T08:00`, [...usedCodes], sitePrefix);
+          const maLichSu = suggestWeldCode(
+            values.cong_nghe_han,
+            `${date}T08:00`,
+            [...usedCodes],
+            sitePrefix,
+            values.loai_moi_han,
+          );
           usedCodes.add(maLichSu);
           await insertWeldJournalEntry({
             ma_lich_su: maLichSu,
