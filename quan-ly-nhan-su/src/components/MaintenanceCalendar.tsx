@@ -9,8 +9,8 @@ import {
   type MaintenanceEvent,
   type MaintenanceResult,
 } from "@/data/maintenance";
-import { Check } from "@/components/icons";
-import { loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
+import { Check, TrashSimple } from "@/components/icons";
+import { deleteMaintenanceEvent, loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const RESULT_OPTIONS: MaintenanceResult[] = ["Chưa có", "Đạt", "Không đạt", "Cần theo dõi"];
@@ -92,6 +92,7 @@ export default function MaintenanceCalendar() {
   const [quickNote, setQuickNote] = useState("");
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickError, setQuickError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dataError, setDataError] = useState("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -244,6 +245,30 @@ export default function MaintenanceCalendar() {
     const [y, m] = values.date.split("-").map(Number);
     setCursor(new Date(y, m - 1, 1));
     showToast(editingEvent ? "Đã cập nhật lịch bảo trì" : "Đã thêm lịch bảo trì");
+  }
+
+  async function handleDelete(event: MaintenanceEvent) {
+    const confirmed = window.confirm(
+      `Xóa lịch bảo trì "${event.title}" lúc ${event.time} ngày ${event.date.split("-").reverse().join("/")}?`,
+    );
+    if (!confirmed) return;
+    setDeletingId(event.id);
+    try {
+      if (event.persisted) {
+        await deleteMaintenanceEvent(event.id);
+      }
+      setEvents((current) => current.filter((item) => item.id !== event.id));
+      if (quickEditId === event.id) closeQuickEdit();
+      if (editingEvent?.id === event.id) {
+        setEditingEvent(null);
+        setOpenAdd(false);
+      }
+      showToast("Đã xóa lịch bảo trì");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Không xóa được lịch bảo trì.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -518,6 +543,15 @@ export default function MaintenanceCalendar() {
                           Sửa đầy đủ
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        disabled={deletingId === e.id}
+                        onClick={() => void handleDelete(e)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        <TrashSimple size={14} weight="bold" aria-hidden />
+                        {deletingId === e.id ? "Đang xóa…" : "Xóa"}
+                      </button>
                     </div>
                   )}
                 </div>

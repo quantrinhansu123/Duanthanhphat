@@ -128,6 +128,8 @@ export type DbTrainingHistoryRecord = {
   courseTitle: string;
   trainer: string;
   date: string;
+  /** Ngày đào tạo ISO (YYYY-MM-DD) để sắp xếp gần nhất trước. */
+  dateIso?: string;
   duration: string;
   result: "Đạt" | "Không đạt" | "Đang học";
   status: "Hoàn thành" | "Đang học" | "Không hoàn thành";
@@ -585,6 +587,7 @@ export async function fetchWelderTrainingHistory(): Promise<{
       courseTitle: course.ten_khoa_hoc,
       trainer: course.nguoi_dao_tao_ten?.trim() || trainer?.name || "Chưa chỉ định",
       date: formatTrainingDate(course.ngay),
+      dateIso: course.ngay?.slice(0, 10) || "",
       duration: formatTotalTrainingHours(course.tong_gio_nha_san_xuat, course.tong_gio_tu_dao_tao),
       manufacturerHours: toNonNegNumber(course.tong_gio_nha_san_xuat),
       selfTrainingHours: toNonNegNumber(course.tong_gio_tu_dao_tao),
@@ -599,7 +602,15 @@ export async function fetchWelderTrainingHistory(): Promise<{
     }];
   });
 
-  records.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  // Thời gian đào tạo gần nhất trước; cùng ngày thì theo thời điểm ghi nhận mới hơn.
+  records.sort((a, b) => {
+    const left = a.dateIso ?? "";
+    const right = b.dateIso ?? "";
+    if (left && right && left !== right) return right.localeCompare(left);
+    if (right && !left) return 1;
+    if (left && !right) return -1;
+    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+  });
   return { records };
 }
 

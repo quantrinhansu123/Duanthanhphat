@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, X } from "@/components/icons";
+import { Check, Warning, X } from "@/components/icons";
 import {
   formatScheduleDate,
   type LookupOption,
@@ -523,12 +523,24 @@ export default function MachineAssignmentList() {
                   <td className="px-3.5 py-3">
                     {oil ? (
                       <div className="space-y-1">
-                        <div className={`font-mono text-sm font-bold tabular-nums ${oilLow ? "text-rose-600" : "text-emerald-700"}`}>
-                          {oil.liters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}{" "}
-                          {oil.unit || "lít"}
+                        <div className={`inline-flex items-center gap-1.5 font-mono text-sm font-bold tabular-nums ${oilLow ? "text-rose-600" : "text-emerald-700"}`}>
+                          {oilLow ? (
+                            <Warning
+                              size={16}
+                              weight="fill"
+                              aria-label="Mức dầu dưới định mức tối thiểu"
+                              className="shrink-0 text-rose-600"
+                            />
+                          ) : null}
+                          <span>
+                            {oil.liters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}{" "}
+                            {oil.unit || "lít"}
+                          </span>
                         </div>
                         {oilLow && (
-                          <div className="text-xs font-bold text-rose-600">Cấp dầu</div>
+                          <div className="text-xs font-bold text-rose-600">
+                            Dưới định mức {quota?.toLocaleString("vi-VN")} lít
+                          </div>
                         )}
                         <button
                           type="button"

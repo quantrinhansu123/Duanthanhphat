@@ -37,7 +37,7 @@ import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import MachineSelect, { type MachineSelectOption } from "@/components/MachineSelect";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 
-const WELD_SCOPE_OPTIONS = ["FBW", "ATW", "Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
+const WELD_SCOPE_OPTIONS = ["FBW", "ATW"] as const;
 
 function parseWeldScopeTokens(value?: string | null): string[] {
   if (!value?.trim()) return [];
@@ -54,13 +54,11 @@ function serializeWeldScope(tokens: string[]): string {
 function matchesCertificateMeta(
   machine: string | undefined,
   weldScope: string | undefined,
-  techFilter: string,
+  methodFilter: string,
   machineFilter: string,
-  weldTypeFilter: string,
 ) {
   const tokens = parseWeldScopeTokens(weldScope);
-  if (techFilter && !tokens.includes(techFilter)) return false;
-  if (weldTypeFilter && !tokens.includes(weldTypeFilter)) return false;
+  if (methodFilter && !tokens.includes(methodFilter)) return false;
   if (machineFilter && (machine || "") !== machineFilter) return false;
   return true;
 }
@@ -378,9 +376,8 @@ export default function CertificateManagement() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
-  const [techFilter, setTechFilter] = useState("");
+  const [methodFilter, setMethodFilter] = useState("");
   const [machineFilter, setMachineFilter] = useState("");
-  const [weldTypeFilter, setWeldTypeFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [detailCert, setDetailCert] = useState<Certificate | null>(null);
   const [listTab, setListTab] = useState<"types" | "owners">("types");
@@ -539,7 +536,7 @@ export default function CertificateManagement() {
   const filtered = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("vi");
     return certificateTypes.filter((row) => {
-      if (!matchesCertificateMeta(row.group?.machine, row.group?.weldScope, techFilter, machineFilter, weldTypeFilter)) return false;
+      if (!matchesCertificateMeta(row.group?.machine, row.group?.weldScope, methodFilter, machineFilter)) return false;
       if (!q) return true;
       if (row.title.toLocaleLowerCase("vi").includes(q)) return true;
       return row.holders.some(
@@ -548,7 +545,7 @@ export default function CertificateManagement() {
           h.code.toLocaleLowerCase("vi").includes(q),
       );
     });
-  }, [certificateTypes, query, techFilter, machineFilter, weldTypeFilter]);
+  }, [certificateTypes, query, methodFilter, machineFilter]);
 
   const filteredWeldersForForm = useMemo(() => {
     const q = holderQuery.trim().toLocaleLowerCase("vi");
@@ -706,7 +703,7 @@ export default function CertificateManagement() {
   const filteredOwners = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("vi");
     const typeByTitle = new Map(certificateTypes.map((row) => [normalizeCertTitle(row.title), row]));
-    const hasMeta = Boolean(techFilter || machineFilter || weldTypeFilter);
+    const hasMeta = Boolean(methodFilter || machineFilter);
     return ownerRows
       .map((row) => {
         const certificates = hasMeta
@@ -715,9 +712,8 @@ export default function CertificateManagement() {
               return matchesCertificateMeta(
                 item.cert.machine || typeRow?.group?.machine,
                 item.cert.weldScope || typeRow?.group?.weldScope,
-                techFilter,
+                methodFilter,
                 machineFilter,
-                weldTypeFilter,
               );
             })
           : row.certificates;
@@ -736,7 +732,7 @@ export default function CertificateManagement() {
         }
         return row.certificates.some((c) => c.title.toLocaleLowerCase("vi").includes(q));
       });
-  }, [ownerRows, certificateTypes, query, techFilter, machineFilter, weldTypeFilter]);
+  }, [ownerRows, certificateTypes, query, methodFilter, machineFilter]);
 
   function openHolderDetail(title: string, holder: CertHolder) {
     setDetailCert(resolveHolderCertificate(title, holder));
@@ -772,7 +768,9 @@ export default function CertificateManagement() {
       code: row.group?.code || "",
       organization: row.group?.issuer || "",
       machine: row.group?.machine || "",
-      weldScope: parseWeldScopeTokens(row.group?.weldScope),
+      weldScope: parseWeldScopeTokens(row.group?.weldScope).filter((token) =>
+        (WELD_SCOPE_OPTIONS as readonly string[]).includes(token),
+      ),
       notes: "",
       holderIds: row.holders.map((holder) => holder.id),
       imageUrl,
@@ -1058,12 +1056,12 @@ export default function CertificateManagement() {
           />
         </div>
         <select
-          value={techFilter}
-          onChange={(event) => setTechFilter(event.target.value)}
+          value={methodFilter}
+          onChange={(event) => setMethodFilter(event.target.value)}
           className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
-          aria-label="Lọc theo công nghệ"
+          aria-label="Lọc theo phương pháp hàn"
         >
-          <option value="">Tất cả công nghệ</option>
+          <option value="">Phương pháp hàn</option>
           <option value="FBW">FBW</option>
           <option value="ATW">ATW</option>
         </select>
@@ -1079,17 +1077,6 @@ export default function CertificateManagement() {
               {machine.code}
             </option>
           ))}
-        </select>
-        <select
-          value={weldTypeFilter}
-          onChange={(event) => setWeldTypeFilter(event.target.value)}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
-          aria-label="Lọc theo loại mối hàn"
-        >
-          <option value="">Tất cả loại mối hàn</option>
-          <option value="Sản xuất">Sản xuất</option>
-          <option value="Thử nghiệm">Thử nghiệm</option>
-          <option value="Đào tạo">Đào tạo</option>
         </select>
         <Link
           href="/ho-so-tho-han"
@@ -1423,7 +1410,7 @@ export default function CertificateManagement() {
 
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Mối hàn áp dụng
+                  Phương pháp hàn áp dụng
                 </label>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {WELD_SCOPE_OPTIONS.map((option) => {
@@ -1456,7 +1443,7 @@ export default function CertificateManagement() {
                   })}
                 </div>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Chọn công nghệ (FBW/ATW) và/hoặc loại mối hàn mà chứng chỉ này áp dụng.
+                  Chỉ chọn FBW hoặc ATW cho chứng chỉ này.
                 </p>
               </div>
 

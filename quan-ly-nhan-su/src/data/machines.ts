@@ -168,11 +168,16 @@ export function getMachineCategory(machine: Pick<Machine, "type" | "name" | "wel
     .filter(Boolean)
     .join(" ")
     .toLocaleLowerCase("vi");
+  // Xe chở / phương tiện độc lập — không lẫn với máy hàn gắn trên xe tải.
   if (
     blob.includes("phương tiện") ||
     blob.includes("xe chuyên") ||
-    blob.includes("transport") ||
-    (blob.includes("road-rail") && blob.includes("carrier"))
+    blob.includes("xe chở") ||
+    blob.includes("xe cho may") ||
+    blob.includes("xe chở máy") ||
+    blob.includes("transport vehicle") ||
+    blob.includes("truck carrier") ||
+    (blob.includes("road-rail") && blob.includes("carrier") && !blob.includes("hàn") && !blob.includes("welding"))
   ) {
     return "Phương tiện";
   }
@@ -180,6 +185,24 @@ export function getMachineCategory(machine: Pick<Machine, "type" | "name" | "wel
     return "Nhiệt nhôm";
   }
   return "Flash Butt";
+}
+
+/** Khóa định danh xe chở máy gắn kèm hồ sơ máy hàn (mã / biển số / model). */
+export function transportVehicleKey(
+  machine: Pick<Machine, "id" | "type" | "name" | "weldingTechnology" | "model" | "transportUnit">,
+): string | null {
+  if (getMachineCategory(machine) === "Phương tiện") return `may:${machine.id}`;
+  const unit = machine.transportUnit;
+  if (!unit) return null;
+  const code = unit.code?.trim() || "";
+  const plate = (unit.plateNumber || String(unit.specs?.plateNumber ?? "")).trim();
+  const model = unit.model?.trim() || "";
+  const manufacturer = unit.manufacturer?.trim() || "";
+  if (code) return `ma:${code.toLocaleUpperCase("vi")}`;
+  if (plate) return `bien:${plate.toLocaleUpperCase("vi")}`;
+  if (model) return `model:${model.toLocaleUpperCase("vi")}`;
+  if (manufacturer) return `nsx:${manufacturer.toLocaleUpperCase("vi")}|${machine.id}`;
+  return null;
 }
 
 export function machineCategoryFieldMatrix(category: MachineCategory) {

@@ -13,6 +13,7 @@ import {
   getMachineCategory,
   machineCategoryFieldMatrix,
   MACHINE_CATEGORIES,
+  transportVehicleKey,
   type Machine,
   type EquipmentAsset,
   type WeldingUnitDetail,
@@ -1813,6 +1814,24 @@ export default function MachineList() {
 
   const typeSummary = useMemo(() => {
     return MACHINE_CATEGORIES.map((category) => {
+      if (category === "Phương tiện") {
+        // Đếm xe chở máy (hồ sơ phương tiện gắn kèm) + thiết bị loại Phương tiện.
+        const byKey = new Map<string, Machine>();
+        for (const machine of list) {
+          const key = transportVehicleKey(machine);
+          if (!key || byKey.has(key)) continue;
+          byKey.set(key, machine);
+        }
+        const rows = [...byKey.values()];
+        return {
+          category,
+          total: rows.length,
+          working: rows.filter((m) => m.status === "Đang làm việc").length,
+          ready: rows.filter((m) => m.status === "Sẵn sàng").length,
+          maint: rows.filter((m) => m.status === "Bảo trì").length,
+          broken: rows.filter((m) => m.status === "Hỏng").length,
+        };
+      }
       const rows = list.filter((m) => getMachineCategory(m) === category);
       return {
         category,

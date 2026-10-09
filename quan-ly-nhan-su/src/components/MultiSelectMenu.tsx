@@ -117,7 +117,7 @@ export default function MultiSelectMenu({
         <div
           ref={menuRef}
           style={menuStyle}
-          className="z-[70] flex flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
+          className="z-[100] flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
         >
           <div className="relative mb-1.5">
             <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />

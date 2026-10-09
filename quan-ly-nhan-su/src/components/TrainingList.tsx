@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
+import MultiSelectMenu from "@/components/MultiSelectMenu";
 import { Check, Clock, ClockCounterClockwise, MagnifyingGlass, PencilSimple, Play, Plus, TrashSimple, UploadSimple, Users, VideoCamera, Warning, X } from "@/components/icons";
 import {
   deleteTrainingCourse,
@@ -40,6 +41,24 @@ function viToISO(value: string) {
   if (!m) return "";
   const [, d, mo, y] = m;
   return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+/** Một khóa có thể gắn 2–3 loại ray, lưu dạng "P50, UIC60". */
+function parseRailTypes(value?: string | null): string[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(/[,;|/·]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function serializeRailTypes(values: string[]): string {
+  return values.map((item) => item.trim()).filter(Boolean).join(", ");
+}
+
+function courseHasRailType(railType: string | undefined, filter: string) {
+  if (filter === "Tất cả loại hàn") return true;
+  return parseRailTypes(railType).includes(filter);
 }
 
 /** Chuyển URL video (YouTube / Drive / file trực tiếp) sang dạng phát được trong modal. */
@@ -170,7 +189,7 @@ function TrainingFormModal({
     certGroupId: initial?.certificateGroupId ?? "",
     manufacturerHours: initial?.manufacturerHours != null ? String(initial.manufacturerHours) : "",
     selfTrainingHours: initial?.selfTrainingHours != null ? String(initial.selfTrainingHours) : "",
-    railType: initial?.railType ?? "",
+    railTypes: parseRailTypes(initial?.railType),
     weldMethod: initial?.weldMethod ?? "",
     participantsCount:
       initial?.participantsCount != null ? String(initial.participantsCount) : "",
@@ -221,7 +240,7 @@ function TrainingFormModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [handleClose, saving, uploadingImg, uploadingVideo]);
 
-  function set<K extends keyof typeof form>(key: K, value: string) {
+  function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -317,7 +336,7 @@ function TrainingFormModal({
       selfTrainingHours: Number(form.selfTrainingHours) || 0,
       participantsCount: attendeeList.length,
       videoUrl: serializeTrainingVideoUrls(videoUrls) ?? "",
-      railType: form.railType.trim(),
+      railType: serializeRailTypes(form.railTypes),
       weldMethod: form.weldMethod.trim(),
       attendees: attendeeList.map((a) => ({
         employeeId: a.id,
@@ -555,13 +574,19 @@ function TrainingFormModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Loại ray</label>
-              <select className={fieldClass} value={form.railType} onChange={(e) => set("railType", e.target.value)}>
-                <option value="">— Chọn loại ray —</option>
-                {railOptions.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Phân loại ray</label>
+              <MultiSelectMenu
+                className="mt-1"
+                buttonClassName="h-10 shadow-2xs"
+                values={form.railTypes}
+                onChange={(railTypes) => set("railTypes", railTypes)}
+                options={railOptions.map((opt) => ({ value: opt, label: opt }))}
+                allLabel="— Chọn loại ray —"
+                searchPlaceholder="Tìm loại ray..."
+              />
+              <p className="mt-1.5 text-[11px] font-medium text-slate-500">
+                Một khóa có thể chọn nhiều loại ray (ví dụ 2–3 loại).
+              </p>
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Công nghệ hàn</label>
@@ -1218,7 +1243,7 @@ export default function TrainingList() {
         c.trainer.toLowerCase().includes(q) ||
         c.date.includes(q);
       const matchResult = resultFilter === "Tất cả kết quả" || c.result === resultFilter;
-      const matchRail = railFilter === "Tất cả loại hàn" || (c.railType || "") === railFilter;
+      const matchRail = courseHasRailType(c.railType, railFilter);
       const matchMethod = methodFilter === "Tất cả công nghệ" || (c.weldMethod || "") === methodFilter;
       return matchQ && matchResult && matchRail && matchMethod;
     });

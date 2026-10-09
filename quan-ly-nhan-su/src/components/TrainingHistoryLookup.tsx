@@ -71,7 +71,7 @@ export default function TrainingHistoryLookup() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return records.filter((row) => {
+    const rows = records.filter((row) => {
       const matchQ =
         !q ||
         row.personCode.toLowerCase().includes(q) ||
@@ -85,8 +85,22 @@ export default function TrainingHistoryLookup() {
       const matchResult = result === "Tất cả kết quả" || row.result === result;
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
       const matchMethod = methodFilter === "Tất cả công nghệ" || (row.weldMethod || "") === methodFilter;
-      const matchRail = railFilter === "Tất cả loại hàn" || (row.railType || "") === railFilter;
+      const matchRail =
+        railFilter === "Tất cả loại hàn"
+        || (row.railType || "")
+          .split(/[,;|/·]+/)
+          .map((token) => token.trim())
+          .includes(railFilter);
       return matchQ && matchType && matchCourse && matchResult && matchStatus && matchMethod && matchRail;
+    });
+    // Giữ thứ tự thời gian đào tạo gần nhất sau khi lọc.
+    return [...rows].sort((a, b) => {
+      const left = a.dateIso ?? "";
+      const right = b.dateIso ?? "";
+      if (left && right && left !== right) return right.localeCompare(left);
+      if (right && !left) return 1;
+      if (left && !right) return -1;
+      return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
   }, [records, query, personType, course, result, status, methodFilter, railFilter]);
 

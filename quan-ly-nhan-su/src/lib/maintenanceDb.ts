@@ -328,3 +328,15 @@ export async function saveMaintenanceEvent(input: MaintenanceSaveInput): Promise
   );
   return rowToEvent(data as unknown as DbMaintenanceRow, machine.ma_may, photosByName);
 }
+
+/** Xóa một lịch bảo trì đã lưu trên Supabase. */
+export async function deleteMaintenanceEvent(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  const value = id.trim();
+  if (!value) throw new Error("Thiếu mã lịch bảo trì để xóa.");
+  const { error } = await createClient()
+    .from("lich_su_bao_tri_may")
+    .delete()
+    .eq("id", value);
+  if (error) throw new Error(formatSupabaseError(error));
+}
