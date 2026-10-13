@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { deploymentItems, type DeploymentItem } from "@/data/deploymentItems";
-import { CaretRight, MagnifyingGlass } from "@/components/icons";
+import { CaretRight } from "@/components/icons";
 
 const statusStyle: Record<DeploymentItem["status"], string> = {
   "Đã bàn giao": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -10,20 +10,12 @@ const statusStyle: Record<DeploymentItem["status"], string> = {
 };
 
 export default function DeploymentHandoverList() {
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return deploymentItems.filter((row) => {
-      const matchQ =
-        !q ||
-        row.category.toLowerCase().includes(q) ||
-        row.content.toLowerCase().includes(q);
-      const matchStatus = status === "Tất cả trạng thái" || row.status === status;
-      return matchQ && matchStatus;
-    });
-  }, [query, status]);
+  const filtered = useMemo(
+    () => deploymentItems.filter((row) => status === "Tất cả trạng thái" || row.status === status),
+    [status],
+  );
 
   const handedOver = deploymentItems.filter((r) => r.status === "Đã bàn giao").length;
 
@@ -41,15 +33,6 @@ export default function DeploymentHandoverList() {
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm hạng mục, nội dung..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}

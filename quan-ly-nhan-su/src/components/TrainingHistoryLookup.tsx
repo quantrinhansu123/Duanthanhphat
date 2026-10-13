@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MagnifyingGlass } from "@/components/icons";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
   fetchWelderTrainingHistory,
@@ -28,7 +27,6 @@ export default function TrainingHistoryLookup() {
   const [records, setRecords] = useState<DbTrainingHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [query, setQuery] = useState("");
   const [personType, setPersonType] = useState("Tất cả đối tượng");
   const [course, setCourse] = useState("Tất cả khóa đào tạo");
   const [result, setResult] = useState("Tất cả kết quả");
@@ -70,16 +68,7 @@ export default function TrainingHistoryLookup() {
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const rows = records.filter((row) => {
-      const matchQ =
-        !q ||
-        row.personCode.toLowerCase().includes(q) ||
-        row.personName.toLowerCase().includes(q) ||
-        row.courseTitle.toLowerCase().includes(q) ||
-        row.trainer.toLowerCase().includes(q) ||
-        row.department.toLowerCase().includes(q) ||
-        row.certificate.toLowerCase().includes(q);
       const matchType = personType === "Tất cả đối tượng" || row.personType === personType;
       const matchCourse = course === "Tất cả khóa đào tạo" || row.courseTitle === course;
       const matchResult = result === "Tất cả kết quả" || row.result === result;
@@ -91,7 +80,7 @@ export default function TrainingHistoryLookup() {
           .split(/[,;|/·]+/)
           .map((token) => token.trim())
           .includes(railFilter);
-      return matchQ && matchType && matchCourse && matchResult && matchStatus && matchMethod && matchRail;
+      return matchType && matchCourse && matchResult && matchStatus && matchMethod && matchRail;
     });
     // Giữ thứ tự thời gian đào tạo gần nhất sau khi lọc.
     return [...rows].sort((a, b) => {
@@ -102,21 +91,12 @@ export default function TrainingHistoryLookup() {
       if (left && !right) return -1;
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
-  }, [records, query, personType, course, result, status, methodFilter, railFilter]);
+  }, [records, personType, course, result, status, methodFilter, railFilter]);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
       <div className="mb-4 flex flex-col gap-2.5">
         <div className="flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5">
-          <div className="relative min-w-[240px] flex-1">
-            <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm theo mã, họ tên, khóa đào tạo, người đào tạo..."
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-            />
-          </div>
           <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
             <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
           </span>
@@ -171,8 +151,7 @@ export default function TrainingHistoryLookup() {
           <table className="w-full min-w-[1480px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <th className="px-4 py-3">Mã</th>
-                <th className="px-3.5 py-3">Họ tên</th>
+                <th className="px-4 py-3">Họ tên</th>
                 <th className="px-3.5 py-3">Đối tượng</th>
                 <th className="px-3.5 py-3">Phòng ban</th>
                 <th className="px-3.5 py-3">Khóa đào tạo</th>
@@ -190,8 +169,7 @@ export default function TrainingHistoryLookup() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
-                  <td className="px-4 py-3 font-mono font-semibold text-[#0047AB] text-xs sm:text-sm">{row.personCode}</td>
-                  <td className="px-3.5 py-3 font-semibold text-slate-900">{row.personName}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{row.personName}</td>
                   <td className="px-3.5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -240,14 +218,14 @@ export default function TrainingHistoryLookup() {
               ))}
               {isLoading && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={13} className="px-4 py-12 text-center text-slate-500">
                     Đang tải lịch sử đào tạo từ CSDL...
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={13} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy lịch sử đào tạo</div>
                   </td>
                 </tr>

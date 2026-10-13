@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowsIn, ArrowsOut } from "@/components/icons";
 import {
   googleOpenPoint,
@@ -55,7 +55,6 @@ const emptyForm = {
 };
 
 export default function MapView() {
-  const [query, setQuery] = useState("");
   const [mode, setMode] = useState<MapViewMode>("route");
   const [baseLayer, setBaseLayer] = useState<MapBaseLayer>("roadmap");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -70,7 +69,6 @@ export default function MapView() {
   const [showForm, setShowForm] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const deferredQuery = useDeferredValue(query);
   const useGoogle = Boolean(googleApiKey);
   const supabaseReady = hasSupabaseEnv();
 
@@ -143,17 +141,7 @@ export default function MapView() {
     setMapFullscreen((v) => !v);
   }
 
-  const filtered = useMemo(() => {
-    const q = deferredQuery.trim().toLowerCase();
-    if (!q) return points;
-    return points.filter(
-      (p) =>
-        p.code.toLowerCase().includes(q) ||
-        p.chainage.toLowerCase().includes(q) ||
-        String(p.latitude).includes(q) ||
-        String(p.longitude).includes(q),
-    );
-  }, [deferredQuery, points]);
+  const filtered = points;
 
   const selected = filtered.find((p) => p.id === selectedId) ?? null;
   const visibleListPoints = useMemo(() => {
@@ -392,15 +380,6 @@ export default function MapView() {
           >
             Vệ tinh
           </button>
-        </div>
-
-        <div className="relative min-w-[200px] flex-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm mã điểm, lý trình, tọa độ..."
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/15"
-          />
         </div>
 
         <button

@@ -45,7 +45,6 @@ export default function CompanyCertificateManagement() {
     return INITIAL_COMPANY_CERTIFICATES;
   });
 
-  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingCert, setEditingCert] = useState<CompanyCertificate | null>(null);
   const [detailCert, setDetailCert] = useState<CompanyCertificate | null>(null);
@@ -84,17 +83,10 @@ export default function CompanyCertificateManagement() {
     setUploadProgress(null);
   }, [editingCert?.id]);
 
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((cert) => {
-      if (statusFilter !== "all" && cert.status !== statusFilter) return false;
-      if (q) {
-        const text = `${cert.title} ${cert.standardCode} ${cert.organization} ${cert.certificateNumber} ${cert.scope} ${cert.notes || ""}`.toLowerCase();
-        if (!text.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [items, search, statusFilter]);
+  const filteredItems = useMemo(
+    () => items.filter((cert) => statusFilter === "all" || cert.status === statusFilter),
+    [items, statusFilter],
+  );
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -275,14 +267,6 @@ export default function CompanyCertificateManagement() {
       {/* Filter bar & Actions */}
       <div className="mb-6 flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="flex flex-1 w-full sm:w-auto gap-3">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={isEn ? "Search certificate, organization, number, scope..." : "Tìm theo tên chứng chỉ, đơn vị cấp, số chứng chỉ, phạm vi..."}
-            className="h-10 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-          />
-
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MagnifyingGlass, X } from "@/components/icons";
+import { X } from "@/components/icons";
 import {
   deleteDriveDocument,
   fetchDriveDocuments,
@@ -34,7 +34,6 @@ function formatDate(iso: string) {
 
 export default function DocumentLibrary() {
   const [items, setItems] = useState<DriveDocumentItem[]>([]);
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -69,18 +68,10 @@ export default function DocumentLibrary() {
     void reload();
   }, [reload]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matches = q
-      ? items.filter(
-          (d) =>
-            d.name.toLowerCase().includes(q) ||
-            d.description.toLowerCase().includes(q) ||
-            (d.md5Checksum && d.md5Checksum.toLowerCase().includes(q)),
-        )
-      : items;
-    return [...matches].sort((a, b) => b.createdTime.localeCompare(a.createdTime));
-  }, [items, query]);
+  const filtered = useMemo(
+    () => [...items].sort((a, b) => b.createdTime.localeCompare(a.createdTime)),
+    [items],
+  );
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -249,19 +240,6 @@ export default function DocumentLibrary() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
-        <div className="relative min-w-[220px] flex-1">
-          <MagnifyingGlass
-            aria-hidden
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            size={16}
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm tên tài liệu, mô tả, MD5..."
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300/90 bg-white text-slate-900 placeholder:text-slate-400 shadow-xs transition-all duration-150 hover:border-slate-400 focus:outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-          />
-        </div>
         <button
           type="button"
           onClick={() => {

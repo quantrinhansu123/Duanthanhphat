@@ -45,6 +45,7 @@ const MachineAssignmentList = dynamic(
   () => import("@/components/MachineAssignmentList"), { loading: TabLoading, ssr: false });
 const SparePartsList = dynamic(
   () => import("@/components/SparePartsList"), { loading: TabLoading, ssr: false });
+const FuelHistoryList = dynamic(() => import("@/components/FuelHistoryList"), { loading: TabLoading, ssr: false });
 const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
 const QualityReportDashboard = dynamic(
   () => import("@/components/QualityReportDashboard"), { loading: TabLoading, ssr: false });
@@ -81,6 +82,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "thu-vien-loi": () => <ErrorLibrary mode="machine" />,
   "phan-cong-may": () => <MachineAssignmentList />,
   "phu-tung-thay-the": () => <SparePartsList />,
+  "lich-su-cap-nhien-lieu": () => <FuelHistoryList />,
   "bc-tong-quan": () => <OverviewDashboard />,
   "bc-san-luong": () => <OverviewDashboard />,
   "bc-chat-luong": () => <QualityReportDashboard />,

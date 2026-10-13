@@ -35,7 +35,6 @@ export default function ComplianceStandardsList() {
     return INITIAL_COMPLIANCE_STANDARDS;
   });
 
-  const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingItem, setEditingItem] = useState<ComplianceStandardItem | null>(null);
@@ -68,17 +67,12 @@ export default function ComplianceStandardsList() {
   }, []);
 
   const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return items.filter((item) => {
       if (scopeFilter !== "all" && item.scope !== scopeFilter) return false;
       if (statusFilter !== "all" && item.status !== statusFilter) return false;
-      if (q) {
-        const text = `${item.standardCode} ${item.clause} ${item.title} ${item.requirement} ${item.relatedStandard} ${item.evidenceRequired} ${item.notes || ""}`.toLowerCase();
-        if (!text.includes(q)) return false;
-      }
       return true;
     });
-  }, [items, search, scopeFilter, statusFilter]);
+  }, [items, scopeFilter, statusFilter]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -259,14 +253,6 @@ export default function ComplianceStandardsList() {
 
       {/* Filter bar */}
       <div className="mb-4 flex flex-col sm:flex-row gap-3">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={isEn ? "Search clause, standard code, title, requirements..." : "Tìm mã tiêu chuẩn, điều khoản, nội dung yêu cầu..."}
-          className="h-10 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-        />
-
         <select
           value={scopeFilter}
           onChange={(e) => setScopeFilter(e.target.value)}

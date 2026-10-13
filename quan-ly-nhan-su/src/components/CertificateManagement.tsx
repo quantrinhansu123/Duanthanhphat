@@ -7,7 +7,6 @@ import CertificateThumbnail from "@/components/CertificateThumbnail";
 import {
   CaretDown,
   Eye,
-  MagnifyingGlass,
   PencilSimple,
   Plus,
   TrashSimple,
@@ -300,9 +299,6 @@ function CertificateDetailModal({
                           }`}
                         >
                           <span className="w-7 shrink-0 font-mono text-xs text-slate-400">{index + 1}</span>
-                          <div className="relative h-12 w-[76px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                            <CertificateThumbnail cert={holderCert} />
-                          </div>
                           <div className="min-w-0 flex-1">
                             <div className={`truncate text-sm font-semibold ${active ? "text-[#0047AB]" : "text-slate-900"}`}>
                               {holder.name}
@@ -311,6 +307,17 @@ function CertificateDetailModal({
                               <span className="font-mono text-[#0047AB]">{holder.code}</span>
                               {holder.position ? <span>· {holder.position}</span> : null}
                               {holder.team ? <span>· {holder.team}</span> : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                              <span>
+                                Số CC: <span className="font-mono font-semibold text-slate-700">{holderCert.certificateNumber || "—"}</span>
+                              </span>
+                              <span>
+                                Cấp: <span className="font-mono font-semibold text-slate-700">{holderCert.issuedAt || "—"}</span>
+                              </span>
+                              <span>
+                                Hết hạn: <span className="font-mono font-semibold text-slate-700">{holderCert.expiresAt || "—"}</span>
+                              </span>
                             </div>
                           </div>
                           <span
@@ -375,7 +382,6 @@ export default function CertificateManagement() {
   const [certificateItems, setCertificateItems] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState("");
   const [machineFilter, setMachineFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -533,19 +539,13 @@ export default function CertificateManagement() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key));
   }, [catalogGroups, welders]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("vi");
-    return certificateTypes.filter((row) => {
-      if (!matchesCertificateMeta(row.group?.machine, row.group?.weldScope, methodFilter, machineFilter)) return false;
-      if (!q) return true;
-      if (row.title.toLocaleLowerCase("vi").includes(q)) return true;
-      return row.holders.some(
-        (h) =>
-          h.name.toLocaleLowerCase("vi").includes(q) ||
-          h.code.toLocaleLowerCase("vi").includes(q),
-      );
-    });
-  }, [certificateTypes, query, methodFilter, machineFilter]);
+  const filtered = useMemo(
+    () =>
+      certificateTypes.filter((row) =>
+        matchesCertificateMeta(row.group?.machine, row.group?.weldScope, methodFilter, machineFilter),
+      ),
+    [certificateTypes, methodFilter, machineFilter],
+  );
 
   const filteredWeldersForForm = useMemo(() => {
     const q = holderQuery.trim().toLocaleLowerCase("vi");
@@ -701,7 +701,6 @@ export default function CertificateManagement() {
   }, [certificateTypes, certificatesByHolderTitle, withGroupImage]);
 
   const filteredOwners = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase("vi");
     const typeByTitle = new Map(certificateTypes.map((row) => [normalizeCertTitle(row.title), row]));
     const hasMeta = Boolean(methodFilter || machineFilter);
     return ownerRows
@@ -719,20 +718,8 @@ export default function CertificateManagement() {
           : row.certificates;
         return { ...row, certificates };
       })
-      .filter((row) => {
-        if (hasMeta && row.certificates.length === 0) return false;
-        if (!q) return true;
-        if (
-          row.name.toLocaleLowerCase("vi").includes(q) ||
-          row.code.toLocaleLowerCase("vi").includes(q) ||
-          row.team.toLocaleLowerCase("vi").includes(q) ||
-          row.position.toLocaleLowerCase("vi").includes(q)
-        ) {
-          return true;
-        }
-        return row.certificates.some((c) => c.title.toLocaleLowerCase("vi").includes(q));
-      });
-  }, [ownerRows, certificateTypes, query, methodFilter, machineFilter]);
+      .filter((row) => !hasMeta || row.certificates.length > 0);
+  }, [ownerRows, certificateTypes, methodFilter, machineFilter]);
 
   function openHolderDetail(title: string, holder: CertHolder) {
     setDetailCert(resolveHolderCertificate(title, holder));
@@ -1038,23 +1025,6 @@ export default function CertificateManagement() {
             Người sở hữu
           </button>
         </div>
-        <div className="relative min-w-[220px] flex-1">
-          <MagnifyingGlass
-            aria-hidden
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            size={16}
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              listTab === "owners"
-                ? "Tìm theo tên, mã nhân sự hoặc loại chứng chỉ…"
-                : "Tìm loại chứng chỉ hoặc tên / mã thợ hàn…"
-            }
-            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300/90 bg-white text-slate-900 placeholder:text-slate-400 shadow-xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-          />
-        </div>
         <select
           value={methodFilter}
           onChange={(event) => setMethodFilter(event.target.value)}
@@ -1286,21 +1256,41 @@ export default function CertificateManagement() {
                                     key={holder.id}
                                     type="button"
                                     onClick={() => openHolderDetail(row.title, holder)}
-                                    className="flex items-stretch gap-3 rounded-xl border border-slate-200 bg-white p-2.5 text-left hover:border-[#0047AB]/40 hover:bg-blue-50/40 transition-colors cursor-pointer"
+                                    className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-[#0047AB]/40 hover:bg-blue-50/40 transition-colors cursor-pointer"
                                   >
-                                    <div className="relative h-[68px] w-[108px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                                      <CertificateThumbnail cert={cert} />
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="font-semibold text-slate-900 truncate">{holder.name}</div>
+                                        <div className="mt-0.5 font-mono text-[11px] text-[#0047AB]">{holder.code}</div>
+                                        <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                                          {holder.position} · {holder.team}
+                                        </div>
+                                      </div>
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusStyle[cert.status]}`}>
+                                        {cert.status}
+                                      </span>
                                     </div>
-                                    <div className="min-w-0 flex-1 py-0.5">
-                                      <div className="font-semibold text-slate-900 truncate">{holder.name}</div>
-                                      <div className="mt-0.5 font-mono text-[11px] text-[#0047AB]">{holder.code}</div>
-                                      <div className="mt-0.5 text-[11px] text-slate-500 truncate">
-                                        {holder.position} · {holder.team}
+                                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-[11px]">
+                                      <div className="min-w-0">
+                                        <dt className="text-slate-500">Số chứng chỉ</dt>
+                                        <dd className="truncate font-mono font-semibold text-slate-800">{cert.certificateNumber || "—"}</dd>
                                       </div>
-                                      <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[#0047AB]">
-                                        <Eye size={12} weight="bold" aria-hidden />
-                                        Xem chi tiết
+                                      <div className="min-w-0">
+                                        <dt className="text-slate-500">Đơn vị cấp</dt>
+                                        <dd className="truncate font-semibold text-slate-800">{cert.organization || "—"}</dd>
                                       </div>
+                                      <div className="min-w-0">
+                                        <dt className="text-slate-500">Ngày cấp</dt>
+                                        <dd className="font-mono font-semibold text-slate-800">{cert.issuedAt || "—"}</dd>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <dt className="text-slate-500">Ngày hết hạn</dt>
+                                        <dd className="font-mono font-semibold text-slate-800">{cert.expiresAt || "—"}</dd>
+                                      </div>
+                                    </dl>
+                                    <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0047AB]">
+                                      <Eye size={12} weight="bold" aria-hidden />
+                                      Xem chi tiết
                                     </div>
                                   </button>
                                 );

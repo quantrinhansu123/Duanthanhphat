@@ -85,6 +85,7 @@ export {
   FilePdf,
   Cube,
   Package,
+  GasPump,
   Stack,
   Tray,
   ListChecks,

@@ -62,7 +62,6 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
-  const [query, setQuery] = useState("");
   const [project, setProject] = useState("Tất cả dự án");
   const [year, setYear] = useState("Tất cả năm");
 
@@ -76,19 +75,12 @@ function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
   );
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("vi");
     return rows.filter((row) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        row.ma_lich_su.toLocaleLowerCase("vi").includes(normalizedQuery) ||
-        row.du_an.toLocaleLowerCase("vi").includes(normalizedQuery) ||
-        row.ten_tho_han.toLocaleLowerCase("vi").includes(normalizedQuery) ||
-        row.loai_ray.toLocaleLowerCase("vi").includes(normalizedQuery);
       const matchesProject = project === "Tất cả dự án" || row.du_an === project;
       const matchesYear = year === "Tất cả năm" || row.nam_thuc_hien === Number(year);
-      return matchesQuery && matchesProject && matchesYear;
+      return matchesProject && matchesYear;
     });
-  }, [project, query, rows, year]);
+  }, [project, rows, year]);
 
   const total = filtered.reduce((sum, row) => sum + row.so_luong_thuc_hien, 0);
   const errors = filtered.reduce((sum, row) => sum + row.so_luong_loi, 0);
@@ -103,18 +95,6 @@ function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
       </div>
 
       <div className="mb-4 flex flex-col gap-2.5 sm:flex-row">
-        <div className="relative min-w-[240px] flex-1">
-          <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" />
-          </svg>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm mã, dự án, loại ray, thợ hàn..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs text-slate-900 outline-hidden transition-all focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-          />
-        </div>
         <select value={project} onChange={(event) => setProject(event.target.value)} className="h-10 max-w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:max-w-[360px] sm:text-sm">
           {projects.map((item) => <option key={item}>{item}</option>)}
         </select>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, DotsThree, MagnifyingGlass } from "@/components/icons";
+import { Check, DotsThree } from "@/components/icons";
 import {
   catalogGroups,
   defaultSystemSettings,
@@ -100,17 +100,10 @@ function CatalogsPanel({
   onPersist?: (nextCatalogs: CatalogItem[]) => Promise<void> | void;
 }) {
   const [group, setGroup] = useState<CatalogGroup>("Loại ray");
-  const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [modal, setModal] = useState<{ item: CatalogItem; mode: "create" | "edit" } | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return catalogs.filter((c) => {
-      if (c.group !== group) return false;
-      return !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-    });
-  }, [catalogs, group, query]);
+  const filtered = useMemo(() => catalogs.filter((c) => c.group === group), [catalogs, group]);
 
   function handleSave(item: CatalogItem) {
     let next: CatalogItem[];
@@ -152,15 +145,6 @@ function CatalogsPanel({
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <div className="relative min-w-[220px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm mã, tên danh mục..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <button
           type="button"
           onClick={() =>
@@ -370,23 +354,15 @@ function AccountsPanel({
   setAccounts: React.Dispatch<React.SetStateAction<InitialAccount[]>>;
   onPersist?: (nextAccounts: InitialAccount[]) => Promise<void> | void;
 }) {
-  const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const matches = q
-      ? accounts.filter(
-          (a) =>
-            a.username.toLowerCase().includes(q) ||
-            a.fullName.toLowerCase().includes(q) ||
-            a.email.toLowerCase().includes(q),
-        )
-      : accounts;
-    return [...matches].sort(
-      (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
-    );
-  }, [accounts, query]);
+  const filtered = useMemo(
+    () =>
+      [...accounts].sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+      ),
+    [accounts],
+  );
 
   function toggleStatus(account: InitialAccount) {
     const next: InitialAccount["status"] = account.status === "Hoạt động" ? "Khóa" : "Hoạt động";
@@ -430,15 +406,6 @@ function AccountsPanel({
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm tên đăng nhập, họ tên, email..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <button
           type="button"
           onClick={handleAddAccount}

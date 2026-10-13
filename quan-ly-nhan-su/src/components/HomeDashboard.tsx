@@ -34,6 +34,7 @@ import {
   Flag,
   Cube,
   Package,
+  GasPump,
   WarningCircle,
 } from "@/components/icons";
 
@@ -59,6 +60,7 @@ const childIcons: Record<string, Icon> = {
   "thu-vien-loi": Bug,
   "phan-cong-may": ListChecks,
   "phu-tung-thay-the": Package,
+  "lich-su-cap-nhien-lieu": GasPump,
   "thu-vien-loi-moi-han": Bug,
   "quan-ly-du-an": Buildings,
   "chung-chi": Certificate,

@@ -9,7 +9,7 @@ import {
   type NdtDefect,
   type ErrorCategory,
 } from "@/data/error-library";
-import { MagnifyingGlass, Plus, X } from "@/components/icons";
+import { Plus, X } from "@/components/icons";
 import { createMachineFault, loadMachineFaultLibrary } from "@/lib/machineFaultsDb";
 import {
   displayWeldCode,
@@ -44,7 +44,6 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
   // Khi chỉ NDT (legacy) — giữ bảng mã khuyết tật
   const ndtOnly = showNdt && !showMachine;
 
-  const [query, setQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<TabKey>(ndtOnly ? "NDT" : "Tất cả");
   const [faults, setFaults] = useState<MachineFault[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,41 +123,16 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
   }, [faults]);
 
   const filteredFaults = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return faults
       .filter((item) => {
-        if (selectedTab !== "Tất cả" && selectedTab !== "NDT" && item.section !== selectedTab) {
-          return false;
-        }
         if (selectedTab === "NDT") return false;
-        if (!q) return true;
-        return (
-          item.symptom.toLowerCase().includes(q) ||
-          item.section.toLowerCase().includes(q) ||
-          item.sourceReference.toLowerCase().includes(q) ||
-          item.cases.some(
-            (c) =>
-              c.probableCause.toLowerCase().includes(q) ||
-              c.remedy.toLowerCase().includes(q),
-          )
-        );
+        return selectedTab === "Tất cả" || item.section === selectedTab;
       })
       .sort(
         (a, b) =>
           (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || b.id.localeCompare(a.id),
       );
-  }, [faults, query, selectedTab]);
-
-  const filteredNdt = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return NDT_DEFECTS;
-    return NDT_DEFECTS.filter(
-      (d) =>
-        d.code.toLowerCase().includes(q) ||
-        d.nameVi.toLocaleLowerCase("vi").includes(q) ||
-        d.nameEn.toLowerCase().includes(q),
-    );
-  }, [query]);
+  }, [faults, selectedTab]);
 
   const groupedBySource = useMemo(() => {
     const map = new Map<string, MachineFault[]>();
@@ -207,7 +181,7 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
             </p>
           </div>
         </div>
-        <NdtTable items={filteredNdt} query={query} onQueryChange={setQuery} onSelect={openNdtDetail} />
+        <NdtTable items={NDT_DEFECTS} onSelect={openNdtDetail} />
         {detail && (
           <ErrorDetailModal
             detail={detail}
@@ -255,19 +229,6 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
       </div>
 
       <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass
-            aria-hidden
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            size={16}
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm triệu chứng, nguyên nhân, cách khắc phục…"
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-          />
-        </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           {tabs.map((tab) => (
             <button
@@ -287,7 +248,7 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
       </div>
 
       {selectedTab === "NDT" ? (
-        <NdtTable items={filteredNdt} query={query} onQueryChange={setQuery} hideSearch onSelect={openNdtDetail} />
+        <NdtTable items={NDT_DEFECTS} onSelect={openNdtDetail} />
       ) : loading ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">
           Đang tải thư viện lỗi…
@@ -429,36 +390,13 @@ export default function ErrorLibrary({ categories, mode }: ErrorLibraryProps) {
 
 function NdtTable({
   items,
-  query,
-  onQueryChange,
-  hideSearch,
   onSelect,
 }: {
   items: NdtDefect[];
-  query: string;
-  onQueryChange: (value: string) => void;
-  hideSearch?: boolean;
   onSelect: (item: NdtDefect) => void;
 }) {
   return (
     <>
-      {!hideSearch && (
-        <div className="mb-4">
-          <div className="relative min-w-[240px] max-w-xl">
-            <MagnifyingGlass
-              aria-hidden
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              size={16}
-            />
-            <input
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Tìm mã khuyết tật (LOF, LOP, C, S, Po, La)…"
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm"
-            />
-          </div>
-        </div>
-      )}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
           <table className="w-full min-w-[520px] border-collapse text-left text-xs sm:text-sm">

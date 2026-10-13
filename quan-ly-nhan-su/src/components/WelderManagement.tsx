@@ -8,7 +8,6 @@ import type { Certificate } from "@/data/certificates";
 import type { Machine } from "@/data/machines";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
-  MagnifyingGlass,
   CaretDown,
   Users,
   Stack,
@@ -23,8 +22,11 @@ import {
 } from "@/components/icons";
 import { uploadToCloudinary } from "@/lib/cloudinaryClient";
 import {
+  certificateEquipmentFamily,
   formatCertificateList,
+  machineEquipmentFamily,
   parseCertificateList,
+  weldMethodForFamily,
 } from "@/lib/weldingCertificates";
 import {
   deletePersonnel,
@@ -193,6 +195,13 @@ function personnelRowToWelder(row: PersonnelCertificateRow): Welder {
   };
 }
 
+function trainedMachineWeldMethod(token: string, machine: Machine | undefined): string | null {
+  const blob = `${token} ${machine?.code ?? ""} ${machine?.name ?? ""} ${machine?.model ?? ""} ${machine?.weldingTechnology ?? ""}`.toLocaleUpperCase("vi");
+  if (/\bFBW\b/.test(blob) || blob.includes("FLASH BUTT")) return "FBW";
+  if (/\bATW\b/.test(blob) || blob.includes("ALUMINOTHERMIC") || blob.includes("THERMIT") || blob.includes("GOLDSCHMI")) return "ATW";
+  return weldMethodForFamily(machineEquipmentFamily({ code: token, name: `${machine?.name ?? ""} ${machine?.model ?? ""}` }));
+}
+
 function MultiSelectCombobox({
   title,
   options,
@@ -304,6 +313,7 @@ function MultiSelectCombobox({
 
 export default function WelderManagement() {
   const configuredRailOptions = useCatalogOptions("Loại ray");
+  const configuredMethodOptions = useCatalogOptions("Phương pháp hàn", "code");
   const { lang } = useLanguage();
   const isEn = lang === "en";
 
@@ -312,11 +322,11 @@ export default function WelderManagement() {
   const [selectedWelder, setSelectedWelder] = useState<Welder | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const [query, setQuery] = useState("");
   const [ranksSel, setRanksSel] = useState<string[]>([]);
   const [teamsSel, setTeamsSel] = useState<string[]>([]);
   const [railsSel, setRailsSel] = useState<string[]>([]);
   const [machinesSel, setMachinesSel] = useState<string[]>([]);
+  const [methodsSel, setMethodsSel] = useState<string[]>([]);
   const [statusesSel, setStatusesSel] = useState<string[]>([]);
   const [toast, setToast] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -1028,6 +1038,27 @@ export default function WelderManagement() {
       .sort((a, b) => a.localeCompare(b, "vi"));
   }, [machineCatalog]);
   const statusOptions = ["Hoạt động", "Khóa"];
+  const methodOptions = configuredMethodOptions.length ? configuredMethodOptions : ["FBW", "ATW"];
+
+  const weldMethodsByWelder = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const w of list) {
+      const methods = new Set<string>();
+      for (const token of parseTrainedMachineTokens(w.trainedMachines)) {
+        const machine = machineCatalog.find((m) =>
+          personTrainedOnMachine(token, { code: m.code, model: m.model }),
+        );
+        const method = trainedMachineWeldMethod(token, machine);
+        if (method) methods.add(method);
+      }
+      for (const cert of parseCertificateList(w.certificates)) {
+        const method = weldMethodForFamily(certificateEquipmentFamily(cert));
+        if (method) methods.add(method);
+      }
+      map.set(w.id, methods);
+    }
+    return map;
+  }, [list, machineCatalog]);
 
   // Loại ray của thợ hàn (loai_ray là text tự do) được đối chiếu với danh mục
   // cấu hình: token khớp -> dùng nhãn chuẩn trong cấu hình; token lệch chuẩn
@@ -1079,17 +1110,7 @@ export default function WelderManagement() {
   }
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const rows = list.filter((w) => {
-      const matchQ =
-        !q ||
-        w.name.toLowerCase().includes(q) ||
-        w.weldingId.toLowerCase().includes(q) ||
-        w.email.toLowerCase().includes(q) ||
-        w.weldingTeam.toLowerCase().includes(q) ||
-        w.certificates.toLowerCase().includes(q) ||
-        w.railTypes.toLowerCase().includes(q) ||
-        w.trainedMachines.toLowerCase().includes(q);
       const matchRank = ranksSel.length === 0 || ranksSel.includes(w.rank);
       const matchTeam = teamsSel.length === 0 || teamsSel.includes(w.weldingTeam);
       const railTokenSet = new Set(
@@ -1104,8 +1125,11 @@ export default function WelderManagement() {
           model: machine?.model,
         });
       });
+      const welderMethods = weldMethodsByWelder.get(w.id);
+      const matchMethod =
+        methodsSel.length === 0 || methodsSel.some((method) => welderMethods?.has(method));
       const matchStatus = statusesSel.length === 0 || statusesSel.includes(w.status);
-      return matchQ && matchRank && matchTeam && matchRail && matchMachine && matchStatus;
+      return matchRank && matchTeam && matchRail && matchMachine && matchMethod && matchStatus;
     });
     const teamOrder = (team: string) => {
       const m = team.match(/\d+/);
@@ -1122,7 +1146,7 @@ export default function WelderManagement() {
         rankOrder(a.rank) - rankOrder(b.rank) ||
         a.name.localeCompare(b.name, "vi"),
     );
-  }, [list, query, ranksSel, teamsSel, railsSel, machinesSel, statusesSel, machineCatalog]);
+  }, [list, ranksSel, teamsSel, railsSel, machinesSel, methodsSel, statusesSel, machineCatalog, weldMethodsByWelder]);
 
   const kanbanColumns = useMemo(() => {
     const teamOrder = (team: string) => {
@@ -1408,21 +1432,11 @@ export default function WelderManagement() {
       {/* Search & Filters Bar - Image 16 / 17 exact */}
       <div className="mb-4 flex flex-col sm:flex-row gap-2.5 items-center justify-between">
         <div className="flex flex-1 w-full sm:w-auto gap-2 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[240px]">
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={isEn ? "Search name, Welding ID, rail type, machine..." : "Tìm theo tên, Welding ID, loại ray, máy..."}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-            />
-            <MagnifyingGlass size={16} className="absolute left-3 top-3 text-slate-400" />
-          </div>
-
           <MultiSelectCombobox title={isEn ? "Grade" : "Hạng"} options={rankOptions} selected={ranksSel} onChange={setRanksSel} />
           <MultiSelectCombobox title={isEn ? "Team" : "Tổ hàn"} options={teamOptions} selected={teamsSel} onChange={setTeamsSel} />
           <MultiSelectCombobox title={isEn ? "Rail Type" : "Loại ray"} options={railOptions} selected={railsSel} onChange={setRailsSel} />
           <MultiSelectCombobox title={isEn ? "Trained Machine" : "Máy đã đào tạo"} options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
+          <MultiSelectCombobox title={isEn ? "Weld Method" : "PP hàn"} options={methodOptions} selected={methodsSel} onChange={setMethodsSel} />
           <MultiSelectCombobox title={isEn ? "Status" : "Trạng thái"} options={statusOptions} selected={statusesSel} onChange={setStatusesSel} />
         </div>
 
@@ -1492,45 +1506,44 @@ export default function WelderManagement() {
                           }`}
                         >
                           <div className="flex gap-3">
-                            <div className="relative h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                            <div className="relative h-[112px] w-[84px] flex-none overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
                               <Image
                                 src={w.photo}
                                 alt={w.name}
                                 fill
-                                className="object-cover"
-                                sizes="64px"
+                                className="object-cover object-top"
+                                sizes="84px"
                               />
                             </div>
-                            <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-1 flex-col">
                               <div className="truncate text-sm font-bold text-slate-900">{w.name}</div>
-                              <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                              <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500">
                                 {localizeBilingual(w.position, isEn)}
                               </div>
                               <div className="mt-1.5 font-mono text-[11px] font-semibold text-[#0047AB]">
                                 {w.weldingId}
                               </div>
+                              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+                                <span
+                                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                    rankStyle[w.rank] || "bg-slate-100 text-slate-700 border border-slate-200"
+                                  }`}
+                                >
+                                  {w.rank}
+                                </span>
+                                {w.status === "Hoạt động" ? (
+                                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                    {w.status}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                    {w.status}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                            <span
-                              className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                rankStyle[w.rank] || "bg-slate-100 text-slate-700 border border-slate-200"
-                              }`}
-                            >
-                              {w.rank}
-                            </span>
-                            {w.status === "Hoạt động" ? (
-                              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                {w.status}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                {w.status}
-                              </span>
-                            )}
                           </div>
 
                           <div

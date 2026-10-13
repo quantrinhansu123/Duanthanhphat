@@ -22,7 +22,6 @@ import {
 import {
   CaretDown,
   CaretRight,
-  MagnifyingGlass,
   Package,
   Plus,
   Trash,
@@ -1732,7 +1731,6 @@ export default function MachineList() {
   const [list, setList] = useState(seedMachines);
   const [source, setSource] = useState<"supabase" | "seed">("seed");
   const [dataError, setDataError] = useState("");
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1776,7 +1774,6 @@ export default function MachineList() {
           (m) => m.code.toLowerCase() === mayCode.toLowerCase() || m.id === mayCode,
         );
         if (match) {
-          // Chỉ mở chi tiết — không set query để tránh lọc mất danh sách
           setActiveId(match.id);
           setDetail(match);
           setDetailTab(openTab);
@@ -1792,20 +1789,10 @@ export default function MachineList() {
     };
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return list.filter((m) => {
-      const matchQ =
-        !q ||
-        m.name.toLowerCase().includes(q) ||
-        m.code.toLowerCase().includes(q) ||
-        m.model.toLowerCase().includes(q) ||
-        m.location.toLowerCase().includes(q) ||
-        (m.transportUnit?.plateNumber && m.transportUnit.plateNumber.toLowerCase().includes(q));
-      const matchStatus = status === "Tất cả trạng thái" || m.status === status;
-      return matchQ && matchStatus;
-    });
-  }, [list, query, status]);
+  const filtered = useMemo(
+    () => list.filter((m) => status === "Tất cả trạng thái" || m.status === status),
+    [list, status],
+  );
 
   const running = list.filter((m) => m.status === "Đang làm việc").length;
   const ready = list.filter((m) => m.status === "Sẵn sàng").length;
@@ -1978,15 +1965,6 @@ export default function MachineList() {
       </section>
 
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm mã máy, tên máy, model, vị trí, biển số xe..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}

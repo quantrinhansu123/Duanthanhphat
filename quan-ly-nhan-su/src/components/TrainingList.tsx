@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WelderMultiSelect from "@/components/WelderMultiSelect";
 import DateField from "@/components/DateField";
 import MultiSelectMenu from "@/components/MultiSelectMenu";
-import { Check, Clock, ClockCounterClockwise, MagnifyingGlass, PencilSimple, Play, Plus, TrashSimple, UploadSimple, Users, VideoCamera, Warning, X } from "@/components/icons";
+import { Check, Clock, ClockCounterClockwise, PencilSimple, Play, Plus, TrashSimple, UploadSimple, Users, VideoCamera, Warning, X } from "@/components/icons";
 import {
   deleteTrainingCourse,
   fetchCertificateGroups,
@@ -1186,7 +1186,6 @@ function TrainingDetailModal({
 }
 
 export default function TrainingList() {
-  const [query, setQuery] = useState("");
   const [resultFilter, setResultFilter] = useState("Tất cả kết quả");
   const [railFilter, setRailFilter] = useState("Tất cả loại hàn");
   const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
@@ -1235,17 +1234,11 @@ export default function TrainingList() {
   }, [loadData]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const base = courses.filter((c) => {
-      const matchQ =
-        !q ||
-        c.title.toLowerCase().includes(q) ||
-        c.trainer.toLowerCase().includes(q) ||
-        c.date.includes(q);
       const matchResult = resultFilter === "Tất cả kết quả" || c.result === resultFilter;
       const matchRail = courseHasRailType(c.railType, railFilter);
       const matchMethod = methodFilter === "Tất cả công nghệ" || (c.weldMethod || "") === methodFilter;
-      return matchQ && matchResult && matchRail && matchMethod;
+      return matchResult && matchRail && matchMethod;
     });
     // Mặc định sắp theo ngày đào tạo mới nhất -> cũ nhất (khóa chưa có ngày xếp cuối).
     return [...base].sort((a, b) => {
@@ -1254,7 +1247,7 @@ export default function TrainingList() {
       if (b.dateIso) return 1;
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
-  }, [query, courses, resultFilter, railFilter, methodFilter]);
+  }, [courses, resultFilter, railFilter, methodFilter]);
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -1386,64 +1379,58 @@ export default function TrainingList() {
           Không tải được dữ liệu đào tạo: {loadError}
         </div>
       )}
-      <div className="mb-4 flex flex-col lg:flex-row flex-wrap items-stretch lg:items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
-        <div className="relative min-w-[240px] flex-1">
-          <MagnifyingGlass aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm theo tên khóa, người đào tạo, ngày..."
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
-          />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="mb-4 flex flex-wrap items-end gap-x-3 gap-y-2.5 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs sm:p-4">
+        <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-48">
+          Kết quả
           <select
             value={resultFilter}
             onChange={(e) => setResultFilter(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer sm:text-sm"
           >
             {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
               <option key={r}>{r}</option>
             ))}
           </select>
-          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
-            Công nghệ
-            <select
-              value={methodFilter}
-              onChange={(e) => setMethodFilter(e.target.value)}
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              aria-label="Lọc theo công nghệ hàn"
-            >
-              {["Tất cả công nghệ", ...(methodFilterOptions.length ? methodFilterOptions : ["FBW", "ATW"])].map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
-            Loại hàn
-            <select
-              value={railFilter}
-              onChange={(e) => setRailFilter(e.target.value)}
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer"
-              aria-label="Lọc theo loại hàn"
-            >
-              {["Tất cả loại hàn", ...railFilterOptions].map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </label>
+        </label>
+        <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-48">
+          Công nghệ
+          <select
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer sm:text-sm"
+            aria-label="Lọc theo công nghệ hàn"
+          >
+            {["Tất cả công nghệ", ...(methodFilterOptions.length ? methodFilterOptions : ["FBW", "ATW"])].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-48">
+          Loại hàn
+          <select
+            value={railFilter}
+            onChange={(e) => setRailFilter(e.target.value)}
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer sm:text-sm"
+            aria-label="Lọc theo loại hàn"
+          >
+            {["Tất cả loại hàn", ...railFilterOptions].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+        <div className="flex h-10 shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setOpenAdd(true)}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#00388A] cursor-pointer sm:text-sm"
+          >
+            <Plus size={16} weight="bold" />
+            Thêm khóa đào tạo
+          </button>
+          <span className="whitespace-nowrap text-xs text-slate-500 sm:text-sm">
+            <strong className="font-mono font-semibold tabular-nums text-slate-900">{filtered.length}</strong> bản ghi
+          </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpenAdd(true)}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer"
-        >
-          <Plus size={16} weight="bold" />
-          Thêm khóa đào tạo
-        </button>
-        <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap self-center">
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
-        </span>
       </div>
 
       {/* Grid danh sách khóa học */}

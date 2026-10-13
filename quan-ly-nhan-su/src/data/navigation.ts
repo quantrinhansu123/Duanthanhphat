@@ -100,6 +100,13 @@ export const navigation: NavItem[] = [
         description: "Danh mục phụ tùng theo nhà sản xuất, model máy tương thích và tồn kho",
         descriptionEn: "Spare parts by manufacturer, compatible machine models, and stock levels",
       },
+      {
+        id: "lich-su-cap-nhien-lieu",
+        label: "Lịch sử cấp nhiên liệu",
+        labelEn: "Fuel Supply History",
+        description: "Ngày cấp, máy, lượng nhiên liệu và người cấp theo từng lượt",
+        descriptionEn: "Supply date, machine, fuel amount, and supplier for each refuel",
+      },
     ],
   },
   {

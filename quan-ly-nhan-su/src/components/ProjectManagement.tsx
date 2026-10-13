@@ -41,6 +41,7 @@ import {
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachinePickerOptions } from "@/lib/machineCatalogDb";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
+import { loadTongMoiHanNam } from "@/lib/tongMoiHanNamDb";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 const PROGRESS_PAGE_SIZE = 50;
@@ -1812,6 +1813,7 @@ export default function ProjectManagement() {
   const [progressRows, setProgressRows] = useState<TheoreticalProgressViewRow[]>([]);
   const [progressLoading, setProgressLoading] = useState(true);
   const [progressReloadToken, setProgressReloadToken] = useState(0);
+  const [actualWelds, setActualWelds] = useState<{ byId: Map<string, number>; byName: Map<string, number> } | null>(null);
   const railOptions = useCatalogOptions("Loại ray");
   const weldOptions = useCatalogOptions("Loại mối hàn", "name");
 
@@ -1851,6 +1853,34 @@ export default function ProjectManagement() {
       active = false;
     };
   }, [progressReloadToken]);
+
+  useEffect(() => {
+    let active = true;
+    loadTongMoiHanNam()
+      .then((bundle) => {
+        if (!active) return;
+        const byId = new Map<string, number>();
+        const byName = new Map<string, number>();
+        for (const row of bundle.byProject) {
+          const amount = Number(row.san_xuat ?? 0);
+          if (row.du_an_id) byId.set(row.du_an_id, (byId.get(row.du_an_id) ?? 0) + amount);
+          const name = row.du_an?.trim();
+          if (name) byName.set(name, (byName.get(name) ?? 0) + amount);
+        }
+        setActualWelds({ byId, byName });
+      })
+      .catch(() => {
+        if (active) setActualWelds({ byId: new Map(), byName: new Map() });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function actualWeldCount(project: Project) {
+    if (!actualWelds) return null;
+    return actualWelds.byId.get(project.id) ?? actualWelds.byName.get(project.name.trim()) ?? 0;
+  }
 
   function refreshProgress() {
     setProgressReloadToken((token) => token + 1);
@@ -2386,6 +2416,7 @@ export default function ProjectManagement() {
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
                 <th className="px-3.5 py-3 text-right">Tổng mối hàn dự kiến</th>
+                <th className="px-3.5 py-3 text-right">Tổng mối hàn thực tế</th>
                 <th className="px-3.5 py-3 text-right">Số ngày</th>
                 <th className="whitespace-nowrap px-3.5 py-3">Thời gian dự án</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
@@ -2404,6 +2435,9 @@ export default function ProjectManagement() {
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.machineCount}</td>
                   <td className="px-3.5 py-3 text-right font-semibold font-mono tabular-nums text-[#0047AB]">
                     {p.plannedWeldCount.toLocaleString("vi-VN")}
+                  </td>
+                  <td className="px-3.5 py-3 text-right font-semibold font-mono tabular-nums text-emerald-700">
+                    {actualWeldCount(p)?.toLocaleString("vi-VN") ?? "…"}
                   </td>
                   <td className="px-3.5 py-3 text-right font-mono font-semibold text-slate-900">
                     {projectDurationDays(p.startDate, p.endDate)}
@@ -2461,7 +2495,7 @@ export default function ProjectManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy dự án phù hợp</div>
                   </td>
                 </tr>
