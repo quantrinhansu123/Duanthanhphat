@@ -109,6 +109,50 @@ export function eligibleCertificatesForWeld(
   );
 }
 
+/** Họ thiết bị dùng để ghép chứng chỉ ↔ máy. `null` = chung, khớp mọi máy. */
+export type WeldEquipmentFamily = "kcm" | "un5" | "atw";
+
+function familyFromText(normalized: string): WeldEquipmentFamily | null {
+  if (normalized.includes("kcm") || normalized.includes("k922") || normalized.includes("k920")) return "kcm";
+  if (normalized.includes("un5")) return "un5";
+  if (
+    normalized.includes("atw") ||
+    normalized.includes("aluminothermic") ||
+    normalized.includes("thermit") ||
+    normalized.includes("railtech") ||
+    normalized.includes("nhomnhiet")
+  ) {
+    return "atw";
+  }
+  return null;
+}
+
+export function certificateEquipmentFamily(certificate: string): WeldEquipmentFamily | null {
+  return familyFromText(normalizeCertificate(certificate));
+}
+
+export function machineEquipmentFamily(
+  machine: { code?: string | null; name?: string | null } | null | undefined,
+): WeldEquipmentFamily | null {
+  if (!machine) return null;
+  return familyFromText(normalizeCertificate(`${machine.code ?? ""} ${machine.name ?? ""}`));
+}
+
+export function isCertificateCompatibleWithMachine(
+  certificate: string,
+  machine: { code?: string | null; name?: string | null } | null | undefined,
+): boolean {
+  const certFamily = certificateEquipmentFamily(certificate);
+  const machineFamily = machineEquipmentFamily(machine);
+  return !certFamily || !machineFamily || certFamily === machineFamily;
+}
+
+export function weldMethodForFamily(family: WeldEquipmentFamily | null): "FBW" | "ATW" | null {
+  if (family === "atw") return "ATW";
+  if (family === "kcm" || family === "un5") return "FBW";
+  return null;
+}
+
 export function describeCertificateRequirement(context: WeldingQualificationContext): string {
   if (context.method === "ATW") return "Chứng chỉ hàn nhôm nhiệt (Thermit/Railtech)";
 

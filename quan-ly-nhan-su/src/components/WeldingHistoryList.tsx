@@ -21,6 +21,7 @@ import {
   formatWeldingDate,
   type WeldingHistoryRecord,
 } from "@/data/weldingHistory";
+import { WELD_TYPE_OPTIONS as WELD_TYPES } from "@/data/weldTypes";
 import {
   deleteWeldingHistoryRecord,
   EMPTY_WELDING_HISTORY_STATS,
@@ -71,7 +72,7 @@ function emptyRecord(defaultResult: WeldingHistoryRecord["result"] = "Đạt"): 
 }
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"];
-const WELD_TYPE_OPTIONS = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
+const WELD_TYPE_OPTIONS: string[] = [...WELD_TYPES];
 
 type ExportColumnKey =
   | "date"

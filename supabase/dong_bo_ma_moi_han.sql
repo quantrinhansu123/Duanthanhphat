@@ -1,4 +1,4 @@
--- Đồng bộ mã mối hàn: {mã dự án}-{công nghệ}-{SX|TN|DT}{3 số}.
+-- Đồng bộ mã mối hàn: {mã dự án}-{công nghệ}-{DT|TN|CT|SX|TS}{3 số}.
 -- VD: PHQ-ATW-SX001, PHQ-ATW-TN001. Số TT theo dự án + công nghệ + loại mối.
 -- Chạy trong Supabase SQL Editor (có thể chạy lại an toàn).
 
@@ -44,6 +44,8 @@ begin
       case
         when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('thử nghiệm', 'thu nghiem') then 'TN'
         when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('đào tạo', 'dao tao') then 'DT'
+        when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('chấp thuận', 'chap thuan') then 'CT'
+        when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('tần suất', 'tan suat') then 'TS'
         else 'SX'
       end as purpose_code,
       coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)) as ngay,
@@ -54,6 +56,8 @@ begin
           case
             when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('thử nghiệm', 'thu nghiem') then 'TN'
             when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('đào tạo', 'dao tao') then 'DT'
+            when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('chấp thuận', 'chap thuan') then 'CT'
+            when lower(btrim(coalesce(ls.loai_moi_han, ''))) in ('tần suất', 'tan suat') then 'TS'
             else 'SX'
           end
         order by coalesce(ls.ngay_thuc_hien, make_date(ls.nam_thuc_hien::integer, 1, 1)), ls.ma_lich_su, ls.id

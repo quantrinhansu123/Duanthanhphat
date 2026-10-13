@@ -1,7 +1,8 @@
 import { WELDING_CERTIFICATES } from "@/lib/weldingCertificates";
+import type { WeldType } from "@/data/weldTypes";
 
 export type WeldMethod = "FBW" | "ATW";
-export type WeldPurpose = "Thử nghiệm" | "Đào tạo" | "Sản xuất";
+export type WeldPurpose = WeldType;
 
 export type WeldJoint = {
   id: string;

@@ -9,6 +9,7 @@ import {
   type StoredSystemConfiguration,
   type SystemSettings,
 } from "@/data/systemConfig";
+import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
 
@@ -20,6 +21,23 @@ const defaults: StoredSystemConfiguration = {
   settings: defaultSystemSettings,
   accounts: initialAccounts,
 };
+
+const WELD_TYPE_GROUP = "Loại mối hàn";
+
+/** Cấu hình đã lưu từ trước có thể thiếu loại mối hàn mới — bổ sung theo mã và xếp đúng thứ tự chuẩn. */
+function withRequiredWeldTypes(catalogs: CatalogItem[]): CatalogItem[] {
+  const others = catalogs.filter((item) => item.group !== WELD_TYPE_GROUP);
+  const weldTypes = catalogs.filter((item) => item.group === WELD_TYPE_GROUP);
+  const existingCodes = new Set(weldTypes.map((item) => item.code.toLocaleUpperCase("vi")));
+  const missing = sharedCatalogs.filter(
+    (item) => item.group === WELD_TYPE_GROUP && !existingCodes.has(item.code.toLocaleUpperCase("vi")),
+  );
+  const rank = (item: CatalogItem) => {
+    const index = (WELD_TYPE_OPTIONS as readonly string[]).indexOf(item.name);
+    return index === -1 ? WELD_TYPE_OPTIONS.length : index;
+  };
+  return [...others, ...[...weldTypes, ...missing].sort((a, b) => rank(a) - rank(b))];
+}
 
 function cleanText(value: unknown, max = 500) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -89,7 +107,7 @@ export async function GET() {
     const configuration = stored ?? defaults;
     return NextResponse.json({
       ...configuration,
-      catalogs: configuration.catalogs.filter((item) => item.group !== "Nhà máy"),
+      catalogs: withRequiredWeldTypes(configuration.catalogs.filter((item) => item.group !== "Nhà máy")),
     });
   } catch (error) {
     return NextResponse.json({ error: formatSupabaseError(error) }, { status: 500 });

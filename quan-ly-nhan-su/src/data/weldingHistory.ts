@@ -12,7 +12,7 @@ export type WeldingHistoryRecord = {
   accountingCode: string; // Mã hạch toán
   /** Công nghệ hàn: FBW / ATW */
   method: string;
-  /** Loại hàn: Sản xuất / Thử nghiệm / Đào tạo */
+  /** Loại hàn (WELD_TYPE_OPTIONS) */
   weldType: string;
   result: "Đạt" | "Không đạt" | "Sửa chữa" | "Chờ thí nghiệm";
 };

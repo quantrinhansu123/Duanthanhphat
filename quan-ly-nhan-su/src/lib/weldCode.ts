@@ -1,13 +1,13 @@
 /** Mã mối hàn: {mã dự án}-{công nghệ}-{loại}{số TT}
- * VD: PHQ-ATW-SX001, PHQ-ATW-TN002, PHQ-ATW-DT001
- * Số TT đếm riêng theo dự án + phương pháp + loại mối (SX/TN/DT).
+ * VD: PHQ-ATW-SX001, PHQ-ATW-TN002, PHQ-ATW-CT001
+ * Số TT đếm riêng theo dự án + phương pháp + loại mối (DT/TN/CT/SX/TS).
  */
+
+import { isWeldType, WELD_TYPE_SHORT_CODES } from "@/data/weldTypes";
 
 export const WELD_CODE_SITE_PREFIX = "PHQ";
 export const WELD_CODE_SEQUENCE_WIDTH = 3;
 export const MACHINE_WELD_CODE_SEQUENCE_WIDTH = 5;
-
-export type WeldPurposeCode = "SX" | "TN" | "DT";
 
 export function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -30,12 +30,15 @@ export function normalizeWeldSitePrefix(value?: string | null) {
   return trimmed || WELD_CODE_SITE_PREFIX;
 }
 
-/** SX = Sản xuất, TN = Thử nghiệm, DT = Đào tạo */
-export function weldPurposeShortCode(loaiMoiHan?: string | null): WeldPurposeCode {
-  const value = (loaiMoiHan ?? "").trim().toLocaleLowerCase("vi");
-  if (value === "thử nghiệm") return "TN";
-  if (value === "đào tạo") return "DT";
-  return "SX";
+/** DT = Đào tạo, TN = Thử nghiệm, CT = Chấp thuận, SX = Sản xuất, TS = Tần suất */
+export function weldPurposeShortCode(loaiMoiHan?: string | null): string {
+  const value = (loaiMoiHan ?? "").trim();
+  return isWeldType(value) ? WELD_TYPE_SHORT_CODES[value] : WELD_TYPE_SHORT_CODES["Sản xuất"];
+}
+
+/** Dự án đã có mã riêng để làm tiền tố (không phải dùng tiền tố dự phòng). */
+export function hasOwnWeldSitePrefix(value?: string | null) {
+  return /^[A-Z0-9]+$/i.test((value ?? "").trim());
 }
 
 /** Tách ngày từ datetime-local / ISO thành DD, MM, YY. */
@@ -113,7 +116,7 @@ export type WeldCodeSourceRow = {
   isoDate: string;
   /** Mã dự án — tiền tố mã mối hàn */
   sitePrefix?: string | null;
-  /** Loại mối: Sản xuất / Thử nghiệm / Đào tạo */
+  /** Loại mối hàn (WELD_TYPE_OPTIONS) */
   loai_moi_han?: string | null;
 };
 

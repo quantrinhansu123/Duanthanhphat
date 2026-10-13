@@ -24,6 +24,14 @@ import {
   type WorkSection,
 } from "@/lib/dailyReportDb";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
+import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
+import type { MachineOption } from "@/data/machineAssignments";
+
+const LINE_TICK = "✓";
+
+function isRailWeldingMachineType(loaiMay: string) {
+  return loaiMay.trim().toLocaleLowerCase("vi").includes("hàn ray");
+}
 
 type SubTab = { kind: "job"; workTypeId: string } | { kind: "thiet-bi" } | { kind: "su-co" };
 
@@ -130,11 +138,34 @@ function PersonnelSelect({
   );
 }
 
+function LineCheckbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-[#0047AB]"
+      />
+      {label}
+    </label>
+  );
+}
+
 function WorkFormModal({
   open,
   title,
   saving,
   personnel,
+  machines,
   workType,
   onClose,
   onSubmit,
@@ -143,6 +174,7 @@ function WorkFormModal({
   title: string;
   saving: boolean;
   personnel: PersonnelOption[];
+  machines: MachineOption[];
   workType: DailyWorkType | null;
   onClose: () => void;
   onSubmit: (values: WorkItemInput) => Promise<void>;
@@ -160,6 +192,8 @@ function WorkFormModal({
 
   if (!open) return null;
 
+  const railMachine = isRailWeldingMachineType(workType?.loaiMayMacDinh ?? form.loaiMay);
+
   function patch(p: Partial<WorkItemInput>) {
     setForm((f) => ({ ...f, ...p }));
   }
@@ -170,12 +204,16 @@ function WorkFormModal({
       setError("Vui lòng nhập hạng mục công việc");
       return;
     }
+    if (railMachine && !form.mayId) {
+      setError("Vui lòng chọn máy hàn ray");
+      return;
+    }
     setError("");
     try {
       await onSubmit({
         ...form,
         congViecId: workType?.id || form.congViecId,
-        hangMuc: workType?.ten || form.hangMuc,
+        hangMuc: form.hangMuc.trim(),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu");
@@ -195,15 +233,24 @@ function WorkFormModal({
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto px-4 py-4 sm:px-5 space-y-3">
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
-          <div>
-            <span className={labelCls}>Công việc</span>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
-              {workType?.ten || form.hangMuc || "—"}
-            </div>
-          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Tuyến hạ" value={form.tuyenHa} onChange={(v) => patch({ tuyenHa: v })} />
-            <Field label="Tuyến thượng" value={form.tuyenThuong} onChange={(v) => patch({ tuyenThuong: v })} />
+            <Field label="Nội dung công việc *" value={form.hangMuc} onChange={(v) => patch({ hangMuc: v })} />
+            <Field label="Tên mối hàn" value={form.tenMoiHan} onChange={(v) => patch({ tenMoiHan: v })} />
+          </div>
+          <div>
+            <span className={labelCls}>Tuyến</span>
+            <div className="flex flex-wrap gap-2">
+              <LineCheckbox
+                label="Tuyến hạ"
+                checked={Boolean(form.tuyenHa)}
+                onChange={(checked) => patch({ tuyenHa: checked ? LINE_TICK : "" })}
+              />
+              <LineCheckbox
+                label="Tuyến thượng"
+                checked={Boolean(form.tuyenThuong)}
+                onChange={(checked) => patch({ tuyenThuong: checked ? LINE_TICK : "" })}
+              />
+            </div>
           </div>
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
             <Field label="Đơn vị" value={form.donVi} onChange={(v) => patch({ donVi: v })} />
@@ -213,7 +260,30 @@ function WorkFormModal({
             <Field label="Thiết kế" value={form.thietKe} onChange={(v) => patch({ thietKe: v })} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Loại máy" value={form.loaiMay} onChange={(v) => patch({ loaiMay: v })} className="sm:col-span-1" />
+            {railMachine ? (
+              <div>
+                <span className={labelCls}>Máy hàn ray *</span>
+                <SelectMenu
+                  value={form.mayId}
+                  onChange={(id) => {
+                    const machine = machines.find((m) => m.id === id);
+                    patch({ mayId: id, loaiMay: machine ? machine.name.trim() || machine.code : "" });
+                  }}
+                  options={machines.map((m) => ({
+                    value: m.id,
+                    label: m.name.trim() || m.code,
+                    hint: m.code,
+                  }))}
+                  searchable={machines.length > 5}
+                  placeholder={machines.length ? "Chọn máy..." : "Chưa có danh mục máy"}
+                  emptyLabel="Chưa có máy trong danh mục thiết bị"
+                  searchPlaceholder="Tìm máy..."
+                  buttonClassName="h-9"
+                />
+              </div>
+            ) : (
+              <Field label="Loại máy" value={form.loaiMay} onChange={(v) => patch({ loaiMay: v })} className="sm:col-span-1" />
+            )}
             <Field label="Máy — Bắt đầu" value={form.mayBatDau} onChange={(v) => patch({ mayBatDau: v })} />
             <Field label="Máy — Kết thúc" value={form.mayKetThuc} onChange={(v) => patch({ mayKetThuc: v })} />
           </div>
@@ -424,6 +494,7 @@ function WorkTable({
           <tr>
             <th className={`${th} w-10`}>TT</th>
             <th className={th}>Hạng mục công việc</th>
+            <th className={th}>Tên mối hàn</th>
             <th className={th}>Tuyến hạ</th>
             <th className={th}>Tuyến thượng</th>
             <th className={th}>Đơn vị</th>
@@ -450,8 +521,9 @@ function WorkTable({
             <tr key={row.id} className="group/row hover:bg-slate-50/80">
               <td className={`${td} text-center font-semibold text-slate-500`}>{i + 1}</td>
               <td className={`${td} font-medium min-w-[180px]`}>{row.hangMuc || "—"}</td>
-              <td className={td}>{row.tuyenHa || "—"}</td>
-              <td className={td}>{row.tuyenThuong || "—"}</td>
+              <td className={`${td} font-mono`}>{row.tenMoiHan || "—"}</td>
+              <td className={`${td} text-center`}>{row.tuyenHa || ""}</td>
+              <td className={`${td} text-center`}>{row.tuyenThuong || ""}</td>
               <td className={td}>{row.donVi || "—"}</td>
               <td className={`${td} text-center`}>{row.denHomQua || "—"}</td>
               <td className={`${td} text-center`}>{row.homNay || "—"}</td>
@@ -508,6 +580,21 @@ export default function DailyWorkReport() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toast, setToast] = useState("");
   const [personnel, setPersonnel] = useState<PersonnelOption[]>([]);
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadMachineOptions()
+      .then((options) => {
+        if (!cancelled) setMachines(options);
+      })
+      .catch(() => {
+        if (!cancelled) setMachines([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reload = useCallback(async (date: string) => {
     setLoading(true);
@@ -825,6 +912,7 @@ export default function DailyWorkReport() {
         }
         saving={saving}
         personnel={personnel}
+        machines={machines}
         workType={modal?.kind === "work" ? modal.workType : null}
         onClose={() => setModal(null)}
         onSubmit={async (values) => {

@@ -1,4 +1,5 @@
 import { ndtDefectLabel } from "@/data/error-library";
+import type { WeldType } from "@/data/weldTypes";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { buildMachineWeldCode, planWeldCodeAssignments } from "@/lib/weldCode";
@@ -42,7 +43,7 @@ export type WeldReportRow = {
   nam_thuc_hien: number;
   ngay_thuc_hien?: string | null;
   loai_ray: string;
-  loai_moi_han: "Sản xuất" | "Thử nghiệm" | "Đào tạo";
+  loai_moi_han: WeldType;
   cong_nghe_han: "FBW" | "ATW";
   so_luong_thuc_hien: number;
   so_luong_loi: number;
@@ -64,6 +65,10 @@ export type WeldReportRow = {
   tinh_trang_thi_nghiem?: WeldTestStatus | null;
   /** Ca hàn: Ca 1 / Ca 2 / Ca 3. */
   ca_han?: WeldShift | string | null;
+  /** Giờ hàn HH:mm[:ss]. */
+  gio_han?: string | null;
+  /** Tên mối hàn ghi trên máy, khi khác mã mặc định. */
+  ten_moi_han_theo_may?: string | null;
 };
 
 export type WeldReportFilters = {
@@ -388,6 +393,9 @@ export type WeldJournalInsert = {
   tinh_trang_thi_nghiem: WeldTestStatus;
   anh_moi_han_lien_ket?: WeldLinkedImageAsset[] | null;
   ca_han?: WeldShift;
+  /** HH:mm */
+  gio_han?: string | null;
+  ten_moi_han_theo_may?: string | null;
 };
 
 export type WeldJournalUpdate = WeldJournalInsert & {
@@ -494,6 +502,52 @@ async function saveWeldShift(
     );
   }
   throw new Error(formatSupabaseError(error));
+}
+
+const WELD_EXTRAS_MIGRATION_MESSAGE =
+  "Chưa thể lưu giờ hàn / tên mối hàn theo máy vì migration_20261011_nhat_ky_han_gio_ten_theo_may.sql chưa được chạy trên Supabase.";
+
+function isWeldExtrasColumnError(message: string | undefined) {
+  return /gio_han|ten_moi_han_theo_may/.test(message ?? "");
+}
+
+export function normalizeWeldTime(value: string | null | undefined): string | null {
+  const match = /^(\d{2}):(\d{2})/.exec((value ?? "").trim());
+  return match ? `${match[1]}:${match[2]}` : null;
+}
+
+async function saveWeldExtras(
+  supabase: ReturnType<typeof createClient>,
+  match: { id?: string; ma_lich_su?: string },
+  payload: Pick<WeldJournalInsert, "gio_han" | "ten_moi_han_theo_may">,
+) {
+  const gioHan = normalizeWeldTime(payload.gio_han);
+  const tenTheoMay = payload.ten_moi_han_theo_may?.trim() || null;
+  if (!gioHan && !tenTheoMay) return;
+  let request = supabase
+    .from("lich_su_moi_han")
+    .update({ gio_han: gioHan, ten_moi_han_theo_may: tenTheoMay });
+  if (match.id) request = request.eq("id", match.id);
+  else if (match.ma_lich_su) request = request.eq("ma_lich_su", match.ma_lich_su.trim());
+  else return;
+  const { error } = await request;
+  if (!error) return;
+  const reason = isWeldExtrasColumnError(error.message)
+    ? WELD_EXTRAS_MIGRATION_MESSAGE
+    : formatSupabaseError(error);
+  throw new Error(`Nhật ký đã được tạo (không thêm lại). ${reason}`);
+}
+
+/** Mã mối hàn đã được dùng bởi bản ghi khác (bỏ qua `excludeId`). */
+export async function isWeldCodeTaken(code: string, excludeId?: string): Promise<boolean> {
+  const value = code.trim();
+  if (!value || !isSupabaseConfigured()) return false;
+  const supabase = createClient();
+  let request = supabase.from("lich_su_moi_han").select("id").eq("ma_lich_su", value).limit(1);
+  if (excludeId) request = request.neq("id", excludeId);
+  const { data, error } = await request;
+  if (error) throw new Error(formatSupabaseError(error));
+  return (data ?? []).length > 0;
 }
 
 /** Ghi ca hàng loạt cho các bản ghi nhật ký đã được phân chia theo ngày. */
@@ -686,6 +740,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
     if (payload.ca_han) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);
     }
+    await saveWeldExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
     if (payload.anh_moi_han_lien_ket?.length) {
       await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
     }
@@ -711,6 +766,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
     if (payload.ca_han) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);
     }
+    await saveWeldExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
     if (payload.anh_moi_han_lien_ket?.length) {
       await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
     }
@@ -739,6 +795,12 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
       payload.ca_han,
     );
   }
+
+  await saveWeldExtras(
+    supabase,
+    typeof rpcRes.data === "string" && rpcRes.data ? { id: rpcRes.data } : { ma_lich_su: payload.ma_lich_su },
+    payload,
+  );
 
   if (payload.ma_khuyet_tat && payload.ma_khuyet_tat.length > 0) {
     const insertedId = typeof rpcRes.data === "string" ? rpcRes.data : "";
@@ -797,6 +859,8 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem,
     anh_moi_han_lien_ket: serializeWeldLinkedImageAssets(payload.anh_moi_han_lien_ket),
     ca_han: normalizeWeldShift(payload.ca_han),
+    gio_han: normalizeWeldTime(payload.gio_han),
+    ten_moi_han_theo_may: payload.ten_moi_han_theo_may?.trim() || null,
   };
   if (certificateId) body.chung_chi_id = certificateId;
 
@@ -813,6 +877,17 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
         "Chưa thể lưu ảnh mối hàn liên kết vì migration_20260923_anh_moi_han_lien_ket.sql chưa được chạy trên Supabase.",
       );
     }
+    ({ data, error } = await supabase
+      .from("lich_su_moi_han")
+      .update(body)
+      .eq("id", payload.id)
+      .select("id,tinh_trang_thi_nghiem")
+      .single());
+  }
+  if (error && isWeldExtrasColumnError(error.message) && "gio_han" in body) {
+    if (body.gio_han || body.ten_moi_han_theo_may) throw new Error(WELD_EXTRAS_MIGRATION_MESSAGE);
+    delete body.gio_han;
+    delete body.ten_moi_han_theo_may;
     ({ data, error } = await supabase
       .from("lich_su_moi_han")
       .update(body)
@@ -838,6 +913,20 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
   if (error) throw new Error(clarifyWeldJournalError(formatSupabaseError(error), payload.chung_chi_su_dung));
   if (!data || data.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
     throw new Error("Cơ sở dữ liệu chưa lưu đúng tình trạng thí nghiệm. Vui lòng kiểm tra lại bản ghi.");
+  }
+
+  const previousCode = payload.previousWeldCode?.trim();
+  const nextCode = payload.ma_lich_su.trim();
+  if (previousCode && previousCode !== nextCode) {
+    const relink = await supabase
+      .from("lich_su_moi_han")
+      .update({ moi_han_lien_ket: nextCode })
+      .eq("moi_han_lien_ket", previousCode);
+    if (relink.error) {
+      throw new Error(
+        `Đã đổi mã nhưng chưa cập nhật được mối hàn liên kết: ${formatSupabaseError(relink.error)}`,
+      );
+    }
   }
 
   invalidateWeldReportCache();
@@ -901,7 +990,7 @@ export type WeldJournalPageQuery = {
   projects?: string[];
   resultFilter?: string;
   linkedWeldFilter?: string;
-  /** Loại mối hàn: Sản xuất / Thử nghiệm / Đào tạo (hoặc "Tất cả"). */
+  /** Loại mối hàn (WELD_TYPE_OPTIONS) hoặc "Tất cả". */
   weldTypeFilter?: string;
   /** Công nghệ hàn: FBW / ATW (hoặc "Tất cả"). */
   weldMethodFilter?: string;
@@ -922,12 +1011,28 @@ export type WeldJournalPageResult = {
   untestedCount: number;
 };
 
-function journalPageSelect(withCreatedAt: boolean, withLinkedImages: boolean, withShift = true) {
+function journalPageSelect(
+  withCreatedAt: boolean,
+  withLinkedImages: boolean,
+  withShift = true,
+  withExtras = true,
+) {
   const cols = [...REPORT_COLUMNS_WITH_TEST_STATUS] as string[];
   if (withCreatedAt) cols.push("created_at");
   if (withLinkedImages) cols.push("anh_moi_han_lien_ket");
   if (withShift) cols.push("ca_han");
+  if (withExtras) cols.push("gio_han", "ten_moi_han_theo_may");
   return cols.join(",");
+}
+
+/** Thời gian hàn gần nhất trước: ngày hàn → giờ hàn → thời điểm nhập. */
+function orderJournalByWeldTime<T>(request: T, withCreatedAt: boolean, withExtras: boolean): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let next: any = request;
+  next = next.order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+  if (withExtras) next = next.order("gio_han", { ascending: false, nullsFirst: false });
+  if (withCreatedAt) next = next.order("created_at", { ascending: false, nullsFirst: false });
+  return next.order("id", { ascending: false }) as T;
 }
 
 function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
@@ -940,6 +1045,7 @@ function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
 
 let journalHasLinkedImages = true;
 let journalHasCaHan = true;
+let journalHasWeldExtras = true;
 
 type JournalListFilter = {
   query?: string;
@@ -1066,19 +1172,23 @@ export async function loadWeldJournalPage({
   const journalRequestUsedCreatedAt = journalHasCreatedAt;
   const journalRequestUsedLinkedImages = journalHasLinkedImages;
   const journalRequestUsedCaHan = journalHasCaHan;
+  const journalRequestUsedExtras = journalHasWeldExtras;
   const request = applyJournalListFilters(
-    supabase
-      .from("bao_cao_moi_han_theo_du_an")
-      .select(
-        journalPageSelect(
-          journalRequestUsedCreatedAt,
-          journalRequestUsedLinkedImages,
-          journalRequestUsedCaHan,
+    orderJournalByWeldTime(
+      supabase
+        .from("bao_cao_moi_han_theo_du_an")
+        .select(
+          journalPageSelect(
+            journalRequestUsedCreatedAt,
+            journalRequestUsedLinkedImages,
+            journalRequestUsedCaHan,
+            journalRequestUsedExtras,
+          ),
+          { count: "exact" },
         ),
-        { count: "exact" },
-      )
-      .order(journalRequestUsedCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false }),
+      journalRequestUsedCreatedAt,
+      journalRequestUsedExtras,
+    ),
     filters,
   );
 
@@ -1101,6 +1211,12 @@ export async function loadWeldJournalPage({
   }
   if (error && journalRequestUsedCaHan && /ca_han/.test(error.message ?? "")) {
     journalHasCaHan = false;
+    return loadWeldJournalPage({
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+    });
+  }
+  if (error && journalRequestUsedExtras && isWeldExtrasColumnError(error.message)) {
+    journalHasWeldExtras = false;
     return loadWeldJournalPage({
       page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
     });
@@ -1206,12 +1322,15 @@ export async function exportFilteredWeldJournal({
     const exportUsesCreatedAt = journalHasCreatedAt;
     const exportUsesLinkedImages = journalHasLinkedImages;
     const exportUsesCaHan = journalHasCaHan;
+    const exportUsesExtras = journalHasWeldExtras;
     const request = applyJournalListFilters(
-      supabase
-        .from("bao_cao_moi_han_theo_du_an")
-        .select(journalPageSelect(exportUsesCreatedAt, exportUsesLinkedImages, exportUsesCaHan))
-        .order(exportUsesCreatedAt ? "created_at" : "ngay_thuc_hien", { ascending: false, nullsFirst: false })
-        .order("id", { ascending: false }),
+      orderJournalByWeldTime(
+        supabase
+          .from("bao_cao_moi_han_theo_du_an")
+          .select(journalPageSelect(exportUsesCreatedAt, exportUsesLinkedImages, exportUsesCaHan, exportUsesExtras)),
+        exportUsesCreatedAt,
+        exportUsesExtras,
+      ),
       filters,
     );
 
@@ -1228,6 +1347,11 @@ export async function exportFilteredWeldJournal({
     }
     if (error && exportUsesCaHan && /ca_han/.test(error.message ?? "")) {
       journalHasCaHan = false;
+      offset -= pageSize;
+      continue;
+    }
+    if (error && exportUsesExtras && isWeldExtrasColumnError(error.message)) {
+      journalHasWeldExtras = false;
       offset -= pageSize;
       continue;
     }

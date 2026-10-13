@@ -7,14 +7,12 @@ import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalProjectOptions } from "@/lib/weldReportData";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
 import DateField from "@/components/DateField";
+import { WELD_TYPE_OPTIONS as WELD_TYPES } from "@/data/weldTypes";
 
 const WELD_METHODS = [
   { value: "FBW", label: "FBW (Hàn tiếp xúc)" },
   { value: "ATW", label: "ATW (Hàn nhiệt nhôm)" },
 ];
-
-const WELD_TYPES = ["Sản xuất", "Thử nghiệm", "Đào tạo"];
-
 function filterPickLabel(count: number, defaultText: string) {
   if (count === 0) return defaultText;
   return `Đã chọn (${count})`;

@@ -1,3 +1,4 @@
+import { WELD_TYPE_OPTIONS, type WeldType } from "@/data/weldTypes";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -16,6 +17,11 @@ export type TongMoiHanNamRow = {
   loi_san_xuat: number;
   loi_thu_nghiem: number;
   loi_dao_tao: number;
+  /** Có sau migration_20261011_loai_moi_han_chap_thuan_tan_suat.sql */
+  chap_thuan?: number;
+  tan_suat?: number;
+  loi_chap_thuan?: number;
+  loi_tan_suat?: number;
 };
 
 export type TongMoiHanNamDuAnRow = TongMoiHanNamRow & {
@@ -39,11 +45,13 @@ export type TongMoiHanNamPhuongPhapRow = {
   san_xuat: number;
   thu_nghiem: number;
   dao_tao: number;
+  chap_thuan?: number;
+  tan_suat?: number;
 };
 
 export type TongMoiHanNamLoaiMoiRow = {
   nam: number;
-  loai_moi_han: "Sản xuất" | "Thử nghiệm" | "Đào tạo";
+  loai_moi_han: WeldType;
   tong_moi_han: number;
   tong_loi: number;
   tong_dat: number;
@@ -157,7 +165,7 @@ export function filterYearTotals(
         defects = row.loi_fbw + row.loi_atw;
       }
 
-      if (weldTypes.length > 0 && weldTypes.length < 3) {
+      if (weldTypes.length > 0 && weldTypes.length < WELD_TYPE_OPTIONS.length) {
         let typed = 0;
         let typedLoi = 0;
         if (weldTypes.includes("Sản xuất")) {
@@ -171,6 +179,14 @@ export function filterYearTotals(
         if (weldTypes.includes("Đào tạo")) {
           typed += row.dao_tao;
           typedLoi += row.loi_dao_tao;
+        }
+        if (weldTypes.includes("Chấp thuận")) {
+          typed += row.chap_thuan ?? 0;
+          typedLoi += row.loi_chap_thuan ?? 0;
+        }
+        if (weldTypes.includes("Tần suất")) {
+          typed += row.tan_suat ?? 0;
+          typedLoi += row.loi_tan_suat ?? 0;
         }
         // Khi lọc loại mối: ưu tiên số theo loại; phương pháp đã cắt ở trên chỉ là gần đúng trên tổng năm.
         if (methods.length === 0) {

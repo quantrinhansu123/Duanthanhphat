@@ -9,6 +9,7 @@ import {
   type MachineOption,
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
+import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { importMachineRunReport, loadMachineRunScheduleBundle, loadScheduleJournalDetails } from "@/lib/machineRunSchedulesDb";
 import { resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import {
@@ -23,7 +24,6 @@ import {
 import { notifyCommanderOilLow } from "@/lib/notificationsDb";
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"] as const;
-const WELD_TYPE_OPTIONS = ["Sản xuất", "Thử nghiệm", "Đào tạo"] as const;
 
 function isLiterUnit(unit: string) {
   const value = unit.trim().toLowerCase();

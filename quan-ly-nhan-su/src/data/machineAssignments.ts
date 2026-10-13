@@ -40,7 +40,7 @@ export type MachineRunSchedule = {
   journalEntryCount?: number;
   /** Phương pháp hàn (FBW / ATW) — từ nhật ký. */
   weldMethod?: string;
-  /** Loại mối hàn (Sản xuất / Thử nghiệm / Đào tạo). */
+  /** Loại mối hàn (WELD_TYPE_OPTIONS). */
   weldType?: string;
 };
 

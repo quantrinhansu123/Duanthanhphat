@@ -119,6 +119,8 @@ function parseWeldType(value: unknown): WeldReportRow["loai_moi_han"] | null {
   const raw = String(value ?? "").trim().toLocaleLowerCase("vi");
   if (!raw) return "Sản xuất";
   if (raw.includes("đào tạo") || raw.includes("dao tao") || raw.includes("training")) return "Đào tạo";
+  if (raw.includes("chấp thuận") || raw.includes("chap thuan") || raw.includes("approval")) return "Chấp thuận";
+  if (raw.includes("tần suất") || raw.includes("tan suat") || raw.includes("frequency")) return "Tần suất";
   if (raw.includes("thử") || raw.includes("thu nghiem") || raw.includes("test")) return "Thử nghiệm";
   if (raw.includes("sản xuất") || raw.includes("san xuat") || raw.includes("production")) return "Sản xuất";
   return null;

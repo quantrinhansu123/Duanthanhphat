@@ -1,3 +1,4 @@
+import type { WeldType } from "@/data/weldTypes";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError } from "@/lib/supabase/env";
 
@@ -8,7 +9,7 @@ export type ProjectWeldRow = {
   du_an: string;
   nam_thuc_hien: number;
   loai_ray: string;
-  loai_moi_han: "Thử nghiệm" | "Đào tạo" | "Sản xuất";
+  loai_moi_han: WeldType;
   cong_nghe_han: "FBW" | "ATW";
   so_luong_thuc_hien: number;
   so_luong_loi: number;

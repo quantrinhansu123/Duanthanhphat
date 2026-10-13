@@ -375,6 +375,8 @@ export const PHRASES: Record<string, string> = {
   "Sản xuất": "Production",
   "Thử nghiệm": "Testing",
   "Đào tạo": "Training",
+  "Chấp thuận": "Approval",
+  "Tần suất": "Frequency",
   "Từ ngày": "From date",
   "Đến ngày": "To date",
   "Tất cả": "All",

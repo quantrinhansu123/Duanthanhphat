@@ -21,6 +21,7 @@ export type DailyWorkItem = {
   thuTu: number;
   congViecId: string;
   hangMuc: string;
+  tenMoiHan: string;
   tuyenHa: string;
   tuyenThuong: string;
   donVi: string;
@@ -29,6 +30,8 @@ export type DailyWorkItem = {
   tichLuy: string;
   thietKe: string;
   loaiMay: string;
+  /** Máy trong danh mục thiết bị (thiet_bi.id) — rỗng khi nhập tay. */
+  mayId: string;
   mayBatDau: string;
   mayKetThuc: string;
   chtId: string;
@@ -96,6 +99,7 @@ type WorkRowDb = {
   thu_tu: number;
   cong_viec_id?: string | null;
   hang_muc: string | null;
+  ten_moi_han?: string | null;
   tuyen_ha: string | null;
   tuyen_thuong: string | null;
   don_vi: string | null;
@@ -104,6 +108,7 @@ type WorkRowDb = {
   tich_luy: number | string | null;
   thiet_ke: number | string | null;
   loai_may: string | null;
+  may_id?: string | null;
   may_bat_dau: string | null;
   may_ket_thuc: string | null;
   cht_id: string | null;
@@ -195,6 +200,7 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     thuTu: row.thu_tu,
     congViecId: row.cong_viec_id ?? "",
     hangMuc: row.hang_muc ?? "",
+    tenMoiHan: row.ten_moi_han ?? "",
     tuyenHa: row.tuyen_ha ?? "",
     tuyenThuong: row.tuyen_thuong ?? "",
     donVi: row.don_vi ?? "",
@@ -203,6 +209,7 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     tichLuy: numStr(row.tich_luy),
     thietKe: numStr(row.thiet_ke),
     loaiMay: row.loai_may ?? "",
+    mayId: row.may_id ?? "",
     mayBatDau: row.may_bat_dau ?? "",
     mayKetThuc: row.may_ket_thuc ?? "",
     chtId: row.cht_id ?? "",
@@ -374,6 +381,7 @@ function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
     thuTu: index + 1,
     congViecId: type.id,
     hangMuc: type.ten,
+    tenMoiHan: "",
     tuyenHa: "",
     tuyenThuong: "",
     donVi: type.donViMacDinh,
@@ -382,6 +390,7 @@ function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
     tichLuy: "",
     thietKe: "",
     loaiMay: type.loaiMayMacDinh,
+    mayId: "",
     mayBatDau: "",
     mayKetThuc: "",
     ...EMPTY_MANPOWER,
@@ -595,12 +604,13 @@ export async function insertWorkItem(
     .eq("phan", phan);
   if (countRes.error) throw countRes.error;
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     bao_cao_id: header.id,
     phan,
     thu_tu: (countRes.count ?? 0) + 1,
     cong_viec_id: input.congViecId || null,
     hang_muc: input.hangMuc,
+    ten_moi_han: input.tenMoiHan.trim() || null,
     tuyen_ha: input.tuyenHa || null,
     tuyen_thuong: input.tuyenThuong || null,
     don_vi: input.donVi || null,
@@ -609,6 +619,7 @@ export async function insertWorkItem(
     tich_luy: toNum(input.tichLuy),
     thiet_ke: toNum(input.thietKe),
     loai_may: input.loaiMay || null,
+    may_id: input.mayId || null,
     may_bat_dau: input.mayBatDau || null,
     may_ket_thuc: input.mayKetThuc || null,
     cht_id: input.chtId || null,
@@ -626,11 +637,25 @@ export async function insertWorkItem(
     ghi_chu: input.ghiChu || null,
   };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("bao_cao_ngay_cong_viec")
     .insert(payload)
     .select("*")
     .single();
+  if (error && /ten_moi_han|may_id/.test(error.message ?? "")) {
+    if (payload.ten_moi_han || payload.may_id) {
+      throw new Error(
+        "Chưa thể lưu tên mối hàn / máy hàn ray vì migration_20261011_nhat_ky_han_gio_ten_theo_may.sql chưa được chạy trên Supabase.",
+      );
+    }
+    delete payload.ten_moi_han;
+    delete payload.may_id;
+    ({ data, error } = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .insert(payload)
+      .select("*")
+      .single());
+  }
   if (error) throw error;
   return mapWork(data as WorkRowDb);
 }
@@ -757,6 +782,7 @@ export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
   return {
     congViecId: workType?.id ?? "",
     hangMuc: workType?.ten ?? "",
+    tenMoiHan: "",
     tuyenHa: "",
     tuyenThuong: "",
     donVi: workType?.donViMacDinh || "mối hàn",
@@ -765,6 +791,7 @@ export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
     tichLuy: "",
     thietKe: "",
     loaiMay: workType?.loaiMayMacDinh ?? "",
+    mayId: "",
     mayBatDau: "",
     mayKetThuc: "",
     ...EMPTY_MANPOWER,

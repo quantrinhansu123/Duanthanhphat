@@ -194,7 +194,7 @@ export interface WeldingHistoryFilterParams {
   accountingCodes?: string[];
   /** Công nghệ hàn: FBW / ATW */
   methods?: string[];
-  /** Loại hàn: Sản xuất / Thử nghiệm / Đào tạo */
+  /** Loại hàn (WELD_TYPE_OPTIONS) */
   weldTypes?: string[];
   /** Khi false: chỉ lấy trang danh sách, bỏ qua thống kê KPI (load nhanh hơn). */
   includeStats?: boolean;

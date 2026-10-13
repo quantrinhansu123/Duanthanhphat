@@ -16,8 +16,8 @@ function emptyYearRow(year: number): TongMoiHanNamRow {
   return {
     nam: year, tong_moi_han: 0, tong_loi: 0, tong_dat: 0,
     fbw: 0, atw: 0, loi_fbw: 0, loi_atw: 0,
-    san_xuat: 0, thu_nghiem: 0, dao_tao: 0,
-    loi_san_xuat: 0, loi_thu_nghiem: 0, loi_dao_tao: 0,
+    san_xuat: 0, thu_nghiem: 0, dao_tao: 0, chap_thuan: 0, tan_suat: 0,
+    loi_san_xuat: 0, loi_thu_nghiem: 0, loi_dao_tao: 0, loi_chap_thuan: 0, loi_tan_suat: 0,
   };
 }
 
@@ -43,6 +43,12 @@ function addWeld(row: TongMoiHanNamRow, weld: WeldReportRow) {
   } else if (weld.loai_moi_han === "Thử nghiệm") {
     row.thu_nghiem += total;
     row.loi_thu_nghiem += errors;
+  } else if (weld.loai_moi_han === "Chấp thuận") {
+    row.chap_thuan = (row.chap_thuan ?? 0) + total;
+    row.loi_chap_thuan = (row.loi_chap_thuan ?? 0) + errors;
+  } else if (weld.loai_moi_han === "Tần suất") {
+    row.tan_suat = (row.tan_suat ?? 0) + total;
+    row.loi_tan_suat = (row.loi_tan_suat ?? 0) + errors;
   } else {
     row.dao_tao += total;
     row.loi_dao_tao += errors;
@@ -95,7 +101,7 @@ function YearSummaryTable({ rows }: { rows: TongMoiHanNamRow[] }) {
 
   return (
     <div className="table-scroll overflow-x-auto">
-      <table className="w-full min-w-[1100px] border-collapse text-left text-xs sm:text-sm">
+      <table className="w-full min-w-[1300px] border-collapse text-left text-xs sm:text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
             <th className="px-3.5 py-3 font-semibold">Năm</th>
@@ -105,9 +111,11 @@ function YearSummaryTable({ rows }: { rows: TongMoiHanNamRow[] }) {
             <th className="px-3.5 py-3 text-right font-semibold">Tỷ lệ đạt</th>
             <th className="px-3.5 py-3 text-right font-semibold">FBW</th>
             <th className="px-3.5 py-3 text-right font-semibold">ATW</th>
-            <th className="px-3.5 py-3 text-right font-semibold">Sản xuất</th>
-            <th className="px-3.5 py-3 text-right font-semibold">Thử nghiệm</th>
             <th className="px-3.5 py-3 text-right font-semibold">Đào tạo</th>
+            <th className="px-3.5 py-3 text-right font-semibold">Thử nghiệm</th>
+            <th className="px-3.5 py-3 text-right font-semibold">Chấp thuận</th>
+            <th className="px-3.5 py-3 text-right font-semibold">Sản xuất</th>
+            <th className="px-3.5 py-3 text-right font-semibold">Tần suất</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -128,14 +136,16 @@ function YearSummaryTable({ rows }: { rows: TongMoiHanNamRow[] }) {
               </td>
               <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.fbw)}</td>
               <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.atw)}</td>
-              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.san_xuat)}</td>
-              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.thu_nghiem)}</td>
               <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.dao_tao)}</td>
+              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.thu_nghiem)}</td>
+              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.chap_thuan ?? 0)}</td>
+              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.san_xuat)}</td>
+              <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">{fmt(row.tan_suat ?? 0)}</td>
             </tr>
           ))}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan={10} className="px-3.5 py-10 text-center text-sm text-slate-500">
+              <td colSpan={12} className="px-3.5 py-10 text-center text-sm text-slate-500">
                 Chưa có dữ liệu tổng hợp theo năm. Chạy <code className="font-mono text-xs">supabase/tong_moi_han_nam.sql</code>.
               </td>
             </tr>
