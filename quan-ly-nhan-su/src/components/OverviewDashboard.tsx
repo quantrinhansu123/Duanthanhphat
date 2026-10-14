@@ -139,7 +139,7 @@ function planStartDate(project: PlanProject) {
   return start || project.startDate || "";
 }
 
-function projectPlanYear(project: { startDate?: string; theoreticalProgress?: { ngay: string }[] }) {
+function projectPlanYear(project: PlanProject) {
   const year = Number(planStartDate(project).slice(0, 4));
   return Number.isInteger(year) && year >= 1900 ? year : null;
 }
