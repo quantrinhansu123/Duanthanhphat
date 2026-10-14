@@ -67,8 +67,13 @@ export type WeldReportRow = {
   ca_han?: WeldShift | string | null;
   /** Giờ hàn HH:mm[:ss]. */
   gio_han?: string | null;
-  /** Tên mối hàn ghi trên máy, khi khác mã mặc định. */
+  /** Mã theo máy: mã mối hàn ghi trên máy, khi khác mã mặc định. */
   ten_moi_han_theo_may?: string | null;
+  /** Mã mối hàn đánh dấu ngoài hiện trường. */
+  ma_hien_truong?: string | null;
+  /** Giờ làm HH:mm[:ss]; giờ kết thúc nhỏ hơn giờ bắt đầu = qua đêm. */
+  gio_bat_dau?: string | null;
+  gio_ket_thuc?: string | null;
 };
 
 export type WeldReportFilters = {
@@ -396,6 +401,11 @@ export type WeldJournalInsert = {
   /** HH:mm */
   gio_han?: string | null;
   ten_moi_han_theo_may?: string | null;
+  ma_hien_truong?: string | null;
+  /** HH:mm */
+  gio_bat_dau?: string | null;
+  /** HH:mm */
+  gio_ket_thuc?: string | null;
 };
 
 export type WeldJournalUpdate = WeldJournalInsert & {
@@ -514,6 +524,72 @@ function isWeldExtrasColumnError(message: string | undefined) {
 export function normalizeWeldTime(value: string | null | undefined): string | null {
   const match = /^(\d{2}):(\d{2})/.exec((value ?? "").trim());
   return match ? `${match[1]}:${match[2]}` : null;
+}
+
+export const DEFAULT_WELD_WORK_HOURS = 4;
+
+function weldTimeToMinutes(value: string | null | undefined): number | null {
+  const time = normalizeWeldTime(value);
+  if (!time) return null;
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** Cộng số giờ vào HH:mm, quay vòng qua nửa đêm. */
+export function addHoursToWeldTime(value: string, hours: number): string {
+  const start = weldTimeToMinutes(value);
+  if (start == null) return "";
+  const total = (((start + Math.round(hours * 60)) % 1440) + 1440) % 1440;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+}
+
+/** Số tiếng làm từ giờ bắt đầu đến giờ kết thúc; kết thúc ≤ bắt đầu được tính qua đêm. */
+export function weldWorkHours(from: string | null | undefined, to: string | null | undefined): number | null {
+  const start = weldTimeToMinutes(from);
+  const end = weldTimeToMinutes(to);
+  if (start == null || end == null) return null;
+  const diff = end > start ? end - start : end + 1440 - start;
+  return Math.round((diff / 60) * 100) / 100;
+}
+
+export function formatWeldWorkHours(hours: number | null): string {
+  if (hours == null) return "";
+  return `${hours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} tiếng`;
+}
+
+const WELD_SITE_MIGRATION_MESSAGE =
+  "Chưa thể lưu mã hiện trường / giờ làm vì migration_20261015_nhat_ky_han_ma_hien_truong_gio_lam.sql chưa được chạy trên Supabase.";
+
+function isWeldSiteColumnError(message: string | undefined) {
+  return /ma_hien_truong|gio_bat_dau|gio_ket_thuc/.test(message ?? "");
+}
+
+function weldSitePayload(payload: Pick<WeldJournalInsert, "ma_hien_truong" | "gio_bat_dau" | "gio_ket_thuc">) {
+  return {
+    ma_hien_truong: payload.ma_hien_truong?.trim() || null,
+    gio_bat_dau: normalizeWeldTime(payload.gio_bat_dau),
+    gio_ket_thuc: normalizeWeldTime(payload.gio_ket_thuc),
+  };
+}
+
+async function saveWeldSiteExtras(
+  supabase: ReturnType<typeof createClient>,
+  match: { id?: string; ma_lich_su?: string },
+  payload: Pick<WeldJournalInsert, "ma_hien_truong" | "gio_bat_dau" | "gio_ket_thuc">,
+) {
+  const body = weldSitePayload(payload);
+  if (!body.ma_hien_truong && !body.gio_bat_dau && !body.gio_ket_thuc) return;
+  let request = supabase.from("lich_su_moi_han").update(body);
+  if (match.id) request = request.eq("id", match.id);
+  else if (match.ma_lich_su) request = request.eq("ma_lich_su", match.ma_lich_su.trim());
+  else return;
+  const { error } = await request;
+  if (!error) return;
+  const reason = isWeldSiteColumnError(error.message)
+    ? WELD_SITE_MIGRATION_MESSAGE
+    : formatSupabaseError(error);
+  throw new Error(`Nhật ký đã được tạo (không thêm lại). ${reason}`);
 }
 
 async function saveWeldExtras(
@@ -741,6 +817,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);
     }
     await saveWeldExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
+    await saveWeldSiteExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
     if (payload.anh_moi_han_lien_ket?.length) {
       await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
     }
@@ -767,6 +844,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);
     }
     await saveWeldExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
+    await saveWeldSiteExtras(supabase, { ma_lich_su: payload.ma_lich_su }, payload);
     if (payload.anh_moi_han_lien_ket?.length) {
       await saveWeldLinkedImages(supabase, { ma_lich_su: payload.ma_lich_su }, payload.anh_moi_han_lien_ket);
     }
@@ -797,6 +875,11 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
   }
 
   await saveWeldExtras(
+    supabase,
+    typeof rpcRes.data === "string" && rpcRes.data ? { id: rpcRes.data } : { ma_lich_su: payload.ma_lich_su },
+    payload,
+  );
+  await saveWeldSiteExtras(
     supabase,
     typeof rpcRes.data === "string" && rpcRes.data ? { id: rpcRes.data } : { ma_lich_su: payload.ma_lich_su },
     payload,
@@ -861,6 +944,7 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
     ca_han: normalizeWeldShift(payload.ca_han),
     gio_han: normalizeWeldTime(payload.gio_han),
     ten_moi_han_theo_may: payload.ten_moi_han_theo_may?.trim() || null,
+    ...weldSitePayload(payload),
   };
   if (certificateId) body.chung_chi_id = certificateId;
 
@@ -884,16 +968,31 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
       .select("id,tinh_trang_thi_nghiem")
       .single());
   }
-  if (error && isWeldExtrasColumnError(error.message) && "gio_han" in body) {
-    if (body.gio_han || body.ten_moi_han_theo_may) throw new Error(WELD_EXTRAS_MIGRATION_MESSAGE);
-    delete body.gio_han;
-    delete body.ten_moi_han_theo_may;
-    ({ data, error } = await supabase
-      .from("lich_su_moi_han")
-      .update(body)
-      .eq("id", payload.id)
-      .select("id,tinh_trang_thi_nghiem")
-      .single());
+  // Hai nhóm cột có thể cùng thiếu; Postgres chỉ báo một cột mỗi lần nên thử hai vòng.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (error && isWeldSiteColumnError(error.message) && "ma_hien_truong" in body) {
+      if (body.ma_hien_truong || body.gio_bat_dau || body.gio_ket_thuc) throw new Error(WELD_SITE_MIGRATION_MESSAGE);
+      delete body.ma_hien_truong;
+      delete body.gio_bat_dau;
+      delete body.gio_ket_thuc;
+      ({ data, error } = await supabase
+        .from("lich_su_moi_han")
+        .update(body)
+        .eq("id", payload.id)
+        .select("id,tinh_trang_thi_nghiem")
+        .single());
+    }
+    if (error && isWeldExtrasColumnError(error.message) && "gio_han" in body) {
+      if (body.gio_han || body.ten_moi_han_theo_may) throw new Error(WELD_EXTRAS_MIGRATION_MESSAGE);
+      delete body.gio_han;
+      delete body.ten_moi_han_theo_may;
+      ({ data, error } = await supabase
+        .from("lich_su_moi_han")
+        .update(body)
+        .eq("id", payload.id)
+        .select("id,tinh_trang_thi_nghiem")
+        .single());
+    }
   }
   if (error && /ca_han/.test(error.message ?? "") && "ca_han" in body) {
     delete body.ca_han;
@@ -973,7 +1072,7 @@ export function listFailedWeldsInDateRange(
       isoDate: getJournalRowDateIso(row, index),
     }))
     .filter(({ row, isoDate }) => Boolean(isoDate) && row.so_luong_loi > 0 && isoDate >= dateFrom && isoDate <= dateTo)
-    .sort((a, b) => a.isoDate.localeCompare(b.isoDate) || a.row.ma_lich_su.localeCompare(b.row.ma_lich_su))
+    .sort((a, b) => b.isoDate.localeCompare(a.isoDate) || b.row.ma_lich_su.localeCompare(a.row.ma_lich_su))
     .map(({ row, isoDate }) => ({
       value: row.ma_lich_su,
       label: `${row.ma_lich_su} · ${formatJournalDateIso(isoDate)} · ${row.du_an}`,
@@ -1016,12 +1115,14 @@ function journalPageSelect(
   withLinkedImages: boolean,
   withShift = true,
   withExtras = true,
+  withSiteExtras = true,
 ) {
   const cols = [...REPORT_COLUMNS_WITH_TEST_STATUS] as string[];
   if (withCreatedAt) cols.push("created_at");
   if (withLinkedImages) cols.push("anh_moi_han_lien_ket");
   if (withShift) cols.push("ca_han");
   if (withExtras) cols.push("gio_han", "ten_moi_han_theo_may");
+  if (withSiteExtras) cols.push("ma_hien_truong", "gio_bat_dau", "gio_ket_thuc");
   return cols.join(",");
 }
 
@@ -1046,6 +1147,7 @@ function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
 let journalHasLinkedImages = true;
 let journalHasCaHan = true;
 let journalHasWeldExtras = true;
+let journalHasSiteExtras = true;
 
 type JournalListFilter = {
   query?: string;
@@ -1173,6 +1275,7 @@ export async function loadWeldJournalPage({
   const journalRequestUsedLinkedImages = journalHasLinkedImages;
   const journalRequestUsedCaHan = journalHasCaHan;
   const journalRequestUsedExtras = journalHasWeldExtras;
+  const journalRequestUsedSiteExtras = journalHasSiteExtras;
   const request = applyJournalListFilters(
     orderJournalByWeldTime(
       supabase
@@ -1183,6 +1286,7 @@ export async function loadWeldJournalPage({
             journalRequestUsedLinkedImages,
             journalRequestUsedCaHan,
             journalRequestUsedExtras,
+            journalRequestUsedSiteExtras,
           ),
           { count: "exact" },
         ),
@@ -1217,6 +1321,12 @@ export async function loadWeldJournalPage({
   }
   if (error && journalRequestUsedExtras && isWeldExtrasColumnError(error.message)) {
     journalHasWeldExtras = false;
+    return loadWeldJournalPage({
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+    });
+  }
+  if (error && journalRequestUsedSiteExtras && isWeldSiteColumnError(error.message)) {
+    journalHasSiteExtras = false;
     return loadWeldJournalPage({
       page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
     });
@@ -1323,11 +1433,12 @@ export async function exportFilteredWeldJournal({
     const exportUsesLinkedImages = journalHasLinkedImages;
     const exportUsesCaHan = journalHasCaHan;
     const exportUsesExtras = journalHasWeldExtras;
+    const exportUsesSiteExtras = journalHasSiteExtras;
     const request = applyJournalListFilters(
       orderJournalByWeldTime(
         supabase
           .from("bao_cao_moi_han_theo_du_an")
-          .select(journalPageSelect(exportUsesCreatedAt, exportUsesLinkedImages, exportUsesCaHan, exportUsesExtras)),
+          .select(journalPageSelect(exportUsesCreatedAt, exportUsesLinkedImages, exportUsesCaHan, exportUsesExtras, exportUsesSiteExtras)),
         exportUsesCreatedAt,
         exportUsesExtras,
       ),
@@ -1355,6 +1466,11 @@ export async function exportFilteredWeldJournal({
       offset -= pageSize;
       continue;
     }
+    if (error && exportUsesSiteExtras && isWeldSiteColumnError(error.message)) {
+      journalHasSiteExtras = false;
+      offset -= pageSize;
+      continue;
+    }
     if (error && formatSupabaseError(error).includes("ma_khuyet_tat")) {
       const fallbackRequest = applyJournalListFilters(
         supabase
@@ -1375,6 +1491,27 @@ export async function exportFilteredWeldJournal({
     rows.push(...pageRows);
     if (pageRows.length < pageSize) return rows;
   }
+}
+
+/** Mối hàn gần nhất của dự án tính đến `untilDate` — dùng để gợi ý form thêm mới. */
+export async function loadLatestProjectWeld(projectId: string, untilDate: string): Promise<WeldReportRow | null> {
+  if (!projectId || !isSupabaseConfigured()) return null;
+  const supabase = createClient();
+  const query = (withCreatedAt: boolean) => {
+    let request = supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("*")
+      .eq("du_an_id", projectId)
+      .lte("ngay_thuc_hien", untilDate)
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+    if (withCreatedAt) request = request.order("created_at", { ascending: false, nullsFirst: false });
+    return request.limit(1);
+  };
+  let { data, error } = await query(true);
+  if (error && /created_at/.test(error.message ?? "")) ({ data, error } = await query(false));
+  if (error) throw new Error(formatSupabaseError(error));
+  const row = (data ?? [])[0] as WeldReportRow | undefined;
+  return row ? normalizeJournalRow(row) : null;
 }
 
 /** Danh sách dự án nhẹ cho filter/form — không cần load toàn bộ nhật ký. */
@@ -1434,7 +1571,12 @@ export async function fetchFailedWeldsInDateRange(dateFrom: string, dateTo: stri
       };
     })
     .filter((x) => x.inRange)
-    .sort((a, b) => (a.iso || "9999").localeCompare(b.iso || "9999") || a.row.ma_lich_su.localeCompare(b.row.ma_lich_su))
+    .sort((a, b) => {
+      if (a.iso && b.iso && a.iso !== b.iso) return b.iso.localeCompare(a.iso);
+      if (b.iso && !a.iso) return 1;
+      if (a.iso && !b.iso) return -1;
+      return b.row.ma_lich_su.localeCompare(a.row.ma_lich_su);
+    })
     .map(({ row, iso, hasIso }) => {
       const code = String(row.ma_lich_su ?? "");
       const shownCode = code.startsWith("__SYNC_") ? `(chưa cấp mã #${code.slice(7, 15)})` : code;
@@ -1519,12 +1661,21 @@ async function fetchWeldReportRows(
   const buildPageQuery = (from: number, to: number) => {
     let query = supabase.from("bao_cao_moi_han_theo_du_an").select(columns.join(","));
     query = applyDateFilters(query);
-    const orderedQuery = columns.includes("created_at")
-      ? query.order("created_at", { ascending: false }).order("id", { ascending: false })
-      : query
-          .order("ngay_thuc_hien", { ascending: false, nullsFirst: false })
-          .order("nam_thuc_hien", { ascending: false })
-          .order("ma_lich_su", { ascending: false });
+    let orderedQuery = query;
+    if (columns.includes("ngay_thuc_hien")) {
+      orderedQuery = orderedQuery.order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
+    }
+    if (columns.includes("nam_thuc_hien")) {
+      orderedQuery = orderedQuery.order("nam_thuc_hien", { ascending: false });
+    }
+    if (columns.includes("created_at")) {
+      orderedQuery = orderedQuery.order("created_at", { ascending: false });
+    }
+    if (columns.includes("ma_lich_su")) {
+      orderedQuery = orderedQuery.order("ma_lich_su", { ascending: false });
+    } else if (columns.includes("id")) {
+      orderedQuery = orderedQuery.order("id", { ascending: false });
+    }
     return orderedQuery.range(from, to);
   };
 

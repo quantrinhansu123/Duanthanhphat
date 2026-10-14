@@ -56,6 +56,9 @@ export default function SparePartsList() {
   const [form, setForm] = useState<SparePart>(emptyForm());
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteText, setBulkDeleteText] = useState("");
 
   const manufacturers = useMemo(() => {
     const set = new Set(list.map((item) => item.manufacturer).filter(Boolean));
@@ -80,6 +83,36 @@ export default function SparePartsList() {
 
   const lowStockCount = filtered.filter((row) => row.status === "Sắp hết" || row.status === "Hết hàng").length;
   const hasFilter = Boolean(manufacturerFilter || modelFilter || categoryFilter || statusFilter);
+  const allFilteredSelected = filtered.length > 0 && filtered.every((row) => selectedIds.includes(row.id));
+
+  function toggleSelectAll() {
+    const filteredIds = filtered.map((row) => row.id);
+    setSelectedIds((current) =>
+      allFilteredSelected
+        ? current.filter((id) => !filteredIds.includes(id))
+        : Array.from(new Set([...current, ...filteredIds])),
+    );
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  function closeBulkDelete() {
+    setBulkDeleteOpen(false);
+    setBulkDeleteText("");
+  }
+
+  function handleBulkDelete() {
+    if (bulkDeleteText.trim() !== "XÓA HẾT") return;
+    const count = selectedIds.length;
+    setList((current) => current.filter((item) => !selectedIds.includes(item.id)));
+    setSelectedIds([]);
+    closeBulkDelete();
+    showToast(`Đã xóa ${count} phụ tùng`);
+  }
 
   function showToast(message: string) {
     setToast(message);
@@ -150,6 +183,7 @@ export default function SparePartsList() {
   function handleDelete(row: SparePart) {
     if (!window.confirm(`Xóa phụ tùng ${row.code} — ${row.name}?`)) return;
     setList((current) => current.filter((item) => item.id !== row.id));
+    setSelectedIds((current) => current.filter((id) => id !== row.id));
     showToast("Đã xóa phụ tùng");
   }
 
@@ -187,13 +221,24 @@ export default function SparePartsList() {
             <h2 className="text-sm font-bold text-slate-900">Danh mục phụ tùng thay thế</h2>
             <p className="mt-0.5 text-xs text-slate-500">Theo nhà sản xuất và model máy hàn tương thích</p>
           </div>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#00388A] sm:text-sm"
-          >
-            <span className="text-base leading-none">+</span> Thêm phụ tùng
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkDeleteOpen(true)}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-300 bg-rose-50 px-4 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 sm:text-sm"
+              >
+                Xóa {selectedIds.length} phụ tùng đã chọn
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={openAdd}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#00388A] sm:text-sm"
+            >
+              <span className="text-base leading-none">+</span> Thêm phụ tùng
+            </button>
+          </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <select
@@ -262,6 +307,16 @@ export default function SparePartsList() {
           <table className="w-full min-w-[1180px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <th className="w-10 py-3 pl-4">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    disabled={filtered.length === 0}
+                    onChange={toggleSelectAll}
+                    aria-label="Chọn tất cả phụ tùng đang hiển thị"
+                    className="h-4 w-4 cursor-pointer accent-[#0047AB]"
+                  />
+                </th>
                 <th className="px-4 py-3">Mã / Tên</th>
                 <th className="px-3.5 py-3">Nhà sản xuất</th>
                 <th className="px-3.5 py-3">Model máy</th>
@@ -274,7 +329,16 @@ export default function SparePartsList() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((row) => (
-                <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
+                <tr key={row.id} className={`transition-colors hover:bg-slate-50/80 ${selectedIds.includes(row.id) ? "bg-blue-50/50" : ""}`}>
+                  <td className="py-3 pl-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(row.id)}
+                      onChange={() => toggleSelect(row.id)}
+                      aria-label={`Chọn phụ tùng ${row.code}`}
+                      className="h-4 w-4 cursor-pointer accent-[#0047AB]"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="font-mono font-bold text-[#0047AB]">{row.code}</div>
                     <div className="mt-0.5 font-medium text-slate-900">{row.name}</div>
@@ -314,7 +378,7 @@ export default function SparePartsList() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={showUnitPrice ? 8 : 7} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={showUnitPrice ? 9 : 8} className="px-4 py-12 text-center text-sm text-slate-500">
                     Chưa có phụ tùng phù hợp.
                   </td>
                 </tr>
@@ -487,6 +551,52 @@ export default function SparePartsList() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={closeBulkDelete}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-delete-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="bulk-delete-title" className="text-base font-bold text-slate-900">
+              Xóa {selectedIds.length} phụ tùng đã chọn?
+            </h3>
+            <p className="mt-1.5 text-sm text-slate-600">
+              Thao tác này xóa toàn bộ phụ tùng đã chọn khỏi danh sách. Gõ <strong className="font-mono text-rose-700">XÓA HẾT</strong> để xác nhận.
+            </p>
+            <input
+              autoFocus
+              value={bulkDeleteText}
+              onChange={(event) => setBulkDeleteText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleBulkDelete();
+              }}
+              placeholder="XÓA HẾT"
+              className="mt-3 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeBulkDelete}
+                className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteText.trim() !== "XÓA HẾT"}
+                className="h-10 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Xóa hết
+              </button>
+            </div>
           </div>
         </div>
       )}

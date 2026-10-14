@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,6 +16,7 @@ import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
 import { useWeldDailyRollup } from "@/hooks/useWeldDailyRollup";
 import { useOverviewAggregates } from "@/hooks/useOverviewAggregates";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { buildDailyWeldPlan, loadTheoreticalProgressViewRows } from "@/lib/projectsDb";
 import {
   buildDailyJournalSeries,
@@ -325,6 +326,7 @@ export default function OverviewDashboard() {
   const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartViewMode, setCumulativeChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartZoom, setCumulativeChartZoom] = useState(1);
+  const [spreadUndatedMonthly, setSpreadUndatedMonthly] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
   const plotScrollRef = useRef<HTMLDivElement>(null);
@@ -638,6 +640,7 @@ export default function OverviewDashboard() {
         labels: dailySeries.map((point) => viDateShort(point.date)),
         fullLabels: dailySeries.map((point) => viDate(point.date)),
         dates: dailySeries.map((point) => point.date),
+        undatedTotal: 0,
       };
     }
     if (cumulativeChartViewMode === "yearly") {
@@ -647,6 +650,7 @@ export default function OverviewDashboard() {
         labels: yearlySeries.map((point) => point.year),
         fullLabels: yearlySeries.map((point) => `Năm ${point.year}`),
         dates: yearlySeries.map((point) => point.date),
+        undatedTotal: 0,
       };
     }
 
@@ -661,22 +665,54 @@ export default function OverviewDashboard() {
       if (!months.has(key)) months.set(key, { value: 0, target: 0 });
       return months.get(key)!;
     };
+    const asOfYear = asOf.slice(0, 4);
+    // Dữ liệu cũ chỉ có năm: số mối theo năm, chia đều cho các tháng khi bật "Tự phân bổ".
+    const undatedByYear = new Map<string, number>();
     if (canSkipJournal) {
+      const datedByYear = new Map<string, number>();
       for (const row of fastRollupRows) {
-        if (!row.ngay_thuc_hien || row.ngay_thuc_hien > asOf) continue;
-        get(row.ngay_thuc_hien.slice(0, 7)).value += Math.max(0, Number(row.so_moi ?? row.so_luong_thuc_hien ?? 0));
+        if (!row.ngay_thuc_hien) continue;
+        const amount = Math.max(0, Number(row.so_moi ?? row.so_luong_thuc_hien ?? 0));
+        const year = row.ngay_thuc_hien.slice(0, 4);
+        datedByYear.set(year, (datedByYear.get(year) ?? 0) + amount);
+        if (row.ngay_thuc_hien > asOf) continue;
+        get(row.ngay_thuc_hien.slice(0, 7)).value += amount;
+      }
+      for (const row of yearTotals) {
+        const year = String(row.nam);
+        if (!/^\d{4}$/.test(year) || year > asOfYear) continue;
+        const undated = Math.max(0, Number(row.tong_moi_han ?? 0)) - (datedByYear.get(year) ?? 0);
+        if (undated > 0) undatedByYear.set(year, undated);
       }
     } else {
       selectedRows.forEach((row, index) => {
         const date = getJournalRowDateIso(row, index);
-        if (!date || date > asOf) return;
         const project = (row.du_an_id && projectByKey.get(row.du_an_id)) || projectByKey.get(row.du_an);
-        if (project) {
-          const start = planStartDate(project);
-          if (start && (start > asOf || date < start)) return;
+        const start = project ? planStartDate(project) : "";
+        if (!date) {
+          const year = String(row.nam_thuc_hien ?? "");
+          if (!/^\d{4}$/.test(year) || year > asOfYear) return;
+          if (!isAllDates && (year < filterFrom.slice(0, 4) || year > filterTo.slice(0, 4))) return;
+          if (start && (start > asOf || year < start.slice(0, 4))) return;
+          undatedByYear.set(year, (undatedByYear.get(year) ?? 0) + 1);
+          return;
         }
+        if (date > asOf) return;
+        if (start && (start > asOf || date < start)) return;
         get(date.slice(0, 7)).value += 1;
       });
+    }
+    let undatedTotal = 0;
+    for (const [year, count] of undatedByYear) {
+      undatedTotal += count;
+      if (!spreadUndatedMonthly) continue;
+      const monthCount = year === asOfYear ? Number(asOf.slice(5, 7)) : 12;
+      const base = Math.floor(count / monthCount);
+      let remainder = count - base * monthCount;
+      for (let month = 1; month <= monthCount; month += 1) {
+        get(`${year}-${String(month).padStart(2, "0")}`).value += base + (remainder > 0 ? 1 : 0);
+        remainder -= 1;
+      }
     }
     selectedProjects.forEach((project) => {
       planRows(project).forEach((row) => {
@@ -704,8 +740,9 @@ export default function OverviewDashboard() {
       labels: keys.map(label),
       fullLabels: keys.map(label),
       dates: keys.map((key) => `${key}-01`),
+      undatedTotal,
     };
-  }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, todayIso, yearlySeries]);
+  }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, spreadUndatedMonthly, todayIso, yearTotals, yearlySeries]);
 
   const cumulativeChart = useMemo(() => {
     const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
@@ -2150,6 +2187,26 @@ export default function OverviewDashboard() {
           <p className="mt-2 text-sm font-semibold text-[#0047AB]">
             Lũy kế toàn kỳ: {fmt(cumulativeChart.totalActual)} mối · Kế hoạch: {fmt(cumulativeChart.totalTarget)} mối
           </p>
+          {cumulativeChartViewMode === "monthly" && cumulativeChartPeriod.undatedTotal > 0 ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <button
+                type="button"
+                onClick={() => setSpreadUndatedMonthly((on) => !on)}
+                aria-pressed={spreadUndatedMonthly}
+                className={`rounded-md border px-2 py-1 font-semibold transition-colors cursor-pointer ${
+                  spreadUndatedMonthly
+                    ? "border-[#0047AB] bg-[#0047AB] text-white hover:bg-[#00388A]"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Tự phân bổ: {spreadUndatedMonthly ? "Bật" : "Tắt"}
+              </button>
+              <span>
+                {fmt(cumulativeChartPeriod.undatedTotal)} mối chỉ có năm, chưa rõ tháng —{" "}
+                {spreadUndatedMonthly ? "đang chia đều cho các tháng của năm đó (ước lượng)." : "đang không tính vào lũy kế tháng."}
+              </span>
+            </div>
+          ) : null}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#3b82f6]" />Thực tế</span>
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />Dự kiến</span>
@@ -2528,88 +2585,6 @@ export default function OverviewDashboard() {
           </div>
         </div>
       </div>
-
-      {/* 5. Tác vụ nhanh */}
-      <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
-        <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
-          TÁC VỤ NHANH
-        </div>
-        <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-          {[
-            {
-              label: "Thêm mối hàn mới",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2.2">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              ),
-            },
-            {
-              label: "Phiếu kiểm tra",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                  <rect x="8" y="2" width="8" height="4" rx="1" />
-                  <path d="M9 12h6M9 16h4" />
-                </svg>
-              ),
-            },
-            {
-              label: "Nhập sản lượng",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                  <rect x="4" y="2" width="16" height="20" rx="2" />
-                  <line x1="8" y1="6" x2="16" y2="6" />
-                  <line x1="8" y1="10" x2="8.01" y2="10" />
-                  <line x1="12" y1="10" x2="12.01" y2="10" />
-                  <line x1="16" y1="10" x2="16.01" y2="10" />
-                  <line x1="8" y1="14" x2="8.01" y2="14" />
-                  <line x1="12" y1="14" x2="12.01" y2="14" />
-                  <line x1="16" y1="14" x2="16.01" y2="14" />
-                </svg>
-              ),
-            },
-            {
-              label: "Tình trạng máy",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                  <rect x="4" y="4" width="16" height="16" rx="2" />
-                  <rect x="9" y="9" width="6" height="6" />
-                  <line x1="9" y1="1" x2="9" y2="4" />
-                  <line x1="15" y1="1" x2="15" y2="4" />
-                  <line x1="9" y1="20" x2="9" y2="23" />
-                  <line x1="15" y1="20" x2="15" y2="23" />
-                  <line x1="20" y1="9" x2="23" y2="9" />
-                  <line x1="20" y1="14" x2="23" y2="14" />
-                  <line x1="1" y1="9" x2="4" y2="9" />
-                  <line x1="1" y1="14" x2="4" y2="14" />
-                </svg>
-              ),
-            },
-            {
-              label: "Tạo báo cáo",
-              icon: (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0047AB" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
-              ),
-            },
-          ].map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              className="flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:text-[#0047AB] shadow-xs transition-all cursor-pointer text-left"
-            >
-              {action.icon}
-              <span>{action.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
       {lookup ? (
         <ReportLookupDialog
           kind={lookup}
@@ -2662,21 +2637,28 @@ function ReportLookupDialog({
     );
   }, [needle, projects]);
   const weldRows = useMemo(() => {
-    if (!needle) return welds;
-    return welds.filter((row) =>
-      [
-        displayWeldCode(row.ma_lich_su),
-        row.du_an,
-        row.ten_tho_han,
-        row.ma_may,
-        row.ten_may,
-        row.loai_moi_han,
-        row.cong_nghe_han,
-        row.moi_han_lien_ket,
-      ]
-        .join(" ")
-        .toLocaleLowerCase("vi")
-        .includes(needle),
+    const source = !needle
+      ? welds
+      : welds.filter((row) =>
+          [
+            displayWeldCode(row.ma_lich_su),
+            row.du_an,
+            row.ten_tho_han,
+            row.ma_may,
+            row.ten_may,
+            row.loai_moi_han,
+            row.cong_nghe_han,
+            row.moi_han_lien_ket,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("vi")
+            .includes(needle),
+        );
+    return [...source].sort(
+      (a, b) =>
+        compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) ||
+        (b.nam_thuc_hien || 0) - (a.nam_thuc_hien || 0) ||
+        (b.ma_lich_su || "").localeCompare(a.ma_lich_su || ""),
     );
   }, [needle, welds]);
   const total = isProjects ? projectRows.length : weldRows.length;

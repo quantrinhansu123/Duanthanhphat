@@ -103,6 +103,11 @@ export type CertificateGroupOption = {
   machine?: string;
   /** Mối hàn / công nghệ áp dụng (FBW, ATW, Sản xuất, …). */
   weldScope?: string;
+  /** Nhà cung cấp gắn với loại chứng chỉ. */
+  supplier?: string;
+  /** Loại dây hàn gắn với loại chứng chỉ. */
+  wireType?: string;
+  notes?: string;
   issueDate?: string;
   expiryDate?: string;
   imageUrl?: string;
@@ -372,48 +377,45 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
   const pageSize = 1000;
   const byId = new Map<string, CertificateGroupOption>();
 
+  type CertificateGroupDbRow = {
+    id: string;
+    ten_nhom: string;
+    ma_nhom: string | null;
+    don_vi_cap: string | null;
+    may_ap_dung: string | null;
+    ngay_cap: string | null;
+    ngay_het_han: string | null;
+    created_at: string;
+    secure_url: string | null;
+    file_chung_chi: string | null;
+    cloudinary_public_id: string | null;
+    moi_han_ap_dung?: string | null;
+    nha_cung_cap?: string | null;
+    loai_day_han?: string | null;
+    ghi_chu?: string | null;
+  };
+  const baseColumns = [
+    "id", "ten_nhom", "ma_nhom", "don_vi_cap", "may_ap_dung", "ngay_cap", "ngay_het_han",
+    "created_at", "secure_url", "file_chung_chi", "cloudinary_public_id",
+  ];
+  // Cột thêm bằng migration sau, có thể chưa có trên môi trường cũ.
+  let optionalColumns = ["moi_han_ap_dung", "nha_cung_cap", "loai_day_han", "ghi_chu"];
+
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("chung_chi_nhom")
-      .select(
-        "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, moi_han_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
-      )
+      .select([...baseColumns, ...optionalColumns].join(", "))
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (error) {
-      // Cột moi_han_ap_dung có thể chưa có trên môi trường cũ — fallback không chọn cột này.
-      if (/moi_han_ap_dung/.test(error.message ?? "")) {
-        const fallback = await supabase
-          .from("chung_chi_nhom")
-          .select(
-            "id, ten_nhom, ma_nhom, don_vi_cap, may_ap_dung, ngay_cap, ngay_het_han, created_at, secure_url, file_chung_chi, cloudinary_public_id",
-          )
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false })
-          .range(offset, offset + pageSize - 1);
-        if (fallback.error) throw new Error(fallback.error.message);
-        const page = fallback.data ?? [];
-        for (const r of page) {
-          byId.set(r.id, {
-            id: r.id,
-            name: r.ten_nhom,
-            createdAt: r.created_at,
-            code: r.ma_nhom ?? undefined,
-            issuer: r.don_vi_cap ?? undefined,
-            machine: r.may_ap_dung ?? undefined,
-            issueDate: r.ngay_cap ?? undefined,
-            expiryDate: r.ngay_het_han ?? undefined,
-            imageUrl: r.secure_url || r.file_chung_chi || undefined,
-            cloudinaryPublicId: r.cloudinary_public_id || undefined,
-          });
-        }
-        if (page.length < pageSize) break;
-        continue;
-      }
-      throw new Error(error.message);
+      const missing = optionalColumns.find((column) => (error.message ?? "").includes(column));
+      if (!missing) throw new Error(error.message);
+      optionalColumns = optionalColumns.filter((column) => column !== missing);
+      offset -= pageSize;
+      continue;
     }
-    const page = data ?? [];
+    const page = (data ?? []) as unknown as CertificateGroupDbRow[];
     for (const r of page) {
       byId.set(r.id, {
         id: r.id,
@@ -422,7 +424,10 @@ export async function fetchCertificateGroups(): Promise<CertificateGroupOption[]
         code: r.ma_nhom ?? undefined,
         issuer: r.don_vi_cap ?? undefined,
         machine: r.may_ap_dung ?? undefined,
-        weldScope: (r as { moi_han_ap_dung?: string | null }).moi_han_ap_dung ?? undefined,
+        weldScope: r.moi_han_ap_dung ?? undefined,
+        supplier: r.nha_cung_cap?.trim() || undefined,
+        wireType: r.loai_day_han?.trim() || undefined,
+        notes: r.ghi_chu?.trim() || undefined,
         issueDate: r.ngay_cap ?? undefined,
         expiryDate: r.ngay_het_han ?? undefined,
         imageUrl: r.secure_url || r.file_chung_chi || undefined,

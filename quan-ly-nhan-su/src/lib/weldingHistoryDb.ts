@@ -269,7 +269,7 @@ function filterInMemoryRecords(
       if (!match) return false;
     }
     return true;
-  });
+  }).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 
   const pass = filtered.filter((r) => r.result === "Đạt").length;
   const fail = filtered.filter((r) => r.result === "Không đạt").length;
@@ -456,7 +456,7 @@ export async function loadWeldingHistoryPage(
 
     // Lấy dữ liệu trang
     const { data: pageData, count: totalCount, error: pageError } = await viewQuery
-      .order("created_at", { ascending: false })
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(fromIndex, toIndex);
 
@@ -558,7 +558,7 @@ export async function loadWeldingHistoryPage(
     let pageQuery = supabase
       .from("lich_su_moi_han")
       .select(selectCols, { count: "exact" })
-      .order("created_at", { ascending: false })
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
       .order("id", { ascending: false });
     if (params.dateFrom) pageQuery = pageQuery.gte("ngay_thuc_hien", params.dateFrom);
     if (params.dateTo) pageQuery = pageQuery.lte("ngay_thuc_hien", params.dateTo);
@@ -595,7 +595,7 @@ export async function loadWeldingHistoryPage(
       let statsQuery = supabase
         .from("lich_su_moi_han")
         .select(selectCols)
-        .order("created_at", { ascending: false })
+        .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
         .order("id", { ascending: false });
       if (params.dateFrom) statsQuery = statsQuery.gte("ngay_thuc_hien", params.dateFrom);
       if (params.dateTo) statsQuery = statsQuery.lte("ngay_thuc_hien", params.dateTo);
@@ -623,7 +623,7 @@ export async function loadWeldingHistoryPage(
     let baseQuery = supabase
       .from("lich_su_moi_han")
       .select(selectCols)
-      .order("created_at", { ascending: false })
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
       .order("id", { ascending: false });
     if (params.dateFrom) baseQuery = baseQuery.gte("ngay_thuc_hien", params.dateFrom);
     if (params.dateTo) baseQuery = baseQuery.lte("ngay_thuc_hien", params.dateTo);
@@ -682,7 +682,7 @@ export async function exportAllFilteredWeldingHistory(
       let viewQuery = supabase
         .from("v_lich_su_moi_han_chi_tiet")
         .select("*")
-        .order("created_at", { ascending: false })
+        .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
         .order("id", { ascending: false });
       if (params.dateFrom) viewQuery = viewQuery.gte("ngay_thuc_hien", params.dateFrom);
       if (params.dateTo) viewQuery = viewQuery.lte("ngay_thuc_hien", params.dateTo);
@@ -768,7 +768,7 @@ export async function exportAllFilteredWeldingHistory(
         du_an:du_an_id (du_an),
         may:may_id (ma_may)
       `)
-      .order("created_at", { ascending: false })
+      .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + rawPageSize - 1);
     if (error) throw new Error(formatSupabaseError(error));

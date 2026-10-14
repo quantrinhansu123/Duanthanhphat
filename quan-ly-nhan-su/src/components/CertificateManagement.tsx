@@ -20,6 +20,7 @@ import {
   deleteCertificateType,
   imageKeyForTitle,
   loadCertificateRegistry,
+  updateCertificateNotesAndHours,
   updateCertificateType,
 } from "@/lib/certificatesDb";
 import {
@@ -31,6 +32,7 @@ import {
   fetchCertificateGroups,
   type CertificateGroupOption,
 } from "@/lib/trainingDb";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { parseCertificateList } from "@/lib/weldingCertificates";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import MachineSelect, { type MachineSelectOption } from "@/components/MachineSelect";
@@ -80,17 +82,155 @@ const statusStyle: Record<Certificate["status"], string> = {
   "Chưa cập nhật": "bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs",
 };
 
+function formatHours(hours: number) {
+  return `${hours.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} giờ`;
+}
+
+function totalHours(certs: Certificate[]): number | null {
+  const values = certs.map((cert) => cert.hours).filter((hours): hours is number => hours !== undefined);
+  return values.length ? values.reduce((sum, hours) => sum + hours, 0) : null;
+}
+
+const AUTO_SAVE_DELAY_MS = 800;
+
+function CertificateNotesHoursEditor({
+  cert,
+  onSaved,
+}: {
+  cert: Certificate;
+  onSaved: (id: string, patch: { notes?: string; hours?: number }) => void;
+}) {
+  const [notes, setNotes] = useState(cert.notes ?? "");
+  const [hoursText, setHoursText] = useState(cert.hours !== undefined ? String(cert.hours) : "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const savedRef = useRef({ notes: cert.notes ?? "", hoursText: cert.hours !== undefined ? String(cert.hours) : "" });
+  const draftRef = useRef({ notes, hoursText });
+  const editable = !cert.inferred;
+
+  const save = useCallback(async () => {
+    const draft = draftRef.current;
+    const saved = savedRef.current;
+    const notesChanged = draft.notes.trim() !== saved.notes.trim();
+    const hoursChanged = draft.hoursText.trim() !== saved.hoursText.trim();
+    if (!notesChanged && !hoursChanged) return;
+
+    let hours: number | null | undefined;
+    if (hoursChanged) {
+      const raw = draft.hoursText.trim().replace(",", ".");
+      hours = raw === "" ? null : Number(raw);
+      if (hours !== null && (!Number.isFinite(hours) || hours < 0)) {
+        setSaveState("error");
+        setSaveError("Số giờ phải là số không âm.");
+        return;
+      }
+    }
+
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      await updateCertificateNotesAndHours(cert.id, {
+        notes: notesChanged ? draft.notes : undefined,
+        hours,
+      });
+      savedRef.current = { notes: draft.notes, hoursText: draft.hoursText };
+      onSaved(cert.id, {
+        ...(notesChanged ? { notes: draft.notes.trim() || undefined } : {}),
+        ...(hoursChanged ? { hours: hours ?? undefined } : {}),
+      });
+      setSaveState("saved");
+    } catch (err) {
+      setSaveState("error");
+      setSaveError(err instanceof Error ? err.message : "Không lưu được.");
+    }
+  }, [cert.id, onSaved]);
+
+  useEffect(() => {
+    if (!editable) return;
+    const timer = window.setTimeout(() => void save(), AUTO_SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [notes, hoursText, editable, save]);
+
+  useEffect(() => {
+    if (!editable) return;
+    return () => void save();
+  }, [editable, save]);
+
+  if (!editable) {
+    return (
+      <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+        Chứng chỉ này chưa có hồ sơ chi tiết trong hệ thống nên chưa thể nhập ghi chú / số giờ.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Ghi chú &amp; số giờ</span>
+        <span
+          className={`text-[11px] font-semibold ${
+            saveState === "error" ? "text-rose-600" : saveState === "saved" ? "text-emerald-600" : "text-slate-400"
+          }`}
+          aria-live="polite"
+        >
+          {saveState === "saving"
+            ? "Đang lưu…"
+            : saveState === "saved"
+              ? "Đã tự động lưu"
+              : saveState === "error"
+                ? saveError
+                : "Tự động lưu khi chỉnh sửa"}
+        </span>
+      </div>
+      <label className="block text-xs font-semibold text-slate-600">
+        Số giờ
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.5}
+          value={hoursText}
+          onChange={(e) => {
+            draftRef.current = { ...draftRef.current, hoursText: e.target.value };
+            setHoursText(e.target.value);
+          }}
+          onBlur={() => void save()}
+          placeholder="VD: 40"
+          className={fieldClass}
+        />
+      </label>
+      <label className="mt-3 block text-xs font-semibold text-slate-600">
+        Ghi chú
+        <textarea
+          value={notes}
+          onChange={(e) => {
+            draftRef.current = { ...draftRef.current, notes: e.target.value };
+            setNotes(e.target.value);
+          }}
+          onBlur={() => void save()}
+          rows={3}
+          placeholder="Nhập ghi chú cho chứng chỉ này…"
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+        />
+      </label>
+    </div>
+  );
+}
+
 function CertificateDetailModal({
   cert,
   holders,
   resolveHolder,
   onSelectHolder,
+  onSaved,
   onClose,
 }: {
   cert: Certificate;
   holders: CertHolder[];
   resolveHolder: (holder: CertHolder) => Certificate;
   onSelectHolder: (holder: CertHolder) => void;
+  onSaved: (id: string, patch: { notes?: string; hours?: number }) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"detail" | "owners">("detail");
@@ -260,13 +400,9 @@ function CertificateDetailModal({
                     <span className="text-right font-semibold text-slate-800">{cert.weldScope}</span>
                   </div>
                 ) : null}
-                {cert.notes ? (
-                  <div className="flex items-start justify-between gap-4 py-2.5 text-xs sm:text-sm">
-                    <span className="shrink-0 text-slate-500">Ghi chú</span>
-                    <span className="text-right text-slate-800">{cert.notes}</span>
-                  </div>
-                ) : null}
               </div>
+
+              <CertificateNotesHoursEditor key={cert.id} cert={cert} onSaved={onSaved} />
             </>
           ) : holders.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-12 text-center text-sm text-slate-500">
@@ -318,6 +454,12 @@ function CertificateDetailModal({
                               <span>
                                 Hết hạn: <span className="font-mono font-semibold text-slate-700">{holderCert.expiresAt || "—"}</span>
                               </span>
+                              <span>
+                                Số giờ:{" "}
+                                <span className="font-mono font-semibold text-slate-700">
+                                  {holderCert.hours !== undefined ? formatHours(holderCert.hours) : "—"}
+                                </span>
+                              </span>
                             </div>
                           </div>
                           <span
@@ -358,6 +500,154 @@ type CertificateTypeRow = {
   group?: CertificateGroupOption;
 };
 
+function formatIsoDate(value?: string) {
+  const [year, month, day] = (value ?? "").slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "";
+}
+
+function certificateTypeSummary(group?: CertificateGroupOption) {
+  return [
+    group?.supplier ? `NCC: ${group.supplier}` : "",
+    group?.wireType ? `Dây hàn: ${group.wireType}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function CertificateTypeDetailModal({
+  row,
+  onOpenHolder,
+  onEdit,
+  onClose,
+}: {
+  row: CertificateTypeRow;
+  onOpenHolder: (holder: CertHolder) => void;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const group = row.group;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const fields: Array<[string, string | undefined]> = [
+    ["Mã", group?.code],
+    ["Nhà cung cấp", group?.supplier],
+    ["Loại dây hàn", group?.wireType],
+    ["Đơn vị cấp", group?.issuer],
+    ["Máy áp dụng", group?.machine],
+    ["Phương pháp hàn", group?.weldScope],
+    ["Ngày cấp", formatIsoDate(group?.issueDate)],
+    ["Ngày hết hạn", formatIsoDate(group?.expiryDate)],
+    ["Số nhân sự sở hữu", String(row.holders.length)],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <button
+        type="button"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+        aria-label="Đóng"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cert-type-detail-title"
+        className="relative z-10 flex max-h-[90dvh] w-full max-w-[600px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4">
+          <div className="min-w-0 pr-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Chi tiết loại chứng chỉ</div>
+            <h2 id="cert-type-detail-title" className="mt-0.5 text-base sm:text-lg font-bold leading-snug text-slate-900">
+              {row.title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+            aria-label="Đóng"
+          >
+            <X size={18} weight="bold" aria-hidden />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 sm:px-6 py-5">
+          {group?.imageUrl ? (
+            <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <Image src={group.imageUrl} alt={row.title} fill className="object-contain" sizes="560px" />
+            </div>
+          ) : null}
+
+          {!group ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              Chứng chỉ này chỉ có trên hồ sơ thợ, chưa có trong danh mục. Bấm “Sửa” để đưa vào danh mục và nhập thông tin.
+            </div>
+          ) : null}
+
+          <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-4 py-1">
+            {fields.map(([label, value]) => (
+              <div key={label} className="flex items-start justify-between gap-4 py-2.5 text-xs sm:text-sm">
+                <dt className="shrink-0 text-slate-500">{label}</dt>
+                <dd className="text-right font-semibold text-slate-800 break-words">{value?.trim() || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Ghi chú</div>
+            <p className="mt-1 whitespace-pre-wrap text-xs sm:text-sm text-slate-700">
+              {group?.notes?.trim() || "Chưa có ghi chú."}
+            </p>
+          </div>
+
+          {row.holders.length > 0 ? (
+            <div>
+              <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">Nhân sự sở hữu</div>
+              <div className="flex flex-wrap gap-1.5">
+                {row.holders.map((holder) => (
+                  <button
+                    key={holder.id}
+                    type="button"
+                    onClick={() => onOpenHolder(holder)}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-[#0047AB]/40 hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
+                  >
+                    {holder.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-5 sm:px-6 py-3.5">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            <PencilSimple size={15} weight="bold" aria-hidden />
+            Sửa
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] px-4 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function normalizeCertTitle(value: string) {
   return value
     .normalize("NFD")
@@ -386,6 +676,7 @@ export default function CertificateManagement() {
   const [machineFilter, setMachineFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [detailCert, setDetailCert] = useState<Certificate | null>(null);
+  const [typeDetail, setTypeDetail] = useState<CertificateTypeRow | null>(null);
   const [listTab, setListTab] = useState<"types" | "owners">("types");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -397,6 +688,8 @@ export default function CertificateManagement() {
     organization: "",
     machine: "",
     weldScope: [] as string[],
+    supplier: "",
+    wireType: "",
     notes: "",
     holderIds: [] as string[],
     imageUrl: "",
@@ -695,7 +988,9 @@ export default function CertificateManagement() {
     return Array.from(byId.values())
       .map((row) => ({
         ...row,
-        certificates: [...row.certificates].sort((a, b) => a.title.localeCompare(b.title, "vi")),
+        certificates: [...row.certificates].sort(
+          (a, b) => compareNewestDate(a.cert.issuedAt, b.cert.issuedAt) || a.title.localeCompare(b.title, "vi"),
+        ),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
   }, [certificateTypes, certificatesByHolderTitle, withGroupImage]);
@@ -721,6 +1016,22 @@ export default function CertificateManagement() {
       .filter((row) => !hasMeta || row.certificates.length > 0);
   }, [ownerRows, certificateTypes, methodFilter, machineFilter]);
 
+  const handleCertificateSaved = useCallback(
+    (id: string, patch: { notes?: string; hours?: number }) => {
+      const apply = (cert: Certificate): Certificate => {
+        if (cert.id !== id) return cert;
+        return {
+          ...cert,
+          ...("notes" in patch ? { notes: patch.notes } : {}),
+          ...("hours" in patch ? { hours: patch.hours } : {}),
+        };
+      };
+      setCertificateItems((items) => items.map(apply));
+      setDetailCert((current) => (current ? apply(current) : current));
+    },
+    [],
+  );
+
   function openHolderDetail(title: string, holder: CertHolder) {
     setDetailCert(resolveHolderCertificate(title, holder));
   }
@@ -733,6 +1044,8 @@ export default function CertificateManagement() {
       organization: "",
       machine: "",
       weldScope: [],
+      supplier: "",
+      wireType: "",
       notes: "",
       holderIds: [],
       imageUrl: "",
@@ -758,7 +1071,9 @@ export default function CertificateManagement() {
       weldScope: parseWeldScopeTokens(row.group?.weldScope).filter((token) =>
         (WELD_SCOPE_OPTIONS as readonly string[]).includes(token),
       ),
-      notes: "",
+      supplier: row.group?.supplier || "",
+      wireType: row.group?.wireType || "",
+      notes: row.group?.notes || "",
       holderIds: row.holders.map((holder) => holder.id),
       imageUrl,
       cloudinaryPublicId,
@@ -834,6 +1149,8 @@ export default function CertificateManagement() {
           organization: form.organization,
           machine: form.machine,
           weldScope: serializeWeldScope(form.weldScope),
+          supplier: form.supplier,
+          wireType: form.wireType,
           notes: form.notes,
           employeeIds: form.holderIds,
           imageUrl: form.imageUrl,
@@ -847,6 +1164,8 @@ export default function CertificateManagement() {
           organization: form.organization,
           machine: form.machine,
           weldScope: serializeWeldScope(form.weldScope),
+          supplier: form.supplier,
+          wireType: form.wireType,
           notes: form.notes,
           employeeIds: form.holderIds,
           imageUrl: form.imageUrl,
@@ -939,6 +1258,8 @@ export default function CertificateManagement() {
         organization: form.organization,
         machine: form.machine,
         weldScope: serializeWeldScope(form.weldScope),
+        supplier: form.supplier,
+        wireType: form.wireType,
         notes: form.notes,
         imageUrl: form.imageUrl,
         cloudinaryPublicId: form.cloudinaryPublicId,
@@ -1080,7 +1401,7 @@ export default function CertificateManagement() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
             <div className="table-scroll overflow-x-auto">
-              <table className="w-full min-w-[960px] border-collapse text-left text-xs sm:text-sm">
+              <table className="w-full min-w-[1040px] border-collapse text-left text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                     <th className="w-12 px-3.5 py-3">#</th>
@@ -1090,6 +1411,7 @@ export default function CertificateManagement() {
                     <th className="px-3.5 py-3">Tổ hàn</th>
                     <th className="min-w-[280px] px-3.5 py-3">Chứng chỉ sở hữu</th>
                     <th className="px-3.5 py-3 text-right">Số CC</th>
+                    <th className="px-3.5 py-3 text-right">Số giờ</th>
                     <th className="w-[100px] px-2 py-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
@@ -1122,6 +1444,12 @@ export default function CertificateManagement() {
                         <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#0047AB]">
                           {row.certificates.length}
                         </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3.5 py-3 text-right font-mono font-semibold text-slate-700">
+                        {(() => {
+                          const hours = totalHours(row.certificates.map((item) => item.cert));
+                          return hours === null ? <span className="text-slate-400">—</span> : formatHours(hours);
+                        })()}
                       </td>
                       <td className="px-2 py-3 text-right">
                         <Link
@@ -1171,21 +1499,29 @@ export default function CertificateManagement() {
                         <td className="px-3.5 py-3">
                           <button
                             type="button"
-                            onClick={() => {
-                              setExpanded((prev) => ({ ...prev, [row.key]: true }));
-                              const first = row.holders[0];
-                              if (first) openHolderDetail(row.title, first);
-                            }}
+                            onClick={() => setTypeDetail(row)}
                             className="text-left cursor-pointer group"
                           >
                             <div className="font-semibold text-slate-900 leading-snug group-hover:text-[#0047AB] transition-colors">
                               {row.title}
                             </div>
-                            {row.fromCatalog && row.holders.length === 0 ? (
-                              <div className="mt-0.5 text-[11px] text-slate-400">Trong danh mục · chưa có thợ hàn</div>
-                            ) : row.holders.length > 0 ? (
-                              <div className="mt-0.5 text-[11px] text-[#0047AB]/80 font-medium">Nhấn để xem chi tiết + ảnh</div>
-                            ) : null}
+                          </button>
+                          {certificateTypeSummary(row.group) ? (
+                            <div className="mt-0.5 text-xs font-medium text-slate-600">
+                              {certificateTypeSummary(row.group)}
+                            </div>
+                          ) : (
+                            <div className="mt-0.5 text-[11px] text-slate-400">
+                              Chưa có nhà cung cấp / loại dây hàn
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setTypeDetail(row)}
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#0047AB] hover:underline cursor-pointer"
+                          >
+                            <Eye size={12} weight="bold" aria-hidden />
+                            Xem chi tiết
                           </button>
                         </td>
                         <td className="px-3.5 py-3 text-right">
@@ -1286,6 +1622,12 @@ export default function CertificateManagement() {
                                       <div className="min-w-0">
                                         <dt className="text-slate-500">Ngày hết hạn</dt>
                                         <dd className="font-mono font-semibold text-slate-800">{cert.expiresAt || "—"}</dd>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <dt className="text-slate-500">Số giờ</dt>
+                                        <dd className="font-mono font-semibold text-slate-800">
+                                          {cert.hours !== undefined ? formatHours(cert.hours) : "—"}
+                                        </dd>
                                       </div>
                                     </dl>
                                     <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0047AB]">
@@ -1437,13 +1779,35 @@ export default function CertificateManagement() {
                 </p>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Nhà cung cấp</label>
+                  <input
+                    className={fieldClass}
+                    value={form.supplier}
+                    onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
+                    placeholder="VD: Railtech"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Loại dây hàn</label>
+                  <input
+                    className={fieldClass}
+                    value={form.wireType}
+                    onChange={(e) => setForm((f) => ({ ...f, wireType: e.target.value }))}
+                    placeholder="VD: ER70S-6"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Ghi chú</label>
-                <input
-                  className={fieldClass}
+                <textarea
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                  rows={2}
                   value={form.notes}
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder="Tùy chọn"
+                  placeholder="Tùy chọn · xem trong “Xem chi tiết”"
                 />
               </div>
 
@@ -1582,6 +1946,19 @@ export default function CertificateManagement() {
         </div>
       )}
 
+      {typeDetail && !detailCert && (
+        <CertificateTypeDetailModal
+          row={typeDetail}
+          onOpenHolder={(holder) => openHolderDetail(typeDetail.title, holder)}
+          onEdit={() => {
+            const row = typeDetail;
+            setTypeDetail(null);
+            openEditModal(row);
+          }}
+          onClose={() => setTypeDetail(null)}
+        />
+      )}
+
       {detailCert && (
         <CertificateDetailModal
           cert={withGroupImage(detailCert)}
@@ -1592,6 +1969,7 @@ export default function CertificateManagement() {
           }
           resolveHolder={(holder) => resolveHolderCertificate(detailCert.title, holder)}
           onSelectHolder={(holder) => setDetailCert(resolveHolderCertificate(detailCert.title, holder))}
+          onSaved={handleCertificateSaved}
           onClose={() => setDetailCert(null)}
         />
       )}

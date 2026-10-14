@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Plus, TrashSimple, X } from "@/components/icons";
 import SelectMenu, { type SelectMenuOption } from "@/components/SelectMenu";
+import MultiSelectMenu, { type MultiSelectOption } from "@/components/MultiSelectMenu";
 import {
   deleteEquipmentItem,
   deleteIncidentItem,
@@ -14,9 +15,12 @@ import {
   insertIncidentItem,
   insertWorkItem,
   loadDailyReport,
+  workMachineKey,
+  workMachineLabel,
   type DailyEquipmentItem,
   type DailyIncidentItem,
   type DailyWorkItem,
+  type DailyWorkMachine,
   type DailyWorkType,
   type EquipmentItemInput,
   type IncidentItemInput,
@@ -24,8 +28,7 @@ import {
   type WorkSection,
 } from "@/lib/dailyReportDb";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
-import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import type { MachineOption } from "@/data/machineAssignments";
+import { loadJournalMachineOptions, type JournalMachineOption } from "@/lib/machineRunSchedulesDb";
 
 const LINE_TICK = "✓";
 
@@ -174,7 +177,7 @@ function WorkFormModal({
   title: string;
   saving: boolean;
   personnel: PersonnelOption[];
-  machines: MachineOption[];
+  machines: JournalMachineOption[];
   workType: DailyWorkType | null;
   onClose: () => void;
   onSubmit: (values: WorkItemInput) => Promise<void>;
@@ -182,6 +185,18 @@ function WorkFormModal({
   const titleId = useId();
   const [form, setForm] = useState<WorkItemInput>(() => emptyWorkInput(workType));
   const [error, setError] = useState("");
+
+  const machineOptions = useMemo<MultiSelectOption[]>(
+    () =>
+      machines.map((m) => ({
+        value: m.id,
+        label: m.name.trim() || m.code,
+        hint: [m.code, m.lastRunDate ? `chạy gần nhất ${displayDate(m.lastRunDate)}` : ""]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    [machines],
+  );
 
   useEffect(() => {
     if (open) {
@@ -192,10 +207,36 @@ function WorkFormModal({
 
   if (!open) return null;
 
-  const railMachine = isRailWeldingMachineType(workType?.loaiMayMacDinh ?? form.loaiMay);
+  const railMachine = isRailWeldingMachineType(workType?.loaiMayMacDinh ?? "");
 
   function patch(p: Partial<WorkItemInput>) {
     setForm((f) => ({ ...f, ...p }));
+  }
+
+  function pickMachines(keys: string[]) {
+    setForm((f) => ({
+      ...f,
+      mayChay: keys.map((key) => {
+        const existing = f.mayChay.find((m) => workMachineKey(m) === key);
+        if (existing) return existing;
+        const machine = machines.find((m) => m.id === key);
+        return {
+          mayId: key.startsWith("code:") ? "" : key,
+          maMay: machine?.code ?? "",
+          tenMay: machine?.name ?? "",
+          soLuong: "1",
+          gioBatDau: "",
+          gioKetThuc: "",
+        };
+      }),
+    }));
+  }
+
+  function patchMachine(index: number, p: Partial<DailyWorkMachine>) {
+    setForm((f) => ({
+      ...f,
+      mayChay: f.mayChay.map((m, i) => (i === index ? { ...m, ...p } : m)),
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -204,7 +245,7 @@ function WorkFormModal({
       setError("Vui lòng nhập hạng mục công việc");
       return;
     }
-    if (railMachine && !form.mayId) {
+    if (railMachine && form.mayChay.length === 0) {
       setError("Vui lòng chọn máy hàn ray");
       return;
     }
@@ -252,40 +293,73 @@ function WorkFormModal({
               />
             </div>
           </div>
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <Field label="Đơn vị" value={form.donVi} onChange={(v) => patch({ donVi: v })} />
-            <Field label="Đến hôm qua" value={form.denHomQua} onChange={(v) => patch({ denHomQua: v })} />
-            <Field label="Hôm nay" value={form.homNay} onChange={(v) => patch({ homNay: v })} />
-            <Field label="Tích lũy" value={form.tichLuy} onChange={(v) => patch({ tichLuy: v })} />
-            <Field label="Thiết kế" value={form.thietKe} onChange={(v) => patch({ thietKe: v })} />
+            <Field label="Số mối hàn hôm qua" value={form.denHomQua} onChange={(v) => patch({ denHomQua: v })} />
+            <Field label="Số mối hàn hôm nay" value={form.homNay} onChange={(v) => patch({ homNay: v })} />
+            <Field label="Số mối hàn tích lũy" value={form.tichLuy} onChange={(v) => patch({ tichLuy: v })} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {railMachine ? (
-              <div>
-                <span className={labelCls}>Máy hàn ray *</span>
-                <SelectMenu
-                  value={form.mayId}
-                  onChange={(id) => {
-                    const machine = machines.find((m) => m.id === id);
-                    patch({ mayId: id, loaiMay: machine ? machine.name.trim() || machine.code : "" });
-                  }}
-                  options={machines.map((m) => ({
-                    value: m.id,
-                    label: m.name.trim() || m.code,
-                    hint: m.code,
-                  }))}
-                  searchable={machines.length > 5}
-                  placeholder={machines.length ? "Chọn máy..." : "Chưa có danh mục máy"}
-                  emptyLabel="Chưa có máy trong danh mục thiết bị"
-                  searchPlaceholder="Tìm máy..."
-                  buttonClassName="h-9"
-                />
+          <div className="space-y-2">
+            <div>
+              <span className={labelCls}>Loại máy{railMachine ? " *" : ""}</span>
+              <MultiSelectMenu
+                values={form.mayChay.map(workMachineKey)}
+                onChange={pickMachines}
+                options={machineOptions}
+                allLabel={machines.length ? "Chọn máy từ nhật ký chạy máy..." : "Chưa có máy trong nhật ký chạy máy"}
+                searchPlaceholder="Tìm máy..."
+                buttonClassName="h-9"
+              />
+            </div>
+            {form.mayChay.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+                <div className="text-[11px] font-semibold text-slate-600">
+                  Tổng số máy:{" "}
+                  <span className="font-mono tabular-nums text-slate-900">
+                    {form.mayChay.reduce((sum, m) => sum + (Number(m.soLuong.replace(",", ".")) || 0), 0)}
+                  </span>
+                </div>
+                {form.mayChay.map((m, index) => (
+                  <div
+                    key={workMachineKey(m)}
+                    className="grid grid-cols-3 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_9rem_9rem]"
+                  >
+                    <div className="col-span-3 truncate text-sm font-semibold text-slate-800 sm:col-span-1 sm:pb-2">
+                      {workMachineLabel(m) || "—"}
+                    </div>
+                    <label>
+                      <span className={labelCls}>Số lượng</span>
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={m.soLuong}
+                        onChange={(e) => patchMachine(index, { soLuong: e.target.value })}
+                        className={inputCls}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelCls}>Giờ bắt đầu</span>
+                      <input
+                        type="time"
+                        value={m.gioBatDau}
+                        onChange={(e) => patchMachine(index, { gioBatDau: e.target.value })}
+                        className={inputCls}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelCls}>Giờ kết thúc</span>
+                      <input
+                        type="time"
+                        value={m.gioKetThuc}
+                        onChange={(e) => patchMachine(index, { gioKetThuc: e.target.value })}
+                        className={inputCls}
+                      />
+                    </label>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <Field label="Loại máy" value={form.loaiMay} onChange={(v) => patch({ loaiMay: v })} className="sm:col-span-1" />
             )}
-            <Field label="Máy — Bắt đầu" value={form.mayBatDau} onChange={(v) => patch({ mayBatDau: v })} />
-            <Field label="Máy — Kết thúc" value={form.mayKetThuc} onChange={(v) => patch({ mayKetThuc: v })} />
           </div>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-5">
             <PersonnelSelect
@@ -472,6 +546,25 @@ function IncidentFormModal({
   );
 }
 
+function MachineLines({
+  machines,
+  value,
+}: {
+  machines: DailyWorkMachine[];
+  value: (machine: DailyWorkMachine) => string;
+}) {
+  if (machines.length === 0) return <>—</>;
+  return (
+    <>
+      {machines.map((m, i) => (
+        <div key={`${workMachineKey(m)}-${i}`} className="whitespace-nowrap leading-6">
+          {value(m) || "—"}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function WorkTable({
   rows,
   onDelete,
@@ -498,13 +591,13 @@ function WorkTable({
             <th className={th}>Tuyến hạ</th>
             <th className={th}>Tuyến thượng</th>
             <th className={th}>Đơn vị</th>
-            <th className={th}>Đến hôm qua</th>
-            <th className={th}>Hôm nay</th>
-            <th className={th}>Tích lũy</th>
-            <th className={th}>Thiết kế</th>
+            <th className={th}>Số mối hàn hôm qua</th>
+            <th className={th}>Số mối hàn hôm nay</th>
+            <th className={th}>Số mối hàn tích lũy</th>
             <th className={th}>Loại máy</th>
-            <th className={th}>Máy BĐ</th>
-            <th className={th}>Máy KT</th>
+            <th className={th}>Số lượng</th>
+            <th className={th}>Giờ bắt đầu</th>
+            <th className={th}>Giờ kết thúc</th>
             <th className={th}>CHT</th>
             <th className={th}>Kỹ sư</th>
             <th className={th}>Lái máy</th>
@@ -528,10 +621,18 @@ function WorkTable({
               <td className={`${td} text-center`}>{row.denHomQua || "—"}</td>
               <td className={`${td} text-center`}>{row.homNay || "—"}</td>
               <td className={`${td} text-center`}>{row.tichLuy || "—"}</td>
-              <td className={`${td} text-center`}>{row.thietKe || "—"}</td>
-              <td className={td}>{row.loaiMay || "—"}</td>
-              <td className={`${td} text-center`}>{row.mayBatDau || "—"}</td>
-              <td className={`${td} text-center`}>{row.mayKetThuc || "—"}</td>
+              <td className={td}>
+                <MachineLines machines={row.mayChay} value={workMachineLabel} />
+              </td>
+              <td className={`${td} text-center`}>
+                <MachineLines machines={row.mayChay} value={(m) => m.soLuong} />
+              </td>
+              <td className={`${td} text-center`}>
+                <MachineLines machines={row.mayChay} value={(m) => m.gioBatDau} />
+              </td>
+              <td className={`${td} text-center`}>
+                <MachineLines machines={row.mayChay} value={(m) => m.gioKetThuc} />
+              </td>
               <td className={`${td} min-w-[100px]`}>{row.chtTen || "—"}</td>
               <td className={`${td} min-w-[100px]`}>{row.kySuTen || "—"}</td>
               <td className={`${td} min-w-[100px]`}>{row.laiMayTen || "—"}</td>
@@ -580,11 +681,11 @@ export default function DailyWorkReport() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toast, setToast] = useState("");
   const [personnel, setPersonnel] = useState<PersonnelOption[]>([]);
-  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [machines, setMachines] = useState<JournalMachineOption[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    loadMachineOptions()
+    loadJournalMachineOptions()
       .then((options) => {
         if (!cancelled) setMachines(options);
       })

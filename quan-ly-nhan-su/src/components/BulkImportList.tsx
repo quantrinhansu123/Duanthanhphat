@@ -194,7 +194,8 @@ function WelderTable({ rows }: { rows: WelderSummaryRow[] }) {
 }
 
 function YearTable({ rows }: { rows: YearSummaryRow[] }) {
-  const totals = rows.reduce(
+  const sortedRows = [...rows].sort((a, b) => b.nam_thuc_hien - a.nam_thuc_hien);
+  const totals = sortedRows.reduce(
     (acc, row) => ({
       trialFbw: acc.trialFbw + row.thu_nghiem_dao_tao_fbw,
       trialAtw: acc.trialAtw + row.thu_nghiem_dao_tao_atw,
@@ -242,7 +243,7 @@ function YearTable({ rows }: { rows: YearSummaryRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
+              {sortedRows.map((row) => (
                 <tr key={row.nam_thuc_hien} className="transition-colors hover:bg-blue-50/50">
                   <td className="px-3 py-3 text-center font-mono font-semibold text-slate-900">{row.nam_thuc_hien}</td>
                   {renderCells(row.thu_nghiem_dao_tao_fbw, row.thu_nghiem_dao_tao_atw)}

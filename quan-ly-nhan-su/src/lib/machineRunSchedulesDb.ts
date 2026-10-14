@@ -322,6 +322,41 @@ function mapAssignmentRow(row: AssignmentDbRow): MachineRunSchedule {
   };
 }
 
+export type JournalMachineOption = MachineOption & { lastRunDate: string };
+
+/** Máy có trong nhật ký chạy máy (phan_cong_may), máy chạy gần nhất đứng trước. */
+export async function loadJournalMachineOptions(): Promise<JournalMachineOption[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = createClient();
+  const pageSize = 1000;
+  const byKey = new Map<string, JournalMachineOption>();
+
+  for (let from = 0; from < 20000; from += pageSize) {
+    const { data, error } = await supabase
+      .from("phan_cong_may")
+      .select("ngay,may_id,ma_may,ten_may")
+      .order("ngay", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(missingAssignmentTableMessage(error));
+    const chunk = (data ?? []) as Pick<AssignmentDbRow, "ngay" | "may_id" | "ma_may" | "ten_may">[];
+    for (const row of chunk) {
+      const code = row.ma_may?.trim() || "";
+      if (!row.may_id && (!code || code === "Chưa gán máy")) continue;
+      const id = row.may_id || `code:${code}`;
+      if (byKey.has(id)) continue;
+      byKey.set(id, {
+        id,
+        code,
+        name: row.ten_may?.trim() || code,
+        lastRunDate: String(row.ngay).slice(0, 10),
+      });
+    }
+    if (chunk.length < pageSize) break;
+  }
+
+  return Array.from(byKey.values());
+}
+
 /** Danh sách đã lưu trong phan_cong_may. Không tổng hợp nhật ký khi mở trang. */
 export async function loadMachineRunScheduleBundle(): Promise<MachineRunScheduleBundle> {
   if (!isSupabaseConfigured()) return seedBundle("Chưa cấu hình Supabase");
@@ -474,7 +509,7 @@ export async function loadScheduleJournalDetails(schedule: MachineRunSchedule): 
       .from("bao_cao_moi_han_theo_du_an")
       .select("id,ma_lich_su,du_an_id,du_an,ngay_thuc_hien,loai_moi_han,cong_nghe_han,so_luong_thuc_hien,so_luong_loi,tho_han_id,ten_tho_han,may_id,ma_may,ten_may,ca_han,tinh_trang_thi_nghiem,nguyen_nhan_loi")
       .eq("ngay_thuc_hien", schedule.date)
-      .order("ma_lich_su", { ascending: true })
+      .order("ma_lich_su", { ascending: false })
       .range(from, from + pageSize - 1);
 
     if (schedule.projectId) request = request.eq("du_an_id", schedule.projectId);

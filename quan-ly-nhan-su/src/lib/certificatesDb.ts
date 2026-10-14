@@ -23,6 +23,7 @@ export type CertificateDbRow = {
   may_ap_dung?: string | null;
   moi_han_ap_dung?: string | null;
   ghi_chu?: string | null;
+  so_gio?: number | string | null;
   cloudinary_public_id?: string | null;
   secure_url?: string | null;
 };
@@ -83,9 +84,19 @@ const CERTIFICATE_COLUMNS = [
   "may_ap_dung",
   "moi_han_ap_dung",
   "ghi_chu",
+  "so_gio",
   "cloudinary_public_id",
   "secure_url",
-].join(",");
+];
+
+/** Cột thêm bằng migration sau, có thể chưa tồn tại trên DB cũ. */
+const OPTIONAL_CERTIFICATE_COLUMNS = ["moi_han_ap_dung", "so_gio"];
+
+function parseHours(value: CertificateDbRow["so_gio"]): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const hours = Number(value);
+  return Number.isFinite(hours) ? hours : undefined;
+}
 
 function normalize(value: string) {
   return value
@@ -172,6 +183,7 @@ function dbRowToCertificate(
     weldScope: row.moi_han_ap_dung || undefined,
     certificateNumber: row.so_chung_chi || undefined,
     notes: row.ghi_chu || undefined,
+    hours: parseHours(row.so_gio),
   };
 }
 
@@ -187,15 +199,20 @@ export async function loadCertificateRegistry(): Promise<CertificateRegistry> {
     (async () => {
       const rows: CertificateDbRow[] = [];
       const pageSize = 1000;
-      let selectCols = CERTIFICATE_COLUMNS;
+      let selectCols = [...CERTIFICATE_COLUMNS];
       for (let offset = 0; ; offset += pageSize) {
         const { data, error } = await supabase
           .from("chung_chi")
-          .select(selectCols)
+          .select(selectCols.join(","))
           .order("created_at", { ascending: false })
           .range(offset, offset + pageSize - 1);
-        if (error && /moi_han_ap_dung/.test(error.message ?? "") && selectCols.includes("moi_han_ap_dung")) {
-          selectCols = CERTIFICATE_COLUMNS.replace(",moi_han_ap_dung", "");
+        const missingColumn = error
+          ? OPTIONAL_CERTIFICATE_COLUMNS.find(
+              (column) => selectCols.includes(column) && (error.message ?? "").includes(column),
+            )
+          : undefined;
+        if (missingColumn) {
+          selectCols = selectCols.filter((column) => column !== missingColumn);
           offset -= pageSize;
           continue;
         }
@@ -282,6 +299,25 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
   if (error) throw new Error(formatSupabaseError(error));
 }
 
+const CERTIFICATE_TYPE_EXTRAS_MIGRATION_MESSAGE =
+  "Chưa thể lưu nhà cung cấp / loại dây hàn vì migration_20261015_chung_chi_nha_cung_cap_day_han.sql chưa được chạy trên Supabase.";
+
+/** Bỏ cột chưa có trên DB cũ khỏi payload; báo lỗi nếu người dùng đã nhập giá trị cho cột đó. */
+function dropMissingGroupColumn(payload: Record<string, string | null>, message: string | undefined): boolean {
+  const text = message ?? "";
+  if (/moi_han_ap_dung/.test(text) && "moi_han_ap_dung" in payload) {
+    delete payload.moi_han_ap_dung;
+    return true;
+  }
+  if (/nha_cung_cap|loai_day_han/.test(text) && "nha_cung_cap" in payload) {
+    if (payload.nha_cung_cap || payload.loai_day_han) throw new Error(CERTIFICATE_TYPE_EXTRAS_MIGRATION_MESSAGE);
+    delete payload.nha_cung_cap;
+    delete payload.loai_day_han;
+    return true;
+  }
+  return false;
+}
+
 /** Tạo loại chứng chỉ mới trong danh mục (không bắt buộc gán nhân sự). */
 export async function createCertificateType(input: {
   title: string;
@@ -289,6 +325,8 @@ export async function createCertificateType(input: {
   organization?: string;
   machine?: string;
   weldScope?: string;
+  supplier?: string;
+  wireType?: string;
   notes?: string;
   employeeIds?: string[];
   issuedAt?: string;
@@ -330,6 +368,21 @@ export async function createCertificateType(input: {
         .update({ moi_han_ap_dung: weldScope })
         .ilike("ten_chung_chi", title);
     }
+    const supplier = input.supplier?.trim() || null;
+    const wireType = input.wireType?.trim() || null;
+    if (supplier || wireType) {
+      const { error: extrasError } = await createClient()
+        .from("chung_chi_nhom")
+        .update({ nha_cung_cap: supplier, loai_day_han: wireType })
+        .ilike("ten_nhom", title);
+      if (extrasError) {
+        throw new Error(
+          /nha_cung_cap|loai_day_han/.test(extrasError.message ?? "")
+            ? CERTIFICATE_TYPE_EXTRAS_MIGRATION_MESSAGE
+            : formatSupabaseError(extrasError),
+        );
+      }
+    }
     return { id: "", name: title };
   }
 
@@ -351,25 +404,18 @@ export async function createCertificateType(input: {
     don_vi_cap: input.organization?.trim() || null,
     may_ap_dung: input.machine?.trim() || null,
     moi_han_ap_dung: weldScope,
+    nha_cung_cap: input.supplier?.trim() || null,
+    loai_day_han: input.wireType?.trim() || null,
     ghi_chu: input.notes?.trim() || null,
     file_chung_chi: imageUrl,
     secure_url: imageUrl,
     cloudinary_public_id: input.cloudinaryPublicId?.trim() || null,
   };
-  let { data, error } = await supabase
-    .from("chung_chi_nhom")
-    .insert(insertPayload)
-    .select("id, ten_nhom")
-    .single();
-  if (error && /moi_han_ap_dung/.test(error.message ?? "")) {
-    const { moi_han_ap_dung: _ignored, ...withoutWeldScope } = insertPayload;
-    const retry = await supabase
-      .from("chung_chi_nhom")
-      .insert(withoutWeldScope)
-      .select("id, ten_nhom")
-      .single();
-    data = retry.data;
-    error = retry.error;
+  const insertGroup = () =>
+    supabase.from("chung_chi_nhom").insert(insertPayload).select("id, ten_nhom").single();
+  let { data, error } = await insertGroup();
+  for (let attempt = 0; attempt < 2 && error && dropMissingGroupColumn(insertPayload, error.message); attempt += 1) {
+    ({ data, error } = await insertGroup());
   }
   if (error) throw new Error(formatSupabaseError(error));
   if (!data) throw new Error("Không tạo được loại chứng chỉ.");
@@ -383,6 +429,8 @@ export type UpdateCertificateTypeInput = {
   organization?: string;
   machine?: string;
   weldScope?: string;
+  supplier?: string;
+  wireType?: string;
   notes?: string;
   employeeIds?: string[];
   imageUrl?: string;
@@ -405,6 +453,8 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
     don_vi_cap: input.organization?.trim() || null,
     may_ap_dung: input.machine?.trim() || null,
     moi_han_ap_dung: input.weldScope?.trim() || null,
+    nha_cung_cap: input.supplier?.trim() || null,
+    loai_day_han: input.wireType?.trim() || null,
     ghi_chu: input.notes?.trim() || null,
     updated_at: new Date().toISOString(),
   };
@@ -417,19 +467,12 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
     groupUpdate.cloudinary_public_id = input.cloudinaryPublicId.trim() || null;
   }
 
-  const { error: groupError } = await supabase
-    .from("chung_chi_nhom")
-    .update(groupUpdate)
-    .eq("id", input.id);
-  if (groupError) {
-    if (/moi_han_ap_dung/.test(groupError.message ?? "")) {
-      const { moi_han_ap_dung: _ignored, ...withoutWeldScope } = groupUpdate;
-      const retry = await supabase.from("chung_chi_nhom").update(withoutWeldScope).eq("id", input.id);
-      if (retry.error) throw new Error(formatSupabaseError(retry.error));
-    } else {
-      throw new Error(formatSupabaseError(groupError));
-    }
+  const updateGroup = () => supabase.from("chung_chi_nhom").update(groupUpdate).eq("id", input.id);
+  let { error: groupError } = await updateGroup();
+  for (let attempt = 0; attempt < 2 && groupError && dropMissingGroupColumn(groupUpdate, groupError.message); attempt += 1) {
+    ({ error: groupError } = await updateGroup());
   }
+  if (groupError) throw new Error(formatSupabaseError(groupError));
 
   const certificateUpdate: Record<string, string | null> = {
     ten_chung_chi: title,
@@ -713,6 +756,33 @@ export async function updateGroupExpiry(groupId: string | undefined, title: stri
   });
 
   if (error) throw new Error(formatSupabaseError(error));
+}
+
+/** Lưu nhanh ghi chú / số giờ của 1 chứng chỉ (dùng cho tự động lưu). */
+export async function updateCertificateNotesAndHours(
+  id: string,
+  patch: { notes?: string; hours?: number | null },
+) {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  if (patch.hours !== undefined && patch.hours !== null && (!Number.isFinite(patch.hours) || patch.hours < 0)) {
+    throw new Error("Số giờ phải là số không âm.");
+  }
+
+  const updatePayload: Record<string, string | number | null> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.notes !== undefined) updatePayload.ghi_chu = patch.notes.trim() || null;
+  if (patch.hours !== undefined) updatePayload.so_gio = patch.hours;
+
+  const { error } = await createClient().from("chung_chi").update(updatePayload).eq("id", id);
+  if (error) {
+    if ((error.message ?? "").includes("so_gio")) {
+      throw new Error(
+        "Database chưa có cột số giờ. Chạy file supabase/migration_20261014_so_gio_chung_chi.sql trên Supabase rồi thử lại.",
+      );
+    }
+    throw new Error(formatSupabaseError(error));
+  }
 }
 
 /** Thu hồi chứng chỉ (đổi trạng thái sang Thu hồi, không xóa dữ liệu) */

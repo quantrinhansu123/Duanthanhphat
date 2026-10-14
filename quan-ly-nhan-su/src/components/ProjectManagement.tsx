@@ -12,6 +12,7 @@ import { type ProjectWeld, type ProjectWeldStatus } from "@/data/projectWelds";
 import { type Project, type TheoreticalProgressRow } from "@/data/projects";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { useProjectsData } from "@/hooks/useProjectsData";
+import { compareNewestDate } from "@/lib/dateOrder";
 import {
   loadMachineRunScheduleBundle,
 } from "@/lib/machineRunSchedulesDb";
@@ -44,7 +45,8 @@ import { REPORT_MACHINES } from "@/lib/weldReportData";
 import { loadTongMoiHanNam } from "@/lib/tongMoiHanNamDb";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
-const PROGRESS_PAGE_SIZE = 50;
+/** Mỗi trang giữ trọn các ngày, tối đa khoảng này dòng dự án. */
+const PROGRESS_PAGE_ROW_CAP = 24;
 type ProjectMachineOption = { code: string; name: string; weldingTechnology?: string };
 type ProjectPersonnelOption = Pick<
   PersonnelCertificateRow,
@@ -91,6 +93,47 @@ type DetailTab = "info" | "personnel" | "progress" | "machines";
 
 function viDate(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString("vi-VN");
+}
+
+function viWeekday(iso: string) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("vi-VN", { weekday: "long" });
+}
+
+type TheoreticalDayGroup = {
+  ngay: string;
+  rows: TheoreticalProgressViewRow[];
+  totalWelds: number;
+};
+
+function groupProgressByDay(rows: TheoreticalProgressViewRow[]): TheoreticalDayGroup[] {
+  const groups: TheoreticalDayGroup[] = [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    if (last?.ngay === row.ngay) {
+      last.rows.push(row);
+      last.totalWelds += row.so_moi_han;
+    } else {
+      groups.push({ ngay: row.ngay, rows: [row], totalWelds: row.so_moi_han });
+    }
+  }
+  return groups;
+}
+
+function paginateDayGroups(groups: TheoreticalDayGroup[], rowCap: number): TheoreticalDayGroup[][] {
+  const pages: TheoreticalDayGroup[][] = [];
+  let page: TheoreticalDayGroup[] = [];
+  let count = 0;
+  for (const group of groups) {
+    if (page.length > 0 && count + group.rows.length > rowCap) {
+      pages.push(page);
+      page = [];
+      count = 0;
+    }
+    page.push(group);
+    count += group.rows.length;
+  }
+  if (page.length > 0) pages.push(page);
+  return pages;
 }
 
 function emptyProject(): Project {
@@ -396,6 +439,7 @@ function ProjectTheoreticalProgressTab({
 }) {
   const total = rows.reduce((sum, row) => sum + row.so_moi_han, 0);
   const offDaySet = new Set(offDays);
+  const displayRows = [...rows].sort((a, b) => compareNewestDate(a.ngay, b.ngay));
 
   return (
     <div>
@@ -419,7 +463,7 @@ function ProjectTheoreticalProgressTab({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((row, index) => (
+            {displayRows.map((row, index) => (
               <tr key={`${row.ngay}-${index}`} className="hover:bg-slate-50/80 transition-colors">
                 <td className="px-3.5 py-2.5">
                   <span className="font-mono text-slate-900">{viDate(row.ngay)}</span>
@@ -474,12 +518,14 @@ function AllTheoreticalProgressTable({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(rows.length / PROGRESS_PAGE_SIZE));
+  const dayGroups = useMemo(
+    () => groupProgressByDay(rows.filter((row) => row.so_moi_han > 0)),
+    [rows],
+  );
+  const pages = useMemo(() => paginateDayGroups(dayGroups, PROGRESS_PAGE_ROW_CAP), [dayGroups]);
+  const totalPages = Math.max(1, pages.length);
   const currentPage = Math.min(page, totalPages);
-  const pageRows = useMemo(() => {
-    const start = (currentPage - 1) * PROGRESS_PAGE_SIZE;
-    return rows.slice(start, start + PROGRESS_PAGE_SIZE);
-  }, [rows, currentPage]);
+  const pageGroups = pages[currentPage - 1] ?? [];
 
   useEffect(() => {
     setPage(1);
@@ -512,7 +558,7 @@ function AllTheoreticalProgressTable({
               Tiến độ lý thuyết
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-slate-500">
-              Số mối hàn dự kiến theo dự án theo ngày — tải mẫu Excel hoặc nhập file để cập nhật
+              Nhóm theo ngày — trong mỗi ngày liệt kê các dự án có mối hàn dự kiến. Tải mẫu Excel hoặc nhập file để cập nhật.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -556,48 +602,77 @@ function AllTheoreticalProgressTable({
         <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-              <th className="px-4 py-3">Ngày</th>
-              <th className="px-3.5 py-3">Dự án</th>
+              <th className="px-4 py-3">Dự án trong ngày</th>
               <th className="px-3.5 py-3 text-right">Số mối hàn</th>
               <th className="px-3.5 py-3 text-right">Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading ? (
+          {loading ? (
+            <tbody>
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
                   Đang tải tiến độ lý thuyết…
                 </td>
               </tr>
-            ) : pageRows.length > 0 ? (
-              pageRows.map((row, index) => (
-                <tr key={`${row.du_an_id}-${row.ngay}-${index}`} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-4 py-3 font-mono text-slate-900 whitespace-nowrap">
-                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <input aria-label="Ngày kế hoạch" type="date" disabled={saving} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} className="rounded border border-slate-300 p-1" /> : viDate(row.ngay)}
-                  </td>
-                  <td className="px-3.5 py-3 font-medium text-slate-900">{row.du_an}</td>
-                  <td className="px-3.5 py-3 text-right font-mono font-semibold tabular-nums text-[#0047AB]">
-                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <input aria-label="Số mối hàn kế hoạch" type="number" min="0" step="1" disabled={saving} value={editing.count} onChange={(e) => setEditing({ ...editing, count: e.target.value })} className="w-24 rounded border border-slate-300 p-1 text-right" /> : row.so_moi_han.toLocaleString("vi-VN")}
-                  </td>
-                  <td className="px-3.5 py-3 text-right whitespace-nowrap">
-                    {editing?.key === `${row.du_an_id}-${row.ngay}` ? <>
-                      <button disabled={saving || importing} onClick={() => void changeRow(row)} className="px-2 text-blue-700 disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu"}</button>
-                      <button disabled={saving} onClick={() => setEditing(null)} className="px-2 text-slate-600">Hủy</button>
-                    </> : <>
-                      <button disabled={saving || importing} onClick={() => setEditing({ key: `${row.du_an_id}-${row.ngay}`, date: row.ngay, count: String(row.so_moi_han) })} className="px-2 text-blue-700 disabled:opacity-50">Sửa</button>
-                      <button disabled={saving || importing} onClick={() => void changeRow(row, true)} className="px-2 text-rose-700 disabled:opacity-50">Xóa</button>
-                    </>}
+            </tbody>
+          ) : pageGroups.length > 0 ? (
+            pageGroups.map((group) => (
+              <tbody key={group.ngay} className="border-t border-slate-200">
+                <tr className="bg-slate-50/90">
+                  <td colSpan={3} className="px-4 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-slate-900">{viDate(group.ngay)}</span>
+                        <span className="text-xs font-medium capitalize text-slate-500">{viWeekday(group.ngay)}</span>
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {group.rows.length.toLocaleString("vi-VN")} dự án
+                        </span>
+                      </div>
+                      <span className="font-mono text-sm font-semibold tabular-nums text-[#0047AB]">
+                        {group.totalWelds.toLocaleString("vi-VN")} mối hàn
+                      </span>
+                    </div>
                   </td>
                 </tr>
-              ))
-            ) : (
+                {group.rows.map((row) => {
+                  const rowKey = `${row.du_an_id}-${row.ngay}`;
+                  const draft = editing?.key === rowKey ? editing : null;
+                  return (
+                    <tr key={rowKey} className="border-t border-slate-100 hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-2.5 pl-8 font-medium text-slate-900">
+                        {draft ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input aria-label="Ngày kế hoạch" type="date" disabled={saving} value={draft.date} onChange={(e) => setEditing({ ...draft, date: e.target.value })} className="rounded border border-slate-300 p-1" />
+                            <span>{row.du_an}</span>
+                          </div>
+                        ) : row.du_an}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-[#0047AB]">
+                        {draft ? <input aria-label="Số mối hàn kế hoạch" type="number" min="0" step="1" disabled={saving} value={draft.count} onChange={(e) => setEditing({ ...draft, count: e.target.value })} className="w-24 rounded border border-slate-300 p-1 text-right" /> : row.so_moi_han.toLocaleString("vi-VN")}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                        {draft ? <>
+                          <button disabled={saving || importing} onClick={() => void changeRow(row)} className="px-2 text-blue-700 disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu"}</button>
+                          <button disabled={saving} onClick={() => setEditing(null)} className="px-2 text-slate-600">Hủy</button>
+                        </> : <>
+                          <button disabled={saving || importing} onClick={() => setEditing({ key: rowKey, date: row.ngay, count: String(row.so_moi_han) })} className="px-2 text-blue-700 disabled:opacity-50">Sửa</button>
+                          <button disabled={saving || importing} onClick={() => void changeRow(row, true)} className="px-2 text-rose-700 disabled:opacity-50">Xóa</button>
+                        </>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))
+          ) : (
+            <tbody>
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={3} className="px-4 py-10 text-center text-slate-500">
                   Chưa có kế hoạch. Tải mẫu Excel hoặc mở dự án để tạo tiến độ theo ngày.
                 </td>
               </tr>
-            )}
-          </tbody>
+            </tbody>
+          )}
         </table>
       </div>
       {rows.length > 0 && (
@@ -606,7 +681,9 @@ function AllTheoreticalProgressTable({
             Trang <strong className="font-mono text-slate-800">{currentPage}</strong> /{" "}
             <strong className="font-mono text-slate-800">{totalPages}</strong>
             {" · "}
-            {rows.length.toLocaleString("vi-VN")} dòng
+            {dayGroups.length.toLocaleString("vi-VN")} ngày
+            {" · "}
+            {dayGroups.reduce((sum, group) => sum + group.rows.length, 0).toLocaleString("vi-VN")} dòng có mối hàn
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1174,13 +1251,15 @@ function ProjectWorkTab({
   const passed = rows.filter((w) => w.status === "Đạt").length;
   const failed = rows.filter((w) => w.status === "Lỗi").length;
   const welderNames = personnelOptions.map((person) => person.ho_ten.trim()).filter(Boolean);
+  const visibleRows = [...rows].sort(
+    (a, b) => b.performedAt.localeCompare(a.performedAt) || b.id.localeCompare(a.id),
+  );
 
   function addRow() {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
     onChange([
-      ...rows,
       {
         id: `w-${Date.now()}`,
         projectId,
@@ -1192,15 +1271,16 @@ function ProjectWorkTab({
         status: "Chờ kiểm tra",
         errorReason: "",
       },
+      ...rows,
     ]);
   }
 
-  function updateRow(index: number, patch: Partial<ProjectWeld>) {
-    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  function updateRow(id: string, patch: Partial<ProjectWeld>) {
+    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
-  function removeRow(index: number) {
-    onChange(rows.filter((_, i) => i !== index));
+  function removeRow(id: string) {
+    onChange(rows.filter((row) => row.id !== id));
   }
 
   return (
@@ -1233,7 +1313,7 @@ function ProjectWorkTab({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((w, index) =>
+            {visibleRows.map((w) =>
               readOnly ? (
                 <WeldRow key={w.id} row={w} />
               ) : (
@@ -1241,7 +1321,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <input
                       value={w.weldId}
-                      onChange={(e) => updateRow(index, { weldId: e.target.value })}
+                      onChange={(e) => updateRow(w.id, { weldId: e.target.value })}
                       className="h-9 w-full min-w-[100px] rounded-lg border border-slate-300 bg-white px-2 text-xs font-mono text-[#0047AB] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     />
                   </td>
@@ -1250,7 +1330,7 @@ function ProjectWorkTab({
                       type="datetime-local"
                       value={w.performedAt.slice(0, 16)}
                       onChange={(e) =>
-                        updateRow(index, {
+                        updateRow(w.id, {
                           performedAt: e.target.value ? new Date(e.target.value).toISOString() : w.performedAt,
                         })
                       }
@@ -1260,7 +1340,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <select
                       value={w.method}
-                      onChange={(e) => updateRow(index, { method: e.target.value as ProjectWeld["method"] })}
+                      onChange={(e) => updateRow(w.id, { method: e.target.value as ProjectWeld["method"] })}
                       className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-[#0047AB] focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
                       <option value="FBW">FBW</option>
@@ -1270,7 +1350,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <select
                       value={w.machine}
-                      onChange={(e) => updateRow(index, { machine: e.target.value })}
+                      onChange={(e) => updateRow(w.id, { machine: e.target.value })}
                       className="h-9 w-full min-w-[88px] rounded-lg border border-slate-300 bg-white px-2 text-xs font-mono text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
                       {MACHINE_TYPES.map((m) => (
@@ -1283,7 +1363,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <select
                       value={w.welderName}
-                      onChange={(e) => updateRow(index, { welderName: e.target.value })}
+                      onChange={(e) => updateRow(w.id, { welderName: e.target.value })}
                       className="h-9 w-full min-w-[120px] rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
                       {welderNames.length === 0 ? (
@@ -1305,7 +1385,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <select
                       value={w.status}
-                      onChange={(e) => updateRow(index, { status: e.target.value as ProjectWeldStatus })}
+                      onChange={(e) => updateRow(w.id, { status: e.target.value as ProjectWeldStatus })}
                       className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     >
                       {WELD_STATUS_OPTIONS.map((s) => (
@@ -1318,7 +1398,7 @@ function ProjectWorkTab({
                   <td className="px-3.5 py-2.5">
                     <input
                       value={w.errorReason}
-                      onChange={(e) => updateRow(index, { errorReason: e.target.value })}
+                      onChange={(e) => updateRow(w.id, { errorReason: e.target.value })}
                       placeholder="—"
                       className="h-9 w-full min-w-[120px] rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 outline-hidden"
                     />
@@ -1326,7 +1406,7 @@ function ProjectWorkTab({
                   <td className="px-2 py-2.5 text-center">
                     <button
                       type="button"
-                      onClick={() => removeRow(index)}
+                      onClick={() => removeRow(w.id)}
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
                       aria-label="Xóa"
                     >
@@ -1397,7 +1477,7 @@ function useProjectMachineRuns(projectId: string, projectName: string, enabled: 
               (projectId && s.projectId === projectId) ||
               (projectName && s.projectName === projectName),
           );
-        setRuns(rows);
+        setRuns([...rows].sort((a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi")));
         if (bundle.error) setError(bundle.error);
       })
       .catch((err) => {
@@ -1961,8 +2041,23 @@ export default function ProjectManagement() {
         weldMethodFilter === "Tất cả" ||
         (p.machineTypes ?? []).some((code) => machineMethodByCode.get(code) === weldMethodFilter);
       return matchStatus && matchProject && matchDate && matchWeldType && matchWeldMethod;
-    });
+    }).sort(
+      (a, b) =>
+        compareNewestDate(a.startDate, b.startDate) ||
+        compareNewestDate(a.endDate, b.endDate) ||
+        a.name.localeCompare(b.name, "vi"),
+    );
   }, [list, status, projectFilter, dateFrom, dateTo, weldTypeFilter, weldMethodFilter, machineMethodByCode]);
+
+  const filteredProgressRows = useMemo(() => {
+    const projectIds = new Set(filtered.map((p) => p.id));
+    return progressRows.filter(
+      (row) =>
+        projectIds.has(row.du_an_id) &&
+        (!dateFrom || row.ngay >= dateFrom) &&
+        (!dateTo || row.ngay <= dateTo),
+    );
+  }, [filtered, progressRows, dateFrom, dateTo]);
 
   const activeCount = list.filter((p) => p.status === "Đang triển khai").length;
 
@@ -2121,7 +2216,11 @@ export default function ProjectManagement() {
   ): Promise<boolean> {
     const project = list.find((item) => item.id === row.du_an_id);
     if (!project) return false;
-    const current = project.theoreticalProgress ?? [];
+    const stored = project.theoreticalProgress ?? [];
+    const fromView = progressRows
+      .filter((item) => item.du_an_id === row.du_an_id)
+      .map((item) => ({ ngay: item.ngay, so_moi_han: item.so_moi_han }));
+    const current = stored.length > 0 ? stored : fromView;
     if (next && next.ngay !== row.ngay && current.some((item) => item.ngay === next.ngay)) {
       window.alert("Dự án đã có kế hoạch ngày này. Hãy sửa dòng hiện có.");
       return false;
@@ -2227,7 +2326,7 @@ export default function ProjectManagement() {
 
   function handleExportTheoreticalExcel() {
     exportTheoreticalProgressToExcel(
-      progressRows.map((row) => {
+      filteredProgressRows.map((row) => {
         const project = list.find((p) => p.id === row.du_an_id);
         return {
           ngay: row.ngay,
@@ -2506,7 +2605,7 @@ export default function ProjectManagement() {
       </div>
 
       <AllTheoreticalProgressTable
-        rows={progressRows}
+        rows={filteredProgressRows}
         loading={progressLoading}
         importing={importingExcel}
         onDownloadTemplate={() => downloadTheoreticalProgressExcelTemplate()}

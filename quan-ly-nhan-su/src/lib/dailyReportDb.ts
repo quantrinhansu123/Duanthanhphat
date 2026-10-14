@@ -14,6 +14,16 @@ export type DailyWorkType = {
   active: boolean;
 };
 
+export type DailyWorkMachine = {
+  /** Máy trong danh mục thiết bị (thiet_bi.id) — rỗng khi nhật ký chưa gán máy. */
+  mayId: string;
+  maMay: string;
+  tenMay: string;
+  soLuong: string;
+  gioBatDau: string;
+  gioKetThuc: string;
+};
+
 export type DailyWorkItem = {
   id: string;
   baoCaoId: string;
@@ -28,12 +38,7 @@ export type DailyWorkItem = {
   denHomQua: string;
   homNay: string;
   tichLuy: string;
-  thietKe: string;
-  loaiMay: string;
-  /** Máy trong danh mục thiết bị (thiet_bi.id) — rỗng khi nhập tay. */
-  mayId: string;
-  mayBatDau: string;
-  mayKetThuc: string;
+  mayChay: DailyWorkMachine[];
   chtId: string;
   chtTen: string;
   kySuId: string;
@@ -111,6 +116,7 @@ type WorkRowDb = {
   may_id?: string | null;
   may_bat_dau: string | null;
   may_ket_thuc: string | null;
+  may_chay?: unknown;
   cht_id: string | null;
   cht_ten: string | null;
   ky_su_id: string | null;
@@ -192,7 +198,49 @@ function toNum(value: string) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function workMachineKey(machine: Pick<DailyWorkMachine, "mayId" | "maMay">) {
+  return machine.mayId || `code:${machine.maMay}`;
+}
+
+export function workMachineLabel(machine: Pick<DailyWorkMachine, "maMay" | "tenMay">) {
+  return machine.tenMay.trim() || machine.maMay.trim();
+}
+
+function legacyMachines(
+  loaiMay: string | null | undefined,
+  mayId: string | null | undefined,
+  batDau: string | null | undefined,
+  ketThuc: string | null | undefined,
+): DailyWorkMachine[] {
+  if (!loaiMay && !mayId && !batDau && !ketThuc) return [];
+  return [
+    {
+      mayId: mayId ?? "",
+      maMay: "",
+      tenMay: loaiMay ?? "",
+      soLuong: "",
+      gioBatDau: batDau ?? "",
+      gioKetThuc: ketThuc ?? "",
+    },
+  ];
+}
+
+function parseMachines(value: unknown): DailyWorkMachine[] | null {
+  if (!Array.isArray(value)) return null;
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      mayId: String(item.may_id ?? ""),
+      maMay: String(item.ma_may ?? ""),
+      tenMay: String(item.ten_may ?? ""),
+      soLuong: numStr(item.so_luong as number | string | null | undefined),
+      gioBatDau: String(item.gio_bat_dau ?? ""),
+      gioKetThuc: String(item.gio_ket_thuc ?? ""),
+    }));
+}
+
 function mapWork(row: WorkRowDb): DailyWorkItem {
+  const machines = parseMachines(row.may_chay);
   return {
     id: row.id,
     baoCaoId: row.bao_cao_id,
@@ -207,11 +255,10 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     denHomQua: numStr(row.den_hom_qua),
     homNay: numStr(row.hom_nay),
     tichLuy: numStr(row.tich_luy),
-    thietKe: numStr(row.thiet_ke),
-    loaiMay: row.loai_may ?? "",
-    mayId: row.may_id ?? "",
-    mayBatDau: row.may_bat_dau ?? "",
-    mayKetThuc: row.may_ket_thuc ?? "",
+    mayChay:
+      machines && machines.length > 0
+        ? machines
+        : legacyMachines(row.loai_may, row.may_id, row.may_bat_dau, row.may_ket_thuc),
     chtId: row.cht_id ?? "",
     chtTen: row.cht_ten ?? numStr(row.so_cht),
     kySuId: row.ky_su_id ?? "",
@@ -334,6 +381,21 @@ function emptyLocal(): LocalStore {
   return { headers: [], work: [], equipment: [], incidents: [] };
 }
 
+type LegacyLocalWork = DailyWorkItem & {
+  loaiMay?: string;
+  mayId?: string;
+  mayBatDau?: string;
+  mayKetThuc?: string;
+};
+
+function normalizeLocalWork(item: LegacyLocalWork): DailyWorkItem {
+  if (Array.isArray(item.mayChay)) return item;
+  return {
+    ...item,
+    mayChay: legacyMachines(item.loaiMay, item.mayId, item.mayBatDau, item.mayKetThuc),
+  };
+}
+
 function readLocal(): LocalStore {
   if (typeof window === "undefined") return emptyLocal();
   try {
@@ -342,7 +404,7 @@ function readLocal(): LocalStore {
     const parsed = JSON.parse(raw) as LocalStore;
     return {
       headers: parsed.headers ?? [],
-      work: parsed.work ?? [],
+      work: (parsed.work ?? []).map(normalizeLocalWork),
       equipment: parsed.equipment ?? [],
       incidents: parsed.incidents ?? [],
     };
@@ -388,11 +450,7 @@ function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
     denHomQua: "",
     homNay: "",
     tichLuy: "",
-    thietKe: "",
-    loaiMay: type.loaiMayMacDinh,
-    mayId: "",
-    mayBatDau: "",
-    mayKetThuc: "",
+    mayChay: [],
     ...EMPTY_MANPOWER,
     nlBatDau: "",
     nlKetThuc: "",
@@ -604,6 +662,8 @@ export async function insertWorkItem(
     .eq("phan", phan);
   if (countRes.error) throw countRes.error;
 
+  const machines = input.mayChay;
+  const firstMachine = machines[0];
   const payload: Record<string, unknown> = {
     bao_cao_id: header.id,
     phan,
@@ -617,11 +677,18 @@ export async function insertWorkItem(
     den_hom_qua: toNum(input.denHomQua),
     hom_nay: toNum(input.homNay),
     tich_luy: toNum(input.tichLuy),
-    thiet_ke: toNum(input.thietKe),
-    loai_may: input.loaiMay || null,
-    may_id: input.mayId || null,
-    may_bat_dau: input.mayBatDau || null,
-    may_ket_thuc: input.mayKetThuc || null,
+    loai_may: machines.map(workMachineLabel).filter(Boolean).join(", ") || null,
+    may_id: firstMachine?.mayId || null,
+    may_bat_dau: firstMachine?.gioBatDau || null,
+    may_ket_thuc: firstMachine?.gioKetThuc || null,
+    may_chay: machines.map((m) => ({
+      may_id: m.mayId || null,
+      ma_may: m.maMay,
+      ten_may: m.tenMay,
+      so_luong: toNum(m.soLuong),
+      gio_bat_dau: m.gioBatDau || null,
+      gio_ket_thuc: m.gioKetThuc || null,
+    })),
     cht_id: input.chtId || null,
     cht_ten: input.chtTen || null,
     ky_su_id: input.kySuId || null,
@@ -642,6 +709,19 @@ export async function insertWorkItem(
     .insert(payload)
     .select("*")
     .single();
+  if (error && /may_chay/.test(error.message ?? "")) {
+    if (machines.length > 1) {
+      throw new Error(
+        "Chưa thể lưu nhiều máy cho một hạng mục vì migration_20261015_bao_cao_ngay_may_chay.sql chưa được chạy trên Supabase.",
+      );
+    }
+    delete payload.may_chay;
+    ({ data, error } = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .insert(payload)
+      .select("*")
+      .single());
+  }
   if (error && /ten_moi_han|may_id/.test(error.message ?? "")) {
     if (payload.ten_moi_han || payload.may_id) {
       throw new Error(
@@ -789,11 +869,7 @@ export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
     denHomQua: "",
     homNay: "",
     tichLuy: "",
-    thietKe: "",
-    loaiMay: workType?.loaiMayMacDinh ?? "",
-    mayId: "",
-    mayBatDau: "",
-    mayKetThuc: "",
+    mayChay: [],
     ...EMPTY_MANPOWER,
     nlBatDau: "",
     nlKetThuc: "",

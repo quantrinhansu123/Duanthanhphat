@@ -24,21 +24,25 @@ import {
   parseWeldJournalExcel,
 } from "@/lib/parseWeldJournalExcel";
 import {
+  addHoursToWeldTime,
+  DEFAULT_WELD_WORK_HOURS,
   fetchFailedWeldsInDateRange,
   exportFilteredWeldJournal,
   deleteWeldJournalEntry,
   displayWeldCode,
   formatJournalDateIso,
+  formatWeldWorkHours,
+  weldWorkHours,
   insertWeldJournalEntry,
   invalidateWeldReportCache,
   isWeldCodeTaken,
   loadJournalProjectOptions,
+  loadLatestProjectWeld,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
   normalizeWeldTime,
   parseWeldLinkedImageAssets,
   resolveWeldTestStatus,
-  updateWeldJournalShifts,
   updateWeldJournalEntry,
   type CertifiedWelderOption,
   type WeldLinkedImageAsset,
@@ -48,6 +52,7 @@ import {
   WELD_SHIFTS,
   resolveWeldShift,
 } from "@/lib/weldReportData";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { buildWeldCodePrefix, hasOwnWeldSitePrefix, normalizeWeldSitePrefix, suggestWeldCode } from "@/lib/weldCode";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import {
@@ -65,6 +70,8 @@ import { useLanguage } from "@/i18n/LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
+const SHOW_WELD_GPS = false;
+const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
 type JournalProjectOption = { id: string; label: string; ma_du_an: string };
 
@@ -90,6 +97,9 @@ type JournalFormValues = {
   kinh_do: string;
   vi_do: string;
   ten_moi_han_theo_may: string;
+  ma_hien_truong: string;
+  gio_bat_dau: string;
+  gio_ket_thuc: string;
 };
 
 function isInternalTrainingProject(label: string) {
@@ -108,6 +118,14 @@ function defaultPerformedAt() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function formatWeldWorkRange(fromValue: string | null | undefined, toValue: string | null | undefined) {
+  const from = normalizeWeldTime(fromValue);
+  const to = normalizeWeldTime(toValue);
+  if (!from && !to) return "—";
+  const hours = formatWeldWorkHours(weldWorkHours(from, to));
+  return `${from ?? "?"} – ${to ?? "?"}${hours ? ` (${hours})` : ""}`;
 }
 
 function emptyJournalForm(
@@ -130,7 +148,7 @@ function emptyJournalForm(
     loai_ray: "P50",
     cong_nghe_han: "FBW",
     loai_moi_han: isInternalTraining ? "Đào tạo" : "Sản xuất",
-    result: isInternalTraining ? "Không thí nghiệm" : "Chờ thí nghiệm",
+    result: DEFAULT_WELD_TEST_STATUS,
     ma_khuyet_tat: [],
     nguyen_nhan_loi: "",
     moi_han_lien_ket: "",
@@ -142,7 +160,110 @@ function emptyJournalForm(
     kinh_do: "",
     vi_do: "",
     ten_moi_han_theo_may: "",
+    ma_hien_truong: "",
+    gio_bat_dau: "",
+    gio_ket_thuc: "",
   };
+}
+
+const LAST_ENTRY_STORAGE_KEY = "weldJournal.lastEntry";
+
+type JournalSuggestion = Partial<
+  Pick<
+    JournalFormValues,
+    | "du_an_id"
+    | "tho_han_id"
+    | "may_id"
+    | "chung_chi_su_dung"
+    | "loai_ray"
+    | "cong_nghe_han"
+    | "loai_moi_han"
+    | "ca_han"
+    | "gio_bat_dau"
+    | "gio_ket_thuc"
+  >
+>;
+
+function pickJournalSuggestion(values: JournalSuggestion): JournalSuggestion {
+  return {
+    du_an_id: values.du_an_id,
+    tho_han_id: values.tho_han_id,
+    may_id: values.may_id,
+    chung_chi_su_dung: values.chung_chi_su_dung,
+    loai_ray: values.loai_ray,
+    cong_nghe_han: values.cong_nghe_han,
+    loai_moi_han: values.loai_moi_han,
+    ca_han: values.ca_han,
+    gio_bat_dau: values.gio_bat_dau,
+    gio_ket_thuc: values.gio_ket_thuc,
+  };
+}
+
+function rememberJournalEntry(values: JournalSuggestion) {
+  try {
+    window.localStorage.setItem(LAST_ENTRY_STORAGE_KEY, JSON.stringify(pickJournalSuggestion(values)));
+  } catch {
+    /* localStorage bị chặn — bỏ qua */
+  }
+}
+
+function readRememberedJournalEntry(): JournalSuggestion {
+  try {
+    const raw = window.localStorage.getItem(LAST_ENTRY_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as JournalSuggestion) : {};
+  } catch {
+    return {};
+  }
+}
+
+function weldRowToSuggestion(row: WeldReportRow): JournalSuggestion {
+  return {
+    du_an_id: row.du_an_id,
+    tho_han_id: row.tho_han_id,
+    may_id: row.may_id ?? undefined,
+    chung_chi_su_dung: row.chung_chi_su_dung ?? undefined,
+    loai_ray: row.loai_ray,
+    cong_nghe_han: row.cong_nghe_han,
+    loai_moi_han: row.loai_moi_han,
+    ca_han: resolveWeldShift(row),
+    gio_bat_dau: normalizeWeldTime(row.gio_bat_dau) ?? undefined,
+    gio_ket_thuc: normalizeWeldTime(row.gio_ket_thuc) ?? undefined,
+  };
+}
+
+/** Áp gợi ý vào form, chỉ nhận giá trị còn tồn tại trong danh mục hiện tại. */
+function applyJournalSuggestion(
+  form: JournalFormValues,
+  suggestion: JournalSuggestion,
+  projects: JournalProjectOption[],
+  welders: CertifiedWelderOption[],
+  machines: MachineOption[],
+): JournalFormValues {
+  const next = { ...form };
+  if (suggestion.du_an_id && projects.some((item) => item.id === suggestion.du_an_id)) {
+    next.du_an_id = suggestion.du_an_id;
+  }
+  const welder = welders.find((item) => item.id === suggestion.tho_han_id);
+  if (welder) {
+    next.tho_han_id = welder.id;
+    if (suggestion.chung_chi_su_dung && welder.certificates.includes(suggestion.chung_chi_su_dung)) {
+      next.chung_chi_su_dung = suggestion.chung_chi_su_dung;
+    }
+  }
+  if (suggestion.may_id && machines.some((item) => item.id === suggestion.may_id)) {
+    next.may_id = suggestion.may_id;
+  }
+  if (suggestion.loai_ray?.trim()) next.loai_ray = suggestion.loai_ray;
+  if (suggestion.cong_nghe_han === "FBW" || suggestion.cong_nghe_han === "ATW") {
+    next.cong_nghe_han = suggestion.cong_nghe_han;
+  }
+  if (suggestion.loai_moi_han && WELD_TYPE_OPTIONS.includes(suggestion.loai_moi_han)) {
+    next.loai_moi_han = suggestion.loai_moi_han;
+  }
+  if (suggestion.ca_han && WELD_SHIFTS.includes(suggestion.ca_han)) next.ca_han = suggestion.ca_han;
+  if (suggestion.gio_bat_dau) next.gio_bat_dau = suggestion.gio_bat_dau;
+  if (suggestion.gio_ket_thuc) next.gio_ket_thuc = suggestion.gio_ket_thuc;
+  return next;
 }
 
 function journalRowToForm(
@@ -171,6 +292,9 @@ function journalRowToForm(
     kinh_do: gpsPoint ? String(gpsPoint.longitude) : "",
     vi_do: gpsPoint ? String(gpsPoint.latitude) : "",
     ten_moi_han_theo_may: row.ten_moi_han_theo_may ?? "",
+    ma_hien_truong: row.ma_hien_truong ?? "",
+    gio_bat_dau: normalizeWeldTime(row.gio_bat_dau) ?? "",
+    gio_ket_thuc: normalizeWeldTime(row.gio_ket_thuc) ?? "",
   };
 }
 
@@ -184,9 +308,11 @@ function JournalFormModal({
   existingCodes,
   recordId,
   saving,
+  bulkProgress = "",
   unlinkedGpsPoints = [],
   onClose,
   onSubmit,
+  onBulkSubmit,
 }: {
   open: boolean;
   mode?: "create" | "edit";
@@ -198,9 +324,11 @@ function JournalFormModal({
   /** Id bản ghi đang sửa — bỏ qua khi kiểm tra trùng mã. */
   recordId?: string;
   saving: boolean;
+  bulkProgress?: string;
   unlinkedGpsPoints?: MapPoint[];
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void | Promise<void>;
+  onBulkSubmit?: (values: BulkFillValues) => void | Promise<boolean | void>;
 }) {
   const shouldCheckCertificate = mode === "edit";
   const { lang } = useLanguage();
@@ -215,6 +343,11 @@ function JournalFormModal({
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
   const [extraTab, setExtraTab] = useState<"linked" | "gps">("linked");
+  const [fillByDay, setFillByDay] = useState(false);
+  const [bulkDateFrom, setBulkDateFrom] = useState(() => defaultPerformedAt().slice(0, 10));
+  const [bulkDateTo, setBulkDateTo] = useState(() => defaultPerformedAt().slice(0, 10));
+  const [bulkCount, setBulkCount] = useState(1);
+  const [projectSuggestion, setProjectSuggestion] = useState<{ code: string; date: string } | null>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const initialImageIds = useRef(new Set<string>());
@@ -266,8 +399,15 @@ function JournalFormModal({
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && (!wasOpen.current || initializedForm.current !== initial)) {
-      const next = initial ?? emptyJournalForm(projects, welders, machines);
+      const next = initial ?? applyJournalSuggestion(
+        emptyJournalForm(projects, welders, machines),
+        readRememberedJournalEntry(),
+        projects,
+        welders,
+        machines,
+      );
       setForm(next);
+      setProjectSuggestion(null);
       initialImageIds.current = new Set(next.anh_moi_han_lien_ket.map((asset) => asset.publicId));
       removedImages.current = [];
       setImageError("");
@@ -276,10 +416,47 @@ function JournalFormModal({
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
       setCodeEdited(mode === "edit");
+      const today = defaultPerformedAt().slice(0, 10);
+      setFillByDay(false);
+      setBulkDateFrom(today);
+      setBulkDateTo(today);
+      setBulkCount(1);
       initializedForm.current = initial;
     }
     wasOpen.current = open;
   }, [open, initial, projects, welders, machines, mode]);
+
+  const suggestionOptions = useRef({ projects, welders, machines });
+  useEffect(() => {
+    suggestionOptions.current = { projects, welders, machines };
+  }, [projects, welders, machines]);
+
+  useEffect(() => {
+    if (!open || mode !== "create" || !form.du_an_id) return;
+    const projectId = form.du_an_id;
+    let active = true;
+    loadLatestProjectWeld(projectId, defaultPerformedAt().slice(0, 10))
+      .then((row) => {
+        if (!active) return;
+        if (!row) {
+          setProjectSuggestion(null);
+          return;
+        }
+        const options = suggestionOptions.current;
+        setForm((current) =>
+          current.du_an_id === projectId
+            ? applyJournalSuggestion(current, weldRowToSuggestion(row), options.projects, options.welders, options.machines)
+            : current,
+        );
+        setProjectSuggestion({ code: displayWeldCode(row.ma_lich_su), date: row.ngay_thuc_hien?.slice(0, 10) ?? "" });
+      })
+      .catch(() => {
+        if (active) setProjectSuggestion(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, mode, form.du_an_id]);
 
   useEffect(() => {
     if (!open) return;
@@ -315,6 +492,11 @@ function JournalFormModal({
   }, [open, mode, codeEdited, suggestedCode, form.ma_lich_su]);
 
   const projectMissingCode = Boolean(selectedProject) && !hasOwnWeldSitePrefix(selectedProject?.ma_du_an);
+  const fillByDayActive = mode === "create" && fillByDay;
+  const bulkDates = listIsoDates(bulkDateFrom, bulkDateTo);
+  const bulkCountSafe = Math.min(100, Math.max(0, Math.round(Number(bulkCount) || 0)));
+  const bulkSpanTooLong = Boolean(bulkDateFrom && bulkDateTo && bulkDateFrom <= bulkDateTo && bulkDates.length > 31);
+  const bulkTotal = bulkDates.length * Math.max(0, bulkCountSafe);
   const selectedCertificateFamily = form.chung_chi_su_dung
     ? certificateEquipmentFamily(form.chung_chi_su_dung)
     : null;
@@ -453,7 +635,72 @@ function JournalFormModal({
     onClose();
   }
 
+  async function handleBulkFromForm() {
+    if (projectMissingCode) {
+      window.alert("Dự án chưa có mã dự án. Vào Quản lý dự án để khai báo mã (VD: PHQ) trước khi ghi nhật ký hàn.");
+      return;
+    }
+    if (!form.du_an_id) {
+      window.alert("Vui lòng chọn dự án.");
+      return;
+    }
+    if (!form.tho_han_id) {
+      window.alert("Vui lòng chọn người trực tiếp hàn.");
+      return;
+    }
+    if (!selectedWelder || selectedEligibleCertificates.length === 0) {
+      window.alert("Người trực tiếp hàn chưa có chứng chỉ còn hiệu lực trong hồ sơ. Không thể ghi nhật ký.");
+      return;
+    }
+    if (!form.chung_chi_su_dung || !selectedEligibleCertificates.includes(form.chung_chi_su_dung)) {
+      window.alert("Vui lòng chọn chứng chỉ sử dụng cho mối hàn.");
+      return;
+    }
+    if (!form.may_id) {
+      window.alert("Vui lòng chọn máy thực hiện mối hàn.");
+      return;
+    }
+    const today = defaultPerformedAt().slice(0, 10);
+    if (bulkDateTo > today) {
+      window.alert("Ngày thực hiện không được lớn hơn ngày hiện tại.");
+      return;
+    }
+    if (bulkDates.length === 0 || bulkSpanTooLong || bulkCountSafe < 1) {
+      window.alert("Chọn khoảng ngày tối đa 31 ngày và số mối mỗi ngày từ 1 đến 100.");
+      return;
+    }
+    try {
+      const created = await onBulkSubmit?.({
+        du_an_id: form.du_an_id,
+        dateFrom: bulkDateFrom,
+        dateTo: bulkDateTo,
+        count: bulkCountSafe,
+        tho_han_id: form.tho_han_id,
+        may_id: form.may_id,
+        loai_ray: form.loai_ray,
+        cong_nghe_han: form.cong_nghe_han,
+        loai_moi_han: form.loai_moi_han,
+        result: form.result,
+        ca_han: form.ca_han,
+        gio_bat_dau: form.gio_bat_dau,
+        gio_ket_thuc: form.gio_ket_thuc,
+        chung_chi_su_dung: form.chung_chi_su_dung,
+      });
+      if (created === false) return;
+      const newAssets = form.anh_moi_han_lien_ket.filter(
+        (asset) => !initialImageIds.current.has(asset.publicId),
+      );
+      await Promise.allSettled(newAssets.map((asset) => deleteCloudinaryAsset(asset.publicId)));
+    } catch {
+      /* parent đã alert */
+    }
+  }
+
   async function handleSubmit() {
+    if (fillByDayActive) {
+      await handleBulkFromForm();
+      return;
+    }
     if (mode === "create" && projectMissingCode) {
       window.alert("Dự án chưa có mã dự án. Vào Quản lý dự án để khai báo mã (VD: PHQ) trước khi ghi nhật ký hàn.");
       return;
@@ -555,7 +802,73 @@ function JournalFormModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {mode === "create" && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={fillByDay}
+                  disabled={saving}
+                  onChange={(event) => setFillByDay(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-slate-900">Điền mối theo ngày</span>
+                  <span className="mt-0.5 block text-[11px] font-medium leading-relaxed text-slate-600">
+                    Tạo nhiều mối cùng thông số cho các ngày đã chọn. Mã mối được tạo tự động.
+                  </span>
+                </span>
+              </label>
+              {fillByDayActive && (
+                <div className="mt-3 space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Từ ngày
+                      <DateField
+                        value={bulkDateFrom}
+                        onChange={(dateFrom) => {
+                          setBulkDateFrom(dateFrom);
+                          if (bulkDateTo && dateFrom > bulkDateTo) setBulkDateTo(dateFrom);
+                        }}
+                        className="mt-1.5"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Đến ngày
+                      <DateField
+                        value={bulkDateTo}
+                        onChange={(dateTo) => {
+                          setBulkDateTo(dateTo);
+                          if (bulkDateFrom && dateTo < bulkDateFrom) setBulkDateFrom(dateTo);
+                        }}
+                        className="mt-1.5"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Số mối mỗi ngày
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={bulkCount}
+                        onChange={(event) => setBulkCount(Number(event.target.value))}
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-xs font-medium text-[#0047AB]">
+                    {bulkSpanTooLong
+                      ? "Chỉ điền tối đa 31 ngày mỗi lần."
+                      : bulkDates.length > 0 && bulkCountSafe > 0
+                        ? `${bulkDates.length.toLocaleString("vi-VN")} ngày × ${bulkCountSafe.toLocaleString("vi-VN")} mối = ${bulkTotal.toLocaleString("vi-VN")} bản ghi.`
+                        : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          {!fillByDayActive && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               <div className="flex items-center justify-between gap-2">
                 <label htmlFor="journal-weld-code">Mã mối hàn</label>
@@ -603,8 +916,16 @@ function JournalFormModal({
               </span>
             </label>
           </div>
+          )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          {fillByDayActive && projectMissingCode && (
+            <span className="block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-800">
+              Dự án chưa có mã dự án — khai báo trong Quản lý dự án trước khi ghi nhật ký.
+            </span>
+          )}
+
+          <div className={`grid grid-cols-1 gap-3.5 ${fillByDayActive ? "" : "sm:grid-cols-2"}`}>
+            {!fillByDayActive && (
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày giờ
               <DateField
@@ -614,6 +935,21 @@ function JournalFormModal({
                 className="mt-1.5"
               />
             </label>
+            )}
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Tình trạng thí nghiệm
+              <SelectMenu
+                value={mode === "create" ? DEFAULT_WELD_TEST_STATUS : form.result}
+                onChange={(result) => setForm({ ...form, result: result as JournalFormValues["result"] })}
+                options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((value) => ({ value, label: value }))}
+                disabled={mode === "create"}
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ca hàn
               <SelectMenu
@@ -625,15 +961,38 @@ function JournalFormModal({
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Tình trạng thí nghiệm
-              <SelectMenu
-                value={form.result}
-                onChange={(result) => setForm({ ...form, result: result as JournalFormValues["result"] })}
-                options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((value) => ({ value, label: value }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
+              Từ giờ
+              <input
+                type="time"
+                value={form.gio_bat_dau}
+                onChange={(event) => {
+                  const gio_bat_dau = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    gio_bat_dau,
+                    gio_ket_thuc: gio_bat_dau
+                      ? addHoursToWeldTime(gio_bat_dau, DEFAULT_WELD_WORK_HOURS)
+                      : current.gio_ket_thuc,
+                  }));
+                }}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Đến giờ
+              <input
+                type="time"
+                value={form.gio_ket_thuc}
+                onChange={(event) => setForm({ ...form, gio_ket_thuc: event.target.value })}
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
+            </label>
+            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Số tiếng
+              <div className="mt-1.5 flex h-10 min-w-[84px] items-center justify-center rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs sm:text-sm font-bold text-[#0047AB]">
+                {formatWeldWorkHours(weldWorkHours(form.gio_bat_dau, form.gio_ket_thuc)) || "—"}
+              </div>
+            </div>
           </div>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -715,11 +1074,14 @@ function JournalFormModal({
                     : current.loai_moi_han === "Đào tạo"
                       ? "Sản xuất"
                       : current.loai_moi_han,
-                  result: internalTraining
-                    ? "Không thí nghiệm"
-                    : current.result === "Không thí nghiệm"
-                      ? "Chờ thí nghiệm"
-                      : current.result,
+                  result:
+                    mode === "create"
+                      ? DEFAULT_WELD_TEST_STATUS
+                      : internalTraining
+                        ? "Không thí nghiệm"
+                        : current.result === "Không thí nghiệm"
+                          ? "Chờ thí nghiệm"
+                          : current.result,
                 }));
               }}
               options={projects.map((p) => ({
@@ -733,6 +1095,12 @@ function JournalFormModal({
               className="mt-1.5"
               buttonClassName="h-10 shadow-2xs"
             />
+            {mode === "create" && projectSuggestion && (
+              <span className="mt-1.5 block rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800">
+                Đã gợi ý theo mối gần nhất của dự án: {projectSuggestion.code}
+                {projectSuggestion.date ? ` · ${formatJournalDateIso(projectSuggestion.date)}` : ""}. Có thể sửa lại.
+              </span>
+            )}
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -804,6 +1172,7 @@ function JournalFormModal({
             </label>
           </div>
 
+          {!fillByDayActive && (
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex border-b border-slate-200 bg-slate-50">
               <button
@@ -822,6 +1191,7 @@ function JournalFormModal({
                   </span>
                 )}
               </button>
+              {SHOW_WELD_GPS && (
               <button
                 type="button"
                 onClick={() => setExtraTab("gps")}
@@ -838,9 +1208,10 @@ function JournalFormModal({
                   </span>
                 )}
               </button>
+              )}
             </div>
 
-            {extraTab === "linked" ? (
+            {!SHOW_WELD_GPS || extraTab === "linked" ? (
               <div className="space-y-3 bg-slate-50/40 p-3.5">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block text-xs font-semibold text-slate-600">
@@ -1038,8 +1409,9 @@ function JournalFormModal({
               </div>
             )}
           </div>
+          )}
 
-          {form.result === "Không đạt" && (
+          {!fillByDayActive && form.result === "Không đạt" && (
             <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-rose-800">
@@ -1076,6 +1448,7 @@ function JournalFormModal({
             </div>
           )}
 
+          {!fillByDayActive && (
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Ghi chú
             <textarea
@@ -1085,6 +1458,7 @@ function JournalFormModal({
               className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 resize-y"
             />
           </label>
+          )}
         </div>
 
         <div className="flex shrink-0 justify-end gap-2.5 border-t border-slate-200 px-5 sm:px-6 py-3.5 bg-white">
@@ -1099,10 +1473,18 @@ function JournalFormModal({
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={saving || uploadingImages || projects.length === 0 || welders.length === 0 || machines.length === 0}
+            disabled={saving || uploadingImages || projects.length === 0 || welders.length === 0 || machines.length === 0 || (fillByDayActive && (bulkSpanTooLong || bulkTotal < 1))}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs disabled:opacity-60 transition-all duration-150 cursor-pointer"
           >
-            {saving ? "Đang lưu…" : uploadingImages ? "Đang tải ảnh…" : mode === "edit" ? "Lưu thay đổi" : "Thêm nhật ký"}
+            {saving
+              ? (fillByDayActive ? (bulkProgress || "Đang điền…") : "Đang lưu…")
+              : uploadingImages
+                ? "Đang tải ảnh…"
+                : mode === "edit"
+                  ? "Lưu thay đổi"
+                  : fillByDayActive
+                    ? "Điền mối"
+                    : "Thêm nhật ký"}
           </button>
         </div>
       </div>
@@ -1138,257 +1520,10 @@ type BulkFillValues = {
   loai_moi_han: WeldReportRow["loai_moi_han"];
   result: WeldTestStatus;
   ca_han: WeldShift;
+  gio_bat_dau?: string;
+  gio_ket_thuc?: string;
   chung_chi_su_dung: string;
 };
-
-function BulkFillJournalDialog({
-  projects,
-  welders,
-  machines,
-  saving,
-  progress,
-  onClose,
-  onSubmit,
-}: {
-  projects: JournalProjectOption[];
-  welders: CertifiedWelderOption[];
-  machines: MachineOption[];
-  saving: boolean;
-  progress: string;
-  onClose: () => void;
-  onSubmit: (values: BulkFillValues) => void | Promise<void>;
-}) {
-  const railOptions = useCatalogOptions("Loại ray");
-  const today = defaultPerformedAt().slice(0, 10);
-  const [values, setValues] = useState<BulkFillValues>(() => {
-    const project = projects[0];
-    const internal = isInternalTrainingProject(project?.label ?? "");
-    return {
-      du_an_id: project?.id ?? "",
-      dateFrom: today,
-      dateTo: today,
-      count: 1,
-      tho_han_id: welders[0]?.id ?? "",
-      may_id: machines[0]?.id ?? "",
-      loai_ray: railOptions[0] || "P50",
-      cong_nghe_han: "FBW",
-      loai_moi_han: internal ? "Đào tạo" : "Sản xuất",
-      result: internal ? "Không thí nghiệm" : "Chờ thí nghiệm",
-      ca_han: "Ca 1",
-      chung_chi_su_dung: welders[0]?.certificates[0] ?? "",
-    };
-  });
-  const welder = welders.find((item) => item.id === values.tho_han_id);
-  const certificates = welder?.certificates ?? [];
-  const dates = listIsoDates(values.dateFrom, values.dateTo);
-  const spanTooLong = values.dateFrom && values.dateTo && values.dateFrom <= values.dateTo && dates.length > 31;
-  const totalRows = dates.length * Math.max(0, values.count);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-3 sm:p-6">
-      <form
-        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (saving) return;
-          void onSubmit(values);
-        }}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Điền mối hàn theo ngày</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Chọn dự án, các ngày cần điền và số mối mỗi ngày. Thông số còn lại giống khi thêm một mối mới. Xác nhận xong, hệ thống tạo đủ số mối đó cho từng ngày.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            aria-label="Đóng"
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="space-y-3.5 overflow-y-auto px-5 py-4">
-          <label className="block text-xs font-semibold text-slate-700">
-            Dự án
-            <SelectMenu
-              value={values.du_an_id}
-              onChange={(du_an_id) => {
-                const internal = isInternalTrainingProject(projects.find((item) => item.id === du_an_id)?.label ?? "");
-                setValues((current) => ({
-                  ...current,
-                  du_an_id,
-                  loai_moi_han: internal ? "Đào tạo" : current.loai_moi_han === "Đào tạo" ? "Sản xuất" : current.loai_moi_han,
-                  result: internal ? "Không thí nghiệm" : current.result === "Không thí nghiệm" ? "Chờ thí nghiệm" : current.result,
-                }));
-              }}
-              options={projects.map((item) => ({ value: item.id, label: item.ma_du_an ? `${item.label} · ${item.ma_du_an}` : item.label }))}
-              placeholder="Chọn dự án"
-              className="mt-1.5"
-              buttonClassName="h-10 shadow-2xs"
-            />
-          </label>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="block text-xs font-semibold text-slate-700">
-              Từ ngày
-              <DateField
-                value={values.dateFrom}
-                onChange={(dateFrom) => setValues((current) => ({ ...current, dateFrom }))}
-                className="mt-1.5"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Đến ngày
-              <DateField
-                value={values.dateTo}
-                onChange={(dateTo) => setValues((current) => ({ ...current, dateTo }))}
-                className="mt-1.5"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Số mối mỗi ngày
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={values.count}
-                onChange={(event) => setValues((current) => ({ ...current, count: Number(event.target.value) }))}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-          </div>
-          <p className="text-xs font-medium text-[#0047AB]">
-            {spanTooLong
-              ? "Chỉ điền tối đa 31 ngày mỗi lần."
-              : dates.length > 0 && values.count > 0
-                ? `${dates.length.toLocaleString("vi-VN")} ngày × ${values.count.toLocaleString("vi-VN")} mối = ${totalRows.toLocaleString("vi-VN")} bản ghi. Mã mối được tạo tự động.`
-                : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-semibold text-slate-700">
-              Người trực tiếp hàn
-              <SelectMenu
-                value={values.tho_han_id}
-                onChange={(tho_han_id) => {
-                  const next = welders.find((item) => item.id === tho_han_id);
-                  setValues((current) => ({
-                    ...current,
-                    tho_han_id,
-                    chung_chi_su_dung: next?.certificates.includes(current.chung_chi_su_dung)
-                      ? current.chung_chi_su_dung
-                      : next?.certificates[0] ?? "",
-                  }));
-                }}
-                options={welders.map((item) => ({ value: item.id, label: item.label }))}
-                searchable
-                placeholder="Chọn thợ hàn"
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Chứng chỉ sử dụng
-              <SelectMenu
-                value={values.chung_chi_su_dung}
-                onChange={(chung_chi_su_dung) => setValues((current) => ({ ...current, chung_chi_su_dung }))}
-                options={certificates.map((item) => ({ value: item, label: item }))}
-                placeholder={certificates.length === 0 ? "Nhân sự chưa có chứng chỉ" : "Chọn chứng chỉ"}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-          </div>
-          <label className="block text-xs font-semibold text-slate-700">
-            Máy thực hiện
-            <SelectMenu
-              value={values.may_id}
-              onChange={(may_id) => setValues((current) => ({ ...current, may_id }))}
-              options={machines.map((item) => ({ value: item.id, label: item.name.trim() || item.code }))}
-              searchable={machines.length > 5}
-              placeholder="Chọn máy"
-              className="mt-1.5"
-              buttonClassName="h-10 shadow-2xs"
-            />
-          </label>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-semibold text-slate-700">
-              Ca hàn
-              <SelectMenu
-                value={values.ca_han}
-                onChange={(ca_han) => setValues((current) => ({ ...current, ca_han: ca_han as WeldShift }))}
-                options={WELD_SHIFTS.map((item) => ({ value: item, label: item }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Tình trạng thí nghiệm
-              <SelectMenu
-                value={values.result}
-                onChange={(result) => setValues((current) => ({ ...current, result: result as WeldTestStatus }))}
-                options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((item) => ({ value: item, label: item }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="block text-xs font-semibold text-slate-700">
-              Loại ray
-              <SelectMenu
-                value={values.loai_ray}
-                onChange={(loai_ray) => setValues((current) => ({ ...current, loai_ray }))}
-                options={(railOptions.length > 0 ? railOptions : ["P50"]).map((item) => ({ value: item, label: item }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Công nghệ
-              <SelectMenu
-                value={values.cong_nghe_han}
-                onChange={(cong_nghe_han) => setValues((current) => ({ ...current, cong_nghe_han: cong_nghe_han as BulkFillValues["cong_nghe_han"] }))}
-                options={["FBW", "ATW"].map((item) => ({ value: item, label: item }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700">
-              Loại mối
-              <SelectMenu
-                value={values.loai_moi_han}
-                onChange={(loai_moi_han) => setValues((current) => ({ ...current, loai_moi_han: loai_moi_han as BulkFillValues["loai_moi_han"] }))}
-                options={WELD_TYPE_OPTIONS.map((item) => ({ value: item, label: item }))}
-                className="mt-1.5"
-                buttonClassName="h-10 shadow-2xs"
-              />
-            </label>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Hủy
-          </button>
-          <button
-            type="submit"
-            disabled={saving || spanTooLong || totalRows < 1 || !values.du_an_id || !values.tho_han_id || !values.may_id || !values.chung_chi_su_dung}
-            className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? (progress || "Đang điền…") : "Điền mối"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
 
 export default function WeldingJournalList({
   lockedResultFilter,
@@ -1427,7 +1562,6 @@ export default function WeldingJournalList({
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [autoFillOpen, setAutoFillOpen] = useState(false);
-  const [bulkFillOpen, setBulkFillOpen] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
   const [autoFillProjectId, setAutoFillProjectId] = useState("");
@@ -1437,9 +1571,12 @@ export default function WeldingJournalList({
     "Ca 1": { start: "06:00", end: "14:00" },
     "Ca 2": { start: "14:00", end: "22:00" },
   });
-  const [autoFillRows, setAutoFillRows] = useState<WeldReportRow[] | null>(null);
+  const [autoFillCount, setAutoFillCount] = useState(1);
+  const [autoFillTemplate, setAutoFillTemplate] = useState<WeldReportRow | null>(null);
+  const [autoFillExisting, setAutoFillExisting] = useState<number | null>(null);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
   const [autoFillSaving, setAutoFillSaving] = useState(false);
+  const [autoFillProgress, setAutoFillProgress] = useState("");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
@@ -1569,7 +1706,13 @@ export default function WeldingJournalList({
     const gpsByPointCode = new Map(
       gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
     );
-    return rows.map((row) => {
+    const orderedRows = [...rows].sort(
+      (a, b) =>
+        compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) ||
+        (b.gio_han || "").localeCompare(a.gio_han || "") ||
+        b.id.localeCompare(a.id),
+    );
+    return orderedRows.map((row) => {
       const codeKey = row.ma_lich_su.trim().toLocaleLowerCase("vi");
       const gpsPoint =
         gpsByWeldId.get(row.id) ??
@@ -1596,6 +1739,8 @@ export default function WeldingJournalList({
         machine: row.ten_may?.trim() || row.ma_may?.trim() || "Chưa gán máy",
         weldName: displayWeldCode(row.ma_lich_su),
         machineCode: row.ten_moi_han_theo_may?.trim() || "—",
+        siteCode: row.ma_hien_truong?.trim() || "—",
+        workTime: formatWeldWorkRange(row.gio_bat_dau, row.gio_ket_thuc),
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
         project: row.du_an,
         weldType: row.loai_moi_han,
@@ -1723,7 +1868,8 @@ export default function WeldingJournalList({
           "Giờ hàn": normalizeWeldTime(row.gio_han) ?? "",
           "Mã bản ghi": row.id,
           "Mã mối hàn": row.ma_lich_su,
-          "Tên mối hàn theo máy": row.ten_moi_han_theo_may?.trim() || "",
+          "Mã theo máy": row.ten_moi_han_theo_may?.trim() || "",
+          "Mã hiện trường": row.ma_hien_truong?.trim() || "",
           "Mối hàn liên kết": row.moi_han_lien_ket?.trim() || "",
           "Welding ID": row.ma_nhan_su,
           "Người trực tiếp hàn": row.ten_tho_han,
@@ -1734,6 +1880,9 @@ export default function WeldingJournalList({
           "Mã dự án": row.ma_du_an,
           "Dự án": row.du_an,
           "Ca hàn": resolveWeldShift(row),
+          "Từ giờ": normalizeWeldTime(row.gio_bat_dau) ?? "",
+          "Đến giờ": normalizeWeldTime(row.gio_ket_thuc) ?? "",
+          "Số tiếng": weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc) ?? "",
           "Loại ray": row.loai_ray,
           "Công nghệ hàn": row.cong_nghe_han,
           "Loại mối hàn": row.loai_moi_han,
@@ -1749,11 +1898,12 @@ export default function WeldingJournalList({
 
       const worksheet = XLSX.utils.json_to_sheet(data);
       worksheet["!cols"] = [
-        { wch: 7 }, { wch: 17 }, { wch: 38 }, { wch: 25 }, { wch: 22 },
-        { wch: 16 }, { wch: 24 }, { wch: 15 }, { wch: 45 }, { wch: 18 },
-        { wch: 30 }, { wch: 16 }, { wch: 48 }, { wch: 10 }, { wch: 13 },
-        { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
-        { wch: 20 }, { wch: 36 }, { wch: 14 }, { wch: 36 },
+        { wch: 7 }, { wch: 17 }, { wch: 10 }, { wch: 38 }, { wch: 25 },
+        { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 24 },
+        { wch: 15 }, { wch: 45 }, { wch: 18 }, { wch: 30 }, { wch: 16 },
+        { wch: 48 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+        { wch: 13 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 14 },
+        { wch: 14 }, { wch: 20 }, { wch: 36 }, { wch: 20 }, { wch: 36 },
       ];
       if (worksheet["!ref"]) worksheet["!autofilter"] = { ref: worksheet["!ref"] };
 
@@ -1773,115 +1923,169 @@ export default function WeldingJournalList({
     }
   }
 
-  async function handleAutoFillLookup() {
+  useEffect(() => {
+    if (!autoFillOpen || !autoFillProjectId || !autoFillDate) {
+      setAutoFillTemplate(null);
+      setAutoFillExisting(null);
+      return;
+    }
+    const project = projectOptions.find((item) => item.id === autoFillProjectId);
+    let active = true;
+    setAutoFillLoading(true);
+    Promise.all([
+      loadLatestProjectWeld(autoFillProjectId, autoFillDate),
+      project
+        ? exportFilteredWeldJournal({
+            projects: [project.label],
+            resultFilter: "Tất cả",
+            linkedWeldFilter: "Tất cả",
+            weldTypeFilter: "Tất cả",
+            weldMethodFilter: "Tất cả",
+            dateFrom: autoFillDate,
+            dateTo: autoFillDate,
+          })
+        : Promise.resolve([] as WeldReportRow[]),
+    ])
+      .then(([template, existing]) => {
+        if (!active) return;
+        setAutoFillTemplate(template);
+        setAutoFillExisting(existing.length);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAutoFillTemplate(null);
+        setAutoFillExisting(null);
+      })
+      .finally(() => {
+        if (active) setAutoFillLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [autoFillOpen, autoFillProjectId, autoFillDate, projectOptions]);
+
+  const autoFillPlan = useMemo(() => {
+    const count = Math.min(200, Math.max(0, Math.round(Number(autoFillCount) || 0)));
+    const shifts = (["Ca 1", "Ca 2"] as const)
+      .filter((shift) => autoFillShifts[shift])
+      .map((shift) => ({
+        shift,
+        ...autoFillShiftTimes[shift],
+        hours: weldWorkHours(autoFillShiftTimes[shift].start, autoFillShiftTimes[shift].end) ?? 0,
+      }));
+    const totalHours = shifts.reduce((sum, item) => sum + item.hours, 0);
+    let remaining = count;
+    const plan = shifts.map((item, index) => {
+      const share = index === shifts.length - 1
+        ? remaining
+        : totalHours > 0 ? Math.round((count * item.hours) / totalHours) : 0;
+      remaining -= share;
+      return { ...item, count: share };
+    });
+    return { count, totalHours, shifts: plan };
+  }, [autoFillCount, autoFillShifts, autoFillShiftTimes]);
+
+  async function handleAutoFillApply() {
+    if (autoFillSaving) return;
     const selectedProject = projectOptions.find((item) => item.id === autoFillProjectId);
     if (!selectedProject) {
-      window.alert("Vui lòng chọn dự án để tra cứu.");
+      window.alert("Vui lòng chọn dự án.");
       return;
     }
     if (!autoFillDate) {
-      window.alert("Vui lòng chọn ngày thực hiện để tra cứu.");
+      window.alert("Vui lòng chọn ngày thực hiện.");
       return;
     }
-    if (!autoFillShifts["Ca 1"] && !autoFillShifts["Ca 2"]) {
+    if (autoFillDate > defaultPerformedAt().slice(0, 10)) {
+      window.alert("Ngày thực hiện không được lớn hơn ngày hiện tại.");
+      return;
+    }
+    if (autoFillPlan.shifts.length === 0) {
       window.alert("Vui lòng chọn ít nhất một ca.");
       return;
     }
-    for (const shift of ["Ca 1", "Ca 2"] as const) {
-      if (!autoFillShifts[shift]) continue;
-      const { start, end } = autoFillShiftTimes[shift];
-      if (!start || !end || start === end) {
-        window.alert(`Vui lòng chọn giờ bắt đầu và kết thúc hợp lệ cho ${shift}.`);
-        return;
-      }
-    }
-    setAutoFillLoading(true);
-    setAutoFillRows(null);
-    try {
-      const found = await exportFilteredWeldJournal({
-        projects: [selectedProject.label],
-        resultFilter: "Tất cả",
-        linkedWeldFilter: "Tất cả",
-        weldTypeFilter: "Tất cả",
-        weldMethodFilter: "Tất cả",
-        dateFrom: autoFillDate,
-        dateTo: autoFillDate,
-      });
-      setAutoFillRows(found);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể tra cứu nhật ký của dự án");
-    } finally {
-      setAutoFillLoading(false);
-    }
-  }
-
-  const autoFillDays = useMemo(() => {
-    const byDate = new Map<string, WeldReportRow[]>();
-    for (const row of autoFillRows ?? []) {
-      const date = row.ngay_thuc_hien?.slice(0, 10) ?? "";
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-      const dayRows = byDate.get(date) ?? [];
-      dayRows.push(row);
-      byDate.set(date, dayRows);
-    }
-    const durationHours = (shift: "Ca 1" | "Ca 2") => {
-      const { start, end } = autoFillShiftTimes[shift];
-      if (!start || !end || start === end) return 0;
-      const [startHour, startMinute] = start.split(":").map(Number);
-      const [endHour, endMinute] = end.split(":").map(Number);
-      const startValue = startHour * 60 + startMinute;
-      const endValue = endHour * 60 + endMinute;
-      return ((endValue - startValue + 1440) % 1440) / 60;
-    };
-    return Array.from(byDate, ([date, dayRows]) => {
-      dayRows.sort((a, b) =>
-        (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.ma_lich_su.localeCompare(b.ma_lich_su),
-      );
-      const ca1Hours = autoFillShifts["Ca 1"] ? durationHours("Ca 1") : 0;
-      const ca2Hours = autoFillShifts["Ca 2"] ? durationHours("Ca 2") : 0;
-      const ca1Count = ca1Hours + ca2Hours === 0
-        ? 0
-        : Math.round(dayRows.length * ca1Hours / (ca1Hours + ca2Hours));
-      const ca2Count = dayRows.length - ca1Count;
-      return { date, rows: dayRows, ca1Count, ca2Count };
-    }).sort((a, b) => a.date.localeCompare(b.date));
-  }, [autoFillRows, autoFillShifts, autoFillShiftTimes]);
-
-  async function handleAutoFillApply() {
-    if (!autoFillRows || autoFillSaving) return;
-    const assignments: Array<{ id: string; shift: WeldShift }> = [];
-    for (const day of autoFillDays) {
-      const ca1Count = day.ca1Count;
-      day.rows.forEach((row, index) => {
-        assignments.push({ id: row.id, shift: index < ca1Count ? "Ca 1" : "Ca 2" });
-      });
-    }
-    if (!assignments.length) {
-      window.alert("Không có nhật ký có ngày thực hiện để tự động điền ca.");
+    const invalidShift = autoFillPlan.shifts.find((item) => !item.start || !item.end || item.start === item.end);
+    if (invalidShift) {
+      window.alert(`Vui lòng chọn giờ bắt đầu và kết thúc hợp lệ cho ${invalidShift.shift}.`);
       return;
     }
-    const selectedProject = projectOptions.find((item) => item.id === autoFillProjectId);
-    const missingDateCount = autoFillRows.length - assignments.length;
-    const chosenShifts = (["Ca 1", "Ca 2"] as const).filter((shift) => autoFillShifts[shift]);
-    const shiftSummary = chosenShifts.map((shift) => {
-      const { start, end } = autoFillShiftTimes[shift];
-      return `${shift} (${start}–${end})`;
-    }).join(", ");
+    if (autoFillPlan.count < 1) {
+      window.alert("Nhập số mối cần điền (từ 1 đến 200).");
+      return;
+    }
+    const template = autoFillTemplate;
+    if (!template || !template.may_id || !template.chung_chi_su_dung?.trim()) {
+      window.alert(
+        "Dự án chưa có mối hàn nào trước ngày này (đủ thợ hàn, máy, chứng chỉ) để lấy thông số. Hãy thêm tay một mối trước.",
+      );
+      return;
+    }
+    const shiftSummary = autoFillPlan.shifts
+      .map((item) => `${item.shift} (${item.start}–${item.end}, ${formatWeldWorkHours(item.hours)}): ${item.count} mối`)
+      .join("\n");
     const ok = window.confirm(
-      `Tự động phân ${assignments.length.toLocaleString("vi-VN")} mối của dự án "${selectedProject?.label ?? ""}" trong ngày ${autoFillDate} vào ${shiftSummary}. Tỷ lệ chia dựa trên thời lượng ca đã chọn.${missingDateCount ? `\nBỏ qua ${missingDateCount.toLocaleString("vi-VN")} bản ghi thiếu ngày thực hiện.` : ""}\n\nCa hiện tại của các bản ghi này sẽ bị ghi đè. Tiếp tục?`,
+      `Tạo ${autoFillPlan.count.toLocaleString("vi-VN")} mối cho dự án "${selectedProject.label}" ngày ${formatJournalDateIso(autoFillDate)}:\n${shiftSummary}\n\nThông số lấy theo mối ${displayWeldCode(template.ma_lich_su)} (${template.ten_tho_han}, ${template.ten_may || template.ma_may || "máy"}).${autoFillExisting ? `\nNgày này đã có ${autoFillExisting.toLocaleString("vi-VN")} mối.` : ""}\n\nTiếp tục?`,
     );
     if (!ok) return;
+
     setAutoFillSaving(true);
+    setAutoFillProgress("");
     try {
-      await updateWeldJournalShifts(assignments);
+      const sitePrefix = normalizeWeldSitePrefix(selectedProject.ma_du_an);
+      const prefix = buildWeldCodePrefix(template.cong_nghe_han, `${autoFillDate}T08:00`, sitePrefix, template.loai_moi_han);
+      const usedCodes = new Set(await loadWeldCodesWithPrefix(prefix));
+      let done = 0;
+      for (const item of autoFillPlan.shifts) {
+        for (let index = 0; index < item.count; index += 1) {
+          const weldTime = addHoursToWeldTime(item.start, (item.hours * index) / item.count);
+          const maLichSu = suggestWeldCode(
+            template.cong_nghe_han,
+            `${autoFillDate}T${weldTime}`,
+            [...usedCodes],
+            sitePrefix,
+            template.loai_moi_han,
+          );
+          usedCodes.add(maLichSu);
+          await insertWeldJournalEntry({
+            ma_lich_su: maLichSu,
+            du_an_id: selectedProject.id,
+            tho_han_id: template.tho_han_id,
+            nam_thuc_hien: Number(autoFillDate.slice(0, 4)),
+            ngay_thuc_hien: autoFillDate,
+            loai_ray: template.loai_ray,
+            loai_moi_han: template.loai_moi_han,
+            cong_nghe_han: template.cong_nghe_han,
+            so_luong_loi: 0,
+            ma_khuyet_tat: [],
+            tinh_trang_thi_nghiem: DEFAULT_WELD_TEST_STATUS,
+            nguyen_nhan_loi: null,
+            ghi_chu: null,
+            moi_han_lien_ket: null,
+            may_id: template.may_id,
+            chung_chi_su_dung: template.chung_chi_su_dung,
+            hach_toan: "HT-SX01",
+            toa_do_id: null,
+            kinh_do: null,
+            vi_do: null,
+            ly_trinh: null,
+            ca_han: item.shift,
+            gio_han: weldTime,
+            gio_bat_dau: item.start,
+            gio_ket_thuc: item.end,
+          });
+          done += 1;
+          setAutoFillProgress(`Đang điền ${done.toLocaleString("vi-VN")}/${autoFillPlan.count.toLocaleString("vi-VN")}`);
+        }
+      }
       setAutoFillOpen(false);
-      setAutoFillRows(null);
       refetch();
-      showToast(`Đã tự động điền ca cho ${assignments.length.toLocaleString("vi-VN")} mối`);
+      showToast(`Đã tự động điền ${done.toLocaleString("vi-VN")} mối`);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể tự động điền ca");
+      refetch();
+      window.alert(err instanceof Error ? err.message : "Không thể tự động điền mối");
     } finally {
       setAutoFillSaving(false);
+      setAutoFillProgress("");
     }
   }
 
@@ -2054,18 +2258,18 @@ export default function WeldingJournalList({
     const count = Math.round(values.count);
     if (!values.du_an_id || !values.tho_han_id || !values.may_id || !values.chung_chi_su_dung) {
       window.alert("Chọn đủ dự án, thợ hàn, chứng chỉ và máy.");
-      return;
+      return false;
     }
     if (dates.length === 0 || dates.length > 31 || count < 1 || count > 100) {
       window.alert("Chọn khoảng ngày tối đa 31 ngày và số mối mỗi ngày từ 1 đến 100.");
-      return;
+      return false;
     }
     const total = dates.length * count;
     const project = projectOptions.find((item) => item.id === values.du_an_id);
     const confirmed = window.confirm(
       `Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project?.label ?? ""}", từ ${formatJournalDateIso(values.dateFrom)} đến ${formatJournalDateIso(values.dateTo)}.\nTổng ${total.toLocaleString("vi-VN")} bản ghi. Tiếp tục?`,
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     setBulkFillSaving(true);
     setBulkFillProgress("");
@@ -2112,16 +2316,23 @@ export default function WeldingJournalList({
             vi_do: null,
             ly_trinh: null,
             ca_han: values.ca_han,
+            gio_bat_dau: values.gio_bat_dau,
+            gio_ket_thuc: values.gio_ket_thuc,
           });
           done += 1;
           setBulkFillProgress(`Đang điền ${done.toLocaleString("vi-VN")}/${total.toLocaleString("vi-VN")}`);
         }
       }
-      setBulkFillOpen(false);
+      setFormOpen(false);
+      setEditingRow(null);
+      setEditingForm(null);
+      rememberJournalEntry(values);
       refetch();
       showToast(`Đã điền ${done.toLocaleString("vi-VN")} mối hàn`);
+      return true;
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không điền được mối hàn");
+      return false;
     } finally {
       setBulkFillSaving(false);
       setBulkFillProgress("");
@@ -2162,10 +2373,14 @@ export default function WeldingJournalList({
         ca_han: values.ca_han,
         gio_han: values.performedAt.slice(11, 16),
         ten_moi_han_theo_may: values.ten_moi_han_theo_may,
+        ma_hien_truong: values.ma_hien_truong,
+        gio_bat_dau: values.gio_bat_dau,
+        gio_ket_thuc: values.gio_ket_thuc,
       });
       setFormOpen(false);
       setEditingRow(null);
       setEditingForm(null);
+      rememberJournalEntry(values);
       refetch();
       showToast("Đã thêm nhật ký hàn");
     } catch (err) {
@@ -2215,6 +2430,9 @@ export default function WeldingJournalList({
         ca_han: values.ca_han,
         gio_han: values.performedAt.slice(11, 16),
         ten_moi_han_theo_may: values.ten_moi_han_theo_may,
+        ma_hien_truong: values.ma_hien_truong,
+        gio_bat_dau: values.gio_bat_dau,
+        gio_ket_thuc: values.gio_ket_thuc,
       });
 
       if (values.toa_do_id) {
@@ -2408,23 +2626,14 @@ export default function WeldingJournalList({
                 const currentProject = projectOptions.find((item) => projectFilter.includes(item.label));
                 setAutoFillProjectId(currentProject?.id ?? "");
                 setAutoFillDate(dateFrom === dateTo ? dateFrom : dateFrom || dateTo || defaultPerformedAt().slice(0, 10));
-                setAutoFillRows(null);
+                setAutoFillCount(1);
                 setAutoFillOpen(true);
               }}
               disabled={saving || loading}
-              title="Chia đều nhật ký từng ngày giữa Ca 1 và Ca 2"
+              title="Tạo số mối trong ngày, chia vào các ca theo số giờ"
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
             >
-              Tự động điền ca
-            </button>
-            <button
-              type="button"
-              onClick={() => setBulkFillOpen(true)}
-              disabled={saving || loading || bulkFillSaving}
-              title="Tạo nhiều mối cùng thông số cho các ngày đã chọn"
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-[#0047AB] bg-white px-4 text-xs font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
-            >
-              Điền mối theo ngày
+              Tự động điền
             </button>
             <button
               type="button"
@@ -2518,7 +2727,7 @@ export default function WeldingJournalList({
                 ) : null}
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Mã mối hàn</th>
-                <th className="p-2.5 font-semibold">Tên theo máy</th>
+                <th className="p-2.5 font-semibold">Mã theo máy</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
                 <th className="whitespace-nowrap p-2.5 font-semibold">Loại mối hàn</th>
                 {failedWeldMode ? (
@@ -2776,11 +2985,13 @@ export default function WeldingJournalList({
                 {[
                   ["Ngày thực hiện", detailView.performedDate],
                   ["Ca hàn", detailView.shift],
+                  ["Giờ làm", detailView.workTime],
                   ["Người trực tiếp hàn", detailView.operator],
                   ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
                   ["Tổ hàn", detailRaw?.to_han || "—"],
                   ["Dự án", detailView.project],
-                  ["Tên mối hàn theo máy", detailView.machineCode],
+                  ["Mã theo máy", detailView.machineCode],
+                  ["Mã hiện trường", detailView.siteCode],
                   ["Máy", detailView.machine],
                   ["Loại ray", detailRaw?.loai_ray || "—"],
                   ["Công nghệ hàn", detailRaw?.cong_nghe_han || "—"],
@@ -2845,6 +3056,7 @@ export default function WeldingJournalList({
                 </div>
               )}
 
+              {SHOW_WELD_GPS && (
               <div className="mt-3.5 border-t border-slate-100 pt-3.5">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị trí GPS</div>
                 <div className="mt-0.5 text-sm text-slate-800">{detailView.location}</div>
@@ -2871,6 +3083,7 @@ export default function WeldingJournalList({
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 border-t border-slate-200 px-4 py-3 sm:px-5">
@@ -2904,26 +3117,14 @@ export default function WeldingJournalList({
         </div>
       )}
 
-      {bulkFillOpen && (
-        <BulkFillJournalDialog
-          projects={projectOptions}
-          welders={personnelWelderOptions}
-          machines={machineOptions}
-          saving={bulkFillSaving}
-          progress={bulkFillProgress}
-          onClose={() => { if (!bulkFillSaving) setBulkFillOpen(false); }}
-          onSubmit={handleBulkFill}
-        />
-      )}
-
       {autoFillOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-3 sm:p-6">
           <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Tự động điền ca hàn</h2>
+                <h2 className="text-base font-bold text-slate-900">Tự động điền mối hàn</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Tra cứu mối của một ngày theo dự án và chia theo các ca đã chọn.
+                  Nhập số mối của một ngày, hệ thống tạo đủ số mối và chia vào các ca theo số giờ làm.
                 </p>
               </div>
               <button
@@ -2941,7 +3142,7 @@ export default function WeldingJournalList({
                 Dự án
                 <select
                   value={autoFillProjectId}
-                  onChange={(event) => { setAutoFillProjectId(event.target.value); setAutoFillRows(null); }}
+                  onChange={(event) => setAutoFillProjectId(event.target.value)}
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 shadow-2xs outline-none transition focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                 >
                   <option value="">Chọn dự án cần tra cứu</option>
@@ -2952,19 +3153,33 @@ export default function WeldingJournalList({
                   ))}
                 </select>
               </label>
-              <label className="block text-xs font-semibold text-slate-700">
-                Ngày thực hiện
-                <input
-                  type="date"
-                  value={autoFillDate}
-                  onChange={(event) => { setAutoFillDate(event.target.value); setAutoFillRows(null); }}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Ngày thực hiện
+                  <input
+                    type="date"
+                    value={autoFillDate}
+                    max={defaultPerformedAt().slice(0, 10)}
+                    onChange={(event) => setAutoFillDate(event.target.value)}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Số mối
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={autoFillCount}
+                    onChange={(event) => setAutoFillCount(Number(event.target.value))}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
               <div className="space-y-3">
                 <div>
                   <h3 className="text-xs font-semibold text-slate-700">Chọn ca và giờ làm</h3>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Có thể chọn một hoặc cả hai ca. Nếu chọn một ca, toàn bộ mối trong ngày sẽ được gán vào ca đó.</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">Có thể chọn một hoặc cả hai ca. Nếu chọn một ca, toàn bộ số mối sẽ vào ca đó.</p>
                 </div>
                 {(["Ca 1", "Ca 2"] as const).map((shift) => (
                   <div key={shift} className={`rounded-xl border p-3 ${autoFillShifts[shift] ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-white"}`}>
@@ -2974,7 +3189,6 @@ export default function WeldingJournalList({
                         checked={autoFillShifts[shift]}
                         onChange={(event) => {
                           setAutoFillShifts((current) => ({ ...current, [shift]: event.target.checked }));
-                          setAutoFillRows(null);
                         }}
                         className="h-4 w-4 accent-[#0047AB]"
                       />
@@ -2989,7 +3203,6 @@ export default function WeldingJournalList({
                             value={autoFillShiftTimes[shift].start}
                             onChange={(event) => {
                               setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], start: event.target.value } }));
-                              setAutoFillRows(null);
                             }}
                             className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
                           />
@@ -3001,7 +3214,6 @@ export default function WeldingJournalList({
                             value={autoFillShiftTimes[shift].end}
                             onChange={(event) => {
                               setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], end: event.target.value } }));
-                              setAutoFillRows(null);
                             }}
                             className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
                           />
@@ -3011,31 +3223,34 @@ export default function WeldingJournalList({
                   </div>
                 ))}
               </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-900">
-                Hệ thống tra cứu mối hàn đúng ngày đã chọn. Số mối được chia theo thời lượng của các ca đã chọn; nếu hai ca cùng 8 giờ thì số mối được chia gần bằng nhau.
+              <div className="rounded-xl border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 text-sm">
+                  <span className="font-semibold text-slate-800">Chia theo số giờ</span>
+                  <span className="text-slate-600">
+                    {autoFillPlan.count.toLocaleString("vi-VN")} mối · {formatWeldWorkHours(autoFillPlan.totalHours) || "0 tiếng"}
+                  </span>
+                </div>
+                {autoFillPlan.shifts.length ? autoFillPlan.shifts.map((item) => (
+                  <div key={item.shift} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-0">
+                    <span className="font-medium text-slate-700">{item.shift} · {item.start}–{item.end}</span>
+                    <span className="text-slate-600">{formatWeldWorkHours(item.hours)}</span>
+                    <span className="text-right font-semibold text-[#0047AB]">{item.count.toLocaleString("vi-VN")} mối</span>
+                  </div>
+                )) : (
+                  <p className="px-3 py-4 text-center text-xs text-slate-500">Chọn ít nhất một ca.</p>
+                )}
               </div>
 
-              {autoFillRows && (
-                <div className="rounded-xl border border-slate-200">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 text-sm">
-                    <span className="font-semibold text-slate-800">Kết quả tra cứu</span>
-                    <span className="text-slate-600">
-                      {autoFillRows.length.toLocaleString("vi-VN")} mối · {autoFillDays.length} ngày · {autoFillRows.length - autoFillDays.reduce((sum, day) => sum + day.rows.length, 0)} thiếu ngày
-                    </span>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto">
-                    {autoFillDays.length ? autoFillDays.map((day) => (
-                      <div key={day.date} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-0">
-                        <span className="font-medium text-slate-700">{day.date}</span>
-                        <span className="text-slate-600">Tổng {day.rows.length}</span>
-                        <span className="text-right text-slate-600">{autoFillShifts["Ca 1"] ? `Ca 1: ${day.ca1Count}` : null}{autoFillShifts["Ca 1"] && autoFillShifts["Ca 2"] ? " · " : null}{autoFillShifts["Ca 2"] ? `Ca 2: ${day.ca2Count}` : null}</span>
-                      </div>
-                    )) : (
-                      <p className="px-3 py-4 text-center text-xs text-slate-500">Không có mối nào có ngày thực hiện trong phạm vi này.</p>
-                    )}
-                  </div>
-                </div>
-              )}
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-900">
+                {autoFillLoading
+                  ? "Đang lấy thông số mối gần nhất của dự án…"
+                  : autoFillTemplate
+                    ? `Thợ hàn, máy, chứng chỉ, loại ray, công nghệ và loại mối lấy theo mối ${displayWeldCode(autoFillTemplate.ma_lich_su)}${autoFillTemplate.ngay_thuc_hien ? ` (${formatJournalDateIso(autoFillTemplate.ngay_thuc_hien.slice(0, 10))})` : ""}: ${autoFillTemplate.ten_tho_han} · ${autoFillTemplate.ten_may || autoFillTemplate.ma_may || "chưa gán máy"}.`
+                    : autoFillProjectId && autoFillDate
+                      ? "Dự án chưa có mối hàn nào trước ngày này để lấy thông số. Hãy thêm tay một mối trước."
+                      : "Chọn dự án và ngày để lấy thông số theo mối gần nhất của dự án."}
+                {autoFillExisting ? ` Ngày này đã có ${autoFillExisting.toLocaleString("vi-VN")} mối.` : ""}
+              </div>
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end">
               <button
@@ -3048,11 +3263,11 @@ export default function WeldingJournalList({
               </button>
               <button
                 type="button"
-                onClick={() => void (autoFillRows ? handleAutoFillApply() : handleAutoFillLookup())}
-                disabled={autoFillLoading || autoFillSaving || !autoFillProjectId || !autoFillDate || (autoFillRows !== null && autoFillDays.length === 0)}
+                onClick={() => void handleAutoFillApply()}
+                disabled={autoFillLoading || autoFillSaving || !autoFillProjectId || !autoFillDate || !autoFillTemplate || autoFillPlan.count < 1 || autoFillPlan.shifts.length === 0}
                 className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-60"
               >
-                {autoFillLoading ? "Đang tra cứu…" : autoFillSaving ? "Đang điền…" : "Tự động điền"}
+                {autoFillLoading ? "Đang tra cứu…" : autoFillSaving ? (autoFillProgress || "Đang điền…") : "Tự động điền"}
               </button>
             </div>
           </div>
@@ -3068,19 +3283,21 @@ export default function WeldingJournalList({
         machines={machineOptions}
         existingCodes={rows.map((row) => row.ma_lich_su)}
         recordId={editingRow?.id}
-        saving={saving}
+        saving={saving || bulkFillSaving}
+        bulkProgress={bulkFillProgress}
         unlinkedGpsPoints={
           editingRow
             ? gpsPoints.filter((p) => !p.isLinked || p.weldId === editingRow.id)
             : gpsPoints.filter((p) => !p.isLinked && !p.weldId)
         }
         onClose={() => {
-          if (saving) return;
+          if (saving || bulkFillSaving) return;
           setFormOpen(false);
           setEditingRow(null);
           setEditingForm(null);
         }}
         onSubmit={editingRow ? handleEdit : handleCreate}
+        onBulkSubmit={handleBulkFill}
       />
 
       {machineError && (

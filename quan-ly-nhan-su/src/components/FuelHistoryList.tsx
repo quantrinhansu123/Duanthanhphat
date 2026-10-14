@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { formatFuelDate, loadDailyFuelRows, type DailyFuelRow } from "@/lib/dailyFuelDb";
 
 const filterClass =
@@ -58,7 +59,7 @@ export default function FuelHistoryList() {
         if (dateFrom && row.date < dateFrom) return false;
         if (dateTo && row.date > dateTo) return false;
         return true;
-      }),
+      }).sort((a, b) => compareNewestDate(a.date, b.date) || b.id.localeCompare(a.id)),
     [rows, machineId, personId, dateFrom, dateTo],
   );
 

@@ -7,6 +7,7 @@ import {
   type CompanyCertificate,
 } from "@/data/companyCertificates";
 import { Plus } from "@/components/icons";
+import { compareNewestDate } from "@/lib/dateOrder";
 import {
   deleteCompanyCertificate,
   loadQualityMetadata,
@@ -84,7 +85,15 @@ export default function CompanyCertificateManagement() {
   }, [editingCert?.id]);
 
   const filteredItems = useMemo(
-    () => items.filter((cert) => statusFilter === "all" || cert.status === statusFilter),
+    () =>
+      items
+        .filter((cert) => statusFilter === "all" || cert.status === statusFilter)
+        .sort(
+          (a, b) =>
+            compareNewestDate(a.issuedAt, b.issuedAt) ||
+            compareNewestDate(a.expiresAt, b.expiresAt) ||
+            a.title.localeCompare(b.title, "vi"),
+        ),
     [items, statusFilter],
   );
 

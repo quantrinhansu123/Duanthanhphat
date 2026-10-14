@@ -114,9 +114,9 @@ function parseImageAssets(value: unknown): MaintenanceImageAsset[] {
 function sortEvents(events: MaintenanceEvent[]) {
   return [...events].sort(
     (a, b) =>
-      (b.createdAt ?? `${b.date}T${b.time}`).localeCompare(
-        a.createdAt ?? `${a.date}T${a.time}`,
-      ),
+      b.date.localeCompare(a.date) ||
+      (b.time || "").localeCompare(a.time || "") ||
+      (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
   );
 }
 

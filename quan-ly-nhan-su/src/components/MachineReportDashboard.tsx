@@ -592,13 +592,6 @@ export default function MachineReportDashboard() {
                 </div>
               </div>
             </div>
-
-            <Link
-              href="/lich-bao-tri"
-              className="mt-4 block w-full rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] py-2.5 text-center text-xs sm:text-sm font-semibold text-white transition-all duration-150 shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              Tạo lệnh bảo trì
-            </Link>
           </div>
 
           {/* Card: Lịch bảo trì sắp tới */}

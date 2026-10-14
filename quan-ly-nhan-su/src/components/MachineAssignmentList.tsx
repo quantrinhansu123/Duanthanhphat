@@ -10,6 +10,7 @@ import {
   type MachineRunSchedule,
 } from "@/data/machineAssignments";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { importMachineRunReport, loadMachineRunScheduleBundle, loadScheduleJournalDetails } from "@/lib/machineRunSchedulesDb";
 import { resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import {
@@ -125,7 +126,9 @@ export default function MachineAssignmentList() {
       if (weldMethod && (row.weldMethod || "") !== weldMethod) return false;
       if (weldType && (row.weldType || "") !== weldType) return false;
       return true;
-    });
+    }).sort(
+      (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
+    );
   }, [list, dateFrom, dateTo, machineId, projectId, personId, weldMethod, weldType]);
 
   const fuelByScheduleKey = useMemo(() => {

@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Warning } from "@/components/icons";
 import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { compareNewestDate } from "@/lib/dateOrder";
 import {
   buildQuarterlyPassRateSeries,
   countReworkWelds,
@@ -374,7 +375,14 @@ export default function QualityReportDashboard() {
   const totalInspected = summary.total;
   const passRate = totalInspected > 0 ? Number(((passed / totalInspected) * 100).toFixed(2)) : 0;
   const errorRows = useMemo(
-    () => selectedRows.filter((row) => row.so_luong_loi > 0),
+    () =>
+      selectedRows
+        .filter((row) => row.so_luong_loi > 0)
+        .sort(
+          (a, b) =>
+            compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) ||
+            (b.ma_lich_su || "").localeCompare(a.ma_lich_su || ""),
+        ),
     [selectedRows],
   );
   const criticalDefects = errorRows.length;

@@ -10,6 +10,7 @@ import {
   type ErrorCategory,
 } from "@/data/error-library";
 import { Plus, X } from "@/components/icons";
+import { compareNewestDate } from "@/lib/dateOrder";
 import { createMachineFault, loadMachineFaultLibrary } from "@/lib/machineFaultsDb";
 import {
   displayWeldCode,
@@ -650,6 +651,9 @@ function DetailField({ label, children }: { label: string; children: ReactNode }
 }
 
 function JournalHistoryTable({ rows }: { rows: WeldReportRow[] }) {
+  const sortedRows = [...rows].sort(
+    (a, b) => compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) || b.ma_lich_su.localeCompare(a.ma_lich_su),
+  );
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500">
@@ -675,7 +679,7 @@ function JournalHistoryTable({ rows }: { rows: WeldReportRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((row, index) => {
+              {sortedRows.map((row, index) => {
                 const iso = getJournalRowDateIso(row, index);
                 const testStatus = resolveWeldTestStatus(row);
                 const statusClass =

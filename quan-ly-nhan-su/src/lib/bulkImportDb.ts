@@ -84,7 +84,7 @@ export async function fetchBulkImportData(): Promise<WeldData> {
     readAllRows<YearSummaryRow>((from, to) => supabase
       .from("bao_cao_moi_han_theo_nam")
       .select("nam_thuc_hien,thu_nghiem_dao_tao_fbw,thu_nghiem_dao_tao_atw,san_xuat_fbw,san_xuat_atw,loi_fbw,loi_atw,tong_thuc_hien,tong_loi")
-      .order("nam_thuc_hien", { ascending: true })
+      .order("nam_thuc_hien", { ascending: false })
       .range(from, to)),
   ]);
   return { projects, welders, years };

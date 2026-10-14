@@ -691,6 +691,7 @@ export default function WelderManagement() {
         .from("chung_chi")
         .select(LIVE_CERT_SELECT)
         .eq("employee_id", welderId)
+        .order("ngay_cap", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
       if (!error && data) setLiveCerts(data as LiveCertRow[]);
       else setLiveCerts([]);
@@ -720,6 +721,7 @@ export default function WelderManagement() {
           .from("chung_chi")
           .select(LIVE_CERT_SELECT)
           .eq("employee_id", welderId)
+          .order("ngay_cap", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
         if (!active) return;
         setLiveCerts(!error && data ? (data as LiveCertRow[]) : []);

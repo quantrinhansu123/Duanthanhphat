@@ -27,6 +27,8 @@ export type Certificate = {
   weldScope?: string;
   certificateNumber?: string;
   notes?: string;
+  /** Số giờ nhập tay, lưu ở cột chung_chi.so_gio */
+  hours?: number;
   /** Bản ghi suy ra từ nhan_su.chung_chi khi chưa có hồ sơ trong bảng chung_chi. */
   inferred?: boolean;
 };
