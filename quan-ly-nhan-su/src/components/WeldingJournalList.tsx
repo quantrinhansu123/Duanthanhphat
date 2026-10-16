@@ -802,6 +802,56 @@ function JournalFormModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-3.5">
+          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Tên dự án
+            <SelectMenu
+              value={form.du_an_id}
+              onChange={(projectId) => {
+                const internalTraining = isInternalTrainingProject(
+                  projects.find((project) => project.id === projectId)?.label ?? "",
+                );
+                setForm((current) => ({
+                  ...current,
+                  du_an_id: projectId,
+                  loai_moi_han: internalTraining
+                    ? "Đào tạo"
+                    : current.loai_moi_han === "Đào tạo"
+                      ? "Sản xuất"
+                      : current.loai_moi_han,
+                  result:
+                    mode === "create"
+                      ? DEFAULT_WELD_TEST_STATUS
+                      : internalTraining
+                        ? "Không thí nghiệm"
+                        : current.result === "Không thí nghiệm"
+                          ? "Chờ thí nghiệm"
+                          : current.result,
+                }));
+              }}
+              options={projects.map((p) => ({
+                value: p.id,
+                label: p.label,
+                hint: hasOwnWeldSitePrefix(p.ma_du_an) ? p.ma_du_an : "Chưa có mã dự án",
+              }))}
+              searchable={projects.length > 5}
+              placeholder={projects.length === 0 ? "Chưa có dữ liệu dự án" : "Chọn dự án"}
+              searchPlaceholder="Gõ để tìm dự án..."
+              className="mt-1.5"
+              buttonClassName="h-10 shadow-2xs"
+            />
+            {mode === "create" && projectSuggestion && (
+              <span className="mt-1.5 block rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800">
+                Đã gợi ý theo mối gần nhất của dự án: {projectSuggestion.code}
+                {projectSuggestion.date ? ` · ${formatJournalDateIso(projectSuggestion.date)}` : ""}. Có thể sửa lại.
+              </span>
+            )}
+            {mode === "create" && !form.du_an_id && (
+              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+                Chọn dự án trước — hệ thống sẽ tự điền thông số theo mối gần nhất của dự án đó.
+              </span>
+            )}
+          </label>
+
           {mode === "create" && (
             <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
               <label className="flex cursor-pointer items-start gap-3">
@@ -1056,51 +1106,6 @@ function JournalFormModal({
               className="mt-1.5"
               buttonClassName="h-10 shadow-2xs"
             />
-          </label>
-
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-            Dự án
-            <SelectMenu
-              value={form.du_an_id}
-              onChange={(projectId) => {
-                const internalTraining = isInternalTrainingProject(
-                  projects.find((project) => project.id === projectId)?.label ?? "",
-                );
-                setForm((current) => ({
-                  ...current,
-                  du_an_id: projectId,
-                  loai_moi_han: internalTraining
-                    ? "Đào tạo"
-                    : current.loai_moi_han === "Đào tạo"
-                      ? "Sản xuất"
-                      : current.loai_moi_han,
-                  result:
-                    mode === "create"
-                      ? DEFAULT_WELD_TEST_STATUS
-                      : internalTraining
-                        ? "Không thí nghiệm"
-                        : current.result === "Không thí nghiệm"
-                          ? "Chờ thí nghiệm"
-                          : current.result,
-                }));
-              }}
-              options={projects.map((p) => ({
-                value: p.id,
-                label: p.label,
-                hint: hasOwnWeldSitePrefix(p.ma_du_an) ? p.ma_du_an : "Chưa có mã dự án",
-              }))}
-              searchable={projects.length > 5}
-              placeholder={projects.length === 0 ? "Chưa có dữ liệu dự án" : "Chọn dự án"}
-              searchPlaceholder="Gõ để tìm dự án..."
-              className="mt-1.5"
-              buttonClassName="h-10 shadow-2xs"
-            />
-            {mode === "create" && projectSuggestion && (
-              <span className="mt-1.5 block rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800">
-                Đã gợi ý theo mối gần nhất của dự án: {projectSuggestion.code}
-                {projectSuggestion.date ? ` · ${formatJournalDateIso(projectSuggestion.date)}` : ""}. Có thể sửa lại.
-              </span>
-            )}
           </label>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
