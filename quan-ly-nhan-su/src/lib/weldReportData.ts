@@ -185,6 +185,48 @@ export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]>
     .filter(Boolean);
 }
 
+/** Mã hiện trường đã dùng trong một dự án. */
+export async function loadSiteFieldCodesForProject(projectId: string): Promise<string[]> {
+  const id = projectId.trim();
+  if (!id || !isSupabaseConfigured()) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ma_hien_truong")
+    .eq("du_an_id", id)
+    .not("ma_hien_truong", "is", null)
+    .order("ma_hien_truong", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (isWeldSiteColumnError(error.message)) return [];
+    throw new Error(formatSupabaseError(error));
+  }
+  return (data ?? [])
+    .map((row) => String((row as { ma_hien_truong?: string | null }).ma_hien_truong ?? "").trim())
+    .filter(Boolean);
+}
+
+/** Mã trong máy đã dùng trên một máy. */
+export async function loadMachineFieldCodesForMachine(machineId: string): Promise<string[]> {
+  const id = machineId.trim();
+  if (!id || !isSupabaseConfigured()) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ten_moi_han_theo_may")
+    .eq("may_id", id)
+    .not("ten_moi_han_theo_may", "is", null)
+    .order("ten_moi_han_theo_may", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (isWeldExtrasColumnError(error.message)) return [];
+    throw new Error(formatSupabaseError(error));
+  }
+  return (data ?? [])
+    .map((row) => String((row as { ten_moi_han_theo_may?: string | null }).ten_moi_han_theo_may ?? "").trim())
+    .filter(Boolean);
+}
+
 /** Mã theo máy của từng bản ghi: mã máy + số thứ tự 5 số trên máy đó. */
 export async function loadMachineWeldCodeMap(machineIds: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();

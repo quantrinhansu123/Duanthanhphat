@@ -13,11 +13,19 @@ import {
   getJournalRowDateIso,
   loadWeldReportRows,
   resolveWeldShift,
+  weldWorkHours,
   type WeldReportRow,
 } from "@/lib/weldReportData";
 
-/** Mỗi ca hàn quy ước ~8 giờ máy khi tổng hợp từ nhật ký. */
+/** Mỗi ca hàn quy ước ~8 giờ máy khi bản ghi nhật ký thiếu giờ bắt đầu/kết thúc. */
 export const HOURS_PER_WELD_SHIFT = 8;
+
+/** Giờ máy của 1 bản ghi nhật ký: thực tế nếu có, không thì 8h (1 ca). */
+export function journalRowOperatingHours(row: WeldReportRow): number {
+  const actual = weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc);
+  if (actual != null && actual > 0) return actual;
+  return HOURS_PER_WELD_SHIFT;
+}
 
 type EquipmentRow = { id: string; ma_may: string; ten_may: string; thong_so?: unknown };
 type ProjectRow = { id: string; du_an: string };
@@ -95,6 +103,7 @@ export function aggregateWeldJournalToSchedules(rows: WeldReportRow[]): MachineR
     weldCount: number;
     failedWeldCount: number;
     journalEntryCount: number;
+    operatingHours: number;
   };
 
   const groups = new Map<string, Acc>();
@@ -130,6 +139,7 @@ export function aggregateWeldJournalToSchedules(rows: WeldReportRow[]): MachineR
         weldCount: 0,
         failedWeldCount: 0,
         journalEntryCount: 0,
+        operatingHours: 0,
       };
       groups.set(key, acc);
     }
@@ -138,14 +148,18 @@ export function aggregateWeldJournalToSchedules(rows: WeldReportRow[]): MachineR
     acc.weldCount += Number(row.so_luong_thuc_hien) || 0;
     acc.failedWeldCount += Number(row.so_luong_loi) || 0;
     acc.journalEntryCount += 1;
+    acc.operatingHours += journalRowOperatingHours(row);
     if (!acc.machineName && row.ten_may) acc.machineName = row.ten_may.trim();
   });
 
   return Array.from(groups.values())
     .map((acc) => {
       const shifts = Array.from(acc.shifts).sort((a, b) => a.localeCompare(b, "vi"));
-      const shiftCount = Math.max(shifts.length, 1);
-      const operatingHours = shiftCount * HOURS_PER_WELD_SHIFT;
+      const shiftFallback = Math.max(shifts.length, 1) * HOURS_PER_WELD_SHIFT;
+      const operatingHours =
+        acc.operatingHours > 0
+          ? Math.round(acc.operatingHours * 100) / 100
+          : shiftFallback;
       return {
         id: `journal:${acc.date}:${acc.machineId}:${acc.projectId}:${acc.personInChargeId}:${acc.weldMethod}:${acc.weldType}`,
         date: acc.date,
@@ -257,6 +271,7 @@ type AssignmentDbRow = {
   so_moi_han: number | null;
   so_moi_loi: number | null;
   so_ban_ghi: number | null;
+  so_gio_hoat_dong?: number | string | null;
 };
 
 function asUuid(value: string) {
@@ -294,6 +309,11 @@ function mapAssignmentRow(row: AssignmentDbRow): MachineRunSchedule {
   const weldCount = Number(row.so_moi_han) || 0;
   const failedWeldCount = Number(row.so_moi_loi) || 0;
   const machineCode = row.ma_may || "Chưa gán máy";
+  const storedHours = Number(row.so_gio_hoat_dong);
+  const operatingHours =
+    Number.isFinite(storedHours) && storedHours > 0
+      ? storedHours
+      : Math.max(shifts.length, 1) * HOURS_PER_WELD_SHIFT;
   return {
     id: row.id,
     date: String(row.ngay).slice(0, 10),
@@ -301,7 +321,7 @@ function mapAssignmentRow(row: AssignmentDbRow): MachineRunSchedule {
     machineCode,
     machineName: row.ten_may || machineCode,
     location: "—",
-    operatingHours: Math.max(shifts.length, 1) * HOURS_PER_WELD_SHIFT,
+    operatingHours,
     projectId: row.du_an_id || "",
     projectName: row.ten_du_an || "Chưa gắn dự án",
     personInChargeId: row.tho_han_id || "",
@@ -363,11 +383,21 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
 
   const supabase = createClient();
   try {
-    const [assignmentResult, machineResult, projectResult, personnelResult] = await Promise.all([
-      supabase
+    const assignmentSelectWithHours =
+      "id,ngay,may_id,ma_may,ten_may,du_an_id,ten_du_an,tho_han_id,ten_tho_han,cong_nghe_han,loai_moi_han,ca,so_moi_han,so_moi_loi,so_ban_ghi,so_gio_hoat_dong";
+    const assignmentSelectLegacy =
+      "id,ngay,may_id,ma_may,ten_may,du_an_id,ten_du_an,tho_han_id,ten_tho_han,cong_nghe_han,loai_moi_han,ca,so_moi_han,so_moi_loi,so_ban_ghi";
+    let assignmentResult = await supabase
+      .from("phan_cong_may")
+      .select(assignmentSelectWithHours)
+      .order("ngay", { ascending: false });
+    if (assignmentResult.error && /so_gio_hoat_dong/.test(assignmentResult.error.message ?? "")) {
+      assignmentResult = (await supabase
         .from("phan_cong_may")
-        .select("id,ngay,may_id,ma_may,ten_may,du_an_id,ten_du_an,tho_han_id,ten_tho_han,cong_nghe_han,loai_moi_han,ca,so_moi_han,so_moi_loi,so_ban_ghi")
-        .order("ngay", { ascending: false }),
+        .select(assignmentSelectLegacy)
+        .order("ngay", { ascending: false })) as typeof assignmentResult;
+    }
+    const [machineResult, projectResult, personnelResult] = await Promise.all([
       supabase.from("thiet_bi").select("id,ma_may,ten_may,thong_so").order("ma_may", { ascending: true }),
       supabase.from("du_an").select("id,du_an").order("du_an", { ascending: true }),
       supabase.from("nhan_su").select("employee_id,ho_ten").order("ho_ten", { ascending: true }),
@@ -485,12 +515,19 @@ export async function importMachineRunReport(dateFrom: string, dateTo: string) {
     so_moi_han: row.weldCount ?? 0,
     so_moi_loi: row.failedWeldCount ?? 0,
     so_ban_ghi: row.journalEntryCount ?? 0,
+    so_gio_hoat_dong: row.operatingHours ?? null,
     nhom: assignmentGroupKey(row),
   }));
 
   const batchSize = 200;
   for (let offset = 0; offset < payload.length; offset += batchSize) {
-    const { error } = await supabase.from("phan_cong_may").insert(payload.slice(offset, offset + batchSize));
+    const chunk = payload.slice(offset, offset + batchSize);
+    let { error } = await supabase.from("phan_cong_may").insert(chunk);
+    if (error && /so_gio_hoat_dong/.test(error.message ?? "")) {
+      ({ error } = await supabase.from("phan_cong_may").insert(
+        chunk.map(({ so_gio_hoat_dong: _hours, ...rest }) => rest),
+      ));
+    }
     if (error) throw new Error(missingAssignmentTableMessage(error));
   }
 

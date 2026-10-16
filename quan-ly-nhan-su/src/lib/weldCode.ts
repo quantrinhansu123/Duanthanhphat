@@ -108,6 +108,60 @@ export function suggestWeldCode(
   );
 }
 
+/** Tách phần chữ + số đuôi (VD: HT012 → { prefix: "HT", seq: 12, width: 3 }). */
+export function splitTrailingSequence(code: string): { prefix: string; seq: number; width: number } | null {
+  const value = code.trim().toUpperCase();
+  const match = /^(.*?)(\d+)$/.exec(value);
+  if (!match) return null;
+  return { prefix: match[1], seq: Number(match[2]), width: match[2].length };
+}
+
+/** Tăng số đuôi của mã (giữ độ rộng số). */
+export function bumpTrailingCode(code: string, by = 1): string {
+  const parts = splitTrailingSequence(code);
+  if (!parts || by < 1) return code.trim().toUpperCase();
+  return `${parts.prefix}${padWeldSequence(parts.seq + by, parts.width)}`;
+}
+
+/**
+ * Gợi ý mã tiếp theo từ danh sách đã có + mã gốc (nếu có).
+ * Ưu tiên cùng tiền tố với `seed`; không có seed thì dùng `fallbackPrefix` + 001.
+ */
+export function suggestNextTrailingCode(
+  existingCodes: string[],
+  seed?: string | null,
+  fallbackPrefix = "",
+  width = WELD_CODE_SEQUENCE_WIDTH,
+): string {
+  const seedParts = splitTrailingSequence(seed ?? "");
+  const prefix = (seedParts?.prefix || fallbackPrefix.trim().toUpperCase() || "").toUpperCase();
+  if (!prefix) return seed?.trim().toUpperCase() || "";
+  const padWidth = seedParts?.width || width;
+  let max = 0;
+  for (const code of existingCodes) {
+    const parts = splitTrailingSequence(code);
+    if (!parts || parts.prefix !== prefix) continue;
+    max = Math.max(max, parts.seq);
+  }
+  if (seedParts && seedParts.prefix === prefix) max = Math.max(max, seedParts.seq);
+  return `${prefix}${padWeldSequence(max + 1, padWidth)}`;
+}
+
+/** Gợi ý mã trong máy: {mã máy}{5 số TT} dựa trên các mã đã lưu của máy đó. */
+export function suggestMachineWeldCode(machineCode: string, existingCodes: string[]): string {
+  const machine = machineCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!machine) return "";
+  const seq = nextWeldSequence(existingCodes, machine);
+  return buildMachineWeldCode(machine, seq);
+}
+
+/** Gợi ý mã hiện trường theo dự án: {mã DA}-HT{số TT}. */
+export function suggestSiteFieldCode(sitePrefix: string, existingCodes: string[], seed?: string | null) {
+  const site = normalizeWeldSitePrefix(sitePrefix);
+  const fallback = `${site}-HT`;
+  return suggestNextTrailingCode(existingCodes, seed, fallback, WELD_CODE_SEQUENCE_WIDTH);
+}
+
 export type WeldCodeSourceRow = {
   id: string;
   ma_lich_su: string;
