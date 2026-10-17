@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import Image from "next/image";
@@ -63,9 +63,9 @@ const MapView = dynamic(() => import("@/components/MapView"), { loading: TabLoad
 const DocumentLibrary = dynamic(() => import("@/components/DocumentLibrary"), { loading: TabLoading, ssr: false });
 const DeploymentHandoverList = dynamic(
   () => import("@/components/DeploymentHandoverList"), { loading: TabLoading, ssr: false });
-const BulkImportList = dynamic(() => import("@/components/BulkImportList"), { loading: TabLoading, ssr: false });
 const SystemConfiguration = dynamic(
   () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
+const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { loading: TabLoading, ssr: false });
 
 const viewRenderers: Record<string, () => React.ReactNode> = {
   "ho-so-tho-han": () => <WelderManagement />,
@@ -90,6 +90,11 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-nhan-su": () => <PersonnelReportDashboard />,
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
   "quan-ly-du-an": () => <ProjectManagement />,
+  "lwr-giai-toa-ung-suat": () => (
+    <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất R2" />
+  ),
+  "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
+  "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
   "nhat-ky-han": () => <WeldingJournalList />,
   "bien-ban-moi-han": () => <WeldAcceptanceReport />,
@@ -97,7 +102,6 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "ban-do": () => <MapView />,
   "tai-lieu": () => <DocumentLibrary />,
   "trien-khai": () => <DeploymentHandoverList />,
-  "nhap-hang-loat": () => <BulkImportList />,
   "cau-hinh": () => <SystemConfiguration />,
 };
 
@@ -181,6 +185,7 @@ export default function AppShell({ tab }: AppShellProps) {
   const current = activeTab && isValidTab(activeTab) ? activeTab : "";
   const crumb = current ? findNavMeta(current) : null;
   const reportTab = Boolean(current && isReportTab(current));
+  const lwrTab = Boolean(current?.startsWith("lwr-"));
   const { lang } = useLanguage();
   const clock = useClientClock(lang);
 
@@ -329,7 +334,9 @@ export default function AppShell({ tab }: AppShellProps) {
           </div>
         </header>
 
-        <div className={`min-h-0 flex-1 overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}>
+        <div
+          className={`min-h-0 flex-1 ${lwrTab ? "overflow-hidden" : "overflow-y-auto"} ${reportTab ? "flex flex-col" : ""}`}
+        >
           {reportTab && (
             <div className="sticky top-0 z-20 shrink-0">
               <GlobalReportFilterBar />
@@ -337,7 +344,7 @@ export default function AppShell({ tab }: AppShellProps) {
             </div>
           )}
 
-          {!reportTab && crumb && (
+          {!reportTab && !lwrTab && crumb && (
             <div className="w-full px-4 sm:px-6 pt-4 sm:pt-5">
               <div className="mb-3.5 sm:mb-4">
                 <button

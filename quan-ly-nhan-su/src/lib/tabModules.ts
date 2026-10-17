@@ -22,6 +22,9 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "bc-nhan-su": () => import("@/components/PersonnelReportDashboard"),
   "bc-bao-cao-ngay": () => import("@/components/DailyWorkReport"),
   "quan-ly-du-an": () => import("@/components/ProjectManagement"),
+  "lwr-giai-toa-ung-suat": () => import("@/components/LwrModuleEmbed"),
+  "lwr-track-map": () => import("@/components/LwrModuleEmbed"),
+  "lwr-cong-trinh": () => import("@/components/LwrModuleEmbed"),
   "thu-vien-loi-moi-han": () => import("@/components/ErrorLibrary"),
   "nhat-ky-han": () => import("@/components/WeldingJournalList"),
   "bien-ban-moi-han": () => import("@/components/WeldAcceptanceReport"),
@@ -29,7 +32,6 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "ban-do": () => import("@/components/MapView"),
   "tai-lieu": () => import("@/components/DocumentLibrary"),
   "trien-khai": () => import("@/components/DeploymentHandoverList"),
-  "nhap-hang-loat": () => import("@/components/BulkImportList"),
   "cau-hinh": () => import("@/components/SystemConfiguration"),
 };
 

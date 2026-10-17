@@ -15,8 +15,8 @@ import {
   Buildings,
   Path,
   ChartBar,
-  ClockCounterClockwise,
   GearSix,
+  Train,
   X,
   CaretDown,
   CaretLeft,
@@ -28,9 +28,9 @@ const icons: Record<string, Icon> = {
   "dao-tao": GraduationCap,
   "may-moc": Wrench,
   "du-an": Buildings,
+  "lwr-han-ray": Train,
   "ky-thuat": Path,
   "bao-cao": ChartBar,
-  "du-lieu-lich-su": ClockCounterClockwise,
   "quan-tri": GearSix,
 };
 

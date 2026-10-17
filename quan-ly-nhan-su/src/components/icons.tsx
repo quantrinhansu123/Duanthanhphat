@@ -93,6 +93,8 @@ export {
   Flag,
   Star,
   Train,
+  Calculator,
+  Shapes,
   Bug,
   Lightning,
   Sparkle,

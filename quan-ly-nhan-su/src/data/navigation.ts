@@ -125,6 +125,35 @@ export const navigation: NavItem[] = [
     ],
   },
   {
+    id: "lwr-han-ray",
+    code: "14",
+    label: "Quản lý hàn ray LWR",
+    labelEn: "LWR Rail Welding",
+    children: [
+      {
+        id: "lwr-giai-toa-ung-suat",
+        label: "Giải toả ứng suất R2",
+        labelEn: "R2 Stress Release",
+        description: "Tính toán giải toả ứng suất ray dài / ray liền (R2)",
+        descriptionEn: "Long welded rail / continuous welded rail stress-release calculator (R2)",
+      },
+      {
+        id: "lwr-track-map",
+        label: "Tổng quan (Track Map)",
+        labelEn: "Track Map Overview",
+        description: "Sơ đồ track map, ô ray và chi tiết theo lý trình",
+        descriptionEn: "Track map schematic, rail cells, and chainage details",
+      },
+      {
+        id: "lwr-cong-trinh",
+        label: "Ký hiệu công trình",
+        labelEn: "Structure Symbols",
+        description: "Danh mục và quản lý ký hiệu công trình trên sơ đồ ray",
+        descriptionEn: "Catalogue and manage structure symbols on the rail schematic",
+      },
+    ],
+  },
+  {
     id: "ky-thuat",
     code: "13",
     label: "Quản lý chất lượng",
@@ -221,21 +250,6 @@ export const navigation: NavItem[] = [
         labelEn: "Daily Report",
         description: "Báo cáo công việc ngày: năng suất, máy móc, nhân lực, thiết bị và sự cố",
         descriptionEn: "Daily work report: productivity, equipment, manpower, and incidents",
-      },
-    ],
-  },
-  {
-    id: "du-lieu-lich-su",
-    code: "16",
-    label: "Dữ liệu lịch sử",
-    labelEn: "Historical Data",
-    children: [
-      {
-        id: "nhap-hang-loat",
-        label: "Nhập hàng loạt",
-        labelEn: "Bulk Import",
-        description: "Nhập số lượng lớn theo mẫu và cấu trúc thống nhất",
-        descriptionEn: "Batch import bulk welding data from standardized Excel templates",
       },
     ],
   },

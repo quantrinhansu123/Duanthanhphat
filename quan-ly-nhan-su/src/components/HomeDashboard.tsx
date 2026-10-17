@@ -30,12 +30,14 @@ import {
   Gauge,
   ChartPieSlice,
   ChartLine,
-  UploadSimple,
   Flag,
   Cube,
   Package,
   GasPump,
   WarningCircle,
+  Train,
+  Calculator,
+  Shapes,
 } from "@/components/icons";
 
 const groupIcons: Record<string, Icon> = {
@@ -43,9 +45,9 @@ const groupIcons: Record<string, Icon> = {
   "dao-tao": GraduationCap,
   "may-moc": Wrench,
   "du-an": Buildings,
+  "lwr-han-ray": Train,
   "ky-thuat": Path,
   "bao-cao": ChartBar,
-  "du-lieu-lich-su": ClockCounterClockwise,
   "quan-tri": GearSix,
 };
 
@@ -63,6 +65,9 @@ const childIcons: Record<string, Icon> = {
   "lich-su-cap-nhien-lieu": GasPump,
   "thu-vien-loi-moi-han": Bug,
   "quan-ly-du-an": Buildings,
+  "lwr-giai-toa-ung-suat": Calculator,
+  "lwr-track-map": Train,
+  "lwr-cong-trinh": Shapes,
   "chung-chi": Certificate,
   "chung-chi-cong-ty": SealCheck,
   "tieu-chuan-tcvn": ClipboardText,
@@ -76,7 +81,6 @@ const childIcons: Record<string, Icon> = {
   "bc-may-moc": ChartLine,
   "bc-nhan-su": Users,
   "bc-bao-cao-ngay": CalendarBlank,
-  "nhap-hang-loat": UploadSimple,
   "cau-hinh": GearSix,
   "trien-khai": Flag,
 };
@@ -114,6 +118,13 @@ const groupThemes: Record<
     ring: "hover:border-teal-300 hover:ring-teal-100",
     soft: "group-hover/card:bg-teal-50",
   },
+  "lwr-han-ray": {
+    iconBg: "bg-sky-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(2,132,199,0.5)]",
+    badge: "bg-sky-50 text-sky-700",
+    ring: "hover:border-sky-300 hover:ring-sky-100",
+    soft: "group-hover/card:bg-sky-50",
+  },
   "ky-thuat": {
     iconBg: "bg-cyan-600",
     iconShadow: "shadow-[0_8px_16px_-6px_rgba(8,145,178,0.5)]",
@@ -127,13 +138,6 @@ const groupThemes: Record<
     badge: "bg-emerald-50 text-emerald-700",
     ring: "hover:border-emerald-300 hover:ring-emerald-100",
     soft: "group-hover/card:bg-emerald-50",
-  },
-  "du-lieu-lich-su": {
-    iconBg: "bg-violet-600",
-    iconShadow: "shadow-[0_8px_16px_-6px_rgba(124,58,237,0.5)]",
-    badge: "bg-violet-50 text-violet-700",
-    ring: "hover:border-violet-300 hover:ring-violet-100",
-    soft: "group-hover/card:bg-violet-50",
   },
   "quan-tri": {
     iconBg: "bg-slate-700",
