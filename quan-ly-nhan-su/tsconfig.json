@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@lwr/*": ["./src/features/lwr/*"]
     }
   },
   "include": [

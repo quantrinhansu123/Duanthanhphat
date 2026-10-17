@@ -335,7 +335,7 @@ export default function AppShell({ tab }: AppShellProps) {
         </header>
 
         <div
-          className={`min-h-0 flex-1 ${lwrTab ? "overflow-hidden" : "overflow-y-auto"} ${reportTab ? "flex flex-col" : ""}`}
+          className={`min-h-0 flex-1 overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
         >
           {reportTab && (
             <div className="sticky top-0 z-20 shrink-0">
