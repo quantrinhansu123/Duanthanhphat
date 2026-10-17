@@ -101,6 +101,17 @@ export function calculateStressRelease(input: StressInput) {
   return {
     length, pullTemp, averageTemp, deltaTemp, force, anchorLength,
     compressionForce, tensionForce, compressionEnd, tensionEnd,
+    compressionExtension: excelRound(compressionDelta * i.alpha * length * 1000, 2),
+    tensionContraction: excelRound(tensionDelta * i.alpha * length * 1000, 2),
+    // Workbook (2), sheet 60R2, R75:T78. Rows 1/2 retain joint resistance
+    // through breathing length; row 3 intentionally excludes joint resistance.
+    extensionChecks: [
+      { label: "Đối chiếu 1", compression: compressionForce * ((compressionForce - i.jointResistance) / i.resistance) / (2 * ea) * 1000, tension: tensionForce * ((tensionForce - i.jointResistance) / i.resistance) / (2 * ea) * 1000 },
+      { label: "Đối chiếu 2", compression: ((compressionForce - i.jointResistance) / i.resistance) * i.alpha * compressionDelta / 2 * 1000, tension: ((tensionForce - i.jointResistance) / i.resistance) * i.alpha * tensionDelta / 2 * 1000 },
+      { label: "Đối chiếu 3 · bỏ qua lực cản mối nối", compression: ea * (i.alpha * compressionDelta) ** 2 / (2 * i.resistance) * 1000, tension: ea * (i.alpha * tensionDelta) ** 2 / (2 * i.resistance) * 1000 },
+      { label: "TB 10015 · theo bảng tính", compression: compressionEnd, tension: tensionEnd },
+    ],
+    compressionDelta, tensionDelta,
     compressionBuffer, tensionBuffer, freeExtension, pullLength, cutGap,
     compressionBreathing: (compressionForce - i.jointResistance) / i.resistance,
     tensionBreathing: (tensionForce - i.jointResistance) / i.resistance,
