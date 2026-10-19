@@ -58,18 +58,21 @@ export async function loadPersonnelCertificateRows(): Promise<PersonnelCertifica
   return rows;
 }
 
-/** Danh sách nhẹ cho form chọn nhân sự (dự án) — không kéo chứng chỉ/ảnh. */
+/** Danh sách nhẹ cho form chọn nhân sự (dự án / báo cáo ngày) — không kéo chứng chỉ/ảnh. */
 export async function loadPersonnelPickerRows(): Promise<
-  Pick<PersonnelCertificateRow, "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han">[]
+  Pick<PersonnelCertificateRow, "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han" | "trang_thai">[]
 > {
   if (!isSupabaseConfigured()) return [];
   const supabase = createClient();
-  const rows: Pick<PersonnelCertificateRow, "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han">[] = [];
+  const rows: Pick<
+    PersonnelCertificateRow,
+    "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han" | "trang_thai"
+  >[] = [];
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("nhan_su")
-      .select("employee_id,ho_ten,chuc_vu,ma_nhan_su,to_han")
+      .select("employee_id,ho_ten,chuc_vu,ma_nhan_su,to_han,trang_thai")
       .order("ho_ten", { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(formatSupabaseError(error));
@@ -79,6 +82,7 @@ export async function loadPersonnelPickerRows(): Promise<
       chuc_vu: string | null;
       ma_nhan_su: string | null;
       to_han: string | null;
+      trang_thai: string | null;
     }>;
     rows.push(...page);
     if (page.length < pageSize) break;

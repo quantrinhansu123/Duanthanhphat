@@ -47,11 +47,22 @@ function ResultTable({ title, rows }: { title: string; rows: Row[] }) {
   </section>;
 }
 
-export function StressReleaseCalculator({ initialInput = DEFAULT_STRESS_INPUT, segmentId, compact = false }: { initialInput?: StressInput; segmentId?: string; compact?: boolean }) {
+export function StressReleaseCalculator({
+  initialInput = DEFAULT_STRESS_INPUT,
+  segmentId,
+  compact = false,
+  onSave,
+}: {
+  initialInput?: StressInput;
+  segmentId?: string;
+  compact?: boolean;
+  onSave?: (input: StressInput) => void;
+}) {
   const [fields, setFields] = useState(() => initialFields(initialInput));
   const [mode, setMode] = useState<Mode>(initialInput.method);
   const [rollers, setRollers] = useState(initialInput.sideRollers);
   const [printOpen, setPrintOpen] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const buffer = mode === "BUFFER";
   const relevant = (key: NumericKey) => {
     if (buffer) return (["area", "modulus", "alpha", "resistance", "jointResistance", "neutralTemp", "maxTemp", "minTemp", "structuralGap"] as NumericKey[]).includes(key);
@@ -137,6 +148,13 @@ export function StressReleaseCalculator({ initialInput = DEFAULT_STRESS_INPUT, s
     window.print();
     setPrintOpen(false);
   }
+  const printStamp = (() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${String(now.getFullYear()).slice(-2)}`;
+  })();
+  const cellValue = (value: number | null, unit: string) =>
+    value === null ? "Không áp dụng" : `${format(value)} ${unit}`;
   const results = result && <>
     <div className="thermal-results grid gap-3 sm:grid-cols-2">
       <ResultTable title="KÉO (nhiệt độ giảm)" rows={tension} />
@@ -170,11 +188,25 @@ export function StressReleaseCalculator({ initialInput = DEFAULT_STRESS_INPUT, s
       <div><h2 className={compact ? "text-base font-bold" : "text-2xl font-bold"}>Giải toả ứng suất R2</h2><p className="mt-1 text-sm font-medium text-emerald-700">Bảng tính mẫu 60R2</p>
         {segmentId && <p className="text-sm">Đoạn ray: {segmentId}</p>}</div>
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => { setFields(initialFields(initialInput)); setRollers(initialInput.sideRollers); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
-        <button disabled={!result} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
-        <button disabled={!result} onClick={printReport} className="rounded-lg bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
+        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
+        {onSave && (
+          <button
+            type="button"
+            disabled={errors.length > 0}
+            onClick={() => {
+              onSave(input);
+              setSaveNotice("Đã lưu thông số thanh dài.");
+            }}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 disabled:opacity-40"
+          >
+            Lưu thông số
+          </button>
+        )}
+        <button type="button" disabled={!result} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
+        <button type="button" disabled={!result} onClick={printReport} className="rounded-lg bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
       </div>
     </header>
+    {saveNotice && <p role="status" className="text-sm text-emerald-700">{saveNotice}</p>}
     <label className="block text-sm font-semibold">Mục tính toán<select className={fieldClass} value={mode} onChange={e => setMode(e.target.value as Mode)}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     <div className={compact ? "grid gap-4" : "grid items-start gap-5 xl:grid-cols-[400px_1fr]"}>
       <section className="space-y-4 rounded-xl border bg-white p-4">
@@ -188,30 +220,268 @@ export function StressReleaseCalculator({ initialInput = DEFAULT_STRESS_INPUT, s
       </section>
       <div className="space-y-3">{errors.length > 0 && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{errors.map(error => <p key={error}>{error}</p>)}</div>}{results}</div>
     </div>
-    {printOpen && createPortal(<article id="stress-print-report">
-      <style>{`
-        #stress-print-report { display: none; }
-        @media print {
-          @page { size: A4 portrait; margin: 10mm; }
-          body:has(#stress-print-report) { margin: 0 !important; background: white !important; }
-          body:has(#stress-print-report) > :not(#stress-print-report) { display: none !important; }
-          #stress-print-report { display: block !important; color: #111; font: 9pt Arial, sans-serif; }
-          #stress-print-report h1 { font-size: 16pt; margin: 0 0 3mm; }
-          #stress-print-report h2 { font-size: 12pt; margin: 0 0 3mm; }
-          #stress-print-report h3 { font-size: 10pt; margin: 0 0 2mm; }
-          #stress-print-report section { padding: 2mm; margin: 2mm 0; break-inside: avoid; border: 1px solid #aaa; border-radius: 0; }
-          #stress-print-report table { width: 100%; font-size: 9pt; border-collapse: collapse; }
-          #stress-print-report th, #stress-print-report td { padding: 1mm; }
-          #stress-print-report p { margin: 1mm 0; font-size: 8pt; }
-          #stress-print-report .thermal-results { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
-          #stress-print-report .print-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 1mm 5mm; margin: 3mm 0; }
-        }
-      `}</style>
-      <h1>PHIẾU TÍNH TOÁN RAY 60R2</h1><h2>{modes[mode]}</h2>
-      {segmentId && <p>Đoạn ray: {segmentId}</p>}
-      {!buffer && <p>Con lăn cạnh: {rollers ? "Có" : "Không"}</p>}
-      <div className="print-inputs">{inputRows.map(([label, value, unit]) => <p key={label}>{label}: <b>{format(Number(value))} {unit}</b></p>)}</div>
-      {results}
-    </article>, document.body)}
+    {printOpen && result && createPortal(
+      <article id="stress-print-report">
+        <style>{`
+          #stress-print-report { display: none; }
+          @media print {
+            @page { size: A4 portrait; margin: 12mm 14mm; }
+            html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body:has(#stress-print-report) { margin: 0 !important; background: #fff !important; }
+            body:has(#stress-print-report) > :not(#stress-print-report) { display: none !important; }
+            #stress-print-report {
+              display: block !important;
+              color: #0f172a;
+              font: 9.5pt "Segoe UI", Arial, Helvetica, sans-serif;
+              line-height: 1.35;
+            }
+            #stress-print-report .doc-top {
+              display: flex; justify-content: space-between; align-items: baseline;
+              border-bottom: 0.35mm solid #94a3b8; padding-bottom: 2.5mm; margin-bottom: 4mm;
+              font-size: 8pt; color: #64748b;
+            }
+            #stress-print-report .doc-brand { font-weight: 600; color: #0047AB; }
+            #stress-print-report .doc-title {
+              text-align: center; margin: 0 0 1.5mm;
+              font-size: 15.5pt; font-weight: 800; letter-spacing: 0.04em; color: #0f172a;
+            }
+            #stress-print-report .doc-subtitle {
+              text-align: center; margin: 0 0 4mm;
+              font-size: 11pt; font-weight: 700; color: #0047AB;
+            }
+            #stress-print-report .meta-line {
+              margin: 0 0 2.5mm; font-size: 9pt; color: #334155;
+            }
+            #stress-print-report .meta-line b { color: #0f172a; }
+            #stress-print-report .print-inputs {
+              display: grid; grid-template-columns: 1fr 1fr; column-gap: 8mm; row-gap: 1.2mm;
+              margin: 0 0 4.5mm; padding: 3mm 0;
+              border-top: 0.2mm solid #e2e8f0; border-bottom: 0.2mm solid #e2e8f0;
+            }
+            #stress-print-report .print-inputs .item {
+              display: flex; justify-content: space-between; gap: 3mm;
+              font-size: 9pt; color: #475569;
+            }
+            #stress-print-report .print-inputs .item b {
+              color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap;
+            }
+            #stress-print-report .thermal-pair {
+              display: grid; grid-template-columns: 1fr 1fr; gap: 3.5mm; margin: 0 0 3mm;
+            }
+            #stress-print-report .box {
+              border: 0.3mm solid #cbd5e1; break-inside: avoid; overflow: hidden;
+            }
+            #stress-print-report .box-h {
+              margin: 0; padding: 2mm 2.5mm;
+              background: #eef4ff; color: #0047AB;
+              font-size: 9pt; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase;
+              border-bottom: 0.3mm solid #cbd5e1;
+            }
+            #stress-print-report .box table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+            #stress-print-report .box th, #stress-print-report .box td {
+              padding: 1.6mm 2.5mm; border-bottom: 0.2mm solid #e2e8f0;
+            }
+            #stress-print-report .box tr:last-child th,
+            #stress-print-report .box tr:last-child td { border-bottom: 0; }
+            #stress-print-report .box th {
+              font-weight: 400; text-align: left; color: #475569;
+            }
+            #stress-print-report .box td {
+              text-align: right; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums;
+            }
+            #stress-print-report .note {
+              margin: 0 0 4mm; font-size: 8pt; font-style: italic; color: #64748b;
+            }
+            #stress-print-report .section-h {
+              margin: 0 0 2mm; padding-bottom: 1.5mm;
+              font-size: 10.5pt; font-weight: 800; color: #0047AB;
+              border-bottom: 0.55mm solid #0047AB;
+            }
+            #stress-print-report .result-table {
+              width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9.5pt;
+            }
+            #stress-print-report .result-table th,
+            #stress-print-report .result-table td {
+              padding: 2mm 0; border-bottom: 0.2mm solid #cbd5e1;
+            }
+            #stress-print-report .result-table th {
+              font-weight: 400; text-align: left; color: #334155;
+            }
+            #stress-print-report .result-table td {
+              text-align: right; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums;
+            }
+            #stress-print-report .alert {
+              margin: 0 0 6mm; padding: 2.5mm 3mm;
+              border: 0.35mm solid #f59e0b; background: #fffbeb; color: #92400e;
+              font-size: 8.5pt; break-inside: avoid;
+            }
+            #stress-print-report .alert p { margin: 0 0 1mm; }
+            #stress-print-report .alert p:last-child { margin: 0; }
+            #stress-print-report .sign-row {
+              display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6mm;
+              margin-top: 8mm; break-inside: avoid;
+            }
+            #stress-print-report .sign {
+              text-align: center; font-size: 8.5pt; color: #334155;
+            }
+            #stress-print-report .sign .role { font-weight: 700; color: #0f172a; margin-bottom: 1mm; }
+            #stress-print-report .sign .hint { font-size: 7.5pt; color: #94a3b8; margin-bottom: 12mm; }
+            #stress-print-report .sign .line {
+              border-top: 0.25mm solid #94a3b8; margin: 0 4mm; padding-top: 1.5mm;
+              font-size: 7.5pt; color: #94a3b8;
+            }
+            #stress-print-report .foot {
+              margin-top: 5mm; padding-top: 2mm;
+              border-top: 0.2mm solid #e2e8f0;
+              font-size: 7.5pt; color: #94a3b8; text-align: center;
+            }
+          }
+        `}</style>
+
+        <div className="doc-top">
+          <span>{printStamp}</span>
+          <span className="doc-brand">Hệ thống Quản lý hàn ray · Thành Phát</span>
+        </div>
+
+        <h1 className="doc-title">PHIẾU TÍNH TOÁN RAY 60R2</h1>
+        <p className="doc-subtitle">{modes[mode]}</p>
+
+        {segmentId ? (
+          <p className="meta-line">Đoạn ray: <b>{segmentId}</b></p>
+        ) : null}
+        {!buffer ? (
+          <p className="meta-line">Con lăn cạnh: <b>{rollers ? "Có" : "Không"}</b></p>
+        ) : null}
+
+        <div className="print-inputs">
+          {inputRows.map(([label, value, unit]) => (
+            <div className="item" key={String(label)}>
+              <span>{label}</span>
+              <b>{format(Number(value))} {unit}</b>
+            </div>
+          ))}
+        </div>
+
+        <div className="thermal-pair">
+          <section className="box">
+            <h3 className="box-h">Kéo (nhiệt độ giảm)</h3>
+            <table>
+              <tbody>
+                {tension.map(([label, value, unit]) => (
+                  <tr key={label}>
+                    <th>{label}</th>
+                    <td>{cellValue(value, unit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+          <section className="box">
+            <h3 className="box-h">Nén (nhiệt độ tăng)</h3>
+            <table>
+              <tbody>
+                {compression.map(([label, value, unit]) => (
+                  <tr key={label}>
+                    <th>{label}</th>
+                    <td>{cellValue(value, unit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+
+        {!buffer ? (
+          <p className="note">
+            Biến dạng tự do trên toàn chiều dài ray; phần Kéo hiển thị độ co ngắn, phần Nén hiển thị độ giãn dài.
+            Lực nhiệt xét theo dải khóa đường rộng 10°C.
+          </p>
+        ) : null}
+
+        {buffer ? (
+          <>
+            <h3 className="section-h">Bố trí khe hở ray vùng đệm 25 m</h3>
+            <table className="result-table">
+              <tbody>
+                {gapRows.map((row) => (
+                  <tr key={row.label}>
+                    <th>{row.label}</th>
+                    <td>
+                      {format(row.lower)} – {format(row.upper)} mm · tham khảo {row.suggested}
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <th>Khe hở cần kiểm tra</th>
+                  <td>{format(result.gapCheck)} mm</td>
+                </tr>
+                <tr>
+                  <th>Khe hở cấu tạo</th>
+                  <td>{format(input.structuralGap)} mm</td>
+                </tr>
+              </tbody>
+            </table>
+            <h3 className="section-h">Đối chiếu giãn dài · mẫu 60R2</h3>
+            <table className="result-table">
+              <tbody>
+                {result.extensionChecks.map((row) => (
+                  <tr key={row.label}>
+                    <th>{row.label}</th>
+                    <td>
+                      Kéo {format(row.tension)} mm · Nén {format(row.compression)} mm
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <>
+            <h3 className="section-h">Kết quả giải toả</h3>
+            <table className="result-table">
+              <tbody>
+                {rows.map(([label, value, unit]) => (
+                  <tr key={label}>
+                    <th>{label}</th>
+                    <td>{cellValue(value, unit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {notices.length > 0 ? (
+          <div className="alert">
+            {notices.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="sign-row">
+          <div className="sign">
+            <div className="role">Người lập</div>
+            <div className="hint">(Ký, họ tên)</div>
+            <div className="line">&nbsp;</div>
+          </div>
+          <div className="sign">
+            <div className="role">Người kiểm tra</div>
+            <div className="hint">(Ký, họ tên)</div>
+            <div className="line">&nbsp;</div>
+          </div>
+          <div className="sign">
+            <div className="role">Phê duyệt</div>
+            <div className="hint">(Ký, họ tên)</div>
+            <div className="line">&nbsp;</div>
+          </div>
+        </div>
+
+        <p className="foot">
+          Mẫu tính theo Bảng tính mẫu 60R2 · Chỉ dùng cho mục đích kỹ thuật nội bộ · In lúc {printStamp}
+        </p>
+      </article>,
+      document.body,
+    )}
   </div>;
 }

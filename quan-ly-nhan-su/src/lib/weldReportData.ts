@@ -168,6 +168,17 @@ export function invalidateWeldReportCache() {
   invalidateWeldDailyRollupCache();
 }
 
+/** Đồng bộ Lịch chạy máy (phan_cong_may) theo ngày nhật ký vừa đổi — không chặn lưu. */
+function notifyMachineRunScheduleChanged(...dates: Array<string | null | undefined>) {
+  void import("@/lib/machineRunSchedulesDb")
+    .then((mod) => {
+      mod.queueMachineRunScheduleSync(dates);
+    })
+    .catch(() => {
+      /* ignore sync bootstrap errors */
+    });
+}
+
 /** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo). */
 export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]> {
   const value = prefix.trim();
@@ -677,6 +688,16 @@ export async function updateWeldJournalShifts(
     throw new Error("Chưa cấu hình Supabase nên không thể cập nhật ca hàn.");
   }
   const supabase = createClient();
+  const allIds = assignments.map((item) => item.id);
+  const dates: string[] = [];
+  for (let offset = 0; offset < allIds.length; offset += 200) {
+    const chunk = allIds.slice(offset, offset + 200);
+    const { data } = await supabase.from("lich_su_moi_han").select("ngay_thuc_hien").in("id", chunk);
+    for (const row of data ?? []) {
+      const iso = String((row as { ngay_thuc_hien?: string | null }).ngay_thuc_hien ?? "").slice(0, 10);
+      if (iso) dates.push(iso);
+    }
+  }
   for (let offset = 0; offset < assignments.length; offset += 100) {
     const batch = assignments.slice(offset, offset + 100);
     for (const shift of WELD_SHIFTS) {
@@ -696,6 +717,7 @@ export async function updateWeldJournalShifts(
     }
   }
   invalidateWeldReportCache();
+  notifyMachineRunScheduleChanged(...dates);
 }
 
 async function ensureCertificateRecord(
@@ -849,6 +871,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
 
   if (!statusRpcRes.error) {
     invalidateWeldReportCache();
+    notifyMachineRunScheduleChanged(payload.ngay_thuc_hien);
     const verification = await supabase.from("lich_su_moi_han")
       .select("tinh_trang_thi_nghiem")
       .eq("ma_lich_su", payload.ma_lich_su.trim()).single();
@@ -882,6 +905,7 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
 
   if (!atomicRpcRes.error) {
     invalidateWeldReportCache();
+    notifyMachineRunScheduleChanged(payload.ngay_thuc_hien);
     if (payload.ca_han) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);
     }
@@ -955,10 +979,17 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
   }
 
   invalidateWeldReportCache();
+  notifyMachineRunScheduleChanged(payload.ngay_thuc_hien);
 }
 
 export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
   const supabase = createClient();
+  const { data: previousRow } = await supabase
+    .from("lich_su_moi_han")
+    .select("ngay_thuc_hien")
+    .eq("id", payload.id)
+    .maybeSingle();
+  const previousDate = String(previousRow?.ngay_thuc_hien ?? "").slice(0, 10);
   const certificateId = await ensureCertificateRecord(
     supabase,
     payload.tho_han_id,
@@ -1071,6 +1102,7 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
   }
 
   invalidateWeldReportCache();
+  notifyMachineRunScheduleChanged(previousDate, payload.ngay_thuc_hien);
 }
 
 /** Xóa 1 bản ghi nhật ký hàn. Điểm GPS liên kết sẽ tự gỡ (FK on delete set null). */
@@ -1079,9 +1111,16 @@ export async function deleteWeldJournalEntry(id: string) {
     throw new Error("Chưa cấu hình Supabase nên không thể xóa nhật ký hàn.");
   }
   const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("lich_su_moi_han")
+    .select("ngay_thuc_hien")
+    .eq("id", id)
+    .maybeSingle();
+  const weldDate = String(existing?.ngay_thuc_hien ?? "").slice(0, 10);
   const { error } = await supabase.from("lich_su_moi_han").delete().eq("id", id);
   if (error) throw new Error(formatSupabaseError(error));
   invalidateWeldReportCache();
+  notifyMachineRunScheduleChanged(weldDate);
 }
 
 export function uniqueProjectOptions(rows: WeldReportRow[]) {

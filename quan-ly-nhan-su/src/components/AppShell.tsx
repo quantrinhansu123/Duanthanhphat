@@ -1,7 +1,6 @@
 "use client";
 
 import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -211,7 +210,8 @@ export default function AppShell({ tab }: AppShellProps) {
 
   return (
     <ReportFilterProvider>
-    <div className="flex h-screen overflow-hidden bg-[#f8fafc] text-[#0f172a]">
+    <div className="app-workspace flex h-dvh overflow-hidden bg-[#f4f6fa] text-[#0f172a]">
+      <a href="#main-content" className="skip-link">{lang === "en" ? "Skip to content" : "Đi đến nội dung chính"}</a>
       {/* Desktop Sidebar */}
       <div className="hidden lg:block shrink-0">
         <Sidebar
@@ -318,23 +318,17 @@ export default function AppShell({ tab }: AppShellProps) {
             ) : null}
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
               <div className="hidden md:block text-right leading-tight">
-                <div className="text-xs sm:text-sm font-semibold text-slate-900">Nguyễn Đắc Công</div>
-                <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Admin" : "Admin"}</div>
+                <div className="text-xs sm:text-sm font-semibold text-slate-900">{lang === "en" ? "Workspace" : "Không gian làm việc"}</div>
+                <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Thanh Phat" : "Thành Phát"}</div>
               </div>
               <div className="relative h-8 w-8 sm:h-9 sm:w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-slate-200 hover:ring-blue-200 transition-all shadow-xs">
-                <Image
-                  src="https://randomuser.me/api/portraits/men/11.jpg"
-                  alt="Nguyễn Đắc Công"
-                  fill
-                  className="object-cover"
-                  sizes="36px"
-                />
+                <span className="grid h-full place-items-center text-xs font-semibold text-white" aria-hidden>TP</span>
               </div>
             </div>
           </div>
         </header>
 
-        <div
+        <main id="main-content" tabIndex={-1}
           className={`min-h-0 flex-1 overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
         >
           {reportTab && (
@@ -412,7 +406,7 @@ export default function AppShell({ tab }: AppShellProps) {
           ) : (
             <HomeDashboard onNavigate={go} />
           )}
-        </div>
+        </main>
       </div>
     </div>
     </ReportFilterProvider>

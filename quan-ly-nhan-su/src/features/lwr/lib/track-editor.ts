@@ -1,4 +1,5 @@
 import { RAIL_ROWS } from "./track-data";
+import { DEFAULT_STRESS_INPUT, type StressInput } from "./stress-release";
 import type { RailCell, RailRow } from "../types/track";
 
 export const TRACK_LAYOUT_STORAGE_KEY = "tp-track-layout-v1";
@@ -15,10 +16,22 @@ export interface TrackPlacement {
   label: string;
 }
 
+export interface LongRail {
+  id: string;
+  code: string;
+  label: string;
+  rowKey: string;
+  startCellId: string;
+  endCellId: string;
+  params: StressInput;
+  updatedAt: string;
+}
+
 export interface TrackLayout {
   version: 1;
   rows: RailRow[];
   placements: TrackPlacement[];
+  longRails: LongRail[];
 }
 
 export interface PlacementSpan {
@@ -60,7 +73,43 @@ export function createInitialTrackLayout(): TrackLayout {
     version: 1,
     rows: RAIL_ROWS.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) })),
     placements: [],
+    longRails: [],
   };
+}
+
+/** Default 60R2 params for a new long rail spanning the selected cells. */
+export function defaultLongRailParams(rows: RailRow[], span: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">): StressInput {
+  const placement = getPlacementSpan(rows, span);
+  if (!placement) return { ...DEFAULT_STRESS_INPUT };
+  return {
+    ...DEFAULT_STRESS_INPUT,
+    leftLength: placement.endMetres - placement.startMetres,
+    rightLength: 0,
+    neutralTemp: placement.startCell.temp,
+  };
+}
+
+/** True when two inclusive cell ranges on the same row share any cell. */
+export function longRailsOverlap(
+  rows: RailRow[],
+  a: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
+  b: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
+): boolean {
+  if (a.rowKey !== b.rowKey) return false;
+  const spanA = getPlacementSpan(rows, a);
+  const spanB = getPlacementSpan(rows, b);
+  if (!spanA || !spanB) return false;
+  return spanA.startIndex <= spanB.endIndex && spanB.startIndex <= spanA.endIndex;
+}
+
+export function nextLongRailCode(longRails: LongRail[], rowKey: string): string {
+  const prefix = `TD-${rowKey}-`;
+  const numbers = longRails
+    .filter((item) => item.code.startsWith(prefix))
+    .map((item) => Number(/-(\d+)$/.exec(item.code)?.[1]))
+    .filter((n) => Number.isSafeInteger(n));
+  const next = (numbers.length ? Math.max(...numbers) : 0) + 1;
+  return `${prefix}${String(next).padStart(2, "0")}`;
 }
 
 /** Inclusive cell selection: the span ends at the end of the last selected cell. */
@@ -132,6 +181,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const STRESS_NUMBER_KEYS: (keyof StressInput)[] = [
+  "area", "modulus", "alpha", "resistance", "jointResistance",
+  "leftLength", "rightLength", "radius", "neutralTemp", "leftTemp", "rightTemp",
+  "maxTemp", "minTemp", "weldGap", "fbwAllowance", "currentGap", "structuralGap",
+  "leftMovement", "rightMovement",
+];
+
+function validateStressParams(value: unknown): StressInput | null {
+  if (!isRecord(value)) return null;
+  const params = { ...DEFAULT_STRESS_INPUT };
+  for (const key of STRESS_NUMBER_KEYS) {
+    const raw = value[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+    params[key] = raw;
+  }
+  if (typeof value.sideRollers !== "boolean") return null;
+  if (value.method !== "ATW" && value.method !== "FBW" && value.method !== "SINGLE") return null;
+  params.sideRollers = value.sideRollers;
+  params.method = value.method;
+  return params;
+}
+
 /** Validate browser storage before using any stored selection or geometry. */
 export function validateTrackLayout(value: unknown): TrackLayout | null {
   if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.rows)
@@ -181,5 +252,28 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
     placementIds.add(placement.id);
     placements.push(placement);
   }
-  return { version: 1, rows, placements };
+
+  // Missing longRails = legacy layouts saved before this field existed.
+  const rawLongRails = value.longRails === undefined ? [] : value.longRails;
+  if (!Array.isArray(rawLongRails)) return null;
+  const longRails: LongRail[] = [];
+  const longRailIds = new Set<string>();
+  for (const raw of rawLongRails) {
+    if (!isRecord(raw) || typeof raw.id !== "string" || !raw.id.trim() || longRailIds.has(raw.id)
+      || typeof raw.code !== "string" || !raw.code.trim()
+      || typeof raw.label !== "string"
+      || typeof raw.rowKey !== "string" || typeof raw.startCellId !== "string"
+      || typeof raw.endCellId !== "string" || typeof raw.updatedAt !== "string") return null;
+    const params = validateStressParams(raw.params);
+    if (!params) return null;
+    const longRail: LongRail = {
+      id: raw.id, code: raw.code, label: raw.label, rowKey: raw.rowKey,
+      startCellId: raw.startCellId, endCellId: raw.endCellId, params, updatedAt: raw.updatedAt,
+    };
+    if (!getPlacementSpan(rows, longRail)) return null;
+    if (longRails.some((other) => longRailsOverlap(rows, longRail, other))) return null;
+    longRailIds.add(longRail.id);
+    longRails.push(longRail);
+  }
+  return { version: 1, rows, placements, longRails };
 }

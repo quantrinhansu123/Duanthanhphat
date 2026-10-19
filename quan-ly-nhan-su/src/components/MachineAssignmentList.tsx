@@ -11,7 +11,12 @@ import {
 } from "@/data/machineAssignments";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { compareNewestDate } from "@/lib/dateOrder";
-import { importMachineRunReport, loadMachineRunScheduleBundle, loadScheduleJournalDetails } from "@/lib/machineRunSchedulesDb";
+import {
+  importMachineRunReport,
+  loadMachineRunScheduleBundle,
+  loadScheduleJournalDetails,
+  MACHINE_RUN_SYNC_EVENT,
+} from "@/lib/machineRunSchedulesDb";
 import { resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import {
   deleteDailyFuel,
@@ -81,6 +86,14 @@ export default function MachineAssignmentList() {
   const [fuelEditId, setFuelEditId] = useState<string | null>(null);
   const [fuelForm, setFuelForm] = useState<DailyFuelFormValues>(emptyOilForm("", ""));
   const [fuelFormError, setFuelFormError] = useState("");
+  const [fuelDateEditable, setFuelDateEditable] = useState(false);
+  const [oilHistoryMachine, setOilHistoryMachine] = useState<{
+    id: string;
+    code: string;
+    name: string;
+    defaultDate: string;
+    defaultPersonId: string;
+  } | null>(null);
   const [toast, setToast] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
   const [reportFrom, setReportFrom] = useState("");
@@ -115,6 +128,14 @@ export default function MachineAssignmentList() {
     void reload();
     void reloadFuel();
   }, [reload, reloadFuel]);
+
+  useEffect(() => {
+    function onJournalSynced() {
+      void reload();
+    }
+    window.addEventListener(MACHINE_RUN_SYNC_EVENT, onJournalSynced);
+    return () => window.removeEventListener(MACHINE_RUN_SYNC_EVENT, onJournalSynced);
+  }, [reload]);
 
   const filtered = useMemo(() => {
     return list.filter((row) => {
@@ -215,6 +236,7 @@ export default function MachineAssignmentList() {
 
   function openOilReport(schedule: MachineRunSchedule) {
     const existing = fuelByScheduleKey.get(fuelKey(schedule.date, schedule.machineId));
+    setFuelDateEditable(false);
     if (existing) {
       setFuelForm({
         date: existing.date,
@@ -234,6 +256,53 @@ export default function MachineAssignmentList() {
     setFuelFormError("");
     setFuelModal("add");
   }
+
+  function openOilHistory(schedule: MachineRunSchedule) {
+    setOilHistoryMachine({
+      id: schedule.machineId,
+      code: schedule.machineCode,
+      name: schedule.machineName || schedule.machineCode,
+      defaultDate: schedule.date,
+      defaultPersonId: schedule.personInChargeId || "",
+    });
+  }
+
+  function openOilHistoryAdd() {
+    if (!oilHistoryMachine) return;
+    setFuelDateEditable(true);
+    setFuelForm(
+      emptyOilForm(
+        oilHistoryMachine.defaultDate,
+        oilHistoryMachine.id,
+        oilHistoryMachine.defaultPersonId,
+      ),
+    );
+    setFuelEditId(null);
+    setFuelFormError("");
+    setFuelModal("add");
+  }
+
+  function openOilHistoryEdit(row: DailyFuelRow) {
+    setFuelDateEditable(true);
+    setFuelForm({
+      date: row.date,
+      machineId: row.machineId,
+      liters: row.liters,
+      unit: row.unit || "lít",
+      personId: row.personId,
+      note: row.note,
+    });
+    setFuelEditId(row.id);
+    setFuelFormError("");
+    setFuelModal("edit");
+  }
+
+  const oilHistoryRows = useMemo(() => {
+    if (!oilHistoryMachine) return [];
+    return fuelRows
+      .filter((row) => row.machineId === oilHistoryMachine.id)
+      .sort((a, b) => compareNewestDate(a.date, b.date) || b.id.localeCompare(a.id));
+  }, [fuelRows, oilHistoryMachine]);
 
   async function handleFuelSave() {
     if (!fuelForm.date) {
@@ -415,7 +484,8 @@ export default function MachineAssignmentList() {
       </section>
 
       <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs text-slate-600">
-        Danh sách chỉ hiện báo cáo đã lưu. Bấm <span className="font-semibold text-[#0047AB]">Lấy báo cáo</span> để tổng hợp nhật ký hàn theo khoảng ngày rồi ghi vào Supabase.
+        Tự động cập nhật khi <span className="font-semibold text-[#0047AB]">Nhật ký hàn</span> thay đổi.
+        Dùng <span className="font-semibold text-[#0047AB]">Lấy báo cáo</span> để đồng bộ lại theo khoảng ngày nếu cần.
       </div>
 
       {loadError && (
@@ -458,20 +528,33 @@ export default function MachineAssignmentList() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-xs sm:text-sm">
+            <colgroup>
+              <col className="w-[8%]" />
+              <col className="w-[15%]" />
+              <col className="w-[6%]" />
+              <col className="w-[8%]" />
+              <col className="w-[6%]" />
+              <col className="w-[6%]" />
+              <col className="w-[5%]" />
+              <col className="w-[12%]" />
+              <col className="w-[11%]" />
+              <col className="w-[16%]" />
+              <col className="w-[7%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <th className="px-4 py-3">Ngày</th>
-                <th className="px-3.5 py-3">Máy</th>
-                <th className="px-3.5 py-3">PP hàn</th>
-                <th className="px-3.5 py-3">Loại mối</th>
-                <th className="whitespace-nowrap px-3.5 py-3">Ca</th>
-                <th className="px-3.5 py-3 text-right">Mối hàn</th>
-                <th className="px-3.5 py-3 text-right">Lỗi</th>
-                <th className="px-3.5 py-3">Dự án</th>
-                <th className="px-3.5 py-3">Thợ hàn</th>
-                <th className="px-3.5 py-3">Mức dầu</th>
-                <th className="px-3.5 py-3 text-right">Chi tiết</th>
+                <th className="px-2.5 py-3 sm:px-3">Ngày</th>
+                <th className="px-2.5 py-3 sm:px-3">Máy</th>
+                <th className="px-2 py-3 text-center">PP hàn</th>
+                <th className="px-2.5 py-3 sm:px-3">Loại mối</th>
+                <th className="whitespace-nowrap px-2 py-3 text-center">Ca</th>
+                <th className="px-2 py-3 text-right">Mối hàn</th>
+                <th className="px-2 py-3 text-right">Lỗi</th>
+                <th className="px-2.5 py-3 sm:px-3">Dự án</th>
+                <th className="px-2.5 py-3 sm:px-3">Thợ hàn</th>
+                <th className="px-2.5 py-3 sm:px-3">Mức dầu</th>
+                <th className="px-2 py-3 text-center">Chi tiết</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -485,27 +568,35 @@ export default function MachineAssignmentList() {
                   oil.liters < quota;
                 return (
                 <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
-                  <td className="px-4 py-3 font-mono font-semibold text-slate-900">
+                  <td className="whitespace-nowrap px-2.5 py-3 font-mono text-[11px] font-semibold text-slate-900 sm:px-3 sm:text-xs">
                     {formatScheduleDate(row.date)}
                   </td>
-                  <td className="px-3.5 py-3">
-                    <div className="font-mono font-bold text-[#0047AB]">{row.machineCode}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{row.machineName}</div>
+                  <td className="px-2.5 py-3 sm:px-3">
+                    <div className="truncate font-mono font-bold text-[#0047AB]" title={row.machineCode}>
+                      {row.machineCode}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500" title={row.machineName}>
+                      {row.machineName}
+                    </div>
                   </td>
-                  <td className="px-3.5 py-3 font-mono font-semibold text-slate-800">
+                  <td className="px-2 py-3 text-center font-mono font-semibold text-slate-800">
                     {row.weldMethod || "—"}
                   </td>
-                  <td className="px-3.5 py-3 text-slate-700">{row.weldType || "—"}</td>
-                  <td className="whitespace-nowrap px-3.5 py-3 text-xs font-semibold text-slate-700">
+                  <td className="px-2.5 py-3 text-slate-700 sm:px-3">
+                    <span className="line-clamp-2" title={row.weldType || undefined}>
+                      {row.weldType || "—"}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold text-slate-700">
                     {(row.shifts ?? []).join(", ") || "—"}
                   </td>
-                  <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-[#0047AB]">
+                  <td className="px-2 py-3 text-right font-mono font-bold tabular-nums text-[#0047AB]">
                     {(row.weldCount ?? 0).toLocaleString("vi-VN")}
                   </td>
-                  <td className="px-3.5 py-3 text-right font-mono font-bold tabular-nums text-rose-600">
+                  <td className="px-2 py-3 text-right font-mono font-bold tabular-nums text-rose-600">
                     {(row.failedWeldCount ?? 0).toLocaleString("vi-VN")}
                   </td>
-                  <td className="px-3.5 py-3">
+                  <td className="px-2.5 py-3 sm:px-3">
                     {row.projectId ? (
                       <Link
                         href={`/phan-cong-may?projectId=${encodeURIComponent(row.projectId)}`}
@@ -513,19 +604,25 @@ export default function MachineAssignmentList() {
                           setProjectId(row.projectId);
                           syncProjectToUrl(row.projectId);
                         }}
-                        className="font-medium text-[#0047AB] hover:underline"
+                        className="line-clamp-2 font-medium text-[#0047AB] hover:underline"
                         title="Lọc theo dự án này"
                       >
                         {row.projectName}
                       </Link>
                     ) : (
-                      <span className="text-slate-700">{row.projectName}</span>
+                      <span className="line-clamp-2 text-slate-700" title={row.projectName}>
+                        {row.projectName}
+                      </span>
                     )}
                   </td>
-                  <td className="px-3.5 py-3 font-medium text-slate-900">{row.personInChargeName}</td>
-                  <td className="px-3.5 py-3">
+                  <td className="px-2.5 py-3 font-medium text-slate-900 sm:px-3">
+                    <span className="line-clamp-2" title={row.personInChargeName}>
+                      {row.personInChargeName}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-3 sm:px-3">
                     {oil ? (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className={`inline-flex items-center gap-1.5 font-mono text-sm font-bold tabular-nums ${oilLow ? "text-rose-600" : "text-emerald-700"}`}>
                           {oilLow ? (
                             <Warning
@@ -541,33 +638,51 @@ export default function MachineAssignmentList() {
                           </span>
                         </div>
                         {oilLow && (
-                          <div className="text-xs font-bold text-rose-600">
+                          <div className="text-[11px] font-bold leading-snug text-rose-600">
                             Dưới định mức {quota?.toLocaleString("vi-VN")} lít
                           </div>
                         )}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openOilReport(row)}
+                            className="h-8 rounded-lg border border-[#0047AB]/25 bg-blue-50 px-1.5 text-[10px] font-semibold leading-tight text-[#0047AB] hover:bg-blue-100 sm:text-[11px]"
+                          >
+                            Sửa báo cáo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openOilHistory(row)}
+                            className="h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
+                          >
+                            Lịch sử cấp phát
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
                           onClick={() => openOilReport(row)}
-                          className="text-xs font-semibold text-[#0047AB] hover:underline"
+                          className="h-8 rounded-lg border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 sm:text-[11px]"
                         >
-                          Sửa báo cáo
+                          Báo cáo mức dầu
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openOilHistory(row)}
+                          className="h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
+                        >
+                          Lịch sử cấp phát
                         </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openOilReport(row)}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                      >
-                        Báo cáo mức dầu
-                      </button>
                     )}
                   </td>
-                  <td className="px-3.5 py-3 text-right">
+                  <td className="px-2 py-3 text-center">
                     <button
                       type="button"
                       onClick={() => openDetail(row)}
-                      className="rounded-lg px-2.5 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50"
+                      className="rounded-lg px-2 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50"
                     >
                       Chi tiết
                     </button>
@@ -766,7 +881,7 @@ export default function MachineAssignmentList() {
       )}
 
       {fuelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-3 sm:p-4">
           <button
             type="button"
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
@@ -781,10 +896,18 @@ export default function MachineAssignmentList() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  {fuelModal === "add" ? "Báo cáo mức dầu" : "Sửa báo cáo mức dầu"}
+                  {fuelDateEditable
+                    ? fuelModal === "add"
+                      ? "Điền cấp phát dầu"
+                      : "Sửa lần cấp phát dầu"
+                    : fuelModal === "add"
+                      ? "Báo cáo mức dầu"
+                      : "Sửa báo cáo mức dầu"}
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Mức dầu tại thời điểm báo cáo · một máy / một ngày
+                  {fuelDateEditable
+                    ? "Ghi lần cấp phát dầu cho máy đã chọn"
+                    : "Mức dầu tại thời điểm báo cáo · một máy / một ngày"}
                 </p>
               </div>
               <button
@@ -802,14 +925,25 @@ export default function MachineAssignmentList() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Ngày</div>
-                  <div className="mt-1.5 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 font-mono text-sm text-slate-800">
-                    {formatFuelDate(fuelForm.date)}
-                  </div>
+                  {fuelDateEditable ? (
+                    <input
+                      type="date"
+                      value={fuelForm.date}
+                      onChange={(e) => setFuelForm((f) => ({ ...f, date: e.target.value }))}
+                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                    />
+                  ) : (
+                    <div className="mt-1.5 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 font-mono text-sm text-slate-800">
+                      {formatFuelDate(fuelForm.date)}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Máy</div>
                   <div className="mt-1.5 flex h-10 items-center truncate rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-[#0047AB]">
-                    {machines.find((m) => m.id === fuelForm.machineId)?.code || "—"}
+                    {machines.find((m) => m.id === fuelForm.machineId)?.code ||
+                      oilHistoryMachine?.code ||
+                      "—"}
                   </div>
                 </div>
               </div>
@@ -907,6 +1041,106 @@ export default function MachineAssignmentList() {
                   {fuelSaving ? "Đang lưu…" : "Lưu"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {oilHistoryMachine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">
+          <button
+            type="button"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            aria-label="Đóng"
+            onClick={() => !fuelSaving && setOilHistoryMachine(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-5">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Lịch sử cấp phát dầu</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Máy{" "}
+                  <span className="font-mono font-semibold text-[#0047AB]">{oilHistoryMachine.code}</span>
+                  {oilHistoryMachine.name && oilHistoryMachine.name !== oilHistoryMachine.code
+                    ? ` · ${oilHistoryMachine.name}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={fuelSaving}
+                onClick={() => setOilHistoryMachine(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Đóng"
+              >
+                <X size={18} weight="bold" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
+              <span className="text-xs text-slate-500 sm:text-sm">
+                <strong className="font-mono font-semibold tabular-nums text-slate-900">
+                  {oilHistoryRows.length}
+                </strong>{" "}
+                lần cấp · ngày mới nhất trước
+              </span>
+              <button
+                type="button"
+                onClick={openOilHistoryAdd}
+                className="inline-flex h-9 items-center rounded-lg bg-[#0047AB] px-3.5 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm"
+              >
+                + Điền lần cấp mới
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              {oilHistoryRows.length === 0 ? (
+                <p className="px-5 py-10 text-center text-sm text-slate-500">
+                  Chưa có lần cấp phát dầu cho máy này. Bấm «Điền lần cấp mới» để ghi.
+                </p>
+              ) : (
+                <table className="w-full min-w-[520px] border-collapse text-left text-xs sm:text-sm">
+                  <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                    <tr className="border-b border-slate-200">
+                      <th className="px-4 py-2.5">Ngày</th>
+                      <th className="px-3.5 py-2.5 text-right">Nhiên liệu</th>
+                      <th className="px-3.5 py-2.5">Người cấp</th>
+                      <th className="px-3.5 py-2.5">Ghi chú</th>
+                      <th className="px-3.5 py-2.5 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {oilHistoryRows.map((row) => (
+                      <tr key={row.id} className="hover:bg-slate-50/80">
+                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-slate-700">
+                          {formatFuelDate(row.date)}
+                        </td>
+                        <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-900">
+                          {row.liters.toLocaleString("vi-VN")}{" "}
+                          <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-slate-700">{row.personName || "—"}</td>
+                        <td className="max-w-[200px] px-3.5 py-2.5 text-slate-600">
+                          <div className="line-clamp-2">{row.note || "—"}</div>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openOilHistoryEdit(row)}
+                            className="rounded-lg px-2.5 py-1 font-semibold text-[#0047AB] hover:bg-blue-50"
+                          >
+                            Sửa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

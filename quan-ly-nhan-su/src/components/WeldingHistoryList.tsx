@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import {
   CaretDown,
   CaretLeft,
@@ -10,8 +9,6 @@ import {
   CheckCircle,
   ClockCounterClockwise,
   DotsThree,
-  DownloadSimple,
-  Export,
   MagnifyingGlass,
   WarningCircle,
   X,
@@ -25,7 +22,6 @@ import { WELD_TYPE_OPTIONS as WELD_TYPES } from "@/data/weldTypes";
 import {
   deleteWeldingHistoryRecord,
   EMPTY_WELDING_HISTORY_STATS,
-  exportAllFilteredWeldingHistory,
   loadWeldingHistoryPage,
   loadWeldingHistoryStats,
   removeVietnameseTones,
@@ -73,62 +69,6 @@ function emptyRecord(defaultResult: WeldingHistoryRecord["result"] = "Đạt"): 
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"];
 const WELD_TYPE_OPTIONS: string[] = [...WELD_TYPES];
-
-type ExportColumnKey =
-  | "date"
-  | "welderName"
-  | "rank"
-  | "weldJoint"
-  | "machine"
-  | "railType"
-  | "project"
-  | "shift"
-  | "method"
-  | "weldType"
-  | "result";
-
-const EXPORT_COLUMN_OPTIONS: { key: ExportColumnKey; label: string }[] = [
-  { key: "date", label: "Ngày" },
-  { key: "welderName", label: "Người trực tiếp hàn" },
-  { key: "rank", label: "Hạng" },
-  { key: "weldJoint", label: "Mã mối hàn" },
-  { key: "machine", label: "Máy" },
-  { key: "railType", label: "Loại ray" },
-  { key: "project", label: "Dự án" },
-  { key: "shift", label: "Ca" },
-  { key: "method", label: "Công nghệ hàn" },
-  { key: "weldType", label: "Loại hàn" },
-  { key: "result", label: "Kết quả" },
-];
-
-const DEFAULT_EXPORT_COLUMNS: ExportColumnKey[] = EXPORT_COLUMN_OPTIONS.map((c) => c.key);
-
-function exportCellValue(row: WeldingHistoryRecord, key: ExportColumnKey): string | number {
-  switch (key) {
-    case "date":
-      return formatWeldingDate(row.date);
-    case "welderName":
-      return row.welderName;
-    case "rank":
-      return row.rank;
-    case "weldJoint":
-      return row.weldJoint;
-    case "machine":
-      return row.machine;
-    case "railType":
-      return row.railType;
-    case "project":
-      return row.project;
-    case "shift":
-      return row.shift;
-    case "method":
-      return row.method;
-    case "weldType":
-      return row.weldType;
-    case "result":
-      return row.result;
-  }
-}
 
 type ComboOption = { value: string; label: string; hint?: string };
 
@@ -610,9 +550,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
   const [list, setList] = useState<WeldingHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportPickerOpen, setExportPickerOpen] = useState(false);
-  const [exportColumns, setExportColumns] = useState<ExportColumnKey[]>(DEFAULT_EXPORT_COLUMNS);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -877,94 +814,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
     setModal(null);
   }
 
-  // Xuất toàn bộ dữ liệu đã lọc ra Excel (theo cột đã chọn)
-  async function exportExcel() {
-    if (exportColumns.length === 0) {
-      window.alert("Vui lòng chọn ít nhất một cột để xuất Excel.");
-      return;
-    }
-    try {
-      setExporting(true);
-      const allRows = await exportAllFilteredWeldingHistory({
-        welder,
-        result,
-        dateFrom,
-        dateTo,
-        machines: machinesSel,
-        rails: railsSel,
-        projects: projectsSel,
-        shifts: shiftsSel,
-        methods: methodsSel,
-        weldTypes: weldTypesSel,
-      });
-
-      const selectedMeta = EXPORT_COLUMN_OPTIONS.filter((c) => exportColumns.includes(c.key));
-      const data = allRows.map((r, idx) => {
-        const row: Record<string, string | number> = { STT: idx + 1 };
-        for (const col of selectedMeta) {
-          row[col.label] = exportCellValue(r, col.key);
-        }
-        return row;
-      });
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Lịch sử hàn");
-      XLSX.writeFile(wb, `Lich_su_han_theo_tho_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      setExportPickerOpen(false);
-    } catch (err) {
-      window.alert("Lỗi xuất Excel: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Xuất toàn bộ dữ liệu đã lọc ra CSV (theo cột đã chọn)
-  async function exportCsv() {
-    if (exportColumns.length === 0) {
-      window.alert("Vui lòng chọn ít nhất một cột để xuất.");
-      return;
-    }
-    try {
-      setExporting(true);
-      const allRows = await exportAllFilteredWeldingHistory({
-        welder,
-        result,
-        dateFrom,
-        dateTo,
-        machines: machinesSel,
-        rails: railsSel,
-        projects: projectsSel,
-        shifts: shiftsSel,
-        methods: methodsSel,
-        weldTypes: weldTypesSel,
-      });
-
-      const selectedMeta = EXPORT_COLUMN_OPTIONS.filter((c) => exportColumns.includes(c.key));
-      const headers = ["STT", ...selectedMeta.map((c) => c.label)];
-      const rows = allRows.map((r, idx) => [
-        idx + 1,
-        ...selectedMeta.map((c) => {
-          const value = exportCellValue(r, c.key);
-          return typeof value === "string" && (value.includes(",") || value.includes('"'))
-            ? `"${value.replace(/"/g, '""')}"`
-            : value;
-        }),
-      ]);
-      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${failedOnly ? "Lich_su_moi_han_loi" : "Lich_su_han_theo_tho"}_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      window.alert("Lỗi xuất CSV: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setExporting(false);
-    }
-  }
-
   const hasFilter =
     dateTo ||
     (dateFrom && dateFrom !== weldingHistoryDefaultDateFrom(WELDING_HISTORY_RECENT_DAYS)) ||
@@ -1227,28 +1076,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           </button>
         )}
 
-        {/* Nút Xuất Excel & CSV */}
-        <button
-          type="button"
-          onClick={() => setExportPickerOpen(true)}
-          disabled={exporting}
-          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-emerald-800 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
-          title="Chọn cột dữ liệu tải xuống Excel"
-        >
-          <DownloadSimple size={16} weight="bold" />
-          <span>{exporting ? "Đang xuất..." : "Xuất Excel"}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={exporting}
-          className="mb-0.5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 px-3 text-xs sm:text-sm font-semibold shadow-2xs transition-all duration-150 cursor-pointer"
-          title="Xuất toàn bộ bảng dữ liệu đã lọc ra file CSV"
-        >
-          <Export size={16} weight="bold" />
-          <span>{exporting ? "Đang xuất..." : "CSV"}</span>
-        </button>
       </div>
 
       {/* Khối bộ lọc chi tiết (Collapsible) */}
@@ -1570,95 +1397,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         />
       )}
 
-      {exportPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-          <button
-            type="button"
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
-            aria-label="Đóng"
-            onClick={() => setExportPickerOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl"
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Xuất Excel</div>
-                <h2 className="mt-0.5 text-base font-bold text-slate-900">Chọn cột dữ liệu tải xuống</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setExportPickerOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
-                aria-label="Đóng"
-              >
-                <X size={18} weight="bold" aria-hidden />
-              </button>
-            </div>
-            <div className="max-h-[50vh] overflow-y-auto px-5 py-4 space-y-2">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setExportColumns(DEFAULT_EXPORT_COLUMNS)}
-                  className="text-xs font-semibold text-[#0047AB] hover:underline cursor-pointer"
-                >
-                  Chọn tất cả
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExportColumns([])}
-                  className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer"
-                >
-                  Bỏ chọn tất cả
-                </button>
-              </div>
-              {EXPORT_COLUMN_OPTIONS.map((col) => {
-                const checked = exportColumns.includes(col.key);
-                return (
-                  <label
-                    key={col.key}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() =>
-                        setExportColumns((prev) =>
-                          prev.includes(col.key)
-                            ? prev.filter((k) => k !== col.key)
-                            : [...prev, col.key],
-                        )
-                      }
-                      className="h-4 w-4 rounded border-slate-300 accent-[#0047AB] cursor-pointer"
-                    />
-                    <span className={checked ? "font-semibold text-slate-900" : ""}>{col.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
-              <button
-                type="button"
-                onClick={() => setExportPickerOpen(false)}
-                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={exportExcel}
-                disabled={exporting || exportColumns.length === 0}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-4 text-sm font-semibold text-white cursor-pointer"
-              >
-                <DownloadSimple size={16} weight="bold" />
-                {exporting ? "Đang xuất..." : "Tải Excel"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

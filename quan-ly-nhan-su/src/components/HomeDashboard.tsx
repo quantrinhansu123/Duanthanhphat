@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -156,16 +157,19 @@ type HomeDashboardProps = {
 
 export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
   const { lang } = useLanguage();
+  const [query, setQuery] = useState("");
+  const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+  const groups = navigation.map(group => ({ ...group, children: group.children.filter(child => normalize(`${group.label} ${group.labelEn} ${child.label} ${child.labelEn} ${child.description ?? ""} ${child.descriptionEn ?? ""}`).includes(normalize(query.trim()))) })).filter(group => group.children.length);
   const totalChildren = navigation.reduce((sum, g) => sum + g.children.length, 0);
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 pb-12 pt-2 animate-in fade-in duration-200">
-      <div className="relative mb-8 sm:mb-10 overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white via-[#f0f5ff]/60 to-white p-6 sm:p-10 shadow-xs">
+    <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 pb-12 pt-6 animate-in fade-in duration-200">
+      <div className="relative mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#0047AB]/5 blur-3xl pointer-events-none" />
         <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
-        <div className="relative flex flex-col items-center text-center">
-          <div className="relative mb-4 flex h-32 w-32 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-4 ring-[#0047AB]/10 transition-transform duration-300 hover:scale-105">
+        <div className="relative flex flex-col items-start text-left">
+          <div className="relative mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-4 ring-[#0047AB]/10 transition-transform duration-300 hover:scale-105">
             <div className="relative h-full w-full overflow-hidden rounded-xl">
               <Image
                 src="/logo.png"
@@ -187,7 +191,7 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
             </span>
           </div>
 
-          <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-900">
+          <h1 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
             {lang === "en" ? (
               <>
                 <span className="text-[#0047AB]">Rail Welding</span> Management System
@@ -202,7 +206,7 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
           <p className="mt-2 max-w-2xl text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
             {lang === "en"
               ? "Comprehensive Platform for Welder Personnel, Certification Training, GPS Logs & Railway Welding Operations"
-              : "Nền tảng Quản trị Nhân sự, Đào tạo Chứng chỉ, Nhật ký GPS & Báo cáo Vận hành Hàn Ray Đường sắt Toàn diện"}
+              : "Quản lý nhân sự, thiết bị và hồ sơ công trình tại một nơi. Chọn nghiệp vụ bên dưới để bắt đầu công việc."}
           </p>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-slate-600">
@@ -228,6 +232,12 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-wrap gap-2" aria-label={lang === "en" ? "Common tasks" : "Công việc thường dùng"}>
+        {["nhat-ky-han", "ho-so-tho-han", "bc-tong-quan", "quan-ly-du-an"].map(id => {
+          const item = navigation.flatMap(group => group.children).find(child => child.id === id);
+          return item ? <button key={id} type="button" onClick={() => onNavigate(id)} className="min-h-10 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-[#0047ab] transition-colors hover:bg-blue-100">{lang === "en" ? item.labelEn : item.label}</button> : null;
+        })}
+      </div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">
@@ -236,21 +246,26 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
           <p className="mt-0.5 text-xs sm:text-sm text-slate-500">
             {lang === "en"
               ? "Open any function from the icon cards below"
-              : "Chọn thẻ icon bên dưới để mở từng hạng mục chức năng"}
+              : "Tìm và mở nhanh nghiệp vụ cần thực hiện."}
           </p>
         </div>
         <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-2xs">
-          {totalChildren} {lang === "en" ? "functions" : "hạng mục"}
+          <span role="status">{query.trim() ? groups.reduce((sum, group) => sum + group.children.length, 0) : totalChildren} {lang === "en" ? "functions" : "hạng mục"}</span>
         </span>
       </div>
 
-      <div className="flex flex-col gap-8 sm:gap-10">
-        {navigation.map((group) => {
+      <div className="relative mb-6 max-w-lg">
+        <MagnifyingGlass size={18} aria-hidden className="absolute left-3 top-3 text-slate-400" />
+        <input type="search" value={query} onChange={event => setQuery(event.target.value)} aria-label={lang === "en" ? "Search functions" : "Tìm chức năng"} placeholder={lang === "en" ? "Search functions…" : "Tìm chức năng, hồ sơ, báo cáo…"} className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm" />
+      </div>
+      {groups.length === 0 && <div role="status" className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="text-sm text-slate-600">{lang === "en" ? "No matching functions. Try another keyword." : "Không tìm thấy chức năng phù hợp. Hãy thử từ khóa khác."}</p><button type="button" onClick={() => setQuery("")} className="mt-3 rounded-lg bg-[#0047ab] px-4 py-2 text-sm text-white">{lang === "en" ? "Clear search" : "Xóa tìm kiếm"}</button></div>}
+      <div className="grid gap-6 xl:grid-cols-2">
+        {groups.map((group) => {
           const GroupIcon = groupIcons[group.id] ?? Path;
           const theme = groupThemes[group.id] ?? defaultTheme;
 
           return (
-            <section key={group.id} aria-labelledby={`home-group-${group.id}`}>
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs" key={group.id} aria-labelledby={`home-group-${group.id}`}>
               <div className="mb-3.5 flex items-center gap-3">
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${theme.iconBg} ${theme.iconShadow}`}
@@ -272,7 +287,7 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {group.children.map((child) => {
                   const ChildIcon = childIcons[child.id] ?? GroupIcon;
                   const title = lang === "en" ? child.labelEn : child.label;
@@ -285,35 +300,28 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
                     <div
                       key={child.id}
                       title={desc || title}
-                      className={`group/card flex flex-col items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3 py-5 sm:px-4 sm:py-6 text-center shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.18)] hover:ring-4 ${theme.ring}`}
+                      className={`group/card flex flex-col items-start gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors duration-150 hover:bg-slate-50 ${theme.ring}`}
                     >
                       <button
                         type="button"
                         onClick={() => onNavigate(child.id)}
-                        className="flex w-full flex-col items-center gap-3 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 rounded-xl"
+                        className="flex w-full items-start gap-3 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 rounded-xl"
                       >
                         <span
-                          className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg} ${theme.iconShadow} ${theme.soft}`}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg}`}
                         >
-                          <ChildIcon size={28} weight="bold" aria-hidden />
+                          <ChildIcon size={19} weight="bold" aria-hidden />
                         </span>
-                        <span className="flex w-full flex-col items-center gap-1">
+                        <span className="flex w-full flex-col items-start gap-1">
                           <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
                             {title}
                           </span>
                           {desc && (
-                            <span className="line-clamp-2 text-[10px] sm:text-[11px] leading-relaxed text-slate-400 font-medium">
+                            <span className="line-clamp-2 text-xs leading-relaxed text-slate-500 font-medium">
                               {desc}
                             </span>
                           )}
                         </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(child.id)}
-                        className={`mt-0.5 inline-flex h-8 items-center justify-center rounded-lg px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors ${theme.iconBg} hover:brightness-95`}
-                      >
-                        {lang === "en" ? "View" : "Xem"}
                       </button>
                     </div>
                   );

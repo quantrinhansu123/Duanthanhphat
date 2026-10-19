@@ -41,6 +41,8 @@ export default function ComboBoxInput({
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
+  /** Khi vừa mở ô: hiện toàn bộ gợi ý; chỉ lọc sau khi người dùng gõ. */
+  const [filterActive, setFilterActive] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const [mounted, setMounted] = useState(false);
@@ -99,13 +101,14 @@ export default function ComboBoxInput({
   const q = (strict && editing ? draft : value).trim().toLocaleLowerCase("vi");
 
   const filtered = useMemo(() => {
-    if (!q) return uniqueOptions;
+    // Mở sổ xuống: hiện hết gợi ý (kể cả khi ô đã có sẵn giá trị). Chỉ lọc khi đang gõ.
+    if (!filterActive || !q) return uniqueOptions;
     const starts = uniqueOptions.filter((o) => o.toLocaleLowerCase("vi").startsWith(q));
     const contains = uniqueOptions.filter(
       (o) => !o.toLocaleLowerCase("vi").startsWith(q) && o.toLocaleLowerCase("vi").includes(q),
     );
     return [...starts, ...contains];
-  }, [q, uniqueOptions]);
+  }, [q, uniqueOptions, filterActive]);
 
   useEffect(() => {
     if (!open) return;
@@ -129,11 +132,13 @@ export default function ComboBoxInput({
     setActiveIndex(-1);
     setEditing(false);
     setDirty(false);
+    setFilterActive(false);
   }
 
   function finishEditing() {
     setOpen(false);
     setActiveIndex(-1);
+    setFilterActive(false);
     if (strict) {
       if (dirty) {
         const match = uniqueOptions.find(
@@ -154,6 +159,7 @@ export default function ComboBoxInput({
       setEditing(true);
       setDirty(false);
     }
+    setFilterActive(false);
     setOpen(true);
   }
 
@@ -302,6 +308,7 @@ export default function ComboBoxInput({
         disabled={disabled}
         placeholder={placeholder}
         onChange={(e) => {
+          setFilterActive(true);
           if (strict) {
             setDraft(e.target.value);
             setEditing(true);

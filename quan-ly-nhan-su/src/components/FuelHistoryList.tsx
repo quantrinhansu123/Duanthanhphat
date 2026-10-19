@@ -13,11 +13,16 @@ function isLiterUnit(unit: string) {
   return value === "lít" || value === "lit" || value === "l";
 }
 
+function readMachineFilterFromUrl() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("machineId")?.trim() || "";
+}
+
 export default function FuelHistoryList() {
   const [rows, setRows] = useState<DailyFuelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [machineId, setMachineId] = useState("");
+  const [machineId, setMachineId] = useState(readMachineFilterFromUrl);
   const [personId, setPersonId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -33,6 +38,11 @@ export default function FuelHistoryList() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const fromUrl = readMachineFilterFromUrl();
+    if (fromUrl) setMachineId(fromUrl);
   }, []);
 
   const machineOptions = useMemo(() => {

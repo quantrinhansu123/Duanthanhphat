@@ -20,11 +20,12 @@ import {
   type TransportUnitDetail,
 } from "@/data/machines";
 import {
-  CaretDown,
+  Camera,
   CaretRight,
-  Package,
+  PencilSimple,
   Plus,
   Trash,
+  TrashSimple,
   UploadSimple,
   X,
 } from "@/components/icons";
@@ -752,41 +753,44 @@ function MachineDetailModal({
         </div>
 
         {/* Tab Selection */}
-        <div className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50">
+        <div
+          className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-5 sm:px-6 pt-1 bg-slate-50"
+          style={{ fontFamily: "var(--font-roboto), Roboto, sans-serif" }}
+        >
           <button
             type="button"
             onClick={() => setTab("welding")}
-            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
               tab === "welding"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            ⚡ Máy hàn (Welding Unit)
+            Máy hàn (Welding Unit)
           </button>
           <button
             type="button"
             onClick={() => setTab("transport")}
-            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
               tab === "transport"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            🚛 Phương tiện vận chuyển
+            Phương tiện vận chuyển
           </button>
           <button
             type="button"
             onClick={() => setTab("history")}
-            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
               tab === "history"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            🔧 Lịch sử bảo trì
+            Lịch sử bảo trì
             {history.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-bold font-mono text-[#0047AB]">
+              <span className="ml-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-sm font-bold font-mono text-[#0047AB]">
                 {history.length}
               </span>
             )}
@@ -794,15 +798,15 @@ function MachineDetailModal({
           <button
             type="button"
             onClick={() => setTab("personnel")}
-            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
               tab === "personnel"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            👥 Nhân sự đã được đào tạo
+            Nhân sự đã được đào tạo
             {trainedPersonnel.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold font-mono text-emerald-700">
+              <span className="ml-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-sm font-bold font-mono text-emerald-700">
                 {trainedPersonnel.length}
               </span>
             )}
@@ -810,18 +814,15 @@ function MachineDetailModal({
           <button
             type="button"
             onClick={() => setTab("spares")}
-            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold transition-colors duration-150 cursor-pointer ${
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
               tab === "spares"
                 ? "border-[#0047AB] text-[#0047AB] bg-white"
                 : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5">
-              <Package size={14} weight={tab === "spares" ? "fill" : "regular"} aria-hidden />
-              Phụ tùng thay thế
-            </span>
+            Phụ tùng thay thế
             {compatibleSpareParts.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-bold font-mono text-amber-800">
+              <span className="ml-1.5 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-sm font-bold font-mono text-amber-800">
                 {compatibleSpareParts.length}
               </span>
             )}
@@ -1987,58 +1988,78 @@ export default function MachineList() {
         <ul className="divide-y divide-slate-100">
           {filtered.map((m) => {
             const selected = activeId === m.id;
+            const expanded = expandedId === m.id;
             return (
-              <li key={m.id} className={`flex flex-wrap items-start ${selected ? "bg-blue-50/70" : "hover:bg-slate-50/80"} transition-colors duration-150`}>
+              <li
+                key={m.id}
+                className={`flex flex-wrap items-start transition-colors duration-150 ${
+                  expanded
+                    ? "bg-slate-50/90"
+                    : selected
+                      ? "bg-blue-50/60"
+                      : "hover:bg-slate-50/80"
+                }`}
+              >
                 <button
                   type="button"
-                  onClick={() => openDetail(m)}
-                  className="group relative flex flex-1 cursor-pointer items-start gap-3.5 px-4 py-3.5 text-left"
+                  onClick={() => setExpandedId((current) => (current === m.id ? null : m.id))}
+                  aria-expanded={expanded}
+                  aria-label={expanded ? `Thu gọn ${m.name}` : `Mở thông tin ${m.name}`}
+                  className="group relative flex flex-1 cursor-pointer items-start gap-3.5 px-4 py-4 text-left sm:gap-4 sm:px-5"
                 >
                   {selected && (
-                    <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[#0047AB]">
+                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[#0047AB]">
                       <CaretRight size={10} weight="fill" aria-hidden />
                     </span>
                   )}
 
-                  <div className="relative h-[88px] w-[140px] sm:h-[104px] sm:w-[168px] flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-2xs">
-                    <Image src={m.image} alt="" fill className="object-cover" sizes="168px" />
+                  <div className="relative h-[88px] w-[140px] sm:h-[100px] sm:w-[160px] flex-none overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-100 to-slate-200 shadow-xs ring-1 ring-black/5">
+                    <Image src={m.image} alt="" fill className="object-cover" sizes="160px" />
                   </div>
 
                   <div className="min-w-0 flex-1 pt-0.5">
-                    <div className="line-clamp-2 text-xs sm:text-sm font-semibold leading-snug text-slate-900">
+                    <div className="line-clamp-2 text-sm font-bold leading-snug tracking-tight text-slate-900 sm:text-[15px]">
                       {m.name}
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      <strong className="font-mono font-semibold text-[#0047AB]">{m.code}</strong>
-                      {" · "}
-                      <strong className="text-slate-700 font-semibold">{m.model}</strong>
-                      {" · "}
-                      {getMachineCategory(m)}
-                      {" · "}
-                      <span className="font-mono tabular-nums">{m.weldCount.toLocaleString("vi-VN")}</span> mối hàn
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 sm:text-xs">
+                      <span className="inline-flex items-center rounded-md bg-[#0047AB]/8 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#0047AB]">
+                        {m.code}
+                      </span>
+                      {m.model ? <span className="font-medium text-slate-700">{m.model}</span> : null}
+                      <span className="text-slate-300" aria-hidden>·</span>
+                      <span>{getMachineCategory(m)}</span>
+                      <span className="text-slate-300" aria-hidden>·</span>
+                      <span>
+                        <span className="font-mono tabular-nums font-semibold text-slate-700">
+                          {m.weldCount.toLocaleString("vi-VN")}
+                        </span>{" "}
+                        mối hàn
+                      </span>
                       {Number(m.specs?.oilQuota) > 0 && (
                         <>
-                          {" · "}
-                          Định mức dầu{" "}
-                          <span className="font-mono font-semibold text-slate-700">
-                            {Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít
+                          <span className="text-slate-300" aria-hidden>·</span>
+                          <span>
+                            Định mức dầu{" "}
+                            <span className="font-mono font-semibold text-slate-700">
+                              {Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít
+                            </span>
                           </span>
                         </>
                       )}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[m.status]}`}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle[m.status]}`}
                       >
                         {m.status}
                       </span>
                       {m.transportUnit?.plateNumber && (
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-mono font-medium text-slate-700">
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-mono font-medium text-slate-700">
                           Xe: {m.transportUnit.plateNumber}
                         </span>
                       )}
                       {m.status === "Sẵn sàng" && (
-                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs">
+                        <span className="inline-flex items-center rounded-full border border-teal-200/80 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800">
                           Có thể phân công
                         </span>
                       )}
@@ -2046,16 +2067,13 @@ export default function MachineList() {
                   </div>
                 </button>
 
-                <div className="relative flex shrink-0 items-center gap-1 px-3 py-3.5">
+                <div className="relative flex shrink-0 items-center gap-1.5 px-3 py-4 sm:px-4">
                   <button
                     type="button"
-                    onClick={() => setExpandedId((current) => current === m.id ? null : m.id)}
-                    aria-label={expandedId === m.id ? `Thu gọn ${m.name}` : `Hiện thông tin ${m.name}`}
-                    aria-expanded={expandedId === m.id}
-                    className="rounded-lg p-2 text-slate-600 hover:bg-blue-50 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer"
-                    title={expandedId === m.id ? "Thu gọn thông tin" : "Hiện thông tin bên dưới"}
+                    onClick={() => openDetail(m)}
+                    className="inline-flex h-9 items-center rounded-lg border border-[#0047AB]/30 bg-blue-50 px-3 text-xs font-semibold text-[#0047AB] shadow-xs hover:bg-blue-100 transition-colors duration-150 cursor-pointer"
                   >
-                    <CaretDown size={17} weight="bold" className={`transition-transform duration-200 ${expandedId === m.id ? "rotate-180" : ""}`} />
+                    Xem
                   </button>
                   <button
                     type="button"
@@ -2063,20 +2081,22 @@ export default function MachineList() {
                       e.stopPropagation();
                       openEdit(m);
                     }}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-xs hover:border-[#0047AB]/35 hover:bg-blue-50 hover:text-[#0047AB] transition-colors duration-150 cursor-pointer"
                   >
+                    <PencilSimple size={14} weight="bold" aria-hidden />
                     Sửa
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(m)}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors duration-150 cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 shadow-xs hover:bg-rose-50 transition-colors duration-150 cursor-pointer"
                   >
+                    <TrashSimple size={14} weight="bold" aria-hidden />
                     Xóa
                   </button>
                 </div>
 
-                {expandedId === m.id && (() => {
+                {expanded && (() => {
                   const vehicle = m.transportUnit;
                   const vehicleImages = vehicle?.gallery?.length
                     ? vehicle.gallery
@@ -2105,43 +2125,102 @@ export default function MachineList() {
                     ["Tải trọng xe", String(vehicle?.specs?.weight || "")],
                     ["Định mức dầu", Number(m.specs?.oilQuota) > 0 ? `${Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít` : ""],
                   ];
+                  const filledInfo = info.filter(([, value]) => Boolean(value));
                   return (
-                    <div className="basis-full border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-6">
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.85fr)]">
-                        <div className="rounded-xl border border-slate-200 bg-white p-4">
-                          <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#0047AB]">Thông tin thiết bị</h3>
-                          <dl className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
-                            {info.filter(([, value]) => Boolean(value)).map(([label, value]) => (
-                              <div key={label} className="flex justify-between gap-3 border-b border-slate-100 py-2 text-xs">
-                                <dt className="text-slate-500">{label}</dt>
-                                <dd className="text-right font-medium text-slate-800">{value}</dd>
+                    <div className="basis-full border-t border-slate-200/90 bg-gradient-to-b from-slate-50 to-slate-100/80 px-4 py-5 sm:px-5">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] lg:items-stretch">
+                        <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs ring-1 ring-black/[0.02]">
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                            <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#0047AB]">
+                              Thông tin thiết bị
+                            </h3>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                              {filledInfo.length} trường
+                            </span>
+                          </div>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2">
+                            {filledInfo.map(([label, value], index) => (
+                              <div
+                                key={label}
+                                className={`px-4 py-3 ${
+                                  index % 2 === 0 ? "sm:border-r sm:border-slate-100" : ""
+                                } ${index < filledInfo.length - (filledInfo.length % 2 === 0 ? 2 : 1) ? "border-b border-slate-100" : ""}`}
+                              >
+                                <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  {label}
+                                </dt>
+                                <dd className="mt-1 text-sm font-semibold leading-snug text-slate-900">
+                                  {value}
+                                </dd>
                               </div>
                             ))}
                           </dl>
-                          {m.note && <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">{m.note}</p>}
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                          <div className="mb-2.5 flex items-center justify-between gap-2">
-                            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Ảnh xe / phương tiện</h3>
-                            {vehicle?.plateNumber && <span className="font-mono text-xs font-semibold text-slate-600">{vehicle.plateNumber}</span>}
+                          {m.note ? (
+                            <div className="border-t border-slate-100 bg-amber-50/40 px-4 py-3">
+                              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700/80">
+                                Ghi chú
+                              </div>
+                              <p className="mt-1 text-xs leading-relaxed text-slate-700">{m.note}</p>
+                            </div>
+                          ) : null}
+                        </section>
+
+                        <section className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs ring-1 ring-black/[0.02]">
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+                            <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#0047AB]">
+                              Ảnh xe / phương tiện
+                            </h3>
+                            {vehicle?.plateNumber ? (
+                              <span className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                                {vehicle.plateNumber}
+                              </span>
+                            ) : null}
                           </div>
-                          <div className="relative h-48 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:h-56">
-                            {vehicleCover ? (
-                              <Image src={vehicleCover} alt={vehicle?.name || `Ảnh ${m.name}`} fill className="object-contain" sizes="(max-width: 1024px) 100vw, 40vw" />
-                            ) : (
-                              <div className="flex h-full items-center justify-center px-4 text-center text-xs text-slate-500">Chưa có ảnh xe được cập nhật.</div>
+                          <div className="flex flex-1 flex-col p-3.5">
+                            <div className="relative min-h-[12rem] flex-1 overflow-hidden rounded-xl border border-dashed border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 sm:min-h-[14rem]">
+                              {vehicleCover ? (
+                                <Image
+                                  src={vehicleCover}
+                                  alt={vehicle?.name || `Ảnh ${m.name}`}
+                                  fill
+                                  className="object-contain p-2"
+                                  sizes="(max-width: 1024px) 100vw, 40vw"
+                                />
+                              ) : (
+                                <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-2 px-6 text-center sm:min-h-[14rem]">
+                                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-400 shadow-xs ring-1 ring-slate-200">
+                                    <Camera size={22} weight="regular" aria-hidden />
+                                  </span>
+                                  <div className="text-sm font-semibold text-slate-600">Chưa có ảnh xe</div>
+                                  <p className="max-w-[16rem] text-[11px] leading-relaxed text-slate-500">
+                                    Cập nhật ảnh phương tiện khi sửa hồ sơ máy để hiển thị tại đây.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            {vehicleImages.length > 1 && (
+                              <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5">
+                                {vehicleImages.map((imageUrl, index) => (
+                                  <a
+                                    key={`${imageUrl}-${index}`}
+                                    href={imageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-xs ring-1 ring-black/5 transition hover:border-[#0047AB]/40"
+                                  >
+                                    <Image
+                                      src={imageUrl}
+                                      alt={`Ảnh xe ${index + 1}`}
+                                      fill
+                                      className="object-cover"
+                                      sizes="80px"
+                                    />
+                                  </a>
+                                ))}
+                              </div>
                             )}
                           </div>
-                          {vehicleImages.length > 1 && (
-                            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                              {vehicleImages.map((imageUrl, index) => (
-                                <a key={`${imageUrl}-${index}`} href={imageUrl} target="_blank" rel="noreferrer" className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md border border-slate-200">
-                                  <Image src={imageUrl} alt={`Ảnh xe ${index + 1}`} fill className="object-cover" sizes="80px" />
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        </section>
                       </div>
                     </div>
                   );

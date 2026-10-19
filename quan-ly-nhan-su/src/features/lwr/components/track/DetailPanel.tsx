@@ -75,7 +75,7 @@ export function DetailPanel({ cell, onPrev, onNext }: DetailPanelProps) {
 
       <div className="space-y-3 px-4 py-3">
         <p className="rounded-md bg-blue-50 p-2 text-xs text-blue-800">
-          Số liệu và biểu đồ bên dưới là mô phỏng tổng quan. <Link href="/giai-toa-ung-suat" className="font-semibold underline">Mở bảng tính theo Excel R2</Link> để nhập thông số và tính giải toả.
+          Số liệu và biểu đồ bên dưới là mô phỏng tổng quan. <Link href="/lwr-giai-toa-ung-suat" className="font-semibold underline">Mở bảng tính theo Excel R2</Link> để nhập thông số và tính giải toả.
         </p>
         <section>
           <h4 className="text-[13px] font-bold text-slate-900">Thông số đầu vào</h4>

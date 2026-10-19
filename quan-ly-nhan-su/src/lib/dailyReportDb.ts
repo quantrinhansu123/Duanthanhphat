@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  addHoursToWeldTime,
+  DEFAULT_WELD_WORK_HOURS,
+  normalizeWeldTime,
+} from "@/lib/weldReportData";
 
 export type WorkSection = "hom_nay" | "ngay_tiep_theo";
 
@@ -24,6 +29,21 @@ export type DailyWorkMachine = {
   gioKetThuc: string;
 };
 
+export type DailyWorkPerson = {
+  id: string;
+  ten: string;
+};
+
+export type DailyWorkManpower = {
+  cht: DailyWorkPerson[];
+  kySu: DailyWorkPerson[];
+  laiMay: DailyWorkPerson[];
+  thoVanHanh: DailyWorkPerson[];
+  congNhan: DailyWorkPerson[];
+  /** Ngày tiếp theo — người được giao thực hiện. */
+  thucHien: DailyWorkPerson[];
+};
+
 export type DailyWorkItem = {
   id: string;
   baoCaoId: string;
@@ -39,18 +59,19 @@ export type DailyWorkItem = {
   homNay: string;
   tichLuy: string;
   mayChay: DailyWorkMachine[];
-  chtId: string;
+  cht: DailyWorkPerson[];
+  kySu: DailyWorkPerson[];
+  laiMay: DailyWorkPerson[];
+  thoVanHanh: DailyWorkPerson[];
+  congNhan: DailyWorkPerson[];
+  thucHien: DailyWorkPerson[];
+  /** Hiển thị bảng — ghép tên từ danh sách. */
   chtTen: string;
-  kySuId: string;
   kySuTen: string;
-  laiMayId: string;
   laiMayTen: string;
-  thoVanHanhId: string;
   thoVanHanhTen: string;
-  congNhanId: string;
   congNhanTen: string;
-  nlBatDau: string;
-  nlKetThuc: string;
+  thucHienTen: string;
   ghiChu: string;
 };
 
@@ -60,6 +81,8 @@ export type DailyEquipmentItem = {
   thuTu: number;
   tenThietBi: string;
   soLuong: string;
+  boPhan: string;
+  nguoiSuDung: string;
   ghiChu: string;
 };
 
@@ -70,6 +93,8 @@ export type DailyIncidentItem = {
   noiDung: string;
   phuongAnXuLy: string;
   tinhTrangXuLy: string;
+  nguoiBaoCao: string;
+  boPhanBaoCao: string;
 };
 
 export type DailyReportHeader = {
@@ -117,6 +142,7 @@ type WorkRowDb = {
   may_bat_dau: string | null;
   may_ket_thuc: string | null;
   may_chay?: unknown;
+  nhan_luc?: unknown;
   cht_id: string | null;
   cht_ten: string | null;
   ky_su_id: string | null;
@@ -133,8 +159,6 @@ type WorkRowDb = {
   so_lai_may?: number | string | null;
   so_tho_van_hanh?: number | string | null;
   so_cong_nhan?: number | string | null;
-  nl_bat_dau: string | null;
-  nl_ket_thuc: string | null;
   ghi_chu: string | null;
 };
 
@@ -155,6 +179,8 @@ type EquipmentRowDb = {
   thu_tu: number;
   ten_thiet_bi: string | null;
   so_luong: number | string | null;
+  bo_phan?: string | null;
+  nguoi_su_dung?: string | null;
   ghi_chu: string | null;
 };
 
@@ -165,6 +191,8 @@ type IncidentRowDb = {
   noi_dung: string | null;
   phuong_an_xu_ly: string | null;
   tinh_trang_xu_ly: string | null;
+  nguoi_bao_cao?: string | null;
+  bo_phan_bao_cao?: string | null;
 };
 
 type HeaderRowDb = {
@@ -239,8 +267,65 @@ function parseMachines(value: unknown): DailyWorkMachine[] | null {
     }));
 }
 
+function parsePeopleList(value: unknown): DailyWorkPerson[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id ?? "").trim(),
+      ten: String(item.ten ?? "").trim(),
+    }))
+    .filter((p) => p.id || p.ten);
+}
+
+function legacyPeople(id: string | null | undefined, ten: string | null | undefined): DailyWorkPerson[] {
+  const rawTen = (ten ?? "").trim();
+  if (!rawTen && !id) return [];
+  // Legacy cột số lượng (trước khi đổi sang tên nhân sự).
+  if (rawTen && /^\d+(\.\d+)?$/.test(rawTen) && !id) return [];
+  const names = rawTen
+    ? rawTen.split(/\s*[,;·|/]\s*/).map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (names.length === 0) return id ? [{ id, ten: "" }] : [];
+  return names.map((name, index) => ({
+    id: index === 0 ? (id ?? "") : "",
+    ten: name,
+  }));
+}
+
+export function formatPeopleNames(people: DailyWorkPerson[]): string {
+  return people.map((p) => p.ten.trim()).filter(Boolean).join(", ");
+}
+
+function peoplePayload(people: DailyWorkPerson[]) {
+  return people
+    .filter((p) => p.id || p.ten.trim())
+    .map((p) => ({ id: p.id || null, ten: p.ten.trim() || null }));
+}
+
+function parseManpower(row: WorkRowDb): DailyWorkManpower {
+  const bag =
+    row.nhan_luc && typeof row.nhan_luc === "object" && !Array.isArray(row.nhan_luc)
+      ? (row.nhan_luc as Record<string, unknown>)
+      : null;
+  const pick = (key: string, id: string | null, ten: string | null | undefined) => {
+    const fromJson = bag ? parsePeopleList(bag[key]) : [];
+    return fromJson.length > 0 ? fromJson : legacyPeople(id, ten);
+  };
+  const thucHien = bag ? parsePeopleList(bag.thuc_hien) : [];
+  return {
+    cht: pick("cht", row.cht_id, row.cht_ten ?? numStr(row.so_cht)),
+    kySu: pick("ky_su", row.ky_su_id, row.ky_su_ten ?? numStr(row.so_ky_su)),
+    laiMay: pick("lai_may", row.lai_may_id, row.lai_may_ten ?? numStr(row.so_lai_may)),
+    thoVanHanh: pick("tho_van_hanh", row.tho_van_hanh_id, row.tho_van_hanh_ten ?? numStr(row.so_tho_van_hanh)),
+    congNhan: pick("cong_nhan", row.cong_nhan_id, row.cong_nhan_ten ?? numStr(row.so_cong_nhan)),
+    thucHien,
+  };
+}
+
 function mapWork(row: WorkRowDb): DailyWorkItem {
   const machines = parseMachines(row.may_chay);
+  const manpower = parseManpower(row);
   return {
     id: row.id,
     baoCaoId: row.bao_cao_id,
@@ -259,18 +344,18 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
       machines && machines.length > 0
         ? machines
         : legacyMachines(row.loai_may, row.may_id, row.may_bat_dau, row.may_ket_thuc),
-    chtId: row.cht_id ?? "",
-    chtTen: row.cht_ten ?? numStr(row.so_cht),
-    kySuId: row.ky_su_id ?? "",
-    kySuTen: row.ky_su_ten ?? numStr(row.so_ky_su),
-    laiMayId: row.lai_may_id ?? "",
-    laiMayTen: row.lai_may_ten ?? numStr(row.so_lai_may),
-    thoVanHanhId: row.tho_van_hanh_id ?? "",
-    thoVanHanhTen: row.tho_van_hanh_ten ?? numStr(row.so_tho_van_hanh),
-    congNhanId: row.cong_nhan_id ?? "",
-    congNhanTen: row.cong_nhan_ten ?? numStr(row.so_cong_nhan),
-    nlBatDau: row.nl_bat_dau ?? "",
-    nlKetThuc: row.nl_ket_thuc ?? "",
+    cht: manpower.cht,
+    kySu: manpower.kySu,
+    laiMay: manpower.laiMay,
+    thoVanHanh: manpower.thoVanHanh,
+    congNhan: manpower.congNhan,
+    thucHien: manpower.thucHien,
+    chtTen: formatPeopleNames(manpower.cht) || (row.cht_ten ?? ""),
+    kySuTen: formatPeopleNames(manpower.kySu) || (row.ky_su_ten ?? ""),
+    laiMayTen: formatPeopleNames(manpower.laiMay) || (row.lai_may_ten ?? ""),
+    thoVanHanhTen: formatPeopleNames(manpower.thoVanHanh) || (row.tho_van_hanh_ten ?? ""),
+    congNhanTen: formatPeopleNames(manpower.congNhan) || (row.cong_nhan_ten ?? ""),
+    thucHienTen: formatPeopleNames(manpower.thucHien),
     ghiChu: row.ghi_chu ?? "",
   };
 }
@@ -343,6 +428,241 @@ export async function loadWorkTypes(): Promise<{ types: DailyWorkType[]; error?:
   }
 }
 
+/** Giá trị «Việc cần làm / Nội dung công việc» đã từng lưu — dùng cho combobox chọn hoặc nhập mới. */
+export async function loadHangMucSuggestions(): Promise<string[]> {
+  const uniq = new Map<string, string>();
+  function add(raw: string | null | undefined) {
+    const text = (raw ?? "").trim();
+    if (!text) return;
+    const key = text.toLocaleLowerCase("vi");
+    if (!uniq.has(key)) uniq.set(key, text);
+  }
+
+  if (!isSupabaseConfigured()) {
+    for (const item of readLocal().work) add(item.hangMuc);
+    return [...uniq.values()].sort((a, b) => a.localeCompare(b, "vi"));
+  }
+
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .select("hang_muc")
+      .not("hang_muc", "is", null)
+      .neq("hang_muc", "")
+      .order("hang_muc", { ascending: true })
+      .limit(500);
+    if (error) throw error;
+    for (const row of data ?? []) add((row as { hang_muc?: string | null }).hang_muc);
+  } catch {
+    for (const item of readLocal().work) add(item.hangMuc);
+  }
+  return [...uniq.values()].sort((a, b) => a.localeCompare(b, "vi"));
+}
+
+/** Map danh mục công việc báo cáo ngày → công nghệ hàn trên nhật ký. */
+export function workTypeWeldMethod(workType: DailyWorkType | null | undefined): "ATW" | "FBW" | null {
+  if (!workType) return null;
+  const blob = `${workType.ma} ${workType.ten} ${workType.moTa}`.toLocaleLowerCase("vi");
+  if (
+    workType.ma === "HAN-NN" ||
+    blob.includes("nhiệt nhôm") ||
+    blob.includes("nhiet nhom") ||
+    blob.includes("atw") ||
+    blob.includes("thermit")
+  ) {
+    return "ATW";
+  }
+  if (
+    workType.ma.startsWith("HAN-CGM") ||
+    blob.includes("cháy giáp") ||
+    blob.includes("chay giap") ||
+    blob.includes("fbw")
+  ) {
+    return "FBW";
+  }
+  return null;
+}
+
+export type DailyWorkJournalFill = {
+  date: string;
+  method: "ATW" | "FBW";
+  homNay: string;
+  tenMoiHan: string;
+  mayChay: DailyWorkMachine[];
+  ghiChu: string;
+  entryCount: number;
+};
+
+type JournalFillRow = {
+  ma_lich_su?: string | null;
+  so_luong_thuc_hien?: number | string | null;
+  may_id?: string | null;
+  ma_may?: string | null;
+  ten_may?: string | null;
+  gio_bat_dau?: string | null;
+  gio_ket_thuc?: string | null;
+  gio_han?: string | null;
+};
+
+function hhmm(value: string | null | undefined): string {
+  return normalizeWeldTime(value) ?? "";
+}
+
+/** Giờ bắt đầu / kết thúc từ 1 dòng nhật ký hàn (thiếu kết thúc thì + DEFAULT_WELD_WORK_HOURS). */
+function journalWorkRange(row: JournalFillRow): { start: string; end: string } {
+  const start = hhmm(row.gio_bat_dau) || hhmm(row.gio_han);
+  const end = hhmm(row.gio_ket_thuc) || (start ? addHoursToWeldTime(start, DEFAULT_WELD_WORK_HOURS) : "");
+  return { start, end };
+}
+
+/** Gom nhật ký hàn theo ngày + công nghệ để điền form báo cáo ngày (phần Hôm nay). */
+export async function loadDailyWorkFillFromJournal(
+  date: string,
+  method: "ATW" | "FBW",
+): Promise<DailyWorkJournalFill> {
+  if (!date.trim()) throw new Error("Thiếu ngày để lấy nhật ký hàn");
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase — không lấy được Nhật ký hàn");
+  }
+
+  const supabase = createClient();
+  /** View có ma_may/ten_may từ thiet_bi; bảng gốc chỉ có may_id. */
+  const viewSelects = [
+    "ma_lich_su,so_luong_thuc_hien,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_han",
+    "ma_lich_su,so_luong_thuc_hien,may_id,ma_may,ten_may,gio_han",
+    "ma_lich_su,so_luong_thuc_hien,may_id,ma_may,ten_may",
+  ];
+  const tableSelects = [
+    "ma_lich_su,so_luong_thuc_hien,may_id,gio_bat_dau,gio_ket_thuc,gio_han",
+    "ma_lich_su,so_luong_thuc_hien,may_id,gio_han",
+    "ma_lich_su,so_luong_thuc_hien,may_id",
+  ];
+  let rows: JournalFillRow[] = [];
+
+  async function fetchWithSelects(
+    table: "bao_cao_moi_han_theo_du_an" | "lich_su_moi_han",
+    selects: string[],
+  ) {
+    let lastError: unknown = null;
+    for (const columns of selects) {
+      const result = await supabase
+        .from(table)
+        .select(columns)
+        .eq("ngay_thuc_hien", date)
+        .eq("cong_nghe_han", method)
+        .order("ma_lich_su", { ascending: true })
+        .limit(2000);
+      if (!result.error) return (result.data as JournalFillRow[] | null) ?? [];
+      lastError = result.error;
+      const message = result.error.message ?? "";
+      if (/does not exist|schema cache|column/i.test(message)) continue;
+      throw result.error;
+    }
+    throw lastError ?? new Error(`Không đọc được ${table}`);
+  }
+
+  try {
+    rows = await fetchWithSelects("bao_cao_moi_han_theo_du_an", viewSelects);
+  } catch {
+    try {
+      rows = await fetchWithSelects("lich_su_moi_han", tableSelects);
+    } catch (error) {
+      throw new Error(formatSupabaseError(error));
+    }
+  }
+
+  // Bảng gốc không có ma_may/ten_may — bổ sung từ thiet_bi khi cần.
+  const missingMachineMeta = rows.some((row) => row.may_id && !row.ma_may && !row.ten_may);
+  if (missingMachineMeta) {
+    const ids = [...new Set(rows.map((row) => (row.may_id ?? "").trim()).filter(Boolean))];
+    if (ids.length > 0) {
+      const { data: machines } = await supabase
+        .from("thiet_bi")
+        .select("id,ma_may,ten_may")
+        .in("id", ids);
+      const byId = new Map(
+        ((machines as { id: string; ma_may?: string | null; ten_may?: string | null }[] | null) ?? []).map(
+          (m) => [m.id, m] as const,
+        ),
+      );
+      rows = rows.map((row) => {
+        const machine = row.may_id ? byId.get(row.may_id) : undefined;
+        if (!machine) return row;
+        return {
+          ...row,
+          ma_may: row.ma_may || machine.ma_may || null,
+          ten_may: row.ten_may || machine.ten_may || null,
+        };
+      });
+    }
+  }
+
+  let weldTotal = 0;
+  const codes: string[] = [];
+  const machines = new Map<string, DailyWorkMachine & { weldQty: number }>();
+
+  for (const row of rows) {
+    const qty = Number(row.so_luong_thuc_hien);
+    const weldQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+    weldTotal += weldQty;
+
+    const code = (row.ma_lich_su ?? "").trim();
+    if (code) codes.push(code);
+
+    const maMay = (row.ma_may ?? "").trim();
+    const mayId = (row.may_id ?? "").trim();
+    const key = mayId || (maMay ? `code:${maMay}` : "");
+    if (!key) continue;
+
+    const { start, end } = journalWorkRange(row);
+    const existing = machines.get(key);
+    if (!existing) {
+      machines.set(key, {
+        mayId,
+        maMay,
+        tenMay: (row.ten_may ?? "").trim(),
+        soLuong: "1",
+        gioBatDau: start,
+        gioKetThuc: end,
+        weldQty,
+      });
+      continue;
+    }
+    existing.weldQty += weldQty;
+    existing.soLuong = String(existing.weldQty);
+    if (start && (!existing.gioBatDau || start < existing.gioBatDau)) {
+      existing.gioBatDau = start;
+      if (!existing.gioKetThuc && end) existing.gioKetThuc = end;
+    }
+    if (end && (!existing.gioKetThuc || end > existing.gioKetThuc)) existing.gioKetThuc = end;
+    if (!existing.tenMay && row.ten_may) existing.tenMay = row.ten_may.trim();
+    if (!existing.maMay && maMay) existing.maMay = maMay;
+    if (!existing.mayId && mayId) existing.mayId = mayId;
+  }
+
+  const mayChay: DailyWorkMachine[] = [...machines.values()].map(({ weldQty: _w, ...machine }) => ({
+    ...machine,
+    soLuong: machine.soLuong || "1",
+  }));
+
+  const tenMoiHan =
+    codes.length <= 6 ? codes.join(", ") : `${codes.slice(0, 6).join(", ")}… (+${codes.length - 6})`;
+
+  return {
+    date,
+    method,
+    homNay: weldTotal > 0 ? String(weldTotal) : "",
+    tenMoiHan,
+    mayChay,
+    ghiChu:
+      rows.length > 0
+        ? `Điền từ Nhật ký hàn · ${method} · ${date} · ${rows.length} bản ghi`
+        : `Không có bản ghi Nhật ký hàn ${method} ngày ${date}`,
+    entryCount: rows.length,
+  };
+}
+
 function mapEquipment(row: EquipmentRowDb): DailyEquipmentItem {
   return {
     id: row.id,
@@ -350,6 +670,8 @@ function mapEquipment(row: EquipmentRowDb): DailyEquipmentItem {
     thuTu: row.thu_tu,
     tenThietBi: row.ten_thiet_bi ?? "",
     soLuong: numStr(row.so_luong),
+    boPhan: row.bo_phan ?? "",
+    nguoiSuDung: row.nguoi_su_dung ?? "",
     ghiChu: row.ghi_chu ?? "",
   };
 }
@@ -362,6 +684,8 @@ function mapIncident(row: IncidentRowDb): DailyIncidentItem {
     noiDung: row.noi_dung ?? "",
     phuongAnXuLy: row.phuong_an_xu_ly ?? "",
     tinhTrangXuLy: row.tinh_trang_xu_ly ?? "",
+    nguoiBaoCao: row.nguoi_bao_cao ?? "",
+    boPhanBaoCao: row.bo_phan_bao_cao ?? "",
   };
 }
 
@@ -386,13 +710,58 @@ type LegacyLocalWork = DailyWorkItem & {
   mayId?: string;
   mayBatDau?: string;
   mayKetThuc?: string;
+  chtId?: string;
+  kySuId?: string;
+  laiMayId?: string;
+  thoVanHanhId?: string;
+  congNhanId?: string;
 };
 
 function normalizeLocalWork(item: LegacyLocalWork): DailyWorkItem {
-  if (Array.isArray(item.mayChay)) return item;
+  const mayChay = Array.isArray(item.mayChay)
+    ? item.mayChay
+    : legacyMachines(item.loaiMay, item.mayId, item.mayBatDau, item.mayKetThuc);
+  const cht = Array.isArray(item.cht) ? item.cht : legacyPeople(item.chtId, item.chtTen);
+  const kySu = Array.isArray(item.kySu) ? item.kySu : legacyPeople(item.kySuId, item.kySuTen);
+  const laiMay = Array.isArray(item.laiMay) ? item.laiMay : legacyPeople(item.laiMayId, item.laiMayTen);
+  const thoVanHanh = Array.isArray(item.thoVanHanh)
+    ? item.thoVanHanh
+    : legacyPeople(item.thoVanHanhId, item.thoVanHanhTen);
+  const congNhan = Array.isArray(item.congNhan)
+    ? item.congNhan
+    : legacyPeople(item.congNhanId, item.congNhanTen);
+  const thucHien = Array.isArray(item.thucHien) ? item.thucHien : [];
   return {
     ...item,
-    mayChay: legacyMachines(item.loaiMay, item.mayId, item.mayBatDau, item.mayKetThuc),
+    mayChay,
+    cht,
+    kySu,
+    laiMay,
+    thoVanHanh,
+    congNhan,
+    thucHien,
+    chtTen: formatPeopleNames(cht) || item.chtTen || "",
+    kySuTen: formatPeopleNames(kySu) || item.kySuTen || "",
+    laiMayTen: formatPeopleNames(laiMay) || item.laiMayTen || "",
+    thoVanHanhTen: formatPeopleNames(thoVanHanh) || item.thoVanHanhTen || "",
+    congNhanTen: formatPeopleNames(congNhan) || item.congNhanTen || "",
+    thucHienTen: formatPeopleNames(thucHien) || item.thucHienTen || "",
+  };
+}
+
+function normalizeLocalEquipment(item: DailyEquipmentItem): DailyEquipmentItem {
+  return {
+    ...item,
+    boPhan: item.boPhan ?? "",
+    nguoiSuDung: item.nguoiSuDung ?? "",
+  };
+}
+
+function normalizeLocalIncident(item: DailyIncidentItem): DailyIncidentItem {
+  return {
+    ...item,
+    nguoiBaoCao: item.nguoiBaoCao ?? "",
+    boPhanBaoCao: item.boPhanBaoCao ?? "",
   };
 }
 
@@ -405,8 +774,8 @@ function readLocal(): LocalStore {
     return {
       headers: parsed.headers ?? [],
       work: (parsed.work ?? []).map(normalizeLocalWork),
-      equipment: parsed.equipment ?? [],
-      incidents: parsed.incidents ?? [],
+      equipment: (parsed.equipment ?? []).map(normalizeLocalEquipment),
+      incidents: (parsed.incidents ?? []).map(normalizeLocalIncident),
     };
   } catch {
     return emptyLocal();
@@ -423,17 +792,44 @@ function uid() {
 }
 
 const EMPTY_MANPOWER = {
-  chtId: "",
+  cht: [] as DailyWorkPerson[],
+  kySu: [] as DailyWorkPerson[],
+  laiMay: [] as DailyWorkPerson[],
+  thoVanHanh: [] as DailyWorkPerson[],
+  congNhan: [] as DailyWorkPerson[],
+  thucHien: [] as DailyWorkPerson[],
   chtTen: "",
-  kySuId: "",
   kySuTen: "",
-  laiMayId: "",
   laiMayTen: "",
-  thoVanHanhId: "",
   thoVanHanhTen: "",
-  congNhanId: "",
   congNhanTen: "",
+  thucHienTen: "",
 };
+
+function manpowerColumns(input: Pick<WorkItemInput, keyof DailyWorkManpower>) {
+  const firstId = (people: DailyWorkPerson[]) => people.find((p) => p.id)?.id || null;
+  const names = (people: DailyWorkPerson[]) => formatPeopleNames(people) || null;
+  return {
+    nhan_luc: {
+      cht: peoplePayload(input.cht),
+      ky_su: peoplePayload(input.kySu),
+      lai_may: peoplePayload(input.laiMay),
+      tho_van_hanh: peoplePayload(input.thoVanHanh),
+      cong_nhan: peoplePayload(input.congNhan),
+      thuc_hien: peoplePayload(input.thucHien),
+    },
+    cht_id: firstId(input.cht),
+    cht_ten: names(input.cht),
+    ky_su_id: firstId(input.kySu),
+    ky_su_ten: names(input.kySu),
+    lai_may_id: firstId(input.laiMay),
+    lai_may_ten: names(input.laiMay),
+    tho_van_hanh_id: firstId(input.thoVanHanh),
+    tho_van_hanh_ten: names(input.thoVanHanh),
+    cong_nhan_id: firstId(input.congNhan),
+    cong_nhan_ten: names(input.congNhan),
+  };
+}
 
 function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
   return DEFAULT_WORK_TYPES.map((type, index) => ({
@@ -452,8 +848,6 @@ function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
     tichLuy: "",
     mayChay: [],
     ...EMPTY_MANPOWER,
-    nlBatDau: "",
-    nlKetThuc: "",
     ghiChu: "",
   }));
 }
@@ -647,6 +1041,12 @@ export async function insertWorkItem(
       phan,
       thuTu: siblings.length + 1,
       ...input,
+      chtTen: formatPeopleNames(input.cht),
+      kySuTen: formatPeopleNames(input.kySu),
+      laiMayTen: formatPeopleNames(input.laiMay),
+      thoVanHanhTen: formatPeopleNames(input.thoVanHanh),
+      congNhanTen: formatPeopleNames(input.congNhan),
+      thucHienTen: formatPeopleNames(input.thucHien),
     };
     store.work.push(item);
     writeLocal(store);
@@ -676,7 +1076,10 @@ export async function insertWorkItem(
     don_vi: input.donVi || null,
     den_hom_qua: toNum(input.denHomQua),
     hom_nay: toNum(input.homNay),
-    tich_luy: toNum(input.tichLuy),
+    tich_luy:
+      !input.denHomQua.trim() && !input.homNay.trim()
+        ? null
+        : (toNum(input.denHomQua) ?? 0) + (toNum(input.homNay) ?? 0),
     loai_may: machines.map(workMachineLabel).filter(Boolean).join(", ") || null,
     may_id: firstMachine?.mayId || null,
     may_bat_dau: firstMachine?.gioBatDau || null,
@@ -689,18 +1092,7 @@ export async function insertWorkItem(
       gio_bat_dau: m.gioBatDau || null,
       gio_ket_thuc: m.gioKetThuc || null,
     })),
-    cht_id: input.chtId || null,
-    cht_ten: input.chtTen || null,
-    ky_su_id: input.kySuId || null,
-    ky_su_ten: input.kySuTen || null,
-    lai_may_id: input.laiMayId || null,
-    lai_may_ten: input.laiMayTen || null,
-    tho_van_hanh_id: input.thoVanHanhId || null,
-    tho_van_hanh_ten: input.thoVanHanhTen || null,
-    cong_nhan_id: input.congNhanId || null,
-    cong_nhan_ten: input.congNhanTen || null,
-    nl_bat_dau: input.nlBatDau || null,
-    nl_ket_thuc: input.nlKetThuc || null,
+    ...manpowerColumns(input),
     ghi_chu: input.ghiChu || null,
   };
 
@@ -716,6 +1108,26 @@ export async function insertWorkItem(
       );
     }
     delete payload.may_chay;
+    ({ data, error } = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .insert(payload)
+      .select("*")
+      .single());
+  }
+  if (error && /nhan_luc/.test(error.message ?? "")) {
+    const multi =
+      input.cht.length > 1 ||
+      input.kySu.length > 1 ||
+      input.laiMay.length > 1 ||
+      input.thoVanHanh.length > 1 ||
+      input.congNhan.length > 1 ||
+      input.thucHien.length > 0;
+    if (multi) {
+      throw new Error(
+        "Chưa thể lưu nhiều người cho một vai trò vì migration_20261020_bao_cao_ngay_nhan_luc_nhieu.sql chưa được chạy trên Supabase.",
+      );
+    }
+    delete payload.nhan_luc;
     ({ data, error } = await supabase
       .from("bao_cao_ngay_cong_viec")
       .insert(payload)
@@ -778,17 +1190,25 @@ export async function insertEquipmentItem(
     .eq("bao_cao_id", header.id);
   if (countRes.error) throw countRes.error;
 
-  const { data, error } = await supabase
-    .from("bao_cao_ngay_thiet_bi")
-    .insert({
-      bao_cao_id: header.id,
-      thu_tu: (countRes.count ?? 0) + 1,
-      ten_thiet_bi: input.tenThietBi,
-      so_luong: toNum(input.soLuong),
-      ghi_chu: input.ghiChu || null,
-    })
-    .select("*")
-    .single();
+  const payload = {
+    bao_cao_id: header.id,
+    thu_tu: (countRes.count ?? 0) + 1,
+    ten_thiet_bi: input.tenThietBi,
+    so_luong: toNum(input.soLuong),
+    bo_phan: input.boPhan.trim() || null,
+    nguoi_su_dung: input.nguoiSuDung.trim() || null,
+    ghi_chu: input.ghiChu || null,
+  };
+  let { data, error } = await supabase.from("bao_cao_ngay_thiet_bi").insert(payload).select("*").single();
+  if (error && /bo_phan|nguoi_su_dung/i.test(error.message ?? "")) {
+    const { bo_phan: _a, nguoi_su_dung: _b, ...legacy } = payload;
+    ({ data, error } = await supabase.from("bao_cao_ngay_thiet_bi").insert(legacy).select("*").single());
+    if (!error && (input.boPhan.trim() || input.nguoiSuDung.trim())) {
+      throw new Error(
+        "Chưa thể lưu Bộ phận / Người sử dụng vì migration_20261020_bao_cao_ngay_thiet_bi_bo_phan.sql chưa được chạy trên Supabase.",
+      );
+    }
+  }
   if (error) throw error;
   return mapEquipment(data as EquipmentRowDb);
 }
@@ -831,17 +1251,28 @@ export async function insertIncidentItem(
     .eq("bao_cao_id", header.id);
   if (countRes.error) throw countRes.error;
 
-  const { data, error } = await supabase
-    .from("bao_cao_ngay_su_co")
-    .insert({
-      bao_cao_id: header.id,
-      thu_tu: (countRes.count ?? 0) + 1,
-      noi_dung: input.noiDung,
-      phuong_an_xu_ly: input.phuongAnXuLy || null,
-      tinh_trang_xu_ly: input.tinhTrangXuLy || null,
-    })
-    .select("*")
-    .single();
+  const payload = {
+    bao_cao_id: header.id,
+    thu_tu: (countRes.count ?? 0) + 1,
+    noi_dung: input.noiDung,
+    phuong_an_xu_ly: input.phuongAnXuLy || null,
+    tinh_trang_xu_ly: input.tinhTrangXuLy || null,
+    nguoi_bao_cao: input.nguoiBaoCao.trim() || null,
+    bo_phan_bao_cao: input.boPhanBaoCao.trim() || null,
+  };
+  let { data, error } = await supabase.from("bao_cao_ngay_su_co").insert(payload).select("*").single();
+  if (
+    error &&
+    /nguoi_bao_cao|bo_phan_bao_cao/i.test(error.message ?? "")
+  ) {
+    const { nguoi_bao_cao: _a, bo_phan_bao_cao: _b, ...legacy } = payload;
+    ({ data, error } = await supabase.from("bao_cao_ngay_su_co").insert(legacy).select("*").single());
+    if (!error && (input.nguoiBaoCao.trim() || input.boPhanBaoCao.trim())) {
+      throw new Error(
+        "Chưa thể lưu Người báo cáo / Bộ phận báo cáo vì migration_20261020_bao_cao_ngay_su_co_bao_cao.sql chưa được chạy trên Supabase.",
+      );
+    }
+  }
   if (error) throw error;
   return mapIncident(data as IncidentRowDb);
 }
@@ -871,16 +1302,14 @@ export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
     tichLuy: "",
     mayChay: [],
     ...EMPTY_MANPOWER,
-    nlBatDau: "",
-    nlKetThuc: "",
     ghiChu: "",
   };
 }
 
 export function emptyEquipmentInput(): EquipmentItemInput {
-  return { tenThietBi: "", soLuong: "", ghiChu: "" };
+  return { tenThietBi: "", soLuong: "", boPhan: "", nguoiSuDung: "", ghiChu: "" };
 }
 
 export function emptyIncidentInput(): IncidentItemInput {
-  return { noiDung: "", phuongAnXuLy: "", tinhTrangXuLy: "" };
+  return { noiDung: "", phuongAnXuLy: "", tinhTrangXuLy: "", nguoiBaoCao: "", boPhanBaoCao: "" };
 }

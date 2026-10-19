@@ -87,8 +87,6 @@ create table if not exists public.bao_cao_ngay_cong_viec (
   tho_van_hanh_ten  text,
   cong_nhan_id      uuid references public.nhan_su (employee_id) on delete set null,
   cong_nhan_ten     text,
-  nl_bat_dau        text,
-  nl_ket_thuc       text,
   ghi_chu           text,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
@@ -116,6 +114,8 @@ create table if not exists public.bao_cao_ngay_thiet_bi (
   thu_tu          integer not null default 1 check (thu_tu >= 1),
   ten_thiet_bi    text not null default '',
   so_luong        numeric(12, 2),
+  bo_phan         text,
+  nguoi_su_dung   text,
   ghi_chu         text,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
@@ -142,6 +142,8 @@ create table if not exists public.bao_cao_ngay_su_co (
   noi_dung          text not null default '',
   phuong_an_xu_ly   text,
   tinh_trang_xu_ly  text,
+  nguoi_bao_cao     text,
+  bo_phan_bao_cao   text,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );

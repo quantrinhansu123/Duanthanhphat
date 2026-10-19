@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
       "@react-google-maps/api",
     ],
   },
+  /** Route cũ của app LWR đứng riêng → tab trong quan-ly-nhan-su. */
+  async redirects() {
+    return [
+      { source: "/cong-trinh", destination: "/lwr-cong-trinh", permanent: false },
+      { source: "/giai-toa-ung-suat", destination: "/lwr-giai-toa-ung-suat", permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       {

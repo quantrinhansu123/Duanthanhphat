@@ -1,6 +1,39 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Shared workspace accessibility and data readability. */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+  transform: translateY(-180%);
+  border-radius: 8px;
+  background: #0047ab;
+  color: white;
+  padding: 12px 18px;
+  font-size: 14px;
+}
+.skip-link:focus { transform: translateY(0); }
+.app-workspace :where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+.app-workspace :where(button):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.app-workspace :where(table) { font-variant-numeric: tabular-nums; }
+.app-workspace :where(thead th) { letter-spacing: 0.015em; }
+.app-workspace :where(tbody tr):hover { background-color: #eff6ff; }
+.app-workspace :where(main) { scrollbar-gutter: stable; }
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace *, .app-workspace *::before, .app-workspace *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 @custom-variant dark (&:is(.dark *));
 

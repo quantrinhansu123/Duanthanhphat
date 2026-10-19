@@ -83,7 +83,7 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`relative flex h-screen flex-col overflow-hidden text-white transition-[width] duration-200 select-none ${
+      className={`relative flex h-dvh flex-col overflow-hidden text-white transition-[width] duration-200 select-none ${
         collapsed ? "w-[78px]" : "w-[280px]"
       }`}
       style={{ background: "linear-gradient(180deg, #071633 0%, #0a254f 60%, #0a2f64 100%)" }}
@@ -213,30 +213,18 @@ export default function Sidebar({
         {!collapsed ? (
           <div className="flex items-center gap-3 rounded-xl bg-white/[0.08] border border-white/5 px-3 py-2.5">
             <div className="relative h-9 w-9 flex-none overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-white/20">
-              <Image
-                src="https://randomuser.me/api/portraits/men/11.jpg"
-                alt="Admin"
-                fill
-                className="object-cover"
-                sizes="36px"
-              />
+              <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>TP</span>
             </div>
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-xs sm:text-sm font-semibold text-white">Nguyễn Đắc Công</div>
+              <div className="truncate text-xs sm:text-sm font-semibold text-white">Thành Phát</div>
               <div className="truncate text-[11px] font-medium text-blue-200/80">
-                {lang === "en" ? "Administrator" : "Quản trị viên"}
+                {lang === "en" ? "Workspace" : "Không gian làm việc"}
               </div>
             </div>
           </div>
         ) : (
           <div className="relative mx-auto h-9 w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-white/20">
-            <Image
-              src="https://randomuser.me/api/portraits/men/11.jpg"
-              alt="Admin"
-              fill
-              className="object-cover"
-              sizes="36px"
-            />
+            <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>TP</span>
           </div>
         )}
         <button

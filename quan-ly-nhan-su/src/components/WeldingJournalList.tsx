@@ -196,7 +196,7 @@ type JournalSuggestion = Partial<
   >
 >;
 
-type EntryMode = "manual" | "quick";
+type EntryMode = "manual" | "quick" | "linked";
 
 function pickJournalSuggestion(values: JournalSuggestion): JournalSuggestion {
   return {
@@ -244,8 +244,8 @@ function weldRowToSuggestion(row: WeldReportRow): JournalSuggestion {
     ca_han: resolveWeldShift(row),
     gio_bat_dau: normalizeWeldTime(row.gio_bat_dau) ?? undefined,
     gio_ket_thuc: normalizeWeldTime(row.gio_ket_thuc) ?? undefined,
-    ma_hien_truong: row.ma_hien_truong?.trim() || undefined,
-    ten_moi_han_theo_may: row.ten_moi_han_theo_may?.trim() || undefined,
+    // Không lấy mã hiện trường / trong máy từ mối cũ — form tự gợi ý mã tiếp theo
+    // (cùng rule Thủ công: nhớ lần cuối + tự tăng / max DB + 1).
   };
 }
 
@@ -367,7 +367,6 @@ function JournalFormModal({
   const [machineCodeEdited, setMachineCodeEdited] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
-  const [extraTab, setExtraTab] = useState<"linked" | "gps">("linked");
   const [entryMode, setEntryMode] = useState<EntryMode>("manual");
   const [bulkDateFrom, setBulkDateFrom] = useState(() => defaultPerformedAt().slice(0, 10));
   const [bulkDateTo, setBulkDateTo] = useState(() => defaultPerformedAt().slice(0, 10));
@@ -449,7 +448,6 @@ function JournalFormModal({
       initialImageIds.current = new Set(withBumpedCodes.anh_moi_han_lien_ket.map((asset) => asset.publicId));
       removedImages.current = [];
       setImageError("");
-      setExtraTab("linked");
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
@@ -598,6 +596,9 @@ function JournalFormModal({
 
   const projectMissingCode = Boolean(selectedProject) && !hasOwnWeldSitePrefix(selectedProject?.ma_du_an);
   const quickActive = mode === "create" && entryMode === "quick";
+  const linkedActive = entryMode === "linked";
+  const linkedTabBadge =
+    (form.moi_han_lien_ket ? 1 : 0) + form.anh_moi_han_lien_ket.length;
   const bulkDates = listIsoDates(bulkDateFrom, bulkDateTo);
   const bulkCountSafe = Math.min(100, Math.max(0, Math.round(Number(bulkCount) || 0)));
   const bulkSpanTooLong = Boolean(bulkDateFrom && bulkDateTo && bulkDateFrom <= bulkDateTo && bulkDates.length > 31);
@@ -925,14 +926,11 @@ function JournalFormModal({
                     : current.loai_moi_han === "Đào tạo"
                       ? "Sản xuất"
                       : current.loai_moi_han,
-                  result:
-                    mode === "create"
-                      ? DEFAULT_WELD_TEST_STATUS
-                      : internalTraining
-                        ? "Không thí nghiệm"
-                        : current.result === "Không thí nghiệm"
-                          ? "Chờ thí nghiệm"
-                          : current.result,
+                  result: internalTraining
+                    ? "Không thí nghiệm"
+                    : current.result === "Không thí nghiệm"
+                      ? "Chờ thí nghiệm"
+                      : current.result,
                 }));
               }}
               options={projects.map((p) => ({
@@ -959,21 +957,21 @@ function JournalFormModal({
             )}
           </label>
 
-          {mode === "create" && (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div className="flex border-b border-slate-200 bg-slate-50">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => setEntryMode("manual")}
-                  className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] disabled:opacity-60 ${
-                    entryMode === "manual"
-                      ? "border-[#0047AB] bg-white text-[#0047AB]"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Thủ công
-                </button>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex border-b border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setEntryMode("manual")}
+                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] disabled:opacity-60 ${
+                  entryMode === "manual"
+                    ? "border-[#0047AB] bg-white text-[#0047AB]"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {mode === "create" ? "Thủ công" : "Thông tin"}
+              </button>
+              {mode === "create" && (
                 <button
                   type="button"
                   disabled={saving}
@@ -986,59 +984,277 @@ function JournalFormModal({
                 >
                   Nhập nhanh
                 </button>
-              </div>
-              {quickActive && (
-                <div className="space-y-2 bg-blue-50/40 p-3.5">
-                  <p className="text-[11px] font-medium leading-relaxed text-slate-600">
-                    Tạo nhiều mối cùng ca, thợ hàn, công nghệ. Mã hệ thống / hiện trường / trong máy tăng lần lượt.
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Từ ngày
-                      <DateField
-                        value={bulkDateFrom}
-                        onChange={(dateFrom) => {
-                          setBulkDateFrom(dateFrom);
-                          if (bulkDateTo && dateFrom > bulkDateTo) setBulkDateTo(dateFrom);
-                        }}
-                        className="mt-1.5"
-                      />
-                    </label>
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Đến ngày
-                      <DateField
-                        value={bulkDateTo}
-                        onChange={(dateTo) => {
-                          setBulkDateTo(dateTo);
-                          if (bulkDateFrom && dateTo < bulkDateFrom) setBulkDateFrom(dateTo);
-                        }}
-                        className="mt-1.5"
-                      />
-                    </label>
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Số mối mỗi ngày
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={bulkCount}
-                        onChange={(event) => setBulkCount(Number(event.target.value))}
-                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                  </div>
-                  <p className="text-xs font-medium text-[#0047AB]">
-                    {bulkSpanTooLong
-                      ? "Chỉ điền tối đa 31 ngày mỗi lần."
-                      : bulkDates.length > 0 && bulkCountSafe > 0
-                        ? `${bulkDates.length.toLocaleString("vi-VN")} ngày × ${bulkCountSafe.toLocaleString("vi-VN")} mối = ${bulkTotal.toLocaleString("vi-VN")} bản ghi.`
-                        : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
-                  </p>
-                </div>
               )}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setEntryMode("linked")}
+                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] disabled:opacity-60 ${
+                  entryMode === "linked"
+                    ? "border-[#0047AB] bg-white text-[#0047AB]"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Mối hàn liên kết
+                {linkedTabBadge > 0 && (
+                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-[#0047AB]">
+                    {linkedTabBadge}
+                  </span>
+                )}
+              </button>
             </div>
-          )}
+            {quickActive && (
+              <div className="space-y-2 bg-blue-50/40 p-3.5">
+                <p className="text-[11px] font-medium leading-relaxed text-slate-600">
+                  Tạo nhiều mối cùng ca, thợ hàn, công nghệ. Mã hệ thống / hiện trường / trong máy tăng lần lượt.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Từ ngày
+                    <DateField
+                      value={bulkDateFrom}
+                      onChange={(dateFrom) => {
+                        setBulkDateFrom(dateFrom);
+                        if (bulkDateTo && dateFrom > bulkDateTo) setBulkDateTo(dateFrom);
+                      }}
+                      className="mt-1.5"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Đến ngày
+                    <DateField
+                      value={bulkDateTo}
+                      onChange={(dateTo) => {
+                        setBulkDateTo(dateTo);
+                        if (bulkDateFrom && dateTo < bulkDateFrom) setBulkDateFrom(dateTo);
+                      }}
+                      className="mt-1.5"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Số mối mỗi ngày
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={bulkCount}
+                      onChange={(event) => setBulkCount(Number(event.target.value))}
+                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs font-medium text-[#0047AB]">
+                  {bulkSpanTooLong
+                    ? "Chỉ điền tối đa 31 ngày mỗi lần."
+                    : bulkDates.length > 0 && bulkCountSafe > 0
+                      ? `${bulkDates.length.toLocaleString("vi-VN")} ngày × ${bulkCountSafe.toLocaleString("vi-VN")} mối = ${bulkTotal.toLocaleString("vi-VN")} bản ghi.`
+                      : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
+                </p>
+              </div>
+            )}
+            {linkedActive && (
+              <div className="space-y-3 bg-slate-50/40 p-3.5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Từ ngày
+                    <DateField
+                      value={linkDateFrom}
+                      onChange={(val) => {
+                        setLinkDateFrom(val);
+                        if (linkDateTo && val > linkDateTo) setLinkDateTo(val);
+                      }}
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Đến ngày
+                    <DateField
+                      value={linkDateTo}
+                      onChange={(val) => {
+                        setLinkDateTo(val);
+                        if (linkDateFrom && val < linkDateFrom) setLinkDateFrom(val);
+                      }}
+                      className="mt-1"
+                    />
+                  </label>
+                </div>
+                <label className="block text-xs font-semibold text-slate-600">
+                  Chọn mối hàn lỗi trong khoảng ngày
+                  <SelectMenu
+                    value={form.moi_han_lien_ket}
+                    onChange={(moi_han_lien_ket) => setForm({ ...form, moi_han_lien_ket })}
+                    options={[{ value: "", label: "— Không liên kết —" }, ...failedWeldOptions]}
+                    searchable={failedWeldOptions.length > 5}
+                    searchPlaceholder="Tìm mã mối hàn..."
+                    className="mt-1"
+                    buttonClassName="h-10 shadow-2xs"
+                  />
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  {failedWeldOptions.length > 0
+                    ? `${failedWeldOptions.length} mối hàn lỗi từ ${formatJournalDateIso(linkDateFrom)} đến ${formatJournalDateIso(linkDateTo)}`
+                    : "Không có mối hàn lỗi trong khoảng ngày đã chọn."}
+                </p>
 
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-slate-600">
+                      Ảnh mối hàn liên kết{" "}
+                      <span className="font-normal text-slate-400">(chụp / chọn nhiều ảnh)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={uploadingImages || saving}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                      >
+                        <Camera size={16} aria-hidden />
+                        Chụp ảnh
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        disabled={uploadingImages || saving}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-100 disabled:opacity-50 cursor-pointer"
+                      >
+                        <UploadSimple size={16} aria-hidden />
+                        {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
+                      </button>
+                    </div>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(event) => void uploadLinkedImages(event.target.files)}
+                    />
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => void uploadLinkedImages(event.target.files)}
+                    />
+                  </div>
+                  {imageError && (
+                    <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-medium text-rose-700">
+                      {imageError}
+                    </div>
+                  )}
+                  {form.anh_moi_han_lien_ket.length > 0 ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {form.anh_moi_han_lien_ket.map((asset) => (
+                        <div
+                          key={asset.publicId}
+                          className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                        >
+                          <div className="relative h-24">
+                            <Image
+                              src={asset.secureUrl}
+                              alt={asset.name}
+                              fill
+                              className="object-cover"
+                              sizes="180px"
+                            />
+                          </div>
+                          <div className="truncate px-2 py-1.5 pr-9 text-[11px] text-slate-600" title={asset.name}>
+                            {asset.name}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeLinkedImage(asset)}
+                            disabled={uploadingImages || saving}
+                            className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-rose-600 shadow-sm hover:bg-rose-50 cursor-pointer"
+                            aria-label={`Xóa ${asset.name}`}
+                          >
+                            <TrashSimple size={15} aria-hidden />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-5 text-center text-xs text-slate-400">
+                      Chưa có ảnh. Chụp hoặc chọn nhiều ảnh để lưu lên Cloudinary.
+                    </div>
+                  )}
+                </div>
+
+                {SHOW_WELD_GPS && (
+                  <div className="space-y-3 border-t border-slate-200 pt-3">
+                    <p className="text-[11px] text-slate-500">Tùy chọn — gán điểm GPS có sẵn hoặc nhập tọa độ mới.</p>
+                    {unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Gán điểm GPS có sẵn (chưa liên kết)
+                        <SelectMenu
+                          value={form.toa_do_id}
+                          onChange={(id) => {
+                            const pt = unlinkedGpsPoints.find((p) => p.id === id);
+                            if (pt) {
+                              setForm((prev) => ({
+                                ...prev,
+                                toa_do_id: id,
+                                ly_trinh: pt.chainage || prev.ly_trinh,
+                                kinh_do: String(pt.longitude),
+                                vi_do: String(pt.latitude),
+                              }));
+                            } else {
+                              setForm((prev) => ({ ...prev, toa_do_id: "" }));
+                            }
+                          }}
+                          options={[
+                            { value: "", label: "— Nhập mới hoặc không gán điểm có sẵn —" },
+                            ...unlinkedGpsPoints.map((pt) => ({
+                              value: pt.id,
+                              label: `${pt.code} (${pt.chainage}) — ${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
+                            })),
+                          ]}
+                          searchable={unlinkedGpsPoints.length > 5}
+                          searchPlaceholder="Tìm mã hoặc lý trình..."
+                          className="mt-1"
+                          buttonClassName="h-10 shadow-2xs"
+                        />
+                      </label>
+                    )}
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Lý trình
+                        <input
+                          value={form.ly_trinh}
+                          onChange={(e) => setForm({ ...form, ly_trinh: e.target.value })}
+                          placeholder="Km0+250.00"
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Kinh độ (lon)
+                        <input
+                          value={form.kinh_do}
+                          onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
+                          placeholder="105.8427"
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">
+                        Vĩ độ (lat)
+                        <input
+                          value={form.vi_do}
+                          onChange={(e) => setForm({ ...form, vi_do: e.target.value })}
+                          placeholder="21.0160"
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {!linkedActive && (
+          <>
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
             <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               <label htmlFor="journal-weld-code">Mã hệ thống</label>
@@ -1052,11 +1268,6 @@ function JournalFormModal({
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
                 Tự tăng theo dự án + công nghệ + loại mối. Không chỉnh tay.
               </span>
-              {mode === "create" && projectMissingCode && (
-                <span className="mt-1.5 block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-800">
-                  Dự án chưa có mã dự án — khai báo trong Quản lý dự án trước khi ghi nhật ký.
-                </span>
-              )}
             </div>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Mã hiện trường
@@ -1105,10 +1316,9 @@ function JournalFormModal({
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Tình trạng thí nghiệm
               <SelectMenu
-                value={mode === "create" ? DEFAULT_WELD_TEST_STATUS : form.result}
+                value={form.result}
                 onChange={(result) => setForm({ ...form, result: result as JournalFormValues["result"] })}
                 options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((value) => ({ value, label: value }))}
-                disabled={mode === "create"}
                 className="mt-1.5"
                 buttonClassName="h-10 shadow-2xs"
               />
@@ -1293,245 +1503,6 @@ function JournalFormModal({
             </label>
           </div>
 
-          {!quickActive && (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex border-b border-slate-200 bg-slate-50">
-              <button
-                type="button"
-                onClick={() => setExtraTab("linked")}
-                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] ${
-                  extraTab === "linked"
-                    ? "border-[#0047AB] bg-white text-[#0047AB]"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Mối hàn liên kết
-                {(form.moi_han_lien_ket || form.anh_moi_han_lien_ket.length > 0) && (
-                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-[#0047AB]">
-                    {(form.moi_han_lien_ket ? 1 : 0) + form.anh_moi_han_lien_ket.length}
-                  </span>
-                )}
-              </button>
-              {SHOW_WELD_GPS && (
-              <button
-                type="button"
-                onClick={() => setExtraTab("gps")}
-                className={`relative min-w-0 flex-1 border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition-colors cursor-pointer sm:text-[13px] ${
-                  extraTab === "gps"
-                    ? "border-[#0047AB] bg-white text-[#0047AB]"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Vị trí & GPS
-                {(form.toa_do_id || form.ly_trinh.trim() || form.kinh_do.trim() || form.vi_do.trim()) && (
-                  <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">
-                    ✓
-                  </span>
-                )}
-              </button>
-              )}
-            </div>
-
-            {!SHOW_WELD_GPS || extraTab === "linked" ? (
-              <div className="space-y-3 bg-slate-50/40 p-3.5">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Từ ngày
-                    <DateField
-                      value={linkDateFrom}
-                      onChange={(val) => {
-                        setLinkDateFrom(val);
-                        if (linkDateTo && val > linkDateTo) setLinkDateTo(val);
-                      }}
-                      className="mt-1"
-                    />
-                  </label>
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Đến ngày
-                    <DateField
-                      value={linkDateTo}
-                      onChange={(val) => {
-                        setLinkDateTo(val);
-                        if (linkDateFrom && val < linkDateFrom) setLinkDateFrom(val);
-                      }}
-                      className="mt-1"
-                    />
-                  </label>
-                </div>
-                <label className="block text-xs font-semibold text-slate-600">
-                  Chọn mối hàn lỗi trong khoảng ngày
-                  <SelectMenu
-                    value={form.moi_han_lien_ket}
-                    onChange={(moi_han_lien_ket) => setForm({ ...form, moi_han_lien_ket })}
-                    options={[{ value: "", label: "— Không liên kết —" }, ...failedWeldOptions]}
-                    searchable={failedWeldOptions.length > 5}
-                    searchPlaceholder="Tìm mã mối hàn..."
-                    className="mt-1"
-                    buttonClassName="h-10 shadow-2xs"
-                  />
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  {failedWeldOptions.length > 0
-                    ? `${failedWeldOptions.length} mối hàn lỗi từ ${formatJournalDateIso(linkDateFrom)} đến ${formatJournalDateIso(linkDateTo)}`
-                    : "Không có mối hàn lỗi trong khoảng ngày đã chọn."}
-                </p>
-
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-semibold text-slate-600">
-                      Ảnh mối hàn liên kết{" "}
-                      <span className="font-normal text-slate-400">(chụp / chọn nhiều ảnh)</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => cameraInputRef.current?.click()}
-                        disabled={uploadingImages || saving}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
-                      >
-                        <Camera size={16} aria-hidden />
-                        Chụp ảnh
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={uploadingImages || saving}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-[#0047AB] hover:bg-blue-100 disabled:opacity-50 cursor-pointer"
-                      >
-                        <UploadSimple size={16} aria-hidden />
-                        {uploadingImages ? "Đang tải..." : "Thêm ảnh"}
-                      </button>
-                    </div>
-                    <input
-                      ref={cameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={(event) => void uploadLinkedImages(event.target.files)}
-                    />
-                    <input
-                      ref={galleryInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(event) => void uploadLinkedImages(event.target.files)}
-                    />
-                  </div>
-                  {imageError && (
-                    <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-medium text-rose-700">
-                      {imageError}
-                    </div>
-                  )}
-                  {form.anh_moi_han_lien_ket.length > 0 ? (
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {form.anh_moi_han_lien_ket.map((asset) => (
-                        <div
-                          key={asset.publicId}
-                          className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                        >
-                          <div className="relative h-24">
-                            <Image
-                              src={asset.secureUrl}
-                              alt={asset.name}
-                              fill
-                              className="object-cover"
-                              sizes="180px"
-                            />
-                          </div>
-                          <div className="truncate px-2 py-1.5 pr-9 text-[11px] text-slate-600" title={asset.name}>
-                            {asset.name}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeLinkedImage(asset)}
-                            disabled={uploadingImages || saving}
-                            className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-md bg-white/95 text-rose-600 shadow-sm hover:bg-rose-50 cursor-pointer"
-                            aria-label={`Xóa ${asset.name}`}
-                          >
-                            <TrashSimple size={15} aria-hidden />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-5 text-center text-xs text-slate-400">
-                      Chưa có ảnh. Chụp hoặc chọn nhiều ảnh để lưu lên Cloudinary.
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 bg-blue-50/30 p-3.5">
-                <p className="text-[11px] text-slate-500">Tùy chọn — gán điểm GPS có sẵn hoặc nhập tọa độ mới.</p>
-                {unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Gán điểm GPS có sẵn (chưa liên kết)
-                    <SelectMenu
-                      value={form.toa_do_id}
-                      onChange={(id) => {
-                        const pt = unlinkedGpsPoints.find((p) => p.id === id);
-                        if (pt) {
-                          setForm((prev) => ({
-                            ...prev,
-                            toa_do_id: id,
-                            ly_trinh: pt.chainage || prev.ly_trinh,
-                            kinh_do: String(pt.longitude),
-                            vi_do: String(pt.latitude),
-                          }));
-                        } else {
-                          setForm((prev) => ({ ...prev, toa_do_id: "" }));
-                        }
-                      }}
-                      options={[
-                        { value: "", label: "— Nhập mới hoặc không gán điểm có sẵn —" },
-                        ...unlinkedGpsPoints.map((pt) => ({
-                          value: pt.id,
-                          label: `${pt.code} (${pt.chainage}) — ${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
-                        })),
-                      ]}
-                      searchable={unlinkedGpsPoints.length > 5}
-                      searchPlaceholder="Tìm mã hoặc lý trình..."
-                      className="mt-1"
-                      buttonClassName="h-10 shadow-2xs"
-                    />
-                  </label>
-                )}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Lý trình
-                    <input
-                      value={form.ly_trinh}
-                      onChange={(e) => setForm({ ...form, ly_trinh: e.target.value })}
-                      placeholder="Km0+250.00"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Kinh độ (lon)
-                    <input
-                      value={form.kinh_do}
-                      onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
-                      placeholder="105.8427"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Vĩ độ (lat)
-                    <input
-                      value={form.vi_do}
-                      onChange={(e) => setForm({ ...form, vi_do: e.target.value })}
-                      placeholder="21.0160"
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
           {!quickActive && form.result === "Không đạt" && (
             <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
               <div>
@@ -1579,6 +1550,8 @@ function JournalFormModal({
               className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 resize-y"
             />
           </label>
+          )}
+          </>
           )}
         </div>
 
@@ -1684,22 +1657,8 @@ export default function WeldingJournalList({
   const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [autoFillOpen, setAutoFillOpen] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
-  const [autoFillProjectId, setAutoFillProjectId] = useState("");
-  const [autoFillDate, setAutoFillDate] = useState("");
-  const [autoFillShifts, setAutoFillShifts] = useState({ "Ca 1": true, "Ca 2": true });
-  const [autoFillShiftTimes, setAutoFillShiftTimes] = useState({
-    "Ca 1": { start: "06:00", end: "14:00" },
-    "Ca 2": { start: "14:00", end: "22:00" },
-  });
-  const [autoFillCount, setAutoFillCount] = useState(1);
-  const [autoFillTemplate, setAutoFillTemplate] = useState<WeldReportRow | null>(null);
-  const [autoFillExisting, setAutoFillExisting] = useState<number | null>(null);
-  const [autoFillLoading, setAutoFillLoading] = useState(false);
-  const [autoFillSaving, setAutoFillSaving] = useState(false);
-  const [autoFillProgress, setAutoFillProgress] = useState("");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
@@ -2047,197 +2006,6 @@ export default function WeldingJournalList({
     }
   }
 
-  useEffect(() => {
-    if (!autoFillOpen || !autoFillProjectId || !autoFillDate) {
-      setAutoFillTemplate(null);
-      setAutoFillExisting(null);
-      return;
-    }
-    const project = projectOptions.find((item) => item.id === autoFillProjectId);
-    let active = true;
-    setAutoFillLoading(true);
-    Promise.all([
-      loadLatestProjectWeld(autoFillProjectId, autoFillDate),
-      project
-        ? exportFilteredWeldJournal({
-            projects: [project.label],
-            resultFilter: "Tất cả",
-            linkedWeldFilter: "Tất cả",
-            weldTypeFilter: "Tất cả",
-            weldMethodFilter: "Tất cả",
-            dateFrom: autoFillDate,
-            dateTo: autoFillDate,
-          })
-        : Promise.resolve([] as WeldReportRow[]),
-    ])
-      .then(([template, existing]) => {
-        if (!active) return;
-        setAutoFillTemplate(template);
-        setAutoFillExisting(existing.length);
-      })
-      .catch(() => {
-        if (!active) return;
-        setAutoFillTemplate(null);
-        setAutoFillExisting(null);
-      })
-      .finally(() => {
-        if (active) setAutoFillLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [autoFillOpen, autoFillProjectId, autoFillDate, projectOptions]);
-
-  const autoFillPlan = useMemo(() => {
-    const count = Math.min(200, Math.max(0, Math.round(Number(autoFillCount) || 0)));
-    const shifts = (["Ca 1", "Ca 2"] as const)
-      .filter((shift) => autoFillShifts[shift])
-      .map((shift) => ({
-        shift,
-        ...autoFillShiftTimes[shift],
-        hours: weldWorkHours(autoFillShiftTimes[shift].start, autoFillShiftTimes[shift].end) ?? 0,
-      }));
-    const totalHours = shifts.reduce((sum, item) => sum + item.hours, 0);
-    let remaining = count;
-    const plan = shifts.map((item, index) => {
-      const share = index === shifts.length - 1
-        ? remaining
-        : totalHours > 0 ? Math.round((count * item.hours) / totalHours) : 0;
-      remaining -= share;
-      return { ...item, count: share };
-    });
-    return { count, totalHours, shifts: plan };
-  }, [autoFillCount, autoFillShifts, autoFillShiftTimes]);
-
-  async function handleAutoFillApply() {
-    if (autoFillSaving) return;
-    const selectedProject = projectOptions.find((item) => item.id === autoFillProjectId);
-    if (!selectedProject) {
-      window.alert("Vui lòng chọn dự án.");
-      return;
-    }
-    if (!autoFillDate) {
-      window.alert("Vui lòng chọn ngày thực hiện.");
-      return;
-    }
-    if (autoFillDate > defaultPerformedAt().slice(0, 10)) {
-      window.alert("Ngày thực hiện không được lớn hơn ngày hiện tại.");
-      return;
-    }
-    if (autoFillPlan.shifts.length === 0) {
-      window.alert("Vui lòng chọn ít nhất một ca.");
-      return;
-    }
-    const invalidShift = autoFillPlan.shifts.find((item) => !item.start || !item.end || item.start === item.end);
-    if (invalidShift) {
-      window.alert(`Vui lòng chọn giờ bắt đầu và kết thúc hợp lệ cho ${invalidShift.shift}.`);
-      return;
-    }
-    if (autoFillPlan.count < 1) {
-      window.alert("Nhập số mối cần điền (từ 1 đến 200).");
-      return;
-    }
-    const template = autoFillTemplate;
-    if (!template || !template.may_id || !template.chung_chi_su_dung?.trim()) {
-      window.alert(
-        "Dự án chưa có mối hàn nào trước ngày này (đủ thợ hàn, máy, chứng chỉ) để lấy thông số. Hãy thêm tay một mối trước.",
-      );
-      return;
-    }
-    const shiftSummary = autoFillPlan.shifts
-      .map((item) => `${item.shift} (${item.start}–${item.end}, ${formatWeldWorkHours(item.hours)}): ${item.count} mối`)
-      .join("\n");
-    const ok = window.confirm(
-      `Tạo ${autoFillPlan.count.toLocaleString("vi-VN")} mối cho dự án "${selectedProject.label}" ngày ${formatJournalDateIso(autoFillDate)}:\n${shiftSummary}\n\nThông số lấy theo mối ${displayWeldCode(template.ma_lich_su)} (${template.ten_tho_han}, ${template.ten_may || template.ma_may || "máy"}).${autoFillExisting ? `\nNgày này đã có ${autoFillExisting.toLocaleString("vi-VN")} mối.` : ""}\n\nTiếp tục?`,
-    );
-    if (!ok) return;
-
-    setAutoFillSaving(true);
-    setAutoFillProgress("");
-    try {
-      const sitePrefix = normalizeWeldSitePrefix(selectedProject.ma_du_an);
-      const prefix = buildWeldCodePrefix(template.cong_nghe_han, `${autoFillDate}T08:00`, sitePrefix, template.loai_moi_han);
-      const [prefixCodes, siteCodes, machineCodes] = await Promise.all([
-        loadWeldCodesWithPrefix(prefix),
-        loadSiteFieldCodesForProject(selectedProject.id),
-        template.may_id ? loadMachineFieldCodesForMachine(template.may_id) : Promise.resolve([] as string[]),
-      ]);
-      const usedCodes = new Set(prefixCodes);
-      let siteCode = suggestSiteFieldCode(
-        sitePrefix,
-        siteCodes,
-        template.ma_hien_truong?.trim() || null,
-      );
-      const machineOpt = machineOptions.find((item) => item.id === template.may_id);
-      let machineCode = suggestMachineWeldCode(machineOpt?.code ?? template.ma_may ?? "", [
-        ...machineCodes,
-        ...(template.ten_moi_han_theo_may?.trim() ? [template.ten_moi_han_theo_may.trim()] : []),
-      ]);
-      let done = 0;
-      for (const item of autoFillPlan.shifts) {
-        for (let index = 0; index < item.count; index += 1) {
-          const weldTime = addHoursToWeldTime(item.start, (item.hours * index) / item.count);
-          const maLichSu = suggestWeldCode(
-            template.cong_nghe_han,
-            `${autoFillDate}T${weldTime}`,
-            [...usedCodes],
-            sitePrefix,
-            template.loai_moi_han,
-          );
-          usedCodes.add(maLichSu);
-          const nextSiteCode = siteCode ? (done === 0 ? siteCode : bumpTrailingCode(siteCode)) : "";
-          const nextMachineCode = machineCode
-            ? done === 0
-              ? machineCode
-              : bumpTrailingCode(machineCode)
-            : "";
-          if (nextSiteCode) siteCode = nextSiteCode;
-          if (nextMachineCode) machineCode = nextMachineCode;
-          await insertWeldJournalEntry({
-            ma_lich_su: maLichSu,
-            du_an_id: selectedProject.id,
-            tho_han_id: template.tho_han_id,
-            nam_thuc_hien: Number(autoFillDate.slice(0, 4)),
-            ngay_thuc_hien: autoFillDate,
-            loai_ray: template.loai_ray,
-            loai_moi_han: template.loai_moi_han,
-            cong_nghe_han: template.cong_nghe_han,
-            so_luong_loi: 0,
-            ma_khuyet_tat: [],
-            tinh_trang_thi_nghiem: DEFAULT_WELD_TEST_STATUS,
-            nguyen_nhan_loi: null,
-            ghi_chu: null,
-            moi_han_lien_ket: null,
-            may_id: template.may_id,
-            chung_chi_su_dung: template.chung_chi_su_dung,
-            hach_toan: "HT-SX01",
-            toa_do_id: null,
-            kinh_do: null,
-            vi_do: null,
-            ly_trinh: null,
-            ca_han: item.shift,
-            gio_han: weldTime,
-            gio_bat_dau: item.start,
-            gio_ket_thuc: item.end,
-            ma_hien_truong: nextSiteCode || null,
-            ten_moi_han_theo_may: nextMachineCode || null,
-          });
-          done += 1;
-          setAutoFillProgress(`Đang điền ${done.toLocaleString("vi-VN")}/${autoFillPlan.count.toLocaleString("vi-VN")}`);
-        }
-      }
-      setAutoFillOpen(false);
-      refetch();
-      showToast(`Đã tự động điền ${done.toLocaleString("vi-VN")} mối`);
-    } catch (err) {
-      refetch();
-      window.alert(err instanceof Error ? err.message : "Không thể tự động điền mối");
-    } finally {
-      setAutoFillSaving(false);
-      setAutoFillProgress("");
-    }
-  }
-
   async function handleImportExcel(file: File | null) {
     if (!file || importing || saving) return;
     setImporting(true);
@@ -2430,9 +2198,21 @@ export default function WeldingJournalList({
         sitePrefix,
         values.loai_moi_han,
       );
-      const usedCodes = new Set(await loadWeldCodesWithPrefix(prefix));
-      let siteCode = values.ma_hien_truong?.trim().toUpperCase() || "";
-      let machineCode = values.ten_moi_han_theo_may?.trim().toUpperCase() || "";
+      const machineOpt = machineOptions.find((item) => item.id === values.may_id);
+      const [prefixCodes, siteCodes, machineCodes] = await Promise.all([
+        loadWeldCodesWithPrefix(prefix),
+        loadSiteFieldCodesForProject(values.du_an_id),
+        values.may_id ? loadMachineFieldCodesForMachine(values.may_id) : Promise.resolve([] as string[]),
+      ]);
+      const usedCodes = new Set(prefixCodes);
+      // Cùng rule Thủ công: ưu tiên mã đang hiện trên form (đã gợi ý / user sửa),
+      // nếu trống thì lấy mã tiếp theo từ DB.
+      let siteCode =
+        values.ma_hien_truong?.trim().toUpperCase() ||
+        suggestSiteFieldCode(sitePrefix, siteCodes);
+      let machineCode =
+        values.ten_moi_han_theo_may?.trim().toUpperCase() ||
+        suggestMachineWeldCode(machineOpt?.code ?? "", machineCodes);
       let done = 0;
       for (const date of dates) {
         for (let index = 0; index < count; index += 1) {
@@ -2784,34 +2564,17 @@ export default function WeldingJournalList({
           {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
         </button>
         {!failedWeldMode ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                const currentProject = projectOptions.find((item) => projectFilter.includes(item.label));
-                setAutoFillProjectId(currentProject?.id ?? "");
-                setAutoFillDate(dateFrom === dateTo ? dateFrom : dateFrom || dateTo || defaultPerformedAt().slice(0, 10));
-                setAutoFillCount(1);
-                setAutoFillOpen(true);
-              }}
-              disabled={saving || loading}
-              title="Tạo số mối trong ngày, chia vào các ca theo số giờ"
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 truncate rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:max-w-[280px] sm:shrink-0 sm:text-sm"
-            >
-              Tự động điền
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingRow(null);
-                setEditingForm(null);
-                setFormOpen(true);
-              }}
-              className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-            >
-              <span className="text-base leading-none">+</span> Thêm nhật ký
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingRow(null);
+              setEditingForm(null);
+              setFormOpen(true);
+            }}
+            className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+          >
+            <span className="text-base leading-none">+</span> Thêm nhật ký
+          </button>
         ) : null}
        </div>
       </div>
@@ -2881,15 +2644,12 @@ export default function WeldingJournalList({
         </div>
 
         <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1340px]" : "min-w-[1560px]"}`}>
+          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1200px]" : "min-w-[1320px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
                 <th className="p-2.5 font-semibold">Ca hàn</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
-                {!failedWeldMode ? (
-                  <th className="min-w-[260px] p-2.5 font-semibold">Chứng chỉ</th>
-                ) : null}
                 <th className="p-2.5 font-semibold">Máy</th>
                 <th className="p-2.5 font-semibold">Mã hệ thống</th>
                 <th className="p-2.5 font-semibold">Mã trong máy</th>
@@ -2914,13 +2674,6 @@ export default function WeldingJournalList({
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
                   <td className="p-2.5 whitespace-nowrap font-semibold text-slate-800">{w.shift}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
-                  {!failedWeldMode ? (
-                    <td className="p-2.5">
-                      <span className={`line-clamp-2 text-xs leading-relaxed ${w.certificateLinked ? "text-emerald-700" : "text-amber-700"}`} title={w.certificate}>
-                        {w.certificate}
-                      </span>
-                    </td>
-                  ) : null}
                   <td className="p-2.5 max-w-[190px]">
                     <span className={`line-clamp-2 text-xs font-semibold ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`} title={w.machine}>
                       {w.machine}
@@ -3279,163 +3032,6 @@ export default function WeldingJournalList({
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {autoFillOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-3 sm:p-6">
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Tự động điền mối hàn</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Nhập số mối của một ngày, hệ thống tạo đủ số mối và chia vào các ca theo số giờ làm.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { if (!autoFillSaving) setAutoFillOpen(false); }}
-                disabled={autoFillSaving}
-                aria-label="Đóng"
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-4 overflow-y-auto px-5 py-4">
-              <label className="block text-xs font-semibold text-slate-700">
-                Dự án
-                <select
-                  value={autoFillProjectId}
-                  onChange={(event) => setAutoFillProjectId(event.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 shadow-2xs outline-none transition focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-                >
-                  <option value="">Chọn dự án cần tra cứu</option>
-                  {projectOptions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}{item.ma_du_an ? ` · ${item.ma_du_an}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Ngày thực hiện
-                  <input
-                    type="date"
-                    value={autoFillDate}
-                    max={defaultPerformedAt().slice(0, 10)}
-                    onChange={(event) => setAutoFillDate(event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Số mối
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={autoFillCount}
-                    onChange={(event) => setAutoFillCount(Number(event.target.value))}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-700">Chọn ca và giờ làm</h3>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Có thể chọn một hoặc cả hai ca. Nếu chọn một ca, toàn bộ số mối sẽ vào ca đó.</p>
-                </div>
-                {(["Ca 1", "Ca 2"] as const).map((shift) => (
-                  <div key={shift} className={`rounded-xl border p-3 ${autoFillShifts[shift] ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-white"}`}>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={autoFillShifts[shift]}
-                        onChange={(event) => {
-                          setAutoFillShifts((current) => ({ ...current, [shift]: event.target.checked }));
-                        }}
-                        className="h-4 w-4 accent-[#0047AB]"
-                      />
-                      {shift} {shift === "Ca 1" ? "· sáng" : "· tối"}
-                    </label>
-                    {autoFillShifts[shift] && (
-                      <div className="mt-3 grid grid-cols-2 gap-3 pl-6">
-                        <label className="block text-xs font-medium text-slate-600">
-                          Giờ bắt đầu
-                          <input
-                            type="time"
-                            value={autoFillShiftTimes[shift].start}
-                            onChange={(event) => {
-                              setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], start: event.target.value } }));
-                            }}
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                          />
-                        </label>
-                        <label className="block text-xs font-medium text-slate-600">
-                          Giờ kết thúc
-                          <input
-                            type="time"
-                            value={autoFillShiftTimes[shift].end}
-                            onChange={(event) => {
-                              setAutoFillShiftTimes((current) => ({ ...current, [shift]: { ...current[shift], end: event.target.value } }));
-                            }}
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-xl border border-slate-200">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 text-sm">
-                  <span className="font-semibold text-slate-800">Chia theo số giờ</span>
-                  <span className="text-slate-600">
-                    {autoFillPlan.count.toLocaleString("vi-VN")} mối · {formatWeldWorkHours(autoFillPlan.totalHours) || "0 tiếng"}
-                  </span>
-                </div>
-                {autoFillPlan.shifts.length ? autoFillPlan.shifts.map((item) => (
-                  <div key={item.shift} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-xs last:border-0">
-                    <span className="font-medium text-slate-700">{item.shift} · {item.start}–{item.end}</span>
-                    <span className="text-slate-600">{formatWeldWorkHours(item.hours)}</span>
-                    <span className="text-right font-semibold text-[#0047AB]">{item.count.toLocaleString("vi-VN")} mối</span>
-                  </div>
-                )) : (
-                  <p className="px-3 py-4 text-center text-xs text-slate-500">Chọn ít nhất một ca.</p>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-900">
-                {autoFillLoading
-                  ? "Đang lấy thông số mối gần nhất của dự án…"
-                  : autoFillTemplate
-                    ? `Thợ hàn, máy, chứng chỉ, loại ray, công nghệ và loại mối lấy theo mối ${displayWeldCode(autoFillTemplate.ma_lich_su)}${autoFillTemplate.ngay_thuc_hien ? ` (${formatJournalDateIso(autoFillTemplate.ngay_thuc_hien.slice(0, 10))})` : ""}: ${autoFillTemplate.ten_tho_han} · ${autoFillTemplate.ten_may || autoFillTemplate.ma_may || "chưa gán máy"}.`
-                    : autoFillProjectId && autoFillDate
-                      ? "Dự án chưa có mối hàn nào trước ngày này để lấy thông số. Hãy thêm tay một mối trước."
-                      : "Chọn dự án và ngày để lấy thông số theo mối gần nhất của dự án."}
-                {autoFillExisting ? ` Ngày này đã có ${autoFillExisting.toLocaleString("vi-VN")} mối.` : ""}
-              </div>
-            </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setAutoFillOpen(false)}
-                disabled={autoFillSaving || autoFillLoading}
-                className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleAutoFillApply()}
-                disabled={autoFillLoading || autoFillSaving || !autoFillProjectId || !autoFillDate || !autoFillTemplate || autoFillPlan.count < 1 || autoFillPlan.shifts.length === 0}
-                className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-60"
-              >
-                {autoFillLoading ? "Đang tra cứu…" : autoFillSaving ? (autoFillProgress || "Đang điền…") : "Tự động điền"}
               </button>
             </div>
           </div>

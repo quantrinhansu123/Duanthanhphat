@@ -4,6 +4,16 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
+function notifyMachineRunScheduleChanged(...dates: Array<string | null | undefined>) {
+  void import("@/lib/machineRunSchedulesDb")
+    .then((mod) => {
+      mod.queueMachineRunScheduleSync(dates);
+    })
+    .catch(() => {
+      /* ignore */
+    });
+}
+
 export interface SupabaseWeldRow {
   id: string;
   created_at?: string | null;
@@ -1041,6 +1051,9 @@ export async function saveWeldingHistoryRecord(
     return { records: currentList, error: dbError };
   }
 
+  const previousDate = currentList.find((row) => row.id === record.id)?.date;
+  notifyMachineRunScheduleChanged(previousDate, finalRecord.date);
+
   const nextList = isNew
     ? [finalRecord, ...currentList.filter((r) => r.id !== record.id && r.id !== finalRecord.id)]
     : currentList.map((r) => (r.id === record.id ? finalRecord : r));
@@ -1097,6 +1110,8 @@ export async function deleteWeldingHistoryRecord(
     return { records: currentList, error: "Chưa cấu hình Supabase. Supabase là nguồn dữ liệu duy nhất." };
   }
 
+  const previousDate = currentList.find((row) => row.id === id)?.date;
+
   try {
     const supabase = createClient();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -1114,6 +1129,7 @@ export async function deleteWeldingHistoryRecord(
     return { records: currentList, error: dbError };
   }
 
+  notifyMachineRunScheduleChanged(previousDate);
   const nextList = currentList.filter((r) => r.id !== id);
   return { records: nextList };
 }

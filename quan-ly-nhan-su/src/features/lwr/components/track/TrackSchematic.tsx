@@ -138,7 +138,7 @@ export function TrackSchematic({ layout, symbols, ready, symbolError, onReloadSy
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h2 className="text-base font-bold">Bố trí công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chọn phạm vi từ đầu thanh bắt đầu đến cuối thanh kết thúc. Sơ đồ và các ô ray cùng cuộn ngang.</p></div>
-          <Link href="/cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
+          <Link href="/lwr-cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">

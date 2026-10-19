@@ -9,7 +9,7 @@ import {
   type MaintenanceEvent,
   type MaintenanceResult,
 } from "@/data/maintenance";
-import { Check, TrashSimple } from "@/components/icons";
+import { Check } from "@/components/icons";
 import { deleteMaintenanceEvent, loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -415,63 +415,81 @@ export default function MaintenanceCalendar() {
                   </div>
                 </div>
                 <div className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${typeColor[e.type]}`} />
-                <div className="min-w-0 flex-1 rounded-xl border border-slate-200/80 p-3.5 bg-white shadow-2xs">
-                  <div className="min-w-0">
-                    <div className="text-xs sm:text-sm font-bold text-slate-900">{e.title}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      <span className="font-mono font-medium text-slate-700">{e.machine}</span> · {e.type} · <span className="font-mono tabular-nums">{e.durationMin}</span> phút
+                <div
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs"
+                  style={{ fontFamily: "var(--font-roboto), Roboto, sans-serif" }}
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="text-sm font-bold leading-snug text-slate-900 sm:text-base">{e.title}</div>
+                    <div className="text-xs leading-relaxed text-slate-500 sm:text-sm">
+                      <span className="font-mono font-medium text-slate-700">{e.machine}</span>
+                      <span className="mx-1.5 text-slate-300">·</span>
+                      {e.type}
+                      <span className="mx-1.5 text-slate-300">·</span>
+                      <span className="font-mono tabular-nums">{e.durationMin}</span> phút
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyle[e.status]}`}>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <span
+                      className={`inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-xs font-semibold sm:text-sm ${statusStyle[e.status]}`}
+                    >
                       {e.status}
                     </span>
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[e.result ?? "Chưa có"]}`}
+                      className={`inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-center text-xs font-semibold sm:text-sm ${resultStyle[e.result ?? "Chưa có"]}`}
                     >
                       Kết quả: {e.result ?? "Chưa có"}
                     </span>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-500">Người được giao</div>
-                      <div className="mt-0.5 truncate text-xs font-medium text-slate-700">
+                  <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3">
+                    <AssigneeAvatars assignees={e.assignees} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Người được giao
+                      </div>
+                      <div className="mt-0.5 truncate text-xs font-medium text-slate-700 sm:text-sm">
                         {e.assignees.map((a) => a.name).join(", ")}
                       </div>
                     </div>
-                    <AssigneeAvatars assignees={e.assignees} size={30} />
                   </div>
+
                   {e.reminder ? (
-                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-800">
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800 sm:text-sm">
                       <span className="font-semibold">Nhắc nhớ:</span> {e.reminder}
                     </div>
                   ) : null}
                   {e.note && quickEditId !== e.id ? (
-                    <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-relaxed text-slate-600">
+                    <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
                       <span className="font-semibold text-slate-700">Ghi chú:</span> {e.note}
                     </div>
                   ) : null}
                   {e.images?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {e.images.map((imageUrl, imageIndex) => (
-                        <a key={`${e.id}-image-${imageIndex}`} href={imageUrl} target="_blank" rel="noreferrer" className="relative h-12 w-16 overflow-hidden rounded-md border border-slate-200 bg-slate-100">
-                          <Image src={imageUrl} alt={`Ảnh bảo trì ${imageIndex + 1}`} fill className="object-cover" sizes="64px" />
+                        <a
+                          key={`${e.id}-image-${imageIndex}`}
+                          href={imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="relative h-14 w-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                        >
+                          <Image src={imageUrl} alt={`Ảnh bảo trì ${imageIndex + 1}`} fill className="object-cover" sizes="80px" />
                         </a>
                       ))}
                     </div>
                   ) : null}
 
                   {quickEditId === e.id ? (
-                    <div className="mt-3 space-y-2.5 rounded-xl border border-blue-200 bg-blue-50/50 p-3">
-                      <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    <div className="mt-3 space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3.5">
+                      <label className="block text-xs font-semibold text-slate-600">
                         Kết quả
                         <select
                           value={quickResult}
                           onChange={(event) => setQuickResult(event.target.value as MaintenanceResult)}
                           disabled={quickSaving}
-                          className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                         >
                           {RESULT_OPTIONS.map((option) => (
                             <option key={option} value={option}>
@@ -480,7 +498,7 @@ export default function MaintenanceCalendar() {
                           ))}
                         </select>
                       </label>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                      <label className="block text-xs font-semibold text-slate-600">
                         Ghi chú
                         <textarea
                           value={quickNote}
@@ -488,20 +506,20 @@ export default function MaintenanceCalendar() {
                           disabled={quickSaving}
                           rows={3}
                           placeholder="Nhập ghi chú bảo trì…"
-                          className="mt-1 w-full resize-y rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                          className="mt-1.5 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                         />
                       </label>
                       {quickError ? (
-                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-700">
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
                           {quickError}
                         </div>
                       ) : null}
-                      <div className="flex justify-end gap-1.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           disabled={quickSaving}
                           onClick={closeQuickEdit}
-                          className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          className="h-10 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
                           Hủy
                         </button>
@@ -509,25 +527,29 @@ export default function MaintenanceCalendar() {
                           type="button"
                           disabled={quickSaving}
                           onClick={() => void handleQuickSave(e)}
-                          className="h-8 rounded-lg bg-[#0047AB] px-3 text-xs font-bold text-white hover:bg-[#00388A] disabled:opacity-50"
+                          className="h-10 rounded-lg bg-[#0047AB] text-sm font-bold text-white hover:bg-[#00388A] disabled:opacity-50"
                         >
                           {quickSaving ? "Đang lưu…" : "Lưu"}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-3 flex flex-wrap justify-end gap-1.5 border-t border-slate-100 pt-2.5">
+                    <div
+                      className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 ${
+                        e.persisted ? "grid-cols-2" : "grid-cols-3"
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => openQuickEdit(e)}
-                        className="h-8 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        className="inline-flex h-10 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 sm:text-sm"
                       >
                         {e.result && e.result !== "Chưa có" ? "Sửa kết quả" : "Thêm kết quả"}
                       </button>
                       <button
                         type="button"
                         onClick={() => openQuickEdit(e)}
-                        className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
                       >
                         {e.note ? "Sửa ghi chú" : "Thêm ghi chú"}
                       </button>
@@ -538,7 +560,7 @@ export default function MaintenanceCalendar() {
                             setEditingEvent(e);
                             setOpenAdd(true);
                           }}
-                          className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
                         >
                           Sửa đầy đủ
                         </button>
@@ -547,9 +569,8 @@ export default function MaintenanceCalendar() {
                         type="button"
                         disabled={deletingId === e.id}
                         onClick={() => void handleDelete(e)}
-                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:text-sm"
                       >
-                        <TrashSimple size={14} weight="bold" aria-hidden />
                         {deletingId === e.id ? "Đang xóa…" : "Xóa"}
                       </button>
                     </div>

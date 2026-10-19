@@ -457,10 +457,74 @@ export async function loadMachineRunScheduleBundle(): Promise<MachineRunSchedule
   }
 }
 
+export const MACHINE_RUN_SYNC_EVENT = "phan-cong-may:synced";
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeSyncDates(dates: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(
+      dates
+        .map((value) => (value ?? "").trim().slice(0, 10))
+        .filter((value) => ISO_DATE_RE.test(value)),
+    ),
+  ).sort();
+}
+
+let pendingSyncDates = new Set<string>();
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let syncInFlight: Promise<number> | null = null;
+
+function emitMachineRunSynced(dates: string[]) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(MACHINE_RUN_SYNC_EVENT, { detail: { dates } }));
+}
+
+/**
+ * Gom các ngày cần đồng bộ (debounce) rồi ghi lại phan_cong_may từ nhật ký hàn.
+ * Không chặn thao tác lưu nhật ký — lỗi đồng bộ bị bỏ qua.
+ */
+export function queueMachineRunScheduleSync(dates: Array<string | null | undefined>) {
+  for (const date of normalizeSyncDates(dates)) pendingSyncDates.add(date);
+  if (!pendingSyncDates.size) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    const batch = Array.from(pendingSyncDates).sort();
+    pendingSyncDates.clear();
+    const run = (async () => {
+      if (syncInFlight) {
+        try {
+          await syncInFlight;
+        } catch {
+          /* previous sync failed; continue */
+        }
+      }
+      const task = syncMachineRunSchedulesForDates(batch);
+      syncInFlight = task;
+      try {
+        return await task;
+      } finally {
+        if (syncInFlight === task) syncInFlight = null;
+      }
+    })();
+    void run.catch(() => {
+      /* journal save already succeeded */
+    });
+  }, 500);
+}
+
+/** Đồng bộ ngay các ngày đã cho (không debounce). */
+export async function syncMachineRunSchedulesForDates(dates: Array<string | null | undefined>) {
+  const clean = normalizeSyncDates(dates);
+  if (!clean.length) return 0;
+  return importMachineRunReport(clean[0], clean[clean.length - 1]);
+}
+
 /** Tổng hợp nhật ký hàn trong khoảng ngày và ghi vào phan_cong_may. */
 export async function importMachineRunReport(dateFrom: string, dateTo: string) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+  if (!ISO_DATE_RE.test(dateFrom) || !ISO_DATE_RE.test(dateTo)) {
     throw new Error("Chọn từ ngày và đến ngày.");
   }
   if (dateFrom > dateTo) throw new Error("Từ ngày phải trước hoặc bằng đến ngày.");
@@ -531,6 +595,7 @@ export async function importMachineRunReport(dateFrom: string, dateTo: string) {
     if (error) throw new Error(missingAssignmentTableMessage(error));
   }
 
+  emitMachineRunSynced([dateFrom, dateTo]);
   return payload.length;
 }
 
