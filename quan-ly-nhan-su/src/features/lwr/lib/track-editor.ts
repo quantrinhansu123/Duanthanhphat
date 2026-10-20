@@ -181,7 +181,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const STRESS_NUMBER_KEYS: (keyof StressInput)[] = [
+type StressNumberKey = {
+  [K in keyof StressInput]-?: StressInput[K] extends number ? K : never;
+}[keyof StressInput];
+
+const STRESS_NUMBER_KEYS: StressNumberKey[] = [
   "area", "modulus", "alpha", "resistance", "jointResistance",
   "leftLength", "rightLength", "radius", "neutralTemp", "leftTemp", "rightTemp",
   "maxTemp", "minTemp", "weldGap", "fbwAllowance", "currentGap", "structuralGap",
