@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { ArrowLeftRight, Link2, TriangleAlert } from "lucide-react";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointsForRow, weldStatusTone } from "@lwr/lib/weld-track-map";
@@ -21,16 +22,17 @@ interface RailGridProps {
 }
 
 function buildTemplate(columns: number) {
+  // Fixed tracks avoid expensive 1fr reflow while scrolling / opening selects.
   const parts = ["110px"];
   for (let i = 0; i < columns; i += 1) {
-    parts.push("minmax(88px,1fr)");
+    parts.push("110px");
     if (i < columns - 1) parts.push("28px");
   }
   return parts.join(" ");
 }
 
 /** 4-rail locking-temperature grid. Joints between cells = mối hàn từ nhật ký. */
-export function RailGrid({
+export const RailGrid = memo(function RailGrid({
   rows = RAIL_ROWS,
   selectedId,
   onSelect,
@@ -143,7 +145,7 @@ export function RailGrid({
       {!embedded && <BandLegend />}
     </div>
   );
-}
+});
 
 function JointMark({
   joint,

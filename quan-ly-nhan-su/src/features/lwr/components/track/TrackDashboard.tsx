@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
@@ -144,6 +144,13 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
       void loadLongRails().then((remote) => {
         if (remote.source !== "supabase") return;
         setLayout((current) => {
+          const same =
+            current.longRails.length === remote.rails.length
+            && current.longRails.every((item, index) => {
+              const other = remote.rails[index];
+              return other && item.id === other.id && item.updatedAt === other.updatedAt;
+            });
+          if (same) return current;
           const next = { ...current, longRails: remote.rails };
           try {
             localStorage.setItem(TRACK_LAYOUT_STORAGE_KEY, JSON.stringify(next));
@@ -315,68 +322,70 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
           {weldError}
         </p>
       )}
-      <div
-        className={
-          sideOpen
-            ? "grid min-w-0 grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_460px]"
-            : "min-w-0"
-        }
-      >
-        <div className="min-w-0" data-testid="track-main">
-          <TrackSchematic
-            layout={layout}
-            symbols={symbols}
-            ready={ready}
-            symbolError={symbolError}
-            selectedLongRailId={selectedLongRailId}
-            onReloadSymbols={() => {
-              void reloadSymbols();
-            }}
-            onPlacement={savePlacement}
-            onRemove={(id) => {
-              commit({ ...layout, placements: layout.placements.filter((item) => item.id !== id) });
-            }}
-            onExtend={(count) => commit({ ...layout, rows: extendRailRows(layout.rows, count) })}
-            onLongRail={saveLongRail}
-            onRemoveLongRail={(id) => {
-              commit({ ...layout, longRails: layout.longRails.filter((item) => item.id !== id) });
-              if (selectedLongRailId === id) setSelectedLongRailId(null);
-              void deleteLongRailRemote(id).then((result) => {
-                if (!result.ok) setError(result.error ?? "Không xóa thanh dài trên Supabase.");
-                else if (result.skipped && result.error) setLongRailSyncNote(result.error);
-              });
-            }}
-            onSelectLongRail={(id) => {
+      {/* Overlay panel on xl so opening detail does not shrink the track (avoids layout jitter). */}
+      <div className="relative min-w-0" data-testid="track-main">
+        <TrackSchematic
+          layout={layout}
+          symbols={symbols}
+          ready={ready}
+          symbolError={symbolError}
+          selectedLongRailId={selectedLongRailId}
+          onReloadSymbols={() => {
+            void reloadSymbols();
+          }}
+          onPlacement={savePlacement}
+          onRemove={(id) => {
+            commit({ ...layout, placements: layout.placements.filter((item) => item.id !== id) });
+          }}
+          onExtend={(count) => commit({ ...layout, rows: extendRailRows(layout.rows, count) })}
+          onLongRail={saveLongRail}
+          onRemoveLongRail={(id) => {
+            commit({ ...layout, longRails: layout.longRails.filter((item) => item.id !== id) });
+            if (selectedLongRailId === id) setSelectedLongRailId(null);
+            void deleteLongRailRemote(id).then((result) => {
+              if (!result.ok) setError(result.error ?? "Không xóa thanh dài trên Supabase.");
+              else if (result.skipped && result.error) setLongRailSyncNote(result.error);
+            });
+          }}
+          onSelectLongRail={(id) => {
+            startTransition(() => {
               setSelectedLongRailId(id);
               setDetailOpen(false);
               setSelectedJoint(null);
-              scrollDetailIntoView();
-            }}
-          >
-            <RailGrid
-              rows={layout.rows}
-              embedded
-              joints={joints}
-              selectedJointId={selectedJoint?.id ?? null}
-              selectedId={cell.id}
-              onSelect={(id) => {
+            });
+            scrollDetailIntoView();
+          }}
+        >
+          <RailGrid
+            rows={layout.rows}
+            embedded
+            joints={joints}
+            selectedJointId={selectedJoint?.id ?? null}
+            selectedId={cell.id}
+            onSelect={(id) => {
+              startTransition(() => {
                 setSelectedId(id);
                 setSelectedJoint(null);
                 setSelectedLongRailId(null);
                 setDetailOpen(true);
-                scrollDetailIntoView();
-              }}
-              onSelectJoint={(joint) => {
+              });
+              scrollDetailIntoView();
+            }}
+            onSelectJoint={(joint) => {
+              startTransition(() => {
                 setSelectedJoint(joint);
                 setDetailOpen(false);
                 setSelectedLongRailId(null);
-                scrollDetailIntoView();
-              }}
-            />
-          </TrackSchematic>
-        </div>
+              });
+              scrollDetailIntoView();
+            }}
+          />
+        </TrackSchematic>
         {sideOpen && (
-          <div ref={detailContainer} className="min-w-0 space-y-3 xl:sticky xl:top-0">
+          <div
+            ref={detailContainer}
+            className="mt-3 min-w-0 space-y-3 xl:absolute xl:right-2 xl:top-2 xl:z-30 xl:mt-0 xl:w-[min(460px,calc(100%-1rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:shadow-lg"
+          >
             {selectedLongRail ? (
               <LongRailDetailPanel
                 longRail={selectedLongRail}

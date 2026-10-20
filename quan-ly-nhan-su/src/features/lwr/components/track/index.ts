@@ -2,6 +2,7 @@
 export { TrackDashboard } from "./TrackDashboard";
 export { TrackHeader } from "./TrackHeader";
 export { TrackSchematic } from "./TrackSchematic";
+export { TrackMapCanvas } from "./TrackMapCanvas";
 export { RailGrid } from "./RailGrid";
 export { WeldJointPanel } from "./WeldJointPanel";
 export { LongRailTable } from "./LongRailTable";

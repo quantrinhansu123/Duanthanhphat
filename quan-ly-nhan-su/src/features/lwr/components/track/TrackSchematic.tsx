@@ -1,23 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Shapes, Trash2 } from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
+import { Check, Plus, RefreshCw, Shapes } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
   defaultLongRailParams,
   formatChainage,
-  getPlacementSpan,
   nextLongRailCode,
   railRowKey,
   trackExtent,
   type LongRail,
-  type PlacementSpan,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { LongRailTable } from "./LongRailTable";
+import { TrackMapCanvas } from "./TrackMapCanvas";
 
 interface TrackSchematicProps {
   layout: TrackLayout;
@@ -37,38 +36,15 @@ interface TrackSchematicProps {
 
 const inputClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600";
 
-interface PlottedPlacement {
-  placement: TrackPlacement;
-  span: PlacementSpan;
-  symbol: StructureSymbol | undefined;
-}
-
-interface PlottedLongRail {
-  longRail: LongRail;
-  span: PlacementSpan;
-}
-
-/** Only overlapping icon labels need an extra line; adding a structure does not add a card. */
-function packSymbolLanes(items: PlottedPlacement[]): PlottedPlacement[][] {
-  const lanes: PlottedPlacement[][] = [];
-  for (const item of items) {
-    const centre = (item.span.startIndex + item.span.endIndex) / 2;
-    const lane = lanes.find((current) => current.every((other) => Math.abs((other.span.startIndex + other.span.endIndex) / 2 - centre) >= 1.5));
-    if (lane) lane.push(item);
-    else lanes.push([item]);
-  }
-  return lanes;
-}
-
 function SymbolImage({ symbol }: { symbol: StructureSymbol | undefined }) {
   const src = safeImageUrl(symbol?.image_url);
   return src
     // eslint-disable-next-line @next/next/no-img-element
-    ? <img src={src} alt="" className="h-10 w-14 shrink-0 object-contain" />
+    ? <img src={src} alt="" className="h-10 w-14 shrink-0 object-contain" decoding="async" />
     : <Shapes className="size-6 shrink-0 text-blue-600" aria-hidden="true" />;
 }
 
-/** One shared horizontal viewport keeps structures aligned with rail cells. */
+/** Forms + memoized map canvas — form edits must not redraw the whole track. */
 export function TrackSchematic({
   layout,
   symbols,
@@ -101,44 +77,6 @@ export function TrackSchematic({
   const [lrFormError, setLrFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [lrNotice, setLrNotice] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const dragState = useRef<{ down: boolean; startX: number; startLeft: number }>({ down: false, startX: 0, startLeft: 0 });
-  const [canLeft, setCanLeft] = useState(false);
-  const [canRight, setCanRight] = useState(false);
-
-  const updateArrows = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanLeft(el.scrollLeft > 4);
-    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  }, []);
-
-  useEffect(() => {
-    updateArrows();
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || e.shiftKey) return;
-      const canGoDown = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-      const canGoUp = el.scrollLeft > 1;
-      if ((e.deltaY > 0 && canGoDown) || (e.deltaY < 0 && canGoUp)) {
-        e.preventDefault();
-        el.scrollLeft += e.deltaY;
-      }
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("scroll", updateArrows, { passive: true });
-    window.addEventListener("resize", updateArrows);
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("scroll", updateArrows);
-      window.removeEventListener("resize", updateArrows);
-    };
-  }, [updateArrows, layout]);
-
-  function scrollByStep(direction: 1 | -1) {
-    scrollRef.current?.scrollBy({ left: direction * Math.max(320, (scrollRef.current?.clientWidth ?? 600) * 0.7), behavior: "smooth" });
-  }
 
   const row = layout.rows.find((item) => railRowKey(item) === rowKey) ?? layout.rows[0];
   const startIndex = Math.max(0, row.cells.findIndex((cell) => cell.id === startId));
@@ -154,32 +92,22 @@ export function TrackSchematic({
   const lrCurrentEnd = lrRow.cells[Math.max(lrStartIndex, lrSelectedEndIndex)];
 
   const extent = trackExtent(layout.rows);
-  const columns = Math.max(...layout.rows.map((item) => item.cells.length));
-  const gridColumns = `repeat(${columns}, minmax(110px, 1fr))`;
-  const plotted = layout.placements.flatMap((placement): PlottedPlacement[] => {
-    const span = getPlacementSpan(layout.rows, placement);
-    return span ? [{ placement, span, symbol: symbols.find((item) => item.id === placement.symbolId) }] : [];
-  });
-  const plottedLongRails = layout.longRails.flatMap((longRail): PlottedLongRail[] => {
-    const span = getPlacementSpan(layout.rows, longRail);
-    return span ? [{ longRail, span }] : [];
-  });
 
-  function clearEditor() {
+  const clearEditor = useCallback(() => {
     setEditingId(null); setLabel(""); setFormError(null);
-  }
+  }, []);
 
-  function clearLongRailEditor() {
+  const clearLongRailEditor = useCallback(() => {
     setEditingLongRailId(null); setLrCode(""); setLrLabel(""); setLrFormError(null);
-  }
+  }, []);
 
-  function edit(placement: TrackPlacement) {
+  const edit = useCallback((placement: TrackPlacement) => {
     setEditingId(placement.id); setRowKey(placement.rowKey); setStartId(placement.startCellId);
     setEndId(placement.endCellId); setSymbolId(placement.symbolId); setLabel(placement.label);
     setFormError(null); setNotice(null);
-  }
+  }, []);
 
-  function editLongRail(longRail: LongRail) {
+  const editLongRail = useCallback((longRail: LongRail) => {
     setEditingLongRailId(longRail.id);
     setLrRowKey(longRail.rowKey);
     setLrStartId(longRail.startCellId);
@@ -188,7 +116,12 @@ export function TrackSchematic({
     setLrLabel(longRail.label);
     setLrFormError(null);
     setLrNotice(null);
-  }
+  }, []);
+
+  const removePlacement = useCallback((id: string) => {
+    onRemove(id);
+    setEditingId((current) => (current === id ? null : current));
+  }, [onRemove]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -315,7 +248,7 @@ export function TrackSchematic({
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-base font-bold">Bố trí công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chọn phạm vi từ đầu thanh bắt đầu đến cuối thanh kết thúc. Sơ đồ và các ô ray cùng cuộn ngang.</p></div>
+          <div><h2 className="text-base font-bold">Bố trí công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chọn phạm vi từ đầu thanh bắt đầu đến cuối thanh kết thúc.</p></div>
           <Link href="/lwr-cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
@@ -349,120 +282,17 @@ export function TrackSchematic({
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-          <h3 className="text-sm font-bold">Sơ đồ tuyến và dải ray · {columns} thanh / dải</h3>
-          <div className="flex items-center gap-1.5">
-            <span className="mr-1 hidden items-center gap-1 text-xs text-slate-500 sm:flex"><ArrowLeftRight className="size-4" />Lăn chuột / kéo · bấm đoạn teal = thanh dài</span>
-            <button type="button" onClick={() => scrollByStep(-1)} disabled={!canLeft} aria-label="Cuộn sang trái" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronLeft className="size-4" /></button>
-            <button type="button" onClick={() => scrollByStep(1)} disabled={!canRight} aria-label="Cuộn sang phải" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronRight className="size-4" /></button>
-          </div>
-        </div>
-        <div
-          ref={scrollRef}
-          className="cursor-grab overflow-x-auto overscroll-x-contain active:cursor-grabbing"
-          data-testid="track-scroll"
-          tabIndex={0}
-          aria-label="Cuộn ngang sơ đồ tuyến và thanh ray. Dùng Shift + lăn chuột, nút mũi tên, hoặc kéo chuột."
-          onPointerDown={(e) => {
-            const el = scrollRef.current;
-            if (!el || e.button !== 0) return;
-            dragState.current = { down: true, startX: e.clientX, startLeft: el.scrollLeft };
-          }}
-          onPointerMove={(e) => {
-            const el = scrollRef.current;
-            if (!el || !dragState.current.down) return;
-            el.scrollLeft = dragState.current.startLeft - (e.clientX - dragState.current.startX);
-          }}
-          onPointerUp={() => { dragState.current.down = false; }}
-          onPointerLeave={() => { dragState.current.down = false; }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowLeft") { e.preventDefault(); scrollByStep(-1); }
-            if (e.key === "ArrowRight") { e.preventDefault(); scrollByStep(1); }
-          }}
-        >
-          <div style={{ minWidth: `${142 + columns * 118}px` }}>
-            <div className="space-y-2 px-4 py-4">
-              {layout.longRails.length === 0 && layout.placements.length === 0 && (
-                <p className="mb-3 text-xs text-slate-500">Chưa có thanh dài hoặc công trình. Thêm ở các form phía trên.</p>
-              )}
-              {layout.rows.map((rail) => {
-                const key = railRowKey(rail);
-                const railLongRails = plottedLongRails.filter((item) => item.longRail.rowKey === key);
-                const structureLanes = packSymbolLanes(plotted.filter((item) => item.placement.rowKey === key));
-                const lanes = structureLanes.length ? structureLanes : [[] as PlottedPlacement[]];
-                return lanes.map((items, laneIndex) => (
-                  <div key={`${key}-${laneIndex}`} className="grid grid-cols-[110px_1fr] items-end gap-x-2" data-testid="symbol-lane">
-                    <span className="pb-4 text-[11px] text-slate-500">{rail.line}<br />{rail.rail}</span>
-                    <div className="relative h-[104px]">
-                      <div data-testid="track-line" className="absolute inset-x-0 top-[68px] h-[3px] rounded bg-emerald-600" />
-                      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: gridColumns, gap: "8px" }}>
-                        {laneIndex === 0 && railLongRails.map(({ longRail, span }) => {
-                          const selected = longRail.id === selectedLongRailId;
-                          return (
-                            <button
-                              key={longRail.id}
-                              type="button"
-                              data-long-rail={longRail.id}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                dragState.current.down = false;
-                                onSelectLongRail(longRail.id);
-                              }}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              title={`${longRail.code} · ${longRail.label} · Km ${span.startCell.from} – ${span.endCell.to}`}
-                              aria-label={`Xem thông số thanh dài ${longRail.code}`}
-                              className={`group/lr relative z-[5] min-w-0 rounded-sm focus-visible:outline-2 focus-visible:outline-teal-600 ${selected ? "ring-2 ring-teal-500 ring-offset-1" : ""}`}
-                              style={{ gridColumn: `${span.startIndex + 1} / ${span.endIndex + 2}`, gridRow: 1 }}
-                            >
-                              <span className={`absolute inset-x-0 top-[62px] h-[15px] rounded-sm ${selected ? "bg-teal-500/55" : "bg-teal-400/40 group-hover/lr:bg-teal-500/50"}`} />
-                              <span className="absolute left-0 top-[61px] h-[17px] w-[3px] rounded bg-teal-700" />
-                              <span className="absolute right-0 top-[61px] h-[17px] w-[3px] rounded bg-teal-700" />
-                              <span className="absolute left-1/2 top-[78px] z-10 max-w-full -translate-x-1/2 truncate rounded bg-white/90 px-1 text-[10px] font-semibold text-teal-900">
-                                {longRail.code}
-                              </span>
-                            </button>
-                          );
-                        })}
-                        {items.map(({ placement, span, symbol }) => (
-                          <div key={placement.id} data-placement={placement.id} data-placement-span className="group relative z-10 min-w-0" style={{ gridColumn: `${span.startIndex + 1} / ${span.endIndex + 2}`, gridRow: 1 }}>
-                            <div className="pointer-events-none absolute inset-x-0 top-[62px] h-[15px] bg-amber-300/35" />
-                            <div className="pointer-events-none absolute left-0 top-[61px] h-[17px] w-[3px] rounded bg-blue-600" />
-                            <div className="pointer-events-none absolute right-0 top-[61px] h-[17px] w-[3px] rounded bg-blue-600" />
-                            <div className="absolute left-1/2 top-0 z-10 w-[150px] max-w-full -translate-x-1/2 text-center text-[11px] leading-4">
-                              <span className="block truncate font-semibold text-slate-800" title={placement.label}>{placement.label}</span>
-                              <span className="block text-[10px] text-slate-500">Km {span.startCell.from} – {span.endCell.to}</span>
-                              <span className="sr-only">{placement.startCellId} → {placement.endCellId}</span>
-                              {!symbol && <span className="block text-[10px] text-amber-700">Ký hiệu đã xóa khỏi danh mục</span>}
-                            </div>
-                            <button type="button" data-placement-icon onClick={() => edit(placement)} aria-label={`Chọn ${placement.label} để sửa`} title={`${placement.label} · ${rail.line} · ${rail.rail} · ${placement.startCellId} → ${placement.endCellId}`} className="absolute left-1/2 top-[48px] z-10 flex h-10 w-14 -translate-x-1/2 items-center justify-center mix-blend-multiply focus-visible:rounded focus-visible:outline-2 focus-visible:outline-blue-600"><SymbolImage symbol={symbol} /></button>
-                            <div className="absolute left-1/2 top-[82px] z-20 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                              <button onClick={() => edit(placement)} aria-label={`Sửa ${placement.label}`} className="rounded bg-white p-1 text-blue-700 hover:bg-blue-50"><Pencil className="size-3.5" /></button>
-                              <button onClick={() => { onRemove(placement.id); if (editingId === placement.id) clearEditor(); }} aria-label={`Xóa ${placement.label}`} className="rounded bg-white p-1 text-red-600 hover:bg-red-50"><Trash2 className="size-3.5" /></button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ));
-              })}
-              <div className="grid grid-cols-[110px_1fr] gap-x-2 pt-1">
-                <span className="text-xs font-medium text-slate-600">Lý trình</span>
-                <div className="grid border-t border-slate-200 pt-1" style={{ gridTemplateColumns: gridColumns, gap: "8px" }}>
-                  {layout.rows[0].cells.map((cell, index) => (
-                    <div key={cell.id} className="flex justify-between text-[10px] text-slate-500">
-                      <span>Km {cell.from}</span>
-                      {index === columns - 1 && <span>Km {cell.to}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {children}
-          </div>
-        </div>
-      </div>
+      <TrackMapCanvas
+        layout={layout}
+        symbols={symbols}
+        selectedLongRailId={selectedLongRailId}
+        editingPlacementId={editingId}
+        onSelectLongRail={onSelectLongRail}
+        onEditPlacement={edit}
+        onRemovePlacement={removePlacement}
+      >
+        {children}
+      </TrackMapCanvas>
     </section>
   );
 }
