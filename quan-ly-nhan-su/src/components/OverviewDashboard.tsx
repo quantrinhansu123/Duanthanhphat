@@ -59,7 +59,16 @@ type ChartDayPoint = {
   cumCy: number;
 };
 
-const PROJECT_COLORS = ["#0047AB", "#0284c7", "#10b981", "#8b5cf6", "#f59e0b"];
+const PROJECT_COLORS = [
+  "#0047AB",
+  "#0d9488",
+  "#7c3aed",
+  "#ea580c",
+  "#db2777",
+  "#2563eb",
+  "#16a34a",
+  "#ca8a04",
+];
 
 const CHART_ZOOM_MAX = 8;
 const LOOKUP_PAGE_SIZE = 80;
@@ -1283,6 +1292,7 @@ export default function OverviewDashboard() {
   const projectRows = useMemo(() => {
     const productionById = new Map<string, number>();
     const productionByName = new Map<string, number>();
+    const yearMinByName = new Map<string, number>();
     const qualityById = new Map<string, { passed: number; errors: number }>();
     const qualityByName = new Map<string, { passed: number; errors: number }>();
     if (showFastAggregate) {
@@ -1290,7 +1300,14 @@ export default function OverviewDashboard() {
         const amount = Number(row.san_xuat ?? 0);
         if (row.du_an_id) productionById.set(row.du_an_id, (productionById.get(row.du_an_id) ?? 0) + amount);
         const name = row.du_an?.trim();
-        if (name) productionByName.set(name, (productionByName.get(name) ?? 0) + amount);
+        if (name) {
+          productionByName.set(name, (productionByName.get(name) ?? 0) + amount);
+          const year = Number(row.nam);
+          if (Number.isInteger(year) && year >= 1900) {
+            const prev = yearMinByName.get(name);
+            if (prev == null || year < prev) yearMinByName.set(name, year);
+          }
+        }
       }
       for (const project of overviewAggregateProjects) {
         const quality = { passed: project.passed, errors: project.errors };
@@ -1307,7 +1324,7 @@ export default function OverviewDashboard() {
           ).map((row) => [row.name, row]),
         );
 
-    const fromDuAn = detailProjects.map((project, index) => {
+    const fromDuAn = detailProjects.map((project) => {
       const production = productionByJournalName.get(project.name);
       return {
         id: project.id,
@@ -1327,17 +1344,17 @@ export default function OverviewDashboard() {
         errors: showFastAggregate
           ? (qualityById.get(project.id)?.errors ?? qualityByName.get(project.name)?.errors ?? 0)
           : (production?.errors ?? 0),
-        color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+        color: PROJECT_COLORS[0],
         fromTable: true,
         year: projectPlanYear(project),
       };
     });
 
-    const known = new Set(fromDuAn.map((row) => row.name));
-    const orphans = [...productionByJournalName.entries()]
-      .filter(([name]) => name && !known.has(name))
-      .map(([name, production], index) => {
-        return {
+    const knownNames = new Set(fromDuAn.map((row) => row.name));
+    const knownIds = new Set(fromDuAn.map((row) => row.id));
+    const journalOrphans = [...productionByJournalName.entries()]
+      .filter(([name]) => name && !knownNames.has(name))
+      .map(([name, production]) => ({
         id: `journal-${name}`,
         name,
         maDuAn: "",
@@ -1347,28 +1364,78 @@ export default function OverviewDashboard() {
         count: production.total,
         passed: production.passed,
         errors: production.errors,
-        color: PROJECT_COLORS[(fromDuAn.length + index) % PROJECT_COLORS.length],
+        color: PROJECT_COLORS[0],
         fromTable: false,
         year: production.rows.reduce<number | null>((min, row) => {
           const year = Number(row.nam_thuc_hien);
           if (!Number.isInteger(year) || year < 1900) return min;
           return min === null || year < min ? year : min;
         }, null),
-        };
-      });
+      }));
 
-    return [...fromDuAn, ...orphans].sort(compareProjectYearDesc);
+    // Chế độ tổng hợp nhanh: thêm dự án có SX trong bảng năm nhưng chưa có trên danh mục dự án.
+    const yearOrphans = showFastAggregate
+      ? [...productionByName.entries()]
+          .filter(([name, count]) => name && count > 0 && !knownNames.has(name))
+          .filter(([name]) => {
+            // Bỏ qua nếu đã khớp theo id ở fromDuAn.
+            const row = yearByProject.find((item) => item.du_an?.trim() === name);
+            return !row?.du_an_id || !knownIds.has(row.du_an_id);
+          })
+          .map(([name, count]) => {
+            const sample = yearByProject.find((item) => item.du_an?.trim() === name);
+            return {
+              id: sample?.du_an_id || `year-${name}`,
+              name,
+              maDuAn: sample?.ma_du_an?.trim() || "",
+              location: "",
+              status: "Từ tổng hợp năm",
+              planned: 0,
+              count,
+              passed: qualityById.get(sample?.du_an_id ?? "")?.passed
+                ?? qualityByName.get(name)?.passed
+                ?? 0,
+              errors: qualityById.get(sample?.du_an_id ?? "")?.errors
+                ?? qualityByName.get(name)?.errors
+                ?? 0,
+              color: PROJECT_COLORS[0],
+              fromTable: false,
+              year: yearMinByName.get(name) ?? null,
+            };
+          })
+      : [];
+
+    // Gán màu sau khi xếp năm — cùng thứ tự với danh sách và biểu đồ tròn.
+    return [...fromDuAn, ...journalOrphans, ...yearOrphans]
+      .sort(compareProjectYearDesc)
+      .map((row, index) => ({
+        ...row,
+        color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+      }));
   }, [detailProjects, detailRows, filterFrom, filterTo, isAllDates, overviewAggregateProjects, showFastAggregate, yearByProject]);
 
   const projectCount = selectedProjects.length;
 
-  // Card DỰ ÁN:
-  // - Đã thực hiện = số mối nhật ký của các năm trước năm hiện tại
-  // - KH dự kiến năm = mối hàn dự kiến của mọi dự án trong năm hiện tại
+  // Biểu đồ tròn = tỷ trọng mối SX theo từng dự án (cùng nguồn với danh sách bên dưới).
   const projectChartRows = useMemo(
-    () => projectRows.filter((row) => row.count > 0),
+    () =>
+      projectRows
+        .filter((row) => row.count > 0)
+        .slice()
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "vi"))
+        .map((row, index) => ({
+          ...row,
+          color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+        })),
     [projectRows],
   );
+  const projectListRows = useMemo(() => {
+    const colorById = new Map(projectChartRows.map((row) => [row.id, row.color]));
+    return projectRows.map((row) => {
+      const chartColor = colorById.get(row.id);
+      return chartColor ? { ...row, color: chartColor } : row;
+    });
+  }, [projectChartRows, projectRows]);
   const projectChartTotal = useMemo(
     () => projectChartRows.reduce((sum, row) => sum + row.count, 0),
     [projectChartRows],
@@ -2080,48 +2147,82 @@ export default function OverviewDashboard() {
               MỐI HÀN THEO DỰ ÁN
             </div>
             <div className="text-[11px] font-semibold text-slate-500">
-              <span className="font-mono text-[#0047AB]">{fmt(projectRows.length)}</span> dự án
+              <span className="font-mono text-[#0047AB]">{fmt(projectListRows.length)}</span> dự án
             </div>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">
             {isAllDates
-              ? "Xếp theo năm bắt đầu · thực tế chỉ tính mối sản xuất · dự kiến là tổng mối hàn dự kiến của dự án"
-              : `Xếp theo năm bắt đầu · thực tế và dự kiến trong kỳ ${viDate(filterFrom)}–${viDate(filterTo)}`}
+              ? "Biểu đồ tròn = tỷ trọng mối SX theo từng dự án · danh sách xếp theo năm bắt đầu · thực tế / dự kiến"
+              : `Biểu đồ tròn = tỷ trọng mối SX theo dự án trong kỳ ${viDate(filterFrom)}–${viDate(filterTo)}`}
           </p>
 
-          <div className="mt-3.5 flex justify-center">
+          <div className="mt-3.5 flex flex-col items-center gap-3">
             <div className="relative h-[126px] w-[126px]">
-              <svg viewBox="0 0 140 140" className="block h-[126px] w-[126px]">
+              <svg viewBox="0 0 140 140" className="block h-[126px] w-[126px]" aria-label="Tỷ trọng mối sản xuất theo dự án">
                 <circle cx="70" cy="70" r="52" fill="none" stroke="#f1f5f9" strokeWidth="20" />
-                {projectDonutArcs.map((arc, index) => (
-                  <circle
-                    key={projectChartRows[index]?.id ?? index}
-                    cx="70"
-                    cy="70"
-                    r="52"
-                    fill="none"
-                    stroke={projectChartRows[index]?.color ?? "#cbd5e1"}
-                    strokeWidth="20"
-                    strokeDasharray={arc.dasharray}
-                    transform={arc.transform}
-                  />
-                ))}
+                {projectChartRows.map((row, index) => {
+                  const arc = projectDonutArcs[index];
+                  if (!arc) return null;
+                  return (
+                    <circle
+                      key={row.id}
+                      cx="70"
+                      cy="70"
+                      r="52"
+                      fill="none"
+                      stroke={row.color}
+                      strokeWidth="20"
+                      strokeDasharray={arc.dasharray}
+                      transform={arc.transform}
+                    >
+                      <title>
+                        {row.name}: {fmt(row.count)} SX
+                        {projectChartTotal > 0
+                          ? ` (${((row.count / projectChartTotal) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%)`
+                          : ""}
+                      </title>
+                    </circle>
+                  );
+                })}
               </svg>
               <div className="absolute left-0 right-0 top-[46px] text-center font-mono text-lg sm:text-xl font-bold leading-none tabular-nums text-slate-900">
                 {fmt(projectChartTotal)}
               </div>
               <div className="absolute left-0 right-0 top-[66px] text-center text-xs font-medium text-slate-500">
-                SX
+                SX theo DA
               </div>
             </div>
+            {projectChartRows.length > 0 ? (
+              <div className="flex w-full max-h-[72px] flex-col gap-1 overflow-y-auto">
+                {projectChartRows.map((row) => {
+                  const pct =
+                    projectChartTotal > 0
+                      ? ((row.count / projectChartTotal) * 100).toLocaleString("vi-VN", {
+                          maximumFractionDigits: 1,
+                        })
+                      : "0";
+                  return (
+                    <div key={`legend-${row.id}`} className="flex items-center gap-1.5 text-[11px]">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: row.color }} />
+                      <span className="min-w-0 flex-1 truncate text-slate-600" title={row.name}>
+                        {row.name}
+                      </span>
+                      <span className="shrink-0 font-mono tabular-nums font-semibold text-slate-700">
+                        {fmt(row.count)} · {pct}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
 
-          <div className="mt-4 flex max-h-[220px] flex-col gap-2.5 overflow-y-auto">
-            {projectRows.length > 0 ? (
-              projectRows.map((row, index) => {
+          <div className="mt-4 flex max-h-[180px] flex-col gap-2.5 overflow-y-auto">
+            {projectListRows.length > 0 ? (
+              projectListRows.map((row, index) => {
                 const progressPct = row.planned > 0 ? Math.min(100, (row.count / row.planned) * 100) : 0;
                 const yearLabel = row.year ? String(row.year) : "Chưa có năm";
-                const showYear = index === 0 || projectRows[index - 1]?.year !== row.year;
+                const showYear = index === 0 || projectListRows[index - 1]?.year !== row.year;
                 return (
                   <div key={row.id} className="text-xs sm:text-sm">
                     {showYear ? (
@@ -2321,12 +2422,12 @@ export default function OverviewDashboard() {
               MỐI HÀN THEO DỰ ÁN — CHI TIẾT
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Chỉ đếm mối sản xuất. Đạt và Lỗi chỉ tính mối sản xuất đã có kết quả; mối chờ thí nghiệm không tính là đạt.
+              Tiến độ = Thực hiện SX ÷ KH dự kiến. Đạt và Lỗi chỉ tính mối sản xuất đã có kết quả thí nghiệm.
             </p>
           </div>
           <div className="text-xs font-semibold text-slate-600">
             <span className="font-mono text-[#0047AB]">{fmt(projectCount)}</span> dự án ·{" "}
-            <span className="font-mono text-[#0047AB]">{fmt(projectRows.reduce((s, r) => s + r.count, 0))}</span> mối SX
+            <span className="font-mono text-[#0047AB]">{fmt(projectChartTotal)}</span> mối SX
           </div>
         </div>
 
@@ -2343,13 +2444,13 @@ export default function OverviewDashboard() {
                   <th className="px-3.5 py-2.5 text-right">Thực hiện SX</th>
                   <th className="px-3.5 py-2.5 text-right">Đạt</th>
                   <th className="px-3.5 py-2.5 text-right">Lỗi</th>
-                  <th className="min-w-[120px] px-3.5 py-2.5">Tỷ lệ đạt / đã test</th>
+                  <th className="min-w-[120px] px-3.5 py-2.5">Tiến độ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {projectRows.map((row, index) => {
-                  const tested = row.passed + row.errors;
-                  const rate = tested > 0 ? (row.passed / tested) * 100 : 0;
+                {projectListRows.map((row, index) => {
+                  const rate = row.planned > 0 ? (row.count / row.planned) * 100 : 0;
+                  const barWidth = Math.min(100, Math.max(0, rate));
                   return (
                     <tr key={row.id} className="align-top hover:bg-slate-50/80 transition-colors">
                       <td className="px-3.5 py-3 font-mono text-slate-400">{index + 1}</td>
@@ -2396,19 +2497,21 @@ export default function OverviewDashboard() {
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-emerald-500"
-                              style={{ width: `${rate}%` }}
+                              className={`h-full rounded-full ${rate >= 100 ? "bg-emerald-500" : rate >= 70 ? "bg-[#0047AB]" : "bg-amber-500"}`}
+                              style={{ width: `${barWidth}%` }}
                             />
                           </div>
                           <span className="w-16 text-right font-mono text-sm tabular-nums text-slate-600">
-                            {tested > 0 ? `${rate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%` : "—"}
+                            {row.planned > 0
+                              ? `${rate.toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`
+                              : "—"}
                           </span>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
-                {projectRows.length === 0 && (
+                {projectListRows.length === 0 && (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
                       Chưa có dự án trong bảng Dự án / kỳ lọc hiện tại.

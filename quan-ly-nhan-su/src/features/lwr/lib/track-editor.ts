@@ -192,7 +192,7 @@ const STRESS_NUMBER_KEYS: StressNumberKey[] = [
   "leftMovement", "rightMovement",
 ];
 
-function validateStressParams(value: unknown): StressInput | null {
+export function validateStressParams(value: unknown): StressInput | null {
   if (!isRecord(value)) return null;
   const params = { ...DEFAULT_STRESS_INPUT };
   for (const key of STRESS_NUMBER_KEYS) {
@@ -205,6 +205,21 @@ function validateStressParams(value: unknown): StressInput | null {
   params.sideRollers = value.sideRollers;
   params.method = value.method;
   return params;
+}
+
+/** Parse a long-rail record without requiring it to match current track cells. */
+export function parseLongRail(value: unknown): LongRail | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()
+    || typeof value.code !== "string" || !value.code.trim()
+    || typeof value.label !== "string"
+    || typeof value.rowKey !== "string" || typeof value.startCellId !== "string"
+    || typeof value.endCellId !== "string" || typeof value.updatedAt !== "string") return null;
+  const params = validateStressParams(value.params);
+  if (!params) return null;
+  return {
+    id: value.id, code: value.code, label: value.label, rowKey: value.rowKey,
+    startCellId: value.startCellId, endCellId: value.endCellId, params, updatedAt: value.updatedAt,
+  };
 }
 
 /** Validate browser storage before using any stored selection or geometry. */
@@ -258,24 +273,18 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
   }
 
   // Missing longRails = legacy layouts saved before this field existed.
+  // Span may be missing after sync from Supabase onto a shorter local schematic — keep the row.
   const rawLongRails = value.longRails === undefined ? [] : value.longRails;
   if (!Array.isArray(rawLongRails)) return null;
   const longRails: LongRail[] = [];
   const longRailIds = new Set<string>();
   for (const raw of rawLongRails) {
-    if (!isRecord(raw) || typeof raw.id !== "string" || !raw.id.trim() || longRailIds.has(raw.id)
-      || typeof raw.code !== "string" || !raw.code.trim()
-      || typeof raw.label !== "string"
-      || typeof raw.rowKey !== "string" || typeof raw.startCellId !== "string"
-      || typeof raw.endCellId !== "string" || typeof raw.updatedAt !== "string") return null;
-    const params = validateStressParams(raw.params);
-    if (!params) return null;
-    const longRail: LongRail = {
-      id: raw.id, code: raw.code, label: raw.label, rowKey: raw.rowKey,
-      startCellId: raw.startCellId, endCellId: raw.endCellId, params, updatedAt: raw.updatedAt,
-    };
-    if (!getPlacementSpan(rows, longRail)) return null;
-    if (longRails.some((other) => longRailsOverlap(rows, longRail, other))) return null;
+    const longRail = parseLongRail(raw);
+    if (!longRail || longRailIds.has(longRail.id)) return null;
+    if (
+      getPlacementSpan(rows, longRail)
+      && longRails.some((other) => longRailsOverlap(rows, longRail, other))
+    ) return null;
     longRailIds.add(longRail.id);
     longRails.push(longRail);
   }
