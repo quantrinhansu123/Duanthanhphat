@@ -155,17 +155,24 @@ export default function AppShell({ tab }: AppShellProps) {
     setActiveTab(fromPath || fromProp);
   }, [pathname, tab]);
 
-  // Prefetch chunk trang hiện tại + tab anh em trong cùng nhóm (idle).
+  // Prefetch chunk trang hiện tại. Tab anh em chỉ warm khi idle — trừ nhóm báo cáo
+  // (Overview/Quality… quá nặng; warm bằng hover sidebar thay vì tải hết khi vừa mở).
   useEffect(() => {
     const fromPath = tabFromPath(pathname);
     const currentId = fromPath || (tab && isValidTab(tab) ? tab : "");
     if (currentId) prefetchTabModule(currentId);
     else void import("@/components/HomeDashboard").catch(() => undefined);
 
-    const siblings =
-      currentId
-        ? navigation.find((g) => g.children.some((c) => c.id === currentId))?.children.map((c) => c.id) ?? []
-        : navigation.flatMap((g) => g.children.slice(0, 1).map((c) => c.id));
+    const group = currentId
+      ? navigation.find((g) => g.children.some((c) => c.id === currentId))
+      : null;
+    const siblings = group
+      ? group.id === "bao-cao"
+        ? []
+        : group.children.map((c) => c.id).filter((id) => id !== currentId)
+      : navigation.flatMap((g) => g.children.slice(0, 1).map((c) => c.id));
+
+    if (siblings.length === 0) return;
 
     const idle = window.requestIdleCallback
       ? window.requestIdleCallback(() => {

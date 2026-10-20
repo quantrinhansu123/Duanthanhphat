@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AppliedReportFilters } from "@/lib/weldReportData";
 import {
   EMPTY_OVERVIEW_AGGREGATE,
+  enrichOverviewProjectQuality,
   loadOverviewAggregates,
   type OverviewAggregateResult,
 } from "@/lib/overviewAggregates";
+
+function filtersKey(filters: Partial<AppliedReportFilters>) {
+  return [
+    filters.dateFrom ?? "",
+    filters.dateTo ?? "",
+    (filters.projects ?? []).join("\0"),
+    (filters.personnel ?? []).join("\0"),
+    (filters.machines ?? []).join("\0"),
+    (filters.methods ?? []).join("\0"),
+    (filters.weldTypes ?? []).join("\0"),
+  ].join("|");
+}
 
 /**
  * Tải các tổng hợp nhẹ cho dashboard tổng quan. `enabled` được dùng để chỉ
@@ -19,6 +32,7 @@ export function useOverviewAggregates(
 ) {
   const [result, setResult] = useState<OverviewAggregateResult>(EMPTY_OVERVIEW_AGGREGATE);
   const [loading, setLoading] = useState(enabled);
+  const key = useMemo(() => filtersKey(filters), [filters]);
 
   useEffect(() => {
     let active = true;
@@ -32,8 +46,16 @@ export function useOverviewAggregates(
 
     setLoading(true);
     loadOverviewAggregates(filters)
-      .then((next) => {
-        if (active) setResult(next);
+      .then(async (next) => {
+        if (!active) return;
+        setResult(next);
+        setLoading(false);
+        // Chất lượng theo dự án chạy nền — KPI đã hiện, không làm treo lần mở báo cáo.
+        const projectRows = await enrichOverviewProjectQuality(next.projectRows);
+        if (!active) return;
+        setResult((prev) =>
+          prev.source === next.source ? { ...prev, projectRows } : prev,
+        );
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -41,15 +63,15 @@ export function useOverviewAggregates(
           ...EMPTY_OVERVIEW_AGGREGATE,
           error: error instanceof Error ? error.message : "Không tải được tổng hợp báo cáo",
         });
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        setLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [enabled, filters]);
+    // `key` ổn định theo nội dung lọc — tránh refetch khi object filters đổi reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, key]);
 
   return { ...result, loading };
 }

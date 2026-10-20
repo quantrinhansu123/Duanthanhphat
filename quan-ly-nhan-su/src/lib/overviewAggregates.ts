@@ -143,27 +143,44 @@ type ProjectTestQuality = { passed: number; errors: number };
 
 /**
  * Đạt / Không đạt theo từng dự án, chỉ trên mối sản xuất đã có kết quả.
- * Mối thử nghiệm không vào đây. Mối sản xuất "Chờ thí nghiệm" cũng không tính đạt.
+ * Lọc ngay trên DB — tránh quét toàn bộ nhật ký (nguyên nhân treo khi mở báo cáo).
  */
 async function loadProjectTestQuality(
   supabase: ReturnType<typeof createClient>,
 ): Promise<Map<string, ProjectTestQuality>> {
   const pageSize = 1000;
   const byProject = new Map<string, ProjectTestQuality>();
+  let useStatusFilter = true;
+
   for (let from = 0; ; from += pageSize) {
-    const result = await supabase
-      .from("bao_cao_moi_han_theo_du_an")
-      .select("id,du_an_id,loai_moi_han,tinh_trang_thi_nghiem")
-      .order("id", { ascending: true })
-      .range(from, from + pageSize - 1);
+    let result = useStatusFilter
+      ? await supabase
+          .from("bao_cao_moi_han_theo_du_an")
+          .select("du_an_id,tinh_trang_thi_nghiem")
+          .eq("loai_moi_han", "Sản xuất")
+          .in("tinh_trang_thi_nghiem", ["Đạt", "Không đạt"])
+          .order("id", { ascending: true })
+          .range(from, from + pageSize - 1)
+      : await supabase
+          .from("bao_cao_moi_han_theo_du_an")
+          .select("du_an_id,loai_moi_han,tinh_trang_thi_nghiem")
+          .order("id", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+    if (result.error && useStatusFilter && /tinh_trang_thi_nghiem|loai_moi_han/i.test(result.error.message ?? "")) {
+      useStatusFilter = false;
+      from = -pageSize;
+      continue;
+    }
     if (result.error) throw result.error;
+
     const rows = (result.data ?? []) as Array<{
       du_an_id?: string | null;
       loai_moi_han?: string | null;
       tinh_trang_thi_nghiem?: string | null;
     }>;
     for (const row of rows) {
-      if (row.loai_moi_han !== "Sản xuất") continue;
+      if (!useStatusFilter && row.loai_moi_han !== "Sản xuất") continue;
       const status = row.tinh_trang_thi_nghiem ?? "";
       if (status !== "Đạt" && status !== "Không đạt") continue;
       const id = String(row.du_an_id ?? "");
@@ -178,16 +195,14 @@ async function loadProjectTestQuality(
   return byProject;
 }
 
-async function loadProjectAggregates(
+/** Tổng mối theo dự án từ bảng tổng hợp năm — nhanh, không quét nhật ký. */
+async function loadProjectTotals(
   supabase: ReturnType<typeof createClient>,
 ): Promise<OverviewProjectAggregate[]> {
-  const [result, qualityByProject] = await Promise.all([
-    supabase
-      .from("tong_moi_han_nam_du_an")
-      .select("du_an_id,ma_du_an,du_an,tong_moi_han")
-      .order("du_an", { ascending: true }),
-    loadProjectTestQuality(supabase),
-  ]);
+  const result = await supabase
+    .from("tong_moi_han_nam_du_an")
+    .select("du_an_id,ma_du_an,du_an,tong_moi_han")
+    .order("du_an", { ascending: true });
   if (result.error) throw result.error;
   const byProject = new Map<string, OverviewProjectAggregate>();
   for (const raw of result.data ?? []) {
@@ -200,7 +215,6 @@ async function loadProjectAggregates(
     const id = String(row.du_an_id ?? row.du_an ?? "");
     const name = String(row.du_an ?? "").trim();
     if (!id || !name) continue;
-    const quality = qualityByProject.get(id);
     const current = byProject.get(id) ?? {
       id,
       code: String(row.ma_du_an ?? "").trim(),
@@ -210,11 +224,21 @@ async function loadProjectAggregates(
       errors: 0,
     };
     current.total += Number(row.tong_moi_han ?? 0);
-    current.passed = quality?.passed ?? 0;
-    current.errors = quality?.errors ?? 0;
     byProject.set(id, current);
   }
   return [...byProject.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "vi"));
+}
+
+function mergeProjectQuality(
+  projects: OverviewProjectAggregate[],
+  qualityByProject: Map<string, ProjectTestQuality>,
+): OverviewProjectAggregate[] {
+  if (qualityByProject.size === 0) return projects;
+  return projects.map((project) => {
+    const quality = qualityByProject.get(project.id);
+    if (!quality) return project;
+    return { ...project, passed: quality.passed, errors: quality.errors };
+  });
 }
 
 async function loadMachineAggregates(): Promise<OverviewMachineAggregate[]> {
@@ -264,7 +288,21 @@ async function loadOverviewAggregatesUncached(
       query.eq("loai_moi_han", "Sản xuất").eq("tinh_trang_thi_nghiem", "Không đạt"),
     );
 
-    const [total, statuses, fbw, atw, rework, productionTotal, productionPassed, productionFailed, errorReasonRows, projectRows, machineRows, yearRows] = await Promise.all([
+    // KPI + bảng tổng hợp năm/máy trước — không chờ quét chất lượng theo dự án.
+    const [
+      total,
+      statuses,
+      fbw,
+      atw,
+      rework,
+      productionTotal,
+      productionPassed,
+      productionFailed,
+      errorReasonRows,
+      projectTotals,
+      machineRows,
+      yearRows,
+    ] = await Promise.all([
       totalPromise,
       statusPromise,
       fbwPromise,
@@ -274,7 +312,7 @@ async function loadOverviewAggregatesUncached(
       productionPassedPromise,
       productionFailedPromise,
       loadErrorReasons(supabase, filters).catch(() => []),
-      loadProjectAggregates(supabase).catch(() => []),
+      loadProjectTotals(supabase).catch(() => []),
       loadMachineAggregates().catch(() => []),
       supabase.from("tong_moi_han_nam").select("nam,tong_moi_han,san_xuat").order("nam", { ascending: true }),
     ]);
@@ -311,7 +349,8 @@ async function loadOverviewAggregatesUncached(
     return {
       summary,
       machineRows,
-      projectRows,
+      // Đạt/Không đạt theo dự án bổ sung sau (enrichOverviewProjectQuality) — không chặn KPI.
+      projectRows: projectTotals,
       errorReasonRows,
       doneBeforePlanYear,
       productionThisPlanYear,
@@ -353,6 +392,18 @@ export function loadOverviewAggregates(
   const request = loadOverviewAggregatesUncached(filters);
   aggregatePromises.set(key, request);
   return request;
+}
+
+/** Bổ sung Đạt/Không đạt theo dự án sau khi KPI đã hiện — chạy nền, không chặn mở trang. */
+export async function enrichOverviewProjectQuality(
+  projects: OverviewProjectAggregate[],
+): Promise<OverviewProjectAggregate[]> {
+  if (!isSupabaseConfigured() || projects.length === 0) return projects;
+  const supabase = createClient();
+  const qualityByProject = await loadProjectTestQuality(supabase).catch(
+    () => new Map<string, ProjectTestQuality>(),
+  );
+  return mergeProjectQuality(projects, qualityByProject);
 }
 
 export function invalidateOverviewAggregateCache() {
