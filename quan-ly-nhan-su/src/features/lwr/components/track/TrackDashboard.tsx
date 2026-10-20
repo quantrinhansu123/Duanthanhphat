@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
@@ -194,12 +194,18 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
   }
 
   function scrollDetailIntoView() {
+    // Panel mounts after setState — đợi 2 frame rồi kéo vào khung nhìn.
     requestAnimationFrame(() => {
-      if (window.innerWidth < 1280) {
-        detailContainer.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      requestAnimationFrame(() => {
+        detailContainer.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     });
   }
+
+  useEffect(() => {
+    if (!sideOpen) return;
+    scrollDetailIntoView();
+  }, [sideOpen, selectedId, selectedJoint?.id, selectedLongRailId]);
 
   function savePlacement(placement: TrackPlacement) {
     if (!getPlacementSpan(layout.rows, placement)) {
@@ -348,12 +354,9 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
             });
           }}
           onSelectLongRail={(id) => {
-            startTransition(() => {
-              setSelectedLongRailId(id);
-              setDetailOpen(false);
-              setSelectedJoint(null);
-            });
-            scrollDetailIntoView();
+            setSelectedLongRailId(id);
+            setDetailOpen(false);
+            setSelectedJoint(null);
           }}
         >
           <RailGrid
@@ -363,28 +366,22 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
             selectedJointId={selectedJoint?.id ?? null}
             selectedId={cell.id}
             onSelect={(id) => {
-              startTransition(() => {
-                setSelectedId(id);
-                setSelectedJoint(null);
-                setSelectedLongRailId(null);
-                setDetailOpen(true);
-              });
-              scrollDetailIntoView();
+              setSelectedId(id);
+              setSelectedJoint(null);
+              setSelectedLongRailId(null);
+              setDetailOpen(true);
             }}
             onSelectJoint={(joint) => {
-              startTransition(() => {
-                setSelectedJoint(joint);
-                setDetailOpen(false);
-                setSelectedLongRailId(null);
-              });
-              scrollDetailIntoView();
+              setSelectedJoint(joint);
+              setDetailOpen(false);
+              setSelectedLongRailId(null);
             }}
           />
         </TrackSchematic>
         {sideOpen && (
           <div
             ref={detailContainer}
-            className="mt-3 min-w-0 space-y-3 xl:absolute xl:right-2 xl:top-2 xl:z-30 xl:mt-0 xl:w-[min(460px,calc(100%-1rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:shadow-lg"
+            className="mt-3 min-w-0 space-y-3 xl:fixed xl:right-4 xl:top-24 xl:z-40 xl:mt-0 xl:w-[min(460px,calc(100vw-2rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-slate-200 xl:bg-white xl:shadow-xl"
           >
             {selectedLongRail ? (
               <LongRailDetailPanel
