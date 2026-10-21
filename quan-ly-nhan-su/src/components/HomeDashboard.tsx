@@ -59,6 +59,7 @@ const childIcons: Record<string, Icon> = {
   "khoa-dao-tao": GraduationCap,
   "tra-cuu-dao-tao": MagnifyingGlass,
   "danh-sach-may": Cube,
+  "kiem-tra-may-truoc-ca": ClipboardText,
   "lich-bao-tri": CalendarCheck,
   "thu-vien-loi": Bug,
   "phan-cong-may": ListChecks,

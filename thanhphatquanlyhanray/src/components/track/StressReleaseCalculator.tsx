@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { calculateStressRelease, DEFAULT_STRESS_INPUT, validateStressInput, type StressInput } from "@/lib/stress-release";
 
@@ -51,6 +51,21 @@ export function StressReleaseCalculator({ initialInput = DEFAULT_STRESS_INPUT, s
   const [fields, setFields] = useState(() => initialFields(initialInput));
   const [mode, setMode] = useState<Mode>(initialInput.method);
   const [rollers, setRollers] = useState(initialInput.sideRollers);
+  useEffect(() => {
+    setFields((current) => {
+      const leftLength = String(initialInput.leftLength);
+      const rightLength = String(initialInput.rightLength);
+      const neutralTemp = String(initialInput.neutralTemp);
+      if (
+        current.leftLength === leftLength
+        && current.rightLength === rightLength
+        && current.neutralTemp === neutralTemp
+      ) {
+        return current;
+      }
+      return { ...current, leftLength, rightLength, neutralTemp };
+    });
+  }, [initialInput.leftLength, initialInput.rightLength, initialInput.neutralTemp]);
   const [printOpen, setPrintOpen] = useState(false);
   const buffer = mode === "BUFFER";
   const relevant = (key: NumericKey) => {

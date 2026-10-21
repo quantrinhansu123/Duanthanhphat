@@ -2,12 +2,11 @@
 
 import { memo } from "react";
 import { ArrowLeftRight, Link2, TriangleAlert } from "lucide-react";
-import { RAIL_ROWS } from "@lwr/lib/track-data";
+import { RAIL_ROWS, tempBand } from "@lwr/lib/track-data";
 import { jointsForRow, weldStatusTone } from "@lwr/lib/weld-track-map";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 import { TempCell } from "./TempCell";
-import { BandLegend } from "./BandLegend";
 import { cn } from "@lwr/lib/utils";
 
 interface RailGridProps {
@@ -36,7 +35,7 @@ export const RailGrid = memo(function RailGrid({
   rows = RAIL_ROWS,
   selectedId,
   onSelect,
-  alertIds = ["DT-05"],
+  alertIds,
   embedded = false,
   joints = [],
   selectedJointId = null,
@@ -44,6 +43,8 @@ export const RailGrid = memo(function RailGrid({
 }: RailGridProps) {
   const columns = Math.max(...rows.map((row) => row.cells.length), 1);
   const gridStyle = { gridTemplateColumns: buildTemplate(columns) };
+  const hotIds = alertIds ?? rows.flatMap((row) => row.cells.filter((cell) => tempBand(cell.temp) === "gt40").map((cell) => cell.id));
+  const hasCells = rows.some((row) => row.cells.length > 0);
 
   return (
     <div className={embedded ? "border-t border-slate-200 bg-white" : "rounded-lg border border-slate-200 bg-white"}>
@@ -57,13 +58,34 @@ export const RailGrid = memo(function RailGrid({
             <Link2 className="h-3.5 w-3.5" />
             Mối hàn nhật ký
           </span>
-          <span className="rounded-md bg-slate-100 px-3 py-1 text-[12.5px] font-semibold text-slate-900">
-            Nhiệt độ khóa
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-600">
+            Chưa giải tỏa
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1 text-[12px] font-semibold text-white">
+            Đã giải tỏa
           </span>
         </div>
       </div>
 
       <div className={embedded ? "" : "overflow-x-auto"}>
+        {!hasCells ? (
+          <div className="px-4 py-6">
+            <p className="text-center text-sm text-slate-500">
+              Ban đầu chưa có ô nhiệt độ. Dùng <span className="font-semibold text-slate-700">Ghép thêm thanh</span> phía trên — sau khi thêm, ô sẽ hiện trên sơ đồ.
+            </p>
+            <div className="mx-auto mt-4 grid max-w-xl gap-2 sm:grid-cols-2">
+              {rows.map((row) => (
+                <div
+                  key={row.line + row.rail}
+                  className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                >
+                  <span className="font-semibold text-slate-800">{row.line}</span>
+                  <span className="mt-0.5 block">{row.rail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="space-y-4 px-4 py-3" style={{ minWidth: `${142 + columns * 118}px` }}>
           {rows.map((row) => {
             const rowJoints = jointsForRow(joints, row);
@@ -75,7 +97,7 @@ export const RailGrid = memo(function RailGrid({
                     const nodes = [
                       <div key={`h-${c.id}`} className="pb-1 text-center text-[11px] text-slate-500">
                         {c.id}
-                        {alertIds.includes(c.id) && (
+                        {hotIds.includes(c.id) && (
                           <TriangleAlert className="ml-1 inline h-3.5 w-3.5 text-red-500" />
                         )}
                       </div>,
@@ -99,6 +121,7 @@ export const RailGrid = memo(function RailGrid({
                         key={`c-${c.id}`}
                         id={c.id}
                         temp={c.temp}
+                        released={Boolean(c.released)}
                         selected={c.id === selectedId}
                         onSelect={onSelect}
                       />,
@@ -141,8 +164,8 @@ export const RailGrid = memo(function RailGrid({
             );
           })}
         </div>
+        )}
       </div>
-      {!embedded && <BandLegend />}
     </div>
   );
 });

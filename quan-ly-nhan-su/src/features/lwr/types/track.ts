@@ -13,6 +13,8 @@ export interface RailCell {
   from: string;
   to: string;
   temp: number;
+  /** True after stress release on this segment has passed. */
+  released?: boolean;
 }
 
 export interface RailRow {

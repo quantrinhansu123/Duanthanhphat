@@ -7,6 +7,7 @@ import {
   parseChainage,
   railRowKey,
   trackExtent,
+  updateRailCell,
   validateTrackLayout,
   type TrackPlacement,
 } from "../src/lib/track-editor";
@@ -61,5 +62,19 @@ assert.equal(validateTrackLayout(wrongPrefix), null);
 const independent = createInitialTrackLayout();
 independent.rows[0].cells[0].temp = 99;
 assert.equal(createInitialTrackLayout().rows[0].cells[0].temp, 35);
+
+const shortened = updateRailCell(layout.rows, "UT-01", { lengthMetres: 480 });
+assert.deepEqual(shortened[0].cells[0], { id: "UT-01", from: "0+000", to: "0+480", temp: 35 });
+assert.equal(shortened[0].cells[1].from, "0+480");
+assert.equal(shortened[0].cells[1].to, "0+980");
+assert.equal(layout.rows[0].cells[0].to, "0+500", "Updating must not mutate source rows");
+const moved = updateRailCell(layout.rows, "UT-02", { from: "0+480" });
+assert.equal(moved[0].cells[0].to, "0+480");
+assert.equal(moved[0].cells[1].to, "0+980");
+const warmed = updateRailCell(layout.rows, "UT-01", { temp: 38 });
+assert.equal(warmed[0].cells[0].temp, 38);
+assert.equal(warmed[0].cells[0].to, "0+500");
+assert.throws(() => updateRailCell(layout.rows, "UT-01", { lengthMetres: 0 }), RangeError);
+assert.throws(() => updateRailCell(layout.rows, "UT-02", { from: "0+000" }), RangeError);
 
 console.log("Track editor: chainage, inclusive spans, synchronized extension and persisted data validation passed.");

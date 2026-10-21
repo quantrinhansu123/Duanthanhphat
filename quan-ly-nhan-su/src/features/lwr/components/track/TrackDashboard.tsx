@@ -10,10 +10,12 @@ import {
   getPlacementSpan,
   longRailsOverlap,
   parseChainage,
+  patchTrackCell,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
   validateTrackLayout,
   type LongRail,
+  type RailCellPatch,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
@@ -28,6 +30,7 @@ import { loadStructureSymbols } from "@lwr/lib/structure-storage";
 import { loadJournalWelds } from "@lwr/lib/weld-journal";
 import { buildRailJoints } from "@lwr/lib/weld-track-map";
 import type { StructureSymbol } from "@lwr/types/structure";
+import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 import { TrackHeader } from "./TrackHeader";
 import { TrackSchematic } from "./TrackSchematic";
@@ -77,22 +80,26 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     }
   }, []);
 
-  const reloadWelds = useCallback(async (rows = layout.rows) => {
+  const layoutRowsRef = useRef(layout.rows);
+  layoutRowsRef.current = layout.rows;
+
+  const reloadWelds = useCallback(async (rows?: RailRow[]) => {
+    const targetRows = rows ?? layoutRowsRef.current;
     try {
       const result = await loadJournalWelds();
       if (result.error) setWeldError(result.error);
       else setWeldError(null);
-      const mapped = buildRailJoints(rows, result.welds);
+      const mapped = buildRailJoints(targetRows, result.welds);
       setJoints(mapped.joints);
       setWeldCount(result.welds.length);
       setWeldsMapped(result.welds.length - mapped.unmatched.length);
     } catch (cause) {
       setWeldError(cause instanceof Error ? cause.message : "Không tải được nhật ký hàn.");
-      setJoints(buildRailJoints(rows, []).joints);
+      setJoints(buildRailJoints(targetRows, []).joints);
       setWeldCount(0);
       setWeldsMapped(0);
     }
-  }, [layout.rows]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -221,9 +228,10 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     });
   }
 
-  function persistLongRail(longRail: LongRail, existing: LongRail | undefined) {
+  function persistLongRail(longRail: LongRail, existing: LongRail | undefined, nextRows?: RailRow[]) {
     const ok = commit({
       ...layout,
+      rows: nextRows ?? layout.rows,
       longRails: existing
         ? layout.longRails.map((item) => (item.id === longRail.id ? longRail : item))
         : [...layout.longRails, longRail],
@@ -241,14 +249,15 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     return true;
   }
 
-  function saveLongRail(draft: LongRail) {
-    const span = getPlacementSpan(layout.rows, draft);
+  function saveLongRail(draft: LongRail, nextRows?: RailRow[]) {
+    const rows = nextRows ?? layout.rows;
+    const span = getPlacementSpan(rows, draft);
     if (!span) {
-      setError("Thanh dài: thanh bắt đầu và kết thúc phải đúng thứ tự trên cùng một dải ray.");
+      setError("Thanh dài: lý trình đầu và lý trình cuối phải đúng thứ tự trên cùng một dải ray.");
       return false;
     }
     const overlaps = layout.longRails.some(
-      (other) => other.id !== draft.id && longRailsOverlap(layout.rows, draft, other),
+      (other) => other.id !== draft.id && longRailsOverlap(rows, draft, other),
     );
     if (overlaps) {
       setError("Thanh dài không được chồng lấn với thanh dài khác trên cùng dải ray.");
@@ -264,12 +273,16 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
       startCellId: draft.startCellId,
       endCellId: draft.endCellId,
       params: {
-        ...(existing?.params ?? draft.params ?? defaultLongRailParams(layout.rows, draft)),
+        ...(existing?.params ?? draft.params ?? defaultLongRailParams(rows, draft, draft.params.railType)),
         leftLength: length,
+        railType: draft.params.railType,
+        area: draft.params.area,
+        modulus: draft.params.modulus,
+        alpha: draft.params.alpha,
       },
       updatedAt: new Date().toISOString(),
     };
-    return persistLongRail(longRail, existing);
+    return persistLongRail(longRail, existing, rows);
   }
 
   function saveLongRailParams(params: StressInput) {
@@ -290,12 +303,21 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     });
   }
 
+  function saveCellPatch(patch: RailCellPatch) {
+    if (!cell) return false;
+    try {
+      return commit(patchTrackCell(layout, cell.id, patch));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không cập nhật được đoạn ray.");
+      return false;
+    }
+  }
+
   function step(direction: 1 | -1) {
+    if (!cell || cells.length === 0) return;
     const index = cells.findIndex((item) => item.id === cell.id);
     setSelectedId(cells[(index + direction + cells.length) % cells.length].id);
   }
-
-  if (!cell) return null;
 
   return (
     <div className="w-full max-w-none space-y-3">
@@ -364,7 +386,7 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
             embedded
             joints={joints}
             selectedJointId={selectedJoint?.id ?? null}
-            selectedId={cell.id}
+            selectedId={cell?.id ?? ""}
             onSelect={(id) => {
               setSelectedId(id);
               setSelectedJoint(null);
@@ -381,7 +403,7 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
         {sideOpen && (
           <div
             ref={detailContainer}
-            className="mt-3 min-w-0 space-y-3 xl:fixed xl:right-4 xl:top-24 xl:z-40 xl:mt-0 xl:w-[min(460px,calc(100vw-2rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-slate-200 xl:bg-white xl:shadow-xl"
+            className="mt-3 min-w-0 space-y-3 xl:fixed xl:right-4 xl:top-24 xl:z-40 xl:mt-0 xl:w-[min(560px,calc(100vw-2rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-slate-200 xl:bg-white xl:shadow-xl"
           >
             {selectedLongRail ? (
               <LongRailDetailPanel
@@ -394,12 +416,13 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
             {selectedJoint ? (
               <WeldJointPanel joint={selectedJoint} onClose={() => setSelectedJoint(null)} />
             ) : null}
-            {detailOpen ? (
+            {detailOpen && cell ? (
               <RailDetailPanel
                 cell={cell}
                 onClose={() => setDetailOpen(false)}
                 onPrev={() => step(-1)}
                 onNext={() => step(1)}
+                onChange={saveCellPatch}
               />
             ) : null}
           </div>

@@ -1,32 +1,32 @@
 "use client";
 
-import { BAND_COLORS } from "@lwr/lib/track-data";
-import { tempBand } from "@lwr/lib/track-data";
 import { cn } from "@lwr/lib/utils";
 
 interface TempCellProps {
   id: string;
   temp: number;
+  released?: boolean;
   selected?: boolean;
   onSelect?: (id: string) => void;
 }
 
-/** Reusable locking-temperature cell. Colour is derived from the temp band,
- *  so callers only pass raw values. */
-export function TempCell({ id, temp, selected = false, onSelect }: TempCellProps) {
+/** Rail segment chip. Gray until stress release has passed, then green. */
+export function TempCell({ id, temp, released = false, selected = false, onSelect }: TempCellProps) {
   return (
     <button
       type="button"
       onClick={() => onSelect?.(id)}
       aria-pressed={selected}
-      aria-label={`${id}: ${temp} độ C`}
-      title={`${id}: ${temp}°C`}
+      aria-label={`${id}: ${temp} độ C, ${released ? "đã giải tỏa ứng suất" : "chưa giải tỏa ứng suất"}`}
+      title={`${id}: ${temp}°C · ${released ? "Đã giải tỏa" : "Chưa giải tỏa"}`}
       className={cn(
-        "rounded-[4px] px-1 py-1 text-center text-white transition",
+        "rounded-[4px] px-1 py-1 text-center transition",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500",
         selected && "outline outline-2 outline-offset-1 outline-blue-500",
+        released
+          ? "bg-emerald-600 text-white"
+          : "border border-slate-300 bg-slate-100 text-slate-600",
       )}
-      style={{ background: BAND_COLORS[tempBand(temp)] }}
     >
       <span className="text-[12px] font-bold">{temp}°C</span>
     </button>

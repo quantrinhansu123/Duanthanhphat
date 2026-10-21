@@ -41,59 +41,12 @@ export const TRACK_STATS: StatItem[] = [
   { label: "Hầm (Tunnel)", value: "3", tone: "text-slate-900" },
 ];
 
+/** Four rails exist as empty rows until the user ghép thêm thanh. */
 export const RAIL_ROWS: RailRow[] = [
-  {
-    line: "TUYẾN THƯỢNG",
-    rail: "Ray trái",
-    cells: [
-      { id: "UT-01", from: "0+000", to: "0+500", temp: 35 },
-      { id: "UT-02", from: "0+500", to: "1+000", temp: 36 },
-      { id: "UT-03", from: "1+000", to: "1+500", temp: 34 },
-      { id: "UT-04", from: "1+500", to: "2+000", temp: 37 },
-      { id: "UT-05", from: "2+000", to: "2+500", temp: 39 },
-      { id: "UT-06", from: "2+500", to: "3+000", temp: 35 },
-      { id: "UT-07", from: "3+000", to: "3+500", temp: 33 },
-    ],
-  },
-  {
-    line: "TUYẾN THƯỢNG",
-    rail: "Ray phải",
-    cells: [
-      { id: "UP-01", from: "0+000", to: "0+500", temp: 34 },
-      { id: "UP-02", from: "0+500", to: "1+000", temp: 35 },
-      { id: "UP-03", from: "1+000", to: "1+500", temp: 37 },
-      { id: "UP-04", from: "1+500", to: "2+000", temp: 38 },
-      { id: "UP-05", from: "2+000", to: "2+500", temp: 36 },
-      { id: "UP-06", from: "2+500", to: "3+000", temp: 34 },
-      { id: "UP-07", from: "3+000", to: "3+500", temp: 32 },
-    ],
-  },
-  {
-    line: "TUYẾN HẠ",
-    rail: "Ray trái",
-    cells: [
-      { id: "DT-01", from: "0+000", to: "0+500", temp: 33 },
-      { id: "DT-02", from: "0+500", to: "1+000", temp: 34 },
-      { id: "DT-03", from: "1+000", to: "1+500", temp: 35 },
-      { id: "DT-04", from: "1+500", to: "2+000", temp: 37 },
-      { id: "DT-05", from: "2+000", to: "2+500", temp: 41 },
-      { id: "DT-06", from: "2+500", to: "3+000", temp: 39 },
-      { id: "DT-07", from: "3+000", to: "3+500", temp: 36 },
-    ],
-  },
-  {
-    line: "TUYẾN HẠ",
-    rail: "Ray phải",
-    cells: [
-      { id: "DP-01", from: "0+000", to: "0+500", temp: 35 },
-      { id: "DP-02", from: "0+500", to: "1+000", temp: 37 },
-      { id: "DP-03", from: "1+000", to: "1+500", temp: 36 },
-      { id: "DP-04", from: "1+500", to: "2+000", temp: 34 },
-      { id: "DP-05", from: "2+000", to: "2+500", temp: 32 },
-      { id: "DP-06", from: "2+500", to: "3+000", temp: 30 },
-      { id: "DP-07", from: "3+000", to: "3+500", temp: 33 },
-    ],
-  },
+  { line: "TUYẾN THƯỢNG", rail: "Ray trái", cells: [] },
+  { line: "TUYẾN THƯỢNG", rail: "Ray phải", cells: [] },
+  { line: "TUYẾN HẠ", rail: "Ray trái", cells: [] },
+  { line: "TUYẾN HẠ", rail: "Ray phải", cells: [] },
 ];
 
 /** Flat lookup of every cell, in display order. */
@@ -101,7 +54,7 @@ export const ALL_CELLS: RailCell[] = RAIL_ROWS.flatMap((r) => r.cells);
 
 export const ALL_CELL_IDS: string[] = ALL_CELLS.map((c) => c.id);
 
-export const DEFAULT_CELL_ID = "DT-05";
+export const DEFAULT_CELL_ID = "";
 
 export function getCellById(id: string): RailCell | undefined {
   return ALL_CELLS.find((c) => c.id === id);
@@ -109,8 +62,9 @@ export function getCellById(id: string): RailCell | undefined {
 
 /** Step selection forward/backward with wrap-around; unknown ids fall back to default. */
 export function stepCellId(currentId: string, direction: 1 | -1): string {
+  if (ALL_CELL_IDS.length === 0) return currentId;
   const idx = ALL_CELL_IDS.indexOf(currentId);
-  const base = idx === -1 ? ALL_CELL_IDS.indexOf(DEFAULT_CELL_ID) : idx;
+  const base = idx === -1 ? 0 : idx;
   const next = (base + direction + ALL_CELL_IDS.length) % ALL_CELL_IDS.length;
   return ALL_CELL_IDS[next];
 }

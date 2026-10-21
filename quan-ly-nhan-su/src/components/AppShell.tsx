@@ -24,7 +24,6 @@ function TabLoading() {
   );
 }
 
-const HomeDashboard = dynamic(() => import("@/components/HomeDashboard"), { loading: TabLoading, ssr: false });
 const WelderManagement = dynamic(() => import("@/components/WelderManagement"), { loading: TabLoading, ssr: false });
 const WeldingHistoryList = dynamic(() => import("@/components/WeldingHistoryList"), { loading: TabLoading, ssr: false });
 const FailedWeldHistoryList = dynamic(() => import("@/components/FailedWeldHistoryList"), { loading: TabLoading, ssr: false });
@@ -45,6 +44,8 @@ const MachineAssignmentList = dynamic(
 const SparePartsList = dynamic(
   () => import("@/components/SparePartsList"), { loading: TabLoading, ssr: false });
 const FuelHistoryList = dynamic(() => import("@/components/FuelHistoryList"), { loading: TabLoading, ssr: false });
+const MachinePreShiftChecklist = dynamic(
+  () => import("@/components/MachinePreShiftChecklist"), { loading: TabLoading, ssr: false });
 const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
 const QualityReportDashboard = dynamic(
   () => import("@/components/QualityReportDashboard"), { loading: TabLoading, ssr: false });
@@ -82,6 +83,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "phan-cong-may": () => <MachineAssignmentList />,
   "phu-tung-thay-the": () => <SparePartsList />,
   "lich-su-cap-nhien-lieu": () => <FuelHistoryList />,
+  "kiem-tra-may-truoc-ca": () => <MachinePreShiftChecklist />,
   "bc-tong-quan": () => <OverviewDashboard />,
   "bc-san-luong": () => <OverviewDashboard />,
   "bc-chat-luong": () => <QualityReportDashboard />,
@@ -108,9 +110,12 @@ type AppShellProps = {
   tab?: string;
 };
 
+/** Trang chủ `/` mở thẳng báo cáo tổng quan. */
+const HOME_TAB = "bc-tong-quan";
+
 function tabFromPath(pathname: string) {
   const path = pathname.replace(/^\//, "").split("/")[0] ?? "";
-  return isValidTab(path) ? path : "";
+  return isValidTab(path) ? path : HOME_TAB;
 }
 
 function useClientClock(lang: "vi" | "en") {
@@ -143,7 +148,7 @@ export default function AppShell({ tab }: AppShellProps) {
   const [activeTab, setActiveTab] = useState(() => {
     if (tab && isValidTab(tab)) return tab;
     if (typeof window !== "undefined") return tabFromPath(window.location.pathname);
-    return "";
+    return HOME_TAB;
   });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -151,7 +156,7 @@ export default function AppShell({ tab }: AppShellProps) {
   // Đồng bộ tab theo URL Next.js — để nút Back trình duyệt về đúng trang trước.
   useEffect(() => {
     const fromPath = tabFromPath(pathname);
-    const fromProp = tab && isValidTab(tab) ? tab : "";
+    const fromProp = tab && isValidTab(tab) ? tab : HOME_TAB;
     setActiveTab(fromPath || fromProp);
   }, [pathname, tab]);
 
@@ -159,9 +164,8 @@ export default function AppShell({ tab }: AppShellProps) {
   // (Overview/Quality… quá nặng; warm bằng hover sidebar thay vì tải hết khi vừa mở).
   useEffect(() => {
     const fromPath = tabFromPath(pathname);
-    const currentId = fromPath || (tab && isValidTab(tab) ? tab : "");
+    const currentId = fromPath || (tab && isValidTab(tab) ? tab : HOME_TAB);
     if (currentId) prefetchTabModule(currentId);
-    else void import("@/components/HomeDashboard").catch(() => undefined);
 
     const group = currentId
       ? navigation.find((g) => g.children.some((c) => c.id === currentId))
@@ -188,7 +192,7 @@ export default function AppShell({ tab }: AppShellProps) {
     };
   }, [pathname, tab]);
 
-  const current = activeTab && isValidTab(activeTab) ? activeTab : "";
+  const current = activeTab && isValidTab(activeTab) ? activeTab : HOME_TAB;
   const crumb = current ? findNavMeta(current) : null;
   const reportTab = Boolean(current && isReportTab(current));
   const lwrTab = Boolean(current?.startsWith("lwr-"));
@@ -199,9 +203,9 @@ export default function AppShell({ tab }: AppShellProps) {
   const content = current ? viewRenderers[current]?.() ?? null : null;
 
   function go(id: string) {
-    const targetId = !id ? "" : id === "bc-san-luong" ? "bc-tong-quan" : id;
-    const href = targetId ? `/${targetId}` : "/";
-    if (targetId) prefetchTabModule(targetId);
+    const targetId = !id || id === "bc-san-luong" ? HOME_TAB : id;
+    const href = targetId === HOME_TAB ? "/" : `/${targetId}`;
+    prefetchTabModule(targetId);
     setActiveTab(targetId);
     setMobileNavOpen(false);
     router.push(href);
@@ -369,7 +373,7 @@ export default function AppShell({ tab }: AppShellProps) {
 
           {content ? (
             content
-          ) : current ? (
+          ) : (
             <div className="w-full px-4 sm:px-6 pb-8">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {(group?.children ?? []).map((child) => {
@@ -410,8 +414,6 @@ export default function AppShell({ tab }: AppShellProps) {
                 </p>
               </div>
             </div>
-          ) : (
-            <HomeDashboard onNavigate={go} />
           )}
         </main>
       </div>

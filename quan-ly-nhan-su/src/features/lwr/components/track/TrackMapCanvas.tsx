@@ -11,6 +11,7 @@ import {
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
+import { railTypeColor } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 
 const CELL_W = 110;
@@ -132,8 +133,10 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
         <h3 className="text-sm font-bold">Sơ đồ tuyến và dải ray · {columns} thanh / dải</h3>
         <div className="flex items-center gap-1.5">
-          <span className="mr-1 hidden items-center gap-1 text-xs text-slate-500 sm:flex">
-            <ArrowLeftRight className="size-4" />Shift + lăn chuột / kéo · bấm đoạn teal = thanh dài
+          <span className="mr-1 hidden items-center gap-2 text-xs text-slate-500 sm:flex">
+            <span className="inline-flex items-center gap-1"><span className="h-[3px] w-5 rounded bg-orange-700" />Đường ray</span>
+            <span className="inline-flex items-center gap-1"><span className="h-px w-5 border-t border-dashed border-slate-800" />Đường tim</span>
+            <ArrowLeftRight className="size-4" />Shift + lăn chuột / kéo
           </span>
           <button type="button" onClick={() => scrollByStep(-1)} disabled={!canLeft} aria-label="Cuộn sang trái" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronLeft className="size-4" /></button>
           <button type="button" onClick={() => scrollByStep(1)} disabled={!canRight} aria-label="Cuộn sang phải" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronRight className="size-4" /></button>
@@ -169,26 +172,30 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
         }}
       >
         <div style={{ width: 142 + trackWidth, minWidth: 142 + trackWidth }}>
-          <div className="space-y-2 px-4 py-4">
+          <div className="space-y-0 px-4 py-4">
             {layout.longRails.length === 0 && layout.placements.length === 0 && (
               <p className="mb-3 text-xs text-slate-500">Chưa có thanh dài hoặc công trình. Thêm ở các form phía trên.</p>
             )}
-            {layout.rows.map((rail) => {
+            {layout.rows.map((rail, index) => {
               const key = railRowKey(rail);
               const railLongRails = plottedLongRails.filter((item) => item.longRail.rowKey === key);
               const structureLanes = packSymbolLanes(plotted.filter((item) => item.placement.rowKey === key));
               const stackCount = Math.max(structureLanes.length, 1);
               const labelStack = 56;
               const trackTop = 12 + stackCount * labelStack;
-              const rowHeight = trackTop + 36;
+              const rowHeight = trackTop + 44;
+              const nextRail = layout.rows[index + 1];
               return (
-                <div key={key} className="grid grid-cols-[110px_1fr] items-end gap-x-2" data-testid="symbol-lane">
+                <div key={key}>
+                <div className="grid grid-cols-[110px_1fr] items-end gap-x-2" data-testid="symbol-lane">
                   <span className="pb-4 text-[11px] text-slate-500">{rail.line}<br />{rail.rail}</span>
                   <div className="relative" style={{ height: rowHeight, width: trackWidth }}>
-                    <div data-testid="track-line" className="absolute inset-x-0 h-[3px] rounded bg-emerald-600" style={{ top: trackTop }} />
+                    <div data-testid="track-line" className="absolute inset-x-0 h-[4px] rounded bg-orange-700" style={{ top: trackTop }} />
+                    <div data-testid="track-centerline" className="absolute inset-x-0 border-t border-dashed border-slate-800" style={{ top: trackTop + 10 }} />
                     {railLongRails.map(({ longRail, span }) => {
                       const box = spanStyle(span);
                       const selected = longRail.id === selectedLongRailId;
+                      const tone = railTypeColor(longRail.params.railType);
                       return (
                         <button
                           key={longRail.id}
@@ -200,16 +207,16 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                             onSelectLongRail(longRail.id);
                           }}
                           onPointerDown={(event) => event.stopPropagation()}
-                          title={`${longRail.code} · ${longRail.label} · Km ${span.startCell.from} – ${span.endCell.to}`}
+                          title={`${longRail.code} · ${longRail.params.railType} · ${longRail.label} · Km ${span.startCell.from} – ${span.endCell.to}`}
                           aria-label={`Xem thông số thanh dài ${longRail.code}`}
-                          className={`absolute z-[5] rounded-sm focus-visible:outline-2 focus-visible:outline-teal-600 ${selected ? "ring-2 ring-teal-500 ring-offset-1" : ""}`}
-                          style={{ left: box.left, width: box.width, top: 0, height: rowHeight }}
+                          className={`absolute z-[5] rounded-sm focus-visible:outline-2 ${selected ? "ring-2 ring-offset-1" : ""}`}
+                          style={{ left: box.left, width: box.width, top: 0, height: rowHeight, outlineColor: tone }}
                         >
-                          <span className={`absolute inset-x-0 h-[15px] rounded-sm ${selected ? "bg-teal-500/55" : "bg-teal-400/40"}`} style={{ top: trackTop - 6 }} />
-                          <span className="absolute left-0 h-[17px] w-[3px] rounded bg-teal-700" style={{ top: trackTop - 7 }} />
-                          <span className="absolute right-0 h-[17px] w-[3px] rounded bg-teal-700" style={{ top: trackTop - 7 }} />
-                          <span className="absolute left-1/2 z-10 max-w-full -translate-x-1/2 truncate rounded bg-white/90 px-1 text-[10px] font-semibold text-teal-900" style={{ top: trackTop + 10 }}>
-                            {longRail.code}
+                          <span className="absolute inset-x-0 h-[15px] rounded-sm" style={{ top: trackTop - 6, backgroundColor: selected ? `${tone}99` : `${tone}66` }} />
+                          <span className="absolute left-0 h-[17px] w-[3px] rounded" style={{ top: trackTop - 7, backgroundColor: tone }} />
+                          <span className="absolute right-0 h-[17px] w-[3px] rounded" style={{ top: trackTop - 7, backgroundColor: tone }} />
+                          <span className="absolute left-1/2 z-10 max-w-full -translate-x-1/2 truncate rounded bg-white/90 px-1 text-[10px] font-semibold" style={{ top: trackTop + 14, color: tone }}>
+                            {longRail.code} · {longRail.params.railType}
                           </span>
                         </button>
                       );
@@ -266,6 +273,23 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                       );
                     }))}
                   </div>
+                </div>
+                {nextRail ? (
+                  <div className="grid grid-cols-[110px_1fr] gap-x-2" aria-hidden="true">
+                    <span />
+                    <svg width={trackWidth} height="16" className="block" data-testid="track-gap-dashes">
+                      <line
+                        x1="0"
+                        y1="8"
+                        x2={trackWidth}
+                        y2="8"
+                        stroke="#64748b"
+                        strokeWidth="1.5"
+                        strokeDasharray="7 5"
+                      />
+                    </svg>
+                  </div>
+                ) : null}
                 </div>
               );
             })}

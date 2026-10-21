@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ComboBoxInput from "@/components/ComboBoxInput";
-import { Plus, TrashSimple, X } from "@/components/icons";
+import DailyWorkReportPrint from "@/components/DailyWorkReportPrint";
+import { CalendarBlank, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
 import MultiSelectMenu, { type MultiSelectOption } from "@/components/MultiSelectMenu";
 import {
+  deleteDailyReport,
   deleteEquipmentItem,
   deleteIncidentItem,
   deleteWorkItem,
@@ -16,13 +18,17 @@ import {
   insertIncidentItem,
   insertWorkItem,
   loadDailyReport,
+  loadDailyReportList,
   loadDailyWorkFillFromJournal,
   loadHangMucSuggestions,
+  matchWorkType,
   workMachineKey,
   workMachineLabel,
   workTypeWeldMethod,
   type DailyEquipmentItem,
   type DailyIncidentItem,
+  type DailyReportHeader,
+  type DailyReportSummary,
   type DailyWorkItem,
   type DailyWorkMachine,
   type DailyWorkPerson,
@@ -32,8 +38,10 @@ import {
   type WorkItemInput,
   type WorkSection,
 } from "@/lib/dailyReportDb";
+import SelectMenu from "@/components/SelectMenu";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions, type JournalMachineOption } from "@/lib/machineRunSchedulesDb";
+import { loadProjects } from "@/lib/projectsDb";
 import { addHoursToWeldTime, DEFAULT_WELD_WORK_HOURS } from "@/lib/weldReportData";
 import { deaccent } from "@/i18n/deaccent";
 
@@ -50,6 +58,21 @@ function todayIsoLocal() {
 }
 
 /** Số mối tích lũy = hôm qua + hôm nay. */
+function applyJournalFill(
+  form: WorkItemInput,
+  filled: { tenMoiHan: string; homNay: string; mayChay: DailyWorkMachine[]; ghiChu: string },
+): WorkItemInput {
+  const homNay = filled.homNay || form.homNay;
+  return {
+    ...form,
+    tenMoiHan: filled.tenMoiHan || form.tenMoiHan,
+    homNay,
+    tichLuy: cumulativeWelds(form.denHomQua, homNay),
+    mayChay: filled.mayChay.length > 0 ? filled.mayChay : form.mayChay,
+    ghiChu: filled.ghiChu || form.ghiChu,
+  };
+}
+
 function cumulativeWelds(denHomQua: string, homNay: string): string {
   const yesterday = Number(String(denHomQua).replace(",", ".").trim());
   const today = Number(String(homNay).replace(",", ".").trim());
@@ -60,12 +83,7 @@ function cumulativeWelds(denHomQua: string, homNay: string): string {
   return Number.isInteger(sum) ? String(sum) : String(sum);
 }
 
-type SubTab = { kind: "job" } | { kind: "thiet-bi" } | { kind: "su-co" };
-
-type ModalState =
-  | { kind: "work"; phan: WorkSection }
-  | { kind: "equipment" }
-  | { kind: "incident" };
+type ModalState = { kind: "work" } | { kind: "equipment" } | { kind: "incident" };
 
 type PersonnelOption = {
   id: string;
@@ -93,9 +111,6 @@ const ROLE_EMPTY_LABEL: Record<ManpowerRole, string> = {
   cong_nhan: "Không có nhân sự vị trí Công nhân",
 };
 
-const th =
-  "border border-slate-300 bg-slate-100 px-2 py-2 text-left text-[11px] font-bold text-slate-700 whitespace-nowrap";
-const td = "border border-slate-200 px-2 py-2 text-[12px] text-slate-800 align-middle";
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25";
 const labelCls = "mb-1 block text-[11px] font-semibold text-slate-600";
@@ -103,6 +118,240 @@ const labelCls = "mb-1 block text-[11px] font-semibold text-slate-600";
 function displayDate(iso: string) {
   const [y, m, d] = iso.split("-");
   return d && m && y ? `${d}/${m}/${y}` : iso;
+}
+
+function StatusPill({ status }: { status: DailyReportSummary["trangThai"] }) {
+  const tone =
+    status === "Đã duyệt"
+      ? "bg-emerald-50 text-emerald-700"
+      : status === "Đã gửi"
+        ? "bg-blue-50 text-[#0047AB]"
+        : "bg-slate-100 text-slate-600";
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
+function DayActions({
+  dateLabel,
+  busy,
+  onView,
+  onEdit,
+  onPrint,
+  onDelete,
+}: {
+  dateLabel: string;
+  busy?: boolean;
+  onView: () => void;
+  onEdit: () => void;
+  onPrint: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-0.5" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        onClick={onView}
+        disabled={busy}
+        aria-label={`Xem ${dateLabel}`}
+        title="Xem"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] disabled:opacity-50 cursor-pointer"
+      >
+        <Eye size={16} weight="bold" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={busy}
+        aria-label={`Sửa ${dateLabel}`}
+        title="Sửa"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] disabled:opacity-50 cursor-pointer"
+      >
+        <PencilSimple size={16} weight="bold" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={onPrint}
+        disabled={busy}
+        aria-label={`In báo cáo ${dateLabel}`}
+        title="In báo cáo"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-blue-50 hover:text-[#0047AB] disabled:opacity-50 cursor-pointer"
+      >
+        <Printer size={16} weight="bold" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={busy}
+        aria-label={`Xóa ${dateLabel}`}
+        title="Xóa"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50 cursor-pointer"
+      >
+        <TrashSimple size={16} weight="bold" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function EditorItem({
+  title,
+  hint,
+  onDelete,
+}: {
+  title: string;
+  hint?: string;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-slate-800">{title}</div>
+        {hint ? <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div> : null}
+      </div>
+      <button
+        type="button"
+        onClick={onDelete}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
+        aria-label="Xóa"
+        title="Xóa"
+      >
+        <TrashSimple size={14} weight="bold" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function DayEditorModal({
+  open,
+  date,
+  workToday,
+  workNext,
+  equipment,
+  incidents,
+  onClose,
+  onAdd,
+  onDeleteWork,
+  onDeleteEquipment,
+  onDeleteIncident,
+}: {
+  open: boolean;
+  date: string;
+  workToday: DailyWorkItem[];
+  workNext: DailyWorkItem[];
+  equipment: DailyEquipmentItem[];
+  incidents: DailyIncidentItem[];
+  onClose: () => void;
+  onAdd: (kind: ModalState["kind"]) => void;
+  onDeleteWork: (id: string, phan: WorkSection) => void;
+  onDeleteEquipment: (id: string) => void;
+  onDeleteIncident: (id: string) => void;
+}) {
+  const titleId = useId();
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-slate-900/40 p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className="flex max-h-[92vh] w-full max-w-xl flex-col rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
+          <h2 id={titleId} className="text-sm sm:text-base font-bold text-slate-900">
+            Sửa báo cáo · {displayDate(date)}
+          </h2>
+          <button type="button" onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer" aria-label="Đóng">
+            <X size={16} weight="bold" aria-hidden />
+          </button>
+        </div>
+        <div className="space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <EditorSection title="A. Hôm nay" onAdd={() => onAdd("work")} addLabel="Thêm công việc">
+            {workToday.length === 0 ? (
+              <p className="text-xs text-slate-500">Chưa có hạng mục</p>
+            ) : (
+              workToday.map((row) => (
+                <EditorItem
+                  key={row.id}
+                  title={row.hangMuc || "Hạng mục"}
+                  hint={[row.tenMoiHan, row.homNay && `${row.homNay} ${row.donVi}`.trim()].filter(Boolean).join(" · ")}
+                  onDelete={() => onDeleteWork(row.id, "hom_nay")}
+                />
+              ))
+            )}
+          </EditorSection>
+          <EditorSection title="B. Ngày tiếp theo" onAdd={() => onAdd("work")} addLabel="Thêm công việc">
+            {workNext.length === 0 ? (
+              <p className="text-xs text-slate-500">Chưa có hạng mục</p>
+            ) : (
+              workNext.map((row) => (
+                <EditorItem
+                  key={row.id}
+                  title={row.hangMuc || "Hạng mục"}
+                  hint={row.thucHienTen || row.ghiChu}
+                  onDelete={() => onDeleteWork(row.id, "ngay_tiep_theo")}
+                />
+              ))
+            )}
+          </EditorSection>
+          <EditorSection title="Thiết bị" onAdd={() => onAdd("equipment")} addLabel="Thêm thiết bị">
+            {equipment.length === 0 ? (
+              <p className="text-xs text-slate-500">Chưa có thiết bị</p>
+            ) : (
+              equipment.map((row) => (
+                <EditorItem
+                  key={row.id}
+                  title={row.tenThietBi || "Thiết bị"}
+                  hint={[row.soLuong, row.boPhan, row.nguoiSuDung].filter(Boolean).join(" · ")}
+                  onDelete={() => onDeleteEquipment(row.id)}
+                />
+              ))
+            )}
+          </EditorSection>
+          <EditorSection title="Sự cố" onAdd={() => onAdd("incident")} addLabel="Thêm sự cố">
+            {incidents.length === 0 ? (
+              <p className="text-xs text-slate-500">Chưa có sự cố</p>
+            ) : (
+              incidents.map((row) => (
+                <EditorItem
+                  key={row.id}
+                  title={row.noiDung || "Sự cố"}
+                  hint={[row.tinhTrangXuLy, row.nguoiBaoCao].filter(Boolean).join(" · ")}
+                  onDelete={() => onDeleteIncident(row.id)}
+                />
+              ))
+            )}
+          </EditorSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditorSection({
+  title,
+  addLabel,
+  onAdd,
+  children,
+}: {
+  title: string;
+  addLabel: string;
+  onAdd: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h3>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer"
+        >
+          <Plus size={12} weight="bold" aria-hidden />
+          {addLabel}
+        </button>
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </section>
+  );
 }
 
 function normalizeRoleText(value: string) {
@@ -260,8 +509,9 @@ function WorkFormModal({
   personnel,
   machines,
   workTypes,
+  projects,
+  currentDuAnId,
   hangMucOptions,
-  phan,
   reportDate,
   onReportDateChange,
   onClose,
@@ -273,17 +523,19 @@ function WorkFormModal({
   personnel: PersonnelOption[];
   machines: JournalMachineOption[];
   workTypes: DailyWorkType[];
+  projects: { id: string; name: string }[];
+  currentDuAnId: string;
   hangMucOptions: string[];
-  phan: WorkSection;
   reportDate: string;
   onReportDateChange: (iso: string) => void;
   onClose: () => void;
-  onSubmit: (values: WorkItemInput) => Promise<void>;
+  onSubmit: (values: WorkItemInput, duAnId: string, phan: WorkSection) => Promise<void>;
 }) {
   const titleId = useId();
-  const [workTypeId, setWorkTypeId] = useState(() => workTypes[0]?.id ?? "");
-  const workType = workTypes.find((t) => t.id === workTypeId) ?? workTypes[0] ?? null;
-  const [form, setForm] = useState<WorkItemInput>(() => emptyWorkInput(workType));
+  const [phan, setPhan] = useState<WorkSection>("hom_nay");
+  const [projectId, setProjectId] = useState(currentDuAnId);
+  const [form, setForm] = useState<WorkItemInput>(() => emptyWorkInput());
+  const workType = matchWorkType(workTypes, form.hangMuc, form.congViecId);
   const [error, setError] = useState("");
   const [filling, setFilling] = useState(false);
   const [fillNote, setFillNote] = useState("");
@@ -302,13 +554,55 @@ function WorkFormModal({
 
   useEffect(() => {
     if (!open) return;
-    const initialType = workTypes[0] ?? null;
-    setWorkTypeId(initialType?.id ?? "");
-    setForm(emptyWorkInput(initialType));
+    setPhan("hom_nay");
+    setProjectId(currentDuAnId);
+    setForm(emptyWorkInput());
     setError("");
     setFillNote("");
     setFilling(false);
-  }, [open, workTypes]);
+  }, [open, currentDuAnId]);
+
+  useEffect(() => {
+    if (!open || phan !== "hom_nay") return;
+    const type = matchWorkType(workTypes, form.hangMuc);
+    const method = workTypeWeldMethod(type);
+    if (!method || !type) return;
+    const date = reportDate.trim() || todayIsoLocal();
+    let cancelled = false;
+    setFilling(true);
+    setError("");
+    void loadDailyWorkFillFromJournal(date, method)
+      .then((filled) => {
+        if (cancelled) return;
+        setForm((current) =>
+          applyJournalFill(
+            {
+              ...emptyWorkInput(type),
+              hangMuc: current.hangMuc || type.ten,
+              congViecId: type.id,
+              tuyenHa: current.tuyenHa,
+              tuyenThuong: current.tuyenThuong,
+            },
+            filled,
+          ),
+        );
+        setFillNote(
+          filled.entryCount > 0
+            ? `Đã điền ${filled.homNay || 0} mối · ${filled.entryCount} bản ghi Nhật ký hàn (${method}) ngày ${displayDate(date)}.`
+            : `Không có bản ghi Nhật ký hàn ${method} ngày ${displayDate(date)}.`,
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Không lấy được Nhật ký hàn");
+      })
+      .finally(() => {
+        if (!cancelled) setFilling(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, phan, form.hangMuc, reportDate, workTypes]);
 
   if (!open) return null;
 
@@ -316,27 +610,17 @@ function WorkFormModal({
   const weldMethod = workTypeWeldMethod(workType);
   const canFillFromJournal = phan === "hom_nay" && Boolean(weldMethod);
 
-  function pickWorkType(id: string) {
-    const prevType = workType;
-    const nextType = workTypes.find((t) => t.id === id) ?? null;
-    setWorkTypeId(id);
-    setForm((current) => {
-      const blank = emptyWorkInput(nextType);
-      const keepHangMuc =
-        current.hangMuc.trim() && current.hangMuc !== (prevType?.ten ?? "")
-          ? current.hangMuc
-          : blank.hangMuc;
-      return {
-        ...blank,
-        hangMuc: keepHangMuc,
-        tuyenHa: current.tuyenHa,
-        tuyenThuong: current.tuyenThuong,
-        ghiChu: current.ghiChu,
-        thucHien: current.thucHien,
-        thucHienTen: current.thucHienTen,
-      };
-    });
-    setFillNote("");
+  function patchHangMuc(hangMuc: string) {
+    const type = matchWorkType(workTypes, hangMuc);
+    setForm((current) => ({
+      ...current,
+      hangMuc,
+      congViecId: type?.id ?? "",
+      donVi:
+        type?.donViMacDinh && (!current.donVi.trim() || current.donVi === "mối hàn")
+          ? type.donViMacDinh
+          : current.donVi,
+    }));
   }
 
   function patch(p: Partial<WorkItemInput>) {
@@ -358,17 +642,7 @@ function WorkFormModal({
     try {
       if (reportDate !== date) onReportDateChange(date);
       const filled = await loadDailyWorkFillFromJournal(date, weldMethod);
-      setForm((f) => {
-        const homNay = filled.homNay || f.homNay;
-        return {
-          ...f,
-          tenMoiHan: filled.tenMoiHan || f.tenMoiHan,
-          homNay,
-          tichLuy: cumulativeWelds(f.denHomQua, homNay),
-          mayChay: filled.mayChay.length > 0 ? filled.mayChay : f.mayChay,
-          ghiChu: filled.ghiChu || f.ghiChu,
-        };
-      });
+      setForm((f) => applyJournalFill(f, filled));
       setFillNote(
         filled.entryCount > 0
           ? `Đã điền ${filled.homNay || 0} mối · ${filled.entryCount} bản ghi Nhật ký hàn (${weldMethod}) ngày ${displayDate(date)}.`
@@ -411,8 +685,12 @@ function WorkFormModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!projectId) {
+      setError("Vui lòng chọn dự án");
+      return;
+    }
     if (!form.hangMuc.trim()) {
-      setError("Vui lòng nhập hạng mục công việc");
+      setError("Vui lòng nhập nội dung công việc");
       return;
     }
     if (!isNextDayPlan && railMachine && form.mayChay.length === 0) {
@@ -442,6 +720,8 @@ function WorkFormModal({
               ...base,
               tichLuy: cumulativeWelds(form.denHomQua, form.homNay),
             },
+        projectId,
+        phan,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu");
@@ -461,22 +741,39 @@ function WorkFormModal({
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto px-4 py-4 sm:px-5 space-y-3">
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
-          {workTypes.length > 0 && (
-            <label>
-              <span className={labelCls}>Loại công việc *</span>
-              <select
-                value={workType?.id ?? ""}
-                onChange={(e) => pickWorkType(e.target.value)}
-                className={inputCls}
-              >
-                {workTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.ten}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <div>
+            <span className={labelCls}>Phần *</span>
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              {([
+                { id: "hom_nay" as const, label: "A. Hôm nay" },
+                { id: "ngay_tiep_theo" as const, label: "B. Ngày tiếp theo" },
+              ]).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setPhan(item.id)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    phan === item.id
+                      ? "bg-white text-[#0047AB] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className={labelCls}>Dự án *</span>
+            <SelectMenu
+              searchable
+              value={projectId}
+              onChange={setProjectId}
+              options={projects.map((project) => ({ value: project.id, label: project.name }))}
+              placeholder="Chọn dự án"
+              emptyLabel="Chưa có dự án"
+            />
+          </div>
           {isNextDayPlan ? (
             <>
               <p className="text-xs text-slate-500">
@@ -486,7 +783,7 @@ function WorkFormModal({
                 <span className={labelCls}>Việc cần làm *</span>
                 <ComboBoxInput
                   value={form.hangMuc}
-                  onChange={(hangMuc) => patch({ hangMuc })}
+                  onChange={patchHangMuc}
                   options={hangMucOptions}
                   placeholder="Chọn việc đã có hoặc nhập mới"
                   mono={false}
@@ -560,7 +857,7 @@ function WorkFormModal({
                   <span className={labelCls}>Nội dung công việc *</span>
                   <ComboBoxInput
                     value={form.hangMuc}
-                    onChange={(hangMuc) => patch({ hangMuc })}
+                    onChange={patchHangMuc}
                     options={hangMucOptions}
                     placeholder="Chọn việc đã có hoặc nhập mới"
                     mono={false}
@@ -862,166 +1159,11 @@ function IncidentFormModal({
   );
 }
 
-function MachineLines({
-  machines,
-  value,
-}: {
-  machines: DailyWorkMachine[];
-  value: (machine: DailyWorkMachine) => string;
-}) {
-  if (machines.length === 0) return <>—</>;
-  return (
-    <>
-      {machines.map((m, i) => (
-        <div key={`${workMachineKey(m)}-${i}`} className="whitespace-nowrap leading-6">
-          {value(m) || "—"}
-        </div>
-      ))}
-    </>
-  );
-}
-
-function WorkTable({
-  rows,
-  onDelete,
-  planOnly = false,
-}: {
-  rows: DailyWorkItem[];
-  onDelete: (id: string) => void;
-  /** Ngày tiếp theo: chỉ hiện danh sách việc cần làm. */
-  planOnly?: boolean;
-}) {
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-        Chưa có công việc nào. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập.
-      </div>
-    );
-  }
-
-  if (planOnly) {
-    return (
-      <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[640px] border-collapse">
-          <thead>
-            <tr>
-              <th className={`${th} w-10`}>TT</th>
-              <th className={th}>Việc cần làm</th>
-              <th className={th}>Tuyến hạ</th>
-              <th className={th}>Tuyến thượng</th>
-              <th className={th}>Người thực hiện</th>
-              <th className={th}>Ghi chú</th>
-              <th className={`${th} w-12`} />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.id} className="group/row hover:bg-slate-50/80">
-                <td className={`${td} text-center font-semibold text-slate-500`}>{i + 1}</td>
-                <td className={`${td} font-medium min-w-[220px]`}>{row.hangMuc || "—"}</td>
-                <td className={`${td} text-center`}>{row.tuyenHa || ""}</td>
-                <td className={`${td} text-center`}>{row.tuyenThuong || ""}</td>
-                <td className={`${td} min-w-[140px]`}>{row.thucHienTen || "—"}</td>
-                <td className={td}>{row.ghiChu || "—"}</td>
-                <td className={`${td} text-center`}>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(row.id)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 opacity-0 transition group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                    aria-label="Xóa"
-                  >
-                    <TrashSimple size={14} weight="bold" aria-hidden />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  return (
-    <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-      <table className="w-full min-w-[1100px] border-collapse">
-        <thead>
-          <tr>
-            <th className={`${th} w-10`}>TT</th>
-            <th className={th}>Hạng mục công việc</th>
-            <th className={th}>Tên mối hàn</th>
-            <th className={th}>Tuyến hạ</th>
-            <th className={th}>Tuyến thượng</th>
-            <th className={th}>Đơn vị</th>
-            <th className={th}>Số mối hàn hôm qua</th>
-            <th className={th}>Số mối hàn hôm nay</th>
-            <th className={th}>Số mối hàn tích lũy</th>
-            <th className={th}>Loại máy</th>
-            <th className={th}>Số lượng</th>
-            <th className={th}>Giờ bắt đầu</th>
-            <th className={th}>Giờ kết thúc</th>
-            <th className={th}>CHT</th>
-            <th className={th}>Kỹ sư</th>
-            <th className={th}>Lái máy</th>
-            <th className={th}>Thợ VH</th>
-            <th className={th}>CN</th>
-            <th className={th}>Ghi chú</th>
-            <th className={`${th} w-12`} />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.id} className="group/row hover:bg-slate-50/80">
-              <td className={`${td} text-center font-semibold text-slate-500`}>{i + 1}</td>
-              <td className={`${td} font-medium min-w-[180px]`}>{row.hangMuc || "—"}</td>
-              <td className={`${td} font-mono`}>{row.tenMoiHan || "—"}</td>
-              <td className={`${td} text-center`}>{row.tuyenHa || ""}</td>
-              <td className={`${td} text-center`}>{row.tuyenThuong || ""}</td>
-              <td className={td}>{row.donVi || "—"}</td>
-              <td className={`${td} text-center`}>{row.denHomQua || "—"}</td>
-              <td className={`${td} text-center`}>{row.homNay || "—"}</td>
-              <td className={`${td} text-center`}>{row.tichLuy || "—"}</td>
-              <td className={td}>
-                <MachineLines machines={row.mayChay} value={workMachineLabel} />
-              </td>
-              <td className={`${td} text-center`}>
-                <MachineLines machines={row.mayChay} value={(m) => m.soLuong} />
-              </td>
-              <td className={`${td} text-center`}>
-                <MachineLines machines={row.mayChay} value={(m) => m.gioBatDau} />
-              </td>
-              <td className={`${td} text-center`}>
-                <MachineLines machines={row.mayChay} value={(m) => m.gioKetThuc} />
-              </td>
-              <td className={`${td} min-w-[100px]`}>{row.chtTen || "—"}</td>
-              <td className={`${td} min-w-[100px]`}>{row.kySuTen || "—"}</td>
-              <td className={`${td} min-w-[100px]`}>{row.laiMayTen || "—"}</td>
-              <td className={`${td} min-w-[100px]`}>{row.thoVanHanhTen || "—"}</td>
-              <td className={`${td} min-w-[100px]`}>{row.congNhanTen || "—"}</td>
-              <td className={td}>{row.ghiChu || "—"}</td>
-              <td className={`${td} text-center`}>
-                <button
-                  type="button"
-                  onClick={() => onDelete(row.id)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 opacity-0 transition group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                  aria-label="Xóa"
-                >
-                  <TrashSimple size={14} weight="bold" aria-hidden />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function DailyWorkReport() {
   const today = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const [workTypes, setWorkTypes] = useState<DailyWorkType[]>([]);
-  const [activeTab, setActiveTab] = useState<SubTab>({ kind: "job" });
-  const [workSection, setWorkSection] = useState<WorkSection>("hom_nay");
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [reportDate, setReportDate] = useState(
     `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
   );
@@ -1037,6 +1179,32 @@ export default function DailyWorkReport() {
   const [personnel, setPersonnel] = useState<PersonnelOption[]>([]);
   const [machines, setMachines] = useState<JournalMachineOption[]>([]);
   const [hangMucSaved, setHangMucSaved] = useState<string[]>([]);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printAuto, setPrintAuto] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [busyRowId, setBusyRowId] = useState("");
+  const [weather, setWeather] = useState("");
+  const [temperature, setTemperature] = useState("");
+  const [reportList, setReportList] = useState<DailyReportSummary[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [header, setHeader] = useState<DailyReportHeader | null>(null);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProjects({ includeProgress: false })
+      .then((result) => {
+        if (!cancelled) {
+          setProjects(result.projects.map((project) => ({ id: project.id, name: project.name })));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setProjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1087,27 +1255,73 @@ export default function DailyWorkReport() {
     return [...preferred, ...rest];
   }, [hangMucSaved, workToday, workNext, workTypes]);
 
+  const reloadList = useCallback(async () => {
+    const result = await loadDailyReportList();
+    setReportList(result.rows);
+    setListLoading(false);
+  }, []);
+
   const reload = useCallback(async (date: string) => {
     setLoading(true);
     const bundle = await loadDailyReport(date);
+    setHeader(bundle.header);
     setWorkTypes(bundle.workTypes);
     setWorkToday(bundle.workToday);
     setWorkNext(bundle.workNext);
     setEquipment(bundle.equipment);
     setIncidents(bundle.incidents);
     setLoadError(bundle.error ?? "");
-    setActiveTab((current) => {
-      if (current.kind === "thiet-bi" || current.kind === "su-co" || current.kind === "job") {
-        return current;
-      }
-      return { kind: "job" };
-    });
     setLoading(false);
+    return bundle;
   }, []);
 
   useEffect(() => {
     void reload(reportDate);
   }, [reportDate, reload]);
+
+  useEffect(() => {
+    void reloadList();
+  }, [reloadList]);
+
+  const autoFilledDates = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (loading || loadError) return;
+    if (workToday.length > 0) return;
+    if (autoFilledDates.current.has(reportDate)) return;
+    const types = workTypes.filter((type) => workTypeWeldMethod(type));
+    if (types.length === 0) return;
+    autoFilledDates.current.add(reportDate);
+    let cancelled = false;
+    void (async () => {
+      const created: DailyWorkItem[] = [];
+      const seen = new Set<string>();
+      for (const type of types) {
+        const method = workTypeWeldMethod(type);
+        if (!method || seen.has(method)) continue;
+        seen.add(method);
+        try {
+          const filled = await loadDailyWorkFillFromJournal(reportDate, method);
+          if (cancelled || filled.entryCount === 0) continue;
+          const item = await insertWorkItem(reportDate, "hom_nay", {
+            ...applyJournalFill(emptyWorkInput(type), filled),
+          });
+          created.push(item);
+        } catch {
+          /* bỏ qua loại không điền được */
+        }
+      }
+      if (!cancelled && created.length > 0) {
+        setWorkToday(created);
+        void reloadList();
+        setToast(`Đã điền ${created.length} hạng mục từ Nhật ký hàn`);
+        window.setTimeout(() => setToast(""), 2200);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, loadError, reportDate, workToday.length, workTypes, reloadList]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1142,31 +1356,104 @@ export default function DailyWorkReport() {
     window.setTimeout(() => setToast(""), 2200);
   }
 
-  const activeWorkRows = workSection === "hom_nay" ? workToday : workNext;
-
-  function openAdd() {
-    if (activeTab.kind === "job") {
-      if (workSection === "hom_nay") setReportDate(todayIsoLocal());
-      setModal({ kind: "work", phan: workSection });
-    } else if (activeTab.kind === "thiet-bi") setModal({ kind: "equipment" });
-    else setModal({ kind: "incident" });
+  function projectLabel(duAnId: string | null | undefined) {
+    if (!duAnId) return "—";
+    return projects.find((project) => project.id === duAnId)?.name || "—";
   }
 
-  const panelTitle =
-    activeTab.kind === "job"
-      ? "BC công việc"
-      : activeTab.kind === "thiet-bi"
-        ? "Thiết bị sử dụng"
-        : "Sự cố — Khó khăn — Vướng mắc";
+  function openAdd(kind: ModalState["kind"]) {
+    setAddMenuOpen(false);
+    setModal({ kind });
+  }
 
-  const tabs: { key: string; label: string; short: string; tab: SubTab }[] = [
-    { key: "job", label: "BC công việc", short: "BC CV", tab: { kind: "job" } },
-    { key: "thiet-bi", label: "Thiết bị sử dụng", short: "Thiết bị", tab: { kind: "thiet-bi" } },
-    { key: "su-co", label: "Sự cố — Khó khăn", short: "Sự cố", tab: { kind: "su-co" } },
-  ];
+  async function openDayPrint(row: DailyReportSummary, autoPrint: boolean) {
+    setBusyRowId(row.id);
+    try {
+      setPrintAuto(autoPrint);
+      setReportDate(row.ngayBaoCao);
+      await reload(row.ngayBaoCao);
+      setPrintOpen(true);
+    } finally {
+      setBusyRowId("");
+    }
+  }
 
-  function isActiveTab(tab: SubTab) {
-    return tab.kind === activeTab.kind;
+  function viewDay(row: DailyReportSummary) {
+    return openDayPrint(row, false);
+  }
+
+  function printDay(row: DailyReportSummary) {
+    return openDayPrint(row, true);
+  }
+
+  async function editDay(row: DailyReportSummary) {
+    setBusyRowId(row.id);
+    try {
+      setReportDate(row.ngayBaoCao);
+      await reload(row.ngayBaoCao);
+      setEditorOpen(true);
+    } finally {
+      setBusyRowId("");
+    }
+  }
+
+  async function deleteDay(row: DailyReportSummary) {
+    if (!window.confirm(`Xóa phiếu ngày ${displayDate(row.ngayBaoCao)}?`)) return;
+    setBusyRowId(row.id);
+    try {
+      await deleteDailyReport(row.id);
+      if (reportDate === row.ngayBaoCao) {
+        setHeader(null);
+        setWorkToday([]);
+        setWorkNext([]);
+        setEquipment([]);
+        setIncidents([]);
+        setEditorOpen(false);
+      }
+      await reloadList();
+      showToast("Đã xóa phiếu");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể xóa phiếu");
+    } finally {
+      setBusyRowId("");
+    }
+  }
+
+  async function removeWork(id: string, phan: WorkSection) {
+    if (!window.confirm("Xóa hạng mục này?")) return;
+    try {
+      await deleteWorkItem(id);
+      if (phan === "hom_nay") setWorkToday((rows) => rows.filter((row) => row.id !== id));
+      else setWorkNext((rows) => rows.filter((row) => row.id !== id));
+      void reloadList();
+      showToast("Đã xóa hạng mục");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể xóa");
+    }
+  }
+
+  async function removeEquipment(id: string) {
+    if (!window.confirm("Xóa thiết bị này?")) return;
+    try {
+      await deleteEquipmentItem(id);
+      setEquipment((rows) => rows.filter((row) => row.id !== id));
+      void reloadList();
+      showToast("Đã xóa thiết bị");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể xóa");
+    }
+  }
+
+  async function removeIncident(id: string) {
+    if (!window.confirm("Xóa sự cố này?")) return;
+    try {
+      await deleteIncidentItem(id);
+      setIncidents((rows) => rows.filter((row) => row.id !== id));
+      void reloadList();
+      showToast("Đã xóa sự cố");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể xóa");
+    }
   }
 
   return (
@@ -1186,7 +1473,7 @@ export default function DailyWorkReport() {
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Tab BC công việc — nhập A hôm nay / B tiếp theo; chọn loại công việc khi thêm mới.
+            Mỗi dòng là một ngày đã báo cáo. Nhấn Thêm mới để nhập công việc, thiết bị hoặc sự cố.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
@@ -1206,212 +1493,237 @@ export default function DailyWorkReport() {
           >
             Hôm nay
           </button>
-        </div>
-      </div>
-
-      <div className="mb-4">
-        <div className="table-scroll overflow-x-auto">
-          <div
-            className="inline-flex min-w-max gap-1 rounded-xl border border-slate-200 bg-slate-100/90 p-1 shadow-xs"
-            role="tablist"
-          >
-            {tabs.map((item) => {
-              const active = isActiveTab(item.tab);
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setActiveTab(item.tab)}
-                  className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047ab]/25 ${
-                    active
-                      ? "bg-[#0047AB] text-white shadow-xs"
-                      : "text-slate-600 hover:bg-white hover:text-slate-900"
-                  }`}
-                >
-                  <span className="sm:hidden">{item.short}</span>
-                  <span className="hidden sm:inline">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">{panelTitle}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Ngày: {displayDate(reportDate)}</p>
-          </div>
+          <label className="flex items-center gap-2">
+            Thời tiết
+            <input
+              value={weather}
+              onChange={(e) => setWeather(e.target.value)}
+              placeholder="Nắng"
+              className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            Nhiệt độ
+            <input
+              value={temperature}
+              onChange={(e) => setTemperature(e.target.value)}
+              placeholder="31"
+              inputMode="decimal"
+              className="h-10 w-16 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
+            />
+            <span>°C</span>
+          </label>
           <button
             type="button"
-            onClick={openAdd}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
+            onClick={() => {
+              setPrintAuto(false);
+              setPrintOpen(true);
+            }}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
           >
-            <Plus size={14} weight="bold" aria-hidden />
-            Thêm mới
+            <Printer size={15} weight="bold" aria-hidden />
+            In báo cáo
           </button>
         </div>
+      </div>
 
-        {activeTab.kind === "job" && (
-          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-            {([
-              { id: "hom_nay" as const, label: "A. Hôm nay" },
-              { id: "ngay_tiep_theo" as const, label: "B. Ngày tiếp theo" },
-            ]).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setWorkSection(item.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                  workSection === item.id
-                    ? "bg-white text-[#0047AB] shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+      <section className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Danh sách đã báo cáo</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Xem, sửa, in hoặc xóa từng phiếu
+            </p>
           </div>
-        )}
-
-        {loading ? (
-          <div className="py-12 text-center text-sm text-slate-500">Đang tải...</div>
-        ) : activeTab.kind === "job" ? (
-          <WorkTable
-            rows={activeWorkRows}
-            planOnly={workSection === "ngay_tiep_theo"}
-            onDelete={async (id) => {
-              if (!window.confirm("Xóa hạng mục này?")) return;
-              await deleteWorkItem(id);
-              if (workSection === "hom_nay") setWorkToday((rows) => rows.filter((r) => r.id !== id));
-              else setWorkNext((rows) => rows.filter((r) => r.id !== id));
-              showToast("Đã xóa hạng mục");
-            }}
-          />
-        ) : activeTab.kind === "thiet-bi" ? (
-          equipment.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-              Chưa có thiết bị. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập.
+          <div className="flex items-center gap-2">
+            <div className="font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+              {reportList.length.toLocaleString("vi-VN")}
+              <span className="ml-1 text-[11px] font-semibold text-slate-400">phiếu</span>
             </div>
-          ) : (
-            <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full border-collapse">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAddMenuOpen((open) => !open)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
+              >
+                <Plus size={14} weight="bold" aria-hidden />
+                Thêm mới
+                <CaretDown size={12} weight="bold" aria-hidden />
+              </button>
+              {addMenuOpen && (
+                <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  <button type="button" onClick={() => openAdd("work")} className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    Công việc
+                  </button>
+                  <button type="button" onClick={() => openAdd("equipment")} className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    Thiết bị
+                  </button>
+                  <button type="button" onClick={() => openAdd("incident")} className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    Sự cố
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {listLoading ? (
+          <div className="px-4 py-8 text-center text-sm text-slate-500">Đang tải danh sách...</div>
+        ) : reportList.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-slate-500">
+            Chưa có phiếu báo cáo. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập công việc —
+            phiếu sẽ hiện ở đây.
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {reportList.map((row) => {
+                const active = row.ngayBaoCao === reportDate;
+                return (
+                  <div
+                    key={row.id}
+                    className={`px-4 py-3 ${active ? "bg-blue-50/80" : "bg-white"}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setReportDate(row.ngayBaoCao)}
+                      className="flex w-full items-start justify-between gap-3 text-left"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <CalendarBlank size={14} weight="bold" className="text-[#0047AB]" aria-hidden />
+                          <span className="font-mono text-sm font-bold text-slate-900">{displayDate(row.ngayBaoCao)}</span>
+                          <StatusPill status={row.trangThai} />
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {projectLabel(row.duAnId)} · {row.workTodayCount} hạng mục · {row.equipmentCount} thiết bị · {row.incidentCount} sự cố
+                        </div>
+                      </div>
+                      {active && <span className="text-[11px] font-bold text-[#0047AB]">Đang xem</span>}
+                    </button>
+                    <div className="mt-2 flex justify-end">
+                      <DayActions
+                        dateLabel={displayDate(row.ngayBaoCao)}
+                        busy={busyRowId === row.id}
+                        onView={() => void viewDay(row)}
+                        onEdit={() => void editDay(row)}
+                        onPrint={() => void printDay(row)}
+                        onDelete={() => void deleteDay(row)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="table-scroll hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[800px] border-collapse text-left text-sm">
                 <thead>
-                  <tr>
-                    <th className={`${th} w-14`}>STT</th>
-                    <th className={th}>Thiết bị</th>
-                    <th className={`${th} w-28`}>Số lượng</th>
-                    <th className={th}>Bộ phận</th>
-                    <th className={th}>Người sử dụng</th>
-                    <th className={th}>Ghi chú</th>
-                    <th className={`${th} w-12`} />
+                  <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-2.5">Ngày</th>
+                    <th className="px-3 py-2.5">Dự án</th>
+                    <th className="px-3 py-2.5">Trạng thái</th>
+                    <th className="px-3 py-2.5 text-right">Hạng mục</th>
+                    <th className="px-3 py-2.5 text-right">Ngày tới</th>
+                    <th className="px-3 py-2.5 text-right">Thiết bị</th>
+                    <th className="px-3 py-2.5 text-right">Sự cố</th>
+                    <th className="px-3 py-2.5">Người lập</th>
+                    <th className="px-3 py-2.5 text-right">Thao tác</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {equipment.map((row, i) => (
-                    <tr key={row.id} className="group/eq hover:bg-slate-50/80">
-                      <td className={`${td} text-center font-semibold text-slate-500`}>{i + 1}</td>
-                      <td className={`${td} font-medium`}>{row.tenThietBi || "—"}</td>
-                      <td className={`${td} text-center`}>{row.soLuong || "—"}</td>
-                      <td className={td}>{row.boPhan || "—"}</td>
-                      <td className={td}>{row.nguoiSuDung || "—"}</td>
-                      <td className={td}>{row.ghiChu || "—"}</td>
-                      <td className={`${td} text-center`}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!window.confirm("Xóa thiết bị này?")) return;
-                            await deleteEquipmentItem(row.id);
-                            setEquipment((rows) => rows.filter((r) => r.id !== row.id));
-                            showToast("Đã xóa thiết bị");
-                          }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 opacity-0 transition group-hover/eq:opacity-100 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                          aria-label="Xóa"
-                        >
-                          <TrashSimple size={14} weight="bold" aria-hidden />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100">
+                  {reportList.map((row) => {
+                    const active = row.ngayBaoCao === reportDate;
+                    return (
+                      <tr
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setReportDate(row.ngayBaoCao)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setReportDate(row.ngayBaoCao);
+                          }
+                        }}
+                        className={`cursor-pointer transition-colors ${active ? "bg-blue-50/80" : "hover:bg-slate-50/80"}`}
+                      >
+                        <td className="whitespace-nowrap px-4 py-2.5 font-mono font-semibold text-[#0047AB]">
+                          {displayDate(row.ngayBaoCao)}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700">{projectLabel(row.duAnId)}</td>
+                        <td className="px-3 py-2.5">
+                          <StatusPill status={row.trangThai} />
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">{row.workTodayCount}</td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums text-slate-500">{row.workNextCount}</td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">{row.equipmentCount}</td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">{row.incidentCount}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{row.nguoiLap || "—"}</td>
+                        <td className="px-3 py-2.5">
+                          <DayActions
+                            dateLabel={displayDate(row.ngayBaoCao)}
+                            busy={busyRowId === row.id}
+                            onView={() => void viewDay(row)}
+                            onEdit={() => void editDay(row)}
+                            onPrint={() => void printDay(row)}
+                            onDelete={() => void deleteDay(row)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )
-        ) : incidents.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-            Chưa có sự cố. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập.
-          </div>
-        ) : (
-          <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className={`${th} w-14`}>STT</th>
-                  <th className={th}>Nội dung</th>
-                  <th className={th}>Người báo cáo</th>
-                  <th className={th}>Bộ phận báo cáo</th>
-                  <th className={th}>Phương án xử lý</th>
-                  <th className={th}>Tình trạng xử lý</th>
-                  <th className={`${th} w-12`} />
-                </tr>
-              </thead>
-              <tbody>
-                {incidents.map((row, i) => (
-                  <tr key={row.id} className="group/inc hover:bg-slate-50/80">
-                    <td className={`${td} text-center font-semibold text-slate-500`}>{i + 1}</td>
-                    <td className={td}>{row.noiDung || "—"}</td>
-                    <td className={td}>{row.nguoiBaoCao || "—"}</td>
-                    <td className={td}>{row.boPhanBaoCao || "—"}</td>
-                    <td className={td}>{row.phuongAnXuLy || "—"}</td>
-                    <td className={td}>{row.tinhTrangXuLy || "—"}</td>
-                    <td className={`${td} text-center`}>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm("Xóa sự cố này?")) return;
-                          await deleteIncidentItem(row.id);
-                          setIncidents((rows) => rows.filter((r) => r.id !== row.id));
-                          showToast("Đã xóa sự cố");
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 opacity-0 transition group-hover/inc:opacity-100 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-                        aria-label="Xóa"
-                      >
-                        <TrashSimple size={14} weight="bold" aria-hidden />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          </>
         )}
       </section>
 
+      <DayEditorModal
+        open={editorOpen}
+        date={reportDate}
+        workToday={workToday}
+        workNext={workNext}
+        equipment={equipment}
+        incidents={incidents}
+        onClose={() => setEditorOpen(false)}
+        onAdd={openAdd}
+        onDeleteWork={(id, phan) => void removeWork(id, phan)}
+        onDeleteEquipment={(id) => void removeEquipment(id)}
+        onDeleteIncident={(id) => void removeIncident(id)}
+      />
+
       <WorkFormModal
         open={modal?.kind === "work"}
-        title={
-          modal?.kind === "work"
-            ? `Thêm · BC công việc · ${modal.phan === "ngay_tiep_theo" ? "Ngày tiếp theo" : "Hôm nay"}`
-            : "Thêm công việc"
-        }
+        title="Thêm công việc"
         saving={saving}
         personnel={personnel}
         machines={machines}
         workTypes={workTypes}
+        projects={projects}
+        currentDuAnId={header?.duAnId ?? ""}
         hangMucOptions={hangMucOptions}
-        phan={modal?.kind === "work" ? modal.phan : "hom_nay"}
         reportDate={reportDate}
         onReportDateChange={setReportDate}
         onClose={() => setModal(null)}
-        onSubmit={async (values) => {
+        onSubmit={async (values, duAnId, phan) => {
           if (!modal || modal.kind !== "work") return;
           setSaving(true);
           try {
-            const item = await insertWorkItem(reportDate, modal.phan, values);
-            if (modal.phan === "hom_nay") setWorkToday((rows) => [...rows, item]);
+            const item = await insertWorkItem(reportDate, phan, values, undefined, duAnId);
+            setHeader((current) =>
+              current
+                ? { ...current, duAnId }
+                : {
+                    id: item.baoCaoId,
+                    ngayBaoCao: reportDate,
+                    ngayTiepTheo: null,
+                    duAnId,
+                    nguoiLap: "",
+                    ghiChu: "",
+                    trangThai: "Nháp",
+                  },
+            );
+            if (phan === "hom_nay") setWorkToday((rows) => [...rows, item]);
             else setWorkNext((rows) => [...rows, item]);
             const added = item.hangMuc.trim();
             if (added) {
@@ -1422,6 +1734,7 @@ export default function DailyWorkReport() {
               });
             }
             setModal(null);
+            void reloadList();
             showToast("Đã thêm công việc");
           } finally {
             setSaving(false);
@@ -1439,6 +1752,7 @@ export default function DailyWorkReport() {
             const item = await insertEquipmentItem(reportDate, values);
             setEquipment((rows) => [...rows, item]);
             setModal(null);
+            void reloadList();
             showToast("Đã thêm thiết bị");
           } finally {
             setSaving(false);
@@ -1456,6 +1770,7 @@ export default function DailyWorkReport() {
             const item = await insertIncidentItem(reportDate, values);
             setIncidents((rows) => [...rows, item]);
             setModal(null);
+            void reloadList();
             showToast("Đã thêm sự cố");
           } finally {
             setSaving(false);
@@ -1468,6 +1783,24 @@ export default function DailyWorkReport() {
           {toast}
         </div>
       )}
+
+      <DailyWorkReportPrint
+        open={printOpen}
+        reportDate={reportDate}
+        weather={weather}
+        temperature={temperature}
+        workTypes={workTypes}
+        workToday={workToday}
+        workNext={workNext}
+        equipment={equipment}
+        incidents={incidents}
+        autoPrint={printAuto}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintAuto(false);
+        }}
+        onPrint={() => window.print()}
+      />
     </main>
   );
 }

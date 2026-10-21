@@ -74,7 +74,7 @@ export function LongRailDetailPanel({
           </div>
         </dl>
         <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-          Toàn bộ thông số 60R2 gắn với thanh dài này. Bấm <b>Lưu thông số</b> để giữ lại và xem lại sau.
+          Toàn bộ thông số giải toả gắn với thanh dài này. Bấm <b>Lưu thông số</b> để giữ lại và xem lại sau.
         </p>
         <StressReleaseCalculator
           key={`${longRail.id}-${longRail.updatedAt}`}

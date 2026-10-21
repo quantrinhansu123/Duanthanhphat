@@ -118,6 +118,13 @@ export type DailyReportBundle = {
   error?: string;
 };
 
+export type DailyReportSummary = DailyReportHeader & {
+  workTodayCount: number;
+  workNextCount: number;
+  equipmentCount: number;
+  incidentCount: number;
+};
+
 export type WorkItemInput = Omit<DailyWorkItem, "id" | "baoCaoId" | "thuTu" | "phan">;
 export type EquipmentItemInput = Omit<DailyEquipmentItem, "id" | "baoCaoId" | "thuTu">;
 export type IncidentItemInput = Omit<DailyIncidentItem, "id" | "baoCaoId" | "thuTu">;
@@ -484,6 +491,22 @@ export function workTypeWeldMethod(workType: DailyWorkType | null | undefined): 
   return null;
 }
 
+export function matchWorkType(
+  workTypes: DailyWorkType[],
+  hangMuc: string,
+  congViecId?: string,
+): DailyWorkType | null {
+  const key = hangMuc.trim().toLocaleLowerCase("vi");
+  if (key) {
+    const byName = workTypes.find((item) => item.ten.trim().toLocaleLowerCase("vi") === key);
+    if (byName) return byName;
+  }
+  if (congViecId) {
+    return workTypes.find((item) => item.id === congViecId) ?? null;
+  }
+  return null;
+}
+
 export type DailyWorkJournalFill = {
   date: string;
   method: "ATW" | "FBW";
@@ -791,6 +814,11 @@ function uid() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function uuidOrNull(value: string | null | undefined) {
+  const raw = (value ?? "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw) ? raw : null;
+}
+
 const EMPTY_MANPOWER = {
   cht: [] as DailyWorkPerson[],
   kySu: [] as DailyWorkPerson[],
@@ -855,28 +883,34 @@ function seedWorkToday(baoCaoId: string): DailyWorkItem[] {
 async function ensureHeaderSupabase(
   ngayBaoCao: string,
   ngayTiepTheo?: string | null,
+  duAnId?: string | null,
 ): Promise<DailyReportHeader> {
   const supabase = createClient();
   const existing = await supabase
     .from("bao_cao_ngay")
     .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai")
     .eq("ngay_bao_cao", ngayBaoCao)
-    .is("du_an_id", null)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (existing.error) throw existing.error;
-  if (existing.data) {
-    if (ngayTiepTheo && existing.data.ngay_tiep_theo !== ngayTiepTheo) {
+  const row = (existing.data?.[0] ?? null) as HeaderRowDb | null;
+  const projectId = duAnId === undefined ? undefined : uuidOrNull(duAnId);
+  if (row) {
+    const patch: Record<string, unknown> = {};
+    if (ngayTiepTheo && row.ngay_tiep_theo !== ngayTiepTheo) patch.ngay_tiep_theo = ngayTiepTheo;
+    if (projectId !== undefined && (row.du_an_id ?? null) !== projectId) patch.du_an_id = projectId;
+    if (Object.keys(patch).length) {
       const updated = await supabase
         .from("bao_cao_ngay")
-        .update({ ngay_tiep_theo: ngayTiepTheo })
-        .eq("id", existing.data.id)
+        .update(patch)
+        .eq("id", row.id)
         .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai")
         .single();
       if (updated.error) throw updated.error;
       return mapHeader(updated.data as HeaderRowDb);
     }
-    return mapHeader(existing.data as HeaderRowDb);
+    return mapHeader(row);
   }
 
   const inserted = await supabase
@@ -884,6 +918,7 @@ async function ensureHeaderSupabase(
     .insert({
       ngay_bao_cao: ngayBaoCao,
       ngay_tiep_theo: ngayTiepTheo || null,
+      du_an_id: projectId ?? null,
       trang_thai: "Nháp",
     })
     .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai")
@@ -892,15 +927,19 @@ async function ensureHeaderSupabase(
   return mapHeader(inserted.data as HeaderRowDb);
 }
 
-function ensureHeaderLocal(ngayBaoCao: string, ngayTiepTheo?: string | null): DailyReportHeader {
+function ensureHeaderLocal(
+  ngayBaoCao: string,
+  ngayTiepTheo?: string | null,
+  duAnId?: string | null,
+): DailyReportHeader {
   const store = readLocal();
-  let header = store.headers.find((h) => h.ngayBaoCao === ngayBaoCao && !h.duAnId);
+  let header = store.headers.find((h) => h.ngayBaoCao === ngayBaoCao);
   if (!header) {
     header = {
       id: uid(),
       ngayBaoCao,
       ngayTiepTheo: ngayTiepTheo || null,
-      duAnId: null,
+      duAnId: duAnId ?? null,
       nguoiLap: "",
       ghiChu: "",
       trangThai: "Nháp",
@@ -912,8 +951,16 @@ function ensureHeaderLocal(ngayBaoCao: string, ngayTiepTheo?: string | null): Da
     writeLocal(store);
     return header;
   }
+  let changed = false;
   if (ngayTiepTheo && header.ngayTiepTheo !== ngayTiepTheo) {
     header = { ...header, ngayTiepTheo };
+    changed = true;
+  }
+  if (duAnId !== undefined && header.duAnId !== duAnId) {
+    header = { ...header, duAnId };
+    changed = true;
+  }
+  if (changed) {
     store.headers = store.headers.map((h) => (h.id === header!.id ? header! : h));
     writeLocal(store);
   }
@@ -930,7 +977,7 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
 
   if (!isSupabaseConfigured()) {
     const store = readLocal();
-    let header = store.headers.find((h) => h.ngayBaoCao === ngayBaoCao && !h.duAnId) ?? null;
+    let header = store.headers.find((h) => h.ngayBaoCao === ngayBaoCao) ?? null;
     if (!header && store.headers.length === 0 && store.work.length === 0) {
       header = ensureHeaderLocal(ngayBaoCao);
       const refreshed = readLocal();
@@ -965,11 +1012,12 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
       .from("bao_cao_ngay")
       .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai")
       .eq("ngay_bao_cao", ngayBaoCao)
-      .is("du_an_id", null)
-      .maybeSingle();
+      .order("created_at", { ascending: false });
 
     if (headerRes.error) throw headerRes.error;
-    if (!headerRes.data) {
+    const headerRows = (headerRes.data ?? []) as HeaderRowDb[];
+    const headerRow = headerRows[0];
+    if (!headerRow) {
       return withTypes({
         header: null,
         workToday: [],
@@ -980,7 +1028,7 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
       });
     }
 
-    const header = mapHeader(headerRes.data as HeaderRowDb);
+    const header = mapHeader(headerRow);
     const [workRes, eqRes, incRes] = await Promise.all([
       supabase
         .from("bao_cao_ngay_cong_viec")
@@ -1025,14 +1073,86 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
   }
 }
 
+function summarizeLocalStore(): DailyReportSummary[] {
+  const store = readLocal();
+  return store.headers
+    .map((header) => ({
+      ...header,
+      workTodayCount: store.work.filter((row) => row.baoCaoId === header.id && row.phan === "hom_nay").length,
+      workNextCount: store.work.filter((row) => row.baoCaoId === header.id && row.phan === "ngay_tiep_theo").length,
+      equipmentCount: store.equipment.filter((row) => row.baoCaoId === header.id).length,
+      incidentCount: store.incidents.filter((row) => row.baoCaoId === header.id).length,
+    }))
+    .filter((row) => row.workTodayCount + row.workNextCount + row.equipmentCount + row.incidentCount > 0)
+    .sort((a, b) => b.ngayBaoCao.localeCompare(a.ngayBaoCao) || b.id.localeCompare(a.id));
+}
+
+export async function loadDailyReportList(): Promise<{ rows: DailyReportSummary[]; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { rows: summarizeLocalStore(), error: "Chưa cấu hình Supabase — đang dùng bộ nhớ cục bộ" };
+  }
+
+  try {
+    const supabase = createClient();
+    const headerRes = await supabase
+      .from("bao_cao_ngay")
+      .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai,created_at")
+      .order("ngay_bao_cao", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (headerRes.error) throw headerRes.error;
+    const headers = (headerRes.data ?? []) as (HeaderRowDb & { created_at?: string })[];
+    if (headers.length === 0) return { rows: [] };
+
+    const ids = headers.map((row) => row.id);
+    const [workRes, eqRes, incRes] = await Promise.all([
+      supabase.from("bao_cao_ngay_cong_viec").select("bao_cao_id,phan").in("bao_cao_id", ids),
+      supabase.from("bao_cao_ngay_thiet_bi").select("bao_cao_id").in("bao_cao_id", ids),
+      supabase.from("bao_cao_ngay_su_co").select("bao_cao_id").in("bao_cao_id", ids),
+    ]);
+    if (workRes.error) throw workRes.error;
+    if (eqRes.error) throw eqRes.error;
+    if (incRes.error) throw incRes.error;
+
+    const workToday = new Map<string, number>();
+    const workNext = new Map<string, number>();
+    for (const row of (workRes.data ?? []) as { bao_cao_id: string; phan: string }[]) {
+      if (row.phan === "ngay_tiep_theo") workNext.set(row.bao_cao_id, (workNext.get(row.bao_cao_id) ?? 0) + 1);
+      else workToday.set(row.bao_cao_id, (workToday.get(row.bao_cao_id) ?? 0) + 1);
+    }
+    const equipment = new Map<string, number>();
+    for (const row of (eqRes.data ?? []) as { bao_cao_id: string }[]) {
+      equipment.set(row.bao_cao_id, (equipment.get(row.bao_cao_id) ?? 0) + 1);
+    }
+    const incidents = new Map<string, number>();
+    for (const row of (incRes.data ?? []) as { bao_cao_id: string }[]) {
+      incidents.set(row.bao_cao_id, (incidents.get(row.bao_cao_id) ?? 0) + 1);
+    }
+
+    return {
+      rows: headers
+        .map((row) => ({
+          ...mapHeader(row),
+          workTodayCount: workToday.get(row.id) ?? 0,
+          workNextCount: workNext.get(row.id) ?? 0,
+          equipmentCount: equipment.get(row.id) ?? 0,
+          incidentCount: incidents.get(row.id) ?? 0,
+        }))
+        .filter((row) => row.workTodayCount + row.workNextCount + row.equipmentCount + row.incidentCount > 0),
+    };
+  } catch (error) {
+    return { rows: summarizeLocalStore(), error: formatSupabaseError(error) };
+  }
+}
+
 export async function insertWorkItem(
   ngayBaoCao: string,
   phan: WorkSection,
   input: WorkItemInput,
   ngayTiepTheo?: string | null,
+  duAnId?: string | null,
 ): Promise<DailyWorkItem> {
   if (!isSupabaseConfigured()) {
-    const header = ensureHeaderLocal(ngayBaoCao, ngayTiepTheo);
+    const header = ensureHeaderLocal(ngayBaoCao, ngayTiepTheo, duAnId);
     const store = readLocal();
     const siblings = store.work.filter((w) => w.baoCaoId === header.id && w.phan === phan);
     const item: DailyWorkItem = {
@@ -1053,7 +1173,7 @@ export async function insertWorkItem(
     return item;
   }
 
-  const header = await ensureHeaderSupabase(ngayBaoCao, ngayTiepTheo);
+  const header = await ensureHeaderSupabase(ngayBaoCao, ngayTiepTheo, duAnId);
   const supabase = createClient();
   const countRes = await supabase
     .from("bao_cao_ngay_cong_viec")
@@ -1289,10 +1409,34 @@ export async function deleteIncidentItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteDailyReport(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const store = readLocal();
+    store.headers = store.headers.filter((header) => header.id !== id);
+    store.work = store.work.filter((row) => row.baoCaoId !== id);
+    store.equipment = store.equipment.filter((row) => row.baoCaoId !== id);
+    store.incidents = store.incidents.filter((row) => row.baoCaoId !== id);
+    writeLocal(store);
+    return;
+  }
+
+  const supabase = createClient();
+  const children = await Promise.all([
+    supabase.from("bao_cao_ngay_cong_viec").delete().eq("bao_cao_id", id),
+    supabase.from("bao_cao_ngay_thiet_bi").delete().eq("bao_cao_id", id),
+    supabase.from("bao_cao_ngay_su_co").delete().eq("bao_cao_id", id),
+  ]);
+  for (const result of children) {
+    if (result.error) throw result.error;
+  }
+  const { error } = await supabase.from("bao_cao_ngay").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export function emptyWorkInput(workType?: DailyWorkType | null): WorkItemInput {
   return {
     congViecId: workType?.id ?? "",
-    hangMuc: workType?.ten ?? "",
+    hangMuc: "",
     tenMoiHan: "",
     tuyenHa: "",
     tuyenThuong: "",

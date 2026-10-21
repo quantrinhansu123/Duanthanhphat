@@ -87,6 +87,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Machine code, model, current location, operating status, and weld count",
       },
       {
+        id: "kiem-tra-may-truoc-ca",
+        label: "Checklist máy trước ca",
+        labelEn: "Pre-shift machine checklist",
+        description: "Công nhân xác nhận checklist máy hàn MFBW trước ca, lưu phiếu và in mẫu",
+        descriptionEn: "Crew confirms the MFBW pre-shift checklist, saves the sheet, and prints the form",
+      },
+      {
         id: "lich-bao-tri",
         label: "Lịch bảo trì",
         labelEn: "Maintenance Schedule",

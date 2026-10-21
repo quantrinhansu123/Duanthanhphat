@@ -128,6 +128,100 @@ export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
   });
 }
 
+export type RailCellPatch = {
+  from?: string;
+  to?: string;
+  lengthMetres?: number;
+  temp?: number;
+};
+
+export function railCellLengthMetres(cell: RailCell): number | null {
+  const from = parseChainage(cell.from);
+  const to = parseChainage(cell.to);
+  if (from === null || to === null) return null;
+  return to - from;
+}
+
+/** Update one cell's chainage/length/temp. Later cells keep their length and slide. */
+export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellPatch): RailRow[] {
+  const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
+  const row = next.find((item) => item.cells.some((cell) => cell.id === cellId));
+  if (!row) throw new RangeError("Không tìm thấy thanh ray.");
+  const index = row.cells.findIndex((cell) => cell.id === cellId);
+  const cell = row.cells[index];
+
+  if (patch.temp !== undefined) {
+    if (!Number.isFinite(patch.temp)) throw new RangeError("Nhiệt độ khóa phải là số hữu hạn.");
+    cell.temp = patch.temp;
+  }
+
+  const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
+  if (!hasGeometry) {
+    if (patch.temp === undefined) throw new RangeError("Không có thông số để cập nhật.");
+    return next;
+  }
+
+  const currentFrom = parseChainage(cell.from);
+  const currentTo = parseChainage(cell.to);
+  if (currentFrom === null || currentTo === null) {
+    throw new RangeError("Lý trình hiện tại không hợp lệ.");
+  }
+
+  let newFrom = currentFrom;
+  if (patch.from !== undefined) {
+    const parsed = parseChainage(patch.from);
+    if (parsed === null || !Number.isSafeInteger(parsed)) {
+      throw new RangeError("Lý trình đầu không hợp lệ. Dùng dạng 0+000.");
+    }
+    newFrom = parsed;
+  }
+
+  let newTo: number;
+  if (patch.lengthMetres !== undefined) {
+    if (!Number.isSafeInteger(patch.lengthMetres) || patch.lengthMetres < 1) {
+      throw new RangeError("Chiều dài đoạn phải là số mét nguyên dương.");
+    }
+    newTo = newFrom + patch.lengthMetres;
+  } else if (patch.to !== undefined) {
+    const parsed = parseChainage(patch.to);
+    if (parsed === null || !Number.isSafeInteger(parsed)) {
+      throw new RangeError("Lý trình cuối không hợp lệ. Dùng dạng 0+000.");
+    }
+    newTo = parsed;
+  } else {
+    newTo = newFrom + (currentTo - currentFrom);
+  }
+
+  if (newTo <= newFrom) throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
+  if (!Number.isSafeInteger(newTo) || newFrom < 0) throw new RangeError("Lý trình vượt giới hạn số.");
+
+  if (index > 0) {
+    const previous = row.cells[index - 1];
+    const prevFrom = parseChainage(previous.from);
+    if (prevFrom === null || newFrom <= prevFrom) {
+      throw new RangeError("Lý trình đầu phải lớn hơn lý trình đầu của đoạn trước.");
+    }
+    previous.to = formatChainage(newFrom);
+  }
+
+  cell.from = formatChainage(newFrom);
+  cell.to = formatChainage(newTo);
+
+  for (let i = index + 1; i < row.cells.length; i += 1) {
+    const length = railCellLengthMetres(row.cells[i]);
+    const start = parseChainage(row.cells[i - 1].to);
+    if (length === null || length < 1 || start === null) {
+      throw new RangeError("Không dồn được các thanh phía sau.");
+    }
+    const end = start + length;
+    if (!Number.isSafeInteger(end)) throw new RangeError("Lý trình vượt giới hạn số.");
+    row.cells[i].from = formatChainage(start);
+    row.cells[i].to = formatChainage(end);
+  }
+
+  return next;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

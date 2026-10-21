@@ -1,8 +1,13 @@
 import { RAIL_ROWS } from "./track-data";
-import { DEFAULT_STRESS_INPUT, type StressInput } from "./stress-release";
+import {
+  DEFAULT_STRESS_INPUT,
+  getRailProfile,
+  nextUnusedRailType,
+  type StressInput,
+} from "./stress-release";
 import type { RailCell, RailRow } from "../types/track";
 
-export const TRACK_LAYOUT_STORAGE_KEY = "tp-track-layout-v1";
+export const TRACK_LAYOUT_STORAGE_KEY = "tp-track-layout-v2";
 export const RAIL_SEGMENT_LENGTH_METRES = 500;
 export const DEFAULT_NEW_RAIL_TEMPERATURE = 35;
 export const MAX_EXTENSION_SEGMENTS = 100;
@@ -44,9 +49,20 @@ export interface PlacementSpan {
   endMetres: number;
 }
 
-/** A rail's cell prefix stays stable as its extent grows. */
+const LINE_RAIL_PREFIX: Array<[line: string, rail: string, prefix: string]> = [
+  ["TUYẾN THƯỢNG", "Ray trái", "UT"],
+  ["TUYẾN THƯỢNG", "Ray phải", "UP"],
+  ["TUYẾN HẠ", "Ray trái", "DT"],
+  ["TUYẾN HẠ", "Ray phải", "DP"],
+];
+
+export function railPrefixFromLabels(line: string, rail: string): string {
+  return LINE_RAIL_PREFIX.find((item) => item[0] === line && item[1] === rail)?.[2] ?? "";
+}
+
+/** A rail's cell prefix stays stable as its extent grows. Empty rows use line/rail labels. */
 export function railRowKey(row: RailRow): string {
-  return row.cells[0]?.id.replace(/-\d+$/, "") ?? "";
+  return row.cells[0]?.id.replace(/-\d+$/, "") || railPrefixFromLabels(row.line, row.rail);
 }
 
 /** Parse kilometre + metre chainage without accepting ambiguous invalid values. */
@@ -78,11 +94,17 @@ export function createInitialTrackLayout(): TrackLayout {
 }
 
 /** Default 60R2 params for a new long rail spanning the selected cells. */
-export function defaultLongRailParams(rows: RailRow[], span: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">): StressInput {
+export function defaultLongRailParams(
+  rows: RailRow[],
+  span: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
+  railType?: string,
+): StressInput {
   const placement = getPlacementSpan(rows, span);
-  if (!placement) return { ...DEFAULT_STRESS_INPUT };
+  const type = railType || DEFAULT_STRESS_INPUT.railType;
+  const base = paramsForRailType(type);
+  if (!placement) return base;
   return {
-    ...DEFAULT_STRESS_INPUT,
+    ...base,
     leftLength: placement.endMetres - placement.startMetres,
     rightLength: 0,
     neutralTemp: placement.startCell.temp,
@@ -102,14 +124,88 @@ export function longRailsOverlap(
   return spanA.startIndex <= spanB.endIndex && spanB.startIndex <= spanA.endIndex;
 }
 
-export function nextLongRailCode(longRails: LongRail[], rowKey: string): string {
-  const prefix = `TD-${rowKey}-`;
+export function nextLongRailCode(longRails: LongRail[], _rowKey?: string): string {
   const numbers = longRails
-    .filter((item) => item.code.startsWith(prefix))
-    .map((item) => Number(/-(\d+)$/.exec(item.code)?.[1]))
-    .filter((n) => Number.isSafeInteger(n));
+    .map((item) => Number(/^LWR(\d+)$/i.exec(item.code.trim())?.[1]))
+    .filter((n) => Number.isSafeInteger(n) && n > 0);
   const next = (numbers.length ? Math.max(...numbers) : 0) + 1;
-  return `${prefix}${String(next).padStart(2, "0")}`;
+  return `LWR${String(next).padStart(2, "0")}`;
+}
+
+function cellRange(cell: RailCell): { from: number; to: number } | null {
+  const from = parseChainage(cell.from);
+  const to = parseChainage(cell.to);
+  return from !== null && to !== null && to > from ? { from, to } : null;
+}
+
+function nextCellNumber(row: RailRow): number {
+  const numbers = row.cells.map((cell) => Number(/-(\d+)$/.exec(cell.id)?.[1]));
+  return (numbers.filter((n) => Number.isSafeInteger(n)).length ? Math.max(...numbers.filter((n) => Number.isSafeInteger(n))) : 0) + 1;
+}
+
+/** Bảo đảm dải ray phủ lý trình đầu–cuối; trả về ô bắt đầu/kết thúc để đánh dấu sơ đồ. */
+export function ensureRowSpan(
+  rows: RailRow[],
+  rowKey: string,
+  startMetres: number,
+  endMetres: number,
+): { rows: RailRow[]; startCellId: string; endCellId: string } {
+  if (!Number.isSafeInteger(startMetres) || !Number.isSafeInteger(endMetres) || endMetres <= startMetres) {
+    throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
+  }
+  const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
+  const row = next.find((item) => railRowKey(item) === rowKey);
+  if (!row) throw new RangeError("Không tìm thấy dải ray.");
+  const prefix = railRowKey(row);
+
+  if (row.cells.length === 0) {
+    const cell: RailCell = {
+      id: `${prefix}-01`,
+      from: formatChainage(startMetres),
+      to: formatChainage(endMetres),
+      temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+    };
+    row.cells.push(cell);
+    return { rows: next, startCellId: cell.id, endCellId: cell.id };
+  }
+
+  const first = cellRange(row.cells[0]);
+  if (first && startMetres < first.from) {
+    row.cells[0].from = formatChainage(startMetres);
+  }
+  const last = row.cells[row.cells.length - 1];
+  const lastRange = cellRange(last);
+  if (lastRange && endMetres > lastRange.to) {
+    row.cells.push({
+      id: `${prefix}-${String(nextCellNumber(row)).padStart(2, "0")}`,
+      from: formatChainage(lastRange.to),
+      to: formatChainage(endMetres),
+      temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+    });
+  }
+
+  const startIndex = row.cells.findIndex((cell) => {
+    const range = cellRange(cell);
+    return range !== null && range.from <= startMetres && startMetres < range.to;
+  });
+  const endIndex = row.cells.findIndex((cell) => {
+    const range = cellRange(cell);
+    return range !== null && range.from < endMetres && endMetres <= range.to;
+  });
+  if (startIndex < 0 || endIndex < startIndex) {
+    throw new RangeError("Không phủ được đoạn lý trình đã nhập trên dải ray này.");
+  }
+  return { rows: next, startCellId: row.cells[startIndex].id, endCellId: row.cells[endIndex].id };
+}
+
+export function paramsForRailType(railType: string, base: StressInput = DEFAULT_STRESS_INPUT): StressInput {
+  const profile = getRailProfile(railType);
+  if (!profile) return { ...base, railType };
+  return { ...base, railType: profile.id, area: profile.area, modulus: profile.modulus, alpha: profile.alpha };
+}
+
+export function defaultRailTypeForNewLongRail(longRails: LongRail[]): string {
+  return nextUnusedRailType(longRails.map((item) => item.params.railType));
 }
 
 /** Inclusive cell selection: the span ends at the end of the last selected cell. */
@@ -146,20 +242,21 @@ export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: 
   };
 }
 
-/** Extend all rails together; original rows and existing cell values are preserved. */
+/** Extend all rails together; original rows and existing cell values are preserved.
+ *  Empty rows start at Km 0+000. */
 export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
   if (!Number.isInteger(count) || count < 1 || count > MAX_EXTENSION_SEGMENTS) {
     throw new RangeError(`Số thanh ghép thêm phải từ 1 đến ${MAX_EXTENSION_SEGMENTS}.`);
   }
   return rows.map((row) => {
     const last = row.cells[row.cells.length - 1];
-    const lastMetres = last ? parseChainage(last.to) : null;
+    const lastMetres = last ? parseChainage(last.to) : 0;
     const prefix = railRowKey(row);
     const numbers = row.cells.map((cell) => Number(/-(\d+)$/.exec(cell.id)?.[1]));
-    if (!last || lastMetres === null || !prefix || numbers.some((number) => !Number.isSafeInteger(number))) {
+    if (lastMetres === null || !prefix || numbers.some((number) => !Number.isSafeInteger(number))) {
       throw new RangeError("Dữ liệu thanh ray không hợp lệ để ghép thêm.");
     }
-    const lastNumber = Math.max(...numbers);
+    const lastNumber = numbers.length ? Math.max(...numbers) : 0;
     if (!Number.isSafeInteger(lastNumber + count)
       || !Number.isSafeInteger(lastMetres + count * RAIL_SEGMENT_LENGTH_METRES)) {
       throw new RangeError("Lý trình hoặc mã thanh ray vượt giới hạn số.");
@@ -177,6 +274,127 @@ export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
   });
 }
 
+export type RailCellPatch = {
+  from?: string;
+  to?: string;
+  lengthMetres?: number;
+  temp?: number;
+  released?: boolean;
+};
+
+export function railCellLengthMetres(cell: RailCell): number | null {
+  const from = parseChainage(cell.from);
+  const to = parseChainage(cell.to);
+  if (from === null || to === null) return null;
+  return to - from;
+}
+
+/** Update one cell's chainage/length/temp. Later cells keep their length and slide. */
+export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellPatch): RailRow[] {
+  const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
+  const row = next.find((item) => item.cells.some((cell) => cell.id === cellId));
+  if (!row) throw new RangeError("Không tìm thấy thanh ray.");
+  const index = row.cells.findIndex((cell) => cell.id === cellId);
+  const cell = row.cells[index];
+
+  if (patch.temp !== undefined) {
+    if (!Number.isFinite(patch.temp)) throw new RangeError("Nhiệt độ khóa phải là số hữu hạn.");
+    cell.temp = patch.temp;
+  }
+  if (patch.released !== undefined) {
+    if (patch.released) cell.released = true;
+    else delete cell.released;
+  }
+
+  const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
+  if (!hasGeometry) {
+    if (patch.temp === undefined && patch.released === undefined) throw new RangeError("Không có thông số để cập nhật.");
+    return next;
+  }
+
+  const currentFrom = parseChainage(cell.from);
+  const currentTo = parseChainage(cell.to);
+  if (currentFrom === null || currentTo === null) {
+    throw new RangeError("Lý trình hiện tại không hợp lệ.");
+  }
+
+  let newFrom = currentFrom;
+  if (patch.from !== undefined) {
+    const parsed = parseChainage(patch.from);
+    if (parsed === null || !Number.isSafeInteger(parsed)) {
+      throw new RangeError("Lý trình đầu không hợp lệ. Dùng dạng 0+000.");
+    }
+    newFrom = parsed;
+  }
+
+  let newTo: number;
+  if (patch.lengthMetres !== undefined) {
+    if (!Number.isSafeInteger(patch.lengthMetres) || patch.lengthMetres < 1) {
+      throw new RangeError("Chiều dài đoạn phải là số mét nguyên dương.");
+    }
+    newTo = newFrom + patch.lengthMetres;
+  } else if (patch.to !== undefined) {
+    const parsed = parseChainage(patch.to);
+    if (parsed === null || !Number.isSafeInteger(parsed)) {
+      throw new RangeError("Lý trình cuối không hợp lệ. Dùng dạng 0+000.");
+    }
+    newTo = parsed;
+  } else {
+    newTo = newFrom + (currentTo - currentFrom);
+  }
+
+  if (newTo <= newFrom) throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
+  if (!Number.isSafeInteger(newTo) || newFrom < 0) throw new RangeError("Lý trình vượt giới hạn số.");
+
+  if (index > 0) {
+    const previous = row.cells[index - 1];
+    const prevFrom = parseChainage(previous.from);
+    if (prevFrom === null || newFrom <= prevFrom) {
+      throw new RangeError("Lý trình đầu phải lớn hơn lý trình đầu của đoạn trước.");
+    }
+    previous.to = formatChainage(newFrom);
+  }
+
+  cell.from = formatChainage(newFrom);
+  cell.to = formatChainage(newTo);
+
+  for (let i = index + 1; i < row.cells.length; i += 1) {
+    const length = railCellLengthMetres(row.cells[i]);
+    const start = parseChainage(row.cells[i - 1].to);
+    if (length === null || length < 1 || start === null) {
+      throw new RangeError("Không dồn được các thanh phía sau.");
+    }
+    const end = start + length;
+    if (!Number.isSafeInteger(end)) throw new RangeError("Lý trình vượt giới hạn số.");
+    row.cells[i].from = formatChainage(start);
+    row.cells[i].to = formatChainage(end);
+  }
+
+  return next;
+}
+
+/** Apply a cell edit and keep long-rail lengths in sync with the new span. */
+export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailCellPatch): TrackLayout {
+  const rows = updateRailCell(layout.rows, cellId, patch);
+  const longRails = layout.longRails.map((item) => {
+    const span = getPlacementSpan(rows, item);
+    if (!span) return item;
+    const length = span.endMetres - span.startMetres;
+    const nextParams = { ...item.params, leftLength: length };
+    if (patch.temp !== undefined && span.startCell.id === cellId) {
+      nextParams.neutralTemp = patch.temp;
+    }
+    if (
+      nextParams.leftLength === item.params.leftLength
+      && nextParams.neutralTemp === item.params.neutralTemp
+    ) {
+      return item;
+    }
+    return { ...item, params: nextParams, updatedAt: new Date().toISOString() };
+  });
+  return { ...layout, rows, longRails };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -192,6 +410,11 @@ const STRESS_NUMBER_KEYS: StressNumberKey[] = [
   "leftMovement", "rightMovement",
 ];
 
+/** Added after the first 60R2 save format; missing keys keep sample defaults. */
+const OPTIONAL_STRESS_NUMBER_KEYS: StressNumberKey[] = [
+  "jackCylinderArea", "minAnchorLength", "allowedGap", "lockTempOffset",
+];
+
 export function validateStressParams(value: unknown): StressInput | null {
   if (!isRecord(value)) return null;
   const params = { ...DEFAULT_STRESS_INPUT };
@@ -200,10 +423,20 @@ export function validateStressParams(value: unknown): StressInput | null {
     if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
     params[key] = raw;
   }
+  for (const key of OPTIONAL_STRESS_NUMBER_KEYS) {
+    const raw = value[key];
+    if (raw === undefined) continue;
+    if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+    params[key] = raw;
+  }
   if (typeof value.sideRollers !== "boolean") return null;
   if (value.method !== "ATW" && value.method !== "FBW" && value.method !== "SINGLE") return null;
   params.sideRollers = value.sideRollers;
   params.method = value.method;
+  if (value.railType !== undefined) {
+    if (typeof value.railType !== "string" || !value.railType.trim()) return null;
+    params.railType = value.railType.trim();
+  }
   return params;
 }
 
@@ -233,25 +466,32 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
   for (const rawRow of value.rows) {
     if (!isRecord(rawRow) || typeof rawRow.line !== "string" || !rawRow.line.trim()
       || typeof rawRow.rail !== "string" || !rawRow.rail.trim()
-      || !Array.isArray(rawRow.cells) || !rawRow.cells.length) return null;
+      || !Array.isArray(rawRow.cells)) return null;
     const cells: RailCell[] = [];
     let previousEnd: number | null = null;
     for (const rawCell of rawRow.cells) {
       if (!isRecord(rawCell) || typeof rawCell.id !== "string" || !/^.+-\d+$/.test(rawCell.id)
         || typeof rawCell.from !== "string" || typeof rawCell.to !== "string"
         || typeof rawCell.temp !== "number" || !Number.isFinite(rawCell.temp)
+        || (rawCell.released !== undefined && typeof rawCell.released !== "boolean")
         || cellIds.has(rawCell.id)) return null;
       const start = parseChainage(rawCell.from);
       const end = parseChainage(rawCell.to);
       if (start === null || end === null || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
         || end <= start || (previousEnd !== null && previousEnd !== start)) return null;
-      cells.push({ id: rawCell.id, from: rawCell.from, to: rawCell.to, temp: rawCell.temp });
+      cells.push({
+        id: rawCell.id,
+        from: rawCell.from,
+        to: rawCell.to,
+        temp: rawCell.temp,
+        ...(rawCell.released ? { released: true } : {}),
+      });
       cellIds.add(rawCell.id);
       previousEnd = end;
     }
     const row = { line: rawRow.line, rail: rawRow.rail, cells };
     const key = railRowKey(row);
-    if (!key || rowKeys.has(key) || cells.some((cell) => cell.id.replace(/-\d+$/, "") !== key)) return null;
+    if (!key || rowKeys.has(key) || (cells.length > 0 && cells.some((cell) => cell.id.replace(/-\d+$/, "") !== key))) return null;
     rowKeys.add(key);
     rows.push(row);
   }

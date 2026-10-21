@@ -10,7 +10,9 @@ import {
   parseChainage,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
+  updateRailCell,
   validateTrackLayout,
+  type RailCellPatch,
   type TrackLayout,
   type TrackPlacement,
 } from "@/lib/track-editor";
@@ -140,6 +142,15 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     });
   }
 
+  function saveCellPatch(patch: RailCellPatch) {
+    try {
+      return commit({ ...layout, rows: updateRailCell(layout.rows, cell.id, patch) });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không cập nhật được đoạn ray.");
+      return false;
+    }
+  }
+
   function step(direction: 1 | -1) {
     const index = cells.findIndex((item) => item.id === cell.id);
     setSelectedId(cells[(index + direction + cells.length) % cells.length].id);
@@ -233,6 +244,7 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
                 onClose={() => setDetailOpen(false)}
                 onPrev={() => step(-1)}
                 onNext={() => step(1)}
+                onChange={saveCellPatch}
               />
             ) : null}
           </div>

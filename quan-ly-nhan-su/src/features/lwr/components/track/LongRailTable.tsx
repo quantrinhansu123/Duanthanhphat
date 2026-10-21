@@ -38,7 +38,7 @@ export function LongRailTable({
       </div>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-sm text-slate-500">
-          Chưa có thanh dài. Chọn dải ray, thanh bắt đầu và kết thúc ở form phía trên để thêm.
+          Chưa có thanh dài. Nhập lý trình đầu/cuối và loại ray ở form phía trên để thêm.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -48,6 +48,7 @@ export function LongRailTable({
                 <th className="px-3 py-2 font-semibold">Mã</th>
                 <th className="px-3 py-2 font-semibold">Tên</th>
                 <th className="px-3 py-2 font-semibold">Dải ray</th>
+                <th className="px-3 py-2 font-semibold">Loại ray</th>
                 <th className="px-3 py-2 font-semibold">Lý trình</th>
                 <th className="px-3 py-2 font-semibold">Chiều dài</th>
                 <th className="px-3 py-2 font-semibold">Tn</th>
@@ -70,6 +71,7 @@ export function LongRailTable({
                     <td className="px-3 py-2 text-slate-600">
                       {rail ? `${rail.line} · ${rail.rail}` : longRail.rowKey}
                     </td>
+                    <td className="px-3 py-2 font-medium text-slate-800">{longRail.params.railType || "—"}</td>
                     <td className="px-3 py-2 text-slate-600">
                       {span
                         ? `Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)}`

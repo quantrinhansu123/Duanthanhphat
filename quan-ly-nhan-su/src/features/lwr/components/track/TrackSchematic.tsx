@@ -6,15 +6,22 @@ import { Check, Plus, RefreshCw, Shapes } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
   defaultLongRailParams,
+  defaultRailTypeForNewLongRail,
+  ensureRowSpan,
   formatChainage,
+  getPlacementSpan,
   nextLongRailCode,
+  paramsForRailType,
+  parseChainage,
   railRowKey,
   trackExtent,
   type LongRail,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
+import { RAIL_TYPE_OPTIONS } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
+import type { RailRow } from "@lwr/types/track";
 import { LongRailTable } from "./LongRailTable";
 import { TrackMapCanvas } from "./TrackMapCanvas";
 
@@ -28,7 +35,7 @@ interface TrackSchematicProps {
   onPlacement: (placement: TrackPlacement) => boolean;
   onRemove: (id: string) => void;
   onExtend: (count: number) => boolean;
-  onLongRail: (longRail: LongRail) => boolean;
+  onLongRail: (longRail: LongRail, nextRows?: RailRow[]) => boolean;
   onRemoveLongRail: (id: string) => void;
   onSelectLongRail: (id: string) => void;
   children: ReactNode;
@@ -67,8 +74,9 @@ export function TrackSchematic({
   const [label, setLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [lrRowKey, setLrRowKey] = useState("UT");
-  const [lrStartId, setLrStartId] = useState("");
-  const [lrEndId, setLrEndId] = useState("");
+  const [lrFrom, setLrFrom] = useState("");
+  const [lrTo, setLrTo] = useState("");
+  const [lrRailType, setLrRailType] = useState(() => defaultRailTypeForNewLongRail([]));
   const [lrCode, setLrCode] = useState("");
   const [lrLabel, setLrLabel] = useState("");
   const [editingLongRailId, setEditingLongRailId] = useState<string | null>(null);
@@ -84,12 +92,14 @@ export function TrackSchematic({
   const selectedEndIndex = row.cells.findIndex((cell) => cell.id === endId);
   const currentEnd = row.cells[Math.max(startIndex, selectedEndIndex)];
   const currentSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? (symbolId ? undefined : symbols[0]);
+  const hasCells = layout.rows.some((item) => item.cells.length > 0);
 
   const lrRow = layout.rows.find((item) => railRowKey(item) === lrRowKey) ?? layout.rows[0];
-  const lrStartIndex = Math.max(0, lrRow.cells.findIndex((cell) => cell.id === lrStartId));
-  const lrCurrentStart = lrRow.cells[lrStartIndex];
-  const lrSelectedEndIndex = lrRow.cells.findIndex((cell) => cell.id === lrEndId);
-  const lrCurrentEnd = lrRow.cells[Math.max(lrStartIndex, lrSelectedEndIndex)];
+  const lrStartMetres = parseChainage(lrFrom);
+  const lrEndMetres = parseChainage(lrTo);
+  const lrLength = lrStartMetres !== null && lrEndMetres !== null && lrEndMetres > lrStartMetres
+    ? lrEndMetres - lrStartMetres
+    : null;
 
   const extent = trackExtent(layout.rows);
 
@@ -108,15 +118,17 @@ export function TrackSchematic({
   }, []);
 
   const editLongRail = useCallback((longRail: LongRail) => {
+    const span = getPlacementSpan(layout.rows, longRail);
     setEditingLongRailId(longRail.id);
     setLrRowKey(longRail.rowKey);
-    setLrStartId(longRail.startCellId);
-    setLrEndId(longRail.endCellId);
+    setLrFrom(span ? formatChainage(span.startMetres) : "");
+    setLrTo(span ? formatChainage(span.endMetres) : "");
+    setLrRailType(longRail.params.railType || defaultRailTypeForNewLongRail(layout.longRails));
     setLrCode(longRail.code);
     setLrLabel(longRail.label);
     setLrFormError(null);
     setLrNotice(null);
-  }, []);
+  }, [layout]);
 
   const removePlacement = useCallback((id: string) => {
     onRemove(id);
@@ -125,6 +137,7 @@ export function TrackSchematic({
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!currentStart || !currentEnd) { setFormError("Chưa có thanh ray. Hãy ghép thêm thanh trước."); return; }
     if (!currentSymbol) { setFormError("Hãy chọn ký hiệu đang có trong danh mục công trình."); return; }
     const placement: TrackPlacement = {
       id: editingId ?? crypto.randomUUID(), rowKey: railRowKey(row),
@@ -141,7 +154,7 @@ export function TrackSchematic({
           <div>
             <h2 className="text-base font-bold">Thanh dài trên tuyến</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Chọn thanh bắt đầu và kết thúc để tạo một thanh dài (có thể ghép nhiều ô 500 m). Sau đó bấm trên sơ đồ hoặc bảng để xem/lưu thông số.
+              Nhập lý trình đầu và lý trình cuối của đoạn cần giải tỏa. Phần mềm tự tính chiều dài và đánh dấu lên sơ đồ. Mỗi thanh chọn một loại ray.
             </p>
           </div>
         </div>
@@ -152,41 +165,63 @@ export function TrackSchematic({
             const existing = editingLongRailId
               ? layout.longRails.find((item) => item.id === editingLongRailId)
               : undefined;
-            const code = (lrCode.trim() || existing?.code || nextLongRailCode(layout.longRails, key)).trim();
+            const code = (lrCode.trim() || existing?.code || nextLongRailCode(layout.longRails)).trim();
             if (!code) { setLrFormError("Nhập mã thanh dài."); return; }
             if (layout.longRails.some((item) => item.code === code && item.id !== editingLongRailId)) {
               setLrFormError("Mã thanh dài đã tồn tại.");
               return;
             }
+            if (lrStartMetres === null || lrEndMetres === null) {
+              setLrFormError("Nhập lý trình dạng 0+000.");
+              return;
+            }
+            if (lrEndMetres <= lrStartMetres) {
+              setLrFormError("Lý trình cuối phải lớn hơn lý trình đầu.");
+              return;
+            }
+            let placed;
+            try {
+              placed = ensureRowSpan(layout.rows, key, lrStartMetres, lrEndMetres);
+            } catch (cause) {
+              setLrFormError(cause instanceof Error ? cause.message : "Không đánh dấu được đoạn trên sơ đồ.");
+              return;
+            }
             const spanDraft = {
               rowKey: key,
-              startCellId: lrCurrentStart.id,
-              endCellId: lrCurrentEnd.id,
+              startCellId: placed.startCellId,
+              endCellId: placed.endCellId,
             };
+            const railType = lrRailType || defaultRailTypeForNewLongRail(layout.longRails.filter((item) => item.id !== editingLongRailId));
             const draft: LongRail = {
               id: editingLongRailId ?? crypto.randomUUID(),
               code,
               label: lrLabel.trim() || code,
               ...spanDraft,
-              params: existing?.params ?? defaultLongRailParams(layout.rows, spanDraft),
+              params: paramsForRailType(
+                railType,
+                existing?.params ?? defaultLongRailParams(placed.rows, spanDraft, railType),
+              ),
               updatedAt: new Date().toISOString(),
             };
-            if (onLongRail(draft)) {
+            if (onLongRail(draft, placed.rows)) {
               clearLongRailEditor();
+              setLrRailType(defaultRailTypeForNewLongRail([...layout.longRails.filter((item) => item.id !== editingLongRailId), draft]));
+              setLrFrom("");
+              setLrTo("");
               setLrFormError(null);
-              setLrNotice(editingLongRailId ? "Đã cập nhật thanh dài." : "Đã thêm thanh dài.");
+              setLrNotice(editingLongRailId ? "Đã cập nhật thanh dài." : `Đã thêm ${code} · ${lrLength} m và đánh dấu trên sơ đồ.`);
             } else {
               setLrFormError("Không lưu được thanh dài. Kiểm tra chồng lấn hoặc thông báo lỗi phía trên.");
             }
           }}
           className="mt-4 space-y-3"
         >
-          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-6">
             <label className="text-xs text-slate-600">Dải ray
               <select
                 className={inputClass}
                 value={railRowKey(lrRow)}
-                onChange={(event) => { setLrRowKey(event.target.value); setLrStartId(""); setLrEndId(""); }}
+                onChange={(event) => setLrRowKey(event.target.value)}
                 disabled={!ready}
               >
                 {layout.rows.map((item) => (
@@ -194,14 +229,15 @@ export function TrackSchematic({
                 ))}
               </select>
             </label>
-            <label className="text-xs text-slate-600">Bắt đầu thanh
-              <select className={inputClass} value={lrCurrentStart.id} onChange={(event) => setLrStartId(event.target.value)} disabled={!ready}>
-                {lrRow.cells.map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.from}</option>)}
-              </select>
+            <label className="text-xs text-slate-600">Lý trình đầu
+              <input className={inputClass} value={lrFrom} onChange={(event) => setLrFrom(event.target.value)} placeholder="0+000" disabled={!ready} />
             </label>
-            <label className="text-xs text-slate-600">Kết thúc thanh
-              <select className={inputClass} value={lrCurrentEnd.id} onChange={(event) => setLrEndId(event.target.value)} disabled={!ready}>
-                {lrRow.cells.slice(lrStartIndex).map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.to}</option>)}
+            <label className="text-xs text-slate-600">Lý trình cuối
+              <input className={inputClass} value={lrTo} onChange={(event) => setLrTo(event.target.value)} placeholder="0+800" disabled={!ready} />
+            </label>
+            <label className="text-xs text-slate-600">Loại ray
+              <select className={inputClass} value={lrRailType} onChange={(event) => setLrRailType(event.target.value)} disabled={!ready}>
+                {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
             <label className="text-xs text-slate-600">Mã thanh dài
@@ -209,18 +245,18 @@ export function TrackSchematic({
                 className={inputClass}
                 value={lrCode}
                 onChange={(event) => setLrCode(event.target.value)}
-                placeholder={nextLongRailCode(layout.longRails, railRowKey(lrRow))}
+                placeholder={nextLongRailCode(layout.longRails)}
                 maxLength={40}
                 disabled={!ready}
               />
             </label>
             <label className="text-xs text-slate-600">Tên hiển thị
-              <input className={inputClass} value={lrLabel} onChange={(event) => setLrLabel(event.target.value)} placeholder="Ví dụ: LWR thượng trái 1" maxLength={120} disabled={!ready} />
+              <input className={inputClass} value={lrLabel} onChange={(event) => setLrLabel(event.target.value)} placeholder="Ví dụ: LWR01" maxLength={120} disabled={!ready} />
             </label>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex h-10 items-center rounded-md bg-slate-50 px-3 text-xs text-slate-600">
-              Km {lrCurrentStart.from} – {lrCurrentEnd.to}
+              {lrLength !== null ? `Chiều dài đoạn giải tỏa: ${lrLength} m · Km ${formatChainage(lrStartMetres!)} – ${formatChainage(lrEndMetres!)}` : "Nhập lý trình đầu và cuối để tính chiều dài"}
             </div>
             <button type="submit" disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md bg-teal-700 px-3 text-sm font-medium text-white disabled:opacity-40">
               {editingLongRailId ? <Check className="size-4" /> : <Plus className="size-4" />}
@@ -254,14 +290,14 @@ export function TrackSchematic({
         <form onSubmit={submit} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <label className="text-xs text-slate-600">Dải ray<select className={inputClass} value={railRowKey(row)} onChange={(event) => { setRowKey(event.target.value); setStartId(""); setEndId(""); }} disabled={!ready}>{layout.rows.map((item) => <option key={railRowKey(item)} value={railRowKey(item)}>{item.line} · {item.rail}</option>)}</select></label>
-            <label className="text-xs text-slate-600">Bắt đầu thanh<select className={inputClass} value={currentStart.id} onChange={(event) => setStartId(event.target.value)} disabled={!ready}>{row.cells.map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.from}</option>)}</select></label>
-            <label className="text-xs text-slate-600">Kết thúc thanh<select className={inputClass} value={currentEnd.id} onChange={(event) => setEndId(event.target.value)} disabled={!ready}>{row.cells.slice(startIndex).map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.to}</option>)}</select></label>
+            <label className="text-xs text-slate-600">Bắt đầu thanh<select className={inputClass} value={currentStart?.id ?? ""} onChange={(event) => setStartId(event.target.value)} disabled={!ready || !hasCells}>{row.cells.map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.from}</option>)}</select></label>
+            <label className="text-xs text-slate-600">Kết thúc thanh<select className={inputClass} value={currentEnd?.id ?? ""} onChange={(event) => setEndId(event.target.value)} disabled={!ready || !hasCells}>{row.cells.slice(startIndex).map((cell) => <option key={cell.id} value={cell.id}>{cell.id} · Km {cell.to}</option>)}</select></label>
             <label className="text-xs text-slate-600">Ký hiệu công trình<select className={inputClass} value={currentSymbol?.id ?? ""} onChange={(event) => setSymbolId(event.target.value)} disabled={!ready || !symbols.length}><option value="" disabled>Chọn từ danh mục ký hiệu</option>{symbols.map((symbol) => <option key={symbol.id} value={symbol.id}>{symbol.name} ({symbol.code})</option>)}</select></label>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="min-w-48 flex-1 text-xs text-slate-600">Tên hiển thị (tùy chọn)<input className={inputClass} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={currentSymbol?.name ?? "Ví dụ: Cầu C1"} maxLength={120} /></label>
-            <div className="flex h-10 items-center gap-2 rounded-md bg-slate-50 px-2 text-xs text-slate-600"><SymbolImage symbol={currentSymbol} /><span>Km {currentStart.from} – {currentEnd.to}</span></div>
-            <button type="submit" disabled={!ready || !currentSymbol} className="flex h-10 items-center gap-1.5 rounded-md bg-blue-700 px-3 text-sm font-medium text-white disabled:opacity-40">{editingId ? <Check className="size-4" /> : <Plus className="size-4" />}{editingId ? "Lưu thay đổi" : "Thêm lên sơ đồ"}</button>
+            <div className="flex h-10 items-center gap-2 rounded-md bg-slate-50 px-2 text-xs text-slate-600"><SymbolImage symbol={currentSymbol} /><span>{currentStart && currentEnd ? `Km ${currentStart.from} – ${currentEnd.to}` : "Chưa có thanh ray"}</span></div>
+            <button type="submit" disabled={!ready || !currentSymbol || !hasCells} className="flex h-10 items-center gap-1.5 rounded-md bg-blue-700 px-3 text-sm font-medium text-white disabled:opacity-40">{editingId ? <Check className="size-4" /> : <Plus className="size-4" />}{editingId ? "Lưu thay đổi" : "Thêm lên sơ đồ"}</button>
             {editingId && <button type="button" onClick={clearEditor} className="h-10 rounded-md border px-3 text-sm">Hủy sửa</button>}
             <button type="button" onClick={onReloadSymbols} className="flex h-10 items-center gap-1.5 rounded-md border px-3 text-sm"><RefreshCw className="size-4" />Cập nhật ký hiệu</button>
           </div>
@@ -278,7 +314,7 @@ export function TrackSchematic({
         }}>
           <label className="text-xs text-slate-600">Số thanh ghép thêm / dải<input type="number" min={1} max={100} step={1} value={appendCount} onChange={(event) => setAppendCount(event.target.value)} className={`${inputClass} max-w-40`} /></label>
           <button disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-800 disabled:opacity-40"><Plus className="size-4" />Ghép thêm thanh</button>
-          <p className="pb-2 text-xs text-slate-500">Thanh mới dài 500 m, nhiệt độ khóa mẫu 35°C. Tuyến hiện tại: Km {formatChainage(extent.startMetres)} – {formatChainage(extent.endMetres)}.</p>
+          <p className="pb-2 text-xs text-slate-500">{hasCells ? `Thanh mới dài 500 m, nhiệt độ khóa 35°C. Tuyến hiện tại: Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}.` : "Lần đầu ghép sẽ tạo thanh từ Km 0+000, mỗi thanh 500 m, nhiệt độ khóa 35°C."}</p>
         </form>
       </div>
 

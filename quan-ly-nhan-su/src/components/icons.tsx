@@ -99,6 +99,8 @@ export {
   Lightning,
   Sparkle,
   ShieldCheck,
+  Drop,
+  Thermometer,
   Circle,
   CircleNotch,
   Spinner,
