@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
-  defaultLongRailParams,
   extendRailRows,
   formatChainage,
   getPlacementSpan,
@@ -273,7 +272,7 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
       startCellId: draft.startCellId,
       endCellId: draft.endCellId,
       params: {
-        ...(existing?.params ?? draft.params ?? defaultLongRailParams(rows, draft, draft.params.railType)),
+        ...(existing?.params ?? draft.params),
         leftLength: length,
         railType: draft.params.railType,
         area: draft.params.area,

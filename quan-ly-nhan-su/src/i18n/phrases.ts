@@ -468,7 +468,6 @@ export const PHRASES: Record<string, string> = {
   "Không cập nhật được đoạn ray.": "Could not update the rail segment.",
   "Bảng tính giải toả ứng suất": "Stress-release calculation",
   "Thông số đầu vào": "Input parameters",
-  "Loại ray": "Rail type",
   "Mục tính toán": "Calculation mode",
   "Hàn nhiệt nhôm (ATW)": "Aluminothermic welding (ATW)",
   "Hàn chảy giáp mép (FBW)": "Flash-butt welding (FBW)",
