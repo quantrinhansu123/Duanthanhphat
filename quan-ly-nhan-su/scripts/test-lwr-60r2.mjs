@@ -13,7 +13,7 @@ import {
 
 const sheet = JSON.parse(readFileSync(new URL("./fixtures/lwr-60r2.json", import.meta.url), "utf8")).cells;
 test("60R2 intermediates still match workbook (2)", () => {
-  const result = calculateStressRelease(DEFAULT_STRESS_INPUT);
+  const result = calculateStressRelease({ ...DEFAULT_STRESS_INPUT, resistance: 24, jointResistance: 400 });
   assert.equal(result.length, sheet.K26.v);
   assert.equal(result.averageTemp, sheet.K31.v);
   assert.equal(result.deltaTemp, sheet.V31.v);
@@ -35,7 +35,7 @@ test("60R2 intermediates still match workbook (2)", () => {
 });
 test("joint resistance changes checks 1, 2 and TB row but not check 3", () => {
   const original = calculateStressRelease(DEFAULT_STRESS_INPUT);
-  const changed = calculateStressRelease({ ...DEFAULT_STRESS_INPUT, jointResistance: 0 });
+  const changed = calculateStressRelease({ ...DEFAULT_STRESS_INPUT, jointResistance: 100 });
   for (const key of ["compression", "tension"]) {
     for (const index of [0, 1, 3]) assert.notEqual(original.extensionChecks[index][key], changed.extensionChecks[index][key]);
     assert.equal(original.extensionChecks[2][key], changed.extensionChecks[2][key]);
@@ -43,7 +43,7 @@ test("joint resistance changes checks 1, 2 and TB row but not check 3", () => {
 });
 test("applied anchor length uses 20 m when design is shorter", () => {
   const result = calculateStressRelease(DEFAULT_STRESS_INPUT);
-  assert.equal(result.anchorLength, 11.53);
+  assert.equal(result.anchorLength, 19.22);
   assert.equal(result.actualAnchorLength, 20);
   const long = calculateStressRelease({ ...DEFAULT_STRESS_INPUT, resistance: 10 });
   assert.ok(long.anchorLength > 20);

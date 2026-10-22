@@ -28,8 +28,10 @@ Kiểm tra trình duyệt bằng `scripts/test-lwr-browser.cjs` với máy chủ
 
 Đã kiểm tra bản tính, lưu/tải lại lý trình lẻ, hoàn thành, công trình, liên kết nhật ký, phân trang PDF và màn hình 390 px. Với tuyến 17.584 m: A4 9 tờ, A3 5 tờ, A3 kéo dài 2 tờ.
 
-## Còn chờ nghiệp vụ
+## Công thức khe hở đã đối chiếu ảnh Excel
 
 Mẫu khe hở dự phòng đã đổi theo hình mới: a₁ ≥ A + C, a₁ ≤ ag − (B + D); a₂ ≥ 2C, a₂ ≤ ag − 2D. A/C là lượng giãn ở nhiệt độ cao nhất, B/D là lượng co ở nhiệt độ thấp nhất. Cộng số liệu chưa làm tròn; giới hạn dưới làm tròn lên, giới hạn trên làm tròn xuống đến mm nguyên. Nếu giới hạn dưới vượt giới hạn trên, báo không có khoảng thoả mãn.
 
-Không dùng các khoảng cố định 8–11 hoặc 6–13 mm. Hiện nhập bốn lượng Δ từ bảng tính đã kiểm tra; chưa có số liệu thì hiển thị chờ và không xuất báo cáo. Cách tự động tính bốn lượng Δ còn chờ xác nhận từ Excel, vì các công thức hiện có chưa tái tạo số liệu minh hoạ 9–11 và 6–13 mm. Chưa triển khai lên môi trường thật; đồng bộ Supabase thực tế chưa được kiểm thử ghi dữ liệu.
+Tự tính Pmax = EFαΔT riêng cho nén (57 − 30 = 27°C) và kéo (40 − 16 = 24°C). Δdài = (Pmax − Pj)²/(2EFr); Δđệm = [(Pmax − Pj)L − rL²/4]/(2EF), L = 25 m; nhân 1.000 đổi m sang mm. Giữ Pmax ở độ chính xác 0,01 kN của bộ tính hiện có, không làm tròn các chuyển vị trung gian. Bốn chuyển vị nhập tay cũ không ghi đè kết quả tự tính.
+
+Mặc định bản tính mới r = 14,4 kN/m, Pj = 0 kN, E = 210.840.000 kN/m²; thông số đã lưu của dự án được giữ nguyên. Mẫu cho a₁ = 8,5520–11,0066 mm → chọn nguyên 9–11 mm; a₂ = 6,3604–12,5021 mm → chọn nguyên 7–12 mm. Khoảng 6–13 mm trong ảnh không thỏa bất đẳng thức. Màn hình, CSV và bản in dùng chung kết quả; chặn xuất nếu Pmax < Pj hoặc chuyển vị âm. Chưa triển khai lên môi trường thật; đồng bộ Supabase thực tế chưa được kiểm thử ghi dữ liệu.

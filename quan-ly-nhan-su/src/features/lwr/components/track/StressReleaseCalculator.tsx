@@ -17,17 +17,7 @@ import {
 import { parseChainage } from "@lwr/lib/track-editor";
 import { StressReleasePrint, type StressPrintRow } from "./StressReleasePrint";
 import { BufferGapTable } from "./BufferGapTable";
-import { calculateBufferGaps, type BufferDeformations } from "@lwr/lib/buffer-gap";
-
-const deltaFields: [keyof BufferDeformations, string][] = [
-  ["longExpansion", "Giãn đầu ray dài ở nhiệt độ cao nhất (A)"],
-  ["longContraction", "Co đầu ray dài ở nhiệt độ thấp nhất (B)"],
-  ["bufferExpansion", "Giãn đầu ray đệm ở nhiệt độ cao nhất (C)"],
-  ["bufferContraction", "Co đầu ray đệm ở nhiệt độ thấp nhất (D)"],
-];
-function initialDeltas(input: StressInput) {
-  return Object.fromEntries(deltaFields.map(([key]) => [key, input.bufferDeformations?.[key]?.toString() ?? ""])) as Record<keyof BufferDeformations, string>;
-}
+import { calculateBufferGaps } from "@lwr/lib/buffer-gap";
 
 type NumericKey = { [K in keyof StressInput]-?: StressInput[K] extends number ? K : never }[keyof StressInput];
 const groups: { title: string; fields: [NumericKey, string, string][] }[] = [
@@ -91,7 +81,6 @@ export function StressReleaseCalculator({
   onSave?: (input: StressInput) => boolean | void;
 }) {
   const [fields, setFields] = useState(() => initialFields(initialInput));
-  const [deltaValues, setDeltaValues] = useState(() => initialDeltas(initialInput));
   const [railType, setRailType] = useState(initialInput.railType || "60R2");
   const [startChainage, setStartChainage] = useState(initialInput.startChainage ?? "");
   const [endChainage, setEndChainage] = useState(initialInput.endChainage ?? "");
@@ -146,22 +135,23 @@ export function StressReleaseCalculator({
     else if (joint === null || joint < from || joint > to) chainErrors.push("Vị trí kéo phải nằm trong đoạn giải toả.");
     else { input.leftLength = joint - from; input.rightLength = to - joint; }
   }
-  const deltas = Object.fromEntries(deltaFields.map(([key]) => [key, deltaValues[key].trim() ? Number(deltaValues[key].replace(",", ".")) : NaN])) as unknown as BufferDeformations;
-  const deltasReady = Object.values(deltas).every(value => Number.isFinite(value) && value >= 0);
-  if (deltasReady) input.bufferDeformations = deltas;
-  else delete input.bufferDeformations;
+  // Legacy manually entered deformations must never override the thermal calculation.
+  delete input.bufferDeformations;
   const errors = [...chainErrors, ...validateStressInput(input), ...(buffer && input.structuralGap <= 0 ? ["Khe hở cấu tạo ag phải lớn hơn 0."] : [])];
   const result = errors.length ? null : calculateStressRelease(input);
+  const deltas = result?.bufferDeformations;
+  const deltasReady = !!deltas && Object.values(deltas).every(value => Number.isFinite(value) && value >= 0)
+    && result.compressionForceRaw >= input.jointResistance && result.tensionForceRaw >= input.jointResistance;
   const gapRows = result && buffer ? calculateBufferGaps(input.structuralGap, deltasReady ? deltas : undefined) : [];
   const canExport = Boolean(result) && (!buffer || deltasReady);
   const tension: Row[] = result ? [
     ["Độ giảm nhiệt độ lớn nhất", result.tensionDelta, "°C"],
-    [buffer ? "Pmax kéo — biên độ giảm nhiệt lớn nhất" : "Lực nhiệt kéo lớn nhất", result.tensionForce, "kN"],
+    [buffer ? "Pmax kéo — biên độ giảm nhiệt lớn nhất" : "Lực nhiệt kéo lớn nhất", buffer ? result.tensionForceRaw : result.tensionForce, "kN"],
     ...(buffer ? [["Co đầu ray dài Δdài,co (B)", deltasReady ? deltas.longContraction : "Chờ số liệu", "mm"], ["Co đầu ray đệm Δđệm,co (D)", deltasReady ? deltas.bufferContraction : "Chờ số liệu", "mm"]] as Row[] : [["Chiều dài co", result.tensionContraction, "mm"]] as Row[]),
   ] : [];
   const compression: Row[] = result ? [
     ["Độ tăng nhiệt độ lớn nhất", result.compressionDelta, "°C"],
-    [buffer ? "Pmax nén — biên độ tăng nhiệt lớn nhất" : "Lực nhiệt nén lớn nhất", result.compressionForce, "kN"],
+    [buffer ? "Pmax nén — biên độ tăng nhiệt lớn nhất" : "Lực nhiệt nén lớn nhất", buffer ? result.compressionForceRaw : result.compressionForce, "kN"],
     ...(buffer ? [["Giãn đầu ray dài Δdài,giãn (A)", deltasReady ? deltas.longExpansion : "Chờ số liệu", "mm"], ["Giãn đầu ray đệm Δđệm,giãn (C)", deltasReady ? deltas.bufferExpansion : "Chờ số liệu", "mm"]] as Row[] : [["Chiều dài giãn", result.compressionExtension, "mm"]] as Row[]),
   ] : [];
   const rows: Row[] = !result || buffer ? [] : [
@@ -181,7 +171,7 @@ export function StressReleaseCalculator({
     ["Chiều dài kéo sau bù chuyển vị", result.pullLength, "mm"],
     ...(mode !== "SINGLE" ? [["Khe hở cắt mục tiêu (khe hở giữa hai đầu ray)", result.cutGap, "mm"]] as Row[] : []),
   ];
-  const notices: string[] = buffer ? ["Giới hạn dưới dùng lượng giãn ở nhiệt độ cao nhất; giới hạn trên dùng lượng co ở nhiệt độ thấp nhất. Cộng các giá trị Δ chưa làm tròn, sau đó làm tròn giới hạn dưới lên và giới hạn trên xuống đến mm nguyên.", "Các lượng Δ nhập từ bảng tính đã kiểm tra; công thức tự động tính Δ đang chờ xác nhận. Không gán cố định các khoảng số trong hình minh hoạ."] : ["Chỉ cộng chuyển vị mốc trong Mt + Mp vào khoảng cách kéo để bù mất mát. Mt = Mp = 0: giữ chiều dài kéo tính toán; tổng Mt + Mp = 3 mm: cộng thêm 3 mm. Giải toả tự nhiên không ra lệnh kéo."];
+  const notices: string[] = buffer ? ["Giới hạn dưới dùng lượng giãn ở nhiệt độ cao nhất; giới hạn trên dùng lượng co ở nhiệt độ thấp nhất. Cộng các giá trị Δ chưa làm tròn, sau đó làm tròn giới hạn dưới lên và giới hạn trên xuống đến mm nguyên.", "Tự động tính riêng cho nén và kéo: Pmax = EFαΔT; Δdài = (Pmax − Pj)²/(2EFr); Δđệm = [(Pmax − Pj)L − rL²/4]/(2EF), với L = 25 m. Nhân 1.000 để đổi chuyển vị từ m sang mm."] : ["Chỉ cộng chuyển vị mốc trong Mt + Mp vào khoảng cách kéo để bù mất mát. Mt = Mp = 0: giữ chiều dài kéo tính toán; tổng Mt + Mp = 3 mm: cộng thêm 3 mm. Giải toả tự nhiên không ra lệnh kéo."];
   if (result && !buffer) {
     if (!result.fixedAnchorsStable) notices.push("Mốc ngoài F dịch chuyển khi kéo thử: neo chưa đạt. Phải tăng chiều dài neo hoặc áp dụng biện pháp tăng cường khác và kiểm tra lại; không cộng chuyển vị F vào khoảng cách kéo.");
     notices.push(`Nhiệt độ < ${formatStressNumber(result.skipThreshold)}°C: có lực kéo; ≥ ${formatStressNumber(result.skipThreshold)}°C: giải toả tự nhiên.`);
@@ -202,7 +192,7 @@ export function StressReleaseCalculator({
   }
   const inputRows: StressPrintRow[] = [
     ["Loại ray", railLabel, ""],
-    ...(buffer ? [["Chiều dài ray đệm L", BUFFER_RAIL_LENGTH, "m"], ...deltaFields.map(([key, label]) => [label, deltasReady ? deltas[key] : "Chờ số liệu", "mm"])] as StressPrintRow[] : []),
+    ...(buffer ? [["Chiều dài ray đệm L", BUFFER_RAIL_LENGTH, "m"]] as StressPrintRow[] : []),
     ...(!buffer ? [
       ["Ray của tuyến", trackSide === "LEFT" ? "Ray trái" : "Ray phải", ""],
       ["Lý trình đầu", startChainage || "Chưa nhập", ""],
@@ -264,7 +254,7 @@ export function StressReleaseCalculator({
   );
   const actions = (
     <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setDeltaValues(initialDeltas(initialInput)); setRailType(initialInput.railType || "60R2"); setStartChainage(initialInput.startChainage ?? ""); setEndChainage(initialInput.endChainage ?? ""); setJointChainage(initialInput.jointChainage ?? ""); setTrackSide(initialInput.trackSide ?? "LEFT"); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
+        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setRailType(initialInput.railType || "60R2"); setStartChainage(initialInput.startChainage ?? ""); setEndChainage(initialInput.endChainage ?? ""); setJointChainage(initialInput.jointChainage ?? ""); setTrackSide(initialInput.trackSide ?? "LEFT"); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
       {onSave && (
         <button
           type="button"
@@ -293,12 +283,7 @@ export function StressReleaseCalculator({
       <section className="space-y-4 rounded-xl border bg-white p-4">
         <h3 className="font-semibold">Thông số đầu vào</h3>
         {buffer && <p className="rounded border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">L = {BUFFER_RAIL_LENGTH} m (ray đệm). E: mô đun đàn hồi; F: diện tích tiết diện ray; r: sức cản dọc; Pj: lực cản mối nối. Pmax nén và Pmax kéo tính riêng theo biên độ tăng và giảm nhiệt lớn nhất.</p>}
-        {buffer && <fieldset className="rounded border border-purple-200 bg-purple-50 p-3">
-          <legend className="text-sm font-semibold text-purple-900">Lượng giãn/co đầu ray theo bảng tính đã kiểm tra</legend>
-          <p className="mb-2 text-xs text-slate-600">Nhập bốn giá trị Δ chưa làm tròn (mm). Các số 9–11 và 6–13 trong ảnh là ví dụ kết quả, không dùng làm giá trị cố định.</p>
-          <div className="grid gap-3 sm:grid-cols-2">{deltaFields.map(([key, label]) => <label key={key} className="text-xs">{label} (mm)<input className={fieldClass} inputMode="decimal" value={deltaValues[key]} onChange={event => setDeltaValues(current => ({ ...current, [key]: event.target.value }))} /></label>)}</div>
-          {!deltasReady && <p role="status" className="mt-2 text-xs text-purple-900">Cần đủ bốn lượng giãn/co hợp lệ (không âm) để tính và xuất báo cáo khe hở.</p>}
-        </fieldset>}
+        {buffer && !deltasReady && <p role="alert" className="text-sm text-red-700">Chưa thể tính khe hở: kiểm tra thông số đầu vào, Pmax phải ≥ Pj và chuyển vị tính toán phải không âm.</p>}
         {!buffer && <>
           <label className="block text-xs text-slate-600">Ray của tuyến (nhìn theo chiều lý trình tăng)
             <select className={fieldClass} value={trackSide} onChange={e => setTrackSide(e.target.value as "LEFT" | "RIGHT")}>

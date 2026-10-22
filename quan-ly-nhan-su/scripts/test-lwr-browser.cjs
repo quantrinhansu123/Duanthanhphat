@@ -45,17 +45,15 @@ const baseURL = process.env.LWR_TEST_URL || 'http://localhost:3010';
   await page.pdf({ path: path.join(output, 'calculation.pdf'), preferCSSPageSize: true, printBackground: true });
   await page.locator('#stress-release-print').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByLabel('Mục tính toán').selectOption('BUFFER');
+  assert.equal(await page.getByRole('button', { name: 'In A4', exact: true }).isDisabled(), false);
+  await page.getByLabel('Lực cản mối nối Pj (kN)', { exact: true }).fill('600');
   assert.equal(await page.getByRole('button', { name: 'In A4', exact: true }).isDisabled(), true);
-  for (const [label, value] of [
-   ['Giãn đầu ray dài ở nhiệt độ cao nhất (A) (mm)', '6'],
-   ['Co đầu ray dài ở nhiệt độ thấp nhất (B) (mm)', '4.5'],
-   ['Giãn đầu ray đệm ở nhiệt độ cao nhất (C) (mm)', '3'],
-   ['Co đầu ray đệm ở nhiệt độ thấp nhất (D) (mm)', '2.5'],
-  ]) await page.getByLabel(label, { exact: true }).fill(value);
+  await page.getByLabel('Lực cản mối nối Pj (kN)', { exact: true }).fill('0');
   assert.match(await page.locator('.buffer-gap-table').innerText(), /9 mm[\s\S]*a₁[\s\S]*11 mm/);
-  assert.match(await page.locator('.buffer-gap-table').innerText(), /6 mm[\s\S]*a₂[\s\S]*13 mm/);
+  assert.match(await page.locator('.buffer-gap-table').innerText(), /7 mm[\s\S]*a₂[\s\S]*12 mm/);
   await page.getByRole('button', { name: 'In A4', exact: true }).click();
   assert.match(await page.locator('#stress-release-print .buffer-gap-table').innerText(), /9 mm[\s\S]*11 mm/);
+  assert.match(await page.locator('#stress-release-print .buffer-gap-table').innerText(), /7 mm[\s\S]*12 mm/);
   assert.equal(await page.locator('#stress-release-print .form-title').evaluate(el => getComputedStyle(el).color), 'rgb(107, 33, 168)');
   await page.pdf({ path: path.join(output, 'buffer-gap.pdf'), preferCSSPageSize: true, printBackground: true });
   await page.locator('#stress-release-print').getByRole('button', { name: 'Đóng', exact: true }).click();
