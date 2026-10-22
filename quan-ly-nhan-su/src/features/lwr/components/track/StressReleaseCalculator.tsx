@@ -69,16 +69,20 @@ function ResultTable({ title, rows }: { title: string; rows: Row[] }) {
   </section>;
 }
 
+export type StressSaveResult = { ok: boolean; message: string };
+
 export function StressReleaseCalculator({
   initialInput = DEFAULT_STRESS_INPUT,
   segmentId,
   compact = false,
   onSave,
+  onModeChange,
 }: {
   initialInput?: StressInput;
   segmentId?: string;
   compact?: boolean;
-  onSave?: (input: StressInput) => boolean | void;
+  onSave?: (input: StressInput) => StressSaveResult | boolean | void;
+  onModeChange?: (mode: Mode) => void;
 }) {
   const [fields, setFields] = useState(() => initialFields(initialInput));
   const [railType, setRailType] = useState(initialInput.railType || "60R2");
@@ -105,6 +109,7 @@ export function StressReleaseCalculator({
   }, [initialInput.leftLength, initialInput.rightLength, initialInput.neutralTemp]);
   const [printOpen, setPrintOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState(false);
   const buffer = mode === "BUFFER";
   const customRail = isUserDefineRail(railType);
   const railLabel = RAIL_TYPE_OPTIONS.find((item) => item.id === railType)?.label ?? railType;
@@ -254,20 +259,42 @@ export function StressReleaseCalculator({
   );
   const actions = (
     <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setRailType(initialInput.railType || "60R2"); setStartChainage(initialInput.startChainage ?? ""); setEndChainage(initialInput.endChainage ?? ""); setJointChainage(initialInput.jointChainage ?? ""); setTrackSide(initialInput.trackSide ?? "LEFT"); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
-      {onSave && (
-        <button
-          type="button"
-          disabled={errors.length > 0 || (buffer && !deltasReady)}
-          onClick={() => {
-            const saved = onSave(input);
-            setSaveNotice(saved === false ? "Chưa lưu được thông số; kiểm tra thông báo lỗi trên sơ đồ." : "Đã lưu thông số thanh dài.");
-          }}
-          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 disabled:opacity-40"
-        >
-          Lưu thông số
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => {
+          if (errors.length > 0) {
+            setSaveOk(false);
+            setSaveNotice(`Chưa lưu được: ${errors.join(" ")}`);
+            return;
+          }
+          if (buffer && !deltasReady) {
+            setSaveOk(false);
+            setSaveNotice("Chưa lưu được: chưa tính được khe hở vùng đệm. Kiểm tra thông số đầu vào — Pmax phải ≥ Pj và chuyển vị tính toán không âm.");
+            return;
+          }
+          if (!onSave) {
+            setSaveOk(false);
+            setSaveNotice("Chưa lưu được: bảng tính độc lập không gắn thanh dài. Mở Tổng quan (Track Map), bấm thanh dài trên sơ đồ, rồi Lưu thông số.");
+            return;
+          }
+          const saved = onSave(input);
+          if (saved && typeof saved === "object") {
+            setSaveOk(saved.ok);
+            setSaveNotice(saved.message);
+            return;
+          }
+          if (saved === false) {
+            setSaveOk(false);
+            setSaveNotice("Chưa lưu được thông số. Đọc thông báo lỗi trên trang — thường do lý trình chồng lấn, dải ray không khớp, hoặc sơ đồ chưa ghi được.");
+            return;
+          }
+          setSaveOk(true);
+          setSaveNotice("Đã lưu thông số thanh dài.");
+        }}
+        className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900"
+      >
+        Lưu thông số
+      </button>
       <button type="button" disabled={!canExport} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
       <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
     </div>
@@ -277,8 +304,15 @@ export function StressReleaseCalculator({
       {compact ? actions : title}
       {compact ? title : actions}
     </header>
-    {saveNotice && <p role="status" className="text-sm text-emerald-700">{saveNotice}</p>}
-    <label className="block text-sm font-semibold">Mục tính toán<select className={fieldClass} value={mode} onChange={e => setMode(e.target.value as Mode)}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    {saveNotice && (
+      <p
+        role="status"
+        className={`rounded-lg border p-3 text-sm ${saveOk ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}
+      >
+        {saveNotice}
+      </p>
+    )}
+    <label className="block text-sm font-semibold">Mục tính toán<select className={fieldClass} value={mode} onChange={e => { const next = e.target.value as Mode; setMode(next); onModeChange?.(next); }}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     <div className={compact ? "grid gap-4" : "grid items-start gap-5 xl:grid-cols-[400px_1fr]"}>
       <section className="space-y-4 rounded-xl border bg-white p-4">
         <h3 className="font-semibold">Thông số đầu vào</h3>

@@ -33,6 +33,7 @@ interface TrackSchematicProps {
   ready: boolean;
   symbolError: string | null;
   selectedLongRailId: string | null;
+  selectedCellId?: string | null;
   onReloadSymbols: () => void;
   onPlacement: (placement: TrackPlacement) => boolean;
   onRemove: (id: string) => void;
@@ -64,6 +65,7 @@ export function TrackSchematic({
   ready,
   symbolError,
   selectedLongRailId,
+  selectedCellId,
   onReloadSymbols,
   onPlacement,
   onRemove,
@@ -347,6 +349,7 @@ export function TrackSchematic({
         layout={layout}
         symbols={symbols}
         selectedLongRailId={selectedLongRailId}
+        selectedCellId={selectedCellId}
         editingPlacementId={editingId}
         onSelectLongRail={onSelectLongRail}
         onEditPlacement={edit}

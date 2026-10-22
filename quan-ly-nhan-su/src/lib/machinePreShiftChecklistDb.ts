@@ -1,10 +1,16 @@
 import {
   CHECKLIST_SHIFTS,
+  attachSectionInspectors,
   emptyChecklistResults,
+  emptySectionInspectors,
+  firstSectionInspector,
   mergeChecklistResults,
+  mergeSectionInspectors,
+  summarizeInspectors,
   type ChecklistConclusion,
   type ChecklistResults,
   type ChecklistShift,
+  type SectionInspectors,
 } from "@/data/machinePreShiftChecklist";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
@@ -25,6 +31,7 @@ export type PreShiftChecklistRecord = {
   chainage: string;
   inspectorId: string;
   inspectorName: string;
+  sectionInspectors: SectionInspectors;
   shiftLeadId: string;
   shiftLeadName: string;
   results: ChecklistResults;
@@ -88,7 +95,23 @@ function normalizeConclusion(value: string | null | undefined): ChecklistConclus
   return "";
 }
 
+function hydrateInspectors(
+  results: unknown,
+  stored?: SectionInspectors,
+  fallback?: { id?: string | null; name?: string | null },
+): SectionInspectors {
+  return mergeSectionInspectors(stored ?? results, {
+    id: fallback?.id?.trim() || "",
+    name: fallback?.name?.trim() || "",
+  });
+}
+
 function rowToRecord(row: TableRow): PreShiftChecklistRecord {
+  const sectionInspectors = hydrateInspectors(row.ket_qua, undefined, {
+    id: row.nguoi_kiem_tra_id,
+    name: row.nguoi_kiem_tra_ten,
+  });
+  const summary = firstSectionInspector(sectionInspectors);
   return {
     id: row.id,
     date: String(row.ngay ?? "").slice(0, 10),
@@ -100,8 +123,9 @@ function rowToRecord(row: TableRow): PreShiftChecklistRecord {
     projectName: row.du_an_ten?.trim() || "",
     location: row.dia_diem?.trim() || "",
     chainage: row.ly_trinh?.trim() || "",
-    inspectorId: row.nguoi_kiem_tra_id?.trim() || "",
-    inspectorName: row.nguoi_kiem_tra_ten?.trim() || "",
+    inspectorId: summary.id || row.nguoi_kiem_tra_id?.trim() || "",
+    inspectorName: summarizeInspectors(sectionInspectors, row.nguoi_kiem_tra_ten || ""),
+    sectionInspectors,
     shiftLeadId: row.truong_ca_id?.trim() || "",
     shiftLeadName: row.truong_ca_ten?.trim() || "",
     results: mergeChecklistResults(row.ket_qua),
@@ -123,6 +147,11 @@ function uuidOrNull(value: string | null | undefined) {
 }
 
 function valuesToPayload(values: PreShiftChecklistFormValues) {
+  const sectionInspectors = mergeSectionInspectors(values.sectionInspectors, {
+    id: values.inspectorId,
+    name: values.inspectorName,
+  });
+  const summary = firstSectionInspector(sectionInspectors);
   return {
     ngay: values.date,
     ca: normalizeShift(values.shift),
@@ -133,11 +162,11 @@ function valuesToPayload(values: PreShiftChecklistFormValues) {
     du_an_ten: values.projectName.trim() || null,
     dia_diem: values.location.trim() || null,
     ly_trinh: values.chainage.trim() || null,
-    nguoi_kiem_tra_id: uuidOrNull(values.inspectorId),
-    nguoi_kiem_tra_ten: values.inspectorName.trim() || null,
+    nguoi_kiem_tra_id: uuidOrNull(summary.id || values.inspectorId),
+    nguoi_kiem_tra_ten: summarizeInspectors(sectionInspectors, values.inspectorName) || null,
     truong_ca_id: uuidOrNull(values.shiftLeadId),
     truong_ca_ten: values.shiftLeadName.trim() || null,
-    ket_qua: values.results,
+    ket_qua: attachSectionInspectors(values.results, sectionInspectors),
     ly_do_na: values.naReason.trim() || null,
     xu_ly_ma_muc: values.failItemCode.trim() || null,
     xu_ly_mo_ta: values.failDescription.trim() || null,
@@ -159,12 +188,21 @@ function readLocal(): PreShiftChecklistRecord[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as PreShiftChecklistRecord[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((row) => ({
-      ...row,
-      shift: normalizeShift(row.shift),
-      results: mergeChecklistResults(row.results),
-      conclusion: normalizeConclusion(row.conclusion),
-    }));
+    return parsed.map((row) => {
+      const sectionInspectors = hydrateInspectors(row.results, row.sectionInspectors, {
+        id: row.inspectorId,
+        name: row.inspectorName,
+      });
+      return {
+        ...row,
+        shift: normalizeShift(row.shift),
+        results: mergeChecklistResults(row.results),
+        sectionInspectors,
+        inspectorId: firstSectionInspector(sectionInspectors).id || row.inspectorId || "",
+        inspectorName: summarizeInspectors(sectionInspectors, row.inspectorName || ""),
+        conclusion: normalizeConclusion(row.conclusion),
+      };
+    });
   } catch {
     return [];
   }
@@ -176,7 +214,7 @@ function writeLocal(rows: PreShiftChecklistRecord[]) {
 }
 
 export function emptyPreShiftForm(partial?: Partial<PreShiftChecklistFormValues>): PreShiftChecklistFormValues {
-  return {
+  const next: PreShiftChecklistFormValues = {
     date: todayIsoLocal(),
     shift: "Ca 1",
     machineId: "",
@@ -188,6 +226,7 @@ export function emptyPreShiftForm(partial?: Partial<PreShiftChecklistFormValues>
     chainage: "",
     inspectorId: "",
     inspectorName: "",
+    sectionInspectors: emptySectionInspectors(),
     shiftLeadId: "",
     shiftLeadName: "",
     results: emptyChecklistResults(),
@@ -200,6 +239,13 @@ export function emptyPreShiftForm(partial?: Partial<PreShiftChecklistFormValues>
     note: "",
     ...partial,
   };
+  next.sectionInspectors = mergeSectionInspectors(partial?.sectionInspectors ?? next.sectionInspectors, {
+    id: next.inspectorId,
+    name: next.inspectorName,
+  });
+  next.inspectorName = summarizeInspectors(next.sectionInspectors, next.inspectorName);
+  next.inspectorId = firstSectionInspector(next.sectionInspectors).id || next.inspectorId;
+  return next;
 }
 
 function pad2(n: number) {
@@ -348,8 +394,15 @@ export async function deletePreShiftChecklist(id: string) {
 
 export function recordToForm(row: PreShiftChecklistRecord): PreShiftChecklistFormValues {
   const { id: _id, createdAt: _created, updatedAt: _updated, ...form } = row;
+  const sectionInspectors = hydrateInspectors(row.results, row.sectionInspectors, {
+    id: row.inspectorId,
+    name: row.inspectorName,
+  });
   return {
     ...form,
     results: mergeChecklistResults(row.results),
+    sectionInspectors,
+    inspectorId: firstSectionInspector(sectionInspectors).id || row.inspectorId || "",
+    inspectorName: summarizeInspectors(sectionInspectors, row.inspectorName),
   };
 }

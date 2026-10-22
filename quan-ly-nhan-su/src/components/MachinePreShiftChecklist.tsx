@@ -30,7 +30,9 @@ import {
   MFBW_PRE_SHIFT_SECTIONS,
   conclusionShort,
   countChecklistProgress,
+  missingSectionLetters,
   suggestChecklistConclusion,
+  summarizeInspectors,
   type ChecklistConclusion,
   type ChecklistMark,
   type ChecklistShift,
@@ -66,6 +68,18 @@ const VIEWER_PERSON_ID = "current-viewer";
 
 function samePersonName(left: string, right: string) {
   return left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
+}
+
+function inspectorOptions(
+  people: { value: string; label: string }[],
+  assigned?: { id: string; name: string },
+) {
+  const name = assigned?.name.trim() || "";
+  if (!name) return people;
+  const id = assigned?.id.trim() || name;
+  if (people.some((item) => item.value === id)) return people;
+  const matched = people.find((item) => samePersonName(item.label.split(" — ")[0] || "", name));
+  return matched ? people : [{ value: id, label: name }, ...people];
 }
 
 function loggedInInspector(people: PersonOption[]): PersonOption | undefined {
@@ -292,8 +306,9 @@ export default function MachinePreShiftChecklist() {
       setFormError("Chọn máy trước khi lưu.");
       return;
     }
-    if (!form.inspectorName.trim()) {
-      setFormError("Nhập người kiểm tra.");
+    const missingInspectors = missingSectionLetters(form.sectionInspectors);
+    if (missingInspectors.length) {
+      setFormError(`Phân công người kiểm tra cho nhóm ${missingInspectors.join(", ")}.`);
       return;
     }
     if (progress.filled < progress.total) {
@@ -445,7 +460,7 @@ export default function MachinePreShiftChecklist() {
                       <StatusBadge conclusion={row.conclusion || ""} done />
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
-                      {formatChecklistDate(row.date)} · {row.shift} · {row.inspectorName || "—"} · {progress.pass}/{progress.total} đạt
+                      {formatChecklistDate(row.date)} · {row.shift} · {summarizeInspectors(row.sectionInspectors, row.inspectorName) || "—"} · {progress.pass}/{progress.total} đạt
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
@@ -517,7 +532,7 @@ export default function MachinePreShiftChecklist() {
                   </div>
                   <div className="mt-2 text-xs text-slate-500">
                     {row
-                      ? `${row.inspectorName || "—"} · ${formatChecklistTime(row.updatedAt) || formatChecklistDate(row.date)} · ${progress?.pass}/${progress?.total} đạt`
+                      ? `${summarizeInspectors(row.sectionInspectors, row.inspectorName) || "—"} · ${formatChecklistTime(row.updatedAt) || formatChecklistDate(row.date)} · ${progress?.pass}/${progress?.total} đạt`
                       : "Chưa kiểm tra trước ca"}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -721,10 +736,22 @@ function ChecklistFormSheet({
     });
   }
 
-  function onPerson(field: "inspector" | "shiftLead", id: string) {
+  function onPerson(field: "shiftLead", id: string) {
     const person = personList.find((item) => item.id === id);
-    if (field === "inspector") patch({ inspectorId: id, inspectorName: person?.name || "" });
-    else patch({ shiftLeadId: id, shiftLeadName: person?.name || "" });
+    patch({ shiftLeadId: id, shiftLeadName: person?.name || "" });
+  }
+
+  function onSectionInspector(sectionId: string, id: string) {
+    const person = personList.find((item) => item.id === id);
+    const sectionInspectors = {
+      ...form.sectionInspectors,
+      [sectionId]: { id, name: person?.name || "" },
+    };
+    patch({
+      sectionInspectors,
+      inspectorId: id || form.inspectorId,
+      inspectorName: summarizeInspectors(sectionInspectors, person?.name || form.inspectorName),
+    });
   }
 
   return (
@@ -838,18 +865,7 @@ function ChecklistFormSheet({
                 className={inputCls}
               />
             </label>
-            <div className="col-span-2 sm:col-span-1">
-              <span className={labelCls}>Người kiểm tra</span>
-              <SelectMenu
-                searchable
-                value={form.inspectorId}
-                onChange={(id) => onPerson("inspector", id)}
-                options={people}
-                placeholder="Chọn người kiểm tra"
-                buttonClassName="h-11"
-              />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
+            <div className="col-span-2">
               <span className={labelCls}>Trưởng ca</span>
               <SelectMenu
                 searchable
@@ -860,6 +876,9 @@ function ChecklistFormSheet({
                 buttonClassName="h-11"
               />
             </div>
+            <p className="col-span-2 text-xs leading-snug text-slate-500">
+              Người kiểm tra chọn riêng trên từng nhóm A–E ở tab Checklist.
+            </p>
           </div>
           )}
 
@@ -911,6 +930,18 @@ function ChecklistFormSheet({
                   >
                     {sectionFilled}/{section.items.length}
                   </div>
+                </div>
+                <div className="border-b border-slate-100 bg-white/80 px-3.5 py-2.5">
+                  <span className={labelCls}>Người kiểm tra nhóm {section.letter}</span>
+                  <SelectMenu
+                    searchable
+                    value={form.sectionInspectors[section.id]?.id || form.sectionInspectors[section.id]?.name || ""}
+                    onChange={(id) => onSectionInspector(section.id, id)}
+                    options={inspectorOptions(people, form.sectionInspectors[section.id])}
+                    placeholder="Phân công người kiểm tra"
+                    searchPlaceholder="Tìm người kiểm tra"
+                    buttonClassName="h-11"
+                  />
                 </div>
                 <div className="divide-y divide-slate-100">
                   {section.items.map((item) => {
@@ -1123,7 +1154,7 @@ function ChecklistFormSheet({
               <button
                 type="button"
                 onClick={() => {
-                  if (!form.machineId || !form.inspectorName.trim()) setSheetTab("info");
+                  if (!form.machineId) setSheetTab("info");
                   onSave();
                 }}
                 disabled={saving}

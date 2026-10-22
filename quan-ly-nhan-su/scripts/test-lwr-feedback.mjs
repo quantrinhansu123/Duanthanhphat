@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { calculateStressRelease, DEFAULT_STRESS_INPUT } from "../src/features/lwr/lib/stress-release.ts";
 import { createInitialTrackLayout, generateRailRows, getPlacementSpan, longRailsOverlap, validateTrackLayout, validateStressParams, formatChainage } from "../src/features/lwr/lib/track-editor.ts";
-import { buildRailJoints, weldMethodTone } from "../src/features/lwr/lib/weld-track-map.ts";
+import { buildRailJoints, jointDisplayMethod, weldMethodTone } from "../src/features/lwr/lib/weld-track-map.ts";
 
 const rows = generateRailRows(createInitialTrackLayout().rows, 123, 17584);
 const rail = (from, to, id = "one") => ({ id, code: id, label: id, rowKey: "UT", startCellId: "UT-01", endCellId: "UT-02", startMetres: from, endMetres: to, releaseDate: "2026-10-22", completedAt: "2026-10-22T04:00:00Z", params: { ...DEFAULT_STRESS_INPUT, startChainage: formatChainage(from), endChainage: formatChainage(to), trackSide: "LEFT", leftOuterMovement: 4 }, updatedAt: "2026-10-22T04:00:00Z" });
@@ -71,7 +71,21 @@ test("ambiguous chainage never assigns a weld to the wrong one of four rails", (
   assert.equal(linked.joints.filter(j => j.welds.length)[0].rowKey, "DP");
   assert.match(weldMethodTone("FBW"), /blue/);
   assert.match(weldMethodTone("Hàn nhiệt nhôm"), /red/);
+  assert.match(weldMethodTone("SINGLE"), /amber/);
   assert.match(weldMethodTone(), /white/);
+  const planned = rail(0, 500);
+  planned.params.method = "FBW";
+  planned.completedAt = undefined;
+  const plannedJoint = { id: "j", rowKey: "UT", metres: 0, chainage: "0+000", leftCellId: "UT-01", rightCellId: "UT-01", welds: [] };
+  assert.equal(jointDisplayMethod(plannedJoint, [planned], rows), "FBW");
+  const otherEnd = { ...plannedJoint, id: "end", metres: 500, chainage: "0+500" };
+  assert.equal(jointDisplayMethod(otherEnd, [planned], rows), "FBW");
+  const mid = { ...plannedJoint, id: "mid", metres: 250, chainage: "0+250" };
+  assert.equal(jointDisplayMethod(mid, [planned], rows, planned.id), undefined);
+  const journal = { ...plannedJoint, metres: 250, welds: [{ id: "w", code: "X", method: "Hàn hồ quang" }] };
+  assert.equal(jointDisplayMethod(journal, [planned], rows), "Hàn hồ quang");
+  const later = { ...plannedJoint, id: "later", metres: 900, chainage: "0+900" };
+  assert.equal(jointDisplayMethod(later, [planned], rows, planned.id), undefined);
 });
 
 test("actual work endpoints create weld points without moving planned boundaries", () => {

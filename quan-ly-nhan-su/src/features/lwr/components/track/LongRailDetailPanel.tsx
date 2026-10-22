@@ -4,18 +4,25 @@ import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { formatChainage, getPlacementSpan, type LongRail, type TrackLayout } from "@lwr/lib/track-editor";
 import type { StressInput } from "@lwr/lib/stress-release";
-import { StressReleaseCalculator } from "./StressReleaseCalculator";
+import { StressReleaseCalculator, type StressSaveResult } from "./StressReleaseCalculator";
+import { ReleaseStatusButtons } from "./RailDetailPanel";
 
 export function LongRailDetailPanel({
   longRail,
   layout,
   onClose,
   onSaveParams,
+  onMethodChange,
+  onPassChange,
+  passed = false,
 }: {
   longRail: LongRail;
   layout: TrackLayout;
   onClose: () => void;
-  onSaveParams: (params: StressInput) => boolean | void;
+  onSaveParams: (params: StressInput) => StressSaveResult | boolean | void;
+  onMethodChange?: (method: StressInput["method"]) => void;
+  onPassChange?: (passed: boolean) => void;
+  passed?: boolean;
 }) {
   const content = useRef<HTMLDivElement>(null);
   const span = getPlacementSpan(layout.rows, longRail);
@@ -43,6 +50,9 @@ export function LongRailDetailPanel({
         </button>
       </header>
       <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
+        {onPassChange && (
+          <ReleaseStatusButtons passed={passed} onChange={onPassChange} />
+        )}
         <dl className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-3 text-sm">
           <div>
             <dt className="text-slate-500">Dải ray</dt>
@@ -77,7 +87,7 @@ export function LongRailDetailPanel({
           Toàn bộ thông số giải toả gắn với thanh dài này. Bấm <b>Lưu thông số</b> để giữ lại và xem lại sau.
         </p>
         <StressReleaseCalculator
-          key={`${longRail.id}-${longRail.updatedAt}`}
+          key={longRail.id}
           compact
           segmentId={longRail.code}
           initialInput={{
@@ -87,6 +97,7 @@ export function LongRailDetailPanel({
             endChainage: longRail.params.endChainage || (span ? formatChainage(span.endMetres) : ""),
           }}
           onSave={onSaveParams}
+          onModeChange={(mode) => onMethodChange?.(mode === "BUFFER" ? "SINGLE" : mode)}
         />
       </div>
     </aside>

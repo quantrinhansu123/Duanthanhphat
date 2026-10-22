@@ -242,6 +242,39 @@ export function getPlacementSpan(
   return { row, startIndex, endIndex, startCell, endCell, startMetres, endMetres };
 }
 
+export function compareLongRailDisplay(a: LongRail, b: LongRail, selectedId?: string | null) {
+  if (selectedId) {
+    if (a.id === selectedId) return -1;
+    if (b.id === selectedId) return 1;
+  }
+  return Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0);
+}
+
+export function coveringLongRail<T extends { rail: LongRail; span: PlacementSpan }>(
+  items: T[],
+  from: number,
+  to: number,
+  selectedId?: string | null,
+): T | undefined {
+  const hits = items.filter(({ span }) => from < span.endMetres && to > span.startMetres);
+  if (!hits.length) return undefined;
+  return [...hits].sort((a, b) => compareLongRailDisplay(a.rail, b.rail, selectedId))[0];
+}
+
+export function visibleLongRailSpan(rows: RailRow[], rail: Pick<LongRail, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">): PlacementSpan | null {
+  const exact = getPlacementSpan(rows, rail);
+  if (exact) return exact;
+  const row = rows.find((item) => railRowKey(item) === rail.rowKey);
+  if (!row?.cells.length) return null;
+  const rowStart = parseChainage(row.cells[0].from) ?? 0;
+  const rowEnd = parseChainage(row.cells[row.cells.length - 1].to);
+  if (rowEnd === null) return null;
+  const start = Number.isFinite(rail.startMetres) ? Math.max(rowStart, rail.startMetres as number) : rowStart;
+  const end = Number.isFinite(rail.endMetres) ? Math.min(rowEnd, rail.endMetres as number) : rowEnd;
+  if (!(end > start)) return null;
+  return getPlacementSpan(rows, { ...rail, startMetres: start, endMetres: end });
+}
+
 export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: number } {
   const starts = rows.flatMap((row) => {
     const value = row.cells[0] ? parseChainage(row.cells[0].from) : null;
@@ -287,6 +320,68 @@ export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
       };
     });
     return { ...row, cells: [...row.cells, ...additions] };
+  });
+}
+
+/** Place the next hidden short rail on one row. Does not lengthen the planned line. */
+export function placeNextShortRail(rows: RailRow[], rowKey: string): RailRow[] {
+  const target = rows.find((row) => railRowKey(row) === rowKey);
+  if (!target) {
+    throw new RangeError("Không tìm thấy dải ray.");
+  }
+  const nextIndex = target.cells.findIndex((cell) => !cell.released && !cell.placed);
+  if (nextIndex >= 0) {
+    return rows.map((row) => {
+      if (railRowKey(row) !== rowKey) return row;
+      return {
+        ...row,
+        cells: row.cells.map((cell, index) => (index === nextIndex ? { ...cell, placed: true } : cell)),
+      };
+    });
+  }
+  const extent = trackExtent(rows);
+  const last = target.cells[target.cells.length - 1];
+  const lastEnd = last ? parseChainage(last.to) : extent.startMetres;
+  if (lastEnd === null || lastEnd >= extent.endMetres) {
+    throw new RangeError("Hết thanh trên dải này. Dùng Rải tuyến hoặc Ghép thêm thanh nếu cần kéo dài tuyến.");
+  }
+  const numbers = target.cells.map((cell) => Number(/-(\d+)$/.exec(cell.id)?.[1]));
+  const lastNumber = numbers.length ? Math.max(...numbers.filter((n) => Number.isSafeInteger(n))) : 0;
+  const addition: RailCell = {
+    id: `${rowKey}-${String(lastNumber + 1).padStart(2, "0")}`,
+    from: formatChainage(lastEnd),
+    to: formatChainage(Math.min(extent.endMetres, lastEnd + RAIL_SEGMENT_LENGTH_METRES)),
+    temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+    placed: true,
+  };
+  return rows.map((row) => {
+    if (railRowKey(row) !== rowKey) return row;
+    return { ...row, cells: [...row.cells, addition] };
+  });
+}
+
+/** Hide a placed short rail. Never clears Đạt. */
+export function removeShortRail(rows: RailRow[], cellId: string): RailRow[] {
+  const row = rows.find((item) => item.cells.some((cell) => cell.id === cellId));
+  if (!row) throw new RangeError("Không tìm thấy thanh ray.");
+  const cell = row.cells.find((item) => item.id === cellId);
+  if (!cell) throw new RangeError("Không tìm thấy thanh ray.");
+  if (cell.released) {
+    throw new RangeError("Thanh đã Đạt. Không xóa trạng thái Đạt. Bấm Chưa giải tỏa trên panel nếu muốn gỡ thanh này.");
+  }
+  if (!cell.placed) {
+    throw new RangeError("Thanh này chưa rải trên sơ đồ.");
+  }
+  return rows.map((item) => {
+    if (!item.cells.some((entry) => entry.id === cellId)) return item;
+    return {
+      ...item,
+      cells: item.cells.map((entry) => {
+        if (entry.id !== cellId) return entry;
+        const { placed: _placed, ...rest } = entry;
+        return rest;
+      }),
+    };
   });
 }
 
@@ -392,8 +487,16 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
 /** Apply a cell edit and keep long-rail lengths in sync with the new span. */
 export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailCellPatch): TrackLayout {
   const rows = updateRailCell(layout.rows, cellId, patch);
-  if ([...layout.placements, ...layout.longRails].some(item => item.startMetres !== undefined && !getPlacementSpan(rows, item))) {
-    throw new RangeError("Thay đổi này làm công trình hoặc đoạn thi công nằm ngoài phạm vi tuyến.");
+  const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
+  if (hasGeometry) {
+    const lostSpan = [...layout.placements, ...layout.longRails].some((item) => (
+      item.startMetres !== undefined
+      && Boolean(getPlacementSpan(layout.rows, item))
+      && !getPlacementSpan(rows, item)
+    ));
+    if (lostSpan) {
+      throw new RangeError("Thay đổi này làm công trình hoặc đoạn thi công nằm ngoài phạm vi tuyến.");
+    }
   }
   const longRails = layout.longRails.map((item) => {
     const span = getPlacementSpan(rows, item);
@@ -521,6 +624,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
       if (!isRecord(rawCell) || typeof rawCell.id !== "string" || !/^.+-\d+$/.test(rawCell.id)
         || typeof rawCell.from !== "string" || typeof rawCell.to !== "string"
         || typeof rawCell.temp !== "number" || !Number.isFinite(rawCell.temp)
+        || (rawCell.placed !== undefined && typeof rawCell.placed !== "boolean")
         || (rawCell.released !== undefined && typeof rawCell.released !== "boolean")
         || cellIds.has(rawCell.id)) return null;
       const start = parseChainage(rawCell.from);
@@ -532,6 +636,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         from: rawCell.from,
         to: rawCell.to,
         temp: rawCell.temp,
+        ...(rawCell.placed ? { placed: true } : {}),
         ...(rawCell.released ? { released: true } : {}),
       });
       cellIds.add(rawCell.id);

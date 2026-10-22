@@ -13,6 +13,8 @@ export interface RailCell {
   from: string;
   to: string;
   temp: number;
+  /** True after the user adds this short rail on the schematic. */
+  placed?: boolean;
   /** True after stress release on this segment has passed. */
   released?: boolean;
 }

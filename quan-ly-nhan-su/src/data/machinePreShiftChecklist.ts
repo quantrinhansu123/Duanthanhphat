@@ -185,6 +185,10 @@ export const MFBW_PRE_SHIFT_SECTIONS: ChecklistSectionDef[] = [
 ];
 
 export const MFBW_PRE_SHIFT_ITEMS = MFBW_PRE_SHIFT_SECTIONS.flatMap((section) => section.items);
+const SECTION_INSPECTORS_KEY = "_inspectors";
+
+export type SectionInspector = { id: string; name: string };
+export type SectionInspectors = Record<string, SectionInspector>;
 
 export type ChecklistItemResult = {
   result: ChecklistMark | "";
@@ -200,6 +204,75 @@ export function emptyChecklistResults(): ChecklistResults {
     next[item.ma] = { result: "", note: "", nhietDo: item.extra === "nhietDo" ? "" : undefined };
   }
   return next;
+}
+
+export function emptySectionInspectors(seed?: SectionInspector): SectionInspectors {
+  const next: SectionInspectors = {};
+  const fallback = seed?.name.trim() ? { id: seed.id.trim(), name: seed.name.trim() } : { id: "", name: "" };
+  for (const section of MFBW_PRE_SHIFT_SECTIONS) next[section.id] = { ...fallback };
+  return next;
+}
+
+function readInspectorBag(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") return {};
+  const source = raw as Record<string, unknown>;
+  const nested = source[SECTION_INSPECTORS_KEY];
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) return nested as Record<string, unknown>;
+  return source;
+}
+
+export function mergeSectionInspectors(raw: unknown, fallback?: SectionInspector): SectionInspectors {
+  const base = emptySectionInspectors();
+  const bag = readInspectorBag(raw);
+  for (const section of MFBW_PRE_SHIFT_SECTIONS) {
+    const value = bag[section.id];
+    if (!value || typeof value !== "object") continue;
+    const row = value as Record<string, unknown>;
+    const name = typeof row.name === "string" ? row.name.trim() : "";
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (name || id) base[section.id] = { id, name };
+  }
+  if (fallback?.name.trim()) {
+    const seed = { id: fallback.id.trim(), name: fallback.name.trim() };
+    for (const section of MFBW_PRE_SHIFT_SECTIONS) {
+      if (!base[section.id].name) base[section.id] = seed;
+    }
+  }
+  return base;
+}
+
+export function uniqueInspectorNames(inspectors: SectionInspectors): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const section of MFBW_PRE_SHIFT_SECTIONS) {
+    const name = inspectors[section.id]?.name.trim();
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("vi");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+export function summarizeInspectors(inspectors: SectionInspectors, fallback = "") {
+  return uniqueInspectorNames(inspectors).join(", ") || fallback.trim();
+}
+
+export function firstSectionInspector(inspectors: SectionInspectors): SectionInspector {
+  for (const section of MFBW_PRE_SHIFT_SECTIONS) {
+    const row = inspectors[section.id];
+    if (row?.name.trim()) return row;
+  }
+  return { id: "", name: "" };
+}
+
+export function missingSectionLetters(inspectors: SectionInspectors) {
+  return MFBW_PRE_SHIFT_SECTIONS.filter((section) => !inspectors[section.id]?.name.trim()).map((section) => section.letter);
+}
+
+export function attachSectionInspectors(results: ChecklistResults, inspectors: SectionInspectors) {
+  return { ...results, [SECTION_INSPECTORS_KEY]: inspectors };
 }
 
 export function mergeChecklistResults(raw: unknown): ChecklistResults {

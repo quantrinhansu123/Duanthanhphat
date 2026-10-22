@@ -74,10 +74,56 @@ export function jointsForRow(joints: RailJoint[], row: RailRow): RailJoint[] {
   return joints.filter((joint) => joint.rowKey === key);
 }
 
+function longRailSpanMetres(rail: LongRail, rows: RailRow[]): { start: number; end: number } | null {
+  if (
+    Number.isFinite(rail.startMetres)
+    && Number.isFinite(rail.endMetres)
+    && (rail.endMetres as number) > (rail.startMetres as number)
+  ) {
+    return { start: rail.startMetres as number, end: rail.endMetres as number };
+  }
+  const span = getPlacementSpan(rows, rail);
+  return span ? { start: span.startMetres, end: span.endMetres } : null;
+}
+
+function isRailEndpoint(rail: LongRail, rows: RailRow[], metres: number): boolean {
+  const span = longRailSpanMetres(rail, rows);
+  return Boolean(span && (span.start === metres || span.end === metres));
+}
+
+/** Màu mối hàn theo Mục tính toán — chỉ 2 đầu của thanh tương ứng, không tô cả tuyến. */
+export function jointDisplayMethod(
+  joint: RailJoint,
+  longRails: LongRail[] = [],
+  rows: RailRow[] = [],
+  preferredRailId?: string | null,
+): string | undefined {
+  const endpoints = longRails
+    .flatMap((rail) => {
+      if (rail.rowKey !== joint.rowKey || !rail.params.method) return [];
+      if (!isRailEndpoint(rail, rows, joint.metres)) return [];
+      const span = longRailSpanMetres(rail, rows);
+      return [{ rail, length: span ? span.end - span.start : Number.POSITIVE_INFINITY }];
+    })
+    .sort((a, b) => a.length - b.length || Date.parse(b.rail.updatedAt) - Date.parse(a.rail.updatedAt));
+
+  const preferred = preferredRailId
+    ? endpoints.find((item) => item.rail.id === preferredRailId)
+    : undefined;
+  if (preferred?.rail.params.method) return preferred.rail.params.method;
+  if (endpoints[0]?.rail.params.method) return endpoints[0].rail.params.method;
+
+  const linked = joint.welds[0]?.method?.trim();
+  if (linked && linked !== "—") return linked;
+  return undefined;
+}
+
 export function weldMethodTone(method?: string): string {
   const value = (method ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
   if (/FBW|FLASH|GIAP MEP|HAN CHAY/.test(value)) return "bg-blue-600 border-blue-800 text-white";
   if (/ATW|THERMIT|NHIET NHOM|ALUMIN/.test(value)) return "bg-red-600 border-red-800 text-white";
+  if (/SINGLE|RAY DON/.test(value)) return "bg-amber-500 border-amber-700 text-white";
+  if (/BUFFER|VUNG DEM/.test(value)) return "bg-purple-600 border-purple-800 text-white";
   return "bg-white border-slate-400 text-slate-700";
 }
 

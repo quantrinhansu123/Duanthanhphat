@@ -524,4 +524,11 @@ export const PHRASES: Record<string, string> = {
   "Lưu trữ": "Save",
   "Thợ máy tích mục kiểm tra đầu ca rồi bấm Lưu trữ. Phiếu lưu theo ngày, ca và máy.":
     "Mechanics tick the pre-shift items and press Save. Sheets are stored by date, shift and machine.",
+  "Người kiểm tra nhóm": "Section inspector",
+  "Phân công người kiểm tra": "Assign inspector",
+  "Tìm người kiểm tra": "Search inspectors",
+  "Người kiểm tra chọn riêng trên từng nhóm A–E ở tab Checklist.":
+    "Assign an inspector on each A–E section in the Checklist tab.",
+  "Người kiểm tra: phân công riêng theo từng nhóm A–E":
+    "Inspectors: assigned separately on sections A–E",
 };

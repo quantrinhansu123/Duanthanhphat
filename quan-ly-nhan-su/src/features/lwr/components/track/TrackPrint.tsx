@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { formatChainage, getPlacementSpan, railRowKey, trackExtent, type TrackLayout } from "@lwr/lib/track-editor";
-import { weldMethodTone } from "@lwr/lib/weld-track-map";
+import { jointDisplayMethod, weldMethodTone } from "@lwr/lib/weld-track-map";
 import type { RailJoint } from "@lwr/types/weld";
 
 const FORMATS = {
@@ -51,16 +51,17 @@ export function TrackPrint({ layout, joints, onClose, projectName }: { layout: T
         <h1>SƠ ĐỒ TUYẾN VÀ GIẢI TOẢ ỨNG SUẤT LWR</h1>
         <p>Dự án: {projectName ?? "Chưa gán dự án"}</p>
         <p>Km{formatChainage(start)} – Km{formatChainage(end)} · Tờ {index + 1}/{count} · {stamp}</p>
-        <p>Ray trái/phải nhìn theo chiều lý trình tăng. Mối hàn: trắng = chưa hàn; xanh = FBW; đỏ = nhiệt nhôm.</p>
+        <p>Ray trái/phải nhìn theo chiều lý trình tăng. Mối hàn: trắng = chưa chọn; xanh = FBW; đỏ = nhiệt nhôm; vàng = ray đơn.</p>
         <svg viewBox={`0 0 1100 ${layout.rows.length * 110 + 45}`} aria-label="Sơ đồ theo lý trình">
           {Array.from({ length: 6 }, (_, tick) => { const m = start + Math.round((end - start) * tick / 5); return <g key={tick}><line x1={x(m)} x2={x(m)} y1={20} y2={layout.rows.length * 110 + 20} stroke="#ddd" /><text x={x(m)} y={14} textAnchor="middle" fontSize={11}>{formatChainage(m)}</text></g>; })}
           {layout.rows.map((row, rowIndex) => {
             const key = railRowKey(row), y = 55 + rowIndex * 110;
             return <g key={key}>
               <text x={0} y={y} fontSize={12}>{row.line}</text><text x={0} y={y + 17} fontSize={12}>{row.rail}</text>
-              <line x1={140} x2={1040} y1={y} y2={y} stroke="#9a3412" strokeWidth={4} />
+              <line x1={140} x2={1040} y1={y} y2={y} stroke="#111" strokeWidth={4} />
+              {layout.rows[rowIndex + 1]?.line === row.line ? <line x1={140} x2={1040} y1={y + 55} y2={y + 55} stroke="#111" strokeWidth={3} strokeDasharray="16 10" /> : null}
               {layout.placements.filter(p => p.rowKey === key).map(p => { const span = getPlacementSpan(layout.rows, p); if (!span || span.endMetres <= start || span.startMetres >= end) return null; const a = x(Math.max(start, span.startMetres)), b = x(Math.min(end, span.endMetres)); return <g key={p.id}><rect x={a} y={y - 9} width={b - a} height={18} fill="#fbbf24" fillOpacity={0.4} /><title>{p.label}</title><text x={(a + b) / 2} y={y - 16} textAnchor="middle" fontSize={10}>{p.label}</text></g>; })}
-              {joints.filter(j => j.rowKey === key && j.metres >= start && (j.metres < end || index === count - 1 && j.metres === end)).map(j => { const tone = weldMethodTone(j.welds[0]?.method); return <g key={j.id}><circle cx={x(j.metres)} cy={y} r={4} stroke="#475569" fill={tone.includes("blue") ? "#2563eb" : tone.includes("red") ? "#dc2626" : "white"} /><text x={x(j.metres)} y={y + 19} fontSize={8} textAnchor="middle">{j.welds[0]?.code}</text></g>; })}
+              {joints.filter(j => j.rowKey === key && j.metres >= start && (j.metres < end || index === count - 1 && j.metres === end)).map(j => { const tone = weldMethodTone(jointDisplayMethod(j, layout.longRails, layout.rows)); return <g key={j.id}><circle cx={x(j.metres)} cy={y} r={3.2} stroke="white" strokeWidth={0.9} fill={tone.includes("blue") ? "#2563eb" : tone.includes("red") ? "#dc2626" : tone.includes("amber") ? "#d97706" : tone.includes("purple") ? "#7c3aed" : "white"} /><text x={x(j.metres)} y={y + 19} fontSize={8} textAnchor="middle">{j.welds[0]?.code}</text></g>; })}
               {pageRails.filter(p => p.rail.rowKey === key).map(({ rail, span }) => { const a = x(Math.max(start, span.startMetres)), b = x(Math.min(end, span.endMetres)); return <g key={rail.id}><rect x={a} y={y + 28} width={b - a} height={18} fill={rail.completedAt ? "#059669" : "#e2e8f0"} stroke="#64748b" /><text x={(a + b) / 2} y={y + 61} fontSize={10} textAnchor="middle">{rail.code}</text></g>; })}
             </g>;
           })}

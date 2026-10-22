@@ -59,6 +59,32 @@ export type LongRailLoadResult = {
   error?: string;
 };
 
+/** Keep the newer copy of each rail so a local method change is not overwritten. */
+export function preferNewerLongRails(local: LongRail[], remote: LongRail[]): LongRail[] {
+  const localById = new Map(local.map((rail) => [rail.id, rail]));
+  const seen = new Set<string>();
+  const merged: LongRail[] = [];
+  for (const remoteRail of remote) {
+    seen.add(remoteRail.id);
+    const localRail = localById.get(remoteRail.id);
+    if (!localRail) {
+      merged.push(remoteRail);
+      continue;
+    }
+    const localTime = Date.parse(localRail.updatedAt);
+    const remoteTime = Date.parse(remoteRail.updatedAt);
+    merged.push(
+      Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime >= remoteTime
+        ? localRail
+        : remoteRail,
+    );
+  }
+  for (const rail of local) {
+    if (!seen.has(rail.id)) merged.push(rail);
+  }
+  return merged;
+}
+
 /** Load long rails from Supabase; caller supplies local cache when table/config missing. */
 export async function loadLongRails(localFallback: LongRail[] = [], projectId?: string): Promise<LongRailLoadResult> {
   if (!supabase) {

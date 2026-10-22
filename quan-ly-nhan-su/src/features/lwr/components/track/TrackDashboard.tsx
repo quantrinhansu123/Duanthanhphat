@@ -5,12 +5,16 @@ import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
   extendRailRows,
+  placeNextShortRail,
+  removeShortRail,
   generateRailRows,
   formatChainage,
   getPlacementSpan,
   longRailsOverlap,
   parseChainage,
+  visibleLongRailSpan,
   patchTrackCell,
+  railRowKey,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
   validateTrackLayout,
@@ -23,6 +27,7 @@ import type { StressInput } from "@lwr/lib/stress-release";
 import {
   deleteLongRailRemote,
   loadLongRails,
+  preferNewerLongRails,
   syncLocalLongRailsToSupabase,
   upsertLongRail,
 } from "@lwr/lib/long-rail-storage";
@@ -37,6 +42,7 @@ import { TrackSchematic } from "./TrackSchematic";
 import { RailGrid } from "./RailGrid";
 import { RailDetailPanel } from "./RailDetailPanel";
 import { LongRailDetailPanel } from "./LongRailDetailPanel";
+import type { StressSaveResult } from "./StressReleaseCalculator";
 import { WeldJointPanel } from "./WeldJointPanel";
 import { TrackPrint } from "./TrackPrint";
 import { loadProjects } from "@/lib/projectsDb";
@@ -177,13 +183,15 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         if (remote.error && remote.source === "local") setLongRailSyncNote(remote.error);
         else if (remote.source === "supabase") {
           setLongRailSyncNote(null);
-          const next = { ...localLayout, longRails: remote.rails };
-          try {
-            localStorage.setItem(storageKey, JSON.stringify(next));
-          } catch {
-            /* keep in-memory */
-          }
-          setLayout(next);
+          setLayout((current) => {
+            const next = { ...current, longRails: preferNewerLongRails(current.longRails, remote.rails) };
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(next));
+            } catch {
+              /* keep in-memory */
+            }
+            return next;
+          });
         }
       } catch (cause) {
         if (!active) return;
@@ -197,14 +205,12 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
       void loadLongRails([], projectId).then((remote) => {
         if (!active || remote.source !== "supabase") return;
         setLayout((current) => {
+          const rails = preferNewerLongRails(current.longRails, remote.rails);
           const same =
-            current.longRails.length === remote.rails.length
-            && current.longRails.every((item, index) => {
-              const other = remote.rails[index];
-              return other && item.id === other.id && item.updatedAt === other.updatedAt;
-            });
+            rails.length === current.longRails.length
+            && rails.every((item, index) => item === current.longRails[index]);
           if (same) return current;
-          const next = { ...current, longRails: remote.rails };
+          const next = { ...current, longRails: rails };
           try {
             localStorage.setItem(storageKey, JSON.stringify(next));
           } catch {
@@ -344,12 +350,24 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     return persistLongRail(longRail, existing, rows);
   }
 
-  function saveLongRailParams(params: StressInput) {
-    if (!selectedLongRail) return false;
-    const start = parseChainage(params.startChainage ?? ""), end = parseChainage(params.endChainage ?? "");
-    if (start === null || end === null) { setError("Nhập lý trình đầu/cuối của đoạn trước khi lưu."); return false; }
+  function saveLongRailParams(params: StressInput): StressSaveResult {
+    if (!ready) return { ok: false, message: "Sơ đồ chưa tải xong. Đợi giây lát rồi bấm Lưu thông số lại." };
+    if (!selectedLongRail) return { ok: false, message: "Chưa chọn thanh dài. Bấm thanh dài trên sơ đồ rồi Lưu thông số." };
+    const start = parseChainage(params.startChainage ?? "");
+    const end = parseChainage(params.endChainage ?? "");
+    if (start === null || end === null) {
+      return { ok: false, message: "Nhập lý trình đầu và lý trình cuối đúng dạng Km (ví dụ 0+000), cuối lớn hơn đầu." };
+    }
     const expectedSide = selectedLongRail.rowKey.endsWith("T") ? "LEFT" : "RIGHT";
-    if (params.trackSide !== expectedSide) { setError("Ray trái/phải phải khớp dải ray của đoạn thi công. Đổi dải ray tại phần sửa đoạn thi công."); return false; }
+    if (params.trackSide !== expectedSide) {
+      return { ok: false, message: `Ray ${params.trackSide === "LEFT" ? "trái" : "phải"} không khớp dải của ${selectedLongRail.code}. Đổi dải ray ở phần sửa đoạn thi công.` };
+    }
+    if (
+      (selectedLongRail.startMetres !== start || selectedLongRail.endMetres !== end)
+      && [selectedLongRail.startMetres, selectedLongRail.endMetres].some((metres) => (layout.jointWeldLinks?.[`${selectedLongRail.rowKey}:km:${metres}`]?.length ?? 0) > 0)
+    ) {
+      return { ok: false, message: "Đầu đoạn đã liên kết nhật ký hàn. Tháo liên kết trước khi đổi lý trình." };
+    }
     const longRail: LongRail = {
       ...selectedLongRail,
       startMetres: start,
@@ -358,8 +376,84 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
       updatedAt: new Date().toISOString(),
     };
     const span = getPlacementSpan(layout.rows, longRail);
-    if (!span || layout.longRails.some(other => other.id !== longRail.id && longRailsOverlap(layout.rows, longRail, other))) { setError("Đoạn phải nằm trong tuyến và không chồng lấn đoạn đã lưu."); return false; }
-    return persistLongRail({ ...longRail, startCellId: span.startCell.id, endCellId: span.endCell.id }, selectedLongRail);
+    if (!span) return { ok: false, message: "Lý trình đầu/cuối phải nằm trong tuyến đã rải." };
+    if (layout.longRails.some((other) => other.id !== longRail.id && longRailsOverlap(layout.rows, longRail, other))) {
+      return { ok: false, message: "Không lưu được: đoạn này chồng lấn thanh dài khác trên cùng dải ray." };
+    }
+    const ok = persistLongRail({ ...longRail, startCellId: span.startCell.id, endCellId: span.endCell.id }, selectedLongRail);
+    if (!ok) return { ok: false, message: "Không ghi được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web." };
+    return { ok: true, message: `Đã lưu thông số thanh dài ${selectedLongRail.code}.` };
+  }
+
+  function saveCellCalculator(params: StressInput): StressSaveResult {
+    if (!ready) return { ok: false, message: "Sơ đồ chưa tải xong. Đợi giây lát rồi bấm Lưu thông số lại." };
+    if (!cell) return { ok: false, message: "Chưa chọn thanh ngắn." };
+    const row = layout.rows.find((item) => item.cells.some((itemCell) => itemCell.id === cell.id));
+    if (!row) return { ok: false, message: `Không tìm thấy dải ray chứa ${cell.id}.` };
+    const from = parseChainage(cell.from);
+    const to = parseChainage(cell.to);
+    const key = railRowKey(row);
+    const covering = layout.longRails.filter((rail) => {
+      if (rail.rowKey !== key) return false;
+      const span = getPlacementSpan(layout.rows, rail);
+      return Boolean(span && from !== null && to !== null && span.startMetres < to && span.endMetres > from);
+    });
+    if (covering.length === 0) {
+      return {
+        ok: false,
+        message: `Không lưu được: ${cell.id} là thanh ngắn. Thông số giải toả chỉ lưu trên thanh dài. Tạo thanh dài trên dải ${row.line} · ${row.rail} ở phần Thi công giải toả, hoặc bấm thanh dài trên sơ đồ rồi Lưu thông số.`,
+      };
+    }
+    const target = (selectedLongRail && covering.some((rail) => rail.id === selectedLongRail.id))
+      ? selectedLongRail
+      : covering.slice().sort((a, b) => (a.endMetres - a.startMetres) - (b.endMetres - b.startMetres))[0];
+    const next: LongRail = {
+      ...target,
+      params: {
+        ...target.params,
+        ...params,
+        startChainage: target.params.startChainage || params.startChainage,
+        endChainage: target.params.endChainage || params.endChainage,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    if (!commit({
+      ...layout,
+      longRails: layout.longRails.map((item) => (item.id === next.id ? next : item)),
+    })) {
+      return { ok: false, message: "Không ghi được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web." };
+    }
+    void upsertLongRail(next).then((result) => {
+      if (!result.ok) setError(result.error ?? "Không lưu thanh dài lên Supabase.");
+    });
+    return { ok: true, message: `Đã lưu thông số lên thanh dài ${next.code}.` };
+  }
+
+  function cellOnSelectedLongRail(item: typeof cell) {
+    if (!selectedLongRail || !item) return false;
+    const row = layout.rows.find((entry) => entry.cells.some((cellItem) => cellItem.id === item.id));
+    if (!row || railRowKey(row) !== selectedLongRail.rowKey) return false;
+    const from = parseChainage(item.from);
+    const to = parseChainage(item.to);
+    const span = getPlacementSpan(layout.rows, selectedLongRail) ?? visibleLongRailSpan(layout.rows, selectedLongRail);
+    if (from === null || to === null || !span) return false;
+    return from < span.endMetres && to > span.startMetres;
+  }
+
+  function markLongRailPass(passed: boolean) {
+    if (!selectedLongRail) return;
+    const span = getPlacementSpan(layout.rows, selectedLongRail) ?? visibleLongRailSpan(layout.rows, selectedLongRail);
+    const target = cell && cellOnSelectedLongRail(cell) ? cell : span?.startCell;
+    if (!target) {
+      setError("Chọn một đoạn ray trên thanh dài này, rồi bấm Đạt. Chỉ đoạn đang chọn được đổi xanh.");
+      return;
+    }
+    try {
+      setSelectedId(target.id);
+      if (!commit(patchTrackCell(layout, target.id, { released: passed }))) return;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không cập nhật được trạng thái Đạt.");
+    }
   }
 
   function saveCellPatch(patch: RailCellPatch) {
@@ -420,6 +514,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           ready={ready}
           symbolError={symbolError}
           selectedLongRailId={selectedLongRailId}
+          selectedCellId={cell?.id ?? null}
           onReloadSymbols={() => {
             void reloadSymbols();
           }}
@@ -464,7 +559,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           <RailGrid
             rows={layout.rows}
             longRails={layout.longRails}
-            onSelectLongRail={id => { setSelectedLongRailId(id); setDetailOpen(false); setSelectedJoint(null); }}
+            selectedLongRailId={selectedLongRailId}
+            onSelectLongRail={id => { setSelectedLongRailId(id); setSelectedJoint(null); }}
             embedded
             joints={joints}
             selectedJointId={selectedJoint?.id ?? null}
@@ -472,13 +568,33 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             onSelect={(id) => {
               setSelectedId(id);
               setSelectedJoint(null);
-              setSelectedLongRailId(null);
               setDetailOpen(true);
             }}
             onSelectJoint={(joint) => {
               setSelectedJoint(joint);
               setDetailOpen(false);
               setSelectedLongRailId(null);
+            }}
+            onAppend={(rowKey) => {
+              try {
+                return commit({ ...layout, rows: placeNextShortRail(layout.rows, rowKey) });
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : "Không thêm được thanh ngắn.");
+                return false;
+              }
+            }}
+            onRemove={(cellId) => {
+              try {
+                const nextRows = removeShortRail(layout.rows, cellId);
+                if (!commit({ ...layout, rows: nextRows })) return;
+                if (selectedId !== cellId) return;
+                const row = nextRows.find((item) => item.cells.some((itemCell) => itemCell.id === cellId));
+                const previous = row ? [...row.cells].reverse().find((itemCell) => itemCell.released || itemCell.placed) : undefined;
+                if (previous) setSelectedId(previous.id);
+                else setDetailOpen(false);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : "Không xóa được thanh ngắn.");
+              }
             }}
           />
         </TrackSchematic>
@@ -493,6 +609,21 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
                 layout={layout}
                 onClose={() => setSelectedLongRailId(null)}
                 onSaveParams={saveLongRailParams}
+                onMethodChange={(method) => {
+                  if (!selectedLongRail) return;
+                  const next = {
+                    ...selectedLongRail,
+                    params: { ...selectedLongRail.params, method },
+                    updatedAt: new Date().toISOString(),
+                  };
+                  commit({
+                    ...layout,
+                    longRails: layout.longRails.map((item) => (item.id === next.id ? next : item)),
+                  });
+                  void upsertLongRail(next);
+                }}
+                passed={Boolean(cell?.released && cellOnSelectedLongRail(cell))}
+                onPassChange={markLongRailPass}
               />
             ) : null}
             {selectedJoint ? (
@@ -516,6 +647,21 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
                 onPrev={() => step(-1)}
                 onNext={() => step(1)}
                 onChange={saveCellPatch}
+                onSaveParams={saveCellCalculator}
+                onRemove={() => {
+                  try {
+                    const nextRows = removeShortRail(layout.rows, cell.id);
+                    if (!commit({ ...layout, rows: nextRows })) return false;
+                    const row = nextRows.find((item) => item.cells.some((itemCell) => itemCell.id === cell.id));
+                    const previous = row ? [...row.cells].reverse().find((itemCell) => itemCell.released || itemCell.placed) : undefined;
+                    if (previous) setSelectedId(previous.id);
+                    else setDetailOpen(false);
+                    return true;
+                  } catch (cause) {
+                    setError(cause instanceof Error ? cause.message : "Không xóa được thanh ngắn.");
+                    return false;
+                  }
+                }}
               />
             ) : null}
           </div>

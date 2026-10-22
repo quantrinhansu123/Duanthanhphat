@@ -135,10 +135,10 @@ export default function MachinePreShiftChecklistPrint({
           </div>
           <div className="meta-grid two">
             <div>
-              Người kiểm tra: <b>{record.inspectorName || "................................"}</b>
+              Trưởng ca: <b>{record.shiftLeadName || "................................"}</b>
             </div>
             <div>
-              Trưởng ca: <b>{record.shiftLeadName || "................................"}</b>
+              Người kiểm tra: phân công riêng theo từng nhóm A–E
             </div>
           </div>
 
@@ -154,6 +154,7 @@ export default function MachinePreShiftChecklistPrint({
               <col className="c-tieu" />
               <col className="c-mark" />
               <col className="c-note" />
+              <col className="c-inspector" />
             </colgroup>
             <thead>
               <tr>
@@ -162,17 +163,20 @@ export default function MachinePreShiftChecklistPrint({
                 <th>Tiêu chí đánh giá</th>
                 <th>Đ / K / NA</th>
                 <th>Ghi chú</th>
+                <th>Người kiểm tra</th>
               </tr>
             </thead>
             <tbody>
               {MFBW_PRE_SHIFT_SECTIONS.map((section) => (
                 <FragmentSection key={section.id} letter={section.letter} title={section.title}>
-                  {section.items.map((item) => {
+                  {section.items.map((item, index) => {
                     const result = record.results[item.ma];
                     const noteParts = [
                       result?.note?.trim() || "",
                       item.extra === "nhietDo" && c04Temp ? `${c04Temp} °C` : "",
                     ].filter(Boolean);
+                    const inspector =
+                      record.sectionInspectors?.[section.id]?.name.trim() || record.inspectorName || "";
                     return (
                       <tr key={item.ma}>
                         <td className="ma">{item.ma}</td>
@@ -183,6 +187,11 @@ export default function MachinePreShiftChecklistPrint({
                         </td>
                         <td>{markBoxes(result?.result)}</td>
                         <td className="left note">{noteParts.join(" · ")}</td>
+                        {index === 0 && (
+                          <td className="inspector" rowSpan={section.items.length}>
+                            {inspector || "...................."}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -240,7 +249,7 @@ function FragmentSection({
   return (
     <>
       <tr className="section-row">
-        <td colSpan={5} className="section-cell">
+        <td colSpan={6} className="section-cell">
           {letter}. {title}
         </td>
       </tr>
@@ -416,11 +425,18 @@ const PRINT_CSS = `
   text-align: center;
   background: #eef3fb;
 }
-#mfbw-checklist-print .c-ma { width: 12mm; }
-#mfbw-checklist-print .c-ten { width: 42mm; }
-#mfbw-checklist-print .c-tieu { width: 78mm; }
-#mfbw-checklist-print .c-mark { width: 28mm; }
-#mfbw-checklist-print .c-note { width: 30mm; }
+#mfbw-checklist-print .c-ma { width: 11mm; }
+#mfbw-checklist-print .c-ten { width: 36mm; }
+#mfbw-checklist-print .c-tieu { width: 62mm; }
+#mfbw-checklist-print .c-mark { width: 26mm; }
+#mfbw-checklist-print .c-note { width: 24mm; }
+#mfbw-checklist-print .c-inspector { width: 28mm; }
+#mfbw-checklist-print .inspector {
+  text-align: center;
+  font-size: 8pt;
+  font-weight: 700;
+  line-height: 1.25;
+}
 #mfbw-checklist-print .ma {
   text-align: center;
   font-family: "Times New Roman", Times, serif;
