@@ -1,0 +1,116 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const output = path.join(require('node:os').tmpdir(), 'thanhphat-lwr-feedback');
+fs.mkdirSync(output, { recursive: true });
+const baseURL = process.env.LWR_TEST_URL || 'http://localhost:3010';
+(async () => {
+ const browser = await chromium.launch({ headless: true });
+ try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/rest/v1/**', async route => {
+   const url = route.request().url();
+   if (url.includes('lwr_long_rails')) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'lwr_long_rails schema cache missing' }) });
+   let data = [];
+   if (url.includes('/du_an?')) data = [{ id: 'project-test', ma_du_an: 'TEST', du_an: 'Dự án kiểm thử', vi_tri: 'Km1+000 – Km2+584', nguoi_phu_trach: null, created_at: '2026-10-22', updated_at: '2026-10-22' }];
+   if (url.includes('structure_symbols')) data = [{ id: 'bridge', code: 'C1', name: 'Cầu kiểm thử', image_url: null }];
+   if (url.includes('bao_cao_moi_han_theo_du_an')) data = [{ id: 'w1', ma_lich_su: 'FBW-TEST-001', cong_nghe_han: 'FBW', du_an: 'Test', ngay_thuc_hien: '2026-10-22' }];
+   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) });
+  });
+  await page.goto(`${baseURL}/lwr-giai-toa-ung-suat`, { timeout: 120000 });
+  await page.getByLabel('Mục tính toán').selectOption('SINGLE');
+  await page.getByLabel('Lý trình đầu', { exact: true }).fill('Km0+123');
+  await page.getByLabel('Lý trình cuối', { exact: true }).fill('Km0+923');
+  await page.getByLabel('Lý trình vị trí kéo / mối hàn').fill('Km0+423');
+  assert.equal(await page.getByLabel('Chiều dài phía Km giảm L₁ (m)', { exact: true }).inputValue(), '300');
+  assert.equal(await page.getByLabel('Chiều dài phía Km tăng L₂ (m)', { exact: true }).inputValue(), '500');
+  await page.getByLabel('Chuyển vị mốc trong Mt (phía Km giảm) (mm)', { exact: true }).fill('3');
+  assert.match(await page.locator('tr').filter({ hasText: 'Chiều dài kéo sau bù chuyển vị' }).innerText(), /141 mm/);
+  await page.getByLabel('Chuyển vị mốc cố định F phía Km giảm (mm)', { exact: true }).fill('4');
+  assert.match(await page.locator('tr').filter({ hasText: 'Chiều dài kéo sau bù chuyển vị' }).innerText(), /141 mm/);
+  await page.getByText('Mốc ngoài F dịch chuyển khi kéo thử:', { exact: false }).first().waitFor();
+  for (const t of ['29.99', '30']) {
+   await page.getByLabel('Nhiệt độ neo phía Km giảm T₁ (°C)', { exact: true }).fill(t);
+   await page.getByLabel('Nhiệt độ neo phía Km tăng T₂ (°C)', { exact: true }).fill(t);
+   assert.match(await page.locator('tr').filter({ hasText: 'Phương pháp giải toả' }).innerText(), t === '30' ? /tự nhiên/ : /Có lực kéo/);
+  }
+  await page.getByRole('button', { name: 'In A4', exact: true }).click();
+  assert.equal(await page.locator('#stress-release-print').getByText('Con lăn cạnh', { exact: true }).count(), 1);
+  assert.equal(await page.locator('#stress-release-print').getByText('Chuyển vị mốc trong Mt', { exact: true }).count(), 1);
+  assert.equal(await page.locator('#stress-release-print').getByText('Chuyển vị mốc trong Mp', { exact: true }).count(), 1);
+  assert.equal(await page.locator('#stress-release-print td').filter({ hasText: 'Chuyển vị mốc cố định F' }).count(), 0);
+  await page.pdf({ path: path.join(output, 'calculation.pdf'), preferCSSPageSize: true, printBackground: true });
+  await page.locator('#stress-release-print').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByLabel('Mục tính toán').selectOption('BUFFER');
+  assert.equal(await page.getByRole('button', { name: 'In A4', exact: true }).isDisabled(), true);
+  for (const [label, value] of [
+   ['Giãn đầu ray dài ở nhiệt độ cao nhất (A) (mm)', '6'],
+   ['Co đầu ray dài ở nhiệt độ thấp nhất (B) (mm)', '4.5'],
+   ['Giãn đầu ray đệm ở nhiệt độ cao nhất (C) (mm)', '3'],
+   ['Co đầu ray đệm ở nhiệt độ thấp nhất (D) (mm)', '2.5'],
+  ]) await page.getByLabel(label, { exact: true }).fill(value);
+  assert.match(await page.locator('.buffer-gap-table').innerText(), /9 mm[\s\S]*a₁[\s\S]*11 mm/);
+  assert.match(await page.locator('.buffer-gap-table').innerText(), /6 mm[\s\S]*a₂[\s\S]*13 mm/);
+  await page.getByRole('button', { name: 'In A4', exact: true }).click();
+  assert.match(await page.locator('#stress-release-print .buffer-gap-table').innerText(), /9 mm[\s\S]*11 mm/);
+  assert.equal(await page.locator('#stress-release-print .form-title').evaluate(el => getComputedStyle(el).color), 'rgb(107, 33, 168)');
+  await page.pdf({ path: path.join(output, 'buffer-gap.pdf'), preferCSSPageSize: true, printBackground: true });
+  await page.locator('#stress-release-print').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.goto(`${baseURL}/lwr-track-map`, { timeout: 120000 });
+  await page.getByLabel('Chốt lý trình cuối tuyến').fill('Km17+584');
+  await page.getByRole('button', { name: 'Rải / cập nhật tuyến', exact: true }).click();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('tp-track-layout-v2') || '{}').rows?.[0]?.cells?.at(-1)?.to === '17+584');
+  const construction = page.locator('form').filter({ has: page.getByLabel('Ngày thi công', { exact: true }) });
+  await construction.getByLabel('Lý trình đầu', { exact: true }).fill('0+123');
+  await construction.getByLabel('Lý trình cuối', { exact: true }).fill('0+789');
+  await construction.getByLabel('Hoàn thành giải toả').check();
+  await construction.getByRole('button', { name: 'Hoàn thành', exact: true }).click();
+  await page.getByRole('button', { name: 'Đóng chi tiết thanh dài', exact: true }).click();
+  let layout = await page.evaluate(() => JSON.parse(localStorage.getItem('tp-track-layout-v2')));
+  assert.equal(layout.longRails[0].params.leftLength, 666);
+  assert.equal(layout.longRails[0].startMetres, 123);
+  assert.ok(layout.longRails[0].completedAt);
+  await page.getByLabel('Lý trình đầu công trình', { exact: true }).fill('0+234');
+  await page.getByLabel('Lý trình cuối công trình', { exact: true }).fill('0+345');
+  await page.getByRole('button', { name: 'Thêm lên sơ đồ', exact: true }).click();
+  await page.getByRole('button', { name: 'Mối hàn TUYẾN THƯỢNG Ray trái Km0+500', exact: true }).click();
+  await page.getByLabel('Nhật ký hàn đã thực hiện', { exact: true }).selectOption('w1');
+  await page.getByRole('button', { name: 'Lưu liên kết · tự điền số mối hàn', exact: true }).click();
+  await page.getByRole('link', { name: 'FBW-TEST-001', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.reload();
+  await page.locator('[data-long-rail]').first().waitFor();
+  layout = await page.evaluate(() => JSON.parse(localStorage.getItem('tp-track-layout-v2')));
+  assert.equal(layout.placements[0].startMetres, 234);
+  assert.equal(layout.placements[0].endMetres, 345);
+  assert.ok(Object.values(layout.jointWeldLinks).flat().includes('w1'));
+  await page.getByRole('button', { name: 'In sơ đồ A4 / A3 / A3 kéo dài', exact: true }).click();
+  for (const [format, expected] of [['A4', 9], ['A3', 5], ['LONG', 2]]) {
+   await page.getByLabel('Khổ giấy').selectOption(format);
+   assert.equal(await page.locator('#lwr-track-print article').count(), expected);
+   const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+   fs.writeFileSync(path.join(output, `track-${format}.pdf`), pdf);
+   const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
+   assert.equal(pages, expected);
+   console.log(format, 'PDF pages', pages);
+  }
+  await page.locator('#lwr-track-print').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.locator('select').first().selectOption('project-test');
+  await page.waitForFunction(() => [...document.querySelectorAll('input')].some(input => input.value === '2+584'));
+  await page.getByRole('button', { name: 'Rải / cập nhật tuyến', exact: true }).click();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tp-track-layout-v2:project-test')).rows[0].cells.at(-1).to), '2+584');
+  await page.getByRole('button', { name: 'Xoá rải ray', exact: true }).click();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tp-track-layout-v2:project-test')).rows[0].cells.length), 0);
+  await page.locator('select').first().selectOption('');
+  await page.locator('[data-long-rail]').first().waitFor();
+  await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: path.join(output, 'mobile.png'), fullPage: true });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'page should not overflow horizontally');
+  assert.deepEqual(errors, []);
+  console.log('PASS calculation, exact spans, completion, weld linking, persistence, print formats, mobile.');
+ } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

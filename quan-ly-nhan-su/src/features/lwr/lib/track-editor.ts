@@ -13,6 +13,8 @@ export const DEFAULT_NEW_RAIL_TEMPERATURE = 35;
 export const MAX_EXTENSION_SEGMENTS = 100;
 
 export interface TrackPlacement {
+  startMetres?: number;
+  endMetres?: number;
   id: string;
   symbolId: string;
   rowKey: string;
@@ -22,6 +24,11 @@ export interface TrackPlacement {
 }
 
 export interface LongRail {
+  projectId?: string;
+  startMetres?: number;
+  endMetres?: number;
+  releaseDate?: string;
+  completedAt?: string;
   id: string;
   code: string;
   label: string;
@@ -33,6 +40,7 @@ export interface LongRail {
 }
 
 export interface TrackLayout {
+  jointWeldLinks?: Record<string, string[]>;
   version: 1;
   rows: RailRow[];
   placements: TrackPlacement[];
@@ -78,10 +86,11 @@ export function parseChainage(value: string): number | null {
 }
 
 export function formatChainage(metres: number): string {
-  if (!Number.isSafeInteger(metres) || metres < 0) {
+  if (!Number.isFinite(metres) || metres < 0 || metres > Number.MAX_SAFE_INTEGER) {
     throw new RangeError("Lý trình phải là số mét nguyên không âm.");
   }
-  return `${Math.floor(metres / 1000)}+${String(metres % 1000).padStart(3, "0")}`;
+  const [whole, fraction] = String(Number((metres % 1000).toFixed(3))).split(".");
+  return `${Math.floor(metres / 1000)}+${whole.padStart(3, "0")}${fraction ? `.${fraction}` : ""}`;
 }
 
 export function createInitialTrackLayout(): TrackLayout {
@@ -96,7 +105,7 @@ export function createInitialTrackLayout(): TrackLayout {
 /** Default 60R2 params for a new long rail spanning the selected cells. */
 export function defaultLongRailParams(
   rows: RailRow[],
-  span: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
+  span: Pick<LongRail, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">,
   railType?: string,
 ): StressInput {
   const placement = getPlacementSpan(rows, span);
@@ -114,14 +123,14 @@ export function defaultLongRailParams(
 /** True when two inclusive cell ranges on the same row share any cell. */
 export function longRailsOverlap(
   rows: RailRow[],
-  a: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
-  b: Pick<LongRail, "rowKey" | "startCellId" | "endCellId">,
+  a: Pick<LongRail, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">,
+  b: Pick<LongRail, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">,
 ): boolean {
   if (a.rowKey !== b.rowKey) return false;
   const spanA = getPlacementSpan(rows, a);
   const spanB = getPlacementSpan(rows, b);
   if (!spanA || !spanB) return false;
-  return spanA.startIndex <= spanB.endIndex && spanB.startIndex <= spanA.endIndex;
+  return spanA.startMetres < spanB.endMetres && spanB.startMetres < spanA.endMetres;
 }
 
 export function nextLongRailCode(longRails: LongRail[], _rowKey?: string): string {
@@ -211,17 +220,24 @@ export function defaultRailTypeForNewLongRail(longRails: LongRail[]): string {
 /** Inclusive cell selection: the span ends at the end of the last selected cell. */
 export function getPlacementSpan(
   rows: RailRow[],
-  placement: Pick<TrackPlacement, "rowKey" | "startCellId" | "endCellId">,
+  placement: Pick<TrackPlacement, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">,
 ): PlacementSpan | null {
   const row = rows.find((item) => railRowKey(item) === placement.rowKey);
   if (!row) return null;
-  const startIndex = row.cells.findIndex((cell) => cell.id === placement.startCellId);
-  const endIndex = row.cells.findIndex((cell) => cell.id === placement.endCellId);
+  const exact = placement.startMetres !== undefined || placement.endMetres !== undefined;
+  if (exact && (!Number.isFinite(placement.startMetres) || !Number.isFinite(placement.endMetres)
+    || placement.startMetres! < 0 || placement.endMetres! <= placement.startMetres!)) return null;
+  const startIndex = row.cells.findIndex((cell) => exact
+    ? (parseChainage(cell.from) ?? Infinity) <= placement.startMetres! && placement.startMetres! < (parseChainage(cell.to) ?? -Infinity)
+    : cell.id === placement.startCellId);
+  const endIndex = row.cells.findIndex((cell) => exact
+    ? (parseChainage(cell.from) ?? Infinity) < placement.endMetres! && placement.endMetres! <= (parseChainage(cell.to) ?? -Infinity)
+    : cell.id === placement.endCellId);
   if (startIndex < 0 || endIndex < startIndex) return null;
   const startCell = row.cells[startIndex];
   const endCell = row.cells[endIndex];
-  const startMetres = parseChainage(startCell.from);
-  const endMetres = parseChainage(endCell.to);
+  const startMetres = placement.startMetres ?? parseChainage(startCell.from);
+  const endMetres = placement.endMetres ?? parseChainage(endCell.to);
   if (startMetres === null || endMetres === null || endMetres <= startMetres) return null;
   return { row, startIndex, endIndex, startCell, endCell, startMetres, endMetres };
 }
@@ -376,11 +392,15 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
 /** Apply a cell edit and keep long-rail lengths in sync with the new span. */
 export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailCellPatch): TrackLayout {
   const rows = updateRailCell(layout.rows, cellId, patch);
+  if ([...layout.placements, ...layout.longRails].some(item => item.startMetres !== undefined && !getPlacementSpan(rows, item))) {
+    throw new RangeError("Thay đổi này làm công trình hoặc đoạn thi công nằm ngoài phạm vi tuyến.");
+  }
   const longRails = layout.longRails.map((item) => {
     const span = getPlacementSpan(rows, item);
     if (!span) return item;
     const length = span.endMetres - span.startMetres;
-    const nextParams = { ...item.params, leftLength: length };
+    const rightLength = Math.min(item.params.rightLength, length);
+    const nextParams = { ...item.params, leftLength: length - rightLength, rightLength };
     if (patch.temp !== undefined && span.startCell.id === cellId) {
       nextParams.neutralTemp = patch.temp;
     }
@@ -412,12 +432,29 @@ const STRESS_NUMBER_KEYS: StressNumberKey[] = [
 
 /** Added after the first 60R2 save format; missing keys keep sample defaults. */
 const OPTIONAL_STRESS_NUMBER_KEYS: StressNumberKey[] = [
+  "leftOuterMovement", "rightOuterMovement",
   "jackCylinderArea", "minAnchorLength", "allowedGap", "lockTempOffset",
 ];
 
 export function validateStressParams(value: unknown): StressInput | null {
   if (!isRecord(value)) return null;
   const params = { ...DEFAULT_STRESS_INPUT };
+  if (value.bufferDeformations !== undefined) {
+    const deltas = value.bufferDeformations;
+    if (!isRecord(deltas)) return null;
+    const keys = ["longExpansion", "longContraction", "bufferExpansion", "bufferContraction"] as const;
+    if (keys.some(key => typeof deltas[key] !== "number" || !Number.isFinite(deltas[key]) || (deltas[key] as number) < 0)) return null;
+    params.bufferDeformations = { longExpansion: deltas.longExpansion as number, longContraction: deltas.longContraction as number, bufferExpansion: deltas.bufferExpansion as number, bufferContraction: deltas.bufferContraction as number };
+  }
+  if (value.trackSide !== undefined) {
+    if (value.trackSide !== "LEFT" && value.trackSide !== "RIGHT") return null;
+    params.trackSide = value.trackSide;
+  }
+  for (const key of ["startChainage", "endChainage", "jointChainage"] as const) {
+    if (value[key] === undefined) continue;
+    if (typeof value[key] !== "string") return null;
+    params[key] = value[key];
+  }
   for (const key of STRESS_NUMBER_KEYS) {
     const raw = value[key];
     if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
@@ -449,7 +486,18 @@ export function parseLongRail(value: unknown): LongRail | null {
     || typeof value.endCellId !== "string" || typeof value.updatedAt !== "string") return null;
   const params = validateStressParams(value.params);
   if (!params) return null;
+  if ((value.startMetres !== undefined || value.endMetres !== undefined)
+    && (typeof value.startMetres !== "number" || typeof value.endMetres !== "number"
+      || !Number.isFinite(value.startMetres) || !Number.isFinite(value.endMetres)
+      || value.startMetres < 0 || value.endMetres <= value.startMetres)) return null;
+  if (value.releaseDate !== undefined && (typeof value.releaseDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.releaseDate))) return null;
+  if (value.completedAt !== undefined && (typeof value.completedAt !== "string" || !Number.isFinite(Date.parse(value.completedAt)))) return null;
   return {
+    projectId: typeof value.projectId === "string" ? value.projectId : undefined,
+    startMetres: value.startMetres as number | undefined,
+    endMetres: value.endMetres as number | undefined,
+    releaseDate: value.releaseDate as string | undefined,
+    completedAt: value.completedAt as string | undefined,
     id: value.id, code: value.code, label: value.label, rowKey: value.rowKey,
     startCellId: value.startCellId, endCellId: value.endCellId, params, updatedAt: value.updatedAt,
   };
@@ -504,6 +552,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
       || typeof raw.rowKey !== "string" || typeof raw.startCellId !== "string"
       || typeof raw.endCellId !== "string" || typeof raw.label !== "string") return null;
     const placement: TrackPlacement = {
+      startMetres: raw.startMetres as number | undefined, endMetres: raw.endMetres as number | undefined,
       id: raw.id, symbolId: raw.symbolId, rowKey: raw.rowKey,
       startCellId: raw.startCellId, endCellId: raw.endCellId, label: raw.label,
     };
@@ -528,5 +577,29 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
     longRailIds.add(longRail.id);
     longRails.push(longRail);
   }
-  return { version: 1, rows, placements, longRails };
+  const links = value.jointWeldLinks;
+  if (links !== undefined && (!isRecord(links) || Object.values(links).some(ids => !Array.isArray(ids) || ids.some(id => typeof id !== "string")))) return null;
+  return { version: 1, rows, placements, longRails, jointWeldLinks: links as Record<string, string[]> | undefined };
+}
+
+/** Planned 500 m intervals stop exactly at the project endpoint. */
+export function generateRailRows(rows: RailRow[], start: number, end: number): RailRow[] {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start || end - start > 500_000) {
+    throw new RangeError("Nhập lý trình đầu/cuối theo mét nguyên, chiều dài tuyến tối đa 500 km.");
+  }
+  return rows.map(row => {
+    const cells: RailCell[] = [];
+    for (let from = start; from < end;) {
+      const to = Math.min(end, (Math.floor(from / 500) + 1) * 500);
+      const old = row.cells.find(c => parseChainage(c.from) === from && parseChainage(c.to) === to);
+      cells.push({ ...(old ?? { from: formatChainage(from), to: formatChainage(to), temp: DEFAULT_NEW_RAIL_TEMPERATURE }), id: `${railRowKey(row)}-${String(cells.length + 1).padStart(2, "0")}` });
+      from = to;
+    }
+    return { ...row, cells };
+  });
+}
+
+export const TRACK_PIXELS_PER_METRE = 118 / 500;
+export function trackSpanStyle(start: number, end: number, origin: number) {
+  return { left: (start - origin) * TRACK_PIXELS_PER_METRE, width: (end - start) * TRACK_PIXELS_PER_METRE };
 }

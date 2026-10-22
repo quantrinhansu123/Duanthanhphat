@@ -15,7 +15,7 @@ export function LongRailDetailPanel({
   longRail: LongRail;
   layout: TrackLayout;
   onClose: () => void;
-  onSaveParams: (params: StressInput) => void;
+  onSaveParams: (params: StressInput) => boolean | void;
 }) {
   const content = useRef<HTMLDivElement>(null);
   const span = getPlacementSpan(layout.rows, longRail);
@@ -80,7 +80,12 @@ export function LongRailDetailPanel({
           key={`${longRail.id}-${longRail.updatedAt}`}
           compact
           segmentId={longRail.code}
-          initialInput={longRail.params}
+          initialInput={{
+            ...longRail.params,
+            trackSide: longRail.rowKey.endsWith("T") ? "LEFT" : "RIGHT",
+            startChainage: longRail.params.startChainage || (span ? formatChainage(span.startMetres) : ""),
+            endChainage: longRail.params.endChainage || (span ? formatChainage(span.endMetres) : ""),
+          }}
           onSave={onSaveParams}
         />
       </div>

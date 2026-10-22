@@ -52,7 +52,7 @@ export function LongRailTable({
                 <th className="px-3 py-2 font-semibold">Lý trình</th>
                 <th className="px-3 py-2 font-semibold">Chiều dài</th>
                 <th className="px-3 py-2 font-semibold">Tn</th>
-                <th className="px-3 py-2 font-semibold">Cập nhật</th>
+                <th className="px-3 py-2 font-semibold">Ngày thi công / trạng thái</th>
                 <th className="px-3 py-2 font-semibold"><span className="sr-only">Thao tác</span></th>
               </tr>
             </thead>
@@ -80,6 +80,7 @@ export function LongRailTable({
                     <td className="px-3 py-2">{length !== null ? `${length} m` : "—"}</td>
                     <td className="px-3 py-2">{longRail.params.neutralTemp} °C</td>
                     <td className="px-3 py-2 text-xs text-slate-500">
+                      <span className="block font-medium">{longRail.releaseDate ?? "Chưa có ngày"} · {longRail.completedAt ? "Đã giải toả" : "Chưa hoàn thành"}</span>
                       {new Date(longRail.updatedAt).toLocaleString("vi-VN", {
                         day: "2-digit",
                         month: "2-digit",

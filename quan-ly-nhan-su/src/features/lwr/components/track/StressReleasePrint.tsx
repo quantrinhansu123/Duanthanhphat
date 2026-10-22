@@ -4,16 +4,15 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Printer, X } from "@/components/icons";
 import {
-  ALLOWED_GAP_RANGE,
-  SELECTABLE_GAP_RANGE,
   formatStressNumber,
   releaseMethodLabel,
   type StressInput,
   type StressResult,
 } from "@lwr/lib/stress-release";
+import type { BufferGapRow } from "@lwr/lib/buffer-gap";
+import { BufferGapTable } from "./BufferGapTable";
 
 export type StressPrintRow = [string, number | string | null, string];
-export type StressGapRow = { label: string; expansion: number; contraction: number; allowedRange: string };
 
 type StressReleasePrintProps = {
   open: boolean;
@@ -27,7 +26,7 @@ type StressReleasePrintProps = {
   tension: StressPrintRow[];
   compression: StressPrintRow[];
   rows: StressPrintRow[];
-  gapRows: StressGapRow[];
+  gapRows: BufferGapRow[];
   notices: string[];
   result: StressResult;
   onClose: () => void;
@@ -44,7 +43,6 @@ export function StressReleasePrint({
   open,
   modeLabel,
   buffer,
-  rollers,
   segmentId,
   railLabel,
   input,
@@ -90,7 +88,6 @@ export function StressReleasePrint({
     : [...inputRows, ...extraLimits];
   const printInputs: StressPrintRow[] = [
     ...withLimits,
-    ...(!buffer ? ([["Con lăn cạnh", rollers ? "Có" : "Không", ""]] as StressPrintRow[]) : []),
   ];
 
   return createPortal(
@@ -99,7 +96,7 @@ export function StressReleasePrint({
       <div className="print-toolbar">
         <div>
           <div id="stress-release-print-title" className="toolbar-title">
-            Bảng tính toán giải tỏa công suất {railLabel}
+            Bảng tính toán giải tỏa ứng suất {railLabel}
           </div>
           <div className="toolbar-sub">Khổ A4 dọc — kiểm tra rồi in hoặc lưu PDF</div>
         </div>
@@ -133,7 +130,7 @@ export function StressReleasePrint({
             </div>
           </header>
 
-          <h1 className="form-title">BẢNG TÍNH TOÁN GIẢI TỎA CÔNG SUẤT</h1>
+          <h1 className="form-title">BẢNG TÍNH TOÁN GIẢI TỎA ỨNG SUẤT</h1>
           <p className="form-sub">
             BẢNG TÍNH {railLabel.toUpperCase()}
             {buffer ? " · KHE HỞ RAY VÙNG ĐỆM" : ""}
@@ -153,23 +150,15 @@ export function StressReleasePrint({
             <div>
               Phương pháp: <b>{modeLabel}</b>
             </div>
-            {!buffer ? (
-              <div>
-                Con lăn cạnh: <b>{rollers ? "Có" : "Không"}</b>
-              </div>
-            ) : (
-              <div>
-                Loại ray: <b>{railLabel}</b>
-              </div>
-            )}
+            <div>Loại ray: <b>{railLabel}</b></div>
           </div>
           <p className="legend">
-            Ray trái: bên trái vị trí kéo về Km0. Ray phải: phía còn lại. Biến dạng tự do xét trên toàn chiều
+            Ray trái/phải của tuyến nhìn theo chiều lý trình tăng. L₁/L₂: phía Km giảm/Km tăng của vị trí kéo trên cùng một ray. Biến dạng tự do xét trên toàn chiều
             dài giải toả; phần Kéo hiển thị chiều dài co, phần Nén hiển thị chiều dài giãn. Lực nhiệt xét theo dải
             khóa đường T ± {formatStressNumber(input.lockTempOffset)}°C.
             {!buffer
               ? ` Phương pháp: ${releaseMethodLabel(result.releaseMethod)}.`
-              : ` Khoảng khe hở cho phép ${ALLOWED_GAP_RANGE}; khoảng có thể lựa chọn ${SELECTABLE_GAP_RANGE}.`}
+              : ` Khe hở cấu tạo ag = ${formatStressNumber(input.structuralGap)} mm. Giới hạn dưới dùng Δgiãn tại nhiệt độ cao nhất, giới hạn trên dùng Δco tại nhiệt độ thấp nhất.`}
             {result.skipPull && !buffer
               ? ` Nhiệt độ môi trường ≥ ${formatStressNumber(result.skipThreshold)}°C: giải toả tự nhiên, chiều dài kéo = 0.`
               : ""}
@@ -228,35 +217,8 @@ export function StressReleasePrint({
 
           {buffer ? (
             <>
-              <h2 className="section-h">III. Bố trí khe hở ray vùng đệm 25 m</h2>
-              <table className="result-table">
-                <thead>
-                  <tr>
-                    <th>Vị trí</th>
-                    <th>Chiều dài giãn</th>
-                    <th>Chiều dài co</th>
-                    <th>Khoảng khe hở cho phép</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gapRows.map((row) => (
-                    <tr key={row.label}>
-                      <td className="left">{row.label}</td>
-                      <td>{formatStressNumber(row.expansion)} mm</td>
-                      <td>{formatStressNumber(row.contraction)} mm</td>
-                      <td>{row.allowedRange}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td className="left">Khoảng khe hở cho phép</td>
-                    <td colSpan={3}>{ALLOWED_GAP_RANGE}</td>
-                  </tr>
-                  <tr>
-                    <td className="left">Khoảng khe hở có thể lựa chọn</td>
-                    <td colSpan={3}>{SELECTABLE_GAP_RANGE}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <h2 className="section-h">III. Khe hở tính toán (dự phòng)</h2>
+              <BufferGapTable rows={gapRows} />
             </>
           ) : (
             <>
@@ -301,7 +263,7 @@ export function StressReleasePrint({
           </div>
 
           <p className="foot">
-            Mẫu tính theo Bảng tính toán giải tỏa công suất {railLabel} · Dùng cho mục đích kỹ thuật nội bộ · In lúc {stamp}
+            Mẫu tính theo Bảng tính toán giải tỏa ứng suất {railLabel} · Dùng cho mục đích kỹ thuật nội bộ · In lúc {stamp}
           </p>
         </article>
       </div>
@@ -367,7 +329,7 @@ const PRINT_CSS = `
   font-weight: 700;
   cursor: pointer;
 }
-#stress-release-print .btn-print { border: 0; background: #0047ab; color: #fff; }
+#stress-release-print .btn-print { border: 0; background: #7e22ce; color: #fff; }
 #stress-release-print .btn-close { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
 #stress-release-print .print-stage {
   flex: 1;
@@ -382,6 +344,7 @@ const PRINT_CSS = `
   background: #fff;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
   font: 9.2pt "Times New Roman", Times, serif;
+  line-height: 1.15;
   color: #111;
   box-sizing: border-box;
   -webkit-print-color-adjust: exact;
@@ -396,7 +359,7 @@ const PRINT_CSS = `
   justify-content: space-between;
   gap: 8mm;
   padding-bottom: 2.5mm;
-  border-bottom: 0.5mm solid #1d4ed8;
+  border-bottom: 0.5mm solid #9333ea;
 }
 #stress-release-print .brand {
   display: flex;
@@ -412,13 +375,13 @@ const PRINT_CSS = `
   font-size: 6.5pt;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: #0047ab;
+  color: #7e22ce;
 }
 #stress-release-print .brand-name {
   font-size: 13.5pt;
   font-weight: 900;
   line-height: 1;
-  color: #0b1f4d;
+  color: #581c87;
   letter-spacing: 0.06em;
 }
 #stress-release-print .brand-sub {
@@ -439,7 +402,7 @@ const PRINT_CSS = `
   font-size: 15.5pt;
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: #1e3a8a;
+  color: #6b21a8;
 }
 #stress-release-print .form-sub {
   margin: 0;
@@ -453,7 +416,7 @@ const PRINT_CSS = `
   text-align: center;
   font-size: 10pt;
   font-weight: 700;
-  color: #1d4ed8;
+  color: #7e22ce;
 }
 #stress-release-print .meta-grid {
   display: grid;
@@ -470,29 +433,29 @@ const PRINT_CSS = `
   line-height: 1.4;
 }
 #stress-release-print .section-h {
-  margin: 3.5mm 0 1.6mm;
+  margin: 2.5mm 0 1.2mm;
   padding: 1.2mm 2mm;
-  background: #e8eef8;
-  border-left: 1.1mm solid #1d4ed8;
+  background: #f3e8ff;
+  border-left: 1.1mm solid #9333ea;
   font-size: 10pt;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #1e3a8a;
+  color: #6b21a8;
 }
 #stress-release-print table {
   width: 100%;
   border-collapse: collapse;
 }
 #stress-release-print .kv-table td {
-  border: 0.28mm solid #94a3b8;
-  padding: 1.3mm 2mm;
+  border: 0.28mm solid #c4a3dc;
+  padding: 0.65mm 2mm;
   vertical-align: middle;
   font-size: 8.6pt;
 }
 #stress-release-print .kv-table .k {
   width: 28%;
-  background: #f8fafc;
+  background: #faf5ff;
   color: #334155;
 }
 #stress-release-print .kv-table .v {
@@ -511,13 +474,13 @@ const PRINT_CSS = `
   gap: 3mm;
 }
 #stress-release-print .box {
-  border: 0.32mm solid #64748b;
+  border: 0.32mm solid #a477bd;
   overflow: hidden;
 }
 #stress-release-print .box-h {
   margin: 0;
   padding: 1.6mm 2.2mm 0.4mm;
-  background: #1e3a8a;
+  background: #6b21a8;
   color: #fff;
   font-size: 9pt;
   font-weight: 800;
@@ -527,16 +490,16 @@ const PRINT_CSS = `
 #stress-release-print .box-note {
   margin: 0;
   padding: 0 2.2mm 1.4mm;
-  background: #1e3a8a;
-  color: #bfdbfe;
+  background: #6b21a8;
+  color: #e9d5ff;
   font-size: 7.5pt;
   font-style: italic;
 }
 #stress-release-print .box table { width: 100%; }
 #stress-release-print .box th,
 #stress-release-print .box td {
-  padding: 1.4mm 2.2mm;
-  border-bottom: 0.2mm solid #e2e8f0;
+  padding: 1mm 2.2mm;
+  border-bottom: 0.2mm solid #e9d5ff;
   font-size: 8.6pt;
 }
 #stress-release-print .box tr:last-child th,
@@ -553,12 +516,12 @@ const PRINT_CSS = `
 }
 #stress-release-print .result-table th,
 #stress-release-print .result-table td {
-  border: 0.28mm solid #64748b;
-  padding: 1.5mm 2mm;
+  border: 0.28mm solid #a477bd;
+  padding: 0.7mm 2mm;
   font-size: 8.8pt;
 }
 #stress-release-print .result-table thead th {
-  background: #e8eef8;
+  background: #f3e8ff;
   font-weight: 800;
   text-align: center;
 }
@@ -573,6 +536,9 @@ const PRINT_CSS = `
   font-weight: 700;
   width: 32%;
 }
+#stress-release-print .buffer-gap-table td { text-align: center; }
+#stress-release-print .buffer-gap-table th[rowspan] { width: 28%; text-align: left; font-weight: 400; }
+#stress-release-print .buffer-gap-table tr { break-inside: avoid; }
 #stress-release-print .alert {
   margin-top: 3mm;
   padding: 2.2mm 2.8mm;
@@ -584,10 +550,11 @@ const PRINT_CSS = `
 #stress-release-print .alert p { margin: 0 0 1mm; }
 #stress-release-print .alert p:last-child { margin: 0; }
 #stress-release-print .sign-row {
+  break-inside: avoid;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 8mm;
-  margin-top: 8mm;
+  margin-top: 5mm;
 }
 #stress-release-print .sign { text-align: center; font-size: 9pt; }
 #stress-release-print .sign .role {
@@ -601,8 +568,8 @@ const PRINT_CSS = `
   color: #64748b;
 }
 #stress-release-print .sign .line {
-  margin: 16mm 4mm 0;
-  border-top: 0.25mm solid #334155;
+  margin: 10mm 4mm 0;
+  border-top: 0.25mm solid #7e22ce;
   padding-top: 1.4mm;
   font-size: 7.5pt;
   color: #94a3b8;
@@ -610,7 +577,7 @@ const PRINT_CSS = `
 #stress-release-print .foot {
   margin-top: 5mm;
   padding-top: 2mm;
-  border-top: 0.2mm solid #cbd5e1;
+  border-top: 0.2mm solid #d8b4fe;
   font-size: 7.5pt;
   color: #64748b;
   text-align: center;

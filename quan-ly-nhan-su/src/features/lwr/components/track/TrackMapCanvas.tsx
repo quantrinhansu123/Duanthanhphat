@@ -6,16 +6,20 @@ import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
   getPlacementSpan,
   railRowKey,
-  type LongRail,
+  trackExtent,
+  trackSpanStyle,
+  TRACK_PIXELS_PER_METRE,
+  parseChainage,
+  formatChainage,
   type PlacementSpan,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
 import { railTypeColor } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
+import type { RailJoint } from "@lwr/types/weld";
+import { weldMethodTone } from "@lwr/lib/weld-track-map";
 
-const CELL_W = 110;
-const CELL_GAP = 8;
 
 interface PlottedPlacement {
   placement: TrackPlacement;
@@ -26,9 +30,9 @@ interface PlottedPlacement {
 function packSymbolLanes(items: PlottedPlacement[]): PlottedPlacement[][] {
   const lanes: PlottedPlacement[][] = [];
   for (const item of items) {
-    const centre = (item.span.startIndex + item.span.endIndex) / 2;
+    const centre = (item.span.startMetres + item.span.endMetres) / 2;
     const lane = lanes.find((current) =>
-      current.every((other) => Math.abs((other.span.startIndex + other.span.endIndex) / 2 - centre) >= 1.5),
+      current.every((other) => Math.abs((other.span.startMetres + other.span.endMetres) / 2 - centre) >= 700),
     );
     if (lane) lane.push(item);
     else lanes.push([item]);
@@ -44,14 +48,9 @@ function SymbolImage({ symbol }: { symbol: StructureSymbol | undefined }) {
     : <Shapes className="size-6 shrink-0 text-blue-600" aria-hidden="true" />;
 }
 
-function spanStyle(span: PlacementSpan): { left: number; width: number } {
-  const left = span.startIndex * (CELL_W + CELL_GAP);
-  const cells = span.endIndex - span.startIndex + 1;
-  const width = cells * CELL_W + (cells - 1) * CELL_GAP;
-  return { left, width };
-}
-
 export const TrackMapCanvas = memo(function TrackMapCanvas({
+  joints,
+  onSelectJoint,
   layout,
   symbols,
   selectedLongRailId,
@@ -61,6 +60,8 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
   onRemovePlacement,
   children,
 }: {
+  joints: RailJoint[];
+  onSelectJoint: (joint: RailJoint) => void;
   layout: TrackLayout;
   symbols: StructureSymbol[];
   selectedLongRailId: string | null;
@@ -78,7 +79,8 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
   const [canRight, setCanRight] = useState(false);
 
   const columns = Math.max(...layout.rows.map((item) => item.cells.length), 1);
-  const trackWidth = columns * CELL_W + Math.max(0, columns - 1) * CELL_GAP;
+  const extent = trackExtent(layout.rows);
+  const trackWidth = Math.max(1, (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE);
 
   const updateArrows = useCallback(() => {
     const el = scrollRef.current;
@@ -123,7 +125,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
     const span = getPlacementSpan(layout.rows, placement);
     return span ? [{ placement, span, symbol: symbols.find((item) => item.id === placement.symbolId) }] : [];
   });
-  const plottedLongRails = layout.longRails.flatMap((longRail) => {
+  const plottedLongRails = layout.longRails.filter(item => item.completedAt).flatMap((longRail) => {
     const span = getPlacementSpan(layout.rows, longRail);
     return span ? [{ longRail, span }] : [];
   });
@@ -171,7 +173,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
           if (e.key === "ArrowRight") { e.preventDefault(); scrollByStep(1); }
         }}
       >
-        <div style={{ width: 142 + trackWidth, minWidth: 142 + trackWidth }}>
+        <div style={{ width: 150 + trackWidth, minWidth: 150 + trackWidth }}>
           <div className="space-y-0 px-4 py-4">
             {layout.longRails.length === 0 && layout.placements.length === 0 && (
               <p className="mb-3 text-xs text-slate-500">Chưa có thanh dài hoặc công trình. Thêm ở các form phía trên.</p>
@@ -192,8 +194,17 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                   <div className="relative" style={{ height: rowHeight, width: trackWidth }}>
                     <div data-testid="track-line" className="absolute inset-x-0 h-[4px] rounded bg-orange-700" style={{ top: trackTop }} />
                     <div data-testid="track-centerline" className="absolute inset-x-0 border-t border-dashed border-slate-800" style={{ top: trackTop + 10 }} />
+                    {joints.filter(joint => joint.rowKey === key).map(joint => <button
+                      key={joint.id}
+                      type="button"
+                      aria-label={`Mối hàn tuyến ${rail.line} ${rail.rail} Km${joint.chainage}`}
+                      title={`${joint.chainage} · ${joint.welds.map(weld => weld.code).join(", ") || "Chưa hàn"}`}
+                      onClick={() => onSelectJoint(joint)}
+                      className={`absolute z-20 size-2 -translate-x-1/2 rounded-full border ${weldMethodTone(joint.welds[0]?.method)}`}
+                      style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: trackTop - 2 }}
+                    />)}
                     {railLongRails.map(({ longRail, span }) => {
-                      const box = spanStyle(span);
+                      const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
                       const selected = longRail.id === selectedLongRailId;
                       const tone = railTypeColor(longRail.params.railType);
                       return (
@@ -207,7 +218,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                             onSelectLongRail(longRail.id);
                           }}
                           onPointerDown={(event) => event.stopPropagation()}
-                          title={`${longRail.code} · ${longRail.params.railType} · ${longRail.label} · Km ${span.startCell.from} – ${span.endCell.to}`}
+                          title={`${longRail.code} · ${longRail.params.railType} · ${longRail.label} · Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)}`}
                           aria-label={`Xem thông số thanh dài ${longRail.code}`}
                           className={`absolute z-[5] rounded-sm focus-visible:outline-2 ${selected ? "ring-2 ring-offset-1" : ""}`}
                           style={{ left: box.left, width: box.width, top: 0, height: rowHeight, outlineColor: tone }}
@@ -222,7 +233,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                       );
                     })}
                     {structureLanes.flatMap((items, laneIndex) => items.map(({ placement, span, symbol }) => {
-                      const box = spanStyle(span);
+                      const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
                       const stackTop = 4 + laneIndex * labelStack;
                       return (
                         <div
@@ -240,7 +251,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                           )}
                           <div className="absolute left-1/2 z-10 w-[150px] max-w-full -translate-x-1/2 text-center text-[11px] leading-4" style={{ top: stackTop }}>
                             <span className="block truncate font-semibold text-slate-800" title={placement.label}>{placement.label}</span>
-                            <span className="block text-[10px] text-slate-500">Km {span.startCell.from} – {span.endCell.to}</span>
+                            <span className="block text-[10px] text-slate-500">Km {formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</span>
                           </div>
                           <button
                             type="button"
@@ -300,7 +311,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                   <div
                     key={cell.id}
                     className="absolute flex justify-between text-[10px] text-slate-500"
-                    style={{ left: index * (CELL_W + CELL_GAP), width: CELL_W }}
+                    style={trackSpanStyle(parseChainage(cell.from) ?? 0, parseChainage(cell.to) ?? 0, extent.startMetres)}
                   >
                     <span>Km {cell.from}</span>
                     {index === columns - 1 && <span>Km {cell.to}</span>}

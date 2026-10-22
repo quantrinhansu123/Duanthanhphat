@@ -1,9 +1,9 @@
-import { formatChainage, parseChainage, railRowKey } from "@lwr/lib/track-editor";
+import { formatChainage, getPlacementSpan, parseChainage, railRowKey, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { JournalWeld, RailJoint } from "@lwr/types/weld";
 
 /** Gán mối hàn vào ranh giới giữa các thanh (theo lý trình gần nhất). */
-export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetres = 250): {
+export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetres = 0, links: Record<string, string[]> = {}, longRails: LongRail[] = []): {
   joints: RailJoint[];
   unmatched: JournalWeld[];
 } {
@@ -28,22 +28,38 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
     }
   }
 
+  for (const rail of longRails) {
+    const span = getPlacementSpan(rows, rail);
+    if (!span) continue;
+    for (const metres of [span.startMetres, span.endMetres]) {
+      if (joints.some(joint => joint.rowKey === rail.rowKey && joint.metres === metres)) continue;
+      const left = span.row.cells.find(cell => (parseChainage(cell.from) ?? Infinity) < metres && metres <= (parseChainage(cell.to) ?? -Infinity));
+      const right = span.row.cells.find(cell => (parseChainage(cell.from) ?? Infinity) <= metres && metres < (parseChainage(cell.to) ?? -Infinity));
+      joints.push({ id: `${rail.rowKey}:km:${metres}`, rowKey: rail.rowKey, metres, chainage: formatChainage(metres), leftCellId: left?.id ?? span.startCell.id, rightCellId: right?.id ?? span.endCell.id, welds: [] });
+    }
+  }
   const unmatched: JournalWeld[] = [];
   for (const weld of welds) {
+    const linked = joints.find(joint => links[joint.id]?.includes(weld.id));
+    if (linked) { linked.welds.push(weld); continue; }
     if (weld.metres == null) {
       unmatched.push(weld);
       continue;
     }
     let best: RailJoint | null = null;
     let bestDist = Number.POSITIVE_INFINITY;
+    let ambiguous = false;
     for (const joint of joints) {
       const dist = Math.abs(joint.metres - weld.metres);
       if (dist < bestDist) {
         bestDist = dist;
         best = joint;
+        ambiguous = false;
+      } else if (dist === bestDist) {
+        ambiguous = true;
       }
     }
-    if (best && bestDist <= snapMetres) {
+    if (best && !ambiguous && bestDist <= snapMetres) {
       best.welds.push(weld);
     } else {
       unmatched.push(weld);
@@ -56,6 +72,13 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
 export function jointsForRow(joints: RailJoint[], row: RailRow): RailJoint[] {
   const key = railRowKey(row);
   return joints.filter((joint) => joint.rowKey === key);
+}
+
+export function weldMethodTone(method?: string): string {
+  const value = (method ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  if (/FBW|FLASH|GIAP MEP|HAN CHAY/.test(value)) return "bg-blue-600 border-blue-800 text-white";
+  if (/ATW|THERMIT|NHIET NHOM|ALUMIN/.test(value)) return "bg-red-600 border-red-800 text-white";
+  return "bg-white border-slate-400 text-slate-700";
 }
 
 export function weldStatusTone(status: string, failed: boolean): string {

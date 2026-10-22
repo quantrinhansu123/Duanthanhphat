@@ -6,8 +6,7 @@ const TABLE = "lwr_long_rails";
 function isMissingTableError(message: string | undefined) {
   const text = (message ?? "").toLowerCase();
   return (
-    text.includes("lwr_long_rails") ||
-    text.includes("schema cache") ||
+    (text.includes("lwr_long_rails") && text.includes("schema cache")) ||
     text.includes("does not exist") ||
     text.includes("could not find the table")
   );
@@ -25,9 +24,13 @@ interface LongRailRow {
 }
 
 function fromRow(row: LongRailRow): LongRail | null {
+  const meta = row.params && typeof row.params === "object" && "placement" in row.params
+    ? row.params.placement : undefined;
+  const projectId = meta && typeof meta === "object" && "projectId" in meta && typeof meta.projectId === "string" ? meta.projectId : undefined;
   return parseLongRail({
+    ...(meta && typeof meta === "object" ? meta : {}),
     id: row.id,
-    code: row.code,
+    code: projectId && row.code.startsWith(`${projectId}:`) ? row.code.slice(projectId.length + 1) : row.code,
     label: row.label,
     rowKey: row.row_key,
     startCellId: row.start_cell_id,
@@ -40,12 +43,12 @@ function fromRow(row: LongRailRow): LongRail | null {
 function toRow(rail: LongRail): LongRailRow {
   return {
     id: rail.id,
-    code: rail.code,
+    code: rail.projectId ? `${rail.projectId}:${rail.code}` : rail.code,
     label: rail.label,
     row_key: rail.rowKey,
     start_cell_id: rail.startCellId,
     end_cell_id: rail.endCellId,
-    params: rail.params,
+    params: { ...rail.params, placement: { projectId: rail.projectId, startMetres: rail.startMetres, endMetres: rail.endMetres, releaseDate: rail.releaseDate, completedAt: rail.completedAt } },
     updated_at: rail.updatedAt,
   };
 }
@@ -57,7 +60,7 @@ export type LongRailLoadResult = {
 };
 
 /** Load long rails from Supabase; caller supplies local cache when table/config missing. */
-export async function loadLongRails(localFallback: LongRail[] = []): Promise<LongRailLoadResult> {
+export async function loadLongRails(localFallback: LongRail[] = [], projectId?: string): Promise<LongRailLoadResult> {
   if (!supabase) {
     return { rails: localFallback, source: "local", error: "Chưa cấu hình Supabase (.env.local)." };
   }
@@ -77,7 +80,7 @@ export async function loadLongRails(localFallback: LongRail[] = []): Promise<Lon
   }
   const rails = (data as LongRailRow[] | null ?? [])
     .map(fromRow)
-    .filter((item): item is LongRail => item !== null);
+    .filter((item): item is LongRail => item !== null && item.projectId === projectId);
   return { rails, source: "supabase" };
 }
 
@@ -103,9 +106,9 @@ export async function deleteLongRailRemote(id: string): Promise<{ ok: boolean; e
 }
 
 /** Push local-only rails that are not yet on the server (one-time migrate). */
-export async function syncLocalLongRailsToSupabase(localRails: LongRail[]): Promise<{ uploaded: number; error?: string }> {
+export async function syncLocalLongRailsToSupabase(localRails: LongRail[], projectId?: string): Promise<{ uploaded: number; error?: string }> {
   if (!supabase || !localRails.length) return { uploaded: 0 };
-  const remote = await loadLongRails([]);
+  const remote = await loadLongRails([], projectId);
   if (remote.source !== "supabase") return { uploaded: 0, error: remote.error };
   const remoteIds = new Set(remote.rails.map((item) => item.id));
   const missing = localRails.filter((item) => !remoteIds.has(item.id));

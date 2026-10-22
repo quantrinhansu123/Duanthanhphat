@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  ALLOWED_GAP_RANGE,
   BUFFER_RAIL_LENGTH,
   calculateStressRelease,
   DEFAULT_STRESS_INPUT,
@@ -12,31 +11,48 @@ import {
   isUserDefineRail,
   RAIL_TYPE_OPTIONS,
   releaseMethodLabel,
-  SELECTABLE_GAP_RANGE,
   validateStressInput,
   type StressInput,
 } from "@lwr/lib/stress-release";
-import { formatChainage, parseChainage } from "@lwr/lib/track-editor";
-import { StressReleasePrint, type StressGapRow, type StressPrintRow } from "./StressReleasePrint";
+import { parseChainage } from "@lwr/lib/track-editor";
+import { StressReleasePrint, type StressPrintRow } from "./StressReleasePrint";
+import { BufferGapTable } from "./BufferGapTable";
+import { calculateBufferGaps, type BufferDeformations } from "@lwr/lib/buffer-gap";
 
-type NumericKey = { [K in keyof StressInput]: StressInput[K] extends number ? K : never }[keyof StressInput];
+const deltaFields: [keyof BufferDeformations, string][] = [
+  ["longExpansion", "Giãn đầu ray dài ở nhiệt độ cao nhất (A)"],
+  ["longContraction", "Co đầu ray dài ở nhiệt độ thấp nhất (B)"],
+  ["bufferExpansion", "Giãn đầu ray đệm ở nhiệt độ cao nhất (C)"],
+  ["bufferContraction", "Co đầu ray đệm ở nhiệt độ thấp nhất (D)"],
+];
+function initialDeltas(input: StressInput) {
+  return Object.fromEntries(deltaFields.map(([key]) => [key, input.bufferDeformations?.[key]?.toString() ?? ""])) as Record<keyof BufferDeformations, string>;
+}
+
+type NumericKey = { [K in keyof StressInput]-?: StressInput[K] extends number ? K : never }[keyof StressInput];
 const groups: { title: string; fields: [NumericKey, string, string][] }[] = [
   { title: "Chiều dài và nhiệt độ", fields: [
-    ["leftLength", "Chiều dài ray trái Lt", "m"], ["rightLength", "Chiều dài ray phải Lp", "m"],
+    ["leftLength", "Chiều dài phía Km giảm L₁", "m"], ["rightLength", "Chiều dài phía Km tăng L₂", "m"],
     ["radius", "Bán kính đường cong R", "m"], ["neutralTemp", "Nhiệt độ khóa đường T", "°C"],
     ["lockTempOffset", "Cộng/trừ nhiệt độ khóa đường ±", "°C"],
-    ["leftTemp", "Nhiệt độ ray neo trái Tt", "°C"], ["rightTemp", "Nhiệt độ ray neo phải Tp", "°C"],
+    ["leftTemp", "Nhiệt độ neo phía Km giảm T₁", "°C"], ["rightTemp", "Nhiệt độ neo phía Km tăng T₂", "°C"],
     ["maxTemp", "Nhiệt độ ray lớn nhất", "°C"], ["minTemp", "Nhiệt độ ray nhỏ nhất", "°C"],
   ] },
   { title: "Thông số ray", fields: [
     ["area", "Tiết diện ray A", "m²"], ["modulus", "Mô đun đàn hồi E", "kN/m²"],
     ["alpha", "Hệ số giãn nở α", "/°C"], ["resistance", "Lực cản dọc r (theo dự án)", "kN/m"],
+    ["jointResistance", "Lực cản mối nối Pj", "kN"],
     ["jackCylinderArea", "Diện tích xi lanh Rail Tensor", "mm²"],
   ] },
   { title: "Hàn và đo chuyển vị", fields: [
+    ["structuralGap", "Khe hở cấu tạo ag", "mm"],
     ["weldGap", "Khe hở hàn Ga", "mm"], ["fbwAllowance", "Overlap / độ rút ngắn mối hàn", "mm"],
-    ["currentGap", "Khe hở hiện tại Gr", "mm"], ["leftMovement", "Chuyển vị mốc trong Mt", "mm"],
-    ["rightMovement", "Chuyển vị mốc trong Mp", "mm"],
+    ["currentGap", "Khe hở hiện tại Gr", "mm"], ["leftMovement", "Chuyển vị mốc trong Mt (phía Km giảm)", "mm"],
+    ["rightMovement", "Chuyển vị mốc trong Mp (phía Km tăng)", "mm"],
+  ] },
+  { title: "Kiểm tra mốc ngoài F khi kéo thử", fields: [
+    ["leftOuterMovement", "Chuyển vị mốc cố định F phía Km giảm", "mm"],
+    ["rightOuterMovement", "Chuyển vị mốc cố định F phía Km tăng", "mm"],
   ] },
 ];
 const RAIL_LOCKED_KEYS: NumericKey[] = ["area", "modulus", "alpha"];
@@ -44,14 +60,14 @@ const fieldClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3
 const lockedClass = "mt-1 w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600";
 
 function initialFields(initialInput: StressInput): Record<NumericKey, string> {
-  return Object.fromEntries(groups.flatMap((g) => g.fields.map(([key]) => [key, String(initialInput[key])]))) as Record<NumericKey, string>;
+  return Object.fromEntries(groups.flatMap((g) => g.fields.map(([key]) => [key, String(initialInput[key] ?? DEFAULT_STRESS_INPUT[key])]))) as Record<NumericKey, string>;
 }
 
 type Mode = StressInput["method"] | "BUFFER";
 type Row = StressPrintRow;
 const modes: Record<Mode, string> = {
   ATW: "Hàn nhiệt nhôm (ATW)", FBW: "Hàn chảy giáp mép (FBW)",
-  SINGLE: "Giải toả dây đơn", BUFFER: "Khe hở ray vùng đệm",
+  SINGLE: "Giải toả ray đơn", BUFFER: "Khe hở ray vùng đệm",
 };
 
 function ResultTable({ title, rows }: { title: string; rows: Row[] }) {
@@ -72,12 +88,15 @@ export function StressReleaseCalculator({
   initialInput?: StressInput;
   segmentId?: string;
   compact?: boolean;
-  onSave?: (input: StressInput) => void;
+  onSave?: (input: StressInput) => boolean | void;
 }) {
   const [fields, setFields] = useState(() => initialFields(initialInput));
+  const [deltaValues, setDeltaValues] = useState(() => initialDeltas(initialInput));
   const [railType, setRailType] = useState(initialInput.railType || "60R2");
-  const [startChainage, setStartChainage] = useState("");
-  const [endChainage, setEndChainage] = useState("");
+  const [startChainage, setStartChainage] = useState(initialInput.startChainage ?? "");
+  const [endChainage, setEndChainage] = useState(initialInput.endChainage ?? "");
+  const [jointChainage, setJointChainage] = useState(initialInput.jointChainage ?? "");
+  const [trackSide, setTrackSide] = useState<"LEFT" | "RIGHT">(initialInput.trackSide ?? "LEFT");
   const [mode, setMode] = useState<Mode>(initialInput.method);
   const [rollers, setRollers] = useState(initialInput.sideRollers);
   useEffect(() => {
@@ -103,51 +122,69 @@ export function StressReleaseCalculator({
   const relevant = (key: NumericKey) => {
     if (buffer) {
       return ([
-        "area", "modulus", "alpha", "resistance", "neutralTemp",
-        "lockTempOffset", "maxTemp", "minTemp",
+        "area", "modulus", "alpha", "resistance", "jointResistance", "neutralTemp",
+        "lockTempOffset", "maxTemp", "minTemp", "structuralGap", "leftLength", "rightLength",
       ] as NumericKey[]).includes(key);
     }
+    if (key === "structuralGap") return false;
+    if (key === "jointResistance") return false;
     if (key === "weldGap") return mode === "ATW";
     if (key === "fbwAllowance") return mode === "FBW";
     if (key === "currentGap") return mode !== "SINGLE";
-    if (key === "jackCylinderArea") return mode === "ATW" || mode === "FBW";
+    if (key === "jackCylinderArea") return !buffer;
     return true;
   };
-  const visibleGroups = groups.map(g => ({ ...g, fields: g.fields.filter(([key]) => relevant(key)) })).filter(g => g.fields.length);
-  const input: StressInput = { ...DEFAULT_STRESS_INPUT, railType, method: buffer ? "SINGLE" : mode, sideRollers: buffer ? false : rollers };
+  const visibleGroups = groups.map(g => ({ ...g, fields: g.fields.filter(([key]) => relevant(key)).map(([key, label, unit]): [NumericKey, string, string] => [key, buffer && key === "area" ? "Diện tích tiết diện ray F" : label, unit]) })).filter(g => g.fields.length);
+  const input: StressInput = { ...DEFAULT_STRESS_INPUT, ...initialInput, trackSide, startChainage, endChainage, jointChainage, railType, method: buffer ? "SINGLE" : mode, sideRollers: buffer ? false : rollers };
   for (const group of visibleGroups) for (const [key] of group.fields) input[key] = fields[key].trim() === "" ? NaN : Number(fields[key].replace(",", "."));
-  const errors = validateStressInput(input);
+  const chainErrors: string[] = [];
+  const from = parseChainage(startChainage);
+  const to = parseChainage(endChainage);
+  const joint = jointChainage.trim() ? parseChainage(jointChainage) : to;
+  if (!buffer && (startChainage.trim() || endChainage.trim() || jointChainage.trim())) {
+    if (from === null || to === null || to <= from) chainErrors.push("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
+    else if (joint === null || joint < from || joint > to) chainErrors.push("Vị trí kéo phải nằm trong đoạn giải toả.");
+    else { input.leftLength = joint - from; input.rightLength = to - joint; }
+  }
+  const deltas = Object.fromEntries(deltaFields.map(([key]) => [key, deltaValues[key].trim() ? Number(deltaValues[key].replace(",", ".")) : NaN])) as unknown as BufferDeformations;
+  const deltasReady = Object.values(deltas).every(value => Number.isFinite(value) && value >= 0);
+  if (deltasReady) input.bufferDeformations = deltas;
+  else delete input.bufferDeformations;
+  const errors = [...chainErrors, ...validateStressInput(input), ...(buffer && input.structuralGap <= 0 ? ["Khe hở cấu tạo ag phải lớn hơn 0."] : [])];
   const result = errors.length ? null : calculateStressRelease(input);
+  const gapRows = result && buffer ? calculateBufferGaps(input.structuralGap, deltasReady ? deltas : undefined) : [];
+  const canExport = Boolean(result) && (!buffer || deltasReady);
   const tension: Row[] = result ? [
     ["Độ giảm nhiệt độ lớn nhất", result.tensionDelta, "°C"],
-    ["Lực nhiệt kéo lớn nhất", result.tensionForce, "kN"],
-    [buffer ? `Chiều dài co ray đệm ${BUFFER_RAIL_LENGTH} m` : "Chiều dài co", buffer ? result.bufferContraction : result.tensionContraction, "mm"],
+    [buffer ? "Pmax kéo — biên độ giảm nhiệt lớn nhất" : "Lực nhiệt kéo lớn nhất", result.tensionForce, "kN"],
+    ...(buffer ? [["Co đầu ray dài Δdài,co (B)", deltasReady ? deltas.longContraction : "Chờ số liệu", "mm"], ["Co đầu ray đệm Δđệm,co (D)", deltasReady ? deltas.bufferContraction : "Chờ số liệu", "mm"]] as Row[] : [["Chiều dài co", result.tensionContraction, "mm"]] as Row[]),
   ] : [];
   const compression: Row[] = result ? [
     ["Độ tăng nhiệt độ lớn nhất", result.compressionDelta, "°C"],
-    ["Lực nhiệt nén lớn nhất", result.compressionForce, "kN"],
-    [buffer ? `Chiều dài giãn ray đệm ${BUFFER_RAIL_LENGTH} m` : "Chiều dài giãn", buffer ? result.bufferExpansion : result.compressionExtension, "mm"],
+    [buffer ? "Pmax nén — biên độ tăng nhiệt lớn nhất" : "Lực nhiệt nén lớn nhất", result.compressionForce, "kN"],
+    ...(buffer ? [["Giãn đầu ray dài Δdài,giãn (A)", deltasReady ? deltas.longExpansion : "Chờ số liệu", "mm"], ["Giãn đầu ray đệm Δđệm,giãn (C)", deltasReady ? deltas.bufferExpansion : "Chờ số liệu", "mm"]] as Row[] : [["Chiều dài giãn", result.compressionExtension, "mm"]] as Row[]),
   ] : [];
   const rows: Row[] = !result || buffer ? [] : [
-    ...(mode === "ATW" || mode === "FBW" ? [["Phương pháp giải toả", releaseMethodLabel(result.releaseMethod), ""]] as Row[] : []),
+    ["Phương pháp giải toả", releaseMethodLabel(result.releaseMethod), ""],
     ["Tổng chiều dài giải toả", result.length, "m"],
     ["Nhiệt độ môi trường", result.averageTemp, "°C"],
     ["Chênh nhiệt giải toả", result.deltaTemp, "°C"],
     ["Lực kéo giải toả", result.appliedPullForce, "kN"],
-    ...((mode === "ATW" || mode === "FBW") ? [["Áp lực dầu", result.jackPressure, "MPa"]] as Row[] : []),
+    ["Áp lực dầu", result.jackPressure, "MPa"],
     ["Chiều dài neo thiết kế", result.anchorLength, "m"],
     ["Chiều dài neo áp dụng", result.actualAnchorLength, "m"],
     ["Giãn dài khi giải toả", result.freeExtension, "mm"],
-    ["Chiều dài kéo", result.pullLength, "mm"],
+    ["Chiều dài kéo tính toán (chưa bù chuyển vị)", result.calculatedPullLength, "mm"],
+    ["Chuyển vị mốc trong Mt", input.leftMovement, "mm"],
+    ["Chuyển vị mốc trong Mp", input.rightMovement, "mm"],
+    ["Tổng bù chuyển vị Mt + Mp", result.movementCompensation, "mm"],
+    ["Chiều dài kéo sau bù chuyển vị", result.pullLength, "mm"],
     ...(mode !== "SINGLE" ? [["Khe hở cắt mục tiêu (khe hở giữa hai đầu ray)", result.cutGap, "mm"]] as Row[] : []),
-    ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
   ];
-  const gapRows: StressGapRow[] = result ? [
-    { label: "Ray dài – ray đệm 25 m", expansion: result.bufferExpansion, contraction: result.bufferContraction, allowedRange: ALLOWED_GAP_RANGE },
-    { label: "Ray đệm 25 m – ray đệm 25 m", expansion: result.bufferExpansion, contraction: result.bufferContraction, allowedRange: SELECTABLE_GAP_RANGE },
-  ] : [];
-  const notices: string[] = [];
+  const notices: string[] = buffer ? ["Giới hạn dưới dùng lượng giãn ở nhiệt độ cao nhất; giới hạn trên dùng lượng co ở nhiệt độ thấp nhất. Cộng các giá trị Δ chưa làm tròn, sau đó làm tròn giới hạn dưới lên và giới hạn trên xuống đến mm nguyên.", "Các lượng Δ nhập từ bảng tính đã kiểm tra; công thức tự động tính Δ đang chờ xác nhận. Không gán cố định các khoảng số trong hình minh hoạ."] : ["Chỉ cộng chuyển vị mốc trong Mt + Mp vào khoảng cách kéo để bù mất mát. Mt = Mp = 0: giữ chiều dài kéo tính toán; tổng Mt + Mp = 3 mm: cộng thêm 3 mm. Giải toả tự nhiên không ra lệnh kéo."];
   if (result && !buffer) {
+    if (!result.fixedAnchorsStable) notices.push("Mốc ngoài F dịch chuyển khi kéo thử: neo chưa đạt. Phải tăng chiều dài neo hoặc áp dụng biện pháp tăng cường khác và kiểm tra lại; không cộng chuyển vị F vào khoảng cách kéo.");
+    notices.push(`Nhiệt độ < ${formatStressNumber(result.skipThreshold)}°C: có lực kéo; ≥ ${formatStressNumber(result.skipThreshold)}°C: giải toả tự nhiên.`);
     if (result.deltaTemp < 0) notices.push("Nhiệt độ ray cao hơn nhiệt độ khóa đường; không dùng kết quả âm làm lệnh căng kéo.");
     notices.push(`Kiểm tra chiều dài: ${result.lengthPass === null ? "Chưa xác định giới hạn" : result.lengthPass ? "Đạt" : "Vượt giới hạn"}${result.lengthLimit === null ? "." : ` (giới hạn ${result.lengthLimit} m).`}`);
     if (result.actualAnchorLength > result.anchorLength) {
@@ -165,7 +202,15 @@ export function StressReleaseCalculator({
   }
   const inputRows: StressPrintRow[] = [
     ["Loại ray", railLabel, ""],
-    ...visibleGroups.flatMap(g => g.fields.map(([key, label, unit]) => [label, input[key], unit] as StressPrintRow)),
+    ...(buffer ? [["Chiều dài ray đệm L", BUFFER_RAIL_LENGTH, "m"], ...deltaFields.map(([key, label]) => [label, deltasReady ? deltas[key] : "Chờ số liệu", "mm"])] as StressPrintRow[] : []),
+    ...(!buffer ? [
+      ["Ray của tuyến", trackSide === "LEFT" ? "Ray trái" : "Ray phải", ""],
+      ["Lý trình đầu", startChainage || "Chưa nhập", ""],
+      ["Lý trình cuối", endChainage || "Chưa nhập", ""],
+      ["Lý trình vị trí kéo", jointChainage || endChainage || "Chưa nhập", ""],
+      ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
+    ] as StressPrintRow[] : []),
+    ...visibleGroups.flatMap(g => g.fields.filter(([key]) => !["leftMovement", "rightMovement", "leftOuterMovement", "rightOuterMovement"].includes(key)).map(([key, label, unit]) => [label, input[key], unit] as StressPrintRow)),
   ];
   function applyRailType(nextType: string) {
     setRailType(nextType);
@@ -179,19 +224,16 @@ export function StressReleaseCalculator({
     }));
   }
   function exportCsv() {
-    if (!result) return;
-    const data = [["Bảng tính toán giải tỏa công suất", modes[mode]], ...(segmentId ? [["Đoạn ray", segmentId]] : []),
+    if (!result || !canExport) return;
+    const data = [["Bảng tính toán giải tỏa ứng suất", modes[mode]], ...(segmentId ? [["Đoạn ray", segmentId]] : []),
       ["Loại ray", railLabel],
-      ...(!buffer ? [["Con lăn cạnh", rollers ? "Có" : "Không"]] : []),
       ...inputRows.map(([label, value, unit]) => [label, String(value), unit]),
       ["KÉO (nhiệt độ giảm)"], ...tension.map(([label, value, unit]) => [label, String(value), unit]),
       ["NÉN (nhiệt độ tăng)"], ...compression.map(([label, value, unit]) => [label, String(value), unit]),
       ["Kết quả", "Giá trị", "Đơn vị"], ...rows.map(([label, value, unit]) => [label, value === null ? "Không áp dụng" : String(value), unit]),
       ...(buffer ? [
-        ["Bố trí khe hở", "Chiều dài giãn (mm)", "Chiều dài co (mm)", "Khoảng khe hở cho phép"],
-        ...gapRows.map(row => [row.label, String(row.expansion), String(row.contraction), row.allowedRange]),
-        ["Khoảng khe hở cho phép", ALLOWED_GAP_RANGE],
-        ["Khoảng khe hở có thể lựa chọn", SELECTABLE_GAP_RANGE],
+        ["Khe hở tính toán (dự phòng)", "Giới hạn dưới ở nhiệt độ cao nhất (mm)", "Ký hiệu", "Giới hạn trên ở nhiệt độ thấp nhất (mm)", "Công thức dưới", "Công thức trên", "Kết luận"],
+        ...gapRows.map(row => [row.label, String(row.lower), row.symbol, String(row.upper), row.lowerFormula, row.upperFormula, row.feasible ? "Có khoảng thoả mãn" : "Không có khoảng thoả mãn"]),
       ] : []),
       ...notices.map(note => ["Ghi chú", note])];
     const csv = "\uFEFF" + data.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n");
@@ -203,47 +245,41 @@ export function StressReleaseCalculator({
       <ResultTable title="KÉO (nhiệt độ giảm) · biên độ giảm lớn nhất" rows={tension} />
       <ResultTable title="NÉN (nhiệt độ tăng) · biên độ tăng lớn nhất" rows={compression} />
     </div>
-    {!buffer && <p className="text-xs text-slate-500">Ray trái: bên trái vị trí kéo về Km0. Biến dạng tự do trên toàn chiều dài giải toả; phần KÉO hiển thị chiều dài co, phần NÉN hiển thị chiều dài giãn. Lực nhiệt xét theo dải khóa đường T ± {formatStressNumber(input.lockTempOffset)}°C.</p>}
+    {!buffer && <p className="text-xs text-slate-500">Ray trái/phải của tuyến xác định khi nhìn theo chiều lý trình tăng. L₁/L₂ là hai phía Km giảm/Km tăng của vị trí kéo trên cùng một ray. Biến dạng tự do trên toàn chiều dài giải toả; phần KÉO hiển thị chiều dài co, phần NÉN hiển thị chiều dài giãn. Lực nhiệt xét theo dải khóa đường T ± {formatStressNumber(input.lockTempOffset)}°C.</p>}
     {buffer ? (
       <section className="rounded-xl border bg-white p-4">
-        <h3 className="mb-2 font-semibold text-blue-900">Bố trí khe hở ray vùng đệm 25 m</h3>
-        <table className="w-full text-left text-xs sm:text-sm">
-          <thead><tr><th className="py-2 pr-2">Vị trí</th><th className="p-2 text-right">Chiều dài giãn (mm)</th><th className="p-2 text-right">Chiều dài co (mm)</th><th className="py-2 pl-2 text-right">Khoảng khe hở cho phép</th></tr></thead>
-          <tbody>{gapRows.map(row => <tr key={row.label} className="border-t"><th className="py-2 pr-2 font-normal">{row.label}</th><td className="p-2 text-right">{formatStressNumber(row.expansion)}</td><td className="p-2 text-right">{formatStressNumber(row.contraction)}</td><td className="py-2 pl-2 text-right font-semibold">{row.allowedRange}</td></tr>)}</tbody>
-        </table>
-        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">Khoảng khe hở cho phép: <b>{ALLOWED_GAP_RANGE}</b></p>
-          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">Khoảng khe hở có thể lựa chọn: <b>{SELECTABLE_GAP_RANGE}</b></p>
-        </div>
+        <h3 className="mb-2 font-semibold text-purple-900">Khe hở tính toán (dự phòng)</h3>
+        <div className="overflow-x-auto"><BufferGapTable rows={gapRows} /></div>
+        <p className="mt-2 text-xs text-purple-900">Khe hở cấu tạo ag = {formatStressNumber(input.structuralGap)} mm. Δgiãn xét tại {formatStressNumber(input.maxTemp)}°C; Δco xét tại {formatStressNumber(input.minTemp)}°C.</p>
       </section>
     ) : <ResultTable title="Kết quả giải toả" rows={rows} />}
     {notices.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">{notices.map(note => <p key={note}>{note}</p>)}</div>}
   </>;
   const title = (
     <div>
-        <h2 className={compact ? "text-base font-bold" : "text-2xl font-bold"}>Bảng tính toán giải tỏa công suất</h2>
+        <h2 className={compact ? "text-base font-bold" : "text-2xl font-bold"}>Bảng tính toán giải tỏa ứng suất</h2>
         <p className="mt-1 text-sm font-medium text-emerald-700">Bảng tính {railLabel}{buffer ? " · Khe hở ray vùng đệm" : ""}</p>
       {segmentId && <p className="text-sm">Đoạn ray: {segmentId}</p>}
     </div>
   );
   const actions = (
     <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setRailType(initialInput.railType || "60R2"); setStartChainage(""); setEndChainage(""); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
+        <button type="button" onClick={() => { setFields(initialFields(initialInput)); setDeltaValues(initialDeltas(initialInput)); setRailType(initialInput.railType || "60R2"); setStartChainage(initialInput.startChainage ?? ""); setEndChainage(initialInput.endChainage ?? ""); setJointChainage(initialInput.jointChainage ?? ""); setTrackSide(initialInput.trackSide ?? "LEFT"); setMode(initialInput.method); setRollers(initialInput.sideRollers); setSaveNotice(null); }} className="rounded-lg border bg-white px-3 py-2 text-sm">Khôi phục mẫu</button>
       {onSave && (
         <button
           type="button"
-          disabled={errors.length > 0}
+          disabled={errors.length > 0 || (buffer && !deltasReady)}
           onClick={() => {
-            onSave(input);
-            setSaveNotice("Đã lưu thông số thanh dài.");
+            const saved = onSave(input);
+            setSaveNotice(saved === false ? "Chưa lưu được thông số; kiểm tra thông báo lỗi trên sơ đồ." : "Đã lưu thông số thanh dài.");
           }}
           className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 disabled:opacity-40"
         >
           Lưu thông số
         </button>
       )}
-      <button type="button" disabled={!result} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
-      <button type="button" disabled={!result} onClick={() => setPrintOpen(true)} className="rounded-lg bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
+      <button type="button" disabled={!canExport} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
+      <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
     </div>
   );
   return <div className="mx-auto max-w-7xl space-y-4 text-slate-800">
@@ -256,32 +292,27 @@ export function StressReleaseCalculator({
     <div className={compact ? "grid gap-4" : "grid items-start gap-5 xl:grid-cols-[400px_1fr]"}>
       <section className="space-y-4 rounded-xl border bg-white p-4">
         <h3 className="font-semibold">Thông số đầu vào</h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="text-xs text-slate-600">Lý trình đầu
-            <input className={fieldClass} value={startChainage} onChange={(e) => {
-              const next = e.target.value;
-              setStartChainage(next);
-              const from = parseChainage(next);
-              const to = parseChainage(endChainage);
-              if (from !== null && to !== null && to > from) setFields((current) => ({ ...current, leftLength: String(to - from), rightLength: "0" }));
-            }} placeholder="0+000" />
+        {buffer && <p className="rounded border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">L = {BUFFER_RAIL_LENGTH} m (ray đệm). E: mô đun đàn hồi; F: diện tích tiết diện ray; r: sức cản dọc; Pj: lực cản mối nối. Pmax nén và Pmax kéo tính riêng theo biên độ tăng và giảm nhiệt lớn nhất.</p>}
+        {buffer && <fieldset className="rounded border border-purple-200 bg-purple-50 p-3">
+          <legend className="text-sm font-semibold text-purple-900">Lượng giãn/co đầu ray theo bảng tính đã kiểm tra</legend>
+          <p className="mb-2 text-xs text-slate-600">Nhập bốn giá trị Δ chưa làm tròn (mm). Các số 9–11 và 6–13 trong ảnh là ví dụ kết quả, không dùng làm giá trị cố định.</p>
+          <div className="grid gap-3 sm:grid-cols-2">{deltaFields.map(([key, label]) => <label key={key} className="text-xs">{label} (mm)<input className={fieldClass} inputMode="decimal" value={deltaValues[key]} onChange={event => setDeltaValues(current => ({ ...current, [key]: event.target.value }))} /></label>)}</div>
+          {!deltasReady && <p role="status" className="mt-2 text-xs text-purple-900">Cần đủ bốn lượng giãn/co hợp lệ (không âm) để tính và xuất báo cáo khe hở.</p>}
+        </fieldset>}
+        {!buffer && <>
+          <label className="block text-xs text-slate-600">Ray của tuyến (nhìn theo chiều lý trình tăng)
+            <select className={fieldClass} value={trackSide} onChange={e => setTrackSide(e.target.value as "LEFT" | "RIGHT")}>
+              <option value="LEFT">Ray trái</option><option value="RIGHT">Ray phải</option>
+            </select>
           </label>
-          <label className="text-xs text-slate-600">Lý trình cuối
-            <input className={fieldClass} value={endChainage} onChange={(e) => {
-              const next = e.target.value;
-              setEndChainage(next);
-              const from = parseChainage(startChainage);
-              const to = parseChainage(next);
-              if (from !== null && to !== null && to > from) setFields((current) => ({ ...current, leftLength: String(to - from), rightLength: "0" }));
-            }} placeholder="0+800" />
-          </label>
-        </div>
-        {(() => {
-          const from = parseChainage(startChainage);
-          const to = parseChainage(endChainage);
-          if (from === null || to === null || to <= from) return <p className="text-xs text-slate-500">Nhập lý trình đầu/cuối dạng 0+000 để tự tính chiều dài đoạn giải tỏa.</p>;
-          return <p className="text-xs text-emerald-700">Chiều dài đoạn: <b>{to - from} m</b> · Km {formatChainage(from)} – {formatChainage(to)}</p>;
-        })()}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs">Lý trình đầu<input className={fieldClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" /></label>
+            <label className="text-xs">Lý trình cuối<input className={fieldClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" /></label>
+            <label className="text-xs sm:col-span-2">Lý trình vị trí kéo / mối hàn<input className={fieldClass} value={jointChainage} onChange={e => setJointChainage(e.target.value)} placeholder="Để trống: kéo ở cuối đoạn" /></label>
+          </div>
+          <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Nhập riêng cho từng ray của tuyến.</p>
+          {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
+        </>}
         <label className="block text-xs text-slate-600">Loại ray
           <select className={fieldClass} value={railType} onChange={e => applyRailType(e.target.value)}>
             {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -292,11 +323,13 @@ export function StressReleaseCalculator({
         {!buffer && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={rollers} onChange={e => setRollers(e.target.checked)} />Sử dụng con lăn cạnh</label>}
         {visibleGroups.map(group => <fieldset key={group.title} className="border-t pt-3">
           <legend className="pr-2 text-sm font-semibold text-blue-800">{group.title}</legend>
-          {group.title === "Chiều dài và nhiệt độ" && <p className="mb-2 text-xs text-slate-500">Ray trái: bên trái vị trí kéo về Km0. Giới hạn khóa ray thiết kế = T ± biên độ (cộng/trừ).</p>}
+          {group.title === "Kiểm tra mốc ngoài F khi kéo thử" && <p className="mb-2 text-xs text-slate-500">F (Fix) phải cố định, chuyển vị bằng 0. Nếu F dịch chuyển, phải tăng chiều dài neo hoặc áp dụng biện pháp tăng cường khác và kéo thử lại. Số đo F chỉ dùng kiểm tra neo, không cộng bù và không đưa vào bảng số liệu báo cáo cuối.</p>}
+          {group.title === "Chiều dài và nhiệt độ" && <p className="mb-2 text-xs text-slate-500">Ray trái/phải của tuyến xác định khi nhìn theo chiều lý trình tăng. L₁/L₂ là hai phía Km giảm/Km tăng của vị trí kéo trên cùng một ray. Giới hạn khóa ray thiết kế = T ± biên độ (cộng/trừ).</p>}
           {group.title === "Thông số ray" && <p className="mb-2 text-xs text-slate-500">Lực cản dọc nhập theo từng dự án; dùng để tính lực kéo và lượng co/giãn theo biên độ nhiệt độ.</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{group.fields.map(([key, label, unit]) => {
-            const locked = !customRail && RAIL_LOCKED_KEYS.includes(key);
-            return <label key={key} className="text-xs text-slate-600">{label} ({unit})<input inputMode="decimal" readOnly={locked} value={fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : fieldClass} /></label>;
+            const chainLength = !buffer && Boolean(startChainage || endChainage) && (key === "leftLength" || key === "rightLength");
+            const locked = chainLength || (!customRail && RAIL_LOCKED_KEYS.includes(key));
+            return <label key={key} className="text-xs text-slate-600">{label} ({unit})<input inputMode="decimal" readOnly={locked} value={chainLength ? String(input[key]) : fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : fieldClass} /></label>;
           })}</div>
           {group.title === "Chiều dài và nhiệt độ" && result && (
             <p className="mt-2 text-xs text-slate-600">Giới hạn trên khóa ray thiết kế: <b>{formatStressNumber(result.lockTempUpper)} °C</b> · Giới hạn dưới: <b>{formatStressNumber(result.lockTempLower)} °C</b> · Ngưỡng Rail Tensor: nhiệt độ môi trường &lt; <b>{formatStressNumber(result.skipThreshold)} °C</b>.</p>

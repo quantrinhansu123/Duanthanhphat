@@ -1,4 +1,5 @@
 /** Reproduction of “Bảng tính mẫu 60R2”; units: m, kN, °C, mm. */
+import type { BufferDeformations } from "./buffer-gap";
 
 export type StressMethod = "ATW" | "FBW" | "SINGLE";
 export type ReleaseMethod = "TENSOR" | "NATURAL";
@@ -15,6 +16,13 @@ export interface RailProfile {
 }
 
 export interface StressInput {
+  bufferDeformations?: BufferDeformations;
+  trackSide?: "LEFT" | "RIGHT";
+  startChainage?: string;
+  endChainage?: string;
+  jointChainage?: string;
+  leftOuterMovement: number;
+  rightOuterMovement: number;
   railType: string;
   area: number;
   modulus: number;
@@ -109,6 +117,7 @@ export function nextUnusedRailType(used: string[]): string {
 }
 
 export const DEFAULT_STRESS_INPUT: StressInput = {
+  leftOuterMovement: 0, rightOuterMovement: 0,
   railType: "60R2",
   area: 0.007611, modulus: RAIL_STEEL_MODULUS, alpha: RAIL_STEEL_ALPHA,
   resistance: 24, jointResistance: 400, leftLength: 500, rightLength: 0,
@@ -191,7 +200,7 @@ export function calculateStressRelease(input: StressInput) {
   const i = input;
   const length = i.leftLength + i.rightLength;
   const pullTemp = (i.leftTemp + i.rightTemp) / 2;
-  const averageTemp = excelRound((i.leftTemp + i.rightTemp + pullTemp) / 3);
+  const averageTemp = (i.leftTemp + i.rightTemp + pullTemp) / 3;
   const deltaTemp = i.neutralTemp - averageTemp;
   const ea = i.area * i.modulus;
   const forceRaw = excelRound(ea * i.alpha * deltaTemp, 2);
@@ -213,7 +222,11 @@ export function calculateStressRelease(input: StressInput) {
   const skipThreshold = lockTempLower;
   const skipPull = averageTemp >= skipThreshold;
   const releaseMethod: ReleaseMethod = skipPull ? "NATURAL" : "TENSOR";
-  const rawPullLength = freeExtensionRaw + i.leftMovement + i.rightMovement;
+  // Mốc M được phép dịch chuyển và được cộng bù; mốc F phải cố định.
+  const movementCompensation = i.leftMovement + i.rightMovement;
+  const fixedAnchorsStable = (i.leftOuterMovement ?? 0) === 0 && (i.rightOuterMovement ?? 0) === 0;
+  const calculatedPullLength = skipPull ? 0 : ceilAbs(freeExtensionRaw);
+  const rawPullLength = freeExtensionRaw + movementCompensation;
   const pullLength = skipPull ? 0 : ceilAbs(rawPullLength);
   const weldCut = i.method === "ATW" ? i.weldGap : i.fbwAllowance;
   const rawCutGap = i.method === "SINGLE" ? null : rawPullLength + weldCut;
@@ -226,6 +239,7 @@ export function calculateStressRelease(input: StressInput) {
   const bufferContraction = ceilAbs(tensionDelta * i.alpha * BUFFER_RAIL_LENGTH * 1000);
   const bufferExpansion = ceilAbs(compressionDelta * i.alpha * BUFFER_RAIL_LENGTH * 1000);
   const warnings: string[] = [];
+  if (!fixedAnchorsStable) warnings.push("Mốc ngoài F dịch chuyển khi kéo thử: neo chưa đạt. Phải tăng chiều dài neo hoặc áp dụng biện pháp tăng cường khác và kiểm tra lại; không cộng chuyển vị F vào khoảng cách kéo.");
   if (deltaTemp < 0) warnings.push("Nhiệt độ ray cao hơn nhiệt độ khóa đường: công thức cho lực/chiều dài kéo âm; không dùng làm lệnh căng kéo.");
   if (lengthLimit === null) warnings.push("Bảng tra không quy định rõ bán kính R = 400 m; cần xác nhận giới hạn chiều dài.");
   else if (length > lengthLimit) warnings.push(`Chiều dài ${length} m vượt giới hạn ${lengthLimit} m theo bảng tra đã chọn.`);
@@ -259,7 +273,7 @@ export function calculateStressRelease(input: StressInput) {
     compressionBuffer: ceilAbs(compressionBufferRaw),
     tensionBuffer: ceilAbs(tensionBufferRaw),
     freeExtension: ceilAbs(freeExtensionRaw),
-    freeExtensionRaw, rawPullLength, pullLength, rawCutGap, cutGap,
+    freeExtensionRaw, movementCompensation, fixedAnchorsStable, calculatedPullLength, rawPullLength, pullLength, rawCutGap, cutGap,
     compressionBreathing: (compressionForceRaw - i.jointResistance) / i.resistance,
     tensionBreathing: (tensionForceRaw - i.jointResistance) / i.resistance,
     gapCheck, gapPass: gapCheck < i.allowedGap,

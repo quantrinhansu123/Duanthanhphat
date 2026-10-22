@@ -1,16 +1,21 @@
 "use client";
 
 import { X } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
 import { weldStatusTone } from "@lwr/lib/weld-track-map";
-import type { RailJoint } from "@lwr/types/weld";
+import type { JournalWeld, RailJoint } from "@lwr/types/weld";
 
 interface WeldJointPanelProps {
   joint: RailJoint;
   onClose: () => void;
+  journalWelds?: JournalWeld[];
+  onLink?: (weldId: string) => void;
 }
 
 /** Chi tiết mối hàn tại một ranh giới giữa hai thanh ray. */
-export function WeldJointPanel({ joint, onClose }: WeldJointPanelProps) {
+export function WeldJointPanel({ joint, onClose, journalWelds = [], onLink }: WeldJointPanelProps) {
+  const [weldId, setWeldId] = useState(joint.welds[0]?.id ?? "");
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
@@ -32,6 +37,16 @@ export function WeldJointPanel({ joint, onClose }: WeldJointPanelProps) {
       </div>
 
       <div className="space-y-2 p-4">
+        {onLink && <div className="space-y-2 rounded border p-3">
+          <label className="text-xs">Nhật ký hàn đã thực hiện
+            <select aria-label="Nhật ký hàn đã thực hiện" className="mt-1 w-full rounded border p-2 text-sm" value={weldId} onChange={e => setWeldId(e.target.value)}>
+              <option value="">Chưa hàn / tháo liên kết</option>
+              {journalWelds.map(weld => <option key={weld.id} value={weld.id}>{weld.code} · {weld.method} · {weld.project} · {weld.chainage ?? "Chưa có lý trình"} · {weld.date}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => onLink(weldId)} className="rounded bg-blue-700 px-3 py-2 text-sm text-white">Lưu liên kết · tự điền số mối hàn</button>
+          <Link href="/nhat-ky-han" className="block text-xs text-blue-700 underline">Mở nhật ký hàn</Link>
+        </div>}
         {joint.welds.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
             Chưa có nhật ký hàn gắn lý trình gần điểm này.
@@ -40,7 +55,7 @@ export function WeldJointPanel({ joint, onClose }: WeldJointPanelProps) {
           joint.welds.map((weld) => (
             <div key={weld.id} className="rounded-lg border border-slate-200 p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-sm font-bold text-[#0b4c8f]">{weld.code}</span>
+                <Link href={`/nhat-ky-han?query=${encodeURIComponent(weld.code)}`} className="font-mono text-sm font-bold text-[#0b4c8f] underline">{weld.code}</Link>
                 <span
                   className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${weldStatusTone(weld.status, weld.failed)}`}
                 >
