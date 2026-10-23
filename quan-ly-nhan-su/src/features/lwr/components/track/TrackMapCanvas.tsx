@@ -276,7 +276,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                       className="absolute z-20 flex size-6 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0"
                       style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: trackTop - 10 }}
                     >
-                      <span className={`block size-3 rounded-full border-0 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] ${weldMethodTone(jointDisplayMethod(joint, layout.longRails, layout.rows, selectedLongRailId))}`} />
+                      <span className={`block size-3 rounded-full border-0 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] ${weldMethodTone(jointDisplayMethod(joint, layout.longRails, layout.rows, selectedLongRailId, selectedCellId))}`} />
                     </button>)}
                     {rail.cells.map((cell) => {
                       if (cell.id !== selectedCellId) return null;

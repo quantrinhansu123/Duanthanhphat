@@ -160,7 +160,7 @@ export const RailGrid = memo(function RailGrid({
             })}
             {jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];
-              const method = jointDisplayMethod(joint, longRails, rows, selectedLongRailId);
+              const method = jointDisplayMethod(joint, longRails, rows, selectedLongRailId, selectedId);
               return (
                 <button
                   key={joint.id}
