@@ -297,30 +297,11 @@ export default function DailyWorkReportPrint({
       <div className="print-stage">
         <article className="print-sheet">
           <header className="doc-head">
-            <div className="brand brand-left">
-              <img src="/logo.png" alt="" className="logo-img" />
-              <div>
-                <div className="brand-kicker">CÔNG TY CỔ PHẦN CÔNG TRÌNH</div>
-                <div className="brand-name">THÀNH PHÁT</div>
-                <div className="brand-en">CONSTRUCTION WORK JOINT STOCK COMPANY</div>
-              </div>
-            </div>
             <div className="doc-title-block">
               <div>DỰ ÁN: TUYẾN TÀU ĐIỆN ĐÔ THỊ LOẠI 1 TẠI ĐẶC KHU PHÚ QUỐC</div>
               <div>GÓI THẦU SỐ XL-03: CUNG CẤP VÀ THI CÔNG LẮP ĐẶT HỆ THỐNG RAY</div>
               <div>HẠNG MỤC: THI CÔNG HÀN RAY</div>
               <div>ĐỊA ĐIỂM XÂY DỰNG: ĐẶC KHU PHÚ QUỐC - TỈNH AN GIANG</div>
-            </div>
-            <div className="brand brand-right">
-              <div className="vnr-mark" aria-hidden>
-                <span className="vnr-bar vnr-blue" />
-                <span className="vnr-bar vnr-red" />
-                <span className="vnr-bar vnr-cyan" />
-              </div>
-              <div>
-                <div className="vnr-code">VNR</div>
-                <div className="vnr-name">ĐƯỜNG SẮT VIỆT NAM</div>
-              </div>
             </div>
           </header>
 
@@ -578,7 +559,7 @@ const PRINT_CSS = `
 }
 #daily-report-print .doc-head {
   display: grid;
-  grid-template-columns: 58mm 1fr 48mm;
+  grid-template-columns: 1fr;
   gap: 4mm;
   align-items: center;
 }
