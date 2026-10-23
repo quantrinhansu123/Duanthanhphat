@@ -1,10 +1,12 @@
 "use client";
 
 import { memo, useEffect, useId, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Eye, Pencil, Plus, Shapes, Trash2, X } from "lucide-react";
+import { safeImageUrl } from "@lwr/lib/safe-url";
+import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, formatChainage, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, formatChainage, getPlacementSpan, type PlacementSpan, type TrackPlacement, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -43,7 +45,49 @@ function chipDeleteButton(cellId: string, box: { left: number; width: number }, 
   );
 }
 
+export interface StructureLayer {
+  placements: TrackPlacement[];
+  symbols: StructureSymbol[];
+  editingPlacementId: string | null;
+  onEditPlacement: (placement: TrackPlacement) => void;
+  onRemovePlacement: (id: string) => void;
+}
+
+interface PlottedPlacement {
+  placement: TrackPlacement;
+  span: PlacementSpan;
+  symbol: StructureSymbol | undefined;
+}
+
+const SYMBOL_STACK = 48;
+const ICON_H = 40;
+const LINE_Y = 34;
+// Narrow structures still need room for their label.
+const GUIDE_MIN_W = 80;
+
+function SymbolImage({ symbol }: { symbol: StructureSymbol | undefined }) {
+  const src = safeImageUrl(symbol?.image_url);
+  return src
+    // eslint-disable-next-line @next/next/no-img-element
+    ? <img src={src} alt="" className="h-10 w-14 shrink-0 object-contain" decoding="async" />
+    : <Shapes className="size-6 shrink-0 text-blue-600" aria-hidden="true" />;
+}
+
+function packSymbolLanes(items: PlottedPlacement[]): PlottedPlacement[][] {
+  const lanes: PlottedPlacement[][] = [];
+  for (const item of items) {
+    const centre = (item.span.startMetres + item.span.endMetres) / 2;
+    const lane = lanes.find((current) =>
+      current.every((other) => Math.abs((other.span.startMetres + other.span.endMetres) / 2 - centre) >= 700),
+    );
+    if (lane) lane.push(item);
+    else lanes.push([item]);
+  }
+  return lanes;
+}
+
 interface RailGridProps {
+  structures?: StructureLayer;
   rows?: RailRow[];
   longRails?: LongRail[];
   onSelectLongRail?: (id: string | null) => void;
@@ -61,6 +105,7 @@ interface RailGridProps {
 }
 
 export const RailGrid = memo(function RailGrid({
+  structures,
   rows = RAIL_ROWS,
   longRails = [],
   onSelectLongRail,
@@ -106,9 +151,66 @@ export const RailGrid = memo(function RailGrid({
             const span = visibleLongRailSpan(rows, rail);
             return span ? [{ rail, span }] : [];
           });
-          return <div key={railRowKey(row)} className="grid grid-cols-[110px_1fr] gap-x-2">
-          <div className="text-[11px]"><b>{row.line}</b><br />{row.rail}</div>
-          <div className="relative" style={{ width, height: 80 }}>
+          const key = railRowKey(row);
+          const structureLanes = packSymbolLanes((structures?.placements ?? []).flatMap((placement): PlottedPlacement[] => {
+            if (placement.rowKey !== key) return [];
+            const span = getPlacementSpan(rows, placement);
+            return span ? [{ placement, span, symbol: structures?.symbols.find((item) => item.id === placement.symbolId) }] : [];
+          }));
+          // Structures sit above the rail line, so the row grows by their stacked height.
+          const offset = structureLanes.length ? 8 + structureLanes.length * SYMBOL_STACK : 0;
+          return <div key={key} className="grid grid-cols-[110px_1fr] gap-x-2">
+          <div className="text-[11px]" style={{ paddingTop: offset }}><b>{row.line}</b><br />{row.rail}</div>
+          <div className="relative" style={{ width, height: 80 + offset }}>
+            {structures && structureLanes.flatMap((items, laneIndex) => items.map(({ placement, span, symbol }) => {
+              const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
+              const iconTop = 4 + laneIndex * SYMBOL_STACK;
+              const guideTop = iconTop + ICON_H;
+              const guideHeight = Math.max(6, offset + LINE_Y - 16 - guideTop);
+              return (
+                <span key={placement.id}>
+                  <div
+                    aria-hidden
+                    data-testid="structure-guide"
+                    className="pointer-events-none absolute z-[5] flex items-center justify-center overflow-hidden border border-dashed border-slate-500/70 bg-slate-400/25 px-0.5"
+                    style={{ left: box.left + box.width / 2 - Math.max(box.width, GUIDE_MIN_W) / 2, width: Math.max(box.width, GUIDE_MIN_W), top: guideTop, height: guideHeight }}
+                  >
+                    <span className="max-h-full max-w-full overflow-hidden text-center text-[9px] font-semibold leading-tight text-slate-600 [overflow-wrap:anywhere] line-clamp-3">
+                      {placement.label || symbol?.code || symbol?.name}
+                    </span>
+                  </div>
+                  <div
+                    data-placement={placement.id}
+                    className={`group absolute z-10 flex items-center ${structures.editingPlacementId === placement.id ? "rounded ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                    style={{ left: box.left + box.width / 2, top: iconTop, transform: "translateX(-50%)" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => structures.onEditPlacement(placement)}
+                      aria-label={`Chọn ${placement.label} để sửa`}
+                      className="flex h-10 w-14 items-center justify-center focus-visible:rounded focus-visible:outline-2 focus-visible:outline-blue-600"
+                    >
+                      <SymbolImage symbol={symbol} />
+                    </button>
+                    <div
+                      role="tooltip"
+                      className="pointer-events-none absolute left-full top-0 z-30 ml-1 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] leading-4 text-slate-700 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                    >
+                      <p className="font-semibold text-slate-900">{placement.label}</p>
+                      <p>Km {formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</p>
+                      <p>{row.line} · {row.rail}</p>
+                      {symbol ? <p>{symbol.name}{symbol.code ? ` (${symbol.code})` : ""}</p> : null}
+                      <div className="mt-1.5 flex gap-1">
+                        <button type="button" aria-label={`Xem ${placement.label}`} title="Xem" className="rounded bg-slate-50 p-1 text-slate-600 hover:bg-slate-100 hover:text-blue-700"><Eye className="size-3.5" /></button>
+                        <button type="button" onClick={() => structures.onEditPlacement(placement)} aria-label={`Sửa ${placement.label}`} title="Sửa" className="rounded bg-slate-50 p-1 text-blue-700 hover:bg-blue-50"><Pencil className="size-3.5" /></button>
+                        <button type="button" onClick={() => structures.onRemovePlacement(placement.id)} aria-label={`Xóa ${placement.label}`} title="Xóa" className="rounded bg-slate-50 p-1 text-red-600 hover:bg-red-50"><Trash2 className="size-3.5" /></button>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              );
+            }))}
+            <div className="absolute inset-x-0 bottom-0" style={{ top: offset }}>
             <svg
               data-testid="rail-grid-line"
               className="pointer-events-none absolute left-0 top-[34px] overflow-visible"
@@ -214,6 +316,7 @@ export const RailGrid = memo(function RailGrid({
             )}
             <span className="absolute bottom-0 left-0 text-[10px] text-slate-500">Km{formatChainage(extent.startMetres)}</span>
             {planned > 0 && <span className="absolute bottom-0 text-[10px] text-slate-500" style={{ left: Math.max(0, lineWidth - 64) }}>Km{formatChainage(extent.endMetres)}</span>}
+            </div>
           </div>
         </div>;
         })}

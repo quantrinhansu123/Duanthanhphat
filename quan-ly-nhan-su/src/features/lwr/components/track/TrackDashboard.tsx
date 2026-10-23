@@ -561,7 +561,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             setSelectedJoint(null);
           }}
         >
-          <RailGrid
+          {(structures) => <RailGrid
+            structures={structures}
             appendError={error}
             rows={layout.rows}
             longRails={layout.longRails}
@@ -614,7 +615,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
                 setError(cause instanceof Error ? cause.message : "Không xóa được thanh ngắn.");
               }
             }}
-          />
+          />}
         </TrackSchematic>
         {sideOpen && (
           <div

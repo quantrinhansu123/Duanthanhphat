@@ -24,6 +24,7 @@ import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 import { LongRailTable } from "./LongRailTable";
 import { TrackMapCanvas } from "./TrackMapCanvas";
+import type { StructureLayer } from "./RailGrid";
 
 interface TrackSchematicProps {
   joints: RailJoint[];
@@ -43,7 +44,7 @@ interface TrackSchematicProps {
   onLongRail: (longRail: LongRail, nextRows?: RailRow[]) => boolean;
   onRemoveLongRail: (id: string) => void;
   onSelectLongRail: (id: string) => void;
-  children: ReactNode;
+  children: (structures: StructureLayer) => ReactNode;
 }
 
 const inputClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600";
@@ -343,19 +344,8 @@ export function TrackSchematic({
         </form>
       </div>
 
-      <TrackMapCanvas
-        joints={joints}
-        onSelectJoint={onSelectJoint}
-        layout={layout}
-        symbols={symbols}
-        selectedLongRailId={selectedLongRailId}
-        selectedCellId={selectedCellId}
-        editingPlacementId={editingId}
-        onSelectLongRail={onSelectLongRail}
-        onEditPlacement={edit}
-        onRemovePlacement={removePlacement}
-      >
-        {children}
+      <TrackMapCanvas layout={layout}>
+        {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
       </TrackMapCanvas>
     </section>
   );
