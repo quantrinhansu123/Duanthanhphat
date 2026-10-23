@@ -9,10 +9,12 @@ type GpsRow = {
   ly_trinh_toa_do?: string | null;
   ngay_thuc_hien?: string | null;
   du_an?: string | null;
+  ten_du_an?: string | null;
   cong_nghe_han?: string | null;
   loai_moi_han?: string | null;
   ten_tho_han?: string | null;
   tinh_trang_thi_nghiem?: string | null;
+  ket_qua_moi_han?: string | null;
   so_luong_loi?: number | null;
 };
 
@@ -52,16 +54,17 @@ function fromGpsRow(row: GpsRow): JournalWeld | null {
   const code = String(row.ma_lich_su ?? "").trim();
   if (!id && !code) return null;
   const chain = normalizeChainage(row.ly_trinh_toa_do || row.ly_trinh);
-  const failed = Number(row.so_luong_loi) > 0 || row.tinh_trang_thi_nghiem === "Không đạt";
+  const statusText = row.tinh_trang_thi_nghiem || row.ket_qua_moi_han;
+  const failed = Number(row.so_luong_loi) > 0 || statusText === "Không đạt" || statusText === "Lỗi";
   return {
     id: id || code,
     code: code || id.slice(0, 8),
     date: row.ngay_thuc_hien?.slice(0, 10) ?? null,
-    project: row.du_an?.trim() || "—",
+    project: row.ten_du_an?.trim() || row.du_an?.trim() || "—",
     method: row.cong_nghe_han?.trim() || "—",
     weldType: row.loai_moi_han?.trim() || "—",
     welder: row.ten_tho_han?.trim() || "—",
-    status: asStatus(row.tinh_trang_thi_nghiem, failed),
+    status: asStatus(statusText, failed),
     chainage: chain.chainage,
     metres: chain.metres,
     failed,
@@ -100,7 +103,7 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
       const { data, error } = await supabase
         .from("bao_cao_moi_han_gps")
         .select(
-          "lich_su_moi_han_id,ma_lich_su,ly_trinh,ly_trinh_toa_do,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi",
+          "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi",
         )
         .order("ngay_thuc_hien", { ascending: false })
         .range(offset, offset + pageSize - 1);

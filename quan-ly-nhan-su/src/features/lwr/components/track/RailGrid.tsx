@@ -1,10 +1,10 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, formatChainage, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, formatChainage, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -55,8 +55,9 @@ interface RailGridProps {
   selectedJointId?: string | null;
   onSelectJoint?: (joint: RailJoint) => void;
   selectedLongRailId?: string | null;
-  onAppend?: (rowKey: string) => void;
+  onAppend?: (rowKey: string, from: string, to: string) => boolean | void;
   onRemove?: (cellId: string) => void;
+  appendError?: string | null;
 }
 
 export const RailGrid = memo(function RailGrid({
@@ -72,7 +73,18 @@ export const RailGrid = memo(function RailGrid({
   selectedLongRailId,
   onAppend,
   onRemove,
+  appendError,
 }: RailGridProps) {
+  const [appendDraft, setAppendDraft] = useState<{ rowKey: string; from: string; to: string } | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogTitleId = useId();
+  const [submitted, setSubmitted] = useState(false);
+  const appendOpen = appendDraft !== null;
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (appendOpen) dialog?.showModal();
+    else dialog?.close();
+  }, [appendOpen]);
   const extent = trackExtent(rows);
   const planned = Math.max(0, (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE);
   const lineWidth = planned > 0 ? planned : EMPTY_LINE;
@@ -81,7 +93,7 @@ export const RailGrid = memo(function RailGrid({
     <div className="space-y-1 border-b px-4 py-3">
       <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · lý trình thi công thực tế</h2>
       <p className="text-xs text-slate-600">Màu mối hàn theo mục tiêu tính toán / nhật ký: <span className="rounded border bg-white px-1">Trắng: chưa chọn</span> · <span className="text-blue-700">Xanh: FBW</span> · <span className="text-red-700">Đỏ: nhiệt nhôm</span> · <span className="text-amber-700">Vàng: ray đơn</span>.</p>
-      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Bấm + để thêm thanh ngắn. Bấm X để xóa ô chưa Đạt.</p>
+      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Bấm + để nhập lý trình và thêm thanh ngắn đúng vị trí. Bấm X để xóa ô chưa Đạt.</p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className="space-y-4 px-4 py-3" style={{ width: 150 + width }}>
@@ -177,17 +189,28 @@ export const RailGrid = memo(function RailGrid({
               );
             })}
             {onAppend && (
-              <button
-                type="button"
-                data-testid="rail-grid-append"
-                onClick={() => onAppend(railRowKey(row))}
-                aria-label={`Thêm thanh ngắn phía sau ${row.line} ${row.rail}`}
-                title="Thêm thanh ngắn trên dải này"
-                className="absolute top-5 z-10 flex size-8 items-center justify-center rounded-full border border-dashed border-slate-500 bg-white text-slate-700 hover:border-blue-600 hover:text-blue-700"
-                style={{ left: plusLeft }}
-              >
-                <Plus className="size-4" />
-              </button>
+              <div className="absolute top-5 z-20" style={{ left: plusLeft }}>
+                <button
+                  type="button"
+                  data-testid="rail-grid-append"
+                  onClick={() => {
+                    const key = railRowKey(row);
+                    const start = lastEnd ?? extent.startMetres;
+                    setSubmitted(false);
+                    setAppendDraft({
+                      rowKey: key,
+                      from: formatChainage(start),
+                      to: formatChainage(start + RAIL_SEGMENT_LENGTH_METRES),
+                    });
+                  }}
+                  aria-label={`Thêm thanh ngắn phía sau ${row.line} ${row.rail}`}
+                  title="Nhập lý trình để thêm thanh ngắn"
+                  className="flex size-8 items-center justify-center rounded-full border border-dashed border-slate-500 bg-white text-slate-700 hover:border-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="size-4" />
+                </button>
+
+              </div>
             )}
             <span className="absolute bottom-0 left-0 text-[10px] text-slate-500">Km{formatChainage(extent.startMetres)}</span>
             {planned > 0 && <span className="absolute bottom-0 text-[10px] text-slate-500" style={{ left: Math.max(0, lineWidth - 64) }}>Km{formatChainage(extent.endMetres)}</span>}
@@ -196,5 +219,38 @@ export const RailGrid = memo(function RailGrid({
         })}
       </div>
     </div>
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={dialogTitleId}
+      onCancel={() => setAppendDraft(null)}
+      onClose={() => setAppendDraft(null)}
+      className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40"
+    >
+      {appendDraft && <form onSubmit={(event) => {
+        event.preventDefault();
+        setSubmitted(true);
+        if (onAppend?.(appendDraft.rowKey, appendDraft.from, appendDraft.to) !== false) setAppendDraft(null);
+      }}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 id={dialogTitleId} className="font-semibold">Thêm thanh ngắn</h3>
+          <button type="button" aria-label="Đóng popup" onClick={() => setAppendDraft(null)} className="rounded p-1 hover:bg-slate-100"><X className="size-5" /></button>
+        </div>
+        <p className="mb-4 text-sm text-slate-600">Nhập lý trình tùy chọn cho {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.line} · {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.rail}.</p>
+        <label className="block text-sm font-medium">
+          Lý trình đầu
+          <input autoFocus required className="mt-1 w-full rounded-lg border px-3 py-2" value={appendDraft.from} onChange={event => { setSubmitted(false); setAppendDraft({ ...appendDraft, from: event.target.value }); }} placeholder="0+000" aria-label="Lý trình đầu thanh ngắn" />
+        </label>
+        <label className="mt-3 block text-sm font-medium">
+          Lý trình cuối
+          <input required className="mt-1 w-full rounded-lg border px-3 py-2" value={appendDraft.to} onChange={event => { setSubmitted(false); setAppendDraft({ ...appendDraft, to: event.target.value }); }} placeholder="0+250" aria-label="Lý trình cuối thanh ngắn" />
+        </label>
+        <p className="mt-2 text-xs text-slate-500">Ví dụ: 12+000 đến 12+250. Lý trình cuối phải lớn hơn lý trình đầu.</p>
+        {submitted && appendError && <p role="alert" className="mt-3 text-sm text-red-700">{appendError}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="rounded-lg border px-4 py-2 text-sm" onClick={() => setAppendDraft(null)}>Hủy</button>
+          <button type="submit" className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800">Thêm</button>
+        </div>
+      </form>}
+    </dialog>
   </div>;
 });

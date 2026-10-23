@@ -5,7 +5,7 @@ import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
   extendRailRows,
-  placeNextShortRail,
+  placeShortRailSpan,
   removeShortRail,
   generateRailRows,
   formatChainage,
@@ -575,9 +575,20 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
               setDetailOpen(false);
               setSelectedLongRailId(null);
             }}
-            onAppend={(rowKey) => {
+            onAppend={(rowKey, from, to) => {
+              const start = parseChainage(from);
+              const end = parseChainage(to);
+              if (start === null || end === null || end <= start) {
+                setError("Nhập lý trình đầu/cuối dạng 0+000, cuối lớn hơn đầu.");
+                return false;
+              }
               try {
-                return commit({ ...layout, rows: placeNextShortRail(layout.rows, rowKey) });
+                const placed = placeShortRailSpan(layout.rows, rowKey, start, end);
+                if (!commit({ ...layout, rows: placed.rows })) return false;
+                setSelectedId(placed.cellId);
+                setSelectedLongRailId(null);
+                setSelectedJoint(null);
+                return true;
               } catch (cause) {
                 setError(cause instanceof Error ? cause.message : "Không thêm được thanh ngắn.");
                 return false;

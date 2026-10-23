@@ -330,6 +330,98 @@ export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
   });
 }
 
+/** Place a short rail at an exact chainage span. Width on the map follows metres. */
+export function placeShortRailSpan(rows: RailRow[], rowKey: string, startMetres: number, endMetres: number): { rows: RailRow[]; cellId: string } {
+  if (!Number.isSafeInteger(startMetres) || !Number.isSafeInteger(endMetres) || startMetres < 0 || endMetres <= startMetres) {
+    throw new RangeError("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
+  }
+  const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
+  const row = next.find((item) => railRowKey(item) === rowKey);
+  if (!row) throw new RangeError("Không tìm thấy dải ray.");
+  const prefix = railRowKey(row);
+  let nextNum = nextCellNumber(row);
+  const allocId = () => {
+    const id = `${prefix}-${String(nextNum).padStart(2, "0")}`;
+    nextNum += 1;
+    return id;
+  };
+
+  for (const cell of row.cells) {
+    if (!cell.placed && !cell.released) continue;
+    const range = cellRange(cell);
+    if (range && startMetres < range.to && endMetres > range.from) {
+      throw new RangeError(`Đoạn Km ${formatChainage(startMetres)} – ${formatChainage(endMetres)} chồng lên thanh ${cell.id} đã rải.`);
+    }
+  }
+
+  if (row.cells.length === 0) {
+    const cell: RailCell = {
+      id: `${prefix}-01`,
+      from: formatChainage(startMetres),
+      to: formatChainage(endMetres),
+      temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+      placed: true,
+    };
+    row.cells.push(cell);
+    return { rows: next, cellId: cell.id };
+  }
+
+  const first = cellRange(row.cells[0]);
+  if (first && startMetres < first.from) {
+    if (row.cells[0].placed || row.cells[0].released) {
+      throw new RangeError("Không đặt trước thanh đã rải trên dải này.");
+    }
+    row.cells[0].from = formatChainage(startMetres);
+  }
+  const last = row.cells[row.cells.length - 1];
+  const lastRange = cellRange(last);
+  if (lastRange && endMetres > lastRange.to) {
+    if (!last.placed && !last.released) {
+      last.to = formatChainage(endMetres);
+    } else {
+      row.cells.push({
+        id: allocId(),
+        from: formatChainage(lastRange.to),
+        to: formatChainage(endMetres),
+        temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+      });
+    }
+  }
+
+  const rebuilt: RailCell[] = [];
+  for (const cell of row.cells) {
+    const range = cellRange(cell);
+    if (!range) continue;
+    const work = Boolean(cell.placed || cell.released);
+    if (work || range.to <= startMetres || range.from >= endMetres) {
+      rebuilt.push(cell);
+      continue;
+    }
+    if (range.from < startMetres) {
+      rebuilt.push({ ...cell, to: formatChainage(startMetres) });
+    }
+    if (range.to > endMetres) {
+      rebuilt.push({
+        ...cell,
+        id: range.from < startMetres ? allocId() : cell.id,
+        from: formatChainage(endMetres),
+      });
+    }
+  }
+  const placed: RailCell = {
+    id: allocId(),
+    from: formatChainage(startMetres),
+    to: formatChainage(endMetres),
+    temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+    placed: true,
+  };
+  const insertAt = rebuilt.findIndex((cell) => (cellRange(cell)?.from ?? Infinity) >= endMetres);
+  if (insertAt < 0) rebuilt.push(placed);
+  else rebuilt.splice(insertAt, 0, placed);
+  row.cells = rebuilt;
+  return { rows: next, cellId: placed.id };
+}
+
 /** Place the next hidden short rail on one row. Does not lengthen the planned line. */
 export function placeNextShortRail(rows: RailRow[], rowKey: string): RailRow[] {
   const target = rows.find((row) => railRowKey(row) === rowKey);

@@ -8,6 +8,7 @@ import {
   extendRailRows,
   nextLongRailCode,
   patchTrackCell,
+  placeShortRailSpan,
   updateRailCell,
   validateTrackLayout,
 } from "../src/features/lwr/lib/track-editor.ts";
@@ -68,6 +69,22 @@ test("patchTrackCell updates long-rail leftLength", () => {
 test("next long-rail code starts at LWR01", () => {
   assert.equal(nextLongRailCode([]), "LWR01");
   assert.equal(nextLongRailCode([{ code: "LWR01" }, { code: "LWR07" }]), "LWR08");
+});
+
+test("plus-button short rail uses exact chainage and proportional length", () => {
+  const layout = seededLayout();
+  const first = placeShortRailSpan(layout.rows, "UT", 0, 200);
+  assert.equal(first.rows[0].cells[0].from, "0+000");
+  assert.equal(first.rows[0].cells[0].to, "0+200");
+  assert.equal(first.rows[0].cells[0].placed, true);
+  assert.equal(first.rows[0].cells[1].from, "0+200");
+  const second = placeShortRailSpan(first.rows, "UT", 200, 350);
+  const placed = second.rows[0].cells.filter((cell) => cell.placed);
+  assert.equal(placed[0].to, "0+200");
+  assert.equal(placed[1].from, "0+200");
+  assert.equal(placed[1].to, "0+350");
+  assert.equal((200 - 0) / (350 - 200), 200 / 150);
+  assert.throws(() => placeShortRailSpan(second.rows, "UT", 100, 250), /chồng lên/);
 });
 
 test("ensureRowSpan covers chainage and returns start/end cells", () => {
