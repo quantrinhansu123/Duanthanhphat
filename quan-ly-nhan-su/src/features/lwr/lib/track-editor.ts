@@ -242,11 +242,12 @@ export function getPlacementSpan(
   return { row, startIndex, endIndex, startCell, endCell, startMetres, endMetres };
 }
 
-export function compareLongRailDisplay(a: LongRail, b: LongRail, selectedId?: string | null) {
+export function compareLongRailDisplay(a: LongRail, b: LongRail, selectedId?: string | null, spanA = 0, spanB = 0) {
   if (selectedId) {
     if (a.id === selectedId) return -1;
     if (b.id === selectedId) return 1;
   }
+  if (spanA !== spanB) return spanB - spanA;
   return Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0);
 }
 
@@ -258,7 +259,13 @@ export function coveringLongRail<T extends { rail: LongRail; span: PlacementSpan
 ): T | undefined {
   const hits = items.filter(({ span }) => from < span.endMetres && to > span.startMetres);
   if (!hits.length) return undefined;
-  return [...hits].sort((a, b) => compareLongRailDisplay(a.rail, b.rail, selectedId))[0];
+  return [...hits].sort((a, b) => compareLongRailDisplay(
+    a.rail,
+    b.rail,
+    selectedId,
+    a.span.endMetres - a.span.startMetres,
+    b.span.endMetres - b.span.startMetres,
+  ))[0];
 }
 
 export function visibleLongRailSpan(rows: RailRow[], rail: Pick<LongRail, "rowKey" | "startCellId" | "endCellId" | "startMetres" | "endMetres">): PlacementSpan | null {

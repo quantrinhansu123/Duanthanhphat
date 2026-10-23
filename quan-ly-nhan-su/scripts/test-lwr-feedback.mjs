@@ -81,11 +81,18 @@ test("ambiguous chainage never assigns a weld to the wrong one of four rails", (
   const otherEnd = { ...plannedJoint, id: "end", metres: 500, chainage: "0+500" };
   assert.equal(jointDisplayMethod(otherEnd, [planned], rows), "FBW");
   const mid = { ...plannedJoint, id: "mid", metres: 250, chainage: "0+250" };
-  assert.equal(jointDisplayMethod(mid, [planned], rows, planned.id), undefined);
+  assert.equal(jointDisplayMethod(mid, [planned], rows, planned.id), "FBW");
   const journal = { ...plannedJoint, metres: 250, welds: [{ id: "w", code: "X", method: "Hàn hồ quang" }] };
   assert.equal(jointDisplayMethod(journal, [planned], rows), "Hàn hồ quang");
   const later = { ...plannedJoint, id: "later", metres: 900, chainage: "0+900" };
   assert.equal(jointDisplayMethod(later, [planned], rows, planned.id), undefined);
+  const longAtw = rail(0, 17580, "lw");
+  longAtw.params.method = "ATW";
+  const nestedFbw = rail(0, 500, "nested");
+  nestedFbw.params.method = "FBW";
+  assert.equal(jointDisplayMethod(plannedJoint, [longAtw, nestedFbw], rows), "ATW");
+  assert.equal(jointDisplayMethod(otherEnd, [longAtw, nestedFbw], rows), "ATW");
+  assert.equal(jointDisplayMethod(otherEnd, [longAtw, nestedFbw], rows, nestedFbw.id), "FBW");
 });
 
 test("actual work endpoints create weld points without moving planned boundaries", () => {

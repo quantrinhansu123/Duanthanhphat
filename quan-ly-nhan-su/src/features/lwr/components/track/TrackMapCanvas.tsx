@@ -18,7 +18,6 @@ import {
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
-import { railTypeColor } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 import { jointDisplayMethod, weldMethodTone } from "@lwr/lib/weld-track-map";
@@ -46,10 +45,18 @@ function packSymbolLanes(items: PlottedPlacement[]): PlottedPlacement[][] {
   return lanes;
 }
 
-function shortRailFill(released: boolean | undefined, tone?: string) {
-  if (released) return "#059669";
-  if (tone) return `${tone}8f`;
-  return "#cbd5e1";
+const TRACK_H = 4;
+const OVERLAY_H = 20;
+const ICON_H = 40;
+const DAT_GREEN = "#059669";
+const UNRATED_GRAY = "#94a3b8";
+
+function segmentColor(released: boolean | undefined) {
+  return released ? DAT_GREEN : UNRATED_GRAY;
+}
+
+function overlayTop(trackTop: number) {
+  return trackTop - Math.round((OVERLAY_H - TRACK_H) / 2);
 }
 
 function SymbolImage({ symbol }: { symbol: StructureSymbol | undefined }) {
@@ -156,7 +163,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
         <div className="flex items-center gap-1.5">
           <span className="mr-1 hidden items-center gap-2 text-xs text-slate-500 sm:flex">
             <span className="inline-flex items-center gap-1"><span className="h-[3px] w-5 rounded bg-black" />Đường ray</span>
-            <span className="inline-flex items-center gap-1"><span className="h-[3px] w-6 border-t-[3px] border-dashed border-black" />Đường tim</span>
+            <span className="inline-flex items-center gap-1"><span className="h-px w-8 border-t-[1.5px] border-dashed border-black" />Đường tim</span>
             <ArrowLeftRight className="size-4" />Shift + lăn chuột / kéo
           </span>
           <button type="button" onClick={() => scrollByStep(-1)} disabled={!canLeft} aria-label="Cuộn sang trái" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronLeft className="size-4" /></button>
@@ -223,8 +230,24 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                   return from < span.endMetres && to > span.startMetres;
                 }))
                 .map(({ rail: leftover, span }) => ({ rail: leftover, startMetres: span.startMetres, endMetres: span.endMetres, cellIds: [] as string[] }));
+              const nestedInside = (
+                item: { rail: { id: string }; startMetres: number; endMetres: number },
+                list: { rail: { id: string }; startMetres: number; endMetres: number }[],
+              ) => list.some((other) => (
+                other.rail.id !== item.rail.id
+                && other.startMetres <= item.startMetres
+                && other.endMetres >= item.endMetres
+                && (other.endMetres - other.startMetres) > (item.endMetres - item.startMetres)
+              ));
               const railLongRails = [...coverRuns, ...leftoverRails]
-                .sort((a, b) => -compareLongRailDisplay(a.rail, b.rail, selectedLongRailId));
+                .filter((item) => item.rail.id === selectedLongRailId || !nestedInside(item, [...coverRuns, ...leftoverRails]))
+                .sort((a, b) => -compareLongRailDisplay(
+                  a.rail,
+                  b.rail,
+                  selectedLongRailId,
+                  a.endMetres - a.startMetres,
+                  b.endMetres - b.startMetres,
+                ));
               const structureLanes = packSymbolLanes(plotted.filter((item) => item.placement.rowKey === key));
               const stackCount = structureLanes.length;
               const stackH = stackCount === 0 ? 0 : 8 + stackCount * SYMBOL_STACK + SYMBOL_GAP;
@@ -232,165 +255,139 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
               const prevRail = layout.rows[index - 1];
               const pairNext = Boolean(nextRail && nextRail.line === rail.line);
               const pairPrev = Boolean(prevRail && prevRail.line === rail.line);
-              const trackTop = pairPrev ? 0 : Math.max(stackH, 10);
-              const belowRail = pairNext ? 0 : pairPrev ? Math.max(stackH, 10) : 36;
-              const rowHeight = trackTop + 4 + belowRail;
-              const pairLabelTop = pairNext ? Math.max(0, trackTop - 18) : trackTop + 14;
+              const overlayPad = Math.round((OVERLAY_H - TRACK_H) / 2);
+              const trackTop = pairPrev ? overlayPad : Math.max(stackH, 24, overlayPad);
+              const labelH = 16;
+              const belowRail = pairNext ? overlayPad + labelH : pairPrev ? Math.max(stackH, 28) : 36;
+              const rowHeight = trackTop + TRACK_H + belowRail;
+              const pairLabelTop = overlayTop(trackTop) + OVERLAY_H + 2;
               return (
                 <div key={key}>
                 <div className={`grid grid-cols-[110px_1fr] gap-x-2 ${pairPrev ? "items-start" : "items-end"}`} data-testid="symbol-lane">
                   <span className="text-[11px] leading-4 text-slate-500">{rail.line}<br />{rail.rail}</span>
                   <div className="relative" style={{ height: rowHeight, width: trackWidth }}>
-                    <div data-testid="track-line" className="absolute inset-x-0 h-[4px] rounded bg-black" style={{ top: trackTop }} />
+                    <div data-testid="track-line" className="absolute inset-x-0 rounded bg-black" style={{ top: trackTop, height: TRACK_H }} />
                     {joints.filter(joint => joint.rowKey === key).map(joint => <button
                       key={joint.id}
                       type="button"
                       aria-label={`Mối hàn tuyến ${rail.line} ${rail.rail} Km${joint.chainage}`}
                       title={`${joint.chainage} · ${joint.welds.map(weld => weld.code).join(", ") || "Chưa hàn"}`}
                       onClick={() => onSelectJoint(joint)}
-                      className="absolute z-20 flex size-4 -translate-x-1/2 items-center justify-center"
-                      style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: trackTop - 6 }}
+                      className="absolute z-20 flex size-6 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0"
+                      style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: trackTop - 10 }}
                     >
-                      <span className={`block size-[7px] rounded-full border-0 shadow-[0_0_0_1px_rgba(255,255,255,0.85)] ${weldMethodTone(jointDisplayMethod(joint, layout.longRails, layout.rows, selectedLongRailId))}`} />
+                      <span className={`block size-3 rounded-full border-0 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] ${weldMethodTone(jointDisplayMethod(joint, layout.longRails, layout.rows, selectedLongRailId))}`} />
                     </button>)}
-                    {rail.cells.map((cell) => {
-                      if (!cell.placed && !cell.released) return null;
-                      const from = parseChainage(cell.from);
-                      const to = parseChainage(cell.to);
-                      if (from === null || to === null) return null;
-                      const cover = coveringLongRail(rowCoverItems, from, to, selectedLongRailId);
-                      if (cover) return null;
-                      const box = trackSpanStyle(from, to, extent.startMetres);
-                      return (
-                        <span
-                          key={`bare-${cell.id}`}
-                          data-testid="track-short-fill"
-                          className="pointer-events-none absolute z-[4] h-[15px] rounded-sm"
-                          style={{ left: box.left, width: Math.max(8, box.width), top: trackTop - 6, backgroundColor: shortRailFill(cell.released) }}
-                        />
-                      );
-                    })}
                     {rail.cells.map((cell) => {
                       if (cell.id !== selectedCellId) return null;
                       const from = parseChainage(cell.from);
-                      const to = parseChainage(cell.to);
-                      if (from === null || to === null) return null;
-                      const box = trackSpanStyle(from, to, extent.startMetres);
+                      if (from === null) return null;
                       return (
                         <span
                           key={`sel-${cell.id}`}
                           ref={selectedCellRef}
                           data-testid="track-selected-cell"
-                          className={`pointer-events-none absolute z-[8] rounded-sm ring-2 ring-offset-1 ${
-                            cell.released ? "ring-emerald-600" : "ring-blue-500"
-                          }`}
-                          style={{
-                            left: box.left,
-                            width: Math.max(12, box.width),
-                            top: trackTop - 8,
-                            height: 19,
-                          }}
+                          className="pointer-events-none absolute h-px w-px"
+                          style={{ left: (from - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: overlayTop(trackTop) }}
                         />
                       );
                     })}
                     {railLongRails.map(({ rail: longRail, startMetres, endMetres, cellIds }) => {
                       const box = trackSpanStyle(startMetres, endMetres, extent.startMetres);
                       const selected = longRail.id === selectedLongRailId;
-                      const tone = railTypeColor(longRail.params.railType);
-                      const cellLabel = cellIds.length && cellIds.length <= 3 ? `${cellIds.join(" ")} · ` : "";
-                      return (
-                        <button
-                          key={`${longRail.id}:${startMetres}`}
-                          type="button"
-                          data-long-rail={longRail.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            dragState.current.down = false;
-                            onSelectLongRail(longRail.id);
-                          }}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          title={`${cellLabel}${longRail.code} · ${longRail.params.railType} · Km ${formatChainage(startMetres)} – ${formatChainage(endMetres)}`}
-                          aria-label={`Xem thông số thanh dài ${longRail.code}`}
-                          className={`absolute z-[5] rounded-sm focus-visible:outline-2 ${selected ? "ring-2 ring-offset-1" : ""}`}
-                          style={{ left: box.left, width: box.width, top: 0, height: rowHeight, outlineColor: tone }}
-                        >
-                          {cellIds.length ? cellIds.map((cellId) => {
+                      const segments = cellIds.length
+                        ? cellIds.map((cellId) => {
                             const cell = rail.cells.find((item) => item.id === cellId);
                             const from = parseChainage(cell?.from ?? "") ?? startMetres;
                             const to = parseChainage(cell?.to ?? "") ?? endMetres;
-                            return (
-                              <span
-                                key={cellId}
-                                data-testid="track-short-fill"
-                                className="pointer-events-none absolute z-[6] h-[15px] rounded-sm"
-                                style={{
-                                  left: (from - startMetres) * TRACK_PIXELS_PER_METRE,
-                                  width: Math.max(8, (to - from) * TRACK_PIXELS_PER_METRE),
-                                  top: trackTop - 6,
-                                  backgroundColor: shortRailFill(cell?.released, tone),
-                                }}
-                              />
-                            );
-                          }) : (
-                            <span className="absolute inset-x-0 h-[15px] rounded-sm" style={{ top: trackTop - 6, backgroundColor: selected ? `${tone}99` : longRail.completedAt ? `${tone}66` : `${tone}40` }} />
-                          )}
-                          <span className="absolute left-0 z-[7] h-[17px] w-[3px] rounded" style={{ top: trackTop - 7, backgroundColor: tone }} />
-                          <span className="absolute right-0 z-[7] h-[17px] w-[3px] rounded" style={{ top: trackTop - 7, backgroundColor: tone }} />
-                          {cellIds.slice(1).map((cellId) => {
-                            const from = parseChainage(rail.cells.find((cell) => cell.id === cellId)?.from ?? "") ?? 0;
-                            return <span key={cellId} className="pointer-events-none absolute z-[7] w-px bg-white/80" style={{ left: (from - startMetres) * TRACK_PIXELS_PER_METRE, top: trackTop - 6, height: 15 }} />;
-                          })}
-                          <span className="absolute left-1/2 z-10 max-w-full -translate-x-1/2 truncate rounded bg-white/90 px-1 text-[10px] font-semibold" style={{ top: pairLabelTop, color: tone }}>
+                            return { cellId, from, to, released: cell?.released, color: segmentColor(cell?.released) };
+                          })
+                        : [{ cellId: longRail.id, from: startMetres, to: endMetres, released: Boolean(longRail.completedAt), color: segmentColor(Boolean(longRail.completedAt)) }];
+                      const cellLabel = cellIds.length && cellIds.length <= 3 ? `${cellIds.join(" ")} · ` : "";
+                      const labelColor = segments.every((item) => item.released) ? DAT_GREEN : UNRATED_GRAY;
+                      return (
+                        <span key={`${longRail.id}:${startMetres}`}>
+                          {segments.map((segment) => (
+                            <button
+                              key={segment.cellId}
+                              type="button"
+                              data-long-rail={longRail.id}
+                              data-testid="track-short-fill"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                dragState.current.down = false;
+                                onSelectLongRail(longRail.id);
+                              }}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              title={`${segment.cellId === longRail.id ? "" : `${segment.cellId} · `}${longRail.code} · ${longRail.params.railType}${segment.released ? " · Đạt" : ""} · Km ${formatChainage(segment.from)} – ${formatChainage(segment.to)}`}
+                              aria-label={`Xem thông số thanh dài ${longRail.code}`}
+                              className={`absolute z-[6] appearance-none rounded-none border-0 p-0 focus-visible:outline-2 ${selected ? "ring-2" : ""}`}
+                              style={{
+                                left: box.left + (segment.from - startMetres) * TRACK_PIXELS_PER_METRE,
+                                width: Math.max(8, (segment.to - segment.from) * TRACK_PIXELS_PER_METRE),
+                                top: overlayTop(trackTop),
+                                height: OVERLAY_H,
+                                backgroundColor: segment.color,
+                                outlineColor: segment.color,
+                              }}
+                            />
+                          ))}
+                          <span className="pointer-events-none absolute z-10 max-w-full -translate-x-1/2 truncate rounded bg-white px-1.5 py-px text-[11px] font-bold shadow-sm" style={{ left: box.left + box.width / 2, top: pairLabelTop, color: labelColor }}>
                             {cellLabel}{longRail.code} · {longRail.params.railType}
                           </span>
-                        </button>
+                        </span>
                       );
                     })}
                     {structureLanes.flatMap((items, laneIndex) => items.map(({ placement, span, symbol }) => {
                       const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
                       const iconTop = pairPrev ? trackTop + SYMBOL_GAP + 4 + laneIndex * SYMBOL_STACK : 4 + laneIndex * SYMBOL_STACK;
+                      const railTop = overlayTop(trackTop);
+                      const railBottom = railTop + OVERLAY_H;
+                      const iconBottom = iconTop + ICON_H;
+                      const guideTop = pairPrev ? railBottom : iconBottom;
+                      const guideHeight = pairPrev ? Math.max(6, iconTop - railBottom) : Math.max(6, railTop - iconBottom);
+                      const guideWidth = Math.max(box.width, 8);
                       return (
+                        <span key={placement.id}>
                         <div
-                          key={placement.id}
-                          data-placement={placement.id}
-                          className="group absolute z-10"
-                          style={{ left: box.left, width: box.width, top: 0, height: rowHeight }}
+                          aria-hidden
+                          data-testid="structure-guide"
+                          className="pointer-events-none absolute z-[5] flex items-center justify-center overflow-hidden border border-dashed border-slate-500/70 bg-slate-400/25 px-0.5"
+                          style={{ left: box.left, width: guideWidth, top: guideTop, height: guideHeight }}
                         >
-                          {laneIndex === 0 && (
-                            <>
-                              <div className="pointer-events-none absolute inset-x-0 h-[15px] bg-amber-300/35" style={{ top: trackTop - 6 }} />
-                              <div className="pointer-events-none absolute left-0 h-[17px] w-[3px] rounded bg-blue-600" style={{ top: trackTop - 7 }} />
-                              <div className="pointer-events-none absolute right-0 h-[17px] w-[3px] rounded bg-blue-600" style={{ top: trackTop - 7 }} />
-                            </>
-                          )}
-                          <div className="absolute left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5" style={{ top: iconTop }}>
-                            <button
-                              type="button"
-                              onClick={() => onEditPlacement(placement)}
-                              aria-label={`Chọn ${placement.label} để sửa`}
-                              className="flex h-10 w-14 items-center justify-center focus-visible:rounded focus-visible:outline-2 focus-visible:outline-blue-600"
-                            >
-                              <SymbolImage symbol={symbol} />
-                            </button>
-                            <div
-                              role="tooltip"
-                              className="pointer-events-none absolute left-full top-0 z-30 ml-1 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] leading-4 text-slate-700 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                            >
-                              <p className="font-semibold text-slate-900">{placement.label}</p>
-                              <p>Km {formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</p>
-                              <p>{rail.line} · {rail.rail}</p>
-                              {symbol ? <p>{symbol.name}{symbol.code ? ` (${symbol.code})` : ""}</p> : null}
-                              <div className="mt-1.5 flex gap-1">
-                                <button type="button" aria-label={`Xem ${placement.label}`} title="Xem" className="rounded bg-slate-50 p-1 text-slate-600 hover:bg-slate-100 hover:text-blue-700"><Eye className="size-3.5" /></button>
-                                <button type="button" onClick={() => onEditPlacement(placement)} aria-label={`Sửa ${placement.label}`} title="Sửa" className="rounded bg-slate-50 p-1 text-blue-700 hover:bg-blue-50"><Pencil className="size-3.5" /></button>
-                                <button type="button" onClick={() => onRemovePlacement(placement.id)} aria-label={`Xóa ${placement.label}`} title="Xóa" className="rounded bg-slate-50 p-1 text-red-600 hover:bg-red-50"><Trash2 className="size-3.5" /></button>
-                              </div>
+                          <span className="max-h-full max-w-full overflow-hidden text-center text-[9px] font-semibold leading-tight text-slate-600 [overflow-wrap:anywhere] line-clamp-2">
+                            {placement.label || symbol?.code || symbol?.name}
+                          </span>
+                        </div>
+                        <div
+                          data-placement={placement.id}
+                          className={`group absolute z-10 flex items-center ${editingPlacementId === placement.id ? "rounded ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                          style={{ left: box.left + box.width / 2, top: iconTop, transform: "translateX(-50%)" }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onEditPlacement(placement)}
+                            aria-label={`Chọn ${placement.label} để sửa`}
+                            className="flex h-10 w-14 items-center justify-center focus-visible:rounded focus-visible:outline-2 focus-visible:outline-blue-600"
+                          >
+                            <SymbolImage symbol={symbol} />
+                          </button>
+                          <div
+                            role="tooltip"
+                            className="pointer-events-none absolute left-full top-0 z-30 ml-1 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] leading-4 text-slate-700 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                          >
+                            <p className="font-semibold text-slate-900">{placement.label}</p>
+                            <p>Km {formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</p>
+                            <p>{rail.line} · {rail.rail}</p>
+                            {symbol ? <p>{symbol.name}{symbol.code ? ` (${symbol.code})` : ""}</p> : null}
+                            <div className="mt-1.5 flex gap-1">
+                              <button type="button" aria-label={`Xem ${placement.label}`} title="Xem" className="rounded bg-slate-50 p-1 text-slate-600 hover:bg-slate-100 hover:text-blue-700"><Eye className="size-3.5" /></button>
+                              <button type="button" onClick={() => onEditPlacement(placement)} aria-label={`Sửa ${placement.label}`} title="Sửa" className="rounded bg-slate-50 p-1 text-blue-700 hover:bg-blue-50"><Pencil className="size-3.5" /></button>
+                              <button type="button" onClick={() => onRemovePlacement(placement.id)} aria-label={`Xóa ${placement.label}`} title="Xóa" className="rounded bg-slate-50 p-1 text-red-600 hover:bg-red-50"><Trash2 className="size-3.5" /></button>
                             </div>
                           </div>
-                          {editingPlacementId === placement.id && (
-                            <span className="pointer-events-none absolute inset-0 rounded ring-2 ring-blue-400 ring-offset-1" />
-                          )}
                         </div>
+                        </span>
                       );
                     }))}
                   </div>
@@ -398,15 +395,16 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
                 {pairNext ? (
                   <div className="grid grid-cols-[110px_1fr] gap-x-2" aria-hidden="true">
                     <span />
-                    <svg width={trackWidth} height={PAIR_GAP} className="block" data-testid="track-centerline">
+                    <svg width={trackWidth} height={PAIR_GAP} className="block overflow-visible" data-testid="track-centerline">
                       <line
                         x1="0"
                         y1={PAIR_GAP / 2}
                         x2={trackWidth}
                         y2={PAIR_GAP / 2}
                         stroke="#111"
-                        strokeWidth="3"
-                        strokeDasharray="16 10"
+                        strokeWidth="1.5"
+                        strokeDasharray="5 4"
+                        strokeLinecap="butt"
                       />
                     </svg>
                   </div>

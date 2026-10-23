@@ -1,4 +1,4 @@
-import { formatChainage, getPlacementSpan, parseChainage, railRowKey, type LongRail } from "@lwr/lib/track-editor";
+import { compareLongRailDisplay, formatChainage, getPlacementSpan, parseChainage, railRowKey, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { JournalWeld, RailJoint } from "@lwr/types/weld";
 
@@ -86,36 +86,24 @@ function longRailSpanMetres(rail: LongRail, rows: RailRow[]): { start: number; e
   return span ? { start: span.startMetres, end: span.endMetres } : null;
 }
 
-function isRailEndpoint(rail: LongRail, rows: RailRow[], metres: number): boolean {
-  const span = longRailSpanMetres(rail, rows);
-  return Boolean(span && (span.start === metres || span.end === metres));
-}
-
-/** Màu mối hàn theo Mục tính toán — chỉ 2 đầu của thanh tương ứng, không tô cả tuyến. */
+/** Màu mối hàn theo Mục tính toán / nhật ký của thanh đang phủ đoạn đó. */
 export function jointDisplayMethod(
   joint: RailJoint,
   longRails: LongRail[] = [],
   rows: RailRow[] = [],
   preferredRailId?: string | null,
 ): string | undefined {
-  const endpoints = longRails
-    .flatMap((rail) => {
-      if (rail.rowKey !== joint.rowKey || !rail.params.method) return [];
-      if (!isRailEndpoint(rail, rows, joint.metres)) return [];
-      const span = longRailSpanMetres(rail, rows);
-      return [{ rail, length: span ? span.end - span.start : Number.POSITIVE_INFINITY }];
-    })
-    .sort((a, b) => a.length - b.length || Date.parse(b.rail.updatedAt) - Date.parse(a.rail.updatedAt));
-
-  const preferred = preferredRailId
-    ? endpoints.find((item) => item.rail.id === preferredRailId)
-    : undefined;
-  if (preferred?.rail.params.method) return preferred.rail.params.method;
-  if (endpoints[0]?.rail.params.method) return endpoints[0].rail.params.method;
-
   const linked = joint.welds[0]?.method?.trim();
   if (linked && linked !== "—") return linked;
-  return undefined;
+
+  const hits = longRails.flatMap((rail) => {
+    if (rail.rowKey !== joint.rowKey || !rail.params.method) return [];
+    const span = longRailSpanMetres(rail, rows);
+    if (!span || joint.metres < span.start || joint.metres > span.end) return [];
+    return [{ rail, length: span.end - span.start }];
+  }).sort((a, b) => compareLongRailDisplay(a.rail, b.rail, preferredRailId, a.length, b.length));
+
+  return hits[0]?.rail.params.method;
 }
 
 export function weldMethodTone(method?: string): string {

@@ -3,7 +3,6 @@
 import { memo } from "react";
 import { Plus, X } from "lucide-react";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
-import { railTypeColor } from "@lwr/lib/stress-release";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
 import { coveringLongRail, formatChainage, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
@@ -11,6 +10,8 @@ import type { RailJoint } from "@lwr/types/weld";
 
 const EMPTY_LINE = 240;
 const ADD_GUTTER = 56;
+const DAT_GREEN = "#059669";
+const UNRATED_GRAY = "#94a3b8";
 
 function contrastText(hex: string) {
   const value = hex.replace("#", "");
@@ -80,7 +81,7 @@ export const RailGrid = memo(function RailGrid({
     <div className="space-y-1 border-b px-4 py-3">
       <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · lý trình thi công thực tế</h2>
       <p className="text-xs text-slate-600">Màu mối hàn theo mục tiêu tính toán / nhật ký: <span className="rounded border bg-white px-1">Trắng: chưa chọn</span> · <span className="text-blue-700">Xanh: FBW</span> · <span className="text-red-700">Đỏ: nhiệt nhôm</span> · <span className="text-amber-700">Vàng: ray đơn</span>.</p>
-      <p className="text-xs text-slate-500">Đường đứt là tuyến. Ô ngắn thuộc thanh dài hiện cùng mã và cùng màu loại ray như sơ đồ trên. Bấm + để thêm thanh ngắn. Bấm X để xóa ô chưa Đạt.</p>
+      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Bấm + để thêm thanh ngắn. Bấm X để xóa ô chưa Đạt.</p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className="space-y-4 px-4 py-3" style={{ width: 150 + width }}>
@@ -96,7 +97,24 @@ export const RailGrid = memo(function RailGrid({
           return <div key={railRowKey(row)} className="grid grid-cols-[110px_1fr] gap-x-2">
           <div className="text-[11px]"><b>{row.line}</b><br />{row.rail}</div>
           <div className="relative" style={{ width, height: 80 }}>
-            <div data-testid="rail-grid-line" className="pointer-events-none absolute top-[34px] h-0 border-t-[3px] border-dashed border-slate-500" style={{ width: lineWidth }} />
+            <svg
+              data-testid="rail-grid-line"
+              className="pointer-events-none absolute left-0 top-[34px] overflow-visible"
+              width={lineWidth}
+              height="2"
+              aria-hidden
+            >
+              <line
+                x1="0"
+                y1="1"
+                x2={lineWidth}
+                y2="1"
+                stroke="#64748b"
+                strokeWidth="1.5"
+                strokeDasharray="5 4"
+                strokeLinecap="butt"
+              />
+            </svg>
             {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
@@ -112,8 +130,8 @@ export const RailGrid = memo(function RailGrid({
                   style={{ ...box, width: Math.max(1, box.width - 4) }}
                 />;
               }
-              if (cover && !cell.released) {
-                const tone = railTypeColor(cover.rail.params.railType);
+              if (cover) {
+                const tone = cell.released ? DAT_GREEN : UNRATED_GRAY;
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
                 return (
                   <span key={cell.id}>
@@ -121,15 +139,15 @@ export const RailGrid = memo(function RailGrid({
                       type="button"
                       data-testid="rail-grid-short"
                       onClick={() => { onSelect(cell.id); onSelectLongRail?.(cover.rail.id); }}
-                      title={`${cell.id} thuộc ${cover.rail.code} · ${cover.rail.params.railType} · ${cell.from} – ${cell.to}`}
+                      title={`${cell.id} thuộc ${cover.rail.code} · ${cover.rail.params.railType} · ${cell.from} – ${cell.to}${cell.released ? " · Đạt" : ""}`}
                       aria-label={`${cell.id}: thanh ngắn của ${cover.rail.code}`}
-                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-5 text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
-                      style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : `${tone}8f`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
+                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
+                      style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : cell.released ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
                     >
                       <span className="block truncate">{cell.id} · {cover.rail.code}</span>
-                      <span className="block truncate text-[9px] font-medium opacity-90">{cover.rail.params.railType}</span>
+                      <span className="block truncate text-[9px] font-medium opacity-90">{cover.rail.params.railType}{cell.released ? " · Đạt" : ""}</span>
                     </button>
-                    {chipDeleteButton(cell.id, box, onRemove)}
+                    {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
                   </span>
                 );
               }
@@ -150,10 +168,10 @@ export const RailGrid = memo(function RailGrid({
                   onClick={() => onSelectJoint?.(joint)}
                   title={`${joint.chainage} · ${weld?.code ?? method ?? "Chưa hàn — liên kết nhật ký"}`}
                   aria-label={`Mối hàn ${row.line} ${row.rail} Km${joint.chainage}`}
-                  className={`absolute z-10 flex h-6 w-4 -translate-x-1/2 items-center justify-center ${selectedJointId === joint.id ? "rounded-sm ring-1 ring-slate-600 ring-offset-1" : ""}`}
-                  style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: 22 }}
+                  className={`absolute z-10 flex h-8 w-5 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0 ${selectedJointId === joint.id ? "rounded-sm ring-1 ring-slate-600 ring-offset-1" : ""}`}
+                  style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: 20 }}
                 >
-                  <span className={`block h-3.5 w-[2px] rounded-full border-0 shadow-sm ${weldMethodTone(method)}`} />
+                  <span className={`block h-5 w-[4px] rounded-full border-0 shadow-sm ${weldMethodTone(method)}`} />
                   {weld && <span className="absolute bottom-full left-1/2 max-w-24 -translate-x-1/2 truncate whitespace-nowrap text-[9px] text-slate-800">{weld.code}</span>}
                 </button>
               );
