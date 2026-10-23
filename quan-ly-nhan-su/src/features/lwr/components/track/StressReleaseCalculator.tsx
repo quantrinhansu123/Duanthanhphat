@@ -93,6 +93,11 @@ export function StressReleaseCalculator({
   const [mode, setMode] = useState<Mode>(initialInput.method);
   const [rollers, setRollers] = useState(initialInput.sideRollers);
   useEffect(() => {
+    setStartChainage(initialInput.startChainage ?? "");
+    setEndChainage(initialInput.endChainage ?? "");
+    setTrackSide(initialInput.trackSide ?? "LEFT");
+  }, [initialInput.startChainage, initialInput.endChainage, initialInput.trackSide]);
+  useEffect(() => {
     setFields((current) => {
       const leftLength = String(initialInput.leftLength);
       const rightLength = String(initialInput.rightLength);

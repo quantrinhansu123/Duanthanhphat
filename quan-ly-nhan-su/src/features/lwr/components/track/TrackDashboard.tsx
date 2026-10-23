@@ -594,6 +594,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
                 setSelectedId(placed.cellId);
                 setSelectedLongRailId(null);
                 setSelectedJoint(null);
+                setDetailOpen(true);
                 return true;
               } catch (cause) {
                 setError(cause instanceof Error ? cause.message : "Không thêm được thanh ngắn.");
@@ -660,6 +661,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             {detailOpen && cell ? (
               <RailDetailPanel
                 cell={cell}
+                trackSide={layout.rows.find(row => row.cells.some(item => item.id === cell.id))?.rail === "Ray phải" ? "RIGHT" : "LEFT"}
                 onClose={() => setDetailOpen(false)}
                 onPrev={() => step(-1)}
                 onNext={() => step(1)}

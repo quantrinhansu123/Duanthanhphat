@@ -62,6 +62,7 @@ function sameChainage(draft: string, stored: string) {
 
 export function RailDetailPanel({
   cell,
+  trackSide = "LEFT",
   onClose,
   onPrev,
   onNext,
@@ -70,6 +71,7 @@ export function RailDetailPanel({
   onRemove,
 }: {
   cell: RailCell;
+  trackSide?: "LEFT" | "RIGHT";
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -185,7 +187,7 @@ export function RailDetailPanel({
             compact
             key={cell.id}
             segmentId={cell.id}
-            initialInput={{ ...DEFAULT_STRESS_INPUT, leftLength: length, rightLength: 0, startChainage: cell.from, endChainage: cell.to, neutralTemp: cell.temp }}
+            initialInput={{ ...DEFAULT_STRESS_INPUT, trackSide, leftLength: length, rightLength: 0, startChainage: cell.from, endChainage: cell.to, neutralTemp: cell.temp }}
             onSave={onSaveParams}
           />
           <div className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-3 text-sm">
