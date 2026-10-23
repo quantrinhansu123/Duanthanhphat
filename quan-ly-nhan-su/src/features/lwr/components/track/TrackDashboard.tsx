@@ -406,7 +406,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     }
     const target = (selectedLongRail && covering.some((rail) => rail.id === selectedLongRail.id))
       ? selectedLongRail
-      : covering.slice().sort((a, b) => (a.endMetres - a.startMetres) - (b.endMetres - b.startMetres))[0];
+      : covering.slice().sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0];
     const next: LongRail = {
       ...target,
       params: {

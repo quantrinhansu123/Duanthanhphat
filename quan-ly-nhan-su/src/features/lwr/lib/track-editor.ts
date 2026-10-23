@@ -248,7 +248,7 @@ export function compareLongRailDisplay(a: LongRail, b: LongRail, selectedId?: st
     if (b.id === selectedId) return 1;
   }
   if (spanA !== spanB) return spanB - spanA;
-  return Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0);
+  return (b.updatedAt ? Date.parse(b.updatedAt) : 0) - (a.updatedAt ? Date.parse(a.updatedAt) : 0);
 }
 
 export function coveringLongRail<T extends { rail: LongRail; span: PlacementSpan }>(

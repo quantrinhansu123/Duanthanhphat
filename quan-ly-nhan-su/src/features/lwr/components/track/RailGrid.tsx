@@ -152,7 +152,7 @@ export const RailGrid = memo(function RailGrid({
                 );
               }
               return <span key={cell.id}>
-                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(cover?.rail.id ?? null); }} title={`${cell.id} · ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
+                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${cell.id} · ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
                   <span className="block truncate">{cell.id} · {cell.temp}°C</span>
                 </button>
                 {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
