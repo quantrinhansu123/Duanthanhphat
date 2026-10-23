@@ -165,6 +165,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         }
         if (!active) return;
         setLayout(localLayout);
+        // Local edits must not wait for the remote sync to finish.
+        setReady(true);
       } catch (cause) {
         if (!active) return;
         setError(cause instanceof Error ? cause.message : "Không đọc được sơ đồ đã lưu.");
@@ -240,7 +242,10 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);
 
   function commit(next: TrackLayout): boolean {
-    if (!ready) return false;
+    if (!ready) {
+      setError(error ?? "Sơ đồ chưa tải xong. Vui lòng thử lại sau giây lát.");
+      return false;
+    }
     try {
       localStorage.setItem(storageKey, JSON.stringify(next));
       setLayout(next);
@@ -557,6 +562,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           }}
         >
           <RailGrid
+            appendError={error}
             rows={layout.rows}
             longRails={layout.longRails}
             selectedLongRailId={selectedLongRailId}
