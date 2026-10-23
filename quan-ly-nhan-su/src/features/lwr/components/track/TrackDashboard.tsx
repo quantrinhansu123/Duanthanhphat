@@ -493,7 +493,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         <p className="text-xs text-slate-500">Bấm mối hàn để chọn nhật ký tương ứng. Mã và công nghệ hàn được điền từ nhật ký.</p>
         <button type="button" onClick={() => setPrintOpen(true)} className="rounded border bg-white px-3 py-2 text-sm">In sơ đồ A4 / A3 / A3 kéo dài</button>
       </div>
-      {printOpen && <TrackPrint projectName={project?.name} layout={layout} joints={joints} onClose={() => setPrintOpen(false)} />}
+      {printOpen && <TrackPrint projectName={project?.name} layout={layout} joints={joints} symbols={symbols} onClose={() => setPrintOpen(false)} />}
       {error && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
