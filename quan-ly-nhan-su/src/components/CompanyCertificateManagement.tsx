@@ -699,15 +699,28 @@ export default function CompanyCertificateManagement() {
                 <label className="block font-semibold text-slate-700 mb-1">
                   {isEn ? "Upload company certificate PDF to Google Drive" : "Tải PDF chứng chỉ công ty lên Google Drive"}
                 </label>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(event) => setPendingPdf(event.target.files?.[0] ?? null)}
-                  className="block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700"
-                />
+                <div className="flex min-h-10 items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700">
+                  <input
+                    id="company-certificate-pdf"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    aria-label={isEn ? "Choose certificate PDF" : "Chọn PDF chứng chỉ"}
+                    onChange={(event) => setPendingPdf(event.target.files?.[0] ?? null)}
+                    className="peer sr-only"
+                  />
+                  <label
+                    htmlFor="company-certificate-pdf"
+                    className="shrink-0 cursor-pointer rounded border border-slate-300 bg-slate-50 px-2.5 py-1.5 font-medium hover:bg-slate-100 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#0047AB]"
+                  >
+                    {isEn ? "Choose file" : "Chọn tệp"}
+                  </label>
+                  <span className="truncate" aria-live="polite">
+                    {pendingPdf?.name || (isEn ? "No file chosen" : "Chưa chọn tệp nào")}
+                  </span>
+                </div>
                 {uploadProgress !== null && (
                   <div className="mt-1.5 text-xs font-medium text-[#0047AB]">
-                    Đang tải lên Google Drive: {uploadProgress}%
+                    {isEn ? "Uploading to Google Drive" : "Đang tải lên Google Drive"}: {uploadProgress}%
                   </div>
                 )}
               </div>
