@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Plus, Printer, TrashSimple } from "@/components/icons";
+import { useLanguage } from "@/i18n/LanguageProvider";
 
 type Participant = { name: string; title: string };
 
@@ -67,23 +68,25 @@ const cellInput =
   "w-full min-w-0 border-0 bg-transparent px-0.5 py-0.5 text-center text-[10px] text-slate-900 outline-hidden focus:bg-blue-50 print:bg-transparent print:focus:bg-transparent";
 
 export default function WeldAcceptanceReport() {
+  // Giá trị mặc định theo ngôn ngữ đang chọn (EN: bản in ra tiếng Anh; người dùng vẫn sửa được).
+  const { lang, t } = useLanguage();
   const [hour, setHour] = useState("16");
   const [minute, setMinute] = useState("00");
   const [day, setDay] = useState("26");
   const [month, setMonth] = useState("08");
   const [year, setYear] = useState("2026");
   const [location, setLocation] = useState(
-    "Xưởng sản xuất Vinalift, Nhà máy Vinalift 2, phường Bạch Đằng, thành phố Hải Phòng",
+    t("Xưởng sản xuất Vinalift, Nhà máy Vinalift 2, phường Bạch Đằng, thành phố Hải Phòng"),
   );
-  const [partyAName, setPartyAName] = useState("Công ty VINALIFT");
-  const [partyBName, setPartyBName] = useState("Công ty Cổ phần Công trình Thành Phát");
+  const [partyAName, setPartyAName] = useState(t("Công ty VINALIFT"));
+  const [partyBName, setPartyBName] = useState(t("Công ty Cổ phần Công trình Thành Phát"));
   const [partyA, setPartyA] = useState<Participant[]>([
-    { name: "Ngô Văn Định", title: "Kiểm soát chất lượng" },
+    { name: t("Ngô Văn Định"), title: t("Kiểm soát chất lượng") },
     { name: "", title: "" },
     { name: "", title: "" },
   ]);
   const [partyB, setPartyB] = useState<Participant[]>([
-    { name: "Trần Công Tiến", title: "Cán bộ kỹ thuật" },
+    { name: t("Trần Công Tiến"), title: t("Cán bộ kỹ thuật") },
     { name: "", title: "" },
     { name: "", title: "" },
   ]);
@@ -163,7 +166,7 @@ export default function WeldAcceptanceReport() {
             <input value={day} onChange={(e) => setDay(e.target.value)} className="w-10 border-b border-slate-400 bg-transparent px-1 text-center outline-hidden" />
             <span>tháng</span>
             <input value={month} onChange={(e) => setMonth(e.target.value)} className="w-10 border-b border-slate-400 bg-transparent px-1 text-center outline-hidden" />
-            <span>năm</span>
+            <span>{lang === "en" ? "year" : "năm"}</span>
             <input value={year} onChange={(e) => setYear(e.target.value)} className="w-14 border-b border-slate-400 bg-transparent px-1 text-center outline-hidden" />
           </div>
           <div className="flex items-start gap-2">
