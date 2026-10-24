@@ -712,6 +712,9 @@ export const PHRASES: Record<string, string> = {
   "Kiểm tra chuông thông báo": "Notification bell test",
   "Nếu bạn thấy dòng này trong panel, realtime đã hoạt động.": "If you see this line in the panel, realtime is working.",
   "Chứng chỉ vận hành máy hàn K922-1 (Flash-Butt Welding of Rails)": "K922-1 welding machine operation certificate (Flash-Butt Welding of Rails)",
+  // ---- Tra cứu đào tạo ----
+  "Nhân sự khác": "Other staff",
+  "Ngày cấp chứng chỉ": "Certificate issue date",
 };
 
 /** Thành phần chức vụ ghép bằng " - " (ví dụ "CHT - Kỹ sư - Thợ hàn"); khóa viết thường. */

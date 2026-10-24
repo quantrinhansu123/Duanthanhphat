@@ -101,7 +101,7 @@ export default function TrainingHistoryLookup() {
             <strong className="font-semibold text-slate-900 font-mono tabular-nums">{filtered.length}</strong> bản ghi
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 items-end gap-2">
           <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
             {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
               <option key={t}>{t}</option>

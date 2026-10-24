@@ -54,7 +54,7 @@ function translate(raw: string): string {
   // "30 ngày" -> "30 days"; tên người có dấu -> không dấu (bản EN dùng tên không dấu thống nhất).
   const days = core.match(/^(\d+) ngày$/);
   if (days) return lead + `${days[1]} days` + trail;
-  if (/^\p{Lu}\p{Ll}+( \p{Lu}\p{Ll}+){1,4}$/u.test(core) && hasVietnameseDiacritics(core)) return lead + deaccent(core) + trail;
+  if (/^\p{Lu}[\p{L}.]*( \p{Lu}[\p{L}.]*){1,6}$/u.test(core) && hasVietnameseDiacritics(core)) return lead + deaccent(core) + trail;
   // "Đã chọn 12 người" -> "12 people selected" (đếm động, không thể liệt kê trong từ điển).
   const picked = core.match(/^Đã chọn (\d+)(?: (người|mục|dự án|nhân sự))?$/);
   if (picked) return lead + `${picked[1]} ${{ "người": "people", "mục": "items", "dự án": "projects", "nhân sự": "staff" }[picked[2] ?? ""] ?? ""} selected`.replace("  ", " ") + trail;
