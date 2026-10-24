@@ -76,6 +76,10 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  const pickPart = core.match(/^Chọn phụ tùng (.+)$/);
+  if (pickPart) return lead + `Select spare part ${pickPart[1]}` + trail;
+  const deletedParts = core.match(/^Đã xóa (\d+) phụ tùng$/);
+  if (deletedParts) return lead + `Deleted ${deletedParts[1]} spare parts` + trail;
   // Lịch: "tháng 10 năm 2026" / "thứ bảy, 24/10/2026" (toLocaleDateString vi-VN; CSS mới viết hoa).
   const monthYear = core.match(/^tháng (\d{1,2}) năm (\d{4})$/i);
   if (monthYear) {
@@ -188,6 +192,12 @@ function translateSubtree(root: Node) {
     const el = root as Element;
     translateElementAttrs(el);
     el.querySelectorAll(ATTR_SELECTOR).forEach(translateElementAttrs);
+    // Ô chỉ-đọc (xem chi tiết): giá trị hiển thị cũng cần dịch; ô đang nhập thì giữ nguyên dữ liệu người dùng.
+    el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input[readonly],textarea[readonly],input:disabled,textarea:disabled").forEach((field) => {
+      if (field.type === "number" || field.type === "date" || field.type === "time") return;
+      const next = translate(field.value);
+      if (next !== field.value) field.value = next;
+    });
   } catch {
     /* bỏ qua nhánh lỗi */
   }
