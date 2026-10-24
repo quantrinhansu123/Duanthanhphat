@@ -1804,7 +1804,12 @@ export const PHRASES: Record<string, string> = {
   "Yêu cầu để được phê duyệt ban đầu — Hệ thống chất lượng": "Requirements for initial approval — Quality system",
   "Yêu cầu để được phê duyệt ban đầu — Quy trình hàn": "Requirements for initial approval — Welding procedures",
   "Yêu cầu đối với ray để hàn": "Requirements for rails to be welded",
+  // ---- Bản đồ GPS ----
+  "Xuất Excel (": "Export Excel (",
+  "Chưa liên kết nhật ký hàn": "Not linked to a welding journal", "Mối hàn / Thợ": "Weld / Welder", "Mối hàn:": "Weld:", "Tọa độ": "Coordinates",
   // ---- Nhật ký hàn ----
+  "Đang tải báo cáo mối hàn theo năm…": "Loading the yearly weld report…",
+  "Tổng hợp trực tiếp từ nhật ký hàn theo bộ lọc hiện tại.": "Compiled directly from the welding journal for the current filter.",
   "Yêu cầu:": "Requirement:",
   "Chứng chỉ hàn nhôm nhiệt (Thermit/Railtech)": "Aluminothermic welding certificate (Thermit/Railtech)",
   "Chứng chỉ vận hành máy hàn K922-1/KCM": "K922-1/KCM welding machine operation certificate",

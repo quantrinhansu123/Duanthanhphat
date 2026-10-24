@@ -78,7 +78,13 @@ function translate(raw: string): string {
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
   // Giải toả ứng suất LWR: thông báo kết quả có số động.
   // Tooltip/aria của sơ đồ ray (có mã thanh, lý trình chèn động).
-  const bulkRule = core.match(/^([\d.,]+) ngày × ([\d.,]+) mối = ([\d.,]+) bản ghi\.$/);
+  const yearBanner = core.match(/^Nhật ký hàn Supabase · ([\d.,]+) bản ghi đã lọc · (\d+) năm$/);
+  if (yearBanner) return lead + `Supabase welding journal · ${yearBanner[1]} filtered records · ${yearBanner[2]} ${yearBanner[2] === "1" ? "year" : "years"}` + trail;
+  const rowCountRule = core.match(/^([\d.,]+) dòng$/);
+  if (rowCountRule) return lead + `${rowCountRule[1]} ${rowCountRule[1] === "1" ? "row" : "rows"}` + trail;
+  const yearLoadError = core.match(/^Không tải được tổng hợp năm: (.+)$/);
+  if (yearLoadError) return lead + `Could not load the yearly summary: ${yearLoadError[1]}` + trail;
+  const bulkRule =core.match(/^([\d.,]+) ngày × ([\d.,]+) mối = ([\d.,]+) bản ghi\.$/);
   if (bulkRule) {
     const plural = (value: string, one: string, many: string) => `${value} ${value === "1" ? one : many}`;
     return lead + `${plural(bulkRule[1], "day", "days")} × ${plural(bulkRule[2], "weld", "welds")} = ${plural(bulkRule[3], "record", "records")}.` + trail;

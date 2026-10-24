@@ -142,49 +142,40 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
   return { rows, errors, sheetName };
 }
 
+type ExportLang = "vi" | "en";
+
+/** Tiêu đề cột: bản EN dùng tên tiếng Anh (parser đã nhận các tên này nên vẫn nhập lại được). */
+const COORDINATE_HEADERS: Record<ExportLang, string[]> = {
+  vi: ["ma_diem", "kinh_do", "vi_do", "ly_trinh", "thu_tu", "ghi_chu", "ma_moi_han", "lich_su_moi_han_id"],
+  en: ["code", "longitude", "latitude", "chainage", "order", "note", "weld_code", "weld_id"],
+};
+const EXPORT_EXTRA_HEADERS: Record<ExportLang, string[]> = {
+  vi: ["ten_tho_han", "ten_may", "ten_du_an", "ket_qua_moi_han", "ngay_thuc_hien"],
+  en: ["welder_name", "machine_name", "project_name", "weld_result", "performed_date"],
+};
+
 /** Tải file Excel mẫu bao gồm liên kết mối hàn. */
-export function downloadCoordinatesExcelTemplate() {
+export function downloadCoordinatesExcelTemplate(lang: ExportLang = "vi") {
+  const en = lang === "en";
   const data = [
-    [
-      "ma_diem",
-      "kinh_do",
-      "vi_do",
-      "ly_trinh",
-      "thu_tu",
-      "ghi_chu",
-      "ma_moi_han",
-      "lich_su_moi_han_id",
-    ],
-    ["TT0001", 105.8412, 21.0245, "Km0+000.00", 1, "Mối hàn đầu tuyến", "R4W-030-30-0001", ""],
-    ["TT0002", 105.8415, 21.0228, "Km0+025.00", 2, "Mối hàn tiếp giáp", "", "551f7e85-f16c-4ef0-8780-5c30e48daa88"],
-    ["TT0003", 105.842, 21.021, "Km0+050.00", 3, "Điểm toạ độ độc lập", "", ""],
+    COORDINATE_HEADERS[lang],
+    ["TT0001", 105.8412, 21.0245, "Km0+000.00", 1, en ? "Weld at the start of the line" : "Mối hàn đầu tuyến", "R4W-030-30-0001", ""],
+    ["TT0002", 105.8415, 21.0228, "Km0+025.00", 2, en ? "Adjoining weld" : "Mối hàn tiếp giáp", "", "551f7e85-f16c-4ef0-8780-5c30e48daa88"],
+    ["TT0003", 105.842, 21.021, "Km0+050.00", 3, en ? "Standalone coordinate point" : "Điểm toạ độ độc lập", "", ""],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "toa_do");
-  XLSX.writeFile(wb, "mau-toa-do-gps.xlsx");
+  XLSX.utils.book_append_sheet(wb, ws, en ? "coordinates" : "toa_do");
+  XLSX.writeFile(wb, en ? "gps-coordinates-template.xlsx" : "mau-toa-do-gps.xlsx");
 }
 
 /** Xuất danh sách toạ độ GPS kèm thông tin mối hàn ra Excel. */
 export function exportCoordinatesToExcel(
   points: MapPoint[],
-  filename = "danh-sach-toa-do-gps.xlsx",
+  lang: ExportLang = "vi",
+  filename = lang === "en" ? "gps-coordinate-list.xlsx" : "danh-sach-toa-do-gps.xlsx",
 ) {
-  const headers = [
-    "ma_diem",
-    "kinh_do",
-    "vi_do",
-    "ly_trinh",
-    "thu_tu",
-    "ghi_chu",
-    "ma_moi_han",
-    "lich_su_moi_han_id",
-    "ten_tho_han",
-    "ten_may",
-    "ten_du_an",
-    "ket_qua_moi_han",
-    "ngay_thuc_hien",
-  ];
+  const headers = [...COORDINATE_HEADERS[lang], ...EXPORT_EXTRA_HEADERS[lang]];
 
   const rows = points.map((p) => [
     p.code,
@@ -204,7 +195,8 @@ export function exportCoordinatesToExcel(
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "toa_do_gps");
+  XLSX.utils.book_append_sheet(wb, ws, lang === "en" ? "gps_coordinates" : "toa_do_gps");
   XLSX.writeFile(wb, filename);
 }
+
 
