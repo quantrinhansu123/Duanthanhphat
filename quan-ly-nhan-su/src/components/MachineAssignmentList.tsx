@@ -347,7 +347,9 @@ export default function MachineAssignmentList() {
       machines.find((m) => m.id === fuelForm.machineId)?.code || fuelForm.machineId;
     if (
       !window.confirm(
-        `Xóa báo cáo mức dầu ${machineLabel} ngày ${formatFuelDate(fuelForm.date)}?`,
+        document.documentElement.lang === "en"
+          ? `Delete the oil level report of ${machineLabel} on ${formatFuelDate(fuelForm.date)}?`
+          : `Xóa báo cáo mức dầu ${machineLabel} ngày ${formatFuelDate(fuelForm.date)}?`,
       )
     ) {
       return;

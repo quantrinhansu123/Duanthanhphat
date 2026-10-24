@@ -76,6 +76,11 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  const savedRows = core.match(/^Đã lưu ([\d.,]+) dòng báo cáo$/);
+  if (savedRows) return lead + `Saved ${savedRows[1]} report rows` + trail;
+  const supplied = core.match(/^Cấp dầu — đã báo Chỉ huy trưởng và Quản trị viên · (.+)$/);
+  if (supplied) return lead + `Oil supply — Site Commanders and Administrators notified · ${supplied[1]}` + trail;
+  if (core.startsWith("· ") && PHRASES[core.slice(2)]) return lead + "· " + PHRASES[core.slice(2)] + trail;
   const hours = core.match(/^([\d.,]+) giờ$/);
   if (hours) return lead + `${hours[1]} h` + trail;
   const wire = core.match(/^Dây hàn: (.+)$/);
