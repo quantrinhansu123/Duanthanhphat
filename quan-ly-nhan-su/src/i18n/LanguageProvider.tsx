@@ -76,9 +76,11 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  const skipDays = core.match(/^\(bỏ (\d+) ngày nghỉ\)$/);
+  if (skipDays) return lead + `(excluding ${skipDays[1]} days off)` + trail;
   const fuelLoadError = core.match(/^Không tải được lịch sử cấp nhiên liệu: (.+)$/);
   if (fuelLoadError) return lead + `Could not load the fuel supply history: ${fuelLoadError[1]}` + trail;
-  const pickPart =core.match(/^Chọn phụ tùng (.+)$/);
+  const pickPart = core.match(/^Chọn phụ tùng (.+)$/);
   if (pickPart) return lead + `Select spare part ${pickPart[1]}` + trail;
   const deletedParts = core.match(/^Đã xóa (\d+) phụ tùng$/);
   if (deletedParts) return lead + `Deleted ${deletedParts[1]} spare parts` + trail;
@@ -129,6 +131,16 @@ function translate(raw: string): string {
   if (core.includes(" - ")) {
     const parts = core.split(" - ").map((part) => ROLE_PARTS[part.trim().toLowerCase()]);
     if (parts.every(Boolean)) return lead + parts.join(" - ") + trail;
+    // Địa danh ghép "Phú Quốc - An Giang": bỏ dấu từng phần như tên riêng.
+    const place = /^\p{Lu}[\p{L}.]*( \p{Lu}[\p{L}.]*){0,3}$/u;
+    if (hasVietnameseDiacritics(core) && core.split(" - ").every((part) => place.test(part))) return lead + deaccent(core) + trail;
+  }
+
+  // "Bùi Huy Toàn · Thợ hàn" / "KCM007-01 · Tổ hợp máy…": dịch từng phần ngăn bởi " · ".
+  if (core.includes(" · ")) {
+    const parts = core.split(" · ");
+    const translated = parts.map((part) => translate(part));
+    if (translated.some((part, index) => part !== parts[index])) return lead + translated.join(" · ") + trail;
   }
 
   // Chuỗi động kiểu "1–50 / 13.417 · 50/trang"
