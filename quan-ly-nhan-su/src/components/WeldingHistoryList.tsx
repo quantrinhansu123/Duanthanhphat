@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   CaretDown,
   CaretLeft,
@@ -206,6 +207,7 @@ function HistoryModal({
   const [form, setForm] = useState(record);
   const configuredRails = useCatalogOptions("Loại ray");
   const readOnly = mode === "view";
+  const { t } = useLanguage();
 
   // Danh sách chọn thợ hàn; gồm cả giá trị đang có của bản ghi cũ nếu chưa nằm trong danh mục.
   const welderChoices = useMemo(() => {
@@ -315,7 +317,7 @@ function HistoryModal({
               Hạng thợ
               <input
                 readOnly={readOnly}
-                value={form.rank}
+                value={readOnly ? t(form.rank) : form.rank}
                 onChange={(e) => setForm({ ...form, rank: e.target.value })}
                 placeholder="Tự điền theo thợ hàn"
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
@@ -367,7 +369,7 @@ function HistoryModal({
             Dự án
             <input
               readOnly={readOnly}
-              value={form.project}
+              value={readOnly ? t(form.project) : form.project}
               onChange={(e) => setForm({ ...form, project: e.target.value })}
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
             />
@@ -936,13 +938,6 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
         </div>
           </>
         )}
-      </div>
-
-      {/* Nguồn dữ liệu */}
-      <div className="mb-4 flex justify-end">
-        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          Nguồn dữ liệu: Supabase
-        </span>
       </div>
 
       {/* Thanh bộ lọc chính */}

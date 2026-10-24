@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { PHRASES as UI_PHRASES, ROLE_PARTS } from "./phrases";
+import { deaccent, hasVietnameseDiacritics } from "./deaccent";
 import { PHRASES_DATA } from "./phrases.data";
 
 // UI_PHRASES thắng khi trùng khóa (bản dịch giao diện chuẩn hơn).
@@ -47,6 +48,10 @@ function translate(raw: string): string {
   const exact = PHRASES[core];
   if (exact) return lead + exact + trail;
 
+  // "30 ngày" -> "30 days"; tên người có dấu -> không dấu (bản EN dùng tên không dấu thống nhất).
+  const days = core.match(/^(\d+) ngày$/);
+  if (days) return lead + `${days[1]} days` + trail;
+  if (/^\p{Lu}\p{Ll}+( \p{Lu}\p{Ll}+){1,4}$/u.test(core) && hasVietnameseDiacritics(core)) return lead + deaccent(core) + trail;
   // Tổ hàn N (N tùy ý) và chức vụ ghép "A - B - C" từ danh mục.
   const team = core.match(/^Tổ hàn (\d+)$/);
   if (team) return lead + `Welding team ${team[1]}` + trail;
