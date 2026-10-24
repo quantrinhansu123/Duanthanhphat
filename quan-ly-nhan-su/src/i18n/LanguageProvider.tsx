@@ -78,7 +78,46 @@ function translate(raw: string): string {
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
   // Giải toả ứng suất LWR: thông báo kết quả có số động.
   // Tooltip/aria của sơ đồ ray (có mã thanh, lý trình chèn động).
-  const yearBanner = core.match(/^Nhật ký hàn Supabase · ([\d.,]+) bản ghi đã lọc · (\d+) năm$/);
+  // Báo cáo ngày: "<mã mối hàn…> · 11 mối hàn" (mã giữ nguyên, chỉ dịch phần đếm).
+  const weldSummary = core.match(/^(.+) · ([\d.,]+) mối hàn$/);
+  if (weldSummary) return lead + `${weldSummary[1]} · ${weldSummary[2]} ${weldSummary[2] === "1" ? "weld" : "welds"}` + trail;
+  // Báo cáo nhân sự: banner nguồn dữ liệu và ghi chú Quick feed.
+  const welderBanner = core.match(/^Supabase · (\d+) thợ hàn · Dữ liệu thực tế$/);
+  if (welderBanner) return lead + `Supabase · ${welderBanner[1]} ${welderBanner[1] === "1" ? "welder" : "welders"} · Live data` + trail;
+  const certExpiring = core.match(/^(\d+) chứng chỉ hết hạn hoặc sắp hết hạn$/);
+  if (certExpiring) return lead + `${certExpiring[1]} ${certExpiring[1] === "1" ? "certificate" : "certificates"} expired or expiring soon` + trail;
+  // Báo cáo máy: ghi chú phân bổ mối hàn, tiền, giờ chạy theo máy.
+  const unassigned = core.match(/^Số mối hàn theo máy chỉ gồm bản ghi đã gán máy · ([\d.,]+) mối chưa gán máy không được phân bổ\.$/);
+  if (unassigned) return lead + `Weld counts by machine only include records assigned to a machine · ${unassigned[1]} welds not assigned to a machine are not allocated.` + trail;
+  const dongAmount = core.match(/^([\d.,]+)đ$/);
+  if (dongAmount) return lead + `${dongAmount[1]} VND` + trail;
+  const machineHours = core.match(/^(.+): ([\d.,]+) giờ$/);
+  if (machineHours) return lead + `${translate(machineHours[1])}: ${machineHours[2]} h` + trail;
+  // Báo cáo máy: hạn bảo trì "Quá N ngày" / "Còn N ngày".
+  const dueDays = core.match(/^(Quá|Còn) (\d+) ngày$/);
+  if (dueDays) return lead + `${dueDays[1] === "Quá" ? "Overdue by" : "Due in"} ${dueDays[2]} ${dueDays[2] === "1" ? "day" : "days"}` + trail;
+  // Báo cáo chất lượng: ghi chú thẻ thống kê và dòng nguồn dữ liệu.
+  const qualitySource = core.match(/^Nhật ký hàn · ([\d.,]+) bản ghi · Sửa\/hàn lại = có Mối hàn liên kết$/);
+  if (qualitySource) return lead + `Welding journal · ${qualitySource[1]} records · Repair/re-weld = has a linked weld` + trail;
+  const passNote = core.match(/^([\d.,]+%) tỷ lệ đạt$/);
+  if (passNote) return lead + `${passNote[1]} pass rate` + trail;
+  const failNote = core.match(/^([\d.,]+) mối không đạt$/);
+  if (failNote) return lead + `${failNote[1]} failed welds` + trail;
+  // Trang tổng quan: các dòng chú thích tiến độ có số/ngày chèn động.
+  const unitEn = (unit: string) => (unit === "mối/ngày" ? "welds/day" : "welds");
+  const projectsCount = core.match(/^(\d+) dự án$/);
+  if (projectsCount) return lead + `${projectsCount[1]} ${projectsCount[1] === "1" ? "project" : "projects"}` + trail;
+  const noteYear = core.match(/^Chú thích: Năm (\d{4}) đến (.+) · thực hiện ([\d.,]+) \/ kế hoạch ([\d.,]+) (mối\/ngày|mối)$/);
+  if (noteYear) return lead + `Note: Year ${noteYear[1]} to ${noteYear[2]} · performed ${noteYear[3]} / plan ${noteYear[4]} ${unitEn(noteYear[5])}` + trail;
+  const notePeriod = core.match(/^Chú thích: (.+–.+) · thực hiện ([\d.,]+) \/ kế hoạch ([\d.,]+) mối$/);
+  if (notePeriod) return lead + `Note: ${notePeriod[1]} · performed ${notePeriod[2]} / plan ${notePeriod[3]} welds` + trail;
+  const noteReason = core.match(/^Chú thích: (.+) · kế hoạch ([\d.,]+) (mối\/ngày|mối)$/);
+  if (noteReason) return lead + `Note: ${noteReason[1].split(" hoặc ").map((part) => translate(part)).join(" or ")} · plan ${noteReason[2]} ${unitEn(noteReason[3])}` + trail;
+  const doneAll = core.match(/^Đã thực hiện \+ (\d{4}) · KH tất cả · (\d+) dự án: ([\d.,]+) mối$/);
+  if (doneAll) return lead + `Performed + ${doneAll[1]} · Plan all · ${doneAll[2]} ${doneAll[2] === "1" ? "project" : "projects"}: ${doneAll[3]} welds` + trail;
+  const donePeriod = core.match(/^Đã thực hiện \+ (\d{4}) trong kỳ · KH kỳ lọc (.+) · ([\d.,]+) mối$/);
+  if (donePeriod) return lead + `Performed + ${donePeriod[1]} in period · Plan for filter period ${donePeriod[2]} · ${donePeriod[3]} welds` + trail;
+  const yearBanner =core.match(/^Nhật ký hàn Supabase · ([\d.,]+) bản ghi đã lọc · (\d+) năm$/);
   if (yearBanner) return lead + `Supabase welding journal · ${yearBanner[1]} filtered records · ${yearBanner[2]} ${yearBanner[2] === "1" ? "year" : "years"}` + trail;
   const rowCountRule = core.match(/^([\d.,]+) dòng$/);
   if (rowCountRule) return lead + `${rowCountRule[1]} ${rowCountRule[1] === "1" ? "row" : "rows"}` + trail;
@@ -199,6 +238,11 @@ function translate(raw: string): string {
     if (hasVietnameseDiacritics(core) && core.split(" - ").every((part) => place.test(part))) return lead + deaccent(core) + trail;
   }
 
+  // Danh sách khuyết tật "Không ngấu, Không thấu, Ngậm xỉ": dịch từng phần nếu tất cả đều có trong từ điển.
+  if (core.includes(", ")) {
+    const items = core.split(", ");
+    if (items.every((item) => PHRASES[item.trim()])) return lead + items.map((item) => PHRASES[item.trim()]).join(", ") + trail;
+  }
   // "Bùi Huy Toàn · Thợ hàn" / "KCM007-01 · Tổ hợp máy…": dịch từng phần ngăn bởi " · ".
   if (core.includes(" · ")) {
     const parts = core.split(" · ");

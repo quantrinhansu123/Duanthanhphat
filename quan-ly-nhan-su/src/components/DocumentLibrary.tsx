@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@/components/icons";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   deleteDriveDocument,
   fetchDriveDocuments,
@@ -43,6 +44,7 @@ export default function DocumentLibrary() {
   const [configNotice, setConfigNotice] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [viewer, setViewer] = useState<DriveDocumentItem | null>(null);
+  const { lang, t } = useLanguage();
   const [editing, setEditing] = useState<DriveDocumentItem | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -165,7 +167,8 @@ export default function DocumentLibrary() {
 
   function openEdit(doc: DriveDocumentItem) {
     setEditing(doc);
-    setTitle(doc.name);
+    // EN: ô tên hiển thị bản dịch; không sửa thì khi lưu vẫn giữ tên gốc.
+    setTitle(lang === "en" ? t(doc.name) : doc.name);
     setDescription(doc.description || "");
     setShowForm(false);
     setErrorMsg(null);
@@ -186,9 +189,10 @@ export default function DocumentLibrary() {
     setErrorMsg(null);
     setStatusMsg(null);
 
+    const savedTitle = lang === "en" && title === t(editing.name) ? editing.name : title;
     const res = await updateDriveDocumentMeta(
       editing.id,
-      title,
+      savedTitle,
       description,
     );
     setSaving(false);
