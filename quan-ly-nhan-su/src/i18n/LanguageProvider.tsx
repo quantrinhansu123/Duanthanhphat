@@ -78,7 +78,14 @@ function translate(raw: string): string {
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
   // Giải toả ứng suất LWR: thông báo kết quả có số động.
   // Tooltip/aria của sơ đồ ray (có mã thanh, lý trình chèn động).
-  const lineLabel = (value: string) => value.replace(/TUYẾN THƯỢNG|TUYẾN HẠ|Ray trái|Ray phải/g, (part) => PHRASES[part] ?? part);
+  const bulkRule = core.match(/^([\d.,]+) ngày × ([\d.,]+) mối = ([\d.,]+) bản ghi\.$/);
+  if (bulkRule) {
+    const plural = (value: string, one: string, many: string) => `${value} ${value === "1" ? one : many}`;
+    return lead + `${plural(bulkRule[1], "day", "days")} × ${plural(bulkRule[2], "weld", "welds")} = ${plural(bulkRule[3], "record", "records")}.` + trail;
+  }
+  const hoursVi =core.match(/^(· )?([\d.,]+) tiếng$/);
+  if (hoursVi) return lead + `${hoursVi[1] ?? ""}${hoursVi[2]} ${hoursVi[2] === "1" ? "hour" : "hours"}` + trail;
+  const lineLabel =(value: string) => value.replace(/TUYẾN THƯỢNG|TUYẾN HẠ|Ray trái|Ray phải/g, (part) => PHRASES[part] ?? part);
   const weldAria = core.match(/^Mối hàn (TUYẾN THƯỢNG|TUYẾN HẠ) (Ray trái|Ray phải) (Km\S+)$/);
   if (weldAria) return lead + `Weld ${lineLabel(`${weldAria[1]} ${weldAria[2]}`)} ${weldAria[3]}` + trail;
   const addAfter = core.match(/^Thêm thanh ngắn phía sau (.+)$/);

@@ -18,7 +18,7 @@ import {
 const STORAGE_KEY = "thanhphat_compliance_standards_v2";
 
 export default function ComplianceStandardsList() {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const isEn = lang === "en";
 
   const [items, setItems] = useState<ComplianceStandardItem[]>(() => {
@@ -108,7 +108,24 @@ export default function ComplianceStandardsList() {
     }
   }
 
-  async function handleSaveStandard(updated: ComplianceStandardItem) {
+  // Chế độ EN: ô sửa hiển thị bản dịch; trường nào người dùng không đụng tới thì khi lưu vẫn giữ nguyên bản gốc (tiếng Việt).
+  const TRANSLATED_FIELDS = ["title", "requirement", "evidenceRequired"] as const;
+  function openStandardEditor(item: ComplianceStandardItem) {
+    if (!isEn) {
+      setEditingStandard(item);
+      return;
+    }
+    setEditingStandard({ ...item, ...Object.fromEntries(TRANSLATED_FIELDS.map((field) => [field, t(item[field])])) });
+  }
+
+  async function handleSaveStandard(edited: ComplianceStandardItem) {
+    const original = items.find((item) => item.id === edited.id);
+    const updated = { ...edited };
+    if (isEn && original) {
+      for (const field of TRANSLATED_FIELDS) {
+        if (edited[field] === t(original[field])) updated[field] = original[field];
+      }
+    }
     try {
       const saved = await saveComplianceStandard(updated);
       setItems((prev) => prev.map((item) => item.id === saved.id ? { ...item, ...saved } : item));
@@ -364,7 +381,7 @@ export default function ComplianceStandardsList() {
                   <td className="p-3 align-top text-right whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => setEditingStandard(item)}
+                      onClick={() => openStandardEditor(item)}
                       className="mr-2 inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] shadow-2xs transition-colors cursor-pointer"
                     >
                       ✏️ {isEn ? "Edit" : "Sửa"}
