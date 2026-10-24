@@ -442,8 +442,26 @@ export default function WeldAcceptanceReport() {
             size: A4 landscape;
             margin: 8mm;
           }
+          .app-workspace {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .app-workspace > div.flex {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+          }
+          #main-content {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            scrollbar-gutter: auto !important;
+          }
           /* Chỉ ẩn chrome app khi in — không đụng visibility toàn trang (dễ làm màn hình trắng). */
-          header,
+          .app-workspace > div > header,
           aside,
           .no-print {
             display: none !important;
@@ -457,6 +475,21 @@ export default function WeldAcceptanceReport() {
           }
           .table-scroll {
             overflow: visible !important;
+          }
+          .table-scroll table {
+            width: 100% !important;
+            min-width: 0 !important;
+            table-layout: fixed;
+            font-size: 9px !important;
+          }
+          .table-scroll th,
+          .table-scroll td {
+            min-width: 0 !important;
+            padding: 1px !important;
+            overflow-wrap: anywhere;
+          }
+          .table-scroll input {
+            font-size: 9px !important;
           }
         }
       `}</style>

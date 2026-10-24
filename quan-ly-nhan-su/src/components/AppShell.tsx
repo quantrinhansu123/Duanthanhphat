@@ -222,7 +222,7 @@ export default function AppShell({ tab }: AppShellProps) {
   return (
     <ReportFilterProvider>
     <div className="app-workspace flex h-dvh overflow-hidden bg-[#f4f6fa] text-[#0f172a]">
-      <a href="#main-content" className="skip-link">{lang === "en" ? "Skip to content" : "Đi đến nội dung chính"}</a>
+      <a href="#main-content" className="skip-link print:hidden">{lang === "en" ? "Skip to content" : "Đi đến nội dung chính"}</a>
       {/* Desktop Sidebar */}
       <div className="hidden lg:block shrink-0">
         <Sidebar
@@ -350,7 +350,7 @@ export default function AppShell({ tab }: AppShellProps) {
           )}
 
           {!reportTab && !lwrTab && crumb && (
-            <div className="w-full px-4 sm:px-6 pt-4 sm:pt-5">
+            <div className="w-full px-4 sm:px-6 pt-4 sm:pt-5 print:hidden">
               <div className="mb-3.5 sm:mb-4">
                 <button
                   type="button"
