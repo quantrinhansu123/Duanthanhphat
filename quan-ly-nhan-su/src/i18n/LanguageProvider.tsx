@@ -76,6 +76,17 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  // Lịch: "tháng 10 năm 2026" / "thứ bảy, 24/10/2026" (toLocaleDateString vi-VN; CSS mới viết hoa).
+  const monthYear = core.match(/^tháng (\d{1,2}) năm (\d{4})$/i);
+  if (monthYear) {
+    const month = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(monthYear[1]) - 1];
+    if (month) return lead + `${month} ${monthYear[2]}` + trail;
+  }
+  const weekdayDate = core.match(/^(thứ hai|thứ ba|thứ tư|thứ năm|thứ sáu|thứ bảy|chủ nhật), (.+)$/i);
+  if (weekdayDate) {
+    const day = { "thứ hai": "Monday", "thứ ba": "Tuesday", "thứ tư": "Wednesday", "thứ năm": "Thursday", "thứ sáu": "Friday", "thứ bảy": "Saturday", "chủ nhật": "Sunday" }[weekdayDate[1].toLowerCase()];
+    return lead + `${day}, ${weekdayDate[2]}` + trail;
+  }
   // "Nguyễn Văn A · 10:20 · 23/24 đạt": phần đếm động ở cuối dòng.
   const passed = core.match(/^(.*?)\s*(\d+\/\d+) đạt$/);
   if (passed) return lead + `${passed[1] ? `${translate(passed[1])} ` : ""}${passed[2]} passed` + trail;
