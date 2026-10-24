@@ -38,9 +38,9 @@ const fieldClass =
 const emptyForm: WelderFormValues = {
   weldingId: "",
   name: "",
-  position: "Thợ hàn",
+  position: "",
   department: "Bộ phận hàn ray (Welding Department)",
-  weldingTeam: "Tổ hàn 1",
+  weldingTeam: "",
   rank: "Hạng 2",
   railTypes: "",
   certificates: [],

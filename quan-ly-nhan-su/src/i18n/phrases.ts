@@ -531,4 +531,31 @@ export const PHRASES: Record<string, string> = {
     "Assign an inspector on each A–E section in the Checklist tab.",
   "Người kiểm tra: phân công riêng theo từng nhóm A–E":
     "Inspectors: assigned separately on sections A–E",
+  // ---- Danh mục hồ sơ thợ hàn (chức vụ, máy, phòng ban, chứng chỉ) ----
+  "Máy hàn nhiệt nhôm": "Aluminothermic welding machine",
+  "Máy hàn Nhiệt nhôm": "Aluminothermic welding machine",
+  "Bộ phận hàn ray (Welding Department)": "Rail Welding Department",
+  "Phòng IT": "IT Department",
+  "Hàn NN": "Aluminothermic welding (NN)",
+  "Chứng chỉ đào tạo kỹ năng hàn nhôm nhiệt đường ray (khóa 10–15/07/2026)": "Rail aluminothermic welding skills training certificate (course 10–15/07/2026)",
+  "Chứng chỉ hàn chảy giáp mép (Máy hàn K922-1)": "Flash-butt welding certificate (K922-1 welding machine)",
+  "Chứng chỉ hàn chảy giáp mép (Máy hàn UN5-150ZB)": "Flash-butt welding certificate (UN5-150ZB welding machine)",
+  "Chứng chỉ hàn nhiệt nhôm Railtech (Verified Welder L2) – Aluminothermic Rail Welding": "Railtech aluminothermic welding certificate (Verified Welder L2) – Aluminothermic Rail Welding",
+  "Chứng chỉ hàn Nhiệt nhôm ray cần trục CR100": "Aluminothermic welding certificate – CR100 crane rail",
+  "Chứng chỉ hàn nhôm nhiệt Railtech (Assistant Welder L1) – Aluminothermic Rail Welding": "Railtech aluminothermic welding certificate (Assistant Welder L1) – Aluminothermic Rail Welding",
+  "Chứng chỉ hàn nhôm nhiệt Thermit (Assistant Thermit Welder Level I)": "Thermit aluminothermic welding certificate (Assistant Thermit Welder Level I)",
+  "Chứng chỉ hàn nhôm nhiệt Thermit (Thermit Welder Level II)": "Thermit aluminothermic welding certificate (Thermit Welder Level II)",
+  "Chứng chỉ vận hành máy hàn UN5-150ZB (Flash-Butt Welding of Rails)": "UN5-150ZB welding machine operation certificate (Flash-Butt Welding of Rails)",
+};
+
+/** Thành phần chức vụ ghép bằng " - " (ví dụ "CHT - Kỹ sư - Thợ hàn"); khóa viết thường. */
+export const ROLE_PARTS: Record<string, string> = {
+  "giám đốc chi nhánh": "Branch Director",
+  "ptgđ": "Deputy Director",
+  "pgđ": "Deputy Director",
+  "pgd": "Deputy Director",
+  "tp kế hoạch": "Head of Planning",
+  "cht": "Site Commander",
+  "kỹ sư": "Engineer",
+  "thợ hàn": "Welder",
 };

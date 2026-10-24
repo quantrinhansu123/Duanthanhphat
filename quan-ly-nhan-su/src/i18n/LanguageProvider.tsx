@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { PHRASES as UI_PHRASES } from "./phrases";
+import { PHRASES as UI_PHRASES, ROLE_PARTS } from "./phrases";
 import { PHRASES_DATA } from "./phrases.data";
 
 // UI_PHRASES thắng khi trùng khóa (bản dịch giao diện chuẩn hơn).
@@ -46,6 +46,14 @@ function translate(raw: string): string {
   if (!core) return raw;
   const exact = PHRASES[core];
   if (exact) return lead + exact + trail;
+
+  // Tổ hàn N (N tùy ý) và chức vụ ghép "A - B - C" từ danh mục.
+  const team = core.match(/^Tổ hàn (\d+)$/);
+  if (team) return lead + `Welding team ${team[1]}` + trail;
+  if (core.includes(" - ")) {
+    const parts = core.split(" - ").map((part) => ROLE_PARTS[part.trim().toLowerCase()]);
+    if (parts.every(Boolean)) return lead + parts.join(" - ") + trail;
+  }
 
   // Chuỗi động kiểu "1–50 / 13.417 · 50/trang"
   const pageWord = PHRASES["trang"];
