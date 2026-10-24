@@ -52,7 +52,10 @@ import {
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
-import Link from "next/link";
+import Link from "next/link";
+
+// window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
+const tr = (vi: string, en: string) => (document.documentElement.lang === "en" ? en : vi);
 
 type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares";
 
@@ -1449,15 +1452,15 @@ function MachineFormModal({
 
   function handleSubmit() {
     if (isUploading) {
-      window.alert("Ảnh đang được tải lên Cloudinary, vui lòng đợi hoàn tất.");
+      window.alert(tr("Ảnh đang được tải lên Cloudinary, vui lòng đợi hoàn tất.", "The image is uploading to Cloudinary, please wait until it finishes."));
       return;
     }
     if (!form.name.trim()) {
-      window.alert("Vui lòng nhập tên tổ hợp máy.");
+      window.alert(tr("Vui lòng nhập tên tổ hợp máy.", "Please enter the machine complex name."));
       return;
     }
     if (!form.code.trim()) {
-      window.alert("Vui lòng nhập mã máy.");
+      window.alert(tr("Vui lòng nhập mã máy.", "Please enter the machine code."));
       return;
     }
 
@@ -1844,7 +1847,7 @@ export default function MachineList() {
   }
 
   async function handleDelete(machine: Machine) {
-    if (!window.confirm(`Xóa máy "${machine.name}"?`)) return;
+    if (!window.confirm(tr(`Xóa máy "${machine.name}"?`, `Delete machine "${machine.name}"?`))) return;
     try {
       await deleteMachineInDb(machine.id);
       const remaining = list.filter((m) => m.id !== machine.id);
@@ -1861,7 +1864,7 @@ export default function MachineList() {
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Không thể xóa máy";
       setDataError(msg);
-      window.alert(`Lỗi xóa máy trên Supabase:\n${msg}\n\nThao tác xóa đã bị hủy.`);
+      window.alert(tr(`Lỗi xóa máy trên Supabase:\n${msg}\n\nThao tác xóa đã bị hủy.`, `Error deleting machine on Supabase:\n${msg}\n\nDeletion cancelled.`));
     }
   }
 
@@ -1883,7 +1886,7 @@ export default function MachineList() {
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Không thể cập nhật máy";
       setDataError(msg);
-      window.alert(`Lỗi lưu máy lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`);
+      window.alert(tr(`Lỗi lưu máy lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`, `Error saving machine to Supabase:\n${msg}\n\nPlease check the specifications.`));
     }
   }
 
@@ -1896,7 +1899,7 @@ export default function MachineList() {
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Không thể thêm máy";
       setDataError(msg);
-      window.alert(`Lỗi thêm máy mới lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`);
+      window.alert(tr(`Lỗi thêm máy mới lên Supabase:\n${msg}\n\nVui lòng kiểm tra lại thông số.`, `Error adding new machine to Supabase:\n${msg}\n\nPlease check the specifications.`));
     }
   }
 

@@ -81,6 +81,13 @@ function translate(raw: string): string {
   const supplied = core.match(/^Cấp dầu — đã báo Chỉ huy trưởng và Quản trị viên · (.+)$/);
   if (supplied) return lead + `Oil supply — Site Commanders and Administrators notified · ${supplied[1]}` + trail;
   if (core.startsWith("· ") && PHRASES[core.slice(2)]) return lead + "· " + PHRASES[core.slice(2)] + trail;
+  const machineLabel = core.match(/^(Mở thông tin|Thu gọn|Ảnh|Ảnh xe|Ảnh bảo trì) (.+)$/);
+  if (machineLabel) {
+    const en = { "Mở thông tin": "Open info for", "Thu gọn": "Collapse", "Ảnh": "Photo of", "Ảnh xe": "Vehicle photo", "Ảnh bảo trì": "Maintenance photo" }[machineLabel[1]];
+    return lead + `${en} ${translate(machineLabel[2])}` + trail;
+  }
+  const countUnit = core.match(/^([\d.,]+) (mối|lít)$/);
+  if (countUnit) return lead + `${countUnit[1]} ${countUnit[2] === "mối" ? "welds" : "L"}` + trail;
   const hours = core.match(/^([\d.,]+) giờ$/);
   if (hours) return lead + `${hours[1]} h` + trail;
   const wire = core.match(/^Dây hàn: (.+)$/);
