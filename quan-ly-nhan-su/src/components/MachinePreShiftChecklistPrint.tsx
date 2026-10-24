@@ -70,7 +70,7 @@ export default function MachinePreShiftChecklistPrint({
   const c04Temp = record.results.C04?.nhietDo?.trim();
 
   return createPortal(
-    <div id="mfbw-checklist-print" data-no-i18n="true" role="dialog" aria-modal="true" aria-labelledby="mfbw-checklist-print-title">
+    <div id="mfbw-checklist-print" role="dialog" aria-modal="true" aria-labelledby="mfbw-checklist-print-title">
       <style>{PRINT_CSS}</style>
       <div className="print-toolbar">
         <div>

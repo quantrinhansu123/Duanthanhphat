@@ -361,11 +361,7 @@ export default function DailyWorkReportPrint({
                 <th colSpan={2}>Tuyến thượng</th>
                 <th colSpan={2}>Tuyến hạ</th>
                 <th rowSpan={2}>Đơn vị</th>
-                <th rowSpan={2}>
-                  Đầu hôm
-                  <br />
-                  qua
-                </th>
+                <th rowSpan={2}>Đầu hôm qua</th>
                 <th rowSpan={2}>Hôm nay</th>
                 <th rowSpan={2}>Tích lũy</th>
                 <th rowSpan={2}>Thiết kế</th>
@@ -374,16 +370,8 @@ export default function DailyWorkReportPrint({
                 <th rowSpan={2}>CHT</th>
                 <th rowSpan={2}>Kỹ sư</th>
                 <th rowSpan={2}>Lái máy</th>
-                <th rowSpan={2}>
-                  Thợ vận
-                  <br />
-                  hành
-                </th>
-                <th rowSpan={2}>
-                  Công
-                  <br />
-                  nhân
-                </th>
+                <th rowSpan={2}>Thợ vận hành</th>
+                <th rowSpan={2}>Công nhân</th>
                 <th colSpan={2}>Thời gian làm việc</th>
               </tr>
               <tr>

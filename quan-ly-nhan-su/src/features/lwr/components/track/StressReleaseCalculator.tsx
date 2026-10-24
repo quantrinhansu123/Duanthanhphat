@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   BUFFER_RAIL_LENGTH,
   calculateStressRelease,
@@ -88,6 +89,7 @@ export function StressReleaseCalculator({
   onSave?: (input: StressInput) => StressSaveResult | boolean | void;
   onModeChange?: (mode: Mode) => void;
 }) {
+  const { lang, t } = useLanguage();
   const [fields, setFields] = useState(() => initialFields(initialInput));
   const [railType, setRailType] = useState(initialInput.railType || "60R2");
   const [startChainage, setStartChainage] = useState(initialInput.startChainage ?? "");
@@ -244,9 +246,10 @@ export function StressReleaseCalculator({
         ...gapRows.map(row => [row.label, String(row.lower), row.symbol, String(row.upper), row.lowerFormula, row.upperFormula, row.feasible ? "Có khoảng thoả mãn" : "Không có khoảng thoả mãn"]),
       ] : []),
       ...notices.map(note => ["Ghi chú", note])];
-    const csv = "\uFEFF" + data.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    // Xu\u1EA5t file theo ng\u00F4n ng\u1EEF \u0111ang ch\u1ECDn (EN: d\u1ECBch nh\u00E3n, ghi ch\u00FA, k\u1EBFt lu\u1EADn).
+    const csv = "\uFEFF" + data.map(row => row.map(cell => `"${t(String(cell)).replaceAll('"', '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = `giai-toa-${mode}${segmentId ? `-${segmentId}` : ""}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = `${lang === "en" ? "stress-release" : "giai-toa"}-${mode}${segmentId ? `-${segmentId}` : ""}.csv`; a.click(); URL.revokeObjectURL(url);
   }
   const results = result && <>
     <div className="thermal-results grid gap-3 sm:grid-cols-2">

@@ -199,23 +199,6 @@ export default function CompanyCertificateManagement() {
 
   return (
     <div className="w-full px-4 sm:px-6 pb-12">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-          {isEn ? "QUALITY MANAGEMENT" : "QUẢN LÝ CHẤT LƯỢNG"}
-        </div>
-        <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-slate-900">
-          {isEn
-            ? "Quality Management Certificates (ISO)"
-            : "Chứng chỉ quản lý chất lượng (ISO)"}
-        </h1>
-        <p className="mt-1 text-sm text-slate-600 max-w-4xl">
-          {isEn
-            ? "ISO quality management certificates and records of Thanh Phat Joint Stock Company."
-            : "Chứng chỉ quản lý chất lượng (ISO) và hồ sơ của Công ty Cổ phần Thành Phát."}
-        </p>
-      </div>
-
       {persistenceError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           Chưa đồng bộ được metadata QLCL với Supabase: {persistenceError}

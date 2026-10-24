@@ -970,7 +970,7 @@ function ChecklistFormSheet({
                             Đạt
                           </MarkButton>
                           <MarkButton active={value.result === "K"} tone="fail" onClick={() => setMark(item.ma, "K")}>
-                            Không
+                            Không đạt
                           </MarkButton>
                           <MarkButton active={value.result === "NA"} tone="na" onClick={() => setMark(item.ma, "NA")}>
                             NA

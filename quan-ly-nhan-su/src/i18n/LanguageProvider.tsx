@@ -76,7 +76,53 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
-  const skipDays = core.match(/^\(bỏ (\d+) ngày nghỉ\)$/);
+  // Giải toả ứng suất LWR: thông báo kết quả có số động.
+  // Tooltip/aria của sơ đồ ray (có mã thanh, lý trình chèn động).
+  const lineLabel = (value: string) => value.replace(/TUYẾN THƯỢNG|TUYẾN HẠ|Ray trái|Ray phải/g, (part) => PHRASES[part] ?? part);
+  const weldAria = core.match(/^Mối hàn (TUYẾN THƯỢNG|TUYẾN HẠ) (Ray trái|Ray phải) (Km\S+)$/);
+  if (weldAria) return lead + `Weld ${lineLabel(`${weldAria[1]} ${weldAria[2]}`)} ${weldAria[3]}` + trail;
+  const addAfter = core.match(/^Thêm thanh ngắn phía sau (.+)$/);
+  if (addAfter) return lead + `Add a short rail after ${lineLabel(addAfter[1])}` + trail;
+  const notLaid = core.match(/^(.+) · Chưa rải$/);
+  if (notLaid) return lead + `${translate(notLaid[1])} · Not laid` + trail;
+  const notLaidAria = core.match(/^(.+): chưa rải thanh ngắn$/);
+  if (notLaidAria) return lead + `${notLaidAria[1]}: short rail not laid` + trail;
+  const belongsTo = core.match(/^(\S+) thuộc (.+)$/);
+  if (belongsTo) return lead + `${belongsTo[1]} belongs to ${translate(belongsTo[2])}` + trail;
+  const shortOf = core.match(/^(\S+): thanh ngắn của (.+)$/);
+  if (shortOf) return lead + `${shortOf[1]}: short rail of ${shortOf[2]}` + trail;
+  const pickEdit = core.match(/^Chọn (.+) để sửa$/);
+  if (pickEdit) return lead + `Select ${translate(pickEdit[1])} to edit` + trail;
+  const rangeEdit = core.match(/^Sửa phạm vi (.+)$/);
+  if (rangeEdit) return lead + `Edit range ${rangeEdit[1]}` + trail;
+  const viewLong = core.match(/^Xem thông số thanh dài (.+)$/);
+  if (viewLong) return lead + `View long rail parameters ${viewLong[1]}` + trail;
+  const gpsPoints = core.match(/^(\d+)\/(\d+) điểm$/);
+  if (gpsPoints) return lead + `${gpsPoints[1]}/${gpsPoints[2]} points` + trail;
+  const newRails = core.match(/^Thanh mới dài 500 m, nhiệt độ khóa 35°C\. Tuyến hiện tại: (Km .+)\.$/);
+  if (newRails) return lead + `New rails are 500 m long with a 35°C locking temperature. Current line: ${newRails[1]}.` + trail;
+  const reportAction =core.match(/^(Sửa|In báo cáo|Xóa) (\d{1,2}\/\d{1,2}\/\d{4})$/);
+  if (reportAction) return lead + `${{ "Sửa": "Edit", "In báo cáo": "Print report", "Xóa": "Delete" }[reportAction[1]]} ${reportAction[2]}` + trail;
+  const yearOnly =core.match(/^Chỉ có năm (\d{4})$/);
+  if (yearOnly) return lead + `Year only ${yearOnly[1]}` + trail;
+  const exportedRows = core.match(/^Đã xuất ([\d.,]+) bản ghi ra Excel$/);
+  if (exportedRows) return lead + `Exported ${exportedRows[1]} records to Excel` + trail;
+  const gapNote =core.match(/^Khe hở cấu tạo ag = ([\d.,]+) mm\. Giới hạn dưới dùng Δgiãn tại nhiệt độ cao nhất, giới hạn trên dùng Δco tại nhiệt độ thấp nhất\.$/);
+  if (gapNote) return lead + `Construction gap ag = ${gapNote[1]} mm. The lower limit uses Δexp at the highest temperature; the upper limit uses Δcontr at the lowest temperature.` + trail;
+  const tempRule =core.match(/^Nhiệt độ < ([\d.,]+)°C: có lực kéo; ≥ ([\d.,]+)°C: giải toả tự nhiên\.$/);
+  if (tempRule) return lead + `Temperature < ${tempRule[1]}°C: pull force applies; ≥ ${tempRule[2]}°C: natural release.` + trail;
+  const lengthCheck = core.match(/^Kiểm tra chiều dài: (Chưa xác định giới hạn|Đạt|Vượt giới hạn)(?: \(giới hạn ([\d.,]+) m\))?\.$/);
+  if (lengthCheck) {
+    const verdict = { "Chưa xác định giới hạn": "Limit not determined", "Đạt": "Pass", "Vượt giới hạn": "Exceeds limit" }[lengthCheck[1]];
+    return lead + `Length check: ${verdict}${lengthCheck[2] ? ` (limit ${lengthCheck[2]} m)` : ""}.` + trail;
+  }
+  const anchorRule = core.match(/^Chiều dài neo áp dụng lấy ([\d.,]+) m vì neo thiết kế nhỏ hơn mức tối thiểu\.$/);
+  if (anchorRule) return lead + `Applied anchor length is taken as ${anchorRule[1]} m because the design anchor is below the minimum.` + trail;
+  const skipPullRule = core.match(/^Nhiệt độ môi trường ≥ ([\d.,]+)°C: giải toả tự nhiên, chiều dài kéo = 0\.$/);
+  if (skipPullRule) return lead + `Ambient temperature ≥ ${skipPullRule[1]}°C: natural release, pull length = 0.` + trail;
+  const overLimit = core.match(/^Chiều dài ([\d.,]+) m vượt giới hạn ([\d.,]+) m theo bảng tra đã chọn\.$/);
+  if (overLimit) return lead + `Length ${overLimit[1]} m exceeds the ${overLimit[2]} m limit of the selected table.` + trail;
+  const skipDays =core.match(/^\(bỏ (\d+) ngày nghỉ\)$/);
   if (skipDays) return lead + `(excluding ${skipDays[1]} days off)` + trail;
   const fuelLoadError = core.match(/^Không tải được lịch sử cấp nhiên liệu: (.+)$/);
   if (fuelLoadError) return lead + `Could not load the fuel supply history: ${fuelLoadError[1]}` + trail;
@@ -131,6 +177,10 @@ function translate(raw: string): string {
   if (core.includes(" - ")) {
     const parts = core.split(" - ").map((part) => ROLE_PARTS[part.trim().toLowerCase()]);
     if (parts.every(Boolean)) return lead + parts.join(" - ") + trail;
+    // "Tuyến thượng - Ray trái": dịch từng phần ngăn bởi " - " nếu có phần trong từ điển.
+    const pieces = core.split(" - ");
+    const translatedPieces = pieces.map((piece) => PHRASES[piece.trim()] ?? piece);
+    if (translatedPieces.some((piece, index) => piece !== pieces[index])) return lead + translatedPieces.join(" - ") + trail;
     // Địa danh ghép "Phú Quốc - An Giang": bỏ dấu từng phần như tên riêng.
     const place = /^\p{Lu}[\p{L}.]*( \p{Lu}[\p{L}.]*){0,3}$/u;
     if (hasVietnameseDiacritics(core) && core.split(" - ").every((part) => place.test(part))) return lead + deaccent(core) + trail;
@@ -141,6 +191,13 @@ function translate(raw: string): string {
     const parts = core.split(" · ");
     const translated = parts.map((part) => translate(part));
     if (translated.some((part, index) => part !== parts[index])) return lead + translated.join(" · ") + trail;
+  }
+
+  // "Xóa lw01" / "Sửa Vùng hạn chế hàn ray": động từ + tên (chỉ khi tên dịch được hoặc là mã có số).
+  const verbName = core.match(/^(Xem|Sửa|Xóa) (.+)$/);
+  if (verbName) {
+    const name = translate(verbName[2]);
+    if (name !== verbName[2] || /\d/.test(verbName[2])) return lead + `${{ "Xem": "View", "Sửa": "Edit", "Xóa": "Delete" }[verbName[1]]} ${name}` + trail;
   }
 
   // Chuỗi động kiểu "1–50 / 13.417 · 50/trang"

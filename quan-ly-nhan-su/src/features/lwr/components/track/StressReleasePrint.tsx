@@ -91,7 +91,7 @@ export function StressReleasePrint({
   ];
 
   return createPortal(
-    <div id="stress-release-print" data-no-i18n="true" role="dialog" aria-modal="true" aria-labelledby="stress-release-print-title">
+    <div id="stress-release-print" role="dialog" aria-modal="true" aria-labelledby="stress-release-print-title">
       <style>{PRINT_CSS}</style>
       <div className="print-toolbar">
         <div>

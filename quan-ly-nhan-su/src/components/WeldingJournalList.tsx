@@ -1629,7 +1629,7 @@ export default function WeldingJournalList({
   heading?: string;
 } = {}) {
   const failedWeldMode = lockedResultFilter === "Không đạt";
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
@@ -1979,7 +1979,11 @@ export default function WeldingJournalList({
         };
       });
 
-      const worksheet = XLSX.utils.json_to_sheet(data);
+      // Xuất file theo ngôn ngữ đang chọn: EN dịch tiêu đề cột và các giá trị cố định (ca, kết quả...).
+      const exportData = lang === "en"
+        ? data.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [t(key), typeof value === "string" ? t(value) : value])))
+        : data;
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
       worksheet["!cols"] = [
         { wch: 7 }, { wch: 17 }, { wch: 10 }, { wch: 38 }, { wch: 25 },
         { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 24 },
@@ -1991,10 +1995,10 @@ export default function WeldingJournalList({
       if (worksheet["!ref"]) worksheet["!autofilter"] = { ref: worksheet["!ref"] };
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Nhật ký hàn");
+      XLSX.utils.book_append_sheet(workbook, worksheet, t("Nhật ký hàn"));
       XLSX.writeFile(
         workbook,
-        `Nhat_ky_moi_han_${defaultPerformedAt().slice(0, 10)}.xlsx`,
+        `${lang === "en" ? "Weld_journal" : "Nhat_ky_moi_han"}_${defaultPerformedAt().slice(0, 10)}.xlsx`,
       );
       showToast(`Đã xuất ${exportRows.length.toLocaleString("vi-VN")} bản ghi ra Excel`);
     } catch (exportError) {
