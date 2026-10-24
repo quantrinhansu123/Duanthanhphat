@@ -47,11 +47,32 @@ function translate(raw: string): string {
   if (!core) return raw;
   const exact = PHRASES[core];
   if (exact) return lead + exact + trail;
+  // Chuỗi JSX xuống dòng chứa nhiều khoảng trắng/xuống dòng: chuẩn hoá về một khoảng trắng.
+  const flat = core.replace(/\s+/g, " ");
+  if (flat !== core && PHRASES[flat]) return lead + PHRASES[flat] + trail;
 
   // "30 ngày" -> "30 days"; tên người có dấu -> không dấu (bản EN dùng tên không dấu thống nhất).
   const days = core.match(/^(\d+) ngày$/);
   if (days) return lead + `${days[1]} days` + trail;
   if (/^\p{Lu}\p{Ll}+( \p{Lu}\p{Ll}+){1,4}$/u.test(core) && hasVietnameseDiacritics(core)) return lead + deaccent(core) + trail;
+  // "Đã chọn 12 người" -> "12 people selected" (đếm động, không thể liệt kê trong từ điển).
+  const picked = core.match(/^Đã chọn (\d+)(?: (người|mục|dự án|nhân sự))?$/);
+  if (picked) return lead + `${picked[1]} ${{ "người": "people", "mục": "items", "dự án": "projects", "nhân sự": "staff" }[picked[2] ?? ""] ?? ""} selected`.replace("  ", " ") + trail;
+  // Nội dung thông báo (chuông): câu có tên máy/người/ngày chèn động.
+  const overdue = core.match(/^(.+) — đã quá hạn (\d+) ngày \(hạn (.+)\)\.$/);
+  if (overdue) return lead + `${translate(overdue[1])} — overdue by ${overdue[2]} days (due ${overdue[3]}).` + trail;
+  const expiring = core.match(/^Chứng chỉ sắp\/đã hết hạn: (.+)$/);
+  if (expiring) return lead + `Certificate expiring/expired: ${translate(expiring[1])}` + trail;
+  const maintDue = core.match(/^Máy (.+) đến hạn bảo trì$/);
+  if (maintDue) return lead + `Machine ${maintDue[1]} is due for maintenance` + trail;
+  const oilLow = core.match(/^(.+) ngày (\S+): mức dầu (\S+) lít dưới định mức (\S+) lít\.$/);
+  if (oilLow) return lead + `${translate(oilLow[1])} on ${oilLow[2]}: oil level ${oilLow[3]} L is below the standard of ${oilLow[4]} L.` + trail;
+  const items = core.match(/^(\d+) mục$/);
+  if (items) return lead + `${items[1]} items` + trail;
+  const removeOne = core.match(/^Bỏ (?!chọn)(.+)$/);
+  if (removeOne) return lead + `Remove ${removeOne[1]}` + trail;
+  const delCourse = core.match(/^Xóa khóa đào tạo (.+)$/);
+  if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   // Tổ hàn N (N tùy ý) và chức vụ ghép "A - B - C" từ danh mục.
   const team = core.match(/^Tổ hàn (\d+)$/);
   if (team) return lead + `Welding team ${team[1]}` + trail;

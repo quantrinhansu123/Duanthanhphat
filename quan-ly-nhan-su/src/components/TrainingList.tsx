@@ -27,6 +27,9 @@ import {
 import { deleteCloudinaryAsset, uploadCloudinaryAsset } from "@/lib/cloudinaryClient";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 
+/** Native confirm() dialogs bypass the DOM translator, so pick the language here. */
+const isEnglish = () => document.documentElement.lang === "en";
+
 const resultStyle: Record<string, string> = {
   Đạt: "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
   "Không đạt": "bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs",
@@ -772,7 +775,9 @@ function TrainingFormModal({
                         .map((a) => personnel.find((p) => p.id === a.id)?.name || a.id)
                         .join(", ");
                       const confirmed = window.confirm(
-                        `Cảnh báo: Bạn đang bỏ chọn học viên đang "Đạt" (${names}). Chứng chỉ cấp sau đào tạo của học viên này sẽ tự động bị thu hồi. Bạn có chắc chắn muốn bỏ chọn không?`,
+                        isEnglish()
+                          ? `Warning: you are deselecting trainees who currently have "Pass" (${names}). The certificates issued after training to these trainees will be revoked automatically. Are you sure you want to deselect them?`
+                          : `Cảnh báo: Bạn đang bỏ chọn học viên đang "Đạt" (${names}). Chứng chỉ cấp sau đào tạo của học viên này sẽ tự động bị thu hồi. Bạn có chắc chắn muốn bỏ chọn không?`,
                       );
                       if (!confirmed) return prev;
                     }
@@ -810,7 +815,9 @@ function TrainingFormModal({
                             const newRes = e.target.value as "Đạt" | "Không đạt" | "Đang học";
                             if (att.result === "Đạt" && newRes !== "Đạt") {
                               const confirmed = window.confirm(
-                                `Xác nhận thay đổi kết quả: Học viên "${person?.name || att.id}" đang có kết quả "Đạt". Nếu đổi sang "${newRes}", chứng chỉ cấp sau khóa học sẽ tự động bị thu hồi. Bạn có chắc chắn muốn đổi không?`,
+                                isEnglish()
+                                  ? `Confirm result change: trainee "${person?.name || att.id}" currently has the result "Pass". If you change it to "${newRes === "Không đạt" ? "Fail" : "In progress"}", the certificate issued after the course will be revoked automatically. Are you sure you want to change it?`
+                                  : `Xác nhận thay đổi kết quả: Học viên "${person?.name || att.id}" đang có kết quả "Đạt". Nếu đổi sang "${newRes}", chứng chỉ cấp sau khóa học sẽ tự động bị thu hồi. Bạn có chắc chắn muốn đổi không?`,
                               );
                               if (!confirmed) return;
                             }
@@ -1571,7 +1578,7 @@ export default function TrainingList() {
                   Xóa khóa đào tạo?
                 </h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                  Khóa <strong className="font-semibold text-slate-900">“{pendingDelete.title}”</strong> và toàn bộ
+                  Khóa đào tạo <strong className="font-semibold text-slate-900">“{pendingDelete.title}”</strong> và toàn bộ
                   danh sách học viên của khóa sẽ bị xóa. Thao tác này không thể hoàn tác.
                 </p>
               </div>
