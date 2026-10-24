@@ -76,7 +76,9 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
-  const pickPart = core.match(/^Chọn phụ tùng (.+)$/);
+  const fuelLoadError = core.match(/^Không tải được lịch sử cấp nhiên liệu: (.+)$/);
+  if (fuelLoadError) return lead + `Could not load the fuel supply history: ${fuelLoadError[1]}` + trail;
+  const pickPart =core.match(/^Chọn phụ tùng (.+)$/);
   if (pickPart) return lead + `Select spare part ${pickPart[1]}` + trail;
   const deletedParts = core.match(/^Đã xóa (\d+) phụ tùng$/);
   if (deletedParts) return lead + `Deleted ${deletedParts[1]} spare parts` + trail;
