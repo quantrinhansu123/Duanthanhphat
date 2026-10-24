@@ -2223,6 +2223,7 @@ export const PHRASES: Record<string, string> = {
   "Tên chuẩn (EN)": "Standard name (EN)",
   "Tên tiếng Anh (Standard)": "English name (Standard)",
   "bản ghi nhật ký hàn liên quan (mới nhất trước).": "related welding journal records (newest first).",
+  "Link video": "Video link", "Xem video": "Watch video",
   // ---- Lịch sử cấp nhiên liệu ----
   "Chưa có lượt cấp nhiên liệu phù hợp.": "No matching fuel supplies.",
   "Đang tải lịch sử cấp nhiên liệu...": "Loading fuel supply history...",
