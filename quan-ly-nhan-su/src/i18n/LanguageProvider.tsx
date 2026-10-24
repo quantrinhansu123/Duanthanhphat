@@ -76,6 +76,12 @@ function translate(raw: string): string {
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
   const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
   if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  // "Nguyễn Văn A · 10:20 · 23/24 đạt": phần đếm động ở cuối dòng.
+  const passed = core.match(/^(.*?)\s*(\d+\/\d+) đạt$/);
+  if (passed) return lead + `${passed[1] ? `${translate(passed[1])} ` : ""}${passed[2]} passed` + trail;
+  // "Nguyễn Đắc Công — Quản trị": tên người bỏ dấu, chức vụ dịch theo từ điển.
+  const personRole = core.match(/^(\p{Lu}[\p{L}. ]*) — (.+)$/u);
+  if (personRole) return lead + `${deaccent(personRole[1])} — ${translate(personRole[2])}` + trail;
   const savedRows = core.match(/^Đã lưu ([\d.,]+) dòng báo cáo$/);
   if (savedRows) return lead + `Saved ${savedRows[1]} report rows` + trail;
   const supplied = core.match(/^Cấp dầu — đã báo Chỉ huy trưởng và Quản trị viên · (.+)$/);
