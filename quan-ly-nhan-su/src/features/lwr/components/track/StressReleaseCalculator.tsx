@@ -23,7 +23,7 @@ type NumericKey = { [K in keyof StressInput]-?: StressInput[K] extends number ? 
 const groups: { title: string; fields: [NumericKey, string, string][] }[] = [
   { title: "Chiều dài và nhiệt độ", fields: [
     ["leftLength", "Chiều dài phía Km giảm L₁", "m"], ["rightLength", "Chiều dài phía Km tăng L₂", "m"],
-    ["radius", "Bán kính đường cong R", "m"], ["neutralTemp", "Nhiệt độ khóa đường T", "°C"],
+    ["radius", "Bán kính đường cong R", "m"], ["neutralTemp", "Nhiệt độ khóa đường T", "°C"], ["airTemp", "Nhiệt độ không khí", "°C"],
     ["lockTempOffset", "Cộng/trừ nhiệt độ khóa đường ±", "°C"],
     ["leftTemp", "Nhiệt độ neo phía Km giảm T₁", "°C"], ["rightTemp", "Nhiệt độ neo phía Km tăng T₂", "°C"],
     ["maxTemp", "Nhiệt độ ray lớn nhất", "°C"], ["minTemp", "Nhiệt độ ray nhỏ nhất", "°C"],
@@ -47,6 +47,10 @@ const groups: { title: string; fields: [NumericKey, string, string][] }[] = [
 ];
 const RAIL_LOCKED_KEYS: NumericKey[] = ["area", "modulus", "alpha"];
 const fieldClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600";
+// Fields filled in on site (chainage, rail/air temperatures): tinted so they stand out from design parameters.
+const siteClass = "mt-1 w-full rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600";
+const SITE_KEYS: NumericKey[] = ["leftTemp", "rightTemp", "airTemp"];
+const formatTime = (iso: string) => iso ? new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi";
 const lockedClass = "mt-1 w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600";
 
 function initialFields(initialInput: StressInput): Record<NumericKey, string> {
@@ -91,6 +95,8 @@ export function StressReleaseCalculator({
   const [jointChainage, setJointChainage] = useState(initialInput.jointChainage ?? "");
   const [trackSide, setTrackSide] = useState<"LEFT" | "RIGHT">(initialInput.trackSide ?? "LEFT");
   const [mode, setMode] = useState<Mode>(initialInput.method);
+  const [startTime, setStartTime] = useState(initialInput.startTime ?? "");
+  const [endTime, setEndTime] = useState(initialInput.endTime ?? "");
   const [rollers, setRollers] = useState(initialInput.sideRollers);
   useEffect(() => {
     setStartChainage(initialInput.startChainage ?? "");
@@ -122,7 +128,7 @@ export function StressReleaseCalculator({
     if (buffer) {
       return ([
         "area", "modulus", "alpha", "resistance", "jointResistance", "neutralTemp",
-        "lockTempOffset", "maxTemp", "minTemp", "structuralGap", "leftLength", "rightLength",
+        "lockTempOffset", "airTemp", "maxTemp", "minTemp", "structuralGap", "leftLength", "rightLength",
       ] as NumericKey[]).includes(key);
     }
     if (key === "structuralGap") return false;
@@ -134,7 +140,7 @@ export function StressReleaseCalculator({
     return true;
   };
   const visibleGroups = groups.map(g => ({ ...g, fields: g.fields.filter(([key]) => relevant(key)).map(([key, label, unit]): [NumericKey, string, string] => [key, buffer && key === "area" ? "Diện tích tiết diện ray F" : label, unit]) })).filter(g => g.fields.length);
-  const input: StressInput = { ...DEFAULT_STRESS_INPUT, ...initialInput, trackSide, startChainage, endChainage, jointChainage, railType, method: buffer ? "SINGLE" : mode, sideRollers: buffer ? false : rollers };
+  const input: StressInput = { ...DEFAULT_STRESS_INPUT, ...initialInput, trackSide, startChainage, endChainage, jointChainage, startTime, endTime, railType, method: buffer ? "SINGLE" : mode, sideRollers: buffer ? false : rollers };
   for (const group of visibleGroups) for (const [key] of group.fields) input[key] = fields[key].trim() === "" ? NaN : Number(fields[key].replace(",", "."));
   const chainErrors: string[] = [];
   const from = parseChainage(startChainage);
@@ -167,7 +173,7 @@ export function StressReleaseCalculator({
   const rows: Row[] = !result || buffer ? [] : [
     ["Phương pháp giải toả", releaseMethodLabel(result.releaseMethod), ""],
     ["Tổng chiều dài giải toả", result.length, "m"],
-    ["Nhiệt độ môi trường", result.averageTemp, "°C"],
+    ["Nhiệt độ ray trung bình", result.averageTemp, "°C"],
     ["Chênh nhiệt giải toả", result.deltaTemp, "°C"],
     ["Lực kéo giải toả", result.appliedPullForce, "kN"],
     ["Áp lực dầu", result.jackPressure, "MPa"],
@@ -210,6 +216,8 @@ export function StressReleaseCalculator({
       ["Lý trình vị trí kéo", jointChainage || endChainage || "Chưa nhập", ""],
       ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
     ] as StressPrintRow[] : []),
+    ["Thời gian bắt đầu", formatTime(startTime), ""],
+    ["Thời gian kết thúc", formatTime(endTime), ""],
     ...visibleGroups.flatMap(g => g.fields.filter(([key]) => !["leftMovement", "rightMovement", "leftOuterMovement", "rightOuterMovement"].includes(key)).map(([key, label, unit]) => [label, input[key], unit] as StressPrintRow)),
   ];
   function applyRailType(nextType: string) {
@@ -330,13 +338,21 @@ export function StressReleaseCalculator({
             </select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs">Lý trình đầu<input className={fieldClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" /></label>
-            <label className="text-xs">Lý trình cuối<input className={fieldClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" /></label>
-            <label className="text-xs sm:col-span-2">Lý trình vị trí kéo / mối hàn<input className={fieldClass} value={jointChainage} onChange={e => setJointChainage(e.target.value)} placeholder="Để trống: kéo ở cuối đoạn" /></label>
+            <label className="text-xs text-amber-800">Lý trình đầu<input className={siteClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" /></label>
+            <label className="text-xs text-amber-800">Lý trình cuối<input className={siteClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" /></label>
+            <label className="text-xs text-amber-800 sm:col-span-2">Lý trình vị trí kéo / mối hàn<input className={siteClass} value={jointChainage} onChange={e => setJointChainage(e.target.value)} placeholder="Để trống: kéo ở cuối đoạn" /></label>
           </div>
           <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Nhập riêng cho từng ray của tuyến.</p>
           {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
         </>}
+        <div className="grid grid-cols-2 gap-3">
+          {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => (
+            <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800">
+              <button type="button" onClick={() => set(new Date().toISOString())} className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600">{label}</button>
+              <div className="mt-1 flex items-center justify-between gap-1"><span>{formatTime(value)}</span>{value && <button type="button" onClick={() => set("")} className="underline">Xóa</button>}</div>
+            </div>
+          ))}
+        </div>
         <label className="block text-xs text-slate-600">Loại ray
           <select className={fieldClass} value={railType} onChange={e => applyRailType(e.target.value)}>
             {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -353,7 +369,7 @@ export function StressReleaseCalculator({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{group.fields.map(([key, label, unit]) => {
             const chainLength = !buffer && Boolean(startChainage || endChainage) && (key === "leftLength" || key === "rightLength");
             const locked = chainLength || (!customRail && RAIL_LOCKED_KEYS.includes(key));
-            return <label key={key} className="text-xs text-slate-600">{label} ({unit})<input inputMode="decimal" readOnly={locked} value={chainLength ? String(input[key]) : fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : fieldClass} /></label>;
+            return <label key={key} className={`text-xs ${SITE_KEYS.includes(key) ? "font-medium text-amber-800" : "text-slate-600"}`}>{label} ({unit})<input inputMode="decimal" readOnly={locked} value={chainLength ? String(input[key]) : fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : SITE_KEYS.includes(key) ? siteClass : fieldClass} /></label>;
           })}</div>
           {group.title === "Chiều dài và nhiệt độ" && result && (
             <p className="mt-2 text-xs text-slate-600">Giới hạn trên khóa ray thiết kế: <b>{formatStressNumber(result.lockTempUpper)} °C</b> · Giới hạn dưới: <b>{formatStressNumber(result.lockTempLower)} °C</b> · Ngưỡng Rail Tensor: nhiệt độ môi trường &lt; <b>{formatStressNumber(result.skipThreshold)} °C</b>.</p>

@@ -3,11 +3,22 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { formatChainage, getPlacementSpan, trackExtent, TRACK_PIXELS_PER_METRE, type TrackLayout } from "@lwr/lib/track-editor";
+import { calculateStressRelease, formatStressNumber, releaseMethodLabel, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 import { RailGrid } from "./RailGrid";
 
 const noop = () => {};
+
+// Same calculation as the stress-release report; a rail with incomplete inputs just shows dashes.
+function stressCells(params: StressInput) {
+  try {
+    const r = calculateStressRelease(params);
+    return [params.railType, formatStressNumber(params.neutralTemp), formatStressNumber(r.averageTemp), releaseMethodLabel(r.releaseMethod), formatStressNumber(r.pullLength), formatStressNumber(r.appliedPullForce), r.cutGap === null ? "—" : formatStressNumber(r.cutGap)];
+  } catch {
+    return Array<string>(7).fill("—");
+  }
+}
 
 const FORMATS = {
   A4: { label: "A4 ngang", size: "297mm 210mm", width: "297mm", px: 1000 },
@@ -63,7 +74,8 @@ export function TrackPrint({ layout, joints, symbols, onClose, projectName }: { 
           structures={{ placements: layout.placements, symbols, editingPlacementId: null, onEditPlacement: noop, onRemovePlacement: noop }}
         />
       </div>
-      <table><thead><tr><th>Mã</th><th>Dải ray</th><th>Ngày thi công</th><th>Lý trình thực</th><th>Chiều dài</th><th>Trạng thái</th></tr></thead><tbody>{plotted.map(({ rail, span }) => <tr key={rail.id}><td>{rail.code}</td><td>{rail.rowKey}</td><td>{rail.releaseDate ?? "—"}</td><td>{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td><td>{span.endMetres - span.startMetres} m</td><td>{rail.completedAt ? "Đã giải toả" : "Chưa hoàn thành"}</td></tr>)}</tbody></table>
+      <p>Bảng thống kê giải toả ứng suất từng thanh ray (tính như phiếu "Bảng tính toán giải tỏa ứng suất"): T khóa = nhiệt độ khóa đường, T ray = nhiệt độ ray trung bình; chiều dài kéo, khe hở cắt tính bằng mm; lực kéo tính bằng kN.</p>
+      <table><thead><tr><th>Mã</th><th>Dải ray</th><th>Ngày thi công</th><th>Lý trình thực</th><th>Dài (m)</th><th>Loại ray</th><th>T khóa (°C)</th><th>T ray (°C)</th><th>Phương pháp</th><th>Chiều dài kéo</th><th>Lực kéo</th><th>Khe hở cắt</th><th>Trạng thái</th></tr></thead><tbody>{plotted.map(({ rail, span }) => <tr key={rail.id}><td>{rail.code}</td><td>{rail.rowKey}</td><td>{rail.releaseDate ?? "—"}</td><td>{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td><td>{span.endMetres - span.startMetres}</td>{stressCells(rail.params).map((cell, i) => <td key={i}>{cell}</td>)}<td>{rail.completedAt ? "Đã giải toả" : "Chưa hoàn thành"}</td></tr>)}</tbody></table>
       <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}><b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b></div>
     </article>
   </div>, document.body);

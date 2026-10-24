@@ -181,7 +181,7 @@ export const RailGrid = memo(function RailGrid({
                   </div>
                   <div
                     data-placement={placement.id}
-                    className={`group absolute z-10 flex items-center ${structures.editingPlacementId === placement.id ? "rounded ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                    className={`group absolute z-10 hover:z-30 focus-within:z-30 flex items-center ${structures.editingPlacementId === placement.id ? "rounded ring-2 ring-blue-400 ring-offset-1" : ""}`}
                     style={{ left: box.left + box.width / 2, top: iconTop, transform: "translateX(-50%)" }}
                   >
                     <button
@@ -314,8 +314,6 @@ export const RailGrid = memo(function RailGrid({
 
               </div>
             )}
-            <span className="absolute bottom-0 left-0 text-[10px] text-slate-500">Km{formatChainage(extent.startMetres)}</span>
-            {planned > 0 && <span className="absolute bottom-0 text-[10px] text-slate-500" style={{ left: Math.max(0, lineWidth - 64) }}>Km{formatChainage(extent.endMetres)}</span>}
             </div>
           </div>
         </div>;

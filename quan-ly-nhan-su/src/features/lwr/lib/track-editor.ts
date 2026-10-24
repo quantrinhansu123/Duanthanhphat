@@ -635,7 +635,7 @@ const STRESS_NUMBER_KEYS: StressNumberKey[] = [
 /** Added after the first 60R2 save format; missing keys keep sample defaults. */
 const OPTIONAL_STRESS_NUMBER_KEYS: StressNumberKey[] = [
   "leftOuterMovement", "rightOuterMovement",
-  "jackCylinderArea", "minAnchorLength", "allowedGap", "lockTempOffset",
+  "jackCylinderArea", "minAnchorLength", "allowedGap", "lockTempOffset", "airTemp",
 ];
 
 export function validateStressParams(value: unknown): StressInput | null {
@@ -652,7 +652,7 @@ export function validateStressParams(value: unknown): StressInput | null {
     if (value.trackSide !== "LEFT" && value.trackSide !== "RIGHT") return null;
     params.trackSide = value.trackSide;
   }
-  for (const key of ["startChainage", "endChainage", "jointChainage"] as const) {
+  for (const key of ["startChainage", "endChainage", "jointChainage", "startTime", "endTime"] as const) {
     if (value[key] === undefined) continue;
     if (typeof value[key] !== "string") return null;
     params[key] = value[key];

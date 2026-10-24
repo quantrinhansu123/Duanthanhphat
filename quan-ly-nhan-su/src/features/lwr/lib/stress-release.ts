@@ -21,6 +21,9 @@ export interface StressInput {
   startChainage?: string;
   endChainage?: string;
   jointChainage?: string;
+  /** Thời điểm bấm Bắt đầu / Kết thúc tại hiện trường (ISO). */
+  startTime?: string;
+  endTime?: string;
   leftOuterMovement: number;
   rightOuterMovement: number;
   railType: string;
@@ -51,6 +54,8 @@ export interface StressInput {
   allowedGap: number;
   /** Biên độ khóa đường thiết kế (±°C), mặc định 5. */
   lockTempOffset: number;
+  /** Nhiệt độ không khí đo tại hiện trường (°C); chỉ ghi nhận, không tham gia công thức. */
+  airTemp: number;
   sideRollers: boolean;
   method: StressMethod;
 }
@@ -128,6 +133,7 @@ export const DEFAULT_STRESS_INPUT: StressInput = {
   minAnchorLength: DEFAULT_MIN_ANCHOR_LENGTH,
   allowedGap: DEFAULT_ALLOWED_GAP,
   lockTempOffset: DEFAULT_LOCK_TEMP_OFFSET,
+  airTemp: 30,
   sideRollers: false, method: "ATW",
 };
 
