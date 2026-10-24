@@ -863,6 +863,8 @@ export const PHRASES: Record<string, string> = {
   "Nhiên liệu": "Fuel",
   "Người cấp": "Supplied by",
   "lần cấp · ngày mới nhất trước": "supplies · newest first",
+  // ---- Shift col ----
+  "Ca": "Shift",
 };
 
 /** Thành phần chức vụ ghép bằng " - " (ví dụ "CHT - Kỹ sư - Thợ hàn"); khóa viết thường. */
