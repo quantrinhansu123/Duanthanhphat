@@ -55,6 +55,7 @@ function translate(raw: string): string {
   const days = core.match(/^(\d+) ngày$/);
   if (days) return lead + `${days[1]} days` + trail;
   if (/^\p{Lu}[\p{L}.]*( \p{Lu}[\p{L}.]*){1,6}$/u.test(core) && hasVietnameseDiacritics(core)) return lead + deaccent(core) + trail;
+  if (core.includes(", ") && hasVietnameseDiacritics(core) && core.split(", ").every((p) => /^\p{Lu}[\p{L}.]*( \p{Lu}[\p{L}.]*){1,6}$/u.test(p))) return lead + deaccent(core) + trail;
   // "Đã chọn 12 người" -> "12 people selected" (đếm động, không thể liệt kê trong từ điển).
   const picked = core.match(/^Đã chọn (\d+)(?: (người|mục|dự án|nhân sự))?$/);
   if (picked) return lead + `${picked[1]} ${{ "người": "people", "mục": "items", "dự án": "projects", "nhân sự": "staff" }[picked[2] ?? ""] ?? ""} selected`.replace("  ", " ") + trail;
@@ -73,6 +74,20 @@ function translate(raw: string): string {
   if (removeOne) return lead + `Remove ${removeOne[1]}` + trail;
   const delCourse = core.match(/^Xóa khóa đào tạo (.+)$/);
   if (delCourse) return lead + `Delete training course ${translate(delCourse[1])}` + trail;
+  const codeName = core.match(/^([A-Z0-9][\w.\-/]*) — (.+)$/);
+  if (codeName) return lead + `${codeName[1]} — ${translate(codeName[2])}` + trail;
+  const hours = core.match(/^([\d.,]+) giờ$/);
+  if (hours) return lead + `${hours[1]} h` + trail;
+  const wire = core.match(/^Dây hàn: (.+)$/);
+  if (wire) return lead + `Wire: ${wire[1]}` + trail;
+  const certDeleted = core.match(/^Đã xóa loại chứng chỉ “(.+)”\.$/);
+  if (certDeleted) return lead + `Certificate type “${translate(certDeleted[1])}” deleted.` + trail;
+  const certExists = core.match(/^Loại chứng chỉ "(.+)" đã có trong danh mục\.$/);
+  if (certExists) return lead + `Certificate type "${translate(certExists[1])}" is already in the catalog.` + trail;
+  const certExp = core.match(/^(.+) · Hết hạn: (.+)$/);
+  if (certExp) return lead + `${translate(certExp[1])} · Expires: ${certExp[2]}` + trail;
+  const certEdit = core.match(/^(Sửa|Xóa) loại chứng chỉ (.+)$/);
+  if (certEdit) return lead + `${certEdit[1] === "Sửa" ? "Edit" : "Delete"} certificate type ${translate(certEdit[2])}` + trail;
   // Tổ hàn N (N tùy ý) và chức vụ ghép "A - B - C" từ danh mục.
   const team = core.match(/^Tổ hàn (\d+)$/);
   if (team) return lead + `Welding team ${team[1]}` + trail;
