@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Warning } from "@/components/icons";
 import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { useLanguage } from "@/i18n/LanguageProvider";
 import { compareNewestDate } from "@/lib/dateOrder";
 import {
   buildQuarterlyPassRateSeries,
@@ -207,6 +208,7 @@ function buildSmoothLinePath(points: { x: number; y: number }[]) {
 
 function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const isEn = useLanguage().lang === "en";
 
   if (data.length === 0) {
     return (
@@ -334,10 +336,12 @@ function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
       {active && (
         <div className="mt-1 flex items-center justify-center gap-4 text-[11px] font-medium text-slate-500">
           <span>
-            <span className="font-bold text-slate-900">{active.label}</span> · {fmt(active.total)} mối kiểm tra
+            <span className="font-bold text-slate-900">{active.label}</span> · {fmt(active.total)} {isEn ? "welds inspected" : "mối kiểm tra"}
           </span>
           <span className={active.errors > 0 ? "text-rose-600 font-semibold" : "text-emerald-600 font-semibold"}>
-            {active.errors > 0 ? `${fmt(active.errors)} không đạt` : "Không có lỗi"}
+            {active.errors > 0
+              ? `${fmt(active.errors)} ${isEn ? "failed welds" : "không đạt"}`
+              : isEn ? "No failures" : "Không có lỗi"}
           </span>
         </div>
       )}
