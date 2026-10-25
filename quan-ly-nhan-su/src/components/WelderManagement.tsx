@@ -266,7 +266,7 @@ function MultiSelectCombobox({
       </button>
 
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-64 w-full min-w-full flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 flex max-h-64 w-max min-w-full max-w-[min(20rem,90vw)] flex-col gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg animate-in fade-in-50 duration-150">
           <div className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100">
             <span className="truncate">{title}</span>
             {count > 0 && (
@@ -300,7 +300,7 @@ function MultiSelectCombobox({
                     }}
                     className="h-4 w-4 accent-[#0047AB] rounded cursor-pointer"
                   />
-                  <span className="truncate">{opt}</span>
+                  <span className="break-words">{opt}</span>
                 </label>
               );
             })}
