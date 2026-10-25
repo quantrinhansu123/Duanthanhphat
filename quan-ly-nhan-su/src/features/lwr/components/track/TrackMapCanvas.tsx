@@ -4,9 +4,6 @@ import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "
 import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { trackExtent, TRACK_PIXELS_PER_METRE, type TrackLayout } from "@lwr/lib/track-editor";
 
-// Keeps the legend/header readable while no short rails are placed yet.
-const MIN_TRACK_WIDTH = 900;
-
 export const TrackMapCanvas = memo(function TrackMapCanvas({
   layout,
   children,
@@ -23,7 +20,8 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
 
   const columns = Math.max(...layout.rows.map((item) => item.cells.length), 1);
   const extent = trackExtent(layout.rows);
-  const trackWidth = Math.max(MIN_TRACK_WIDTH, (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE);
+  const plannedWidth = (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE;
+  const trackWidth = plannedWidth > 0 ? plannedWidth : 240;
 
   const updateArrows = useCallback(() => {
     const el = scrollRef.current;
@@ -103,7 +101,7 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
           if (e.key === "ArrowRight") { e.preventDefault(); scrollByStep(1); }
         }}
       >
-        <div style={{ width: 150 + trackWidth, minWidth: 150 + trackWidth }}>
+        <div style={{ width: `max(100%, ${150 + trackWidth + 56}px)` }}>
           {children}
         </div>
       </div>

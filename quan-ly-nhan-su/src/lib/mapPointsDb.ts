@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { mapPoints as seedMapPoints, type MapPoint } from "@/data/mapPoints";
+import { normalizeCoordinateCode, parseCoordinateCode } from "@/lib/weldCode";
 
 export type ToaDoRow = {
   id: string;
@@ -171,8 +172,11 @@ export async function insertMapPoint(
     return { error: "Chưa cấu hình NEXT_PUBLIC_SUPABASE_URL / ANON_KEY" };
   }
 
-  const code = input.code.trim().toUpperCase();
+  const code = normalizeCoordinateCode(input.code);
   if (!code) return { error: "Nhập mã điểm" };
+  if (!parseCoordinateCode(code)) {
+    return { error: "Mã Autolisp phải là HT/HP/TT/TP + số (vd HT0001, TT0166)" };
+  }
   if (!Number.isFinite(input.longitude) || !Number.isFinite(input.latitude)) {
     return { error: "Kinh độ / vĩ độ không hợp lệ" };
   }
@@ -244,8 +248,9 @@ export async function upsertMapPoints(
   const inserts = rows.map((r, idx) => {
     const codeKey = r.weldCode ? r.weldCode.trim().toUpperCase() : "";
     const resolvedWeldId = r.weldId?.trim() || (codeKey ? weldIdByCode.get(codeKey) : null) || null;
+    const maDiem = normalizeCoordinateCode(r.code) || r.code.trim().toUpperCase();
     return {
-      ma_diem: r.code.trim().toUpperCase(),
+      ma_diem: maDiem,
       kinh_do: r.longitude,
       vi_do: r.latitude,
       ly_trinh: r.chainage?.trim() || null,

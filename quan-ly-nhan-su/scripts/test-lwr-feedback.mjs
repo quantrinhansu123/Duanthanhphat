@@ -87,7 +87,7 @@ test("ambiguous chainage never assigns a weld to the wrong one of four rails", (
   const ut = workRows.find((row) => row.cells[0]?.id?.startsWith("UT"));
   ut.cells[0].placed = true;
   assert.equal(jointDisplayMethod(otherEnd, [planned], workRows), "FBW");
-  assert.equal(jointDisplayMethod(mid, [planned], workRows, planned.id), undefined);
+  assert.equal(jointDisplayMethod(mid, [planned], workRows, planned.id), "FBW");
   assert.equal(jointDisplayMethod(later, [planned], workRows, planned.id), undefined);
   const longAtw = rail(0, 17580, "lw");
   longAtw.params.method = "ATW";
@@ -98,9 +98,10 @@ test("ambiguous chainage never assigns a weld to the wrong one of four rails", (
   ut.cells[1].placed = true;
   const midChip = { ...plannedJoint, id: "between", metres: 500, chainage: "0+500" };
   const nextEnd = { ...plannedJoint, id: "next-end", metres: 1000, chainage: "1+000" };
-  assert.equal(jointDisplayMethod(midChip, [longAtw], workRows), undefined);
+  assert.equal(jointDisplayMethod(midChip, [longAtw], workRows), "ATW");
   assert.equal(jointDisplayMethod(nextEnd, [longAtw], workRows), "ATW");
-  assert.equal(jointDisplayMethod(midChip, [longAtw], workRows, longAtw.id, ut.cells[0].id), undefined);
+  const betweenPlaced = buildRailJoints(workRows, [], 0, {}, [longAtw]).joints;
+  assert.ok(betweenPlaced.some((j) => j.rowKey === "UT" && j.metres === 500 && j.leftCellId === ut.cells[0].id));
   assert.equal(jointDisplayMethod(later, [longAtw], workRows), undefined);
 });
 
@@ -109,6 +110,6 @@ test("actual work endpoints create weld points without moving planned boundaries
   const joints = buildRailJoints(rows, [], 0, {}, [work]).joints;
   assert.ok(joints.some(j => j.rowKey === "UT" && j.metres === 234));
   assert.ok(joints.some(j => j.rowKey === "UT" && j.metres === 789));
-  assert.ok(joints.some(j => j.rowKey === "UT" && j.metres === 500));
+  assert.equal(joints.some(j => j.rowKey === "UT" && j.metres === 500), false);
   assert.equal(rows[0].cells[0].to, "0+500");
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Check, Plus, RefreshCw, Shapes } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
@@ -14,7 +14,6 @@ import {
   parseChainage,
   railRowKey,
   trackExtent,
-  visibleLongRailSpan,
   type LongRail,
   type TrackLayout,
   type TrackPlacement,
@@ -23,7 +22,6 @@ import { RAIL_TYPE_OPTIONS } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
-import { LongRailTable } from "./LongRailTable";
 import { TrackMapCanvas } from "./TrackMapCanvas";
 import type { StructureLayer } from "./RailGrid";
 
@@ -34,7 +32,6 @@ interface TrackSchematicProps {
   symbols: StructureSymbol[];
   ready: boolean;
   symbolError: string | null;
-  selectedLongRailId: string | null;
   selectedCellId?: string | null;
   onReloadSymbols: () => void;
   onPlacement: (placement: TrackPlacement) => boolean;
@@ -43,10 +40,6 @@ interface TrackSchematicProps {
   onPlan: (start: string, end: string) => boolean;
   onClearPlan: () => boolean;
   onLongRail: (longRail: LongRail, nextRows?: RailRow[]) => boolean;
-  onRemoveLongRail: (id: string) => void;
-  onSelectLongRail: (id: string) => void;
-  /** Yêu cầu nạp một thanh dài vào form sửa (bấm thanh trên sơ đồ). n đổi để kích hoạt lại. */
-  editRequest?: { id: string; n: number } | null;
   children: (structures: StructureLayer) => ReactNode;
 }
 
@@ -68,7 +61,6 @@ export function TrackSchematic({
   symbols,
   ready,
   symbolError,
-  selectedLongRailId,
   selectedCellId,
   onReloadSymbols,
   onPlacement,
@@ -77,9 +69,6 @@ export function TrackSchematic({
   onPlan,
   onClearPlan,
   onLongRail,
-  onRemoveLongRail,
-  onSelectLongRail,
-  editRequest,
   children,
 }: TrackSchematicProps) {
   const [rowKey, setRowKey] = useState("UT");
@@ -111,6 +100,11 @@ export function TrackSchematic({
   const hasCells = layout.rows.some((item) => item.cells.length > 0);
 
   const lrRow = layout.rows.find((item) => railRowKey(item) === lrRowKey) ?? layout.rows[0];
+  const editingLongRail = editingLongRailId
+    ? layout.longRails.find((item) => item.id === editingLongRailId)
+    : undefined;
+  /** Đã giải toả xong → khóa lý trình; bỏ tick Hoàn thành để mở lại nếu cần. */
+  const chainageLocked = Boolean(editingLongRail?.completedAt) && completed;
   const lrStartMetres = parseChainage(lrFrom);
   const lrEndMetres = parseChainage(lrTo);
   const lrLength = lrStartMetres !== null && lrEndMetres !== null && lrEndMetres > lrStartMetres
@@ -133,38 +127,20 @@ export function TrackSchematic({
   }, []);
 
   const edit = useCallback((placement: TrackPlacement) => {
-    setEditingId(placement.id); setRowKey(placement.rowKey); setStructureFrom(formatChainage(getPlacementSpan(layout.rows, placement)?.startMetres ?? 0));
-    setStructureTo(formatChainage(getPlacementSpan(layout.rows, placement)?.endMetres ?? 0)); setSymbolId(placement.symbolId); setLabel(placement.label);
-    setFormError(null); setNotice(null);
+    const owner = layout.rows.find((item) => railRowKey(item) === placement.rowKey);
+    const lineAnchor =
+      layout.rows.find((item) => item.line === owner?.line && item.rail === "Ray trái")
+      ?? owner
+      ?? layout.rows[0];
+    setEditingId(placement.id);
+    setRowKey(railRowKey(lineAnchor));
+    setStructureFrom(formatChainage(getPlacementSpan(layout.rows, placement)?.startMetres ?? 0));
+    setStructureTo(formatChainage(getPlacementSpan(layout.rows, placement)?.endMetres ?? 0));
+    setSymbolId(placement.symbolId);
+    setLabel(placement.label);
+    setFormError(null);
+    setNotice(null);
   }, [layout.rows]);
-
-  const editLongRail = useCallback((longRail: LongRail) => {
-    const span = visibleLongRailSpan(layout.rows, longRail);
-    setEditingLongRailId(longRail.id);
-    setLrRowKey(longRail.rowKey);
-    setReleaseDate(longRail.releaseDate ?? "");
-    setCompleted(Boolean(longRail.completedAt));
-    setLrTemp(String(longRail.params.airTemp));
-    setLrFrom(span ? formatChainage(span.startMetres) : "");
-    setLrTo(span ? formatChainage(span.endMetres) : "");
-    setLrRailType(longRail.params.railType || defaultRailTypeForNewLongRail(layout.longRails));
-    setLrCode(longRail.code);
-    setLrLabel(longRail.label);
-    setLrFormError(null);
-    setLrNotice(null);
-  }, [layout]);
-
-  const longRailFormRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!editRequest) return;
-    const target = layout.longRails.find((item) => item.id === editRequest.id);
-    if (!target) return;
-    editLongRail(target);
-    setLrNotice(`Đang sửa ${target.code}: đổi lý trình cuối rồi bấm lưu để kéo dài thanh.`);
-    longRailFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Chỉ chạy khi có yêu cầu mới, không chạy lại mỗi lần layout đổi.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editRequest?.n]);
 
   const removePlacement = useCallback((id: string) => {
     onRemove(id);
@@ -178,10 +154,17 @@ export function TrackSchematic({
     const span = startMetres === null || endMetres === null ? null : getPlacementSpan(layout.rows, { rowKey, startCellId: "", endCellId: "", startMetres, endMetres });
     if (!span) { setFormError("Nhập lý trình đầu/cuối hợp lệ trong phạm vi tuyến đã rải."); return; }
     if (!currentSymbol) { setFormError("Hãy chọn ký hiệu đang có trong danh mục công trình."); return; }
+    const lineAnchor =
+      layout.rows.find((item) => item.line === row.line && item.rail === "Ray trái") ?? row;
     const placement: TrackPlacement = {
-      id: editingId ?? crypto.randomUUID(), rowKey: railRowKey(row),
-      startCellId: span.startCell.id, endCellId: span.endCell.id, startMetres: span.startMetres, endMetres: span.endMetres,
-      symbolId: currentSymbol.id, label: label.trim() || currentSymbol.name,
+      id: editingId ?? crypto.randomUUID(),
+      rowKey: railRowKey(lineAnchor),
+      startCellId: span.startCell.id,
+      endCellId: span.endCell.id,
+      startMetres: span.startMetres,
+      endMetres: span.endMetres,
+      symbolId: currentSymbol.id,
+      label: label.trim() || currentSymbol.name,
     };
     if (onPlacement(placement)) { clearEditor(); setNotice("Đã lưu công trình trên sơ đồ."); }
   }
@@ -189,18 +172,18 @@ export function TrackSchematic({
   return (
     <section className="space-y-3" aria-label="Bố trí công trình trên tuyến">
       <form className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4" onSubmit={e => { e.preventDefault(); if (onPlan(planFrom, planTo)) setNotice("Đã rải tuyến, chốt đúng lý trình cuối."); }}>
-        <div className="w-full"><h2 className="font-bold">Rải ray tự động theo lý trình</h2><p className="text-xs text-slate-500">Các mốc 500 m; thanh cuối kết thúc đúng lý trình chốt, ví dụ Km17+584.</p></div>
+        <div className="w-full"><h2 className="font-bold">Bước 1 · Khai tuyến</h2><p className="text-xs text-slate-500">Đánh số lý trình ~500 m trên 2 đường tim (Thượng / Hạ). Hiện 4 ray trái–phải + 2 tim tuyến. Thanh cuối chốt đúng lý trình, ví dụ Km17+584.</p></div>
         <label className="text-xs">Lý trình đầu tuyến<input className={inputClass} value={planFrom} onChange={e => setPlanFrom(e.target.value)} placeholder="Km0+000" /></label>
         <label className="text-xs">Chốt lý trình cuối tuyến<input className={inputClass} value={planTo} onChange={e => setPlanTo(e.target.value)} placeholder="Km17+584" required /></label>
         <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật tuyến</button>
         <button type="button" disabled={!ready || !hasCells} onClick={() => { if (onClearPlan()) setNotice("Đã xoá sơ đồ rải ray."); }} className="h-10 rounded border px-3 text-sm text-red-700">Xoá rải ray</button>
       </form>
-      <div ref={longRailFormRef} className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold">Thi công giải toả trên 4 dải ray</h2>
+            <h2 className="text-base font-bold">Bước 3 · Tạo thanh LWR</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Nhập độc lập ngày thi công, dải ray và lý trình thực tế, không làm thay đổi sơ đồ rải ray. Đánh dấu Hoàn thành để ghi đoạn đã giải toả lên tuyến.
+              Chọn ray trái/phải của từng tuyến, nhập lý trình đầu–cuối — thanh hiện <b>xám</b> trên tim ray. Mỗi ngày hàn xong, sửa lý trình cuối để tăng chiều dài. Bước 4: mở thanh → giải toả → Hoàn thành → <b>xanh</b> nếu T≥30°C, <b>vàng-cam</b> nếu T&lt;30°C.
             </p>
           </div>
         </div>
@@ -212,9 +195,9 @@ export function TrackSchematic({
               ? layout.longRails.find((item) => item.id === editingLongRailId)
               : undefined;
             const code = (lrCode.trim() || existing?.code || nextLongRailCode(layout.longRails)).trim();
-            if (!code) { setLrFormError("Nhập mã thanh dài."); return; }
+            if (!code) { setLrFormError("Nhập mã LWR."); return; }
             if (layout.longRails.some((item) => item.code === code && item.id !== editingLongRailId)) {
-              setLrFormError("Mã thanh dài đã tồn tại.");
+              setLrFormError("Mã LWR đã tồn tại.");
               return;
             }
             if (lrStartMetres === null || lrEndMetres === null) {
@@ -223,6 +206,14 @@ export function TrackSchematic({
             }
             if (lrEndMetres <= lrStartMetres) {
               setLrFormError("Lý trình cuối phải lớn hơn lý trình đầu.");
+              return;
+            }
+            if (
+              existing?.completedAt
+              && completed
+              && (existing.startMetres !== lrStartMetres || existing.endMetres !== lrEndMetres || existing.rowKey !== key)
+            ) {
+              setLrFormError("Đoạn đã giải toả xong — lý trình bị khóa. Bỏ tick Hoàn thành nếu cần mở lại để sửa.");
               return;
             }
             if (!releaseDate) { setLrFormError("Chọn ngày thi công."); return; }
@@ -256,9 +247,9 @@ export function TrackSchematic({
               setLrFrom("");
               setLrTo("");
               setLrFormError(null);
-              setLrNotice(editingLongRailId ? "Đã cập nhật thanh dài." : `Đã thêm ${code} · ${lrLength} m và đánh dấu trên sơ đồ.`);
+              setLrNotice(editingLongRailId ? "Đã cập nhật lý trình." : `Đã ghi lý trình ${code} · ${lrLength} m.`);
             } else {
-              setLrFormError("Không lưu được thanh dài. Kiểm tra chồng lấn hoặc thông báo lỗi phía trên.");
+              setLrFormError("Không lưu được lý trình. Kiểm tra chồng lấn hoặc thông báo lỗi phía trên.");
             }
           }}
           className="mt-4 space-y-3"
@@ -269,7 +260,7 @@ export function TrackSchematic({
                 className={inputClass}
                 value={railRowKey(lrRow)}
                 onChange={(event) => setLrRowKey(event.target.value)}
-                disabled={!ready}
+                disabled={!ready || chainageLocked}
               >
                 {layout.rows.map((item) => (
                   <option key={railRowKey(item)} value={railRowKey(item)}>{item.line} · {item.rail}</option>
@@ -277,17 +268,19 @@ export function TrackSchematic({
               </select>
             </label>
             <label className="text-xs text-slate-600">Lý trình đầu
-              <input className={inputClass} value={lrFrom} onChange={(event) => setLrFrom(event.target.value)} placeholder="0+000" disabled={!ready} />
+              <input className={inputClass} value={lrFrom} onChange={(event) => setLrFrom(event.target.value)} placeholder="0+000" disabled={!ready || chainageLocked} />
             </label>
-            <label className="text-xs text-slate-600">Lý trình cuối
-              <input className={inputClass} value={lrTo} onChange={(event) => setLrTo(event.target.value)} placeholder="0+800" disabled={!ready} />
+            <label className="text-xs text-slate-600">
+              Lý trình cuối
+              <span className="ml-1 font-normal text-teal-700">(cập nhật hàng ngày)</span>
+              <input className={inputClass} value={lrTo} onChange={(event) => setLrTo(event.target.value)} placeholder="0+800" disabled={!ready || chainageLocked} />
             </label>
             <label className="text-xs text-slate-600">Loại ray
               <select className={inputClass} value={lrRailType} onChange={(event) => setLrRailType(event.target.value)} disabled={!ready}>
                 {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
-            <label className="text-xs text-slate-600">Mã thanh dài
+            <label className="text-xs text-slate-600">Mã LWR
               <input
                 className={inputClass}
                 value={lrCode}
@@ -304,13 +297,20 @@ export function TrackSchematic({
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs">Ngày thi công<input type="date" required className={inputClass} value={releaseDate} onChange={e => setReleaseDate(e.target.value)} /></label>
             <label className="text-xs">Nhiệt độ giải toả (°C)<input inputMode="decimal" className={`${inputClass} max-w-32`} value={lrTemp} onChange={e => setLrTemp(e.target.value)} /></label>
-            <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={completed} onChange={e => setCompleted(e.target.checked)} />Hoàn thành giải toả</label>
+            <label className="flex h-10 items-center gap-2 text-sm" title="Khi đã giải toả xong, lý trình đầu–cuối bị khóa">
+              <input type="checkbox" checked={completed} onChange={(e) => setCompleted(e.target.checked)} />
+              Hoàn thành giải toả (khóa lý trình)
+            </label>
             <div className="flex h-10 items-center rounded-md bg-slate-50 px-3 text-xs text-slate-600">
-              {lrLength !== null ? `Chiều dài đoạn giải tỏa: ${lrLength} m · Km ${formatChainage(lrStartMetres!)} – ${formatChainage(lrEndMetres!)}` : "Nhập lý trình đầu và cuối để tính chiều dài"}
+              {chainageLocked
+                ? "Lý trình đã khóa — thanh đã giải toả xong"
+                : lrLength !== null
+                  ? `Chiều dài đang theo dõi: ${lrLength} m · Km ${formatChainage(lrStartMetres!)} – ${formatChainage(lrEndMetres!)}`
+                  : "Nhập lý trình đầu và cuối để tính chiều dài"}
             </div>
             <button type="submit" disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md bg-teal-700 px-3 text-sm font-medium text-white disabled:opacity-40">
               {editingLongRailId ? <Check className="size-4" /> : <Plus className="size-4" />}
-              {completed ? "Hoàn thành" : "Lưu đoạn thi công"}
+              {completed ? "Lưu & khóa lý trình" : editingLongRailId ? "Cập nhật lý trình" : "Tạo thanh LWR"}
             </button>
             {editingLongRailId && (
               <button type="button" onClick={clearLongRailEditor} className="h-10 rounded-md border px-3 text-sm">Hủy sửa</button>
@@ -321,29 +321,18 @@ export function TrackSchematic({
         </form>
       </div>
 
-      <LongRailTable
-        layout={layout}
-        selectedId={selectedLongRailId}
-        onSelect={onSelectLongRail}
-        onEdit={editLongRail}
-        onRemove={(id) => {
-          onRemoveLongRail(id);
-          if (editingLongRailId === id) clearLongRailEditor();
-        }}
-      />
-
       <TrackMapCanvas layout={layout}>
         {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
       </TrackMapCanvas>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-base font-bold">Bố trí công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Nhập lý trình thực của công trình, không cần trùng biên thanh ray.</p></div>
+          <div><h2 className="text-base font-bold">Bước 2 · Nhập công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chỉ chọn tuyến Thượng hoặc Hạ (không phân ray trái/phải). Công trình hiện trên đường tim tuyến.</p></div>
           <Link href="/lwr-cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-            <label className="text-xs text-slate-600">Dải ray<select className={inputClass} value={railRowKey(row)} onChange={(event) => { setRowKey(event.target.value); setStructureFrom(""); setStructureTo(""); }} disabled={!ready}>{layout.rows.map((item) => <option key={railRowKey(item)} value={railRowKey(item)}>{item.line} · {item.rail}</option>)}</select></label>
+            <label className="text-xs text-slate-600">Tuyến (Thượng / Hạ)<select className={inputClass} value={row?.line ?? ""} onChange={(event) => { const first = layout.rows.find((item) => item.line === event.target.value && item.rail === "Ray trái") ?? layout.rows.find((item) => item.line === event.target.value); if (first) { setRowKey(railRowKey(first)); setStructureFrom(""); setStructureTo(""); } }} disabled={!ready}>{Array.from(new Map(layout.rows.map((item) => [item.line, item.line])).keys()).map((line) => <option key={line} value={line}>{line}</option>)}</select></label>
             <label className="text-xs text-slate-600">Lý trình đầu công trình<input className={inputClass} value={structureFrom} onChange={e => setStructureFrom(e.target.value)} placeholder="Km0+123" /></label>
             <label className="text-xs text-slate-600">Lý trình cuối công trình<input className={inputClass} value={structureTo} onChange={e => setStructureTo(e.target.value)} placeholder="Km0+789" /></label>
             <label className="text-xs text-slate-600">Ký hiệu công trình<select className={inputClass} value={currentSymbol?.id ?? ""} onChange={(event) => setSymbolId(event.target.value)} disabled={!ready || !symbols.length}><option value="" disabled>Chọn từ danh mục ký hiệu</option>{symbols.map((symbol) => <option key={symbol.id} value={symbol.id}>{symbol.name} ({symbol.code})</option>)}</select></label>

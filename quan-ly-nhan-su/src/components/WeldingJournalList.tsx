@@ -38,8 +38,7 @@ import {
   isWeldCodeTaken,
   loadJournalProjectOptions,
   loadLatestProjectWeld,
-  loadMachineFieldCodesForMachine,
-  loadSiteFieldCodesForProject,
+  loadMachineFieldCodesForSuggestion,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
   normalizeWeldTime,
@@ -58,10 +57,13 @@ import { compareNewestDate } from "@/lib/dateOrder";
 import {
   buildWeldCodePrefix,
   bumpTrailingCode,
+  detectMachineWeldNumbering,
+  fieldCodeFromSystemCode,
   hasOwnWeldSitePrefix,
+  machineWeldCodeHint,
+  machineWeldCodePlaceholder,
   normalizeWeldSitePrefix,
-  suggestMachineWeldCode,
-  suggestSiteFieldCode,
+  suggestMachineWeldCodeForMachine,
   suggestWeldCode,
 } from "@/lib/weldCode";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
@@ -80,7 +82,7 @@ import { useLanguage } from "@/i18n/LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
-const SHOW_WELD_GPS = false;
+const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
 type JournalProjectOption = { id: string; label: string; ma_du_an: string };
@@ -361,7 +363,6 @@ function JournalFormModal({
     { value: string; label: string; isoDate: string }[]
   >([]);
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
-  const [siteFieldCodes, setSiteFieldCodes] = useState<string[]>([]);
   const [machineFieldCodes, setMachineFieldCodes] = useState<string[]>([]);
   const [siteCodeEdited, setSiteCodeEdited] = useState(false);
   const [machineCodeEdited, setMachineCodeEdited] = useState(false);
@@ -529,32 +530,19 @@ function JournalFormModal({
   }, [open, mode, suggestedCode, form.ma_lich_su]);
 
   useEffect(() => {
-    if (!open || !form.du_an_id) {
-      setSiteFieldCodes([]);
-      return;
-    }
-    if (mode === "create") setSiteCodeEdited(false);
-    let active = true;
-    loadSiteFieldCodesForProject(form.du_an_id)
-      .then((codes) => {
-        if (active) setSiteFieldCodes(codes);
-      })
-      .catch(() => {
-        if (active) setSiteFieldCodes([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [open, mode, form.du_an_id]);
+    if (!open || mode === "edit") return;
+    setSiteCodeEdited(false);
+  }, [open, mode, form.du_an_id, form.cong_nghe_han, form.performedAt]);
 
   useEffect(() => {
-    if (!open || !form.may_id) {
+    if (!open || !form.performedAt) {
       setMachineFieldCodes([]);
       return;
     }
     if (mode === "create") setMachineCodeEdited(false);
+    const machine = machines.find((item) => item.id === form.may_id);
     let active = true;
-    loadMachineFieldCodesForMachine(form.may_id)
+    loadMachineFieldCodesForSuggestion(form.performedAt, machine)
       .then((codes) => {
         if (active) setMachineFieldCodes(codes);
       })
@@ -564,17 +552,17 @@ function JournalFormModal({
     return () => {
       active = false;
     };
-  }, [open, mode, form.may_id]);
+  }, [open, mode, form.performedAt, form.may_id, machines]);
 
   const suggestedSiteCode = useMemo(() => {
     if (mode === "edit") return form.ma_hien_truong;
-    return suggestSiteFieldCode(sitePrefix, siteFieldCodes);
-  }, [mode, form.ma_hien_truong, sitePrefix, siteFieldCodes]);
+    return fieldCodeFromSystemCode(suggestedCode) || form.ma_hien_truong;
+  }, [mode, form.ma_hien_truong, suggestedCode]);
 
   const suggestedMachineCode = useMemo(() => {
     if (mode === "edit") return form.ten_moi_han_theo_may;
-    return suggestMachineWeldCode(selectedMachine?.code ?? "", machineFieldCodes);
-  }, [mode, form.ten_moi_han_theo_may, selectedMachine?.code, machineFieldCodes]);
+    return suggestMachineWeldCodeForMachine(form.performedAt, machineFieldCodes, selectedMachine);
+  }, [mode, form.ten_moi_han_theo_may, form.performedAt, machineFieldCodes, selectedMachine]);
 
   useEffect(() => {
     if (!open || mode === "edit" || siteCodeEdited) return;
@@ -627,6 +615,7 @@ function JournalFormModal({
 
   function pickMachine(machineId: string) {
     const machine = machines.find((item) => item.id === machineId);
+    if (mode === "create") setMachineCodeEdited(false);
     setForm((current) => {
       const welderCertificates = welders.find((welder) => welder.id === current.tho_han_id)?.certificates ?? [];
       const nextCertificate =
@@ -1255,6 +1244,43 @@ function JournalFormModal({
 
           {!linkedActive && (
           <>
+          {!quickActive && unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Điểm Autolisp (HT/HP/TT/TP)
+              <SelectMenu
+                value={form.toa_do_id}
+                onChange={(id) => {
+                  const pt = unlinkedGpsPoints.find((p) => p.id === id);
+                  if (pt) {
+                    setForm((prev) => ({
+                      ...prev,
+                      toa_do_id: id,
+                      ly_trinh: pt.chainage || prev.ly_trinh,
+                      kinh_do: String(pt.longitude),
+                      vi_do: String(pt.latitude),
+                    }));
+                  } else {
+                    setForm((prev) => ({ ...prev, toa_do_id: "" }));
+                  }
+                }}
+                options={[
+                  { value: "", label: "— Chưa gán điểm Autolisp —" },
+                  ...unlinkedGpsPoints.map((pt) => ({
+                    value: pt.id,
+                    label: `${pt.code}${pt.chainage ? ` · ${pt.chainage}` : ""}`,
+                    hint: `${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
+                  })),
+                ]}
+                searchable={unlinkedGpsPoints.length > 5}
+                searchPlaceholder="Tìm HT/HP/TT/TP hoặc lý trình..."
+                className="mt-1.5"
+                buttonClassName="h-10 shadow-2xs font-mono"
+              />
+              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+                Chọn điểm thiết kế → tự điền Km/GPS. Hàn xen kẽ trái/phải thì chọn lại điểm.
+              </span>
+            </label>
+          )}
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
             <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               <label htmlFor="journal-weld-code">Mã hệ thống</label>
@@ -1262,26 +1288,26 @@ function JournalFormModal({
                 id="journal-weld-code"
                 value={form.ma_lich_su}
                 readOnly
-                placeholder="PHQ-ATW-SX001"
+                placeholder={`${sitePrefix}-FBW-25-10-26-0001`}
                 className="mt-1.5 h-10 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs sm:text-sm text-slate-800 shadow-2xs outline-hidden font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Tự tăng theo dự án + công nghệ + loại mối. Không chỉnh tay.
+                {sitePrefix}-CN-DD-MM-YY-xxxx · TT 1→n theo dự án. Không chỉnh tay.
               </span>
             </div>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Mã hiện trường
+              Mã hiện trường (sơn bụng ray)
               <input
                 value={form.ma_hien_truong}
                 onChange={(event) => {
                   setSiteCodeEdited(true);
                   setForm({ ...form, ma_hien_truong: event.target.value.toUpperCase() });
                 }}
-                placeholder={`${sitePrefix}-HT001`}
+                placeholder="FBW-25-10-26-0001"
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Sửa được · nhớ lần cuối theo dự án · tự tăng số TT.
+                CN-DD-MM-YY-xxxx · cùng số TT mã hệ thống · sửa được.
               </span>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1290,13 +1316,18 @@ function JournalFormModal({
                 value={form.ten_moi_han_theo_may}
                 onChange={(event) => {
                   setMachineCodeEdited(true);
-                  setForm({ ...form, ten_moi_han_theo_may: event.target.value.toUpperCase() });
+                  const raw = event.target.value;
+                  const scheme = detectMachineWeldNumbering(selectedMachine);
+                  setForm({
+                    ...form,
+                    ten_moi_han_theo_may: scheme === "k922" ? raw.replace(/[^\d]/g, "") : raw.toUpperCase(),
+                  });
                 }}
-                placeholder={selectedMachine?.code ? `${selectedMachine.code}00001` : "Theo mã máy"}
+                placeholder={machineWeldCodePlaceholder(form.performedAt, selectedMachine)}
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Sửa được · gợi ý theo máy đã chọn · tự tăng trên máy.
+                {machineWeldCodeHint(selectedMachine)}
               </span>
             </label>
           </div>
@@ -1633,6 +1664,7 @@ export default function WeldingJournalList({
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
 
+  const [searchDraft, setSearchDraft] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
@@ -1682,7 +1714,10 @@ export default function WeldingJournalList({
     const initialQuery = params.get("query")?.trim() || params.get("q")?.trim() || "";
     const from = params.get("from")?.trim() || "";
     const to = params.get("to")?.trim() || from;
-    if (initialQuery) setAppliedQuery(initialQuery);
+    if (initialQuery) {
+      setSearchDraft(initialQuery);
+      setAppliedQuery(initialQuery);
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(from)) setDateFrom(from);
     if (/^\d{4}-\d{2}-\d{2}$/.test(to)) setDateTo(to);
   }, []);
@@ -2202,23 +2237,29 @@ export default function WeldingJournalList({
         sitePrefix,
         values.loai_moi_han,
       );
-      const machineOpt = machineOptions.find((item) => item.id === values.may_id);
-      const [prefixCodes, siteCodes, machineCodes] = await Promise.all([
+      const machine = machineOptions.find((item) => item.id === values.may_id);
+      const scheme = detectMachineWeldNumbering(machine);
+      const [prefixCodes, machineCodesDay0] = await Promise.all([
         loadWeldCodesWithPrefix(prefix),
-        loadSiteFieldCodesForProject(values.du_an_id),
-        values.may_id ? loadMachineFieldCodesForMachine(values.may_id) : Promise.resolve([] as string[]),
+        loadMachineFieldCodesForSuggestion(values.dateFrom, machine),
       ]);
       const usedCodes = new Set(prefixCodes);
-      // Cùng rule Thủ công: ưu tiên mã đang hiện trên form (đã gợi ý / user sửa),
-      // nếu trống thì lấy mã tiếp theo từ DB.
-      let siteCode =
-        values.ma_hien_truong?.trim().toUpperCase() ||
-        suggestSiteFieldCode(sitePrefix, siteCodes);
-      let machineCode =
-        values.ten_moi_han_theo_may?.trim().toUpperCase() ||
-        suggestMachineWeldCode(machineOpt?.code ?? "", machineCodes);
+      const usedMachineCodes = new Set(machineCodesDay0);
+      let lastSiteCode = values.ma_hien_truong?.trim().toUpperCase() || "";
+      let lastMachineCode = values.ten_moi_han_theo_may?.trim().toUpperCase() || "";
       let done = 0;
+      let prevDate = "";
       for (const date of dates) {
+        if (date !== prevDate && scheme !== "k922") {
+          const dayCodes =
+            date === values.dateFrom
+              ? machineCodesDay0
+              : await loadMachineFieldCodesForSuggestion(date, machine);
+          for (const code of dayCodes) usedMachineCodes.add(code);
+          prevDate = date;
+        } else if (date !== prevDate) {
+          prevDate = date;
+        }
         for (let index = 0; index < count; index += 1) {
           const maLichSu = suggestWeldCode(
             values.cong_nghe_han,
@@ -2228,14 +2269,19 @@ export default function WeldingJournalList({
             values.loai_moi_han,
           );
           usedCodes.add(maLichSu);
-          const nextSiteCode = siteCode ? (done === 0 ? siteCode : bumpTrailingCode(siteCode)) : "";
-          const nextMachineCode = machineCode
-            ? done === 0
-              ? machineCode
-              : bumpTrailingCode(machineCode)
-            : "";
-          if (nextSiteCode) siteCode = nextSiteCode;
-          if (nextMachineCode) machineCode = nextMachineCode;
+          const nextSiteCode =
+            done === 0 && lastSiteCode
+              ? lastSiteCode
+              : fieldCodeFromSystemCode(maLichSu);
+          const nextMachineCode =
+            done === 0 && lastMachineCode && (scheme === "k922" || prevDate === date)
+              ? lastMachineCode
+              : suggestMachineWeldCodeForMachine(date, [...usedMachineCodes], machine);
+          if (nextSiteCode) lastSiteCode = nextSiteCode;
+          if (nextMachineCode) {
+            lastMachineCode = nextMachineCode;
+            usedMachineCodes.add(nextMachineCode);
+          }
           await insertWeldJournalEntry({
             ma_lich_su: maLichSu,
             du_an_id: values.du_an_id,
@@ -2273,8 +2319,8 @@ export default function WeldingJournalList({
       setEditingForm(null);
       rememberJournalEntry({
         ...values,
-        ma_hien_truong: siteCode || values.ma_hien_truong,
-        ten_moi_han_theo_may: machineCode || values.ten_moi_han_theo_may,
+        ma_hien_truong: lastSiteCode || values.ma_hien_truong,
+        ten_moi_han_theo_may: lastMachineCode || values.ten_moi_han_theo_may,
       });
       refetch();
       showToast(`Đã điền ${done.toLocaleString("vi-VN")} mối hàn`);
@@ -2447,6 +2493,45 @@ export default function WeldingJournalList({
       </div>
 
       <div className="mb-4 space-y-2.5">
+       <form
+         className="flex flex-col gap-2 sm:flex-row sm:items-end"
+         onSubmit={(event) => {
+           event.preventDefault();
+           setAppliedQuery(searchDraft.trim());
+           setPage(1);
+         }}
+       >
+         <label className="min-w-0 flex-1 text-xs font-semibold text-slate-700">
+           Tìm theo mã (hệ thống / hiện trường / trong máy)
+           <input
+             value={searchDraft}
+             onChange={(event) => setSearchDraft(event.target.value)}
+             placeholder="VD: PQ-FBW-… · FBW-25-10-26-0001 · 2026-9-11-001 · 42"
+             className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+           />
+         </label>
+         <div className="flex gap-2">
+           <button
+             type="submit"
+             className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] cursor-pointer sm:text-sm"
+           >
+             Tìm
+           </button>
+           {(searchDraft || appliedQuery) && (
+             <button
+               type="button"
+               onClick={() => {
+                 setSearchDraft("");
+                 setAppliedQuery("");
+                 setPage(1);
+               }}
+               className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer sm:text-sm"
+             >
+               Xóa
+             </button>
+           )}
+         </div>
+       </form>
        <div className="grid grid-cols-2 gap-2.5 items-end">
         <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700">
           Dự án
@@ -2606,8 +2691,11 @@ export default function WeldingJournalList({
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0">
                     <span className="block font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
+                    {w.siteCode !== "—" && (
+                      <span className="block font-mono text-[11px] text-slate-600 truncate">{w.siteCode}</span>
+                    )}
                     {w.machineCode !== "—" && (
-                      <span className="block font-mono text-[11px] text-slate-500 truncate">{w.machineCode}</span>
+                      <span className="block font-mono text-[11px] text-slate-500 truncate">Máy · {w.machineCode}</span>
                     )}
                   </span>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${

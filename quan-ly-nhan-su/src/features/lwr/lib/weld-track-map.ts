@@ -1,8 +1,12 @@
-import { compareLongRailDisplay, coveringLongRail, formatChainage, getPlacementSpan, parseChainage, railRowKey, visibleLongRailSpan, type LongRail } from "@lwr/lib/track-editor";
+import { compareLongRailDisplay, formatChainage, getPlacementSpan, parseChainage, railRowKey, visibleLongRailSpan, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { JournalWeld, RailJoint } from "@lwr/types/weld";
 
-/** Mối hàn nằm ở hai đầu thanh dài (và các mối đã liên kết nhật ký từ trước); vạch 500 m không phải mối hàn. */
+function cellHasPlacedWork(cell: { placed?: boolean; released?: boolean }) {
+  return Boolean(cell.placed || cell.released);
+}
+
+/** Mối hàn: biên hai thanh ngắn đã rải, hai đầu thanh dài, và mối đã liên kết nhật ký. */
 export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetres = 0, links: Record<string, string[]> = {}, longRails: LongRail[] = []): {
   joints: RailJoint[];
   unmatched: JournalWeld[];
@@ -16,10 +20,12 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
       const right = row.cells[index + 1];
       const metres = parseChainage(left.to) ?? parseChainage(right.from);
       if (metres == null) continue;
-      // Lý trình chẵn 500 m chỉ là vạch chia, không phải mối hàn; chỉ giữ nếu đã có nhật ký liên kết từ trước.
-      if (!links[`${key}:${left.id}:${right.id}`]?.length) continue;
+      const id = `${key}:${left.id}:${right.id}`;
+      const linked = Boolean(links[id]?.length);
+      const betweenWork = cellHasPlacedWork(left) && cellHasPlacedWork(right);
+      if (!linked && !betweenWork) continue;
       joints.push({
-        id: `${key}:${left.id}:${right.id}`,
+        id,
         rowKey: key,
         leftCellId: left.id,
         rightCellId: right.id,
@@ -76,18 +82,6 @@ export function jointsForRow(joints: RailJoint[], row: RailRow): RailJoint[] {
   return joints.filter((joint) => joint.rowKey === key);
 }
 
-function longRailSpanMetres(rail: LongRail, rows: RailRow[]): { start: number; end: number } | null {
-  if (
-    Number.isFinite(rail.startMetres)
-    && Number.isFinite(rail.endMetres)
-    && (rail.endMetres as number) > (rail.startMetres as number)
-  ) {
-    return { start: rail.startMetres as number, end: rail.endMetres as number };
-  }
-  const span = getPlacementSpan(rows, rail);
-  return span ? { start: span.startMetres, end: span.endMetres } : null;
-}
-
 function cellHasWork(cell: { placed?: boolean; released?: boolean }) {
   return Boolean(cell.placed || cell.released);
 }
@@ -112,63 +106,24 @@ function jointOnPlacedWork(joint: RailJoint, rows: RailRow[]): boolean {
   });
 }
 
-function placedWorkEnds(
-  rail: LongRail,
-  longRails: LongRail[],
-  rows: RailRow[],
-  preferredRailId?: string | null,
-): { start: number; end: number } | null {
-  const row = rows.find((item) => railRowKey(item) === rail.rowKey);
-  if (!row) return longRailSpanMetres(rail, rows);
-  const items = rowCoverItems(longRails, rows, rail.rowKey);
-  let start = Number.POSITIVE_INFINITY;
-  let end = Number.NEGATIVE_INFINITY;
-  for (const cell of row.cells) {
-    if (!cellHasWork(cell)) continue;
-    const from = parseChainage(cell.from);
-    const to = parseChainage(cell.to);
-    if (from === null || to === null) continue;
-    const cover = coveringLongRail(items, from, to, preferredRailId);
-    if (cover?.rail.id !== rail.id) continue;
-    start = Math.min(start, from);
-    end = Math.max(end, to);
-  }
-  if (Number.isFinite(start) && end > start) return { start, end };
-  return longRailSpanMetres(rail, rows);
-}
-
-/** Màu mối hàn theo Mục tính toán / nhật ký — chỉ đầu/cuối thanh đang chọn, không tô mối giữa các ô ngắn. */
+/** Màu mối hàn theo Mục tính toán / nhật ký của thanh dài phủ đoạn đã rải (kể cả mối giữa hai thanh ngắn). */
 export function jointDisplayMethod(
   joint: RailJoint,
   longRails: LongRail[] = [],
   rows: RailRow[] = [],
   preferredRailId?: string | null,
-  selectedCellId?: string | null,
+  _selectedCellId?: string | null,
 ): string | undefined {
   const linked = joint.welds[0]?.method?.trim();
   if (linked && linked !== "—") return linked;
   if (!jointOnPlacedWork(joint, rows)) return undefined;
-
-  if (selectedCellId) {
-    const row = rows.find((item) => railRowKey(item) === joint.rowKey);
-    const cell = row?.cells.find((item) => item.id === selectedCellId);
-    if (cell) {
-      const from = parseChainage(cell.from);
-      const to = parseChainage(cell.to);
-      if (from !== null && to !== null && joint.metres !== from && joint.metres !== to) return undefined;
-    }
-  }
 
   const items = rowCoverItems(longRails, rows, joint.rowKey);
   const hits = items
     .filter(({ span }) => joint.metres >= span.startMetres && joint.metres <= span.endMetres)
     .map(({ rail, span }) => ({ rail, length: span.endMetres - span.startMetres }))
     .sort((a, b) => compareLongRailDisplay(a.rail, b.rail, preferredRailId, a.length, b.length));
-  const owner = hits[0]?.rail;
-  if (!owner) return undefined;
-  const ends = placedWorkEnds(owner, longRails, rows, preferredRailId);
-  if (!ends || (joint.metres !== ends.start && joint.metres !== ends.end)) return undefined;
-  return owner.params.method;
+  return hits[0]?.rail.params.method;
 }
 
 export function weldMethodTone(method?: string): string {

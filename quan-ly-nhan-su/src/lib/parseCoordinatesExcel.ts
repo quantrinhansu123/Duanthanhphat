@@ -1,6 +1,12 @@
 import * as XLSX from "xlsx";
 import type { NewToaDoInput } from "@/lib/mapPointsDb";
 import type { MapPoint } from "@/data/mapPoints";
+import {
+  COORDINATE_RAIL_PREFIXES,
+  isCoordinateRailPrefix,
+  normalizeCoordinateCode,
+  parseCoordinateCode,
+} from "@/lib/weldCode";
 
 const HEADER_ALIASES: Record<
   keyof Pick<
@@ -9,10 +15,23 @@ const HEADER_ALIASES: Record<
   >,
   string[]
 > = {
-  code: ["ma_diem", "mã điểm", "ma diem", "code", "madinh", "điểm", "diem", "point_code"],
+  code: [
+    "ma_diem",
+    "mã điểm",
+    "ma diem",
+    "code",
+    "madinh",
+    "điểm",
+    "diem",
+    "point_code",
+    "autolisp",
+    "ma autolisp",
+    "ki_hieu",
+    "ký hiệu",
+  ],
   longitude: ["kinh_do", "kinh độ", "kinh do", "longitude", "lon", "lng", "x"],
   latitude: ["vi_do", "vĩ độ", "vi do", "latitude", "lat", "y"],
-  chainage: ["ly_trinh", "lý trình", "ly trinh", "chainage", "km"],
+  chainage: ["ly_trinh", "lý trình", "ly trinh", "chainage", "km", "station"],
   note: ["ghi_chu", "ghi chú", "ghi chu", "note", "mô tả", "mo ta"],
   order: ["thu_tu", "thứ tự", "thu tu", "order", "stt", "no"],
   weldCode: ["ma_moi_han", "mã mối hàn", "ma moi han", "ma_lich_su", "mã lịch sử", "weld_code", "weldcode"],
@@ -102,7 +121,8 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
     const isEmpty = line.every((c) => c == null || String(c).trim() === "");
     if (isEmpty) continue;
 
-    const code = String(line[cols.code] ?? "").trim();
+    const rawCode = String(line[cols.code] ?? "").trim();
+    const code = normalizeCoordinateCode(rawCode);
     const longitude = parseNumber(line[cols.longitude]);
     const latitude = parseNumber(line[cols.latitude]);
     const chainage =
@@ -114,8 +134,14 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
     const weldId =
       cols.weldId >= 0 ? String(line[cols.weldId] ?? "").trim() : undefined;
 
-    if (!code) {
+    if (!rawCode) {
       errors.push(`Dòng ${i + 1}: thiếu mã điểm`);
+      continue;
+    }
+    if (!parseCoordinateCode(code)) {
+      errors.push(
+        `Dòng ${i + 1} (${rawCode}): mã Autolisp phải là HT/HP/TT/TP + số (vd HT0001, R.TT173)`,
+      );
       continue;
     }
     if (longitude == null || latitude == null) {
@@ -154,20 +180,57 @@ const EXPORT_EXTRA_HEADERS: Record<ExportLang, string[]> = {
   en: ["welder_name", "machine_name", "project_name", "weld_result", "performed_date"],
 };
 
-/** Tải file Excel mẫu bao gồm liên kết mối hàn. */
+/** Tải file Excel mẫu Autolisp (4 dải HT/HP/TT/TP) + liên kết mối hàn. */
 export function downloadCoordinatesExcelTemplate(lang: ExportLang = "vi") {
   const en = lang === "en";
+  const note = (vi: string, eng: string) => (en ? eng : vi);
   const data = [
     COORDINATE_HEADERS[lang],
-    ["TT0001", 105.8412, 21.0245, "Km0+000.00", 1, en ? "Weld at the start of the line" : "Mối hàn đầu tuyến", "R4W-030-30-0001", ""],
-    ["TT0002", 105.8415, 21.0228, "Km0+025.00", 2, en ? "Adjoining weld" : "Mối hàn tiếp giáp", "", "551f7e85-f16c-4ef0-8780-5c30e48daa88"],
-    ["TT0003", 105.842, 21.021, "Km0+050.00", 3, en ? "Standalone coordinate point" : "Điểm toạ độ độc lập", "", ""],
+    ["HT0001", 105.8412, 21.0245, "Km0+000.00", 1, note("Hạ trái · đầu tuyến", "Lower-left · start of line"), "", ""],
+    ["HP0001", 105.84125, 21.02445, "Km0+000.00", 2, note("Hạ phải", "Lower-right"), "", ""],
+    ["TT0001", 105.8415, 21.0228, "Km0+025.00", 3, note("Thượng trái", "Upper-left"), "", ""],
+    ["TP0001", 105.84155, 21.02275, "Km0+025.00", 4, note("Thượng phải", "Upper-right"), "", ""],
+    ["TT0166", 105.842, 21.021, "Km4+422.53", 5, note("Mẫu Autolisp CAD", "CAD Autolisp sample"), "", ""],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, en ? "coordinates" : "toa_do");
-  XLSX.writeFile(wb, en ? "gps-coordinates-template.xlsx" : "mau-toa-do-gps.xlsx");
+  // Sheet ghi chú rule
+  const guide = XLSX.utils.aoa_to_sheet([
+    [en ? "Rail prefix" : "Tiền tố ray", en ? "Meaning" : "Ý nghĩa"],
+    ...COORDINATE_RAIL_PREFIXES.map((prefix) => [
+      prefix,
+      prefix === "HT"
+        ? en
+          ? "Lower track · left rail"
+          : "Đường Hạ · ray trái"
+        : prefix === "HP"
+          ? en
+            ? "Lower track · right rail"
+            : "Đường Hạ · ray phải"
+          : prefix === "TT"
+            ? en
+              ? "Upper track · left rail"
+              : "Đường Thượng · ray trái"
+            : en
+              ? "Upper track · right rail"
+              : "Đường Thượng · ray phải",
+    ]),
+    [],
+    [
+      en ? "Accepted codes" : "Mã chấp nhận",
+      "HT0001, HP12, TT0166, R.TT173, R.HT174(24965)",
+    ],
+    [
+      en ? "Required columns" : "Cột bắt buộc",
+      "ma_diem, kinh_do, vi_do",
+    ],
+  ]);
+  XLSX.utils.book_append_sheet(wb, guide, en ? "guide" : "huong_dan");
+  XLSX.writeFile(wb, en ? "gps-autolisp-template.xlsx" : "mau-toa-do-autolisp.xlsx");
 }
+
+export { isCoordinateRailPrefix, normalizeCoordinateCode };
 
 /** Xuất danh sách toạ độ GPS kèm thông tin mối hàn ra Excel. */
 export function exportCoordinatesToExcel(

@@ -41,11 +41,11 @@ export function LongRailDetailPanel({
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
         <div>
           <h2 id="long-rail-detail-title" className="text-lg font-bold">
-            Thanh dài {longRail.code}
+            Lý trình {longRail.code}
           </h2>
           <p className="text-sm text-slate-500">{longRail.label || "Chưa đặt tên"}</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Đóng chi tiết thanh dài" className="rounded-lg border p-2">
+        <button type="button" onClick={onClose} aria-label="Đóng chi tiết lý trình" className="rounded-lg border p-2">
           <X className="size-5" />
         </button>
       </header>
@@ -71,25 +71,22 @@ export function LongRailDetailPanel({
             </dd>
           </div>
           <div>
-            <dt className="text-slate-500">Cập nhật</dt>
+            <dt className="text-slate-500">Trạng thái</dt>
             <dd className="font-semibold">
-              {new Date(longRail.updatedAt).toLocaleString("vi-VN", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {longRail.completedAt ? "Đã giải toả · lý trình khóa" : "Đang thi công · cập nhật lý trình cuối hàng ngày"}
             </dd>
           </div>
         </dl>
         <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-          Toàn bộ thông số giải toả gắn với thanh dài này. Bấm <b>Lưu thông số</b> để giữ lại và xem lại sau.
+          {longRail.completedAt
+            ? "Đoạn đã giải toả xong — lý trình đầu/cuối không sửa được. Bỏ tick Hoàn thành ở form lý trình nếu cần mở lại."
+            : <>Cập nhật <b>lý trình cuối</b> mỗi ngày hàn xong tại form «Theo dõi lý trình thực tế». Bấm <b>Lưu thông số</b> để giữ bảng tính.</>}
         </p>
         <StressReleaseCalculator
           key={longRail.id}
           compact
           segmentId={longRail.code}
+          chainageLocked={Boolean(longRail.completedAt)}
           initialInput={{
             ...longRail.params,
             trackSide: longRail.rowKey.endsWith("T") ? "LEFT" : "RIGHT",

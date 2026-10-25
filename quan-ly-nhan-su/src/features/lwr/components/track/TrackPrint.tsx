@@ -3,20 +3,19 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { formatChainage, getPlacementSpan, trackExtent, TRACK_PIXELS_PER_METRE, type TrackLayout } from "@lwr/lib/track-editor";
-import { calculateStressRelease, formatStressNumber, releaseMethodLabel, type StressInput } from "@lwr/lib/stress-release";
+import { calculateStressRelease, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 import { RailGrid } from "./RailGrid";
 
 const noop = () => {};
 
-// Same calculation as the stress-release report; a rail with incomplete inputs just shows dashes.
-function stressCells(params: StressInput) {
+/** Nhiệt độ giải toả: T ray trung bình từ bảng tính; thiếu số liệu thì lấy T môi trường đã nhập. */
+function releaseTempLabel(params: StressInput): string {
   try {
-    const r = calculateStressRelease(params);
-    return [params.railType, formatStressNumber(params.neutralTemp), formatStressNumber(r.averageTemp), releaseMethodLabel(r.releaseMethod), formatStressNumber(r.pullLength), formatStressNumber(r.appliedPullForce), r.cutGap === null ? "—" : formatStressNumber(r.cutGap)];
+    return formatStressNumber(calculateStressRelease(params).averageTemp);
   } catch {
-    return Array<string>(7).fill("—");
+    return Number.isFinite(params.airTemp) ? formatStressNumber(params.airTemp) : "—";
   }
 }
 
@@ -43,8 +42,8 @@ export function TrackPrint({ layout, joints, symbols, onClose, projectName }: { 
       #lwr-track-print article { width:${config.width}; box-sizing:border-box; margin:16px auto; padding:10mm; background:white; font:10pt 'Times New Roman',serif; }
       #lwr-track-print h1 { font-size:15pt; text-align:center; font-weight:bold; margin:4px; }
       #lwr-track-print p { margin:3px 0; }
-      #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:8px; font-size:9pt; }
-      #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:4px 6px; text-align:left; }
+      #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:8px; font-size:10pt; }
+      #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:5px 8px; text-align:left; }
       #lwr-track-print tr { break-inside:avoid; }
       @media print {
         @page { size:${config.size}; margin:8mm; }
@@ -74,8 +73,30 @@ export function TrackPrint({ layout, joints, symbols, onClose, projectName }: { 
           structures={{ placements: layout.placements, symbols, editingPlacementId: null, onEditPlacement: noop, onRemovePlacement: noop }}
         />
       </div>
-      <p>Bảng thống kê giải toả ứng suất từng thanh ray (tính như phiếu "Bảng tính toán giải tỏa ứng suất"): T khóa = nhiệt độ khóa đường, T ray = nhiệt độ ray trung bình; chiều dài kéo, khe hở cắt tính bằng mm; lực kéo tính bằng kN.</p>
-      <table><thead><tr><th>Mã</th><th>Dải ray</th><th>Ngày thi công</th><th>Lý trình thực</th><th>Dài (m)</th><th>Loại ray</th><th>T khóa (°C)</th><th>T ray (°C)</th><th>Phương pháp</th><th>Chiều dài kéo</th><th>Lực kéo</th><th>Khe hở cắt</th><th>Trạng thái</th></tr></thead><tbody>{plotted.map(({ rail, span }) => <tr key={rail.id}><td>{rail.code}</td><td>{rail.rowKey}</td><td>{rail.releaseDate ?? "—"}</td><td>{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td><td>{span.endMetres - span.startMetres}</td>{stressCells(rail.params).map((cell, i) => <td key={i}>{cell}</td>)}<td>{rail.completedAt ? "Đã giải toả" : "Chưa hoàn thành"}</td></tr>)}</tbody></table>
+      <p>Bảng tổng hợp thanh LWR. Chi tiết giải toả (kéo, lực, khe hở…) xem trong phiếu <b>Bảng tính toán giải tỏa ứng suất</b> khi in báo cáo PDF.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Tên thanh LWR</th>
+            <th>Chiều dài (m)</th>
+            <th>Nhiệt độ giải toả (°C)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plotted.map(({ rail, span }) => (
+            <tr key={rail.id}>
+              <td>{rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code}</td>
+              <td>{span.endMetres - span.startMetres}</td>
+              <td>{releaseTempLabel(rail.params)}</td>
+            </tr>
+          ))}
+          {plotted.length === 0 ? (
+            <tr>
+              <td colSpan={3}>Chưa có thanh LWR trên sơ đồ.</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
       <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}><b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b></div>
     </article>
   </div>, document.body);

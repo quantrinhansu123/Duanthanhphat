@@ -5,7 +5,6 @@ export { TrackSchematic } from "./TrackSchematic";
 export { TrackMapCanvas } from "./TrackMapCanvas";
 export { RailGrid } from "./RailGrid";
 export { WeldJointPanel } from "./WeldJointPanel";
-export { LongRailTable } from "./LongRailTable";
 export { LongRailDetailPanel } from "./LongRailDetailPanel";
 export { DetailPanel } from "./DetailPanel";
 export { ForceChart } from "./ForceChart";

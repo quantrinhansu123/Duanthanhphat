@@ -1,28 +1,23 @@
 "use client";
 
-import { memo, useEffect, useId, useRef, useState } from "react";
-import { Eye, Pencil, Plus, Shapes, Trash2, X } from "lucide-react";
-import { safeImageUrl } from "@lwr/lib/safe-url";
+import { Fragment, memo, useEffect, useId, useRef, useState } from "react";
+import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, formatChainage, getPlacementSpan, type PlacementSpan, type TrackPlacement, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, formatChainage, type TrackPlacement, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
+
+import { TrackCenterline } from "./TrackCenterline";
 
 const EMPTY_LINE = 240;
 const ADD_GUTTER = 56;
 const DAT_GREEN = "#059669";
 const UNRATED_GRAY = "#94a3b8";
-const WARN_YELLOW = "#eab308";
-/** Nhiệt độ từ mức này trở lên: giải toả xong tô xanh; thấp hơn tô vàng. */
-const LONG_RAIL_OK_TEMP = 30;
-
-/** Xám = đang thi công; xong thì xanh (T >= 30°C) hoặc vàng (T < 30°C). */
-function longRailTone(rail: LongRail) {
-  if (!rail.completedAt) return UNRATED_GRAY;
-  return rail.params.airTemp >= LONG_RAIL_OK_TEMP ? DAT_GREEN : WARN_YELLOW;
-}
+/** Giải toả xong mà T < 30°C */
+const STRESS_LOW_ORANGE = "#ea580c";
+const STRESS_PASS_TEMP_C = 30;
 
 function contrastText(hex: string) {
   const value = hex.replace("#", "");
@@ -31,6 +26,19 @@ function contrastText(hex: string) {
   const g = Number.parseInt(value.slice(2, 4), 16);
   const b = Number.parseInt(value.slice(4, 6), 16);
   return (r * 299 + g * 587 + b * 114) / 1000 > 155 ? "#0f172a" : "#fff";
+}
+
+/** B3 xám khi chưa hoàn thành; B4 xanh nếu T≥30, vàng-cam nếu T<30. */
+function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number) {
+  const done = Boolean(rail.completedAt) || Boolean(cellReleased);
+  if (!done) return UNRATED_GRAY;
+  const tempC = rail.params.neutralTemp ?? rail.params.airTemp ?? cellTemp ?? STRESS_PASS_TEMP_C;
+  return tempC >= STRESS_PASS_TEMP_C ? DAT_GREEN : STRESS_LOW_ORANGE;
+}
+
+/** Mã trên thanh ngắn: LWR01-500m-35oC (500 = chiều dài đoạn). */
+function shortRailChipLabel(code: string, lengthMetres: number, tempC: number) {
+  return `${code}-${lengthMetres}m-${tempC}oC`;
 }
 
 function chipDeleteButton(cellId: string, box: { left: number; width: number }, onRemove?: (id: string) => void) {
@@ -62,45 +70,11 @@ export interface StructureLayer {
   onRemovePlacement: (id: string) => void;
 }
 
-interface PlottedPlacement {
-  placement: TrackPlacement;
-  span: PlacementSpan;
-  symbol: StructureSymbol | undefined;
-}
-
-const SYMBOL_STACK = 48;
-const ICON_H = 40;
-const LINE_Y = 34;
-// Narrow structures still need room for their label.
-const GUIDE_MIN_W = 80;
-
-function SymbolImage({ symbol }: { symbol: StructureSymbol | undefined }) {
-  const src = safeImageUrl(symbol?.image_url);
-  return src
-    // eslint-disable-next-line @next/next/no-img-element
-    ? <img src={src} alt="" className="h-10 w-14 shrink-0 object-contain" decoding="async" />
-    : <Shapes className="size-6 shrink-0 text-blue-600" aria-hidden="true" />;
-}
-
-function packSymbolLanes(items: PlottedPlacement[]): PlottedPlacement[][] {
-  const lanes: PlottedPlacement[][] = [];
-  for (const item of items) {
-    const centre = (item.span.startMetres + item.span.endMetres) / 2;
-    const lane = lanes.find((current) =>
-      current.every((other) => Math.abs((other.span.startMetres + other.span.endMetres) / 2 - centre) >= 700),
-    );
-    if (lane) lane.push(item);
-    else lanes.push([item]);
-  }
-  return lanes;
-}
-
 interface RailGridProps {
   structures?: StructureLayer;
   rows?: RailRow[];
   longRails?: LongRail[];
   onSelectLongRail?: (id: string | null) => void;
-  onEditLongRail?: (id: string) => void;
   selectedId: string;
   onSelect: (id: string) => void;
   alertIds?: string[];
@@ -119,7 +93,6 @@ export const RailGrid = memo(function RailGrid({
   rows = RAIL_ROWS,
   longRails = [],
   onSelectLongRail,
-  onEditLongRail,
   selectedId,
   onSelect,
   embedded = false,
@@ -147,13 +120,13 @@ export const RailGrid = memo(function RailGrid({
   const width = lineWidth + ADD_GUTTER;
   return <div className="border-t border-slate-200 bg-white">
     <div className="space-y-1 border-b px-4 py-3">
-      <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · lý trình thi công thực tế</h2>
-      <p className="text-xs text-slate-600">Màu mối hàn theo mục tiêu tính toán / nhật ký: <span className="rounded border bg-white px-1">Trắng: chưa chọn</span> · <span className="text-blue-700">Xanh: FBW</span> · <span className="text-red-700">Đỏ: nhiệt nhôm</span> · <span className="text-amber-700">Vàng: ray đơn</span>.</p>
-      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Thanh dài dưới đường tuyến: xám = đang thi công, xanh = đã giải toả (T ≥ 30°C), vàng = đã giải toả (T &lt; 30°C); bấm để sửa lý trình. Bấm + để nhập lý trình và thêm thanh ngắn đúng vị trí. Bấm X để xóa ô chưa Đạt.</p>
+      <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · 2 đường tim tuyến · lý trình thi công</h2>
+      <p className="text-xs text-slate-600">Thanh LWR: <span className="font-semibold text-slate-500">xám</span> = đã tạo / đang theo dõi · <span className="font-semibold text-emerald-700">xanh</span> = giải toả xong T≥30°C · <span className="font-semibold text-orange-600">vàng-cam</span> = giải toả xong T&lt;30°C. Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.</p>
+      <p className="text-xs text-slate-500">Tim tuyến (Thượng/Hạ): mốc ~500 m + ký hiệu công trình. Mỗi ray trái/phải có thanh LWR riêng. Bấm thanh để mở giải toả ứng suất.</p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className="space-y-4 px-4 py-3" style={{ width: 150 + width }}>
-        {rows.map(row => {
+        {rows.map((row, rowIndex) => {
           const lastVisible = [...row.cells].reverse().find((cell) => cell.released || cell.placed);
           const lastEnd = lastVisible ? parseChainage(lastVisible.to) : null;
           const plusLeft = lastEnd === null ? 8 : (lastEnd - extent.startMetres) * TRACK_PIXELS_PER_METRE + 8;
@@ -163,83 +136,10 @@ export const RailGrid = memo(function RailGrid({
             return span ? [{ rail, span }] : [];
           });
           const key = railRowKey(row);
-          const structureLanes = packSymbolLanes((structures?.placements ?? []).flatMap((placement): PlottedPlacement[] => {
-            if (placement.rowKey !== key) return [];
-            const span = getPlacementSpan(rows, placement);
-            return span ? [{ placement, span, symbol: structures?.symbols.find((item) => item.id === placement.symbolId) }] : [];
-          }));
-          // Structures sit above the rail line, so the row grows by their stacked height.
-          const offset = structureLanes.length ? 8 + structureLanes.length * SYMBOL_STACK : 0;
-          return <div key={key} className="grid grid-cols-[110px_1fr] gap-x-2">
-          <div className="text-[11px]" style={{ paddingTop: offset }}><b>{row.line}</b><br />{row.rail}</div>
-          <div className="relative" style={{ width, height: 80 + offset }}>
-            {structures && structureLanes.flatMap((items, laneIndex) => items.map(({ placement, span, symbol }) => {
-              const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
-              const iconTop = 4 + laneIndex * SYMBOL_STACK;
-              const guideTop = iconTop + ICON_H;
-              const guideHeight = Math.max(6, offset + LINE_Y - 16 - guideTop);
-              return (
-                <span key={placement.id}>
-                  <div
-                    aria-hidden
-                    data-testid="structure-guide"
-                    className="pointer-events-none absolute z-[5] flex items-center justify-center overflow-hidden border border-dashed border-slate-500/70 bg-slate-400/25 px-0.5"
-                    style={{ left: box.left + box.width / 2 - Math.max(box.width, GUIDE_MIN_W) / 2, width: Math.max(box.width, GUIDE_MIN_W), top: guideTop, height: guideHeight }}
-                  >
-                    <span className="max-h-full max-w-full overflow-hidden text-center text-[9px] font-semibold leading-tight text-slate-600 [overflow-wrap:anywhere] line-clamp-3">
-                      {placement.label || symbol?.code || symbol?.name}
-                    </span>
-                  </div>
-                  <div
-                    data-placement={placement.id}
-                    className={`group absolute z-10 hover:z-30 focus-within:z-30 flex items-center ${structures.editingPlacementId === placement.id ? "rounded ring-2 ring-blue-400 ring-offset-1" : ""}`}
-                    style={{ left: box.left + box.width / 2, top: iconTop, transform: "translateX(-50%)" }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => structures.onEditPlacement(placement)}
-                      aria-label={`Chọn ${placement.label} để sửa`}
-                      className="flex h-10 w-14 items-center justify-center focus-visible:rounded focus-visible:outline-2 focus-visible:outline-blue-600"
-                    >
-                      <SymbolImage symbol={symbol} />
-                    </button>
-                    <div
-                      role="tooltip"
-                      className="pointer-events-none absolute left-full top-0 z-30 ml-1 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left text-[11px] leading-4 text-slate-700 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                    >
-                      <p className="font-semibold text-slate-900">{placement.label}</p>
-                      <p>Km {formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</p>
-                      <p>{row.line} · {row.rail}</p>
-                      {symbol ? <p>{symbol.name}{symbol.code ? ` (${symbol.code})` : ""}</p> : null}
-                      <div className="mt-1.5 flex gap-1">
-                        <button type="button" aria-label={`Xem ${placement.label}`} title="Xem" className="rounded bg-slate-50 p-1 text-slate-600 hover:bg-slate-100 hover:text-blue-700"><Eye className="size-3.5" /></button>
-                        <button type="button" onClick={() => structures.onEditPlacement(placement)} aria-label={`Sửa ${placement.label}`} title="Sửa" className="rounded bg-slate-50 p-1 text-blue-700 hover:bg-blue-50"><Pencil className="size-3.5" /></button>
-                        <button type="button" onClick={() => structures.onRemovePlacement(placement.id)} aria-label={`Xóa ${placement.label}`} title="Xóa" className="rounded bg-slate-50 p-1 text-red-600 hover:bg-red-50"><Trash2 className="size-3.5" /></button>
-                      </div>
-                    </div>
-                  </div>
-                </span>
-              );
-            }))}
-            <div className="absolute inset-x-0 bottom-0" style={{ top: offset }}>
-            <svg
-              data-testid="rail-grid-line"
-              className="pointer-events-none absolute left-0 top-[34px] overflow-visible"
-              width={lineWidth}
-              height="2"
-              aria-hidden
-            >
-              <line
-                x1="0"
-                y1="1"
-                x2={lineWidth}
-                y2="1"
-                stroke="#64748b"
-                strokeWidth="1.5"
-                strokeDasharray="5 4"
-                strokeLinecap="butt"
-              />
-            </svg>
+          return <Fragment key={key}><div className="grid grid-cols-[110px_1fr] gap-x-2">
+          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{row.rail}</div>
+          <div className="relative" style={{ width, height: 64 }}>
+            <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
             {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
@@ -256,57 +156,43 @@ export const RailGrid = memo(function RailGrid({
                 />;
               }
               if (cover) {
-                const tone = cell.released ? DAT_GREEN : UNRATED_GRAY;
+                const tempC = cover.rail.params.neutralTemp ?? cover.rail.params.airTemp ?? cell.temp;
+                const tone = longRailTone(cover.rail, cell.released, cell.temp);
+                const done = Boolean(cover.rail.completedAt) || Boolean(cell.released);
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
+                const lengthM = Math.max(0, to - from);
+                const label = shortRailChipLabel(cover.rail.code, lengthM, tempC);
+                const statusNote = !done
+                  ? "Chưa giải toả"
+                  : tempC >= STRESS_PASS_TEMP_C
+                    ? "Giải toả · T≥30"
+                    : "Giải toả · T<30";
                 return (
                   <span key={cell.id}>
                     <button
                       type="button"
                       data-testid="rail-grid-short"
                       onClick={() => { onSelect(cell.id); onSelectLongRail?.(cover.rail.id); }}
-                      title={`${cell.id} thuộc ${cover.rail.code} · ${cover.rail.params.railType} · ${cell.from} – ${cell.to}${cell.released ? " · Đạt" : ""}`}
-                      aria-label={`${cell.id}: thanh ngắn của ${cover.rail.code}`}
-                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
-                      style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : cell.released ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
+                      title={`${label} · ${cell.id} · ${cover.rail.params.railType} · Km ${cell.from} – ${cell.to} · ${statusNote}`}
+                      aria-label={`${label}: thanh ngắn của ${cover.rail.code}`}
+                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${done ? "" : "pr-5 "}px-1 text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
+                      style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : done ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
                     >
-                      <span className="block truncate">{cell.id} · {cover.rail.code}</span>
-                      <span className="block truncate text-[9px] font-medium opacity-90">{cover.rail.params.railType}{cell.released ? " · Đạt" : ""}</span>
+                      <span className="block truncate">{label}</span>
+                      {done ? <span className="block truncate text-[9px] font-medium opacity-90">{statusNote}</span> : null}
                     </button>
-                    {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
+                    {!done && chipDeleteButton(cell.id, box, onRemove)}
                   </span>
                 );
               }
+              const lengthM = Math.max(0, to - from);
+              const bareLabel = shortRailChipLabel(cell.id, lengthM, cell.temp);
               return <span key={cell.id}>
-                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${cell.id} · ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
-                  <span className="block truncate">{cell.id} · {cell.temp}°C</span>
+                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}px-1 text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
+                  <span className="block truncate">{bareLabel}</span>
                 </button>
                 {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
               </span>;
-            })}
-            {row.cells.slice(0, -1).map((cell, index) => {
-              const metres = parseChainage(cell.to) ?? parseChainage(row.cells[index + 1].from);
-              if (metres === null) return null;
-              const x = (metres - extent.startMetres) * TRACK_PIXELS_PER_METRE;
-              return <span key={`tick-${cell.id}`} className="pointer-events-none absolute z-[3] -translate-x-1/2" style={{ left: x, top: 20 }} aria-hidden>
-                <span className="mx-auto block h-8 w-px bg-slate-500" />
-                <span className="block whitespace-nowrap text-center text-[9px] font-medium leading-3 text-slate-500">{formatChainage(metres)}</span>
-              </span>;
-            })}
-            {rowLongRails.map(({ rail, span }) => {
-              const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
-              const tone = longRailTone(rail);
-              const state = !rail.completedAt ? "Đang thi công" : rail.params.airTemp >= LONG_RAIL_OK_TEMP ? "Đã giải toả" : "Đã giải toả · T < 30°C";
-              const text = `${rail.code} · Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)}`;
-              return <button
-                key={`lr-${rail.id}`}
-                type="button"
-                data-testid="long-rail-bar"
-                onClick={() => { onSelectLongRail?.(rail.id); onEditLongRail?.(rail.id); }}
-                title={`${text} · ${state} · bấm để sửa`}
-                aria-label={`Sửa ${rail.code}`}
-                className={`absolute top-[66px] z-[2] h-3.5 overflow-hidden rounded-sm border text-left text-[9px] font-semibold leading-3 ${selectedLongRailId === rail.id ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
-                style={{ ...box, backgroundColor: tone, borderColor: tone, color: contrastText(tone) }}
-              ><span className="block truncate px-1">{text}</span></button>;
             })}
             {jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];
@@ -318,11 +204,11 @@ export const RailGrid = memo(function RailGrid({
                   onClick={() => onSelectJoint?.(joint)}
                   title={`${joint.chainage} · ${weld?.code ?? method ?? "Chưa hàn — liên kết nhật ký"}`}
                   aria-label={`Mối hàn ${row.line} ${row.rail} Km${joint.chainage}`}
-                  className={`absolute z-10 flex h-8 w-5 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0 ${selectedJointId === joint.id ? "rounded-sm ring-1 ring-slate-600 ring-offset-1" : ""}`}
+                  className={`absolute z-10 flex size-8 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0 ${selectedJointId === joint.id ? "rounded-full ring-2 ring-slate-700 ring-offset-1" : ""}`}
                   style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: 20 }}
                 >
-                  <span className={`block h-5 w-[4px] rounded-full border-0 shadow-sm ${weldMethodTone(method)}`} />
-                  {weld && <span className="absolute bottom-full left-1/2 max-w-24 -translate-x-1/2 truncate whitespace-nowrap text-[9px] text-slate-800">{weld.code}</span>}
+                  <span className={`block size-4 rounded-full border-2 shadow-md ${weldMethodTone(method)}`} />
+                  {weld && <span className="absolute bottom-full left-1/2 mb-0.5 max-w-24 -translate-x-1/2 truncate whitespace-nowrap text-[9px] font-medium text-slate-800">{weld.code}</span>}
                 </button>
               );
             })}
@@ -352,7 +238,11 @@ export const RailGrid = memo(function RailGrid({
             )}
             </div>
           </div>
-        </div>;
+        </div>
+        {rows[rowIndex + 1]?.line === row.line && (rowIndex === 0 || rows[rowIndex - 1].line !== row.line) && (
+          <TrackCenterline structures={structures} rows={[row, rows[rowIndex + 1]]} startMetres={extent.startMetres} width={lineWidth} />
+        )}
+        </Fragment>;
         })}
       </div>
     </div>

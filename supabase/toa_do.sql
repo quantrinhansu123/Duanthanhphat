@@ -21,7 +21,7 @@ $$;
 -- ------------------------------------------------------------
 create table if not exists public.toa_do (
   id          uuid primary key default gen_random_uuid(),
-  ma_diem     text not null,                 -- TT0001, TT0002...
+  ma_diem     text not null,                 -- HT/HP/TT/TP + số (Autolisp)
   kinh_do     double precision not null,     -- longitude
   vi_do       double precision not null,     -- latitude
   ly_trinh    text,                          -- Km0+000.00
@@ -35,8 +35,8 @@ create table if not exists public.toa_do (
   constraint toa_do_vi_do_check check (vi_do between -90 and 90)
 );
 
-comment on table public.toa_do is 'Điểm toạ độ / lý trình khảo sát trên bản đồ';
-comment on column public.toa_do.ma_diem is 'Mã điểm (vd TT0001)';
+comment on table public.toa_do is 'Điểm toạ độ Autolisp / lý trình khảo sát trên bản đồ';
+comment on column public.toa_do.ma_diem is 'Mã Autolisp: HT hạ trái, HP hạ phải, TT thượng trái, TP thượng phải (vd HT0001, TT0166)';
 comment on column public.toa_do.kinh_do is 'Kinh độ (longitude)';
 comment on column public.toa_do.vi_do is 'Vĩ độ (latitude)';
 comment on column public.toa_do.ly_trinh is 'Lý trình Km (vd Km0+025.00)';

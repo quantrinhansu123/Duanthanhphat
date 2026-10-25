@@ -82,12 +82,15 @@ export function StressReleaseCalculator({
   compact = false,
   onSave,
   onModeChange,
+  chainageLocked = false,
 }: {
   initialInput?: StressInput;
   segmentId?: string;
   compact?: boolean;
   onSave?: (input: StressInput) => StressSaveResult | boolean | void;
   onModeChange?: (mode: Mode) => void;
+  /** Khóa lý trình đầu/cuối khi thanh LWR đã giải toả xong. */
+  chainageLocked?: boolean;
 }) {
   const { lang, t } = useLanguage();
   const [fields, setFields] = useState(() => initialFields(initialInput));
@@ -290,7 +293,7 @@ export function StressReleaseCalculator({
           }
           if (!onSave) {
             setSaveOk(false);
-            setSaveNotice("Chưa lưu được: bảng tính độc lập không gắn thanh dài. Mở Tổng quan (Track Map), bấm thanh dài trên sơ đồ, rồi Lưu thông số.");
+            setSaveNotice("Chưa lưu được: bảng tính độc lập không gắn đoạn LWR. Mở Tổng quan (Track Map), bấm đoạn trên sơ đồ, rồi Lưu thông số.");
             return;
           }
           const saved = onSave(input);
@@ -305,7 +308,7 @@ export function StressReleaseCalculator({
             return;
           }
           setSaveOk(true);
-          setSaveNotice("Đã lưu thông số thanh dài.");
+          setSaveNotice("Đã lưu thông số đoạn LWR.");
         }}
         className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900"
       >
@@ -341,11 +344,13 @@ export function StressReleaseCalculator({
             </select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-amber-800">Lý trình đầu<input className={siteClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" /></label>
-            <label className="text-xs text-amber-800">Lý trình cuối<input className={siteClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" /></label>
+            <label className="text-xs text-amber-800">Lý trình đầu<input className={siteClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" disabled={chainageLocked} readOnly={chainageLocked} /></label>
+            <label className="text-xs text-amber-800">Lý trình cuối<input className={siteClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" disabled={chainageLocked} readOnly={chainageLocked} /></label>
             <label className="text-xs text-amber-800 sm:col-span-2">Lý trình vị trí kéo / mối hàn<input className={siteClass} value={jointChainage} onChange={e => setJointChainage(e.target.value)} placeholder="Để trống: kéo ở cuối đoạn" /></label>
           </div>
-          <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Nhập riêng cho từng ray của tuyến.</p>
+          {chainageLocked
+            ? <p className="text-xs text-emerald-800">Lý trình đã khóa vì đoạn đã giải toả xong. Cập nhật lý trình chỉ khi đang thi công (form lý trình phía trên).</p>
+            : <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Theo dõi tiến độ hàn bằng cách cập nhật lý trình cuối trên form lý trình.</p>}
           {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
         </>}
         <div className="grid grid-cols-2 gap-3">

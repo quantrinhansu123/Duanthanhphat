@@ -2,7 +2,12 @@ import { ndtDefectLabel } from "@/data/error-library";
 import type { WeldType } from "@/data/weldTypes";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
-import { buildMachineWeldCode, planWeldCodeAssignments } from "@/lib/weldCode";
+import {
+  buildMachineDayPrefix,
+  buildMachineWeldCode,
+  detectMachineWeldNumbering,
+  planWeldCodeAssignments,
+} from "@/lib/weldCode";
 import { defaultCertificatesForPersonnelCode, parseCertificateList } from "@/lib/weldingCertificates";
 import { invalidateWeldDailyRollupCache } from "@/lib/weldDailyStats";
 
@@ -238,7 +243,64 @@ export async function loadMachineFieldCodesForMachine(machineId: string): Promis
     .filter(Boolean);
 }
 
-/** Mã theo máy của từng bản ghi: mã máy + số thứ tự 5 số trên máy đó. */
+/** Mã trong máy đã dùng trong một ngày (DD-MM-YY-xxxx · reset mỗi ngày). */
+export async function loadMachineFieldCodesForDay(performedAt: string): Promise<string[]> {
+  const prefix = buildMachineDayPrefix(performedAt);
+  if (!prefix || !isSupabaseConfigured()) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ten_moi_han_theo_may")
+    .ilike("ten_moi_han_theo_may", `${prefix}%`)
+    .order("ten_moi_han_theo_may", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (isWeldExtrasColumnError(error.message)) return [];
+    throw new Error(formatSupabaseError(error));
+  }
+  return (data ?? [])
+    .map((row) => String((row as { ten_moi_han_theo_may?: string | null }).ten_moi_han_theo_may ?? "").trim())
+    .filter(Boolean);
+}
+
+/** Mã UN5 đã dùng trong một ngày: YYYY-M-D-xxx. */
+export async function loadUn5MachineFieldCodesForDay(performedAt: string): Promise<string[]> {
+  const iso = performedAt.trim().slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match || !isSupabaseConfigured()) return [];
+  const prefix = `${match[1]}-${Number(match[2])}-${Number(match[3])}-`;
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("bao_cao_moi_han_theo_du_an")
+    .select("ten_moi_han_theo_may")
+    .ilike("ten_moi_han_theo_may", `${prefix}%`)
+    .order("ten_moi_han_theo_may", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (isWeldExtrasColumnError(error.message)) return [];
+    throw new Error(formatSupabaseError(error));
+  }
+  return (data ?? [])
+    .map((row) => String((row as { ten_moi_han_theo_may?: string | null }).ten_moi_han_theo_may ?? "").trim())
+    .filter(Boolean);
+}
+
+/** Mã trong máy theo rule thiết bị (UN5 / K922 / ngày). */
+export async function loadMachineFieldCodesForSuggestion(
+  performedAt: string,
+  machine?: { id?: string; code?: string | null; name?: string | null; model?: string | null } | null,
+): Promise<string[]> {
+  const scheme = detectMachineWeldNumbering(machine);
+  if (scheme === "k922" && machine?.id) {
+    return loadMachineFieldCodesForMachine(machine.id);
+  }
+  if (scheme === "un5") {
+    return loadUn5MachineFieldCodesForDay(performedAt);
+  }
+  return loadMachineFieldCodesForDay(performedAt);
+}
+
+/** Mã máy theo ngày của từng bản ghi: DD-MM-YY-xxxx (TT reset mỗi ngày). */
 export async function loadMachineWeldCodeMap(machineIds: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   const ids = Array.from(new Set(machineIds.map((id) => id.trim()).filter(Boolean)));
@@ -258,11 +320,13 @@ export async function loadMachineWeldCodeMap(machineIds: string[]): Promise<Map<
     rows.push(...(data as { id: string; may_id: string; ma_may: string; ngay_thuc_hien: string | null }[]));
     if (data.length < pageSize) break;
   }
-  const seq = new Map<string, number>();
+  const seqByDay = new Map<string, number>();
   for (const row of rows) {
-    const next = (seq.get(row.may_id) ?? 0) + 1;
-    seq.set(row.may_id, next);
-    const code = buildMachineWeldCode(row.ma_may || "", next);
+    const day = (row.ngay_thuc_hien ?? "").slice(0, 10);
+    if (!day) continue;
+    const next = (seqByDay.get(day) ?? 0) + 1;
+    seqByDay.set(day, next);
+    const code = buildMachineWeldCode(day, next);
     if (code) map.set(row.id, code);
   }
   return map;
@@ -306,7 +370,7 @@ async function updateWeldCodesInBatches(
   }
 }
 
-/** Đồng bộ mã mối hàn theo chuẩn: mã dự án + công nghệ + loại mối + số TT.
+/** Đồng bộ mã hệ thống theo chuẩn: {mã DA}-{CN}-{DD}-{MM}-{YY}-{xxxx}.
  * Chỉ đổi các bản ghi khớp bộ lọc (nếu có).
  */
 export async function syncAllWeldCodes(
@@ -1253,8 +1317,11 @@ function journalSearchOrFilter(query: string) {
     `ma_nhan_su.ilike.%${query}%`,
     `du_an.ilike.%${query}%`,
     `ma_lich_su.ilike.%${query}%`,
+    `ma_hien_truong.ilike.%${query}%`,
+    `ten_moi_han_theo_may.ilike.%${query}%`,
     `chung_chi_su_dung.ilike.%${query}%`,
     `ma_may.ilike.%${query}%`,
+    `ten_may.ilike.%${query}%`,
   ].join(",");
 }
 

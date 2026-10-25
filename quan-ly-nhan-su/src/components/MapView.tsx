@@ -26,6 +26,12 @@ import {
   exportCoordinatesToExcel,
   parseCoordinatesExcel,
 } from "@/lib/parseCoordinatesExcel";
+import {
+  COORDINATE_RAIL_LABELS,
+  COORDINATE_RAIL_PREFIXES,
+  type CoordinateRailPrefix,
+  suggestCoordinateCode,
+} from "@/lib/weldCode";
 
 const GoogleCoordinateMap = dynamic(() => import("@/components/GoogleCoordinateMap"), {
   ssr: false,
@@ -53,6 +59,7 @@ const emptyForm = {
   longitude: "",
   latitude: "",
   chainage: "",
+  railPrefix: "TT" as CoordinateRailPrefix,
 };
 
 export default function MapView() {
@@ -175,6 +182,21 @@ export default function MapView() {
     setMode("route");
   }
 
+  function suggestNextAutolispCode(prefix: CoordinateRailPrefix = form.railPrefix) {
+    const existing = points.map((point) => point.code);
+    return suggestCoordinateCode(prefix, existing);
+  }
+
+  function openAddForm() {
+    const prefix = form.railPrefix || "TT";
+    setForm({
+      ...emptyForm,
+      railPrefix: prefix,
+      code: suggestNextAutolispCode(prefix),
+    });
+    setShowForm(true);
+  }
+
   function setViewMode(next: MapViewMode) {
     setMode(next);
     setFocusSelected(false);
@@ -205,8 +227,15 @@ export default function MapView() {
       return;
     }
 
-    setForm(emptyForm);
-    setShowForm(false);
+    const nextPrefix = (form.railPrefix || "TT") as CoordinateRailPrefix;
+    setForm({
+      ...emptyForm,
+      railPrefix: nextPrefix,
+      code: suggestCoordinateCode(
+        nextPrefix,
+        [...points.map((p) => p.code), form.code],
+      ),
+    });
     setStatusMsg(`Đã thêm ${res.point?.code}`);
     await reload(true);
     if (res.point) selectPoint(res.point.id);
@@ -387,10 +416,16 @@ export default function MapView() {
         <button
           type="button"
           disabled={!supabaseReady || saving}
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              return;
+            }
+            openAddForm();
+          }}
           className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
         >
-          {showForm ? "Đóng form" : "+ Thêm toạ độ"}
+          {showForm ? "Đóng form" : "+ Thêm Autolisp"}
         </button>
         <input
           ref={fileInputRef}
@@ -469,17 +504,49 @@ export default function MapView() {
       {showForm && (
         <form
           onSubmit={(e) => void handleAdd(e)}
-          className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:grid-cols-2 lg:grid-cols-5"
+          className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:grid-cols-2 lg:grid-cols-6"
         >
+          <div className="text-xs font-semibold text-slate-500 sm:col-span-2 lg:col-span-1">
+            Dải ray Autolisp
+            <div className="mt-1 grid grid-cols-2 gap-1">
+              {COORDINATE_RAIL_PREFIXES.map((prefix) => (
+                <button
+                  key={prefix}
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      railPrefix: prefix,
+                      code: suggestCoordinateCode(
+                        prefix,
+                        points.map((point) => point.code),
+                      ),
+                    }))
+                  }
+                  className={`h-9 rounded-lg border px-2 text-[11px] font-bold font-mono transition ${
+                    form.railPrefix === prefix
+                      ? "border-[#0047AB] bg-[#0047AB] text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-[#0047AB]/40"
+                  }`}
+                  title={COORDINATE_RAIL_LABELS[prefix]}
+                >
+                  {prefix}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="text-xs font-semibold text-slate-500">
-            Mã điểm
+            Mã điểm (Autolisp)
             <input
               required
               value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              placeholder="TT0015"
-              className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-[#0047AB]"
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+              placeholder="HT0001 / HP0001 / TT0001 / TP0001"
+              className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-mono text-slate-900 outline-none focus:border-[#0047AB]"
             />
+            <span className="mt-1 block text-[10px] font-medium text-slate-400">
+              {COORDINATE_RAIL_LABELS[form.railPrefix]} · TT 1→n theo dải · sửa được
+            </span>
           </label>
           <label className="text-xs font-semibold text-slate-500">
             Kinh độ (lon)
