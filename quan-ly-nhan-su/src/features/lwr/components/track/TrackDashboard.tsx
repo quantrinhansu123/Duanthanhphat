@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
@@ -40,7 +40,6 @@ import { TrackHeader } from "./TrackHeader";
 import { TrackSchematic } from "./TrackSchematic";
 import { RailGrid } from "./RailGrid";
 import { RailDetailPanel } from "./RailDetailPanel";
-import { LongRailDetailPanel } from "./LongRailDetailPanel";
 import type { StressSaveResult } from "./StressReleaseCalculator";
 import { WeldJointPanel } from "./WeldJointPanel";
 import { TrackPrint } from "./TrackPrint";
@@ -102,7 +101,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     (sum, item) => sum + (parseChainage(item.to) ?? 0) - (parseChainage(item.from) ?? 0),
     0,
   );
-  const sideOpen = detailOpen || Boolean(selectedJoint) || Boolean(selectedLongRail);
+  const sideOpen = detailOpen || Boolean(selectedJoint);
 
   const reloadSymbols = useCallback(async () => {
     try {
@@ -256,19 +255,18 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     }
   }
 
-  function scrollDetailIntoView() {
-    // Panel mounts after setState — đợi 2 frame rồi kéo vào khung nhìn.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        detailContainer.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
-    });
-  }
-
+  const sideWasOpen = useRef(false);
   useEffect(() => {
-    if (!sideOpen) return;
-    scrollDetailIntoView();
-  }, [sideOpen, selectedId, selectedJoint?.id, selectedLongRailId]);
+    const justOpened = sideOpen && !sideWasOpen.current;
+    sideWasOpen.current = sideOpen;
+    // Chỉ cuộn khi mới mở panel — chuyển thanh/ray không scroll lại (tránh giật lag).
+    if (!justOpened) return;
+    // Overlay cố định trên xl: không cần kéo trang.
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches) return;
+    requestAnimationFrame(() => {
+      detailContainer.current?.scrollIntoView({ behavior: "auto", block: "nearest" });
+    });
+  }, [sideOpen]);
 
   function savePlacement(placement: TrackPlacement) {
     if (!getPlacementSpan(layout.rows, placement)) {
@@ -503,8 +501,32 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   function step(direction: 1 | -1) {
     if (!cell || cells.length === 0) return;
     const index = cells.findIndex((item) => item.id === cell.id);
-    setSelectedId(cells[(index + direction + cells.length) % cells.length].id);
+    const nextId = cells[(index + direction + cells.length) % cells.length].id;
+    startTransition(() => setSelectedId(nextId));
   }
+
+  const selectCell = useCallback((id: string) => {
+    startTransition(() => {
+      setSelectedId(id);
+      setSelectedJoint(null);
+      setDetailOpen(true);
+    });
+  }, []);
+
+  const selectLongRail = useCallback((id: string | null) => {
+    startTransition(() => {
+      setSelectedLongRailId(id);
+      setSelectedJoint(null);
+    });
+  }, []);
+
+  const selectJoint = useCallback((joint: RailJoint) => {
+    startTransition(() => {
+      setSelectedJoint(joint);
+      setDetailOpen(false);
+      setSelectedLongRailId(null);
+    });
+  }, []);
 
   return (
     <div className="w-full max-w-none space-y-3">
@@ -542,7 +564,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
       <div className="relative min-w-0" data-testid="track-main">
         <TrackSchematic
           joints={joints}
-          onSelectJoint={joint => { setSelectedJoint(joint); setDetailOpen(false); setSelectedLongRailId(null); }}
+          onSelectJoint={selectJoint}
           layout={layout}
           symbols={symbols}
           ready={ready}
@@ -572,7 +594,6 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             if (layout.placements.length || layout.longRails.length || Object.values(layout.jointWeldLinks ?? {}).some(ids => ids.length)) { setError("Sơ đồ còn công trình, đoạn thi công hoặc liên kết mối hàn. Xoá các mục liên quan trước để tránh mất dữ liệu."); return false; }
             return commit({ ...layout, rows: layout.rows.map(row => ({ ...row, cells: [] })), jointWeldLinks: {} });
           }}
-          onLongRail={saveLongRail}
         >
           {(structures) => <RailGrid
             structures={structures}
@@ -580,21 +601,13 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             rows={layout.rows}
             longRails={layout.longRails}
             selectedLongRailId={selectedLongRailId}
-            onSelectLongRail={id => { setSelectedLongRailId(id); setSelectedJoint(null); }}
+            onSelectLongRail={selectLongRail}
             embedded
             joints={joints}
             selectedJointId={selectedJoint?.id ?? null}
             selectedId={cell?.id ?? ""}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setSelectedJoint(null);
-              setDetailOpen(true);
-            }}
-            onSelectJoint={(joint) => {
-              setSelectedJoint(joint);
-              setDetailOpen(false);
-              setSelectedLongRailId(null);
-            }}
+            onSelect={selectCell}
+            onSelectJoint={selectJoint}
             onAppend={(rowKey, from, to) => {
               const start = parseChainage(from);
               const end = parseChainage(to);
@@ -635,29 +648,6 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             ref={detailContainer}
             className="mt-3 min-w-0 space-y-3 xl:fixed xl:right-4 xl:top-24 xl:z-40 xl:mt-0 xl:w-[min(560px,calc(100vw-2rem))] xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-slate-200 xl:bg-white xl:shadow-xl"
           >
-            {selectedLongRail ? (
-              <LongRailDetailPanel
-                longRail={selectedLongRail}
-                layout={layout}
-                onClose={() => setSelectedLongRailId(null)}
-                onSaveParams={saveLongRailParams}
-                onMethodChange={(method) => {
-                  if (!selectedLongRail) return;
-                  const next = {
-                    ...selectedLongRail,
-                    params: { ...selectedLongRail.params, method },
-                    updatedAt: new Date().toISOString(),
-                  };
-                  commit({
-                    ...layout,
-                    longRails: layout.longRails.map((item) => (item.id === next.id ? next : item)),
-                  });
-                  void upsertLongRail(next);
-                }}
-                passed={Boolean(cell?.released && cellOnSelectedLongRail(cell))}
-                onPassChange={markLongRailPass}
-              />
-            ) : null}
             {selectedJoint ? (
               <WeldJointPanel
                 key={selectedJoint.id}

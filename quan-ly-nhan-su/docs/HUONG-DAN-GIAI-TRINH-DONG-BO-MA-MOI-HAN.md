@@ -97,16 +97,21 @@ Người dùng có thể sửa hậu tố / số TT khi thực tế thi công **
 
 ### Bước B — Nhập nhật ký mối hàn (đồng bộ)
 
+**Cách nhanh (hàng loạt):** trên màn **Nhật ký hàn** bấm **Autolisp → nhật ký**.
+
+1. Chọn dự án, ngày, máy, thợ, công nghệ; lọc dải HT/HP/TT/TP và (tuỳ chọn) khoảng Km.
+2. **Xem trước khớp mã** — bảng liệt kê từng điểm: Autolisp · Km · mã hệ thống · mã sơn · mã máy.
+3. Bỏ tick điểm chưa hàn / sửa mã máy nếu xen kẽ trái–phải.
+4. **Tạo N nhật ký** — hệ thống tạo bản ghi và gắn `toa_do` (tối đa 200 mối/lần). Điểm đã liên kết bị bỏ qua.
+
+**Cách từng mối:**
+
 1. **Thêm nhật ký** → chọn **dự án**, **máy**, **thợ**, **ngày**.
 2. Chọn **điểm Autolisp** (vd `HT0166`) → hệ thống tự điền Km / tọa độ.
-3. Hệ thống tự điền:
-   - Mã hệ thống  
-   - Mã hiện trường (sơn)  
-   - Mã trong máy (theo rule UN5 hoặc K922)
-4. Chỉ sửa tay khi cần (thường chỉ mã máy hoặc mã sơn).
-5. Lưu → điểm Autolisp được **liên kết** với bản ghi nhật ký.
+3. Hệ thống tự điền mã hệ thống, mã sơn, mã máy.
+4. Chỉ sửa tay khi cần; Lưu → điểm Autolisp được **liên kết**.
 
-**Ước lượng hiệu suất:** khi đã có sẵn điểm Autolisp và rule mã, nhập khoảng 40 mối chỉ cần chỉnh hậu tố mã máy — khoảng vài phút (không nhập lại Km/GPS từng mối).
+**Ước lượng hiệu suất:** đã import Autolisp thì tạo hàng loạt ~40 mối chỉ cần soát mã máy trên preview — vài phút.
 
 ### Bước C — Tra cứu / đối chiếu khi giải trình
 
@@ -155,6 +160,7 @@ Bản ghi cũ vẫn giữ mã đã nhập. Có thể bổ sung dần điểm Aut
 | Rule mã | `src/lib/weldCode.ts` |
 | Import Excel Autolisp | `src/lib/parseCoordinatesExcel.ts` · màn Bản đồ |
 | Form nhật ký + tìm kiếm | `src/components/WeldingJournalList.tsx` |
+| Nhập hàng loạt Autolisp | `src/components/BulkAutolispWeldDialog.tsx` · `src/lib/bulkCreateWeldsFromAutolisp.ts` |
 | Bảng điểm thiết kế | `public.toa_do` (`ma_diem`, `ly_trinh`, tọa độ) |
 | Bảng nhật ký | `public.lich_su_moi_han` (`ma_lich_su`, `ma_hien_truong`, `ten_moi_han_theo_may`) |
 | Migration 4 dải Autolisp | `supabase/migration_20261026_dong_bo_autolisp_4_dai.sql` |

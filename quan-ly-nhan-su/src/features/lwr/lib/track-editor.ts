@@ -459,16 +459,13 @@ export function placeNextShortRail(rows: RailRow[], rowKey: string): RailRow[] {
   });
 }
 
-/** Hide a placed short rail. Never clears Đạt. */
+/** Gỡ thanh ngắn khỏi sơ đồ (kể cả đã giải toả / Đạt). */
 export function removeShortRail(rows: RailRow[], cellId: string): RailRow[] {
   const row = rows.find((item) => item.cells.some((cell) => cell.id === cellId));
   if (!row) throw new RangeError("Không tìm thấy thanh ray.");
   const cell = row.cells.find((item) => item.id === cellId);
   if (!cell) throw new RangeError("Không tìm thấy thanh ray.");
-  if (cell.released) {
-    throw new RangeError("Thanh đã Đạt. Không xóa trạng thái Đạt. Bấm Chưa giải tỏa trên panel nếu muốn gỡ thanh này.");
-  }
-  if (!cell.placed) {
+  if (!cell.placed && !cell.released) {
     throw new RangeError("Thanh này chưa rải trên sơ đồ.");
   }
   return rows.map((item) => {
@@ -477,7 +474,7 @@ export function removeShortRail(rows: RailRow[], cellId: string): RailRow[] {
       ...item,
       cells: item.cells.map((entry) => {
         if (entry.id !== cellId) return entry;
-        const { placed: _placed, ...rest } = entry;
+        const { placed: _placed, released: _released, ...rest } = entry;
         return rest;
       }),
     };

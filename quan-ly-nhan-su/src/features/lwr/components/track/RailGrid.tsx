@@ -54,10 +54,10 @@ function chipDeleteButton(cellId: string, box: { left: number; width: number }, 
         event.stopPropagation();
         onRemove(cellId);
       }}
-      className="absolute z-[4] flex size-5 items-center justify-center rounded-full border border-slate-300 bg-white text-red-600 shadow-sm hover:border-red-400 hover:bg-red-50"
-      style={{ left: box.left + width - 22, top: 22 }}
+      className="absolute z-[5] flex size-6 items-center justify-center rounded-full border border-red-300 bg-white text-red-600 shadow-md hover:border-red-500 hover:bg-red-50"
+      style={{ left: box.left + Math.max(0, width - 26), top: 18 }}
     >
-      <X className="size-3" />
+      <X className="size-3.5" strokeWidth={2.5} />
     </button>
   );
 }
@@ -175,23 +175,23 @@ export const RailGrid = memo(function RailGrid({
                       onClick={() => { onSelect(cell.id); onSelectLongRail?.(cover.rail.id); }}
                       title={`${label} · ${cell.id} · ${cover.rail.params.railType} · Km ${cell.from} – ${cell.to} · ${statusNote}`}
                       aria-label={`${label}: thanh ngắn của ${cover.rail.code}`}
-                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${done ? "" : "pr-5 "}px-1 text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
+                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
                       style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : done ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
                     >
                       <span className="block truncate">{label}</span>
                       {done ? <span className="block truncate text-[9px] font-medium opacity-90">{statusNote}</span> : null}
                     </button>
-                    {!done && chipDeleteButton(cell.id, box, onRemove)}
+                    {chipDeleteButton(cell.id, box, onRemove)}
                   </span>
                 );
               }
               const lengthM = Math.max(0, to - from);
               const bareLabel = shortRailChipLabel(cell.id, lengthM, cell.temp);
               return <span key={cell.id}>
-                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${cell.released ? "" : "pr-5 "}px-1 text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
+                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
                   <span className="block truncate">{bareLabel}</span>
                 </button>
-                {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
+                {chipDeleteButton(cell.id, box, onRemove)}
               </span>;
             })}
             {jointsForRow(joints, row).map(joint => {

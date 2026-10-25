@@ -67,6 +67,7 @@ import {
   suggestWeldCode,
 } from "@/lib/weldCode";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
+import { BulkAutolispWeldDialog } from "@/components/BulkAutolispWeldDialog";
 import {
   certificateEquipmentFamily,
   describeCertificateRequirement,
@@ -1688,6 +1689,7 @@ export default function WeldingJournalList({
   const [error, setError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
+  const [autolispBulkOpen, setAutolispBulkOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
@@ -2653,17 +2655,28 @@ export default function WeldingJournalList({
           {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
         </button>
         {!failedWeldMode ? (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingRow(null);
-              setEditingForm(null);
-              setFormOpen(true);
-            }}
-            className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-          >
-            <span className="text-base leading-none">+</span> Thêm nhật ký
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setAutolispBulkOpen(true)}
+              disabled={saving || bulkFillSaving || importing}
+              title="Tạo nhật ký hàng loạt từ điểm Autolisp HT/HP/TT/TP đã import"
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 text-xs font-semibold text-amber-900 shadow-2xs hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+            >
+              Autolisp → nhật ký
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingRow(null);
+                setEditingForm(null);
+                setFormOpen(true);
+              }}
+              className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white shadow-xs transition-all duration-150 hover:bg-[#00388A] active:bg-[#002D6E] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+            >
+              <span className="text-base leading-none">+</span> Thêm nhật ký
+            </button>
+          </>
         ) : null}
        </div>
       </div>
@@ -3154,6 +3167,19 @@ export default function WeldingJournalList({
         }}
         onSubmit={editingRow ? handleEdit : handleCreate}
         onBulkSubmit={handleBulkFill}
+      />
+
+      <BulkAutolispWeldDialog
+        open={autolispBulkOpen}
+        onClose={() => setAutolispBulkOpen(false)}
+        projects={projectOptions}
+        welders={welderOptions}
+        machines={machineOptions}
+        onDone={(message) => {
+          showToast(message);
+          refetch();
+          setReloadToken((token) => token + 1);
+        }}
       />
 
       {machineError && (

@@ -5,22 +5,15 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Check, Plus, RefreshCw, Shapes } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
-  defaultLongRailParams,
-  defaultRailTypeForNewLongRail,
   formatChainage,
   getPlacementSpan,
-  nextLongRailCode,
-  paramsForRailType,
   parseChainage,
   railRowKey,
   trackExtent,
-  type LongRail,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
-import { RAIL_TYPE_OPTIONS } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
-import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 import { TrackMapCanvas } from "./TrackMapCanvas";
 import type { StructureLayer } from "./RailGrid";
@@ -39,7 +32,6 @@ interface TrackSchematicProps {
   onExtend: (count: number) => boolean;
   onPlan: (start: string, end: string) => boolean;
   onClearPlan: () => boolean;
-  onLongRail: (longRail: LongRail, nextRows?: RailRow[]) => boolean;
   children: (structures: StructureLayer) => ReactNode;
 }
 
@@ -68,7 +60,6 @@ export function TrackSchematic({
   onExtend,
   onPlan,
   onClearPlan,
-  onLongRail,
   children,
 }: TrackSchematicProps) {
   const [rowKey, setRowKey] = useState("UT");
@@ -76,40 +67,16 @@ export function TrackSchematic({
   const [structureTo, setStructureTo] = useState("");
   const [planFrom, setPlanFrom] = useState("0+000");
   const [planTo, setPlanTo] = useState("");
-  const [releaseDate, setReleaseDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
-  const [completed, setCompleted] = useState(false);
-  const [lrTemp, setLrTemp] = useState("30");
   const [symbolId, setSymbolId] = useState("");
   const [label, setLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [lrRowKey, setLrRowKey] = useState("UT");
-  const [lrFrom, setLrFrom] = useState("");
-  const [lrTo, setLrTo] = useState("");
-  const [lrRailType, setLrRailType] = useState(() => defaultRailTypeForNewLongRail([]));
-  const [lrCode, setLrCode] = useState("");
-  const [lrLabel, setLrLabel] = useState("");
-  const [editingLongRailId, setEditingLongRailId] = useState<string | null>(null);
   const [appendCount, setAppendCount] = useState("1");
   const [formError, setFormError] = useState<string | null>(null);
-  const [lrFormError, setLrFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [lrNotice, setLrNotice] = useState<string | null>(null);
 
   const row = layout.rows.find((item) => railRowKey(item) === rowKey) ?? layout.rows[0];
   const currentSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? (symbolId ? undefined : symbols[0]);
   const hasCells = layout.rows.some((item) => item.cells.length > 0);
-
-  const lrRow = layout.rows.find((item) => railRowKey(item) === lrRowKey) ?? layout.rows[0];
-  const editingLongRail = editingLongRailId
-    ? layout.longRails.find((item) => item.id === editingLongRailId)
-    : undefined;
-  /** Đã giải toả xong → khóa lý trình; bỏ tick Hoàn thành để mở lại nếu cần. */
-  const chainageLocked = Boolean(editingLongRail?.completedAt) && completed;
-  const lrStartMetres = parseChainage(lrFrom);
-  const lrEndMetres = parseChainage(lrTo);
-  const lrLength = lrStartMetres !== null && lrEndMetres !== null && lrEndMetres > lrStartMetres
-    ? lrEndMetres - lrStartMetres
-    : null;
 
   const extent = trackExtent(layout.rows);
   useEffect(() => {
@@ -120,10 +87,6 @@ export function TrackSchematic({
 
   const clearEditor = useCallback(() => {
     setEditingId(null); setLabel(""); setFormError(null);
-  }, []);
-
-  const clearLongRailEditor = useCallback(() => {
-    setEditingLongRailId(null); setCompleted(false); setLrTemp("30"); setLrCode(""); setLrLabel(""); setLrFormError(null);
   }, []);
 
   const edit = useCallback((placement: TrackPlacement) => {
@@ -178,148 +141,6 @@ export function TrackSchematic({
         <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật tuyến</button>
         <button type="button" disabled={!ready || !hasCells} onClick={() => { if (onClearPlan()) setNotice("Đã xoá sơ đồ rải ray."); }} className="h-10 rounded border px-3 text-sm text-red-700">Xoá rải ray</button>
       </form>
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-bold">Bước 3 · Tạo thanh LWR</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Chọn ray trái/phải của từng tuyến, nhập lý trình đầu–cuối — thanh hiện <b>xám</b> trên tim ray. Mỗi ngày hàn xong, sửa lý trình cuối để tăng chiều dài. Bước 4: mở thanh → giải toả → Hoàn thành → <b>xanh</b> nếu T≥30°C, <b>vàng-cam</b> nếu T&lt;30°C.
-            </p>
-          </div>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const key = railRowKey(lrRow);
-            const existing = editingLongRailId
-              ? layout.longRails.find((item) => item.id === editingLongRailId)
-              : undefined;
-            const code = (lrCode.trim() || existing?.code || nextLongRailCode(layout.longRails)).trim();
-            if (!code) { setLrFormError("Nhập mã LWR."); return; }
-            if (layout.longRails.some((item) => item.code === code && item.id !== editingLongRailId)) {
-              setLrFormError("Mã LWR đã tồn tại.");
-              return;
-            }
-            if (lrStartMetres === null || lrEndMetres === null) {
-              setLrFormError("Nhập lý trình dạng 0+000.");
-              return;
-            }
-            if (lrEndMetres <= lrStartMetres) {
-              setLrFormError("Lý trình cuối phải lớn hơn lý trình đầu.");
-              return;
-            }
-            if (
-              existing?.completedAt
-              && completed
-              && (existing.startMetres !== lrStartMetres || existing.endMetres !== lrEndMetres || existing.rowKey !== key)
-            ) {
-              setLrFormError("Đoạn đã giải toả xong — lý trình bị khóa. Bỏ tick Hoàn thành nếu cần mở lại để sửa.");
-              return;
-            }
-            if (!releaseDate) { setLrFormError("Chọn ngày thi công."); return; }
-            const temp = Number(lrTemp.replace(",", "."));
-            if (lrTemp.trim() === "" || !Number.isFinite(temp)) { setLrFormError("Nhập nhiệt độ giải toả (°C)."); return; }
-            const spanDraft = { rowKey: key, startCellId: "", endCellId: "", startMetres: lrStartMetres, endMetres: lrEndMetres };
-            const span = getPlacementSpan(layout.rows, spanDraft);
-            if (!span) { setLrFormError("Đoạn thi công phải nằm trong phạm vi tuyến đã rải. Nhập lý trình lẻ được giữ nguyên."); return; }
-            spanDraft.startCellId = span.startCell.id;
-            spanDraft.endCellId = span.endCell.id;
-            const railType = lrRailType || defaultRailTypeForNewLongRail(layout.longRails.filter((item) => item.id !== editingLongRailId));
-            const draft: LongRail = {
-              id: editingLongRailId ?? crypto.randomUUID(),
-              code,
-              label: lrLabel.trim() || code,
-              ...spanDraft,
-              releaseDate,
-              completedAt: completed ? (existing?.completedAt ?? new Date().toISOString()) : undefined,
-              params: {
-                ...paramsForRailType(
-                  railType,
-                  existing?.params ?? defaultLongRailParams(layout.rows, spanDraft, railType),
-                ),
-                airTemp: temp,
-              },
-              updatedAt: new Date().toISOString(),
-            };
-            if (onLongRail(draft)) {
-              clearLongRailEditor();
-              setLrRailType(defaultRailTypeForNewLongRail([...layout.longRails.filter((item) => item.id !== editingLongRailId), draft]));
-              setLrFrom("");
-              setLrTo("");
-              setLrFormError(null);
-              setLrNotice(editingLongRailId ? "Đã cập nhật lý trình." : `Đã ghi lý trình ${code} · ${lrLength} m.`);
-            } else {
-              setLrFormError("Không lưu được lý trình. Kiểm tra chồng lấn hoặc thông báo lỗi phía trên.");
-            }
-          }}
-          className="mt-4 space-y-3"
-        >
-          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-6">
-            <label className="text-xs text-slate-600">Dải ray
-              <select
-                className={inputClass}
-                value={railRowKey(lrRow)}
-                onChange={(event) => setLrRowKey(event.target.value)}
-                disabled={!ready || chainageLocked}
-              >
-                {layout.rows.map((item) => (
-                  <option key={railRowKey(item)} value={railRowKey(item)}>{item.line} · {item.rail}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs text-slate-600">Lý trình đầu
-              <input className={inputClass} value={lrFrom} onChange={(event) => setLrFrom(event.target.value)} placeholder="0+000" disabled={!ready || chainageLocked} />
-            </label>
-            <label className="text-xs text-slate-600">
-              Lý trình cuối
-              <span className="ml-1 font-normal text-teal-700">(cập nhật hàng ngày)</span>
-              <input className={inputClass} value={lrTo} onChange={(event) => setLrTo(event.target.value)} placeholder="0+800" disabled={!ready || chainageLocked} />
-            </label>
-            <label className="text-xs text-slate-600">Loại ray
-              <select className={inputClass} value={lrRailType} onChange={(event) => setLrRailType(event.target.value)} disabled={!ready}>
-                {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            <label className="text-xs text-slate-600">Mã LWR
-              <input
-                className={inputClass}
-                value={lrCode}
-                onChange={(event) => setLrCode(event.target.value)}
-                placeholder={nextLongRailCode(layout.longRails)}
-                maxLength={40}
-                disabled={!ready}
-              />
-            </label>
-            <label className="text-xs text-slate-600">Tên hiển thị
-              <input className={inputClass} value={lrLabel} onChange={(event) => setLrLabel(event.target.value)} placeholder="Ví dụ: LWR01" maxLength={120} disabled={!ready} />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-xs">Ngày thi công<input type="date" required className={inputClass} value={releaseDate} onChange={e => setReleaseDate(e.target.value)} /></label>
-            <label className="text-xs">Nhiệt độ giải toả (°C)<input inputMode="decimal" className={`${inputClass} max-w-32`} value={lrTemp} onChange={e => setLrTemp(e.target.value)} /></label>
-            <label className="flex h-10 items-center gap-2 text-sm" title="Khi đã giải toả xong, lý trình đầu–cuối bị khóa">
-              <input type="checkbox" checked={completed} onChange={(e) => setCompleted(e.target.checked)} />
-              Hoàn thành giải toả (khóa lý trình)
-            </label>
-            <div className="flex h-10 items-center rounded-md bg-slate-50 px-3 text-xs text-slate-600">
-              {chainageLocked
-                ? "Lý trình đã khóa — thanh đã giải toả xong"
-                : lrLength !== null
-                  ? `Chiều dài đang theo dõi: ${lrLength} m · Km ${formatChainage(lrStartMetres!)} – ${formatChainage(lrEndMetres!)}`
-                  : "Nhập lý trình đầu và cuối để tính chiều dài"}
-            </div>
-            <button type="submit" disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md bg-teal-700 px-3 text-sm font-medium text-white disabled:opacity-40">
-              {editingLongRailId ? <Check className="size-4" /> : <Plus className="size-4" />}
-              {completed ? "Lưu & khóa lý trình" : editingLongRailId ? "Cập nhật lý trình" : "Tạo thanh LWR"}
-            </button>
-            {editingLongRailId && (
-              <button type="button" onClick={clearLongRailEditor} className="h-10 rounded-md border px-3 text-sm">Hủy sửa</button>
-            )}
-          </div>
-          {lrFormError && <p role="alert" className="text-sm text-red-700">{lrFormError}</p>}
-          {lrNotice && <p role="status" className="text-sm text-emerald-700">{lrNotice}</p>}
-        </form>
-      </div>
 
       <TrackMapCanvas layout={layout}>
         {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
