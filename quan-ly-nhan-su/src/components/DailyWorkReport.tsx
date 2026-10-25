@@ -44,6 +44,7 @@ import { loadJournalMachineOptions, type JournalMachineOption } from "@/lib/mach
 import { loadProjects } from "@/lib/projectsDb";
 import { addHoursToWeldTime, DEFAULT_WELD_WORK_HOURS } from "@/lib/weldReportData";
 import { deaccent } from "@/i18n/deaccent";
+import { useLanguage } from "@/i18n/LanguageProvider";
 
 const LINE_TICK = "✓";
 
@@ -534,6 +535,7 @@ function WorkFormModal({
   const titleId = useId();
   const [phan, setPhan] = useState<WorkSection>("hom_nay");
   const [projectId, setProjectId] = useState(currentDuAnId);
+  const { lang } = useLanguage();
   const [form, setForm] = useState<WorkItemInput>(() => emptyWorkInput());
   const workType = matchWorkType(workTypes, form.hangMuc, form.congViecId);
   const [error, setError] = useState("");
@@ -883,7 +885,7 @@ function WorkFormModal({
                 </div>
               </div>
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-                <Field label="Đơn vị" value={form.donVi} onChange={(v) => patch({ donVi: v })} />
+                <Field label="Đơn vị" value={lang === "en" && form.donVi === "mối hàn" ? "Weld" : form.donVi} onChange={(v) => patch({ donVi: v })} />
                 <Field label="Số mối hàn hôm qua" value={form.denHomQua} onChange={(v) => patch({ denHomQua: v })} />
                 <Field label="Số mối hàn hôm nay" value={form.homNay} onChange={(v) => patch({ homNay: v })} />
                 <label>
@@ -1547,7 +1549,7 @@ export default function DailyWorkReport() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
               >
                 <Plus size={14} weight="bold" aria-hidden />
-                Thêm mới
+                Thêm phiếu mới
                 <CaretDown size={12} weight="bold" aria-hidden />
               </button>
               {addMenuOpen && (
@@ -1570,7 +1572,7 @@ export default function DailyWorkReport() {
           <div className="px-4 py-8 text-center text-sm text-slate-500">Đang tải danh sách...</div>
         ) : reportList.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-slate-500">
-            Chưa có phiếu báo cáo. Nhấn <span className="font-semibold text-slate-700">Thêm mới</span> để nhập công việc —
+            Chưa có phiếu báo cáo. Nhấn <span className="font-semibold text-slate-700">Thêm phiếu mới</span> để nhập công việc —
             phiếu sẽ hiện ở đây.
           </div>
         ) : (

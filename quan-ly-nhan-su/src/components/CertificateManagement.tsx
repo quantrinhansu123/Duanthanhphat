@@ -538,7 +538,6 @@ function CertificateTypeDetailModal({
   const fields: Array<[string, string | undefined]> = [
     ["Mã", group?.code],
     ["Nhà cung cấp", group?.supplier],
-    ["Loại dây hàn", group?.wireType],
     ["Đơn vị cấp", group?.issuer],
     ["Máy áp dụng", group?.machine],
     ["Phương pháp hàn", group?.weldScope],
@@ -1787,15 +1786,6 @@ export default function CertificateManagement() {
                     value={form.supplier}
                     onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
                     placeholder="VD: Railtech"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Loại dây hàn</label>
-                  <input
-                    className={fieldClass}
-                    value={form.wireType}
-                    onChange={(e) => setForm((f) => ({ ...f, wireType: e.target.value }))}
-                    placeholder="VD: ER70S-6"
                   />
                 </div>
               </div>

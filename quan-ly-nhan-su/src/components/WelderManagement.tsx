@@ -1438,7 +1438,7 @@ export default function WelderManagement() {
           <MultiSelectCombobox title={isEn ? "Team" : "Tổ hàn"} options={teamOptions} selected={teamsSel} onChange={setTeamsSel} />
           <MultiSelectCombobox title={isEn ? "Rail Type" : "Loại ray"} options={railOptions} selected={railsSel} onChange={setRailsSel} />
           <MultiSelectCombobox title={isEn ? "Trained Machine" : "Máy đã đào tạo"} options={machineOptions} selected={machinesSel} onChange={setMachinesSel} />
-          <MultiSelectCombobox title={isEn ? "Weld Method" : "PP hàn"} options={methodOptions} selected={methodsSel} onChange={setMethodsSel} />
+          <MultiSelectCombobox title={isEn ? "Welding Method" : "PP hàn"} options={methodOptions} selected={methodsSel} onChange={setMethodsSel} />
           <MultiSelectCombobox title={isEn ? "Status" : "Trạng thái"} options={statusOptions} selected={statusesSel} onChange={setStatusesSel} />
         </div>
 
@@ -1452,7 +1452,7 @@ export default function WelderManagement() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-xs transition-colors cursor-pointer"
           >
             <Plus size={16} weight="bold" />
-            {isEn ? "Add New" : "Thêm mới"}
+            {isEn ? "Add New Welder" : "Thêm mới"}
           </button>
         </div>
       </div>

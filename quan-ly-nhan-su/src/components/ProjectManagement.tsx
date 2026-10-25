@@ -2370,10 +2370,10 @@ export default function ProjectManagement() {
           onChange={(e) => setStatus(e.target.value)}
           className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
         >
-          <option>Tất cả trạng thái</option>
-          <option>Đang triển khai</option>
-          <option>Hoàn thành</option>
-          <option>Tạm dừng</option>
+          <option value="Tất cả trạng thái">Tất cả trạng thái</option>
+          <option value="Đang triển khai">Đang triển khai</option>
+          <option value="Hoàn thành">Hoàn thành</option>
+          <option value="Tạm dừng">Tạm dừng</option>
         </select>
 
         <select

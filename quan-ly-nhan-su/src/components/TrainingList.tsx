@@ -60,7 +60,7 @@ function serializeRailTypes(values: string[]): string {
 }
 
 function courseHasRailType(railType: string | undefined, filter: string) {
-  if (filter === "Tất cả loại hàn") return true;
+  if (filter === "Tất cả loại ray") return true;
   return parseRailTypes(railType).includes(filter);
 }
 
@@ -1194,7 +1194,7 @@ function TrainingDetailModal({
 
 export default function TrainingList() {
   const [resultFilter, setResultFilter] = useState("Tất cả kết quả");
-  const [railFilter, setRailFilter] = useState("Tất cả loại hàn");
+  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
   const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
   const railFilterOptions = useCatalogOptions("Loại ray");
   const methodFilterOptions = useCatalogOptions("Phương pháp hàn", "code");
@@ -1413,14 +1413,14 @@ export default function TrainingList() {
           </select>
         </label>
         <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-48">
-          Loại hàn
+          Loại ray
           <select
             value={railFilter}
             onChange={(e) => setRailFilter(e.target.value)}
             className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 cursor-pointer sm:text-sm"
-            aria-label="Lọc theo loại hàn"
+            aria-label="Lọc theo loại ray"
           >
-            {["Tất cả loại hàn", ...railFilterOptions].map((r) => (
+            {["Tất cả loại ray", ...railFilterOptions].map((r) => (
               <option key={r}>{r}</option>
             ))}
           </select>

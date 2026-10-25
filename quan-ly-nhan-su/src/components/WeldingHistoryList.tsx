@@ -395,13 +395,13 @@ function HistoryModal({
               {readOnly ? (
                 <div className="mt-2">
                   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[form.result]}`}>
-                    {form.result}
+                    {form.result === "Sửa chữa" ? "Hàn lại" : form.result}
                   </span>
                 </div>
               ) : (
                 <FormCombo
                   value={form.result}
-                  options={resultOptions.map((r) => ({ value: r, label: r }))}
+                  options={resultOptions.map((r) => ({ value: r, label: r === "Sửa chữa" ? "Hàn lại" : r }))}
                   placeholder="— Chọn kết quả —"
                   onChange={(v) => setForm({ ...form, result: (v || "Đạt") as WeldingHistoryRecord["result"] })}
                 />
@@ -1019,7 +1019,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
-              <option key={r}>{r}</option>
+              <option key={r} value={r}>{r === "Sửa chữa" ? "Hàn lại" : r}</option>
             ))}
           </select>
         )}
@@ -1227,7 +1227,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${resultStyle[row.result]}`}
                     >
-                      {row.result}
+                      {row.result === "Sửa chữa" ? "Hàn lại" : row.result}
                     </span>
                   </td>
                   <td className="relative px-2 py-3 text-center">

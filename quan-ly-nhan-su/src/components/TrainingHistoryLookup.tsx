@@ -32,7 +32,7 @@ export default function TrainingHistoryLookup() {
   const [result, setResult] = useState("Tất cả kết quả");
   const [status, setStatus] = useState("Tất cả trạng thái");
   const [methodFilter, setMethodFilter] = useState("Tất cả công nghệ");
-  const [railFilter, setRailFilter] = useState("Tất cả loại hàn");
+  const [railFilter, setRailFilter] = useState("Tất cả loại ray");
   const methodOptions = useCatalogOptions("Phương pháp hàn", "code");
   const railOptions = useCatalogOptions("Loại ray");
 
@@ -75,7 +75,7 @@ export default function TrainingHistoryLookup() {
       const matchStatus = status === "Tất cả trạng thái" || row.status === status;
       const matchMethod = methodFilter === "Tất cả công nghệ" || (row.weldMethod || "") === methodFilter;
       const matchRail =
-        railFilter === "Tất cả loại hàn"
+        railFilter === "Tất cả loại ray"
         || (row.railType || "")
           .split(/[,;|/·]+/)
           .map((token) => token.trim())
@@ -131,9 +131,9 @@ export default function TrainingHistoryLookup() {
             </select>
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
-            Loại hàn
-            <select value={railFilter} onChange={(e) => setRailFilter(e.target.value)} className={selectClass} aria-label="Lọc theo loại hàn">
-              {["Tất cả loại hàn", ...railOptions].map((item) => (
+            Loại ray
+            <select value={railFilter} onChange={(e) => setRailFilter(e.target.value)} className={selectClass} aria-label="Lọc theo loại ray">
+              {["Tất cả loại ray", ...railOptions].map((item) => (
                 <option key={item}>{item}</option>
               ))}
             </select>

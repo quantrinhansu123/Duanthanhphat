@@ -13,7 +13,7 @@ interface TrackHeaderProps {
 /** Page header: title + stat cards + kilometre-range selector.
  *  Server component — fully driven by props. */
 export function TrackHeader({
-  title = "LWR/CWR Track Map",
+  title = "LWR/CWR Map Overview",
   subtitle = "Tuyến 10 km · 4 dải ray · 80 đoạn LWR",
   stats = TRACK_STATS,
   rangeLabel = "Km 0–10",

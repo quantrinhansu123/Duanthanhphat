@@ -98,7 +98,7 @@ function translate(raw: string): string {
   if (dueDays) return lead + `${dueDays[1] === "Quá" ? "Overdue by" : "Due in"} ${dueDays[2]} ${dueDays[2] === "1" ? "day" : "days"}` + trail;
   // Báo cáo chất lượng: ghi chú thẻ thống kê và dòng nguồn dữ liệu.
   const qualitySource = core.match(/^Nhật ký hàn · ([\d.,]+) bản ghi · Sửa\/hàn lại = có Mối hàn liên kết$/);
-  if (qualitySource) return lead + `Welding journal · ${qualitySource[1]} records · Repair/re-weld = has a linked weld` + trail;
+  if (qualitySource) return lead + `Welding log · ${qualitySource[1]} records · Re-weld = has a linked weld` + trail;
   const passNote = core.match(/^([\d.,]+%) tỷ lệ đạt$/);
   if (passNote) return lead + `${passNote[1]} pass rate` + trail;
   const failNote = core.match(/^([\d.,]+) mối không đạt$/);
@@ -118,7 +118,7 @@ function translate(raw: string): string {
   const donePeriod = core.match(/^Đã thực hiện \+ (\d{4}) trong kỳ · KH kỳ lọc (.+) · ([\d.,]+) mối$/);
   if (donePeriod) return lead + `Performed + ${donePeriod[1]} in period · Plan for filter period ${donePeriod[2]} · ${donePeriod[3]} welds` + trail;
   const yearBanner =core.match(/^Nhật ký hàn Supabase · ([\d.,]+) bản ghi đã lọc · (\d+) năm$/);
-  if (yearBanner) return lead + `Supabase welding journal · ${yearBanner[1]} filtered records · ${yearBanner[2]} ${yearBanner[2] === "1" ? "year" : "years"}` + trail;
+  if (yearBanner) return lead + `Supabase welding log · ${yearBanner[1]} filtered records · ${yearBanner[2]} ${yearBanner[2] === "1" ? "year" : "years"}` + trail;
   const rowCountRule = core.match(/^([\d.,]+) dòng$/);
   if (rowCountRule) return lead + `${rowCountRule[1]} ${rowCountRule[1] === "1" ? "row" : "rows"}` + trail;
   const yearLoadError = core.match(/^Không tải được tổng hợp năm: (.+)$/);

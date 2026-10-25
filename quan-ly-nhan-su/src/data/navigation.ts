@@ -41,7 +41,7 @@ export const navigation: NavItem[] = [
     id: "dao-tao",
     code: "10",
     label: "Đào tạo & chứng chỉ",
-    labelEn: "Training & Certificates",
+    labelEn: "Training & Certification",
     children: [
       {
         id: "khoa-dao-tao",
@@ -75,7 +75,7 @@ export const navigation: NavItem[] = [
       {
         id: "phan-cong-may",
         label: "Lịch chạy máy",
-        labelEn: "Machine Run Schedule",
+        labelEn: "Machine Operation Log",
         description: "Tổng hợp từ nhật ký hàn và báo cáo mức dầu trên từng dòng lịch",
         descriptionEn: "Aggregated from weld journal with per-row oil level reports",
       },
@@ -89,7 +89,7 @@ export const navigation: NavItem[] = [
       {
         id: "kiem-tra-may-truoc-ca",
         label: "Checklist máy trước ca",
-        labelEn: "Pre-shift machine checklist",
+        labelEn: "Pre-shift Machine Checklist",
         description: "Công nhân xác nhận checklist máy hàn MFBW trước ca, lưu phiếu và in mẫu",
         descriptionEn: "Crew confirms the MFBW pre-shift checklist, saves the sheet, and prints the form",
       },
@@ -135,19 +135,19 @@ export const navigation: NavItem[] = [
     id: "lwr-han-ray",
     code: "14",
     label: "Quản lý hàn ray LWR",
-    labelEn: "LWR Rail Welding",
+    labelEn: "LWR/CWR Management",
     children: [
       {
         id: "lwr-giai-toa-ung-suat",
         label: "Giải toả ứng suất R2",
-        labelEn: "R2 Stress Release",
+        labelEn: "Stress Release",
         description: "Tính toán giải toả ứng suất ray dài / ray liền (R2)",
         descriptionEn: "Long welded rail / continuous welded rail stress-release calculator (R2)",
       },
       {
         id: "lwr-track-map",
         label: "Tổng quan (Track Map)",
-        labelEn: "Track Map Overview",
+        labelEn: "LWR/CWR Map Overview",
         description: "Sơ đồ track map, ô ray và chi tiết theo lý trình",
         descriptionEn: "Track map schematic, rail cells, and chainage details",
       },
@@ -183,7 +183,7 @@ export const navigation: NavItem[] = [
       {
         id: "nhat-ky-han",
         label: "Nhật ký hàn",
-        labelEn: "Welding Journal",
+        labelEn: "Welding Log",
         description: "Theo dõi nhật ký hàn theo thời gian, nhân sự, vị trí GPS và tình trạng",
         descriptionEn: "Track daily weld records by timestamp, welder, GPS coordinates, and status",
       },
@@ -197,14 +197,14 @@ export const navigation: NavItem[] = [
       {
         id: "bc-moi-han-theo-nam",
         label: "Báo cáo mối hàn theo năm",
-        labelEn: "Yearly Weld Report",
+        labelEn: "Annual Welding Report",
         description: "Bảng tổng hợp mối hàn, đạt/lỗi, FBW/ATW và loại mối theo từng năm",
         descriptionEn: "Annual consolidated weld report, pass/defect stats, FBW/ATW methods",
       },
       {
         id: "ban-do",
         label: "Quản lý mối hàn theo GPS",
-        labelEn: "Weld Map (GPS)",
+        labelEn: "Weld Tracking Map (GPS)",
         description: "Bản đồ đánh dấu mối hàn theo tọa độ GPS / lý trình Km",
         descriptionEn: "Interactive map marking weld locations by GPS coordinates and Km chainage",
       },
