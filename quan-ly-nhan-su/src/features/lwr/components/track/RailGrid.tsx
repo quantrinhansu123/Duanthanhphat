@@ -283,6 +283,15 @@ export const RailGrid = memo(function RailGrid({
                 {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
               </span>;
             })}
+            {row.cells.slice(0, -1).map((cell, index) => {
+              const metres = parseChainage(cell.to) ?? parseChainage(row.cells[index + 1].from);
+              if (metres === null) return null;
+              const x = (metres - extent.startMetres) * TRACK_PIXELS_PER_METRE;
+              return <span key={`tick-${cell.id}`} className="pointer-events-none absolute z-[3] -translate-x-1/2" style={{ left: x, top: 20 }} aria-hidden>
+                <span className="mx-auto block h-8 w-px bg-slate-500" />
+                <span className="block whitespace-nowrap text-center text-[9px] font-medium leading-3 text-slate-500">{formatChainage(metres)}</span>
+              </span>;
+            })}
             {rowLongRails.map(({ rail, span }) => {
               const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
               const tone = longRailTone(rail);
@@ -295,7 +304,7 @@ export const RailGrid = memo(function RailGrid({
                 onClick={() => { onSelectLongRail?.(rail.id); onEditLongRail?.(rail.id); }}
                 title={`${text} · ${state} · bấm để sửa`}
                 aria-label={`Sửa ${rail.code}`}
-                className={`absolute top-[58px] z-[2] h-3.5 overflow-hidden rounded-sm border text-left text-[9px] font-semibold leading-3 ${selectedLongRailId === rail.id ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+                className={`absolute top-[66px] z-[2] h-3.5 overflow-hidden rounded-sm border text-left text-[9px] font-semibold leading-3 ${selectedLongRailId === rail.id ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
                 style={{ ...box, backgroundColor: tone, borderColor: tone, color: contrastText(tone) }}
               ><span className="block truncate px-1">{text}</span></button>;
             })}

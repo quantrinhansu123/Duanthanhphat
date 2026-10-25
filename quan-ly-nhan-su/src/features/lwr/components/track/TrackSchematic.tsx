@@ -332,6 +332,10 @@ export function TrackSchematic({
         }}
       />
 
+      <TrackMapCanvas layout={layout}>
+        {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
+      </TrackMapCanvas>
+
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h2 className="text-base font-bold">Bố trí công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Nhập lý trình thực của công trình, không cần trùng biên thanh ray.</p></div>
@@ -367,10 +371,6 @@ export function TrackSchematic({
           <p className="pb-2 text-xs text-slate-500">{hasCells ? `Thanh mới dài 500 m, nhiệt độ khóa 35°C. Tuyến hiện tại: Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}.` : "Lần đầu ghép sẽ tạo thanh từ Km 0+000, mỗi thanh 500 m, nhiệt độ khóa 35°C."}</p>
         </form>
       </div>
-
-      <TrackMapCanvas layout={layout}>
-        {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
-      </TrackMapCanvas>
     </section>
   );
 }

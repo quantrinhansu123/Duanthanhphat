@@ -2,7 +2,7 @@ import { compareLongRailDisplay, coveringLongRail, formatChainage, getPlacementS
 import type { RailRow } from "@lwr/types/track";
 import type { JournalWeld, RailJoint } from "@lwr/types/weld";
 
-/** Gán mối hàn vào ranh giới giữa các thanh (theo lý trình gần nhất). */
+/** Mối hàn nằm ở hai đầu thanh dài (và các mối đã liên kết nhật ký từ trước); vạch 500 m không phải mối hàn. */
 export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetres = 0, links: Record<string, string[]> = {}, longRails: LongRail[] = []): {
   joints: RailJoint[];
   unmatched: JournalWeld[];
@@ -16,6 +16,8 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
       const right = row.cells[index + 1];
       const metres = parseChainage(left.to) ?? parseChainage(right.from);
       if (metres == null) continue;
+      // Lý trình chẵn 500 m chỉ là vạch chia, không phải mối hàn; chỉ giữ nếu đã có nhật ký liên kết từ trước.
+      if (!links[`${key}:${left.id}:${right.id}`]?.length) continue;
       joints.push({
         id: `${key}:${left.id}:${right.id}`,
         rowKey: key,
