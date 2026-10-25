@@ -4,6 +4,9 @@
  */
 export const PHRASES: Record<string, string> = {
   "Thêm phiếu mới": "Add New Report",
+  "Máy cần kiểm tra: các máy phải kiểm tra trong ca đang chọn. Mỗi máy có một phiếu cho mỗi ngày và ca; đã lập phiếu thì nút đổi thành Sửa phiếu. Phiếu đã lưu được lưu trong hệ thống (Supabase) và xem ở Phiếu đã lưu.": "Machines to Inspect: the machines that must be inspected in the selected shift. Each machine has one form per day and shift; once a form exists the button becomes Edit form. Saved forms are stored in the system (Supabase) and listed under Saved Forms.",
+  "Máy đã có phiếu trong ca này — mở để xem hoặc sửa": "This machine already has a form for this shift — open to view or edit",
+  "Lập phiếu kiểm tra cho máy này": "Create an inspection form for this machine",
   "Tất cả loại ray": "All rail types",
   "Lọc theo loại ray": "Filter by rail type",
   "CHT": "Site Manager",
@@ -1324,7 +1327,7 @@ export const PHRASES: Record<string, string> = {
   "Kinh độ": "Longitude", "Vĩ độ": "Latitude", "Mã khuyết tật": "Defect codes",
   "STT": "No.", "Ca ngày": "Day shift",
   // ---- In phiếu checklist ----
-  "Checklist kiểm tra máy hàn MFBW trước ca": "MFBW welding machine pre-shift checklist",
+  "Checklist kiểm tra máy hàn MFBW trước ca": "MFBW Welding Machine Pre-shift Checklist",
   "DỰ ÁN:": "PROJECT:",
   "ĐỊA ĐIỂM:": "LOCATION:",
   "Ngày:": "Date:",
@@ -2243,8 +2246,7 @@ export const PHRASES: Record<string, string> = {
   "Máy cần KT": "Machines to check",
   "Đã Kiểm Tra": "Checked",
   "Đã kiểm tra": "Checked",
-  "Máy ca này": "Machines this shift",
-  "Danh sách phiếu": "Checklist forms",
+  "Máy cần kiểm tra": "Machines to Inspect",
   "Chưa kiểm tra trước ca": "Not checked before shift",
   "Phiếu khác": "Other forms",
   "Sửa phiếu": "Edit form",
@@ -2272,7 +2274,7 @@ export const PHRASES: Record<string, string> = {
   "Mã mục không đạt": "Failed item codes",
   "Mô tả lỗi": "Fault description",
   "Nhiệt độ nước làm mát (°C)": "Coolant temperature (°C)",
-  "Phiếu đã lưu": "Saved forms",
+  "Phiếu đã lưu": "Saved Forms",
   "Đủ điều kiện vận hành": "Fit to operate",
   "Đủ ĐK": "Fit",
   "Dừng vận hành": "Stop operation",

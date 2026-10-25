@@ -96,6 +96,8 @@ function translate(raw: string): string {
   // Báo cáo máy: hạn bảo trì "Quá N ngày" / "Còn N ngày".
   const dueDays = core.match(/^(Quá|Còn) (\d+) ngày$/);
   if (dueDays) return lead + `${dueDays[1] === "Quá" ? "Overdue by" : "Due in"} ${dueDays[2]} ${dueDays[2] === "1" ? "day" : "days"}` + trail;
+  const railHint = core.match(/^Thanh mới dài 500 m, nhiệt độ khóa 35°C\. Tuyến hiện tại: (.+)\.$/);
+  if (railHint) return lead + `New rail is 500 m long, lock temperature 35°C. Current line: ${railHint[1]}.` + trail;
   // Báo cáo chất lượng: ghi chú thẻ thống kê và dòng nguồn dữ liệu.
   const qualitySource = core.match(/^Nhật ký hàn · ([\d.,]+) bản ghi · Sửa\/hàn lại = có Mối hàn liên kết$/);
   if (qualitySource) return lead + `Welding log · ${qualitySource[1]} records · Re-weld = has a linked weld` + trail;

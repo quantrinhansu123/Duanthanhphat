@@ -411,7 +411,7 @@ export default function MachinePreShiftChecklist() {
             pageTab === "machines" ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-500"
           }`}
         >
-          Máy ca này
+          Máy cần kiểm tra
         </button>
         <button
           type="button"
@@ -420,10 +420,13 @@ export default function MachinePreShiftChecklist() {
             pageTab === "list" ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-500"
           }`}
         >
-          Danh sách phiếu
+          Phiếu đã lưu
           <span className="font-mono text-[11px] tabular-nums">{listedRows.length}</span>
         </button>
       </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Máy cần kiểm tra: các máy phải kiểm tra trong ca đang chọn. Mỗi máy có một phiếu cho mỗi ngày và ca; đã lập phiếu thì nút đổi thành Sửa phiếu. Phiếu đã lưu được lưu trong hệ thống (Supabase) và xem ở Phiếu đã lưu.
+      </p>
 
       {pageTab === "list" ? (
         <section className="mb-4">
@@ -498,7 +501,7 @@ export default function MachinePreShiftChecklist() {
       ) : (
       <section className="mb-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-slate-800">Máy ca này</h2>
+          <h2 className="text-sm font-bold text-slate-800">Máy cần kiểm tra</h2>
           <button
             type="button"
             onClick={() => openNew()}
@@ -539,6 +542,7 @@ export default function MachinePreShiftChecklist() {
                     <button
                       type="button"
                       onClick={() => (row ? openRow(row) : openNew(machine))}
+                      title={row ? "Máy đã có phiếu trong ca này — mở để xem hoặc sửa" : "Lập phiếu kiểm tra cho máy này"}
                       className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0047AB] px-3 text-sm font-bold text-white"
                     >
                       {row ? <PencilSimple size={15} weight="bold" aria-hidden /> : <CheckCircle size={15} weight="bold" aria-hidden />}
