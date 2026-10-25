@@ -28,12 +28,16 @@ function contrastText(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 155 ? "#0f172a" : "#fff";
 }
 
-/** B3 xám khi chưa hoàn thành; B4 xanh nếu T≥30, vàng-cam nếu T<30. */
+/** Xám khi tạo; xanh nếu giải toả T≥30; cam nếu T<30. */
+function releaseTone(released: boolean, tempC: number) {
+  if (!released) return UNRATED_GRAY;
+  return tempC >= STRESS_PASS_TEMP_C ? DAT_GREEN : STRESS_LOW_ORANGE;
+}
+
 function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number) {
   const done = Boolean(rail.completedAt) || Boolean(cellReleased);
-  if (!done) return UNRATED_GRAY;
   const tempC = rail.params.neutralTemp ?? rail.params.airTemp ?? cellTemp ?? STRESS_PASS_TEMP_C;
-  return tempC >= STRESS_PASS_TEMP_C ? DAT_GREEN : STRESS_LOW_ORANGE;
+  return releaseTone(done, tempC);
 }
 
 /** Mã trên thanh ngắn: LWR01-500m-35oC (500 = chiều dài đoạn). */
@@ -120,12 +124,12 @@ export const RailGrid = memo(function RailGrid({
   const width = lineWidth + ADD_GUTTER;
   return <div className="border-t border-slate-200 bg-white">
     <div className="space-y-1 border-b px-4 py-3">
-      <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · 2 đường tim tuyến · lý trình thi công</h2>
-      <p className="text-xs text-slate-600">Thanh LWR: <span className="font-semibold text-slate-500">xám</span> = đã tạo / đang theo dõi · <span className="font-semibold text-emerald-700">xanh</span> = giải toả xong T≥30°C · <span className="font-semibold text-orange-600">vàng-cam</span> = giải toả xong T&lt;30°C. Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.</p>
-      <p className="text-xs text-slate-500">Tim tuyến (Thượng/Hạ): mốc ~500 m + ký hiệu công trình. Mỗi ray trái/phải có thanh LWR riêng. Bấm thanh để mở giải toả ứng suất.</p>
+      <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công</h2>
+      <p className="text-xs text-slate-600">Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo · <span className="font-semibold text-emerald-700">xanh</span> = giải toả T≥30°C · <span className="font-semibold text-orange-600">cam</span> = giải toả T&lt;30°C. Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.</p>
+      <p className="text-xs text-slate-500">Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m). Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend. Bấm thanh để sửa nhiệt độ / giải toả.</p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
-      <div className="space-y-4 px-4 py-3" style={{ width: 150 + width }}>
+      <div className="space-y-1 px-4 py-3" style={{ width: 150 + width }}>
         {rows.map((row, rowIndex) => {
           const lastVisible = [...row.cells].reverse().find((cell) => cell.released || cell.placed);
           const lastEnd = lastVisible ? parseChainage(lastVisible.to) : null;
@@ -187,9 +191,30 @@ export const RailGrid = memo(function RailGrid({
               }
               const lengthM = Math.max(0, to - from);
               const bareLabel = shortRailChipLabel(cell.id, lengthM, cell.temp);
+              const done = Boolean(cell.released);
+              const tone = releaseTone(done, cell.temp);
+              const statusNote = !done
+                ? "Chưa giải toả"
+                : cell.temp >= STRESS_PASS_TEMP_C
+                  ? "Giải toả · T≥30"
+                  : "Giải toả · T<30";
               return <span key={cell.id}>
-                <button type="button" onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }} title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${cell.released ? "Đạt" : "Thanh ngắn"}`} className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] ${cell.released ? "border-emerald-700 bg-emerald-600 text-white" : "border-slate-400 bg-slate-100 text-slate-700"} ${selectedId === cell.id ? "ring-2 ring-blue-500" : ""}`} style={{ ...box, width: Math.max(1, box.width - 4) }}>
+                <button
+                  type="button"
+                  onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }}
+                  title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${statusNote}`}
+                  className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] font-semibold leading-tight ${selectedId === cell.id ? "ring-2 ring-offset-1" : ""}`}
+                  style={{
+                    ...box,
+                    width: Math.max(1, box.width - 4),
+                    backgroundColor: selectedId === cell.id ? `${tone}e6` : done ? tone : `${tone}c7`,
+                    borderColor: tone,
+                    color: contrastText(tone),
+                    outlineColor: tone,
+                  }}
+                >
                   <span className="block truncate">{bareLabel}</span>
+                  {done ? <span className="block truncate text-[9px] font-medium opacity-90">{statusNote}</span> : null}
                 </button>
                 {chipDeleteButton(cell.id, box, onRemove)}
               </span>;

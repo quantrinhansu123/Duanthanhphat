@@ -4,6 +4,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { DEFAULT_CELL_ID } from "@lwr/lib/track-data";
 import {
   createInitialTrackLayout,
+  defaultLongRailParams,
   extendRailRows,
   placeShortRailSpan,
   removeShortRail,
@@ -11,6 +12,7 @@ import {
   formatChainage,
   getPlacementSpan,
   longRailsOverlap,
+  nextLongRailCode,
   parseChainage,
   visibleLongRailSpan,
   patchTrackCell,
@@ -409,41 +411,83 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     if (!row) return { ok: false, message: `Không tìm thấy dải ray chứa ${cell.id}.` };
     const from = parseChainage(cell.from);
     const to = parseChainage(cell.to);
+    if (from === null || to === null || to <= from) {
+      return { ok: false, message: "Lý trình thanh ngắn không hợp lệ." };
+    }
     const key = railRowKey(row);
     const covering = layout.longRails.filter((rail) => {
       if (rail.rowKey !== key) return false;
       const span = getPlacementSpan(layout.rows, rail);
-      return Boolean(span && from !== null && to !== null && span.startMetres < to && span.endMetres > from);
+      return Boolean(span && span.startMetres < to && span.endMetres > from);
     });
+    const temp = Number.isFinite(params.neutralTemp) ? params.neutralTemp : cell.temp;
+    let target: LongRail;
+    let created = false;
     if (covering.length === 0) {
-      return {
-        ok: false,
-        message: `Không lưu được: ${cell.id} là thanh ngắn. Thông số giải toả chỉ lưu trên đoạn LWR. Nhập lý trình trên dải ${row.line} · ${row.rail} ở phần Theo dõi lý trình thực tế, hoặc bấm đoạn trên sơ đồ rồi Lưu thông số.`,
+      const draftSpan = {
+        rowKey: key,
+        startCellId: cell.id,
+        endCellId: cell.id,
+        startMetres: from,
+        endMetres: to,
+      };
+      const code = nextLongRailCode(layout.longRails);
+      target = {
+        id: crypto.randomUUID(),
+        code,
+        label: code,
+        ...draftSpan,
+        releaseDate: new Date().toISOString().slice(0, 10),
+        params: {
+          ...defaultLongRailParams(layout.rows, draftSpan, params.railType),
+          ...params,
+          startChainage: params.startChainage || cell.from,
+          endChainage: params.endChainage || cell.to,
+          neutralTemp: temp,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+      created = true;
+    } else {
+      target = (selectedLongRail && covering.some((rail) => rail.id === selectedLongRail.id))
+        ? selectedLongRail
+        : covering.slice().sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0];
+      target = {
+        ...target,
+        params: {
+          ...target.params,
+          ...params,
+          startChainage: target.params.startChainage || params.startChainage,
+          endChainage: target.params.endChainage || params.endChainage,
+          neutralTemp: temp,
+        },
+        updatedAt: new Date().toISOString(),
       };
     }
-    const target = (selectedLongRail && covering.some((rail) => rail.id === selectedLongRail.id))
-      ? selectedLongRail
-      : covering.slice().sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0];
-    const next: LongRail = {
-      ...target,
-      params: {
-        ...target.params,
-        ...params,
-        startChainage: target.params.startChainage || params.startChainage,
-        endChainage: target.params.endChainage || params.endChainage,
-      },
-      updatedAt: new Date().toISOString(),
-    };
-    if (!commit({
+    let nextLayout: TrackLayout = {
       ...layout,
-      longRails: layout.longRails.map((item) => (item.id === next.id ? next : item)),
-    })) {
+      longRails: created
+        ? [...layout.longRails, target]
+        : layout.longRails.map((item) => (item.id === target.id ? target : item)),
+    };
+    try {
+      nextLayout = patchTrackCell(nextLayout, cell.id, { temp });
+    } catch (cause) {
+      return { ok: false, message: cause instanceof Error ? cause.message : "Không cập nhật được nhiệt độ thanh." };
+    }
+    if (!commit(nextLayout)) {
       return { ok: false, message: "Không ghi được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web." };
     }
-    void upsertLongRail(next).then((result) => {
+    setSelectedLongRailId(target.id);
+    void upsertLongRail(target).then((result) => {
       if (!result.ok) setError(result.error ?? "Không lưu đoạn LWR lên Supabase.");
     });
-    return { ok: true, message: `Đã lưu thông số lên đoạn LWR ${next.code}.` };
+    return {
+      ok: true,
+      message: created
+        ? `Đã tạo đoạn LWR ${target.code} và lưu thông số + nhiệt độ ${temp}°C lên sơ đồ.`
+        : `Đã lưu thông số lên đoạn LWR ${target.code} và cập nhật nhiệt độ sơ đồ ${temp}°C.`,
+    };
   }
 
   function cellOnSelectedLongRail(item: typeof cell) {

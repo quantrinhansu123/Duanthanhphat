@@ -298,6 +298,30 @@ export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: 
   };
 }
 
+/** Cắt sơ đồ theo đoạn Km để in — giữ thanh/công trình/LWR giao với [start, end]. */
+export function sliceLayoutForPrint(layout: TrackLayout, startMetres: number, endMetres: number): TrackLayout {
+  if (!(endMetres > startMetres)) {
+    throw new RangeError("Lý trình in: cuối phải lớn hơn đầu.");
+  }
+  const rows = layout.rows.map((row) => ({
+    ...row,
+    cells: row.cells.filter((cell) => {
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      return from !== null && to !== null && from < endMetres && to > startMetres;
+    }),
+  }));
+  const longRails = layout.longRails.filter((rail) => {
+    const span = getPlacementSpan(layout.rows, rail) ?? visibleLongRailSpan(layout.rows, rail);
+    return Boolean(span && span.startMetres < endMetres && span.endMetres > startMetres);
+  });
+  const placements = layout.placements.filter((placement) => {
+    const span = getPlacementSpan(layout.rows, placement);
+    return Boolean(span && span.startMetres < endMetres && span.endMetres > startMetres);
+  });
+  return { ...layout, rows, longRails, placements };
+}
+
 /** Extend all rails together; original rows and existing cell values are preserved.
  *  Empty rows start at Km 0+000. */
 export function extendRailRows(rows: RailRow[], count: number): RailRow[] {

@@ -48,7 +48,7 @@ export function ReleaseStatusButtons({
         </button>
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
-        Chỉ đoạn ray đang chọn trên sơ đồ chuyển xanh khi Đạt.
+        Đạt → màu theo nhiệt độ khóa (≥30 xanh, &lt;30 cam). Không đạt → xám.
       </p>
     </div>
   );
@@ -183,16 +183,12 @@ export function RailDetailPanel({
         </header>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
           <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
-          <StressReleaseCalculator
-            compact
-            key={cell.id}
-            segmentId={cell.id}
-            initialInput={{ ...DEFAULT_STRESS_INPUT, trackSide, leftLength: length, rightLength: 0, startChainage: cell.from, endChainage: cell.to, neutralTemp: cell.temp }}
-            onSave={onSaveParams}
-          />
-          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
+            <p className="col-span-2 text-xs font-semibold text-amber-900">
+              Sửa nhanh trên sơ đồ — đổi nhiệt độ rồi Enter/Blur; màu thanh: xám (tạo) · xanh (giải toả T≥30) · cam (T&lt;30).
+            </p>
             <label className="block min-w-0">
-              <span className="text-slate-500">Lý trình đầu</span>
+              <span className="text-slate-600">Lý trình đầu</span>
               <span className="flex items-center gap-1">
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
                 <input
@@ -206,7 +202,7 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0">
-              <span className="text-slate-500">Lý trình cuối</span>
+              <span className="text-slate-600">Lý trình cuối</span>
               <span className="flex items-center gap-1">
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
                 <input
@@ -220,7 +216,7 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0">
-              <span className="text-slate-500">Chiều dài đoạn</span>
+              <span className="text-slate-600">Chiều dài đoạn</span>
               <span className="flex items-center gap-1">
                 <input
                   className={inputClass}
@@ -235,10 +231,10 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0">
-              <span className="text-slate-500">Nhiệt độ khóa trên sơ đồ</span>
+              <span className="font-semibold text-amber-900">Nhiệt độ khóa (°C)</span>
               <span className="flex items-center gap-1">
                 <input
-                  className={inputClass}
+                  className={`${inputClass} border-amber-400 bg-white`}
                   inputMode="decimal"
                   value={tempDraft}
                   aria-label="Nhiệt độ khóa trên sơ đồ"
@@ -252,11 +248,17 @@ export function RailDetailPanel({
           </div>
           {fieldError ? (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">{fieldError}</p>
-          ) : (
-            <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-              Sửa lý trình, chiều dài hoặc nhiệt độ khóa trên ô này — sơ đồ và bảng tính sẽ cập nhật. Thanh phía sau giữ nguyên chiều dài và dồn theo lý trình mới. Nút thùng rác góc phải xóa thanh ngắn khỏi sơ đồ (không rút tuyến). Thông số khác dùng mẫu 60R2 (hai neo 20°C).
-            </p>
-          )}
+          ) : null}
+          <StressReleaseCalculator
+            compact
+            key={cell.id}
+            segmentId={cell.id}
+            initialInput={{ ...DEFAULT_STRESS_INPUT, trackSide, leftLength: length, rightLength: 0, startChainage: cell.from, endChainage: cell.to, neutralTemp: cell.temp }}
+            onSave={onSaveParams}
+          />
+          <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
+            Bảng tính bên trên: bấm <b>Lưu thông số</b> để ghi nhiệt độ/kéo lên đoạn LWR (tự tạo nếu chưa có). Thanh phía sau giữ nguyên chiều dài khi sửa lý trình.
+          </p>
         </div>
       </div>
     </aside>
