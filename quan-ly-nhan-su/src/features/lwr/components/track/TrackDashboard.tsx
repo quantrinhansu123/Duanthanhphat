@@ -82,6 +82,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJoint, setSelectedJoint] = useState<RailJoint | null>(null);
   const [selectedLongRailId, setSelectedLongRailId] = useState<string | null>(null);
+  const [editRequest, setEditRequest] = useState<{ id: string; n: number } | null>(null);
   const detailContainer = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState(createInitialTrackLayout);
   const [symbols, setSymbols] = useState<StructureSymbol[]>([]);
@@ -346,6 +347,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         endChainage: formatChainage(span.endMetres),
         jointChainage: formatChainage(joint),
         railType: draft.params.railType,
+        airTemp: draft.params.airTemp,
         area: draft.params.area,
         modulus: draft.params.modulus,
         alpha: draft.params.alpha,
@@ -545,6 +547,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             return commit({ ...layout, rows: layout.rows.map(row => ({ ...row, cells: [] })), jointWeldLinks: {} });
           }}
           onLongRail={saveLongRail}
+          editRequest={editRequest}
           onRemoveLongRail={(id) => {
             const rail = layout.longRails.find(item => item.id === id);
             if (rail && [rail.startMetres, rail.endMetres].some(m => (layout.jointWeldLinks?.[`${rail.rowKey}:km:${m}`]?.length ?? 0) > 0)) { setError("Tháo liên kết nhật ký ở đầu đoạn trước khi xoá đoạn thi công."); return; }
@@ -568,6 +571,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             longRails={layout.longRails}
             selectedLongRailId={selectedLongRailId}
             onSelectLongRail={id => { setSelectedLongRailId(id); setSelectedJoint(null); }}
+            onEditLongRail={id => setEditRequest({ id, n: Date.now() })}
             embedded
             joints={joints}
             selectedJointId={selectedJoint?.id ?? null}

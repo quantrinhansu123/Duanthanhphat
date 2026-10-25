@@ -14,6 +14,15 @@ const EMPTY_LINE = 240;
 const ADD_GUTTER = 56;
 const DAT_GREEN = "#059669";
 const UNRATED_GRAY = "#94a3b8";
+const WARN_YELLOW = "#eab308";
+/** Nhiệt độ từ mức này trở lên: giải toả xong tô xanh; thấp hơn tô vàng. */
+const LONG_RAIL_OK_TEMP = 30;
+
+/** Xám = đang thi công; xong thì xanh (T >= 30°C) hoặc vàng (T < 30°C). */
+function longRailTone(rail: LongRail) {
+  if (!rail.completedAt) return UNRATED_GRAY;
+  return rail.params.airTemp >= LONG_RAIL_OK_TEMP ? DAT_GREEN : WARN_YELLOW;
+}
 
 function contrastText(hex: string) {
   const value = hex.replace("#", "");
@@ -91,6 +100,7 @@ interface RailGridProps {
   rows?: RailRow[];
   longRails?: LongRail[];
   onSelectLongRail?: (id: string | null) => void;
+  onEditLongRail?: (id: string) => void;
   selectedId: string;
   onSelect: (id: string) => void;
   alertIds?: string[];
@@ -109,6 +119,7 @@ export const RailGrid = memo(function RailGrid({
   rows = RAIL_ROWS,
   longRails = [],
   onSelectLongRail,
+  onEditLongRail,
   selectedId,
   onSelect,
   embedded = false,
@@ -138,7 +149,7 @@ export const RailGrid = memo(function RailGrid({
     <div className="space-y-1 border-b px-4 py-3">
       <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · lý trình thi công thực tế</h2>
       <p className="text-xs text-slate-600">Màu mối hàn theo mục tiêu tính toán / nhật ký: <span className="rounded border bg-white px-1">Trắng: chưa chọn</span> · <span className="text-blue-700">Xanh: FBW</span> · <span className="text-red-700">Đỏ: nhiệt nhôm</span> · <span className="text-amber-700">Vàng: ray đơn</span>.</p>
-      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Bấm + để nhập lý trình và thêm thanh ngắn đúng vị trí. Bấm X để xóa ô chưa Đạt.</p>
+      <p className="text-xs text-slate-500">Đường đứt là tuyến. Thanh xanh lá = Đạt. Thanh xám mờ = chưa đánh giá. Thanh dài dưới đường tuyến: xám = đang thi công, xanh = đã giải toả (T ≥ 30°C), vàng = đã giải toả (T &lt; 30°C); bấm để sửa lý trình. Bấm + để nhập lý trình và thêm thanh ngắn đúng vị trí. Bấm X để xóa ô chưa Đạt.</p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className="space-y-4 px-4 py-3" style={{ width: 150 + width }}>
@@ -271,6 +282,22 @@ export const RailGrid = memo(function RailGrid({
                 </button>
                 {!cell.released && chipDeleteButton(cell.id, box, onRemove)}
               </span>;
+            })}
+            {rowLongRails.map(({ rail, span }) => {
+              const box = trackSpanStyle(span.startMetres, span.endMetres, extent.startMetres);
+              const tone = longRailTone(rail);
+              const state = !rail.completedAt ? "Đang thi công" : rail.params.airTemp >= LONG_RAIL_OK_TEMP ? "Đã giải toả" : "Đã giải toả · T < 30°C";
+              const text = `${rail.code} · Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)}`;
+              return <button
+                key={`lr-${rail.id}`}
+                type="button"
+                data-testid="long-rail-bar"
+                onClick={() => { onSelectLongRail?.(rail.id); onEditLongRail?.(rail.id); }}
+                title={`${text} · ${state} · bấm để sửa`}
+                aria-label={`Sửa ${rail.code}`}
+                className={`absolute top-[58px] z-[2] h-3.5 overflow-hidden rounded-sm border text-left text-[9px] font-semibold leading-3 ${selectedLongRailId === rail.id ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+                style={{ ...box, backgroundColor: tone, borderColor: tone, color: contrastText(tone) }}
+              ><span className="block truncate px-1">{text}</span></button>;
             })}
             {jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];

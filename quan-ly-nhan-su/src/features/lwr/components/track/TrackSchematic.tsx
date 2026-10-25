@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Plus, RefreshCw, Shapes } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
@@ -14,6 +14,7 @@ import {
   parseChainage,
   railRowKey,
   trackExtent,
+  visibleLongRailSpan,
   type LongRail,
   type TrackLayout,
   type TrackPlacement,
@@ -44,6 +45,8 @@ interface TrackSchematicProps {
   onLongRail: (longRail: LongRail, nextRows?: RailRow[]) => boolean;
   onRemoveLongRail: (id: string) => void;
   onSelectLongRail: (id: string) => void;
+  /** Yêu cầu nạp một thanh dài vào form sửa (bấm thanh trên sơ đồ). n đổi để kích hoạt lại. */
+  editRequest?: { id: string; n: number } | null;
   children: (structures: StructureLayer) => ReactNode;
 }
 
@@ -76,6 +79,7 @@ export function TrackSchematic({
   onLongRail,
   onRemoveLongRail,
   onSelectLongRail,
+  editRequest,
   children,
 }: TrackSchematicProps) {
   const [rowKey, setRowKey] = useState("UT");
@@ -85,6 +89,7 @@ export function TrackSchematic({
   const [planTo, setPlanTo] = useState("");
   const [releaseDate, setReleaseDate] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const [completed, setCompleted] = useState(false);
+  const [lrTemp, setLrTemp] = useState("30");
   const [symbolId, setSymbolId] = useState("");
   const [label, setLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -124,7 +129,7 @@ export function TrackSchematic({
   }, []);
 
   const clearLongRailEditor = useCallback(() => {
-    setEditingLongRailId(null); setCompleted(false); setLrCode(""); setLrLabel(""); setLrFormError(null);
+    setEditingLongRailId(null); setCompleted(false); setLrTemp("30"); setLrCode(""); setLrLabel(""); setLrFormError(null);
   }, []);
 
   const edit = useCallback((placement: TrackPlacement) => {
@@ -134,11 +139,12 @@ export function TrackSchematic({
   }, [layout.rows]);
 
   const editLongRail = useCallback((longRail: LongRail) => {
-    const span = getPlacementSpan(layout.rows, longRail);
+    const span = visibleLongRailSpan(layout.rows, longRail);
     setEditingLongRailId(longRail.id);
     setLrRowKey(longRail.rowKey);
     setReleaseDate(longRail.releaseDate ?? "");
     setCompleted(Boolean(longRail.completedAt));
+    setLrTemp(String(longRail.params.airTemp));
     setLrFrom(span ? formatChainage(span.startMetres) : "");
     setLrTo(span ? formatChainage(span.endMetres) : "");
     setLrRailType(longRail.params.railType || defaultRailTypeForNewLongRail(layout.longRails));
@@ -147,6 +153,18 @@ export function TrackSchematic({
     setLrFormError(null);
     setLrNotice(null);
   }, [layout]);
+
+  const longRailFormRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!editRequest) return;
+    const target = layout.longRails.find((item) => item.id === editRequest.id);
+    if (!target) return;
+    editLongRail(target);
+    setLrNotice(`Đang sửa ${target.code}: đổi lý trình cuối rồi bấm lưu để kéo dài thanh.`);
+    longRailFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Chỉ chạy khi có yêu cầu mới, không chạy lại mỗi lần layout đổi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest?.n]);
 
   const removePlacement = useCallback((id: string) => {
     onRemove(id);
@@ -177,7 +195,7 @@ export function TrackSchematic({
         <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật tuyến</button>
         <button type="button" disabled={!ready || !hasCells} onClick={() => { if (onClearPlan()) setNotice("Đã xoá sơ đồ rải ray."); }} className="h-10 rounded border px-3 text-sm text-red-700">Xoá rải ray</button>
       </form>
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div ref={longRailFormRef} className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold">Thi công giải toả trên 4 dải ray</h2>
@@ -208,6 +226,8 @@ export function TrackSchematic({
               return;
             }
             if (!releaseDate) { setLrFormError("Chọn ngày thi công."); return; }
+            const temp = Number(lrTemp.replace(",", "."));
+            if (lrTemp.trim() === "" || !Number.isFinite(temp)) { setLrFormError("Nhập nhiệt độ giải toả (°C)."); return; }
             const spanDraft = { rowKey: key, startCellId: "", endCellId: "", startMetres: lrStartMetres, endMetres: lrEndMetres };
             const span = getPlacementSpan(layout.rows, spanDraft);
             if (!span) { setLrFormError("Đoạn thi công phải nằm trong phạm vi tuyến đã rải. Nhập lý trình lẻ được giữ nguyên."); return; }
@@ -221,10 +241,13 @@ export function TrackSchematic({
               ...spanDraft,
               releaseDate,
               completedAt: completed ? (existing?.completedAt ?? new Date().toISOString()) : undefined,
-              params: paramsForRailType(
-                railType,
-                existing?.params ?? defaultLongRailParams(layout.rows, spanDraft, railType),
-              ),
+              params: {
+                ...paramsForRailType(
+                  railType,
+                  existing?.params ?? defaultLongRailParams(layout.rows, spanDraft, railType),
+                ),
+                airTemp: temp,
+              },
               updatedAt: new Date().toISOString(),
             };
             if (onLongRail(draft)) {
@@ -280,6 +303,7 @@ export function TrackSchematic({
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs">Ngày thi công<input type="date" required className={inputClass} value={releaseDate} onChange={e => setReleaseDate(e.target.value)} /></label>
+            <label className="text-xs">Nhiệt độ giải toả (°C)<input inputMode="decimal" className={`${inputClass} max-w-32`} value={lrTemp} onChange={e => setLrTemp(e.target.value)} /></label>
             <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={completed} onChange={e => setCompleted(e.target.checked)} />Hoàn thành giải toả</label>
             <div className="flex h-10 items-center rounded-md bg-slate-50 px-3 text-xs text-slate-600">
               {lrLength !== null ? `Chiều dài đoạn giải tỏa: ${lrLength} m · Km ${formatChainage(lrStartMetres!)} – ${formatChainage(lrEndMetres!)}` : "Nhập lý trình đầu và cuối để tính chiều dài"}
