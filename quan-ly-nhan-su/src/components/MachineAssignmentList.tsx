@@ -380,90 +380,111 @@ export default function MachineAssignmentList() {
             Lấy báo cáo
           </button>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <select
-            value={projectId}
-            onChange={(event) => {
-              const next = event.target.value;
-              setProjectId(next);
-              syncProjectToUrl(next);
-            }}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo dự án"
-          >
-            <option value="">Tất cả dự án</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={weldMethod}
-            onChange={(event) => setWeldMethod(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo phương pháp hàn"
-          >
-            <option value="">Tất cả phương pháp hàn</option>
-            {WELD_METHOD_OPTIONS.map((method) => (
-              <option key={method} value={method}>
-                {method}
-              </option>
-            ))}
-          </select>
-          <select
-            value={weldType}
-            onChange={(event) => setWeldType(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo loại mối hàn"
-          >
-            <option value="">Tất cả loại mối hàn</option>
-            {WELD_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <select
-            value={machineId}
-            onChange={(event) => setMachineId(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo máy"
-          >
-            <option value="">Tất cả máy</option>
-            {machines.map((machine) => (
-              <option key={machine.id} value={machine.id}>
-                {machine.code}
-              </option>
-            ))}
-          </select>
-          <select
-            value={personId}
-            onChange={(event) => setPersonId(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo thợ hàn"
-          >
-            <option value="">Tất cả thợ hàn</option>
-            {personnel.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.label}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => setDateFrom(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Từ ngày"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(event) => setDateTo(event.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Đến ngày"
-          />
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+          <label className="col-span-2 flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 lg:col-span-3 xl:col-span-4">
+            Dự án
+            <select
+              value={projectId}
+              onChange={(event) => {
+                const next = event.target.value;
+                setProjectId(next);
+                syncProjectToUrl(next);
+              }}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Lọc theo dự án"
+            >
+              <option value="">Tất cả dự án</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Phương pháp hàn
+            <select
+              value={weldMethod}
+              onChange={(event) => setWeldMethod(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Lọc theo phương pháp hàn"
+            >
+              <option value="">Tất cả phương pháp hàn</option>
+              {WELD_METHOD_OPTIONS.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Loại mối hàn
+            <select
+              value={weldType}
+              onChange={(event) => setWeldType(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Lọc theo loại mối hàn"
+            >
+              <option value="">Tất cả loại mối hàn</option>
+              {WELD_TYPE_OPTIONS.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Máy
+            <select
+              value={machineId}
+              onChange={(event) => setMachineId(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Lọc theo máy"
+            >
+              <option value="">Tất cả máy</option>
+              {machines.map((machine) => (
+                <option key={machine.id} value={machine.id}>
+                  {machine.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Thợ hàn
+            <select
+              value={personId}
+              onChange={(event) => setPersonId(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Lọc theo thợ hàn"
+            >
+              <option value="">Tất cả thợ hàn</option>
+              {personnel.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Từ ngày
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-base outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Từ ngày"
+            />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Đến ngày
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-base outline-hidden focus:border-[#0047AB] sm:text-sm"
+              aria-label="Đến ngày"
+            />
+          </label>
           {hasFilter && (
             <button
               type="button"
@@ -477,7 +498,7 @@ export default function MachineAssignmentList() {
                 setWeldType("");
                 syncProjectToUrl("");
               }}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
+              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
             >
               Xóa bộ lọc
             </button>

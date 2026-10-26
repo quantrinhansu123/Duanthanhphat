@@ -102,26 +102,38 @@ export default function TrainingHistoryLookup() {
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 items-end gap-2">
-          <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
-            {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-          <select value={course} onChange={(e) => setCourse(e.target.value)} className={`${selectClass} max-w-full truncate`}>
-            {courseOptions.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-          <select value={result} onChange={(e) => setResult(e.target.value)} className={selectClass}>
-            {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass}>
-            {["Tất cả trạng thái", "Hoàn thành", "Đang học", "Không hoàn thành"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Đối tượng
+            <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={selectClass}>
+              {["Tất cả đối tượng", "Thợ hàn", "Nhân sự khác"].map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Khóa đào tạo
+            <select value={course} onChange={(e) => setCourse(e.target.value)} className={`${selectClass} max-w-full truncate`}>
+              {courseOptions.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Kết quả
+            <select value={result} onChange={(e) => setResult(e.target.value)} className={selectClass}>
+              {["Tất cả kết quả", "Đạt", "Không đạt", "Đang học"].map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
+            Trạng thái
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass}>
+              {["Tất cả trạng thái", "Hoàn thành", "Đang học", "Không hoàn thành"].map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </label>
           <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">
             Công nghệ
             <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={selectClass} aria-label="Lọc theo công nghệ hàn">

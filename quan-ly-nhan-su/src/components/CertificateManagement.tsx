@@ -1289,7 +1289,7 @@ export default function CertificateManagement() {
         {" · "}không tạo ảnh mẫu
       </div>
 
-      <div className="mb-5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Loại chứng chỉ</div>
           <div className="mt-1.5 text-2xl font-bold font-mono text-slate-900">{totalTypes}</div>
@@ -1310,9 +1310,9 @@ export default function CertificateManagement() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
+      <div className="mb-4 grid grid-cols-2 items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs sm:flex sm:flex-wrap sm:p-4">
         <div
-          className="inline-flex rounded-lg border border-slate-200 bg-slate-100/90 p-1"
+          className="col-span-2 inline-flex w-fit rounded-lg border border-slate-200 bg-slate-100/90 p-1 sm:col-span-1"
           role="tablist"
           aria-label="Chế độ xem chứng chỉ"
         >
@@ -1348,7 +1348,7 @@ export default function CertificateManagement() {
         <select
           value={methodFilter}
           onChange={(event) => setMethodFilter(event.target.value)}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
+          className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:w-auto sm:text-sm"
           aria-label="Lọc theo phương pháp hàn"
         >
           <option value="">Phương pháp hàn</option>
@@ -1358,7 +1358,7 @@ export default function CertificateManagement() {
         <select
           value={machineFilter}
           onChange={(event) => setMachineFilter(event.target.value)}
-          className="h-9 max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:text-sm"
+          className="h-9 w-full max-w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:w-auto sm:max-w-[220px] sm:text-sm"
           aria-label="Lọc theo máy"
         >
           <option value="">Tất cả máy</option>
@@ -1370,14 +1370,14 @@ export default function CertificateManagement() {
         </select>
         <Link
           href="/ho-so-tho-han"
-          className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs sm:w-auto sm:justify-start sm:text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Mở hồ sơ thợ hàn
         </Link>
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs sm:w-auto sm:justify-start sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
         >
           <Plus size={14} weight="bold" />
           Thêm chứng chỉ
