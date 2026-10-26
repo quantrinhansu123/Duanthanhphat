@@ -198,6 +198,24 @@ export const RailGrid = memo(function RailGrid({
           <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{row.rail}</div>
           <div className="relative" style={{ width, height: 64 }}>
             <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
+            <svg
+              data-testid="rail-grid-line"
+              className="pointer-events-none absolute left-0 top-[34px] z-0 overflow-visible"
+              width={lineWidth}
+              height="2"
+              aria-hidden
+            >
+              <line
+                x1="0"
+                y1="1"
+                x2={lineWidth}
+                y2="1"
+                stroke="#64748b"
+                strokeWidth="1.5"
+                strokeDasharray="5 4"
+                strokeLinecap="butt"
+              />
+            </svg>
             {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
