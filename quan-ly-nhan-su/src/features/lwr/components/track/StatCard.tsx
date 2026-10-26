@@ -11,7 +11,7 @@ export function StatCard({ item, className }: StatCardProps) {
   return (
     <div
       className={cn(
-        "min-w-[104px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5",
+        "min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 sm:min-w-[104px]",
         className,
       )}
     >

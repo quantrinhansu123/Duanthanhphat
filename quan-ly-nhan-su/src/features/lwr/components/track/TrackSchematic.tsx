@@ -149,7 +149,7 @@ export function TrackSchematic({
 
   return (
     <section className="space-y-3" aria-label="Bố trí công trình trên tuyến">
-      <form className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4" onSubmit={(e) => {
+      <form className="flex min-w-0 flex-wrap items-end gap-3 rounded-lg border bg-white p-4" onSubmit={(e) => {
         e.preventDefault();
         if (onPlan(planLine, planFrom, planTo)) {
           setNotice(`Đã rải ${planLine}: Km ${planFrom} – ${planTo}. Tuyến kia giữ nguyên chiều dài riêng.`);
@@ -162,13 +162,13 @@ export function TrackSchematic({
             Chỉ cập nhật 2 ray trái/phải của tuyến đang chọn; tuyến còn lại không đổi.
           </p>
         </div>
-        <label className="text-xs text-slate-600">Tuyến cần rải
+        <label className="w-full text-xs text-slate-600 sm:w-auto sm:flex-1">Tuyến cần rải
           <select className={inputClass} value={planLine} onChange={(e) => setPlanLine(e.target.value)} disabled={!ready}>
             {lineNames.map((line) => <option key={line} value={line}>{line}</option>)}
           </select>
         </label>
-        <label className="text-xs">Lý trình đầu tuyến<input className={inputClass} value={planFrom} onChange={(e) => setPlanFrom(e.target.value)} placeholder="Km0+000" /></label>
-        <label className="text-xs">Chốt lý trình cuối tuyến<input className={inputClass} value={planTo} onChange={(e) => setPlanTo(e.target.value)} placeholder="Km17+584" required /></label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu tuyến<input className={inputClass} value={planFrom} onChange={(e) => setPlanFrom(e.target.value)} placeholder="Km0+000" /></label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Chốt lý trình cuối tuyến<input className={inputClass} value={planTo} onChange={(e) => setPlanTo(e.target.value)} placeholder="Km17+584" required /></label>
         <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật {planLine.replace(/^TUYẾN\s+/i, "")}</button>
         <button
           type="button"

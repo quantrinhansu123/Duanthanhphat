@@ -65,9 +65,9 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     void loadProjects({ includeProgress: false }).then(result => { if (active) { setProjects(result.projects); setProjectError(result.error ?? ""); } }).catch(cause => { if (active) setProjectError(String(cause)); });
     return () => { active = false; };
   }, []);
-  return <div className="space-y-3">
-    <label className="block rounded border bg-white p-3 text-sm">Dự án
-      <select className="ml-3 rounded border p-2" value={projectId} onChange={e => setProjectId(e.target.value)}>
+  return <div className="min-w-0 space-y-3">
+    <label className="block min-w-0 rounded border bg-white p-3 text-sm">Dự án
+      <select className="mt-1 block w-full min-w-0 rounded border p-2" value={projectId} onChange={e => setProjectId(e.target.value)}>
         <option value="">Sơ đồ hiện có (chưa gán dự án)</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
@@ -582,7 +582,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   }, []);
 
   return (
-    <div className="w-full max-w-none space-y-3">
+    <div className="w-full min-w-0 max-w-none space-y-3">
       <TrackHeader
         subtitle={`Tuyến ${(extent.endMetres - extent.startMetres) / 1000} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${layout.longRails.length} đoạn LWR`}
         rangeLabel={`Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}`}
