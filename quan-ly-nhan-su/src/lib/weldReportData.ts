@@ -937,10 +937,22 @@ async function insertWeldJournalEntryInner(payload: WeldJournalInsert) {
     invalidateWeldReportCache();
     notifyMachineRunScheduleChanged(payload.ngay_thuc_hien);
     const verification = await supabase.from("lich_su_moi_han")
-      .select("tinh_trang_thi_nghiem")
+      .select("id,tinh_trang_thi_nghiem")
       .eq("ma_lich_su", payload.ma_lich_su.trim()).single();
-    if (verification.error || verification.data?.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
-      throw new Error("Nhật ký đã được tạo nhưng chưa xác nhận đúng tình trạng thí nghiệm. Hãy mở lại bản ghi để kiểm tra, không thêm lại.");
+    if (verification.error) {
+      throw new Error("Nhật ký đã được tạo nhưng chưa đọc lại được bản ghi. Hãy mở lại để kiểm tra, không thêm lại.");
+    }
+    // RPC có thể chưa ghi đúng tình trạng → ghi đè cột thay vì báo lỗi cứng.
+    if (verification.data?.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
+      const patch = await supabase
+        .from("lich_su_moi_han")
+        .update({ tinh_trang_thi_nghiem: payload.tinh_trang_thi_nghiem })
+        .eq("id", verification.data.id)
+        .select("tinh_trang_thi_nghiem")
+        .single();
+      if (patch.error || patch.data?.tinh_trang_thi_nghiem !== payload.tinh_trang_thi_nghiem) {
+        throw new Error("Nhật ký đã được tạo nhưng chưa xác nhận đúng tình trạng thí nghiệm. Hãy mở lại bản ghi để kiểm tra, không thêm lại.");
+      }
     }
     if (payload.ca_han) {
       await saveWeldShift(supabase, { ma_lich_su: payload.ma_lich_su }, payload.ca_han);

@@ -100,9 +100,9 @@ Người dùng có thể sửa hậu tố / số TT khi thực tế thi công **
 **Cách nhanh (hàng loạt):** trên màn **Nhật ký hàn** bấm **Autolisp → nhật ký**.
 
 1. Chọn dự án, ngày, máy, thợ, công nghệ; lọc dải HT/HP/TT/TP và (tuỳ chọn) khoảng Km.
-2. **Xem trước khớp mã** — bảng liệt kê từng điểm: Autolisp · Km · mã hệ thống · mã sơn · mã máy.
+2. **Xem trước khớp mã** — bảng liệt kê từng điểm: Autolisp · Km · mã hệ thống · mã sơn · mã máy · trạng thái (Tạo mới / Ghi đè).
 3. Bỏ tick điểm chưa hàn / sửa mã máy nếu xen kẽ trái–phải.
-4. **Tạo N nhật ký** — hệ thống tạo bản ghi và gắn `toa_do` (tối đa 200 mối/lần). Điểm đã liên kết bị bỏ qua.
+4. **Xử lý N điểm** — điểm chưa gắn → tạo mới; điểm đã gắn → **ghi đè** nhật ký cũ (giữ mã hệ thống, cập nhật ngày/máy/thợ/sơn/máy). Tối đa 200 mối/lần.
 
 **Cách từng mối:**
 

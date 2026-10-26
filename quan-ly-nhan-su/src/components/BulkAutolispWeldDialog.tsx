@@ -67,7 +67,8 @@ export function BulkAutolispWeldDialog({
   const [prefixes, setPrefixes] = useState<CoordinateRailPrefix[]>([...COORDINATE_RAIL_PREFIXES]);
   const [kmFrom, setKmFrom] = useState("");
   const [kmTo, setKmTo] = useState("");
-  const [includeLinked, setIncludeLinked] = useState(false);
+  /** Mặc định gồm điểm đã gắn để ghi đè nhật ký cũ. */
+  const [includeLinked, setIncludeLinked] = useState(true);
 
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -117,6 +118,8 @@ export function BulkAutolispWeldDialog({
   );
 
   const selectedCount = rows.filter((row) => row.selected && !row.skipReason).length;
+  const overwriteCount = rows.filter((row) => row.selected && !row.skipReason && row.mode === "overwrite").length;
+  const createCount = rows.filter((row) => row.selected && !row.skipReason && row.mode === "create").length;
 
   const togglePrefix = (prefix: CoordinateRailPrefix) => {
     setPrefixes((prev) =>
@@ -150,11 +153,10 @@ export function BulkAutolispWeldDialog({
       }
 
       setLoadingPoints(true);
-      const [unlinked, all] = await Promise.all([
-        fetchUnlinkedGpsPoints(),
-        includeLinked ? fetchMapPointsFromDb({ force: true }) : Promise.resolve({ points: [] as Awaited<ReturnType<typeof fetchUnlinkedGpsPoints>> }),
-      ]);
-      const sourcePoints = includeLinked ? all.points : unlinked;
+      const source = includeLinked
+        ? await fetchMapPointsFromDb({ force: true })
+        : { points: await fetchUnlinkedGpsPoints() };
+      const sourcePoints = source.points;
       setPointCount(sourcePoints.length);
 
       const filtered = filterAutolispPointsForBulk(sourcePoints, {
@@ -232,7 +234,8 @@ export function BulkAutolispWeldDialog({
       return;
     }
     const confirmed = window.confirm(
-      `Tạo ${selectedCount.toLocaleString("vi-VN")} nhật ký từ điểm Autolisp (dự án “${project?.label ?? ""}”, ngày ${performedAt})?\nMã hệ thống / sơn / máy đã xem trước. Tiếp tục?`,
+      `Xử lý ${selectedCount.toLocaleString("vi-VN")} điểm Autolisp (dự án “${project?.label ?? ""}”, ngày ${performedAt})?\n` +
+        `Tạo mới: ${createCount.toLocaleString("vi-VN")} · Ghi đè: ${overwriteCount.toLocaleString("vi-VN")}.\nTiếp tục?`,
     );
     if (!confirmed) return;
 
@@ -240,23 +243,25 @@ export function BulkAutolispWeldDialog({
     setError("");
     try {
       const result = await commitAutolispBulkWelds(rows, context, (done, total) => {
-        setProgress(`Đang tạo ${done}/${total}…`);
+        setProgress(`Đang xử lý ${done}/${total}…`);
       });
       const parts = [
-        `Đã tạo ${result.created.toLocaleString("vi-VN")} nhật ký`,
+        result.created ? `tạo ${result.created.toLocaleString("vi-VN")}` : "",
+        result.updated ? `ghi đè ${result.updated.toLocaleString("vi-VN")}` : "",
         result.skipped ? `bỏ qua ${result.skipped}` : "",
         result.errors.length ? `lỗi ${result.errors.length}` : "",
       ].filter(Boolean);
+      const summary = parts.length ? `Đã ${parts.join(" · ")}` : "Không có thay đổi.";
       if (result.errors.length) {
-        window.alert(`${parts.join(" · ")}\n\n${result.errors.slice(0, 12).join("\n")}`);
+        window.alert(`${summary}\n\n${result.errors.slice(0, 12).join("\n")}`);
       }
-      if (result.created > 0) {
-        onDone(parts.join(" · "));
+      if (result.created > 0 || result.updated > 0) {
+        onDone(summary);
         onClose();
       } else if (!result.errors.length) {
-        setError("Không tạo được bản ghi nào.");
+        setError("Không tạo/ghi đè được bản ghi nào.");
       } else {
-        setError(result.errors[0] ?? "Có lỗi khi tạo nhật ký.");
+        setError(result.errors[0] ?? "Có lỗi khi đồng bộ nhật ký.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tạo được nhật ký hàng loạt.");
@@ -280,7 +285,7 @@ export function BulkAutolispWeldDialog({
           <div>
             <h2 className="text-base font-bold text-slate-900">Nhập hàng loạt từ Autolisp</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Chọn điểm thiết kế chưa gắn nhật ký → xem trước mã hệ thống / sơn / máy → tạo hàng loạt.
+              Điểm chưa gắn → tạo mới; điểm đã gắn → ghi đè nhật ký cũ (giữ mã hệ thống).
               {pointCount > 0 ? ` · Đã tải ${pointCount.toLocaleString("vi-VN")} điểm GPS` : ""}
             </p>
           </div>
@@ -414,7 +419,7 @@ export function BulkAutolispWeldDialog({
               checked={includeLinked}
               onChange={(e) => setIncludeLinked(e.target.checked)}
             />
-            Hiện cả điểm đã gắn (chỉ để xem, không tạo lại)
+            Gồm điểm đã gắn (ghi đè nhật ký)
           </label>
         </div>
 
@@ -435,7 +440,7 @@ export function BulkAutolispWeldDialog({
                 disabled={saving}
                 className="h-10 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Chọn tất cả tạo được
+                Chọn tất cả
               </button>
               <button
                 type="button"
@@ -446,7 +451,8 @@ export function BulkAutolispWeldDialog({
                 Bỏ chọn
               </button>
               <span className="text-xs text-slate-600">
-                Chọn <strong className="font-mono">{selectedCount}</strong> / {rows.length} · tối đa {AUTOLISP_BULK_MAX}/lần
+                Chọn <strong className="font-mono">{selectedCount}</strong> / {rows.length}
+                {" · "}tạo {createCount} · ghi đè {overwriteCount} · tối đa {AUTOLISP_BULK_MAX}/lần
               </span>
             </>
           ) : null}
@@ -479,7 +485,16 @@ export function BulkAutolispWeldDialog({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.pointId} className={row.skipReason ? "bg-slate-50 text-slate-400" : ""}>
+                  <tr
+                    key={row.pointId}
+                    className={
+                      row.skipReason
+                        ? "bg-slate-50 text-slate-400"
+                        : row.mode === "overwrite"
+                          ? "bg-amber-50/60"
+                          : ""
+                    }
+                  >
                     <td className="border-b border-slate-100 px-2 py-1.5">
                       <input
                         type="checkbox"
@@ -507,7 +522,12 @@ export function BulkAutolispWeldDialog({
                       )}
                     </td>
                     <td className="border-b border-slate-100 px-2 py-1.5">
-                      {row.skipReason ?? (row.selected ? "Sẵn sàng" : "Bỏ qua")}
+                      {row.skipReason
+                        ?? (row.selected
+                          ? row.mode === "overwrite"
+                            ? "Ghi đè"
+                            : "Tạo mới"
+                          : "Bỏ qua")}
                     </td>
                   </tr>
                 ))}
@@ -531,7 +551,7 @@ export function BulkAutolispWeldDialog({
             disabled={saving || selectedCount < 1}
             className="h-10 rounded-lg bg-emerald-700 px-4 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
           >
-            {saving ? progress || "Đang tạo…" : `Tạo ${selectedCount} nhật ký`}
+            {saving ? progress || "Đang xử lý…" : `Xử lý ${selectedCount} điểm`}
           </button>
         </div>
       </div>
