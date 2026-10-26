@@ -212,11 +212,9 @@ export function TrackSchematic({
         {children({ placements: layout.placements, symbols, editingPlacementId: editingId, onEditPlacement: edit, onRemovePlacement: removePlacement })}
       </TrackMapCanvas>
 
-      <StructureLegend layout={layout} symbols={symbols} />
-
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-base font-bold">Bước 2 · Nhập công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chỉ chọn tuyến Thượng hoặc Hạ (không phân ray trái/phải). Biểu tượng trên đường tim giữa 2 ray; tên/mã xem Legend phía trên.</p></div>
+          <div><h2 className="text-base font-bold">Bước 2 · Nhập công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chỉ chọn tuyến Thượng hoặc Hạ (không phân ray trái/phải). Biểu tượng trên đường tim giữa 2 ray; tên/mã xem Chú thích / Legend bên dưới.</p></div>
           <Link href="/lwr-cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
@@ -260,6 +258,8 @@ export function TrackSchematic({
           </p>
         </form>
       </div>
+
+      <StructureLegend layout={layout} symbols={symbols} />
     </section>
   );
 }
