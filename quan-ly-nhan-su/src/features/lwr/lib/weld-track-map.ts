@@ -6,12 +6,57 @@ function cellHasPlacedWork(cell: { placed?: boolean; released?: boolean }) {
   return Boolean(cell.placed || cell.released);
 }
 
-/** Mối hàn: biên hai thanh ngắn đã rải, hai đầu thanh dài, và mối đã liên kết nhật ký. */
+type JointBuild = RailJoint & { linkAliases?: string[] };
+
+function pushJoint(joints: JointBuild[], joint: JointBuild) {
+  const existing = joints.find((item) => item.rowKey === joint.rowKey && item.metres === joint.metres);
+  if (existing) {
+    existing.linkAliases = [...new Set([...(existing.linkAliases ?? [existing.id]), joint.id, ...(joint.linkAliases ?? [])])];
+    return;
+  }
+  joints.push({ ...joint, linkAliases: joint.linkAliases ?? [joint.id] });
+}
+
+/** Hai đầu thực của đoạn LWR theo thanh ngắn đã rải (theo khi dài ra/ngắn lại). */
+function liveLongRailEnds(rows: RailRow[], rail: LongRail): { startMetres: number; endMetres: number; startCellId: string; endCellId: string } | null {
+  const span = getPlacementSpan(rows, rail) ?? visibleLongRailSpan(rows, rail);
+  if (!span) return null;
+  let startMetres = span.startMetres;
+  let endMetres = span.endMetres;
+  let startCellId = span.startCell.id;
+  let endCellId = span.endCell.id;
+  for (const cell of span.row.cells) {
+    if (!cellHasPlacedWork(cell)) continue;
+    const from = parseChainage(cell.from);
+    const to = parseChainage(cell.to);
+    if (from === null || to === null) continue;
+    // Thanh giao đoạn LWR (kể cả khi đã kéo dài `to` vượt endMetres đã lưu).
+    if (!(from < endMetres && to > startMetres)) continue;
+    if (from < startMetres) {
+      startMetres = from;
+      startCellId = cell.id;
+    }
+    if (to > endMetres) {
+      endMetres = to;
+      endCellId = cell.id;
+    }
+  }
+  if (!(endMetres > startMetres)) return null;
+  return { startMetres, endMetres, startCellId, endCellId };
+}
+
+function jointHasLink(joint: JointBuild, links: Record<string, string[]>, weldId?: string) {
+  const aliases = joint.linkAliases ?? [joint.id];
+  if (weldId) return aliases.some((id) => links[id]?.includes(weldId));
+  return aliases.some((id) => Boolean(links[id]?.length));
+}
+
+/** Mối hàn: biên hai thanh ngắn đã rải, hai đầu thanh dài (theo mép thực), và mối đã liên kết nhật ký. */
 export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetres = 0, links: Record<string, string[]> = {}, longRails: LongRail[] = []): {
   joints: RailJoint[];
   unmatched: JournalWeld[];
 } {
-  const joints: RailJoint[] = [];
+  const joints: JointBuild[] = [];
 
   for (const row of rows) {
     const key = railRowKey(row);
@@ -21,10 +66,9 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
       const metres = parseChainage(left.to) ?? parseChainage(right.from);
       if (metres == null) continue;
       const id = `${key}:${left.id}:${right.id}`;
-      const linked = Boolean(links[id]?.length);
       const betweenWork = cellHasPlacedWork(left) && cellHasPlacedWork(right);
-      if (!linked && !betweenWork) continue;
-      joints.push({
+      if (!betweenWork && !links[id]?.length) continue;
+      pushJoint(joints, {
         id,
         rowKey: key,
         leftCellId: left.id,
@@ -34,27 +78,74 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
         welds: [],
       });
     }
+
+    // Hai đầu mỗi thanh ngắn đã rải — luôn bám cell.from / cell.to khi dài ra.
+    for (const cell of row.cells) {
+      if (!cellHasPlacedWork(cell)) continue;
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      if (from !== null) {
+        pushJoint(joints, {
+          id: `${key}:cell:${cell.id}:from`,
+          rowKey: key,
+          leftCellId: cell.id,
+          rightCellId: cell.id,
+          chainage: formatChainage(from),
+          metres: from,
+          welds: [],
+        });
+      }
+      if (to !== null) {
+        pushJoint(joints, {
+          id: `${key}:cell:${cell.id}:to`,
+          rowKey: key,
+          leftCellId: cell.id,
+          rightCellId: cell.id,
+          chainage: formatChainage(to),
+          metres: to,
+          welds: [],
+        });
+      }
+    }
   }
 
   for (const rail of longRails) {
-    const span = getPlacementSpan(rows, rail);
-    if (!span) continue;
-    for (const metres of [span.startMetres, span.endMetres]) {
-      if (joints.some(joint => joint.rowKey === rail.rowKey && joint.metres === metres)) continue;
-      const left = span.row.cells.find(cell => (parseChainage(cell.from) ?? Infinity) < metres && metres <= (parseChainage(cell.to) ?? -Infinity));
-      const right = span.row.cells.find(cell => (parseChainage(cell.from) ?? Infinity) <= metres && metres < (parseChainage(cell.to) ?? -Infinity));
-      joints.push({ id: `${rail.rowKey}:km:${metres}`, rowKey: rail.rowKey, metres, chainage: formatChainage(metres), leftCellId: left?.id ?? span.startCell.id, rightCellId: right?.id ?? span.endCell.id, welds: [] });
+    const live = liveLongRailEnds(rows, rail);
+    if (!live) continue;
+    const edges = [
+      { edge: "start" as const, metres: live.startMetres, cellId: live.startCellId, legacy: rail.startMetres },
+      { edge: "end" as const, metres: live.endMetres, cellId: live.endCellId, legacy: rail.endMetres },
+    ];
+    for (const { edge, metres, cellId, legacy } of edges) {
+      const id = `${rail.rowKey}:lwr:${rail.id}:${edge}`;
+      const aliases = [id];
+      if (Number.isFinite(legacy)) aliases.push(`${rail.rowKey}:km:${legacy}`);
+      if (Number.isFinite(metres) && metres !== legacy) aliases.push(`${rail.rowKey}:km:${metres}`);
+      pushJoint(joints, {
+        id,
+        rowKey: rail.rowKey,
+        leftCellId: cellId,
+        rightCellId: cellId,
+        chainage: formatChainage(metres),
+        metres,
+        welds: [],
+        linkAliases: aliases,
+      });
     }
   }
+
   const unmatched: JournalWeld[] = [];
   for (const weld of welds) {
-    const linked = joints.find(joint => links[joint.id]?.includes(weld.id));
-    if (linked) { linked.welds.push(weld); continue; }
+    const linked = joints.find((joint) => jointHasLink(joint, links, weld.id));
+    if (linked) {
+      linked.welds.push(weld);
+      continue;
+    }
     if (weld.metres == null) {
       unmatched.push(weld);
       continue;
     }
-    let best: RailJoint | null = null;
+    let best: JointBuild | null = null;
     let bestDist = Number.POSITIVE_INFINITY;
     let ambiguous = false;
     for (const joint of joints) {
@@ -74,7 +165,10 @@ export function buildRailJoints(rows: RailRow[], welds: JournalWeld[], snapMetre
     }
   }
 
-  return { joints, unmatched };
+  return {
+    joints: joints.map(({ linkAliases: _aliases, ...joint }) => joint),
+    unmatched,
+  };
 }
 
 export function jointsForRow(joints: RailJoint[], row: RailRow): RailJoint[] {

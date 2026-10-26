@@ -287,7 +287,11 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
 
   function persistLongRail(longRail: LongRail, existing: LongRail | undefined, nextRows?: RailRow[]) {
     if (existing && (existing.rowKey !== longRail.rowKey || existing.startMetres !== longRail.startMetres || existing.endMetres !== longRail.endMetres)
-      && [existing.startMetres, existing.endMetres].some(m => (layout.jointWeldLinks?.[`${existing.rowKey}:km:${m}`]?.length ?? 0) > 0)) {
+      && (
+        [existing.startMetres, existing.endMetres].some(m => (layout.jointWeldLinks?.[`${existing.rowKey}:km:${m}`]?.length ?? 0) > 0)
+        || (layout.jointWeldLinks?.[`${existing.rowKey}:lwr:${existing.id}:start`]?.length ?? 0) > 0
+        || (layout.jointWeldLinks?.[`${existing.rowKey}:lwr:${existing.id}:end`]?.length ?? 0) > 0
+      )) {
       setError("Đầu đoạn đã liên kết nhật ký hàn. Tháo liên kết trước khi đổi lý trình hoặc dải ray.");
       return false;
     }
@@ -383,7 +387,11 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     }
     if (
       (selectedLongRail.startMetres !== start || selectedLongRail.endMetres !== end)
-      && [selectedLongRail.startMetres, selectedLongRail.endMetres].some((metres) => (layout.jointWeldLinks?.[`${selectedLongRail.rowKey}:km:${metres}`]?.length ?? 0) > 0)
+      && (
+        [selectedLongRail.startMetres, selectedLongRail.endMetres].some((metres) => (layout.jointWeldLinks?.[`${selectedLongRail.rowKey}:km:${metres}`]?.length ?? 0) > 0)
+        || (layout.jointWeldLinks?.[`${selectedLongRail.rowKey}:lwr:${selectedLongRail.id}:start`]?.length ?? 0) > 0
+        || (layout.jointWeldLinks?.[`${selectedLongRail.rowKey}:lwr:${selectedLongRail.id}:end`]?.length ?? 0) > 0
+      )
     ) {
       return { ok: false, message: "Đầu đoạn đã liên kết nhật ký hàn. Tháo liên kết trước khi đổi lý trình." };
     }

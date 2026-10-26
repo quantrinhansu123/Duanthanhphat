@@ -314,18 +314,23 @@ export const RailGrid = memo(function RailGrid({
             })}
             {jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];
-              const method = jointDisplayMethod(joint, longRails, rows, selectedLongRailId, selectedId);
+              const linked = joint.welds.length > 0;
+              // Chưa liên kết nhật ký → xám (không lấy màu ATW/FBW từ thanh phủ).
+              const method = linked ? jointDisplayMethod(joint, longRails, rows, selectedLongRailId, selectedId) : undefined;
+              const tone = linked
+                ? weldMethodTone(method)
+                : "bg-slate-300 border-slate-400 text-slate-500 opacity-80";
               return (
                 <button
                   key={joint.id}
                   type="button"
                   onClick={() => onSelectJoint?.(joint)}
-                  title={`${joint.chainage} · ${weld?.code ?? method ?? "Chưa hàn — liên kết nhật ký"}`}
+                  title={`${joint.chainage} · ${weld?.code ?? (linked ? method : "Chưa liên kết nhật ký")}`}
                   aria-label={`Mối hàn ${row.line} ${row.rail} Km${joint.chainage}`}
                   className={`absolute z-10 flex size-8 -translate-x-1/2 appearance-none items-center justify-center border-0 bg-transparent p-0 ${selectedJointId === joint.id ? "rounded-full ring-2 ring-slate-700 ring-offset-1" : ""}`}
                   style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: 20 }}
                 >
-                  <span className={`block size-4 rounded-full border-2 shadow-md ${weldMethodTone(method)}`} />
+                  <span className={`block size-4 rounded-full border-2 shadow-md ${tone}`} />
                   {weld && <span className="absolute bottom-full left-1/2 mb-0.5 max-w-24 -translate-x-1/2 truncate whitespace-nowrap text-[9px] font-medium text-slate-800">{weld.code}</span>}
                 </button>
               );
