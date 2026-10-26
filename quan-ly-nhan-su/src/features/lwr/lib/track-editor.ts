@@ -368,8 +368,25 @@ export function extendRailRows(rows: RailRow[], count: number, line?: string): R
   });
 }
 
+export type PlaceShortRailTemps = {
+  leftTemp?: number;
+  rightTemp?: number;
+};
+
+function shortRailTemps(temps?: PlaceShortRailTemps): Pick<RailCell, "temp" | "leftTemp" | "rightTemp"> {
+  const left = Number.isFinite(temps?.leftTemp) ? (temps!.leftTemp as number) : DEFAULT_NEW_RAIL_TEMPERATURE;
+  const right = Number.isFinite(temps?.rightTemp) ? (temps!.rightTemp as number) : DEFAULT_NEW_RAIL_TEMPERATURE;
+  return { leftTemp: left, rightTemp: right, temp: lockTempFromSides(left, right) };
+}
+
 /** Place a short rail at an exact chainage span. Width on the map follows metres. */
-export function placeShortRailSpan(rows: RailRow[], rowKey: string, startMetres: number, endMetres: number): { rows: RailRow[]; cellId: string } {
+export function placeShortRailSpan(
+  rows: RailRow[],
+  rowKey: string,
+  startMetres: number,
+  endMetres: number,
+  temps?: PlaceShortRailTemps,
+): { rows: RailRow[]; cellId: string } {
   if (!Number.isSafeInteger(startMetres) || !Number.isSafeInteger(endMetres) || startMetres < 0 || endMetres <= startMetres) {
     throw new RangeError("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
   }
@@ -383,6 +400,7 @@ export function placeShortRailSpan(rows: RailRow[], rowKey: string, startMetres:
     nextNum += 1;
     return id;
   };
+  const tempsPayload = shortRailTemps(temps);
 
   for (const cell of row.cells) {
     if (!cell.placed && !cell.released) continue;
@@ -397,7 +415,7 @@ export function placeShortRailSpan(rows: RailRow[], rowKey: string, startMetres:
       id: `${prefix}-01`,
       from: formatChainage(startMetres),
       to: formatChainage(endMetres),
-      temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+      ...tempsPayload,
       placed: true,
     };
     row.cells.push(cell);
@@ -450,7 +468,7 @@ export function placeShortRailSpan(rows: RailRow[], rowKey: string, startMetres:
     id: allocId(),
     from: formatChainage(startMetres),
     to: formatChainage(endMetres),
-    temp: DEFAULT_NEW_RAIL_TEMPERATURE,
+    ...tempsPayload,
     placed: true,
   };
   const insertAt = rebuilt.findIndex((cell) => (cellRange(cell)?.from ?? Infinity) >= endMetres);

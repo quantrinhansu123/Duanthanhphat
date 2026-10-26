@@ -696,15 +696,22 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             selectedId={cell?.id ?? ""}
             onSelect={selectCell}
             onSelectJoint={selectJoint}
-            onAppend={(rowKey, from, to) => {
+            onAppend={(rowKey, from, to, temps) => {
               const start = parseChainage(from);
               const end = parseChainage(to);
               if (start === null || end === null || end <= start) {
                 setError("Nhập lý trình đầu/cuối dạng 0+000, cuối lớn hơn đầu.");
                 return false;
               }
+              if (
+                temps
+                && (!Number.isFinite(temps.leftTemp) || !Number.isFinite(temps.rightTemp))
+              ) {
+                setError("Nhập nhiệt độ ray trái/phải là số hữu hạn.");
+                return false;
+              }
               try {
-                const placed = placeShortRailSpan(layout.rows, rowKey, start, end);
+                const placed = placeShortRailSpan(layout.rows, rowKey, start, end, temps);
                 if (!commit({ ...layout, rows: placed.rows })) return false;
                 setSelectedId(placed.cellId);
                 setSelectedLongRailId(null);

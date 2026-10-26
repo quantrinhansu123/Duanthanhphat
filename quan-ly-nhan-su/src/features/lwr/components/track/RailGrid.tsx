@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, formatChainage, type TrackPlacement, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lockTempFromSides, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -87,10 +87,23 @@ interface RailGridProps {
   selectedJointId?: string | null;
   onSelectJoint?: (joint: RailJoint) => void;
   selectedLongRailId?: string | null;
-  onAppend?: (rowKey: string, from: string, to: string) => boolean | void;
+  onAppend?: (
+    rowKey: string,
+    from: string,
+    to: string,
+    temps?: { leftTemp: number; rightTemp: number },
+  ) => boolean | void;
   onRemove?: (cellId: string) => void;
   appendError?: string | null;
 }
+
+type AppendDraft = {
+  rowKey: string;
+  from: string;
+  to: string;
+  leftTemp: string;
+  rightTemp: string;
+};
 
 export const RailGrid = memo(function RailGrid({
   structures,
@@ -108,11 +121,23 @@ export const RailGrid = memo(function RailGrid({
   onRemove,
   appendError,
 }: RailGridProps) {
-  const [appendDraft, setAppendDraft] = useState<{ rowKey: string; from: string; to: string } | null>(null);
+  const [appendDraft, setAppendDraft] = useState<AppendDraft | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogTitleId = useId();
   const [submitted, setSubmitted] = useState(false);
   const appendOpen = appendDraft !== null;
+  const appendStart = appendDraft ? parseChainage(appendDraft.from) : null;
+  const appendEnd = appendDraft ? parseChainage(appendDraft.to) : null;
+  const appendLength =
+    appendStart !== null && appendEnd !== null && appendEnd > appendStart
+      ? appendEnd - appendStart
+      : null;
+  const appendLeft = appendDraft ? Number(appendDraft.leftTemp.trim().replace(",", ".")) : NaN;
+  const appendRight = appendDraft ? Number(appendDraft.rightTemp.trim().replace(",", ".")) : NaN;
+  const appendLockTemp =
+    Number.isFinite(appendLeft) && Number.isFinite(appendRight)
+      ? lockTempFromSides(appendLeft, appendRight)
+      : null;
   useEffect(() => {
     const dialog = dialogRef.current;
     if (appendOpen) dialog?.showModal();
@@ -251,6 +276,8 @@ export const RailGrid = memo(function RailGrid({
                       rowKey: key,
                       from: formatChainage(start),
                       to: formatChainage(start + RAIL_SEGMENT_LENGTH_METRES),
+                      leftTemp: String(DEFAULT_NEW_RAIL_TEMPERATURE),
+                      rightTemp: String(DEFAULT_NEW_RAIL_TEMPERATURE),
                     });
                   }}
                   aria-label={`Thêm thanh ngắn phía sau ${row.line} ${row.rail}`}
@@ -282,13 +309,17 @@ export const RailGrid = memo(function RailGrid({
       {appendDraft && <form onSubmit={(event) => {
         event.preventDefault();
         setSubmitted(true);
-        if (onAppend?.(appendDraft.rowKey, appendDraft.from, appendDraft.to) !== false) setAppendDraft(null);
+        if (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight)) return;
+        if (onAppend?.(appendDraft.rowKey, appendDraft.from, appendDraft.to, {
+          leftTemp: appendLeft,
+          rightTemp: appendRight,
+        }) !== false) setAppendDraft(null);
       }}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 id={dialogTitleId} className="font-semibold">Thêm thanh ngắn</h3>
           <button type="button" aria-label="Đóng popup" onClick={() => setAppendDraft(null)} className="rounded p-1 hover:bg-slate-100"><X className="size-5" /></button>
         </div>
-        <p className="mb-4 text-sm text-slate-600">Nhập lý trình tùy chọn cho {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.line} · {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.rail}.</p>
+        <p className="mb-4 text-sm text-slate-600">Nhập lý trình và nhiệt độ hiện trường cho {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.line} · {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.rail}.</p>
         <label className="block text-sm font-medium">
           Lý trình đầu
           <input autoFocus required className="mt-1 w-full rounded-lg border px-3 py-2" value={appendDraft.from} onChange={event => { setSubmitted(false); setAppendDraft({ ...appendDraft, from: event.target.value }); }} placeholder="0+000" aria-label="Lý trình đầu thanh ngắn" />
@@ -297,7 +328,47 @@ export const RailGrid = memo(function RailGrid({
           Lý trình cuối
           <input required className="mt-1 w-full rounded-lg border px-3 py-2" value={appendDraft.to} onChange={event => { setSubmitted(false); setAppendDraft({ ...appendDraft, to: event.target.value }); }} placeholder="0+250" aria-label="Lý trình cuối thanh ngắn" />
         </label>
+        <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          Chiều dài:{" "}
+          <span className="font-semibold text-slate-900">
+            {appendLength !== null ? `${appendLength} m` : "— (nhập lý trình hợp lệ)"}
+          </span>
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <label className="block text-sm font-medium">
+            Nhiệt độ ray trái (°C)
+            <input
+              required
+              inputMode="decimal"
+              className="mt-1 w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-2"
+              value={appendDraft.leftTemp}
+              onChange={(event) => { setSubmitted(false); setAppendDraft({ ...appendDraft, leftTemp: event.target.value }); }}
+              aria-label="Nhiệt độ ray trái"
+            />
+          </label>
+          <label className="block text-sm font-medium">
+            Nhiệt độ ray phải (°C)
+            <input
+              required
+              inputMode="decimal"
+              className="mt-1 w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-2"
+              value={appendDraft.rightTemp}
+              onChange={(event) => { setSubmitted(false); setAppendDraft({ ...appendDraft, rightTemp: event.target.value }); }}
+              aria-label="Nhiệt độ ray phải"
+            />
+          </label>
+        </div>
+        <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          T khóa đường:{" "}
+          <span className="font-semibold">
+            {appendLockTemp !== null ? `${appendLockTemp} °C` : "—"}
+          </span>
+          <span className="ml-1 text-xs font-medium">(T trái + T phải) / 2</span>
+        </p>
         <p className="mt-2 text-xs text-slate-500">Ví dụ: 12+000 đến 12+250. Lý trình cuối phải lớn hơn lý trình đầu.</p>
+        {submitted && (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight)) && (
+          <p role="alert" className="mt-3 text-sm text-red-700">Nhập nhiệt độ ray trái/phải là số hữu hạn.</p>
+        )}
         {submitted && appendError && <p role="alert" className="mt-3 text-sm text-red-700">{appendError}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="rounded-lg border px-4 py-2 text-sm" onClick={() => setAppendDraft(null)}>Hủy</button>

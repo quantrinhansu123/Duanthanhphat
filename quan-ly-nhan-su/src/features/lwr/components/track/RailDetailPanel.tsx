@@ -244,9 +244,6 @@ export function RailDetailPanel({
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
           <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
-            <p className="col-span-2 text-xs font-semibold text-amber-900">
-              Hiện trường: nhập T trái / T phải trước giải toả. T khóa = trung bình → tô màu sơ đồ. Chiều dài sửa hàng ngày đến khi Đạt.
-            </p>
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
               <span className="flex items-center gap-1">
