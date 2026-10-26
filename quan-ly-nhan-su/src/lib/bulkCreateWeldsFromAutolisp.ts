@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import {
   insertWeldJournalEntry,
+  spreadWeldSlotTime,
   updateWeldJournalEntry,
   type WeldJournalInsert,
   type WeldReportRow,
@@ -379,7 +380,11 @@ export async function commitAutolispBulkWelds(
 
   for (let index = 0; index < selected.length; index += 1) {
     const row = selected[index];
-    const payload = buildPayload(row, context, date, year, status);
+    const payload: WeldJournalInsert = {
+      ...buildPayload(row, context, date, year, status),
+      // Giờ chia đều theo thứ tự TT (0001 sớm nhất → n muộn hơn trong ngày).
+      gio_han: spreadWeldSlotTime("08:00", "16:00", index, selected.length),
+    };
     try {
       if (row.mode === "overwrite" && row.existingWeldId) {
         let maLichSu = row.ma_lich_su;

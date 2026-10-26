@@ -43,6 +43,7 @@ import {
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
   normalizeWeldTime,
+  spreadWeldSlotTime,
   parseWeldLinkedImageAssets,
   resolveWeldTestStatus,
   updateWeldJournalEntry,
@@ -81,7 +82,6 @@ import {
 } from "@/lib/weldingCertificates";
 import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { createClient } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
@@ -1828,11 +1828,13 @@ export default function WeldingJournalList({
     const gpsByPointCode = new Map(
       gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
     );
+    // Ngày mới trước; trong ngày sắp theo mã hệ thống tăng dần (0001 → n).
     const orderedRows = [...rows].sort(
       (a, b) =>
         compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) ||
-        (b.gio_han || "").localeCompare(a.gio_han || "") ||
-        b.id.localeCompare(a.id),
+        a.ma_lich_su.localeCompare(b.ma_lich_su, "vi") ||
+        (a.gio_han || "").localeCompare(b.gio_han || "") ||
+        a.id.localeCompare(b.id),
     );
     return orderedRows.map((row) => {
       const codeKey = row.ma_lich_su.trim().toLocaleLowerCase("vi");
@@ -2253,8 +2255,8 @@ export default function WeldingJournalList({
       ]);
       const usedCodes = new Set(prefixCodes);
       const usedMachineCodes = new Set(machineCodesDay0);
-      let lastSiteCode = values.ma_hien_truong?.trim().toUpperCase() || "";
-      let lastMachineCode = values.ten_moi_han_theo_may?.trim().toUpperCase() || "";
+      let lastSiteCode = "";
+      let lastMachineCode = "";
       let done = 0;
       let prevDate = "";
       for (const date of dates) {
@@ -2269,6 +2271,7 @@ export default function WeldingJournalList({
           prevDate = date;
         }
         for (let index = 0; index < count; index += 1) {
+          // TT tăng dần 0001→n; mã hiện trường / trong máy khớp cùng số.
           const maLichSu = suggestWeldCode(
             values.cong_nghe_han,
             `${date}T08:00`,
@@ -2277,19 +2280,14 @@ export default function WeldingJournalList({
             values.loai_moi_han,
           );
           usedCodes.add(maLichSu);
-          const nextSiteCode =
-            done === 0 && lastSiteCode
-              ? lastSiteCode
-              : fieldCodeFromSystemCode(maLichSu);
-          const nextMachineCode =
-            done === 0 && lastMachineCode && (scheme === "k922" || prevDate === date)
-              ? lastMachineCode
-              : suggestMachineWeldCodeForMachine(date, [...usedMachineCodes], machine);
+          const nextSiteCode = fieldCodeFromSystemCode(maLichSu);
+          const nextMachineCode = suggestMachineWeldCodeForMachine(date, [...usedMachineCodes], machine);
           if (nextSiteCode) lastSiteCode = nextSiteCode;
           if (nextMachineCode) {
             lastMachineCode = nextMachineCode;
             usedMachineCodes.add(nextMachineCode);
           }
+          const gioHan = spreadWeldSlotTime(values.gio_bat_dau, values.gio_ket_thuc, index, count);
           await insertWeldJournalEntry({
             ma_lich_su: maLichSu,
             du_an_id: values.du_an_id,
@@ -2313,6 +2311,7 @@ export default function WeldingJournalList({
             vi_do: null,
             ly_trinh: null,
             ca_han: values.ca_han,
+            gio_han: gioHan,
             gio_bat_dau: values.gio_bat_dau,
             gio_ket_thuc: values.gio_ket_thuc,
             ma_hien_truong: nextSiteCode || null,

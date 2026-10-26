@@ -191,16 +191,23 @@ export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]>
   const value = prefix.trim();
   if (!value || !isSupabaseConfigured()) return [];
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("bao_cao_moi_han_theo_du_an")
-    .select("ma_lich_su")
-    .ilike("ma_lich_su", `${value}%`)
-    .order("ma_lich_su", { ascending: false })
-    .limit(200);
-  if (error) throw new Error(formatSupabaseError(error));
-  return (data ?? [])
-    .map((row) => String((row as { ma_lich_su?: string }).ma_lich_su ?? "").trim())
-    .filter(Boolean);
+  const codes: string[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("bao_cao_moi_han_theo_du_an")
+      .select("ma_lich_su")
+      .ilike("ma_lich_su", `${value}%`)
+      .order("ma_lich_su", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(formatSupabaseError(error));
+    const page = (data ?? [])
+      .map((row) => String((row as { ma_lich_su?: string }).ma_lich_su ?? "").trim())
+      .filter(Boolean);
+    codes.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return codes;
 }
 
 /** Mã hiện trường đã dùng trong một dự án. */
@@ -661,6 +668,32 @@ export function addHoursToWeldTime(value: string, hours: number): string {
   const total = (((start + Math.round(hours * 60)) % 1440) + 1440) % 1440;
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+}
+
+/**
+ * Chia đều giờ hàn trong ca theo thứ tự TT (index 0 = đầu ca).
+ * Dùng khi điền hàng loạt / Autolisp để mã tăng dần khớp giờ tăng dần.
+ */
+export function spreadWeldSlotTime(
+  fromValue: string | null | undefined,
+  toValue: string | null | undefined,
+  index: number,
+  total: number,
+  fallback = "08:00",
+): string {
+  const start = weldTimeToMinutes(fromValue);
+  const endRaw = weldTimeToMinutes(toValue);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const toHhMm = (mins: number) => {
+    const wrapped = ((mins % 1440) + 1440) % 1440;
+    return `${pad(Math.floor(wrapped / 60))}:${pad(wrapped % 60)}`;
+  };
+  if (start == null) return normalizeWeldTime(fallback) ?? fallback;
+  if (total <= 1 || endRaw == null) return toHhMm(start);
+  const end = endRaw <= start ? endRaw + 1440 : endRaw;
+  const span = end - start;
+  const slot = Math.round(start + (span * Math.max(0, index)) / Math.max(1, total - 1));
+  return toHhMm(slot);
 }
 
 /** Số tiếng làm từ giờ bắt đầu đến giờ kết thúc; kết thúc ≤ bắt đầu được tính qua đêm. */
@@ -1285,14 +1318,15 @@ function journalPageSelect(
   return cols.join(",");
 }
 
-/** Thời gian hàn gần nhất trước: ngày hàn → giờ hàn → thời điểm nhập. */
+/** Ngày mới trước; trong cùng ngày sắp theo mã hệ thống tăng dần (TT 0001→n). */
 function orderJournalByWeldTime<T>(request: T, withCreatedAt: boolean, withExtras: boolean): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let next: any = request;
   next = next.order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
-  if (withExtras) next = next.order("gio_han", { ascending: false, nullsFirst: false });
-  if (withCreatedAt) next = next.order("created_at", { ascending: false, nullsFirst: false });
-  return next.order("id", { ascending: false }) as T;
+  next = next.order("ma_lich_su", { ascending: true, nullsFirst: false });
+  if (withExtras) next = next.order("gio_han", { ascending: true, nullsFirst: false });
+  if (withCreatedAt) next = next.order("created_at", { ascending: true, nullsFirst: false });
+  return next.order("id", { ascending: true }) as T;
 }
 
 function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
