@@ -45,6 +45,24 @@ function shortRailChipLabel(code: string, lengthMetres: number, tempC: number) {
   return `${code}-${lengthMetres}m-${tempC}oC`;
 }
 
+/** Nền phân biệt 2 tuyến trên sơ đồ. */
+function lineZoneClass(line: string) {
+  if (/hạ|ha\b/i.test(line)) {
+    return "rounded-lg border border-sky-200/80 bg-sky-50/90";
+  }
+  return "rounded-lg border border-amber-200/80 bg-amber-50/80";
+}
+
+function groupRowsByLine(rows: RailRow[]) {
+  const groups: { line: string; rows: RailRow[] }[] = [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.line === row.line) last.rows.push(row);
+    else groups.push({ line: row.line, rows: [row] });
+  }
+  return groups;
+}
+
 function chipDeleteButton(cellId: string, box: { left: number; width: number }, onRemove?: (id: string) => void) {
   if (!onRemove) return null;
   const width = Math.max(1, box.width - 4);
@@ -151,11 +169,21 @@ export const RailGrid = memo(function RailGrid({
     <div className="space-y-1 border-b px-4 py-3">
       <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công</h2>
       <p className="text-xs text-slate-600">Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo · <span className="font-semibold text-emerald-700">xanh</span> = giải toả T≥30°C · <span className="font-semibold text-orange-600">cam</span> = giải toả T&lt;30°C. Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.</p>
-      <p className="text-xs text-slate-500">Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m). Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend. Bấm thanh để sửa nhiệt độ / giải toả.</p>
+      <p className="text-xs text-slate-500">
+        Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m).
+        {" "}
+        <span className="font-semibold text-amber-800">Nền vàng</span> = Thượng ·
+        {" "}
+        <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ.
+        {" "}
+        Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend.
+      </p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
-      <div className="space-y-1 px-4 py-3" style={{ width: 150 + width }}>
-        {rows.map((row, rowIndex) => {
+      <div className="space-y-3 px-4 py-3" style={{ width: 150 + width }}>
+        {groupRowsByLine(rows).map((group) => (
+          <div key={group.line} className={`space-y-1 p-2 ${lineZoneClass(group.line)}`} data-line={group.line}>
+            {group.rows.map((row, indexInGroup) => {
           const lastVisible = [...row.cells].reverse().find((cell) => cell.released || cell.placed);
           const lastEnd = lastVisible ? parseChainage(lastVisible.to) : null;
           const plusLeft = lastEnd === null ? 8 : (lastEnd - extent.startMetres) * TRACK_PIXELS_PER_METRE + 8;
@@ -165,6 +193,7 @@ export const RailGrid = memo(function RailGrid({
             return span ? [{ rail, span }] : [];
           });
           const key = railRowKey(row);
+          const pairMate = indexInGroup === 0 ? group.rows[1] : undefined;
           return <Fragment key={key}><div className="grid grid-cols-[110px_1fr] gap-x-2">
           <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{row.rail}</div>
           <div className="relative" style={{ width, height: 64 }}>
@@ -292,11 +321,13 @@ export const RailGrid = memo(function RailGrid({
             </div>
           </div>
         </div>
-        {rows[rowIndex + 1]?.line === row.line && (rowIndex === 0 || rows[rowIndex - 1].line !== row.line) && (
-          <TrackCenterline structures={structures} rows={[row, rows[rowIndex + 1]]} startMetres={extent.startMetres} width={lineWidth} />
+        {pairMate && (
+          <TrackCenterline structures={structures} rows={[row, pairMate]} startMetres={extent.startMetres} width={lineWidth} />
         )}
         </Fragment>;
-        })}
+            })}
+          </div>
+        ))}
       </div>
     </div>
     <dialog
