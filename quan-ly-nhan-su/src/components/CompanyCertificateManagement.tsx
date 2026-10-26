@@ -257,13 +257,13 @@ export default function CompanyCertificateManagement() {
       </div>
 
       {/* Filter bar & Actions */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex flex-1 w-full sm:w-auto gap-3">
+      <div className="mb-6 grid grid-cols-2 items-center gap-3 sm:flex sm:justify-between">
+        <div className="min-w-0">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             aria-label={isEn ? "Filter by status" : "Lọc theo trạng thái"}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] cursor-pointer"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] cursor-pointer"
           >
             <option value="all">{isEn ? "All Statuses" : "Tất cả trạng thái"}</option>
             <option value="Chưa cập nhật">{isEn ? "Not verified" : "Chưa cập nhật"}</option>

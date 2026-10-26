@@ -340,10 +340,10 @@ export default function AppShell({ tab }: AppShellProps) {
         </header>
 
         <main id="main-content" tabIndex={-1}
-          className={`min-h-0 flex-1 overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
+          className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
         >
           {reportTab && (
-            <div className="sticky top-0 z-20 shrink-0">
+            <div className="shrink-0 bg-[#f4f6fa]">
               <GlobalReportFilterBar />
               <ReportTabBar activeId={current} onNavigate={go} />
             </div>

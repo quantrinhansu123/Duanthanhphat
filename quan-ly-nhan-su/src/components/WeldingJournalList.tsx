@@ -2618,7 +2618,7 @@ export default function WeldingJournalList({
         )}
        </div>
 
-       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
         <button
           type="button"
           onClick={() => downloadWeldJournalExcelTemplate()}

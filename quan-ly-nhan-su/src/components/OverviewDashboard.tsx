@@ -1524,7 +1524,7 @@ export default function OverviewDashboard() {
       </div>
 
       {/* Top KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card: Dự án */}
         <button type="button" onClick={() => setLookup("projects")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
@@ -1559,7 +1559,7 @@ export default function OverviewDashboard() {
               </div>
             )}
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 border border-violet-200">
             <Buildings size={24} weight="fill" aria-hidden />
           </div>
         </button>
@@ -1580,7 +1580,7 @@ export default function OverviewDashboard() {
               Toàn bộ bản ghi
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
         </button>
@@ -1601,7 +1601,7 @@ export default function OverviewDashboard() {
               Hôm qua: <span className="font-mono font-semibold">{fmt(yesterdayTotal)}</span> mối
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CalendarCheck size={24} weight="fill" aria-hidden />
           </div>
         </button>
@@ -1629,7 +1629,7 @@ export default function OverviewDashboard() {
               )}
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
             <ChartBar size={24} weight="fill" aria-hidden />
           </div>
         </button>
@@ -1650,7 +1650,7 @@ export default function OverviewDashboard() {
               <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{productionWelds.tested > 0 ? pctComma(productionWelds.passed, productionWelds.tested) : "—"}</span> số mối sx đã thí nghiệm
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle size={24} weight="fill" aria-hidden />
           </div>
         </button>
@@ -1671,7 +1671,7 @@ export default function OverviewDashboard() {
               <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{productionWelds.total > 0 ? pctComma(productionWelds.failed, productionWelds.total) : "—"}</span> lỗi / tổng mối hàn sx
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700 border border-rose-200">
             <XCircle size={24} weight="fill" aria-hidden />
           </div>
         </button>

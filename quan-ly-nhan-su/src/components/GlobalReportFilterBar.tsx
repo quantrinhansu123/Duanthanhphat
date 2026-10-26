@@ -130,7 +130,7 @@ export default function GlobalReportFilterBar() {
   }, []);
 
   return (
-    <div className="shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur-md z-20">
+    <div className="shrink-0 border-b border-slate-200/80 bg-white z-20">
       <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-2">
         <div className={`${filtersOpen ? "overflow-visible" : "overflow-hidden"} rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
           <div className="flex w-full items-center justify-between gap-3 px-3 sm:px-4 py-3 text-left">

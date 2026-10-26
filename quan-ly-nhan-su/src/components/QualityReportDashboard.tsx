@@ -138,11 +138,11 @@ function QualityKpiGrid({
       <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
         {cells.map((cell) => (
           <div key={cell.label} className={`flex items-start gap-2.5 p-3.5 sm:p-4 ${cell.accent}`}>
-            <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${cell.iconBg}`}>
+            <div className={`mt-0.5 hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex ${cell.iconBg}`}>
               {cell.icon}
             </div>
-            <div className="flex min-w-0 flex-1 items-end justify-between gap-2">
-              <div className="min-w-0">
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
+              <div className="w-full min-w-0 sm:w-auto">
                 <div className={`text-[11px] font-bold uppercase tracking-wider leading-tight ${cell.labelColor}`}>
                   {cell.label}
                 </div>
@@ -153,7 +153,7 @@ function QualityKpiGrid({
                   <span className="text-[11px] font-medium text-slate-400">{cell.unit}</span>
                 </div>
               </div>
-              <div className={`shrink-0 self-end pb-0.5 text-right text-[11px] font-medium leading-snug ${cell.noteColor}`}>
+              <div className={`w-full min-w-0 self-start text-left text-[11px] font-medium leading-snug sm:w-auto sm:shrink-0 sm:self-end sm:pb-0.5 sm:text-right ${cell.noteColor}`}>
                 {cell.note}
               </div>
             </div>
@@ -252,7 +252,7 @@ function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
   const active = activeIndex !== null ? data[activeIndex] : null;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <div
         title="So với quý đầu tiên trong biểu đồ"
         className="absolute right-0 top-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold font-mono tabular-nums shadow-2xs"
@@ -266,12 +266,13 @@ function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
         {Math.abs(delta).toLocaleString("vi-VN")}% so với quý đầu
       </div>
 
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="mt-3 h-[260px] w-full sm:h-[300px]"
-        preserveAspectRatio="none"
-        onMouseLeave={() => setActiveIndex(null)}
-      >
+      <div className="mt-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-[260px] w-full min-w-[640px] sm:h-[300px]"
+          preserveAspectRatio="none"
+          onMouseLeave={() => setActiveIndex(null)}
+        >
         <defs>
           <linearGradient id="qtrTrendFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#0047AB" stopOpacity="0.22" />
@@ -331,7 +332,8 @@ function QuarterlyTrendChart({ data }: { data: QuarterlyPassRatePoint[] }) {
             </g>
           );
         })}
-      </svg>
+        </svg>
+      </div>
 
       {active && (
         <div className="mt-1 flex items-center justify-center gap-4 text-[11px] font-medium text-slate-500">
@@ -489,7 +491,7 @@ export default function QualityReportDashboard() {
       />
 
       {/* Charts row */}
-      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[380px_1fr]">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Cơ cấu kết quả kiểm định</div>
           <div className="mt-0.5 text-xs text-slate-500">Đạt chuẩn, không đạt và phải xử lý lại</div>
@@ -548,8 +550,8 @@ export default function QualityReportDashboard() {
       </div>
 
       {/* Trend + plant */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Xu hướng tỷ lệ đạt theo quý</div>
           <div className="mt-0.5 text-xs text-slate-500">Theo dõi biến động chất lượng qua từng quý</div>
           <QuarterlyTrendChart data={quarterlyTrend} />
@@ -562,7 +564,7 @@ export default function QualityReportDashboard() {
             {currentPlantQuality.map((p) => (
               <div key={p.plant}>
                 <div className="mb-1 flex items-center justify-between text-xs sm:text-sm">
-                  <span className="font-semibold text-slate-900 truncate">{p.plant}</span>
+                  <span className="min-w-0 flex-1 font-semibold text-slate-900 truncate">{p.plant}</span>
                   <span className="text-[#0047AB] font-bold font-mono shrink-0 ml-2 tabular-nums">{p.passRate}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -578,7 +580,7 @@ export default function QualityReportDashboard() {
       </div>
 
       {/* Rail type + welder ranking */}
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">Theo loại ray</div>
           <div className="mt-3.5 flex flex-col gap-2.5">

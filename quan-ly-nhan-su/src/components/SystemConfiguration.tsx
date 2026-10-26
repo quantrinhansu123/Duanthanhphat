@@ -133,7 +133,7 @@ function CatalogsPanel({
             key={g}
             type="button"
             onClick={() => setGroup(g)}
-            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
+            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm leading-10 font-semibold transition-all duration-150 cursor-pointer ${
               group === g
                 ? "bg-[#0047AB] text-white shadow-xs"
                 : "bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 shadow-2xs"

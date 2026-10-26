@@ -1471,49 +1471,51 @@ export default function DailyWorkReport() {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
           <p className="mt-0.5 text-xs text-slate-500">
             Mỗi dòng là một ngày đã báo cáo. Nhấn Thêm mới để nhập công việc, thiết bị hoặc sự cố.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-          <label className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-600 shadow-xs sm:flex sm:flex-wrap sm:items-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+          <label className="col-span-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
             Ngày báo cáo
             <input
               type="date"
               value={reportDate}
               onChange={(e) => setReportDate(e.target.value)}
-              className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25 sm:w-auto"
             />
           </label>
           <button
             type="button"
             onClick={() => setReportDate(todayIsoLocal())}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            className="col-span-2 h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             Hôm nay
           </button>
-          <label className="flex items-center gap-2">
+          <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
             Thời tiết
             <input
               value={weather}
               onChange={(e) => setWeather(e.target.value)}
               placeholder="Nắng"
-              className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
             />
           </label>
-          <label className="flex items-center gap-2">
+          <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
             Nhiệt độ
+            <span className="flex items-center gap-1.5">
             <input
               value={temperature}
               onChange={(e) => setTemperature(e.target.value)}
               placeholder="31"
               inputMode="decimal"
-              className="h-10 w-16 rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
+              className="h-10 w-full rounded-lg sm:w-16 border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
             />
             <span>°C</span>
+            </span>
           </label>
           <button
             type="button"
@@ -1521,7 +1523,7 @@ export default function DailyWorkReport() {
               setPrintAuto(false);
               setPrintOpen(true);
             }}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
+            className="col-span-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
           >
             <Printer size={15} weight="bold" aria-hidden />
             In báo cáo
@@ -1530,14 +1532,14 @@ export default function DailyWorkReport() {
       </div>
 
       <section className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
             <h2 className="text-sm font-bold text-slate-900">Danh sách đã báo cáo</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Xem, sửa, in hoặc xóa từng phiếu
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
             <div className="font-mono text-sm font-bold tabular-nums text-[#0047AB]">
               {reportList.length.toLocaleString("vi-VN")}
               <span className="ml-1 text-[11px] font-semibold text-slate-400">phiếu</span>

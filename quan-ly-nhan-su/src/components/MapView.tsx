@@ -346,28 +346,28 @@ export default function MapView() {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+      <div className="mb-4 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600 sm:flex sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2 sm:text-sm">
         <span>
           <strong className="text-slate-900">{filtered.length}</strong> điểm
           {loading ? " · đang tải…" : ""}
         </span>
-        <span className="text-slate-300">|</span>
+        <span className="hidden text-slate-300 sm:inline">|</span>
         <span>
           Nguồn:{" "}
           <strong className="text-slate-900">
             {dataSource === "supabase" ? "Supabase · toa_do" : "Seed cục bộ"}
           </strong>
         </span>
-        <span className="text-slate-300">|</span>
-        <span className="font-medium text-[#0047AB]">{useGoogle ? "Google Maps" : "OSM (dự phòng)"}</span>
+        <span className="hidden text-slate-300 sm:inline">|</span>
+        <span className="col-span-2 font-medium text-[#0047AB] sm:col-span-1">{useGoogle ? "Google Maps" : "OSM (dự phòng)"}</span>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+      <div className="mb-4 grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+        <div className="col-span-2 grid grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
           <button
             type="button"
             onClick={() => setViewMode("vietnam")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            className={`w-full whitespace-nowrap rounded-lg px-2 py-2 text-xs font-semibold transition sm:w-auto sm:px-3 sm:text-sm ${
               mode === "vietnam" && !focusSelected
                 ? "bg-[#0047AB] text-white"
                 : "text-slate-500 hover:bg-slate-50"
@@ -378,7 +378,7 @@ export default function MapView() {
           <button
             type="button"
             onClick={() => setViewMode("route")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            className={`w-full whitespace-nowrap rounded-lg px-2 py-2 text-xs font-semibold transition sm:w-auto sm:px-3 sm:text-sm ${
               mode === "route" || focusSelected
                 ? "bg-[#0047AB] text-white"
                 : "text-slate-500 hover:bg-slate-50"
@@ -388,11 +388,11 @@ export default function MapView() {
           </button>
         </div>
 
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+        <div className="col-span-2 grid grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
           <button
             type="button"
             onClick={() => setBaseLayer("roadmap")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            className={`w-full whitespace-nowrap rounded-lg px-2 py-2 text-xs font-semibold transition sm:w-auto sm:px-3 sm:text-sm ${
               baseLayer === "roadmap"
                 ? "bg-slate-900 text-white"
                 : "text-slate-500 hover:bg-slate-50"
@@ -403,7 +403,7 @@ export default function MapView() {
           <button
             type="button"
             onClick={() => setBaseLayer("satellite")}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            className={`w-full whitespace-nowrap rounded-lg px-2 py-2 text-xs font-semibold transition sm:w-auto sm:px-3 sm:text-sm ${
               baseLayer === "satellite"
                 ? "bg-slate-900 text-white"
                 : "text-slate-500 hover:bg-slate-50"
@@ -423,7 +423,7 @@ export default function MapView() {
             }
             openAddForm();
           }}
-          className="inline-flex h-10 items-center rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#0047AB] px-2 text-xs font-semibold text-white hover:bg-[#00388A] disabled:opacity-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           {showForm ? "Đóng form" : "+ Thêm Autolisp"}
         </button>
@@ -438,14 +438,14 @@ export default function MapView() {
           type="button"
           disabled={!supabaseReady || saving}
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex h-10 items-center rounded-lg border border-[#0047AB] bg-white px-4 text-sm font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#0047AB] bg-white px-2 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           {saving ? "Đang import…" : "Tải Excel lên"}
         </button>
         <button
           type="button"
           onClick={() => downloadCoordinatesExcelTemplate(lang)}
-          className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           Mẫu Excel
         </button>
@@ -453,7 +453,7 @@ export default function MapView() {
           type="button"
           disabled={!points.length}
           onClick={() => exportCoordinatesToExcel(points, lang)}
-          className="inline-flex h-10 items-center rounded-lg border border-emerald-600 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-600 bg-emerald-50 px-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           Xuất Excel ({points.length})
         </button>
@@ -461,7 +461,7 @@ export default function MapView() {
           type="button"
           disabled={!supabaseReady || saving}
           onClick={() => void handleSeed()}
-          className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           Seed 14 điểm HN
         </button>
@@ -469,7 +469,7 @@ export default function MapView() {
           type="button"
           disabled={saving}
           onClick={() => void reload(true)}
-          className="inline-flex h-10 items-center rounded-lg border border-[#d9e2f1] bg-white px-4 text-[13px] font-medium text-[#334155] hover:bg-[#f8fafc]"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#d9e2f1] bg-white px-2 text-xs font-medium text-[#334155] hover:bg-[#f8fafc] sm:w-auto sm:px-4 sm:text-[13px]"
         >
           Tải lại
         </button>
@@ -477,7 +477,7 @@ export default function MapView() {
           href={googleOpenVietnam()}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           Mở Google Maps
         </a>
@@ -485,7 +485,7 @@ export default function MapView() {
           href={googleRouteUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50 sm:w-auto sm:px-4 sm:text-sm"
         >
           Tuyến trên Google
         </a>
@@ -494,7 +494,7 @@ export default function MapView() {
             href={googleOpenPoint(selected.latitude, selected.longitude)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-10 items-center rounded-lg border border-[#0047AB] bg-white px-4 text-sm font-semibold text-[#0047AB] hover:bg-blue-50"
+            className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#0047AB] bg-white px-2 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 sm:w-auto sm:px-4 sm:text-sm"
           >
             Điểm trên Google
           </a>
@@ -594,7 +594,7 @@ export default function MapView() {
           className={
             mapFullscreen
               ? "fixed inset-0 z-[80] flex flex-col bg-white"
-              : "relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+              : "relative isolate overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
           }
         >
           <button
@@ -602,7 +602,7 @@ export default function MapView() {
             onClick={toggleMapFullscreen}
             title={mapFullscreen ? "Thu nhỏ (Esc)" : "Phóng to màn hình"}
             aria-label={mapFullscreen ? "Thu nhỏ" : "Phóng to"}
-            className="absolute left-3 top-3 z-[500] inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-700 shadow-xs backdrop-blur hover:bg-white hover:text-slate-900"
+            className="absolute left-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-700 shadow-xs backdrop-blur hover:bg-white hover:text-slate-900"
           >
             {mapFullscreen ? (
               <ArrowsIn size={14} weight="bold" aria-hidden />
@@ -671,7 +671,7 @@ export default function MapView() {
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2.5">Mã điểm</th>
-                  <th className="px-3 py-2.5">Mối hàn / Thợ</th>
+                  <th className="min-w-[120px] whitespace-nowrap px-3 py-2.5">Mối hàn / Thợ</th>
                   <th className="px-3 py-2.5">Lý trình</th>
                   <th className="px-3 py-2.5">Tọa độ</th>
                   <th className="px-2 py-2.5" />
@@ -699,7 +699,7 @@ export default function MapView() {
                       <td className="px-3 py-2.5 font-semibold text-slate-900">
                         {p.code}
                       </td>
-                      <td className="px-3 py-2.5 text-xs">
+                      <td className="min-w-[120px] px-3 py-2.5 text-xs">
                         {p.weldCode ? (
                           <div>
                             <span className="font-semibold text-[#0047AB]">{p.weldCode}</span>

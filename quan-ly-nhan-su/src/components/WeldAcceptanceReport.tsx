@@ -108,6 +108,9 @@ export default function WeldAcceptanceReport() {
   }
 
   function handlePrintPdf() {
+    const previousTitle = document.title;
+    document.title = lang === "en" ? "Weld-acceptance-report" : "Bien-ban-nghiem-thu-moi-han";
+    window.addEventListener("afterprint", () => { document.title = previousTitle; }, { once: true });
     window.print();
   }
 
@@ -137,9 +140,15 @@ export default function WeldAcceptanceReport() {
             className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
           >
             <Printer size={16} weight="bold" aria-hidden />
-            In tệp PDF
+            <span className="sm:hidden">{lang === "en" ? "Save PDF" : "Lưu PDF về máy"}</span>
+            <span className="hidden sm:inline">In tệp PDF</span>
           </button>
         </div>
+        <p className="basis-full text-[11px] leading-relaxed text-slate-500 sm:hidden">
+          {lang === "en"
+            ? "In the print screen, choose Save as PDF (Android) or Share → Save to Files (iPhone)."
+            : "Trong màn hình in, chọn Lưu dưới dạng PDF (Android) hoặc Chia sẻ → Lưu vào Tệp (iPhone)."}
+        </p>
       </div>
 
       <div className="weld-acceptance-print rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-xs print:rounded-none print:border-0 print:shadow-none print:p-0">

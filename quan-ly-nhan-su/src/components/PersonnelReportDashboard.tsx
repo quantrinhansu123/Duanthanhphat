@@ -166,7 +166,7 @@ export default function PersonnelReportDashboard() {
         </select>
       </div>
       {/* 1. Top KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Card 1: Thợ hàn đang trực */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
@@ -178,7 +178,7 @@ export default function PersonnelReportDashboard() {
             </div>
             <div className="mt-2.5 text-xs text-slate-400 font-normal">Theo dữ liệu nhật ký hàn trong kỳ đã chọn</div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <Users size={24} weight="fill" aria-hidden />
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function PersonnelReportDashboard() {
               Thợ đạt chuẩn trong kỳ đã chọn
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
             <Users size={24} weight="fill" aria-hidden />
           </div>
         </div>

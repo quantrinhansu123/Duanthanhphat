@@ -256,7 +256,7 @@ export default function MachineReportDashboard() {
               : "Số mối hàn tự động tính từ nhật ký đã chọn máy · Số giờ tự động tính từ lịch chạy máy"}
       </div>
       {/* 1. Top KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Số máy đang vận hành */}
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
@@ -270,7 +270,7 @@ export default function MachineReportDashboard() {
               <span className="text-slate-400 font-normal">Theo trạng thái danh mục máy</span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
             <GearSix size={24} weight="fill" aria-hidden />
           </div>
         </div>
@@ -290,7 +290,7 @@ export default function MachineReportDashboard() {
               </span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 border border-sky-200">
             <ChartLineUp size={24} weight="fill" aria-hidden />
           </div>
         </div>
@@ -308,7 +308,7 @@ export default function MachineReportDashboard() {
               Theo trạng thái Bảo trì
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
             <Wrench size={24} weight="fill" aria-hidden />
           </div>
         </div>
@@ -328,7 +328,7 @@ export default function MachineReportDashboard() {
               </span>
             </div>
           </div>
-          <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
             <Warning size={24} weight="fill" aria-hidden />
           </div>
         </div>
