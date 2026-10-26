@@ -1839,9 +1839,9 @@ export default function WeldingJournalList({
         gpsByPointCode.get(codeKey) ??
         null;
       const isoDate = row.ngay_thuc_hien?.slice(0, 10) ?? "";
-      const weldTime = normalizeWeldTime(row.gio_han);
+      // Chỉ hiện ngày — giờ chia đều tự điền, không cần trên danh sách.
       const performedDate = isoDate
-        ? `${formatJournalDateIso(isoDate)}${weldTime ? ` ${weldTime}` : ""}`
+        ? formatJournalDateIso(isoDate)
         : `Chỉ có năm ${row.nam_thuc_hien}`;
       const pass = row.so_luong_loi === 0;
       const testStatus = resolveWeldTestStatus(row);
@@ -1859,6 +1859,7 @@ export default function WeldingJournalList({
         weldName: displayWeldCode(row.ma_lich_su),
         machineCode: row.ten_moi_han_theo_may?.trim() || "—",
         siteCode: row.ma_hien_truong?.trim() || "—",
+        lispCode: gpsPoint?.code?.trim() || "—",
         workTime: formatWeldWorkRange(row.gio_bat_dau, row.gio_ket_thuc),
         workHours: formatWeldWorkHours(weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc)) || "—",
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
@@ -2702,15 +2703,7 @@ export default function WeldingJournalList({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
-                    {w.siteCode !== "—" && (
-                      <span className="block font-mono text-[11px] text-slate-600 truncate">{w.siteCode}</span>
-                    )}
-                    {w.machineCode !== "—" && (
-                      <span className="block font-mono text-[11px] text-slate-500 truncate">Máy · {w.machineCode}</span>
-                    )}
-                  </span>
+                  <span className="block min-w-0 font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${
                     w.testStatus === "Đạt"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -2724,7 +2717,12 @@ export default function WeldingJournalList({
                   </span>
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
-                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}{w.workHours !== "—" ? ` · ${w.workHours}` : ""}</div>
+                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-slate-600">
+                  <span className="truncate" title="Mã Autolisp">Lisp · {w.lispCode}</span>
+                  <span className="truncate" title="Mã hiện trường">HT · {w.siteCode}</span>
+                  <span className="truncate" title="Mã trong máy">Máy · {w.machineCode}</span>
+                </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
                   <span className="truncate">🏗️ {w.project}</span>
                   <span className="whitespace-nowrap">{w.weldType}</span>
@@ -2749,16 +2747,17 @@ export default function WeldingJournalList({
         </div>
 
         <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1200px]" : "min-w-[1320px]"}`}>
+          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1280px]" : "min-w-[1400px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
                 <th className="p-2.5 font-semibold">Ca hàn</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
                 <th className="p-2.5 font-semibold">Máy</th>
+                <th className="p-2.5 font-semibold">Mã Autolisp</th>
                 <th className="p-2.5 font-semibold">Mã hệ thống</th>
+                <th className="p-2.5 font-semibold">Mã hiện trường</th>
                 <th className="p-2.5 font-semibold">Mã trong máy</th>
-                <th className="p-2.5 font-semibold">Số giờ</th>
                 <th className="p-2.5 font-semibold">Dự án</th>
                 <th className="whitespace-nowrap p-2.5 font-semibold">Loại mối hàn</th>
                 {failedWeldMode ? (
@@ -2784,9 +2783,10 @@ export default function WeldingJournalList({
                       {w.machine}
                     </span>
                   </td>
+                  <td className={`p-2.5 font-mono text-xs font-semibold ${w.lispCode === "—" ? "text-slate-400" : "text-slate-800"}`}>{w.lispCode}</td>
                   <td className="p-2.5 font-mono font-semibold text-[#0047AB]">{w.weldName}</td>
+                  <td className={`p-2.5 font-mono text-xs font-semibold ${w.siteCode === "—" ? "text-slate-400" : "text-emerald-800"}`}>{w.siteCode}</td>
                   <td className="p-2.5 font-mono text-xs font-semibold text-slate-800">{w.machineCode}</td>
-                  <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-700">{w.workHours}</td>
                   <td className="p-2.5 max-w-[220px]">
                     <span className="line-clamp-2" title={w.project}>
                       {w.project}
@@ -3011,13 +3011,13 @@ export default function WeldingJournalList({
                   ["Ngày thực hiện", detailView.performedDate],
                   ["Ca hàn", detailView.shift],
                   ["Giờ làm", detailView.workTime],
-                  ["Số giờ", detailView.workHours],
                   ["Người trực tiếp hàn", detailView.operator],
                   ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
                   ["Tổ hàn", detailRaw?.to_han || "—"],
                   ["Dự án", detailView.project],
-                  ["Mã trong máy", detailView.machineCode],
+                  ["Mã Autolisp", detailView.lispCode],
                   ["Mã hiện trường", detailView.siteCode],
+                  ["Mã trong máy", detailView.machineCode],
                   ["Máy", detailView.machine],
                   ["Loại ray", detailRaw?.loai_ray || "—"],
                   ["Công nghệ hàn", detailRaw?.cong_nghe_han || "—"],
