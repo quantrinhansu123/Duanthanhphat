@@ -76,6 +76,8 @@ export type WeldReportRow = {
   ten_moi_han_theo_may?: string | null;
   /** Mã mối hàn đánh dấu ngoài hiện trường. */
   ma_hien_truong?: string | null;
+  /** Mã Autolisp (toa_do.ma_diem: HT/HP/TT/TP…) gắn qua điểm GPS. */
+  ma_diem?: string | null;
   /** Giờ làm HH:mm[:ss]; giờ kết thúc nhỏ hơn giờ bắt đầu = qua đêm. */
   gio_bat_dau?: string | null;
   gio_ket_thuc?: string | null;
@@ -1301,6 +1303,35 @@ function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
   };
 }
 
+/** Gắn mã LISP (toa_do.ma_diem) vào từng dòng nhật ký theo liên kết GPS. */
+async function attachLispCodesToJournalRows(rows: WeldReportRow[]): Promise<WeldReportRow[]> {
+  if (!rows.length || !isSupabaseConfigured()) return rows;
+  const ids = [...new Set(rows.map((row) => row.id).filter(Boolean))];
+  if (!ids.length) return rows;
+
+  const supabase = createClient();
+  const byWeldId = new Map<string, string>();
+  const chunkSize = 200;
+  for (let offset = 0; offset < ids.length; offset += chunkSize) {
+    const chunk = ids.slice(offset, offset + chunkSize);
+    const { data, error } = await supabase
+      .from("toa_do")
+      .select("ma_diem, lich_su_moi_han_id")
+      .in("lich_su_moi_han_id", chunk);
+    if (error) break;
+    for (const point of data ?? []) {
+      const weldId = String(point.lich_su_moi_han_id ?? "").trim();
+      const code = String(point.ma_diem ?? "").trim();
+      if (weldId && code) byWeldId.set(weldId, code);
+    }
+  }
+  if (!byWeldId.size) return rows;
+  return rows.map((row) => ({
+    ...row,
+    ma_diem: byWeldId.get(row.id) ?? row.ma_diem ?? null,
+  }));
+}
+
 let journalHasLinkedImages = true;
 let journalHasCaHan = true;
 let journalHasWeldExtras = true;
@@ -1517,8 +1548,9 @@ export async function loadWeldJournalPage({
       ? allRows.filter((row) => resolveWeldTestStatus(row) === resultFilter)
       : allRows;
     const summary = summarizeJournalRows(filteredRows);
+    const pageRows = await attachLispCodesToJournalRows(filteredRows.slice(from, to + 1));
     return {
-      rows: filteredRows.slice(from, to + 1),
+      rows: pageRows,
       total: filteredRows.length,
       page: safePage,
       pageSize,
@@ -1529,7 +1561,9 @@ export async function loadWeldJournalPage({
     };
   }
 
-  const rows = ((data ?? []) as unknown as WeldReportRow[]).map(normalizeJournalRow);
+  const rows = await attachLispCodesToJournalRows(
+    ((data ?? []) as unknown as WeldReportRow[]).map(normalizeJournalRow),
+  );
 
   const counts = await Promise.all(WELD_TEST_STATUSES.map(async (status) => {
     if (WELD_TEST_STATUSES.includes(resultFilter as WeldTestStatus) && resultFilter !== status) return 0;
@@ -1649,7 +1683,7 @@ export async function exportFilteredWeldJournal({
     if (error) throw new Error(formatSupabaseError(error));
     const pageRows = ((data ?? []) as unknown as WeldReportRow[]).map(normalizeJournalRow);
     rows.push(...pageRows);
-    if (pageRows.length < pageSize) return rows;
+    if (pageRows.length < pageSize) return attachLispCodesToJournalRows(rows);
   }
 }
 

@@ -1859,7 +1859,7 @@ export default function WeldingJournalList({
         weldName: displayWeldCode(row.ma_lich_su),
         machineCode: row.ten_moi_han_theo_may?.trim() || "—",
         siteCode: row.ma_hien_truong?.trim() || "—",
-        lispCode: gpsPoint?.code?.trim() || "—",
+        lispCode: row.ma_diem?.trim() || gpsPoint?.code?.trim() || "—",
         workTime: formatWeldWorkRange(row.gio_bat_dau, row.gio_ket_thuc),
         workHours: formatWeldWorkHours(weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc)) || "—",
         linkedWeld: row.moi_han_lien_ket?.trim() || "—",
@@ -1989,6 +1989,7 @@ export default function WeldingJournalList({
           "Giờ hàn": normalizeWeldTime(row.gio_han) ?? "",
           "Mã bản ghi": row.id,
           "Mã hệ thống": row.ma_lich_su,
+          "Mã vị trí": row.ma_diem?.trim() || gpsPoint?.code?.trim() || "",
           "Mã trong máy": row.ten_moi_han_theo_may?.trim() || "",
           "Mã hiện trường": row.ma_hien_truong?.trim() || "",
           "Mối hàn liên kết": row.moi_han_lien_ket?.trim() || "",
@@ -2719,7 +2720,7 @@ export default function WeldingJournalList({
                 <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
                 <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-slate-600">
-                  <span className="truncate" title="Mã Autolisp">Lisp · {w.lispCode}</span>
+                  <span className="truncate" title="Mã vị trí">VT · {w.lispCode}</span>
                   <span className="truncate" title="Mã hiện trường">HT · {w.siteCode}</span>
                   <span className="truncate" title="Mã trong máy">Máy · {w.machineCode}</span>
                 </div>
@@ -2754,7 +2755,7 @@ export default function WeldingJournalList({
                 <th className="p-2.5 font-semibold">Ca hàn</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
                 <th className="p-2.5 font-semibold">Máy</th>
-                <th className="p-2.5 font-semibold">Mã Autolisp</th>
+                <th className="p-2.5 font-semibold">Mã vị trí</th>
                 <th className="p-2.5 font-semibold">Mã hệ thống</th>
                 <th className="p-2.5 font-semibold">Mã hiện trường</th>
                 <th className="p-2.5 font-semibold">Mã trong máy</th>
@@ -3015,7 +3016,7 @@ export default function WeldingJournalList({
                   ["Mã nhân sự", detailRaw?.ma_nhan_su || "—"],
                   ["Tổ hàn", detailRaw?.to_han || "—"],
                   ["Dự án", detailView.project],
-                  ["Mã Autolisp", detailView.lispCode],
+                  ["Mã vị trí", detailView.lispCode],
                   ["Mã hiện trường", detailView.siteCode],
                   ["Mã trong máy", detailView.machineCode],
                   ["Máy", detailView.machine],
