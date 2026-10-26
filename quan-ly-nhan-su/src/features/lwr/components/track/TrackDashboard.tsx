@@ -11,6 +11,7 @@ import {
   generateRailRows,
   formatChainage,
   getPlacementSpan,
+  isLongRailReleased,
   longRailsOverlap,
   nextLongRailCode,
   parseChainage,
@@ -105,8 +106,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     (sum, item) => sum + (parseChainage(item.to) ?? 0) - (parseChainage(item.from) ?? 0),
     0,
   );
-  /** Chỉ đếm đoạn LWR đã giải toả xong (có completedAt). */
-  const releasedLongRailCount = layout.longRails.filter((rail) => Boolean(rail.completedAt)).length;
+  /** Đếm khớp sơ đồ: completedAt hoặc mọi thanh ngắn trong đoạn đã Đạt / released. */
+  const releasedLongRailCount = layout.longRails.filter((rail) => isLongRailReleased(layout.rows, rail)).length;
   const sideOpen = detailOpen || Boolean(selectedJoint);
 
   const reloadSymbols = useCallback(async () => {
@@ -542,7 +543,25 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   function saveCellPatch(patch: RailCellPatch) {
     if (!cell) return false;
     try {
-      return commit(patchTrackCell(layout, cell.id, patch));
+      let next = patchTrackCell(layout, cell.id, patch);
+      // Đồng bộ completedAt với thanh đã Đạt trên sơ đồ — để thẻ “Đoạn LWR đã giải toả” đếm đúng.
+      if (patch.released !== undefined) {
+        const now = new Date().toISOString();
+        next = {
+          ...next,
+          longRails: next.longRails.map((rail) => {
+            const done = isLongRailReleased(next.rows, { ...rail, completedAt: undefined });
+            if (done && !rail.completedAt) {
+              return { ...rail, completedAt: now, updatedAt: now };
+            }
+            if (!done && rail.completedAt) {
+              return { ...rail, completedAt: undefined, updatedAt: now };
+            }
+            return rail;
+          }),
+        };
+      }
+      return commit(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không cập nhật được đoạn ray.");
       return false;

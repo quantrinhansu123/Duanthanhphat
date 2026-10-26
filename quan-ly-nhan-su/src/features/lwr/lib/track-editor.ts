@@ -282,6 +282,21 @@ export function visibleLongRailSpan(rows: RailRow[], rail: Pick<LongRail, "rowKe
   return getPlacementSpan(rows, { ...rail, startMetres: start, endMetres: end });
 }
 
+/** Khớp màu/nhãn “Giải toả” trên sơ đồ: completedAt hoặc mọi thanh ngắn trong đoạn đã released. */
+export function isLongRailReleased(rows: RailRow[], rail: LongRail): boolean {
+  if (rail.completedAt) return true;
+  const span = getPlacementSpan(rows, rail) ?? visibleLongRailSpan(rows, rail);
+  if (!span) return false;
+  const covered = span.row.cells.filter((cell) => {
+    const from = parseChainage(cell.from);
+    const to = parseChainage(cell.to);
+    if (from === null || to === null) return false;
+    if (!(from < span.endMetres && to > span.startMetres)) return false;
+    return Boolean(cell.placed || cell.released);
+  });
+  return covered.length > 0 && covered.every((cell) => Boolean(cell.released));
+}
+
 export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: number } {
   const starts = rows.flatMap((row) => {
     const value = row.cells[0] ? parseChainage(row.cells[0].from) : null;
