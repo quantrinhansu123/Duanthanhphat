@@ -105,6 +105,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     (sum, item) => sum + (parseChainage(item.to) ?? 0) - (parseChainage(item.from) ?? 0),
     0,
   );
+  /** Chỉ đếm đoạn LWR đã giải toả xong (có completedAt). */
+  const releasedLongRailCount = layout.longRails.filter((rail) => Boolean(rail.completedAt)).length;
   const sideOpen = detailOpen || Boolean(selectedJoint);
 
   const reloadSymbols = useCallback(async () => {
@@ -155,11 +157,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
       let localLayout = createInitialTrackLayout();
       try {
         const stored = localStorage.getItem(storageKey);
-        if (!stored && project) {
-          const marks = project.location.match(/(?:Km\s*)?\d+\+\d{1,3}/gi) ?? [];
-          const start = parseChainage(marks[0] ?? ""), end = parseChainage(marks[1] ?? "");
-          if (start !== null && end !== null && end > start) localLayout = { ...localLayout, rows: generateRailRows(localLayout.rows, start, end) };
-        }
+        // Không tự rải cả Thượng+Hạ cùng một đoạn Km — hai tuyến độc lập, người dùng rải từng tuyến ở Bước 1.
         if (stored) {
           const restored = validateTrackLayout(JSON.parse(stored));
           if (!restored) throw new Error("Sơ đồ đã lưu không hợp lệ. Dữ liệu gốc vẫn được giữ; chưa thể chỉnh sửa.");
@@ -584,11 +582,15 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   return (
     <div className="w-full min-w-0 max-w-none space-y-3">
       <TrackHeader
-        subtitle={`Tuyến ${(extent.endMetres - extent.startMetres) / 1000} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${layout.longRails.length} đoạn LWR`}
+        subtitle={`Tuyến ${(extent.endMetres - extent.startMetres) / 1000} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${releasedLongRailCount} đoạn LWR đã giải toả`}
         rangeLabel={`Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}`}
         stats={[
           { label: "Tổng chiều dài ray", value: `${totalLength / 1000} km`, tone: "text-slate-900" },
-          { label: "Đoạn LWR", value: String(layout.longRails.length), tone: "text-teal-700" },
+          {
+            label: "Đoạn LWR đã giải toả",
+            value: String(releasedLongRailCount),
+            tone: "text-teal-700",
+          },
           { label: "Mối hàn (nhật ký)", value: String(weldCount), tone: "text-blue-700" },
           { label: "Đã gắn lý trình", value: `${weldsMapped}/${jointWithWelds} điểm`, tone: "text-emerald-700" },
         ]}

@@ -6,7 +6,6 @@ import {
   formatChainage,
   getPlacementSpan,
   parseChainage,
-  railCellLockTemp,
   railRowKey,
   sliceLayoutForPrint,
   trackExtent,
@@ -22,11 +21,63 @@ import { StructureLegend } from "./StructureLegend";
 
 const noop = () => {};
 
-function releaseTempLabel(params: StressInput): string {
+/** Giờ hiện trường trên bảng in: 09:37:47 26/10/2026. */
+function formatFieldTime(iso?: string) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")}:${get("second")} ${get("day")}/${get("month")}/${get("year")}`;
+}
+
+type LwrPrintSummary = {
+  tempLabel: string;
+  methodLabel: string;
+  designPullMm: string;
+  naturalPullMm: string;
+  startTimeLabel: string;
+  endTimeLabel: string;
+};
+
+/** Tóm tắt bảng in: < ngưỡng → Có lực căng; ≥ ngưỡng → Tự nhiên. */
+function lwrPrintSummary(params: StressInput): LwrPrintSummary {
+  const startTimeLabel = formatFieldTime(params.startTime);
+  const endTimeLabel = formatFieldTime(params.endTime);
   try {
-    return formatStressNumber(calculateStressRelease(params).averageTemp);
+    const result = calculateStressRelease(params);
+    const tensor = result.releaseMethod === "TENSOR";
+    return {
+      tempLabel: formatStressNumber(result.averageTemp),
+      methodLabel: tensor ? "Có lực căng" : "Tự nhiên",
+      designPullMm: tensor ? formatStressNumber(result.pullLength) : "0",
+      naturalPullMm: tensor ? "0" : formatStressNumber(result.freeExtension),
+      startTimeLabel,
+      endTimeLabel,
+    };
   } catch {
-    return Number.isFinite(params.airTemp) ? formatStressNumber(params.airTemp) : "—";
+    const temp = Number.isFinite(params.airTemp) ? params.airTemp : Number.NaN;
+    const avgFallback = Number.isFinite(params.leftTemp) && Number.isFinite(params.rightTemp)
+      ? (params.leftTemp + params.rightTemp) / 2
+      : temp;
+    const tensor = Number.isFinite(avgFallback) ? avgFallback < 30 : false;
+    return {
+      tempLabel: Number.isFinite(avgFallback) ? formatStressNumber(avgFallback) : "—",
+      methodLabel: Number.isFinite(avgFallback) ? (tensor ? "Có lực căng" : "Tự nhiên") : "—",
+      designPullMm: "—",
+      naturalPullMm: "—",
+      startTimeLabel,
+      endTimeLabel,
+    };
   }
 }
 
@@ -77,42 +128,6 @@ export function TrackPrint({
   const config = FORMATS[format];
   const stamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
-  const shortRows = useMemo(() => {
-    if (!sliced || !printRange) return [];
-    return sliced.rows.flatMap((row) =>
-      row.cells
-        .filter((cell) => cell.placed || cell.released)
-        .map((cell) => {
-          const from = parseChainage(cell.from) ?? 0;
-          const to = parseChainage(cell.to) ?? 0;
-          const cover = sliced.longRails.find((rail) => {
-            if (rail.rowKey !== railRowKey(row)) return false;
-            const span = getPlacementSpan(sliced.rows, rail) ?? visibleLongRailSpan(sliced.rows, rail);
-            return Boolean(span && from < span.endMetres && to > span.startMetres);
-          });
-          const temp = railCellLockTemp(cell);
-          const status = !cell.released
-            ? "Chưa giải toả"
-            : temp >= 30
-              ? "Giải toả · T≥30"
-              : "Giải toả · T<30";
-          return {
-            id: cell.id,
-            line: row.line,
-            rail: row.rail,
-            from: cell.from,
-            to: cell.to,
-            length: Math.max(0, to - from),
-            temp,
-            leftTemp: cell.leftTemp ?? temp,
-            rightTemp: cell.rightTemp ?? temp,
-            status,
-            lwr: cover?.code ?? "—",
-          };
-        }),
-    );
-  }, [sliced, printRange]);
-
   const lwrRows = useMemo(() => {
     if (!sliced) return [];
     return sliced.longRails.flatMap((rail) => {
@@ -124,6 +139,7 @@ export function TrackPrint({
         span,
         line: row?.line ?? "—",
         side: row?.rail ?? "—",
+        summary: lwrPrintSummary(rail.params),
       }];
     });
   }, [sliced]);
@@ -275,44 +291,10 @@ export function TrackPrint({
             />
           </div>
 
-          <StructureLegend layout={sliced} symbols={symbols} />
-
-          <h2>Tổng hợp từng thanh ngắn trong đoạn in</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Mã thanh</th>
-                <th>Tuyến · Ray</th>
-                <th>Lý trình</th>
-                <th>Dài (m)</th>
-                <th>T trái</th>
-                <th>T phải</th>
-                <th>T khóa</th>
-                <th>Trạng thái</th>
-                <th>LWR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shortRows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.id}</td>
-                  <td>{row.line} · {row.rail}</td>
-                  <td>Km{row.from} – {row.to}</td>
-                  <td>{row.length}</td>
-                  <td>{row.leftTemp}</td>
-                  <td>{row.rightTemp}</td>
-                  <td>{row.temp}</td>
-                  <td>{row.status}</td>
-                  <td>{row.lwr}</td>
-                </tr>
-              ))}
-              {shortRows.length === 0 ? (
-                <tr><td colSpan={9}>Chưa có thanh ngắn trong đoạn đã chọn.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
-
-          <h2>Tổng hợp đoạn LWR trong đoạn in</h2>
+          <h2>Tổng hợp thông tin LWR</h2>
+          <p style={{ fontSize: "8pt", color: "#555" }}>
+            Phương pháp: nhiệt độ giải toả &lt; ngưỡng khóa → Có lực căng; ≥ ngưỡng → Tự nhiên.
+          </p>
           <table>
             <thead>
               <tr>
@@ -320,26 +302,39 @@ export function TrackPrint({
                 <th>Tuyến · Ray</th>
                 <th>Lý trình</th>
                 <th>Dài (m)</th>
-                <th>Nhiệt độ giải toả (°C)</th>
+                <th>T giải toả (°C)</th>
+                <th>Phương pháp giải toả</th>
+                <th>Chiều dài kéo thiết kế (mm)</th>
+                <th>Chiều dài kéo tự nhiên (mm)</th>
+                <th>Ngày/giờ bắt đầu</th>
+                <th>Ngày/giờ kết thúc</th>
                 <th>Hoàn thành</th>
               </tr>
             </thead>
             <tbody>
-              {lwrRows.map(({ rail, span, line, side }) => (
+              {lwrRows.map(({ rail, span, line, side, summary }) => (
                 <tr key={rail.id}>
                   <td>{rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code}</td>
                   <td>{line} · {side}</td>
                   <td>Km{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td>
                   <td>{span.endMetres - span.startMetres}</td>
-                  <td>{releaseTempLabel(rail.params)}</td>
+                  <td>{summary.tempLabel}</td>
+                  <td>{summary.methodLabel}</td>
+                  <td>{summary.designPullMm}</td>
+                  <td>{summary.naturalPullMm}</td>
+                  <td>{summary.startTimeLabel}</td>
+                  <td>{summary.endTimeLabel}</td>
                   <td>{rail.completedAt ? "Có" : "Chưa"}</td>
                 </tr>
               ))}
               {lwrRows.length === 0 ? (
-                <tr><td colSpan={6}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={11}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>
+
+          {/* Legend xuống dưới các bảng tổng hợp — tránh chen giữa sơ đồ và bảng. */}
+          <StructureLegend layout={sliced} symbols={symbols} />
 
           <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}>
             <b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b>

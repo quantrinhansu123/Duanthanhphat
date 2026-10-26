@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lockTempFromSides, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -168,25 +168,50 @@ export const RailGrid = memo(function RailGrid({
   return <div className="border-t border-slate-200 bg-white">
     <div className="space-y-1 border-b px-4 py-3">
       <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công</h2>
-      <p className="text-xs text-slate-600">Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo · <span className="font-semibold text-emerald-700">xanh</span> = giải toả T≥30°C · <span className="font-semibold text-orange-600">cam</span> = giải toả T&lt;30°C. Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.</p>
+      <p className="text-xs text-slate-600">
+        Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo ·
+        {" "}
+        <span className="font-semibold text-emerald-700">xanh</span> / <span className="font-semibold text-orange-600">cam</span> = đã giải toả.
+        {" "}
+        Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.
+      </p>
+      <p className="text-xs text-slate-500">
+        Ghi chú: màu xanh khi T khóa ≥30°C, cam khi T khóa &lt;30°C (nhiệt độ đã hiện trên nhãn thanh, không lặp T≥30 / T&lt;30 trên từng ô).
+      </p>
       <p className="text-xs text-slate-500">
         Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m).
         {" "}
         <span className="font-semibold text-amber-800">Nền vàng</span> = Thượng ·
         {" "}
-        <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ.
+        <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ
+        {" "}
+        (hai tuyến độc lập, chiều dài không bắt buộc bằng nhau).
         {" "}
         Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend.
       </p>
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className="space-y-3 px-4 py-3" style={{ width: 150 + width }}>
-        {groupRowsByLine(rows).map((group) => (
+        {groupRowsByLine(rows).map((group) => {
+          const groupExtent = lineTrackExtent(rows, group.line);
+          const groupHasSpan = groupExtent.endMetres > groupExtent.startMetres;
+          const groupLineBox = groupHasSpan
+            ? trackSpanStyle(groupExtent.startMetres, groupExtent.endMetres, extent.startMetres)
+            : null;
+          return (
           <div key={group.line} className={`space-y-1 p-2 ${lineZoneClass(group.line)}`} data-line={group.line}>
+            <p className="px-1 text-[10px] font-semibold text-slate-600">
+              {group.line}
+              {groupHasSpan
+                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${(groupExtent.endMetres - groupExtent.startMetres) / 1000} km (độc lập)`
+                : " · chưa rải"}
+            </p>
             {group.rows.map((row, indexInGroup) => {
           const lastVisible = [...row.cells].reverse().find((cell) => cell.released || cell.placed);
           const lastEnd = lastVisible ? parseChainage(lastVisible.to) : null;
-          const plusLeft = lastEnd === null ? 8 : (lastEnd - extent.startMetres) * TRACK_PIXELS_PER_METRE + 8;
+          const plusLeft = lastEnd === null
+            ? (groupHasSpan ? (groupExtent.startMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE + 8 : 8)
+            : (lastEnd - extent.startMetres) * TRACK_PIXELS_PER_METRE + 8;
           const rowLongRails = longRails.flatMap((rail) => {
             if (rail.rowKey !== railRowKey(row)) return [];
             const span = visibleLongRailSpan(rows, rail);
@@ -198,17 +223,19 @@ export const RailGrid = memo(function RailGrid({
           <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{row.rail}</div>
           <div className="relative" style={{ width, height: 64 }}>
             <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
+            {groupLineBox ? (
             <svg
               data-testid="rail-grid-line"
-              className="pointer-events-none absolute left-0 top-[34px] z-0 overflow-visible"
-              width={lineWidth}
+              className="pointer-events-none absolute top-[34px] z-0 overflow-visible"
+              style={{ left: groupLineBox.left }}
+              width={groupLineBox.width}
               height="2"
               aria-hidden
             >
               <line
                 x1="0"
                 y1="1"
-                x2={lineWidth}
+                x2={groupLineBox.width}
                 y2="1"
                 stroke="#64748b"
                 strokeWidth="1.5"
@@ -216,6 +243,7 @@ export const RailGrid = memo(function RailGrid({
                 strokeLinecap="butt"
               />
             </svg>
+            ) : null}
             {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
@@ -238,11 +266,7 @@ export const RailGrid = memo(function RailGrid({
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
                 const lengthM = Math.max(0, to - from);
                 const label = shortRailChipLabel(cover.rail.code, lengthM, tempC);
-                const statusNote = !done
-                  ? "Chưa giải toả"
-                  : tempC >= STRESS_PASS_TEMP_C
-                    ? "Giải toả · T≥30"
-                    : "Giải toả · T<30";
+                const statusNote = done ? "Giải toả" : "Chưa giải toả";
                 return (
                   <span key={cell.id}>
                     <button
@@ -266,11 +290,7 @@ export const RailGrid = memo(function RailGrid({
               const bareLabel = shortRailChipLabel(cell.id, lengthM, tempC);
               const done = Boolean(cell.released);
               const tone = releaseTone(done, tempC);
-              const statusNote = !done
-                ? "Chưa giải toả"
-                : tempC >= STRESS_PASS_TEMP_C
-                  ? "Giải toả · T≥30"
-                  : "Giải toả · T<30";
+              const statusNote = done ? "Giải toả" : "Chưa giải toả";
               return <span key={cell.id}>
                 <button
                   type="button"
@@ -317,7 +337,7 @@ export const RailGrid = memo(function RailGrid({
                   data-testid="rail-grid-append"
                   onClick={() => {
                     const key = railRowKey(row);
-                    const start = lastEnd ?? extent.startMetres;
+                    const start = lastEnd ?? (groupHasSpan ? groupExtent.startMetres : extent.startMetres);
                     setSubmitted(false);
                     setAppendDraft({
                       rowKey: key,
@@ -345,7 +365,8 @@ export const RailGrid = memo(function RailGrid({
         </Fragment>;
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
     <dialog

@@ -142,24 +142,31 @@ export function TrackCenterline({
   const axisY = padTop + symbolStackH + markerGapAboveAxis;
   const giaoThoa = overlapBands(plottedStructures);
 
-  const chainageTicks = (() => {
-    let endMetres = startMetres;
-    for (const row of rows) {
-      for (const cell of row.cells) {
-        const to = parseChainage(cell.to);
-        if (to !== null && to > endMetres) endMetres = to;
-      }
+  // Extent riêng của tuyến này — không kéo bằng canvas chung (Thượng ≠ Hạ).
+  let lineStart = Number.POSITIVE_INFINITY;
+  let lineEnd = Number.NEGATIVE_INFINITY;
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      if (from !== null && from < lineStart) lineStart = from;
+      if (to !== null && to > lineEnd) lineEnd = to;
     }
+  }
+  const hasLineSpan = Number.isFinite(lineStart) && Number.isFinite(lineEnd) && lineEnd > lineStart;
+  const axisBox = hasLineSpan ? trackSpanStyle(lineStart, lineEnd, startMetres) : null;
+
+  const chainageTicks = (() => {
     const ticks: { metres: number; key: string }[] = [];
-    if (endMetres <= startMetres) return ticks;
+    if (!hasLineSpan) return ticks;
     const step = 500;
-    let metres = Math.ceil(startMetres / step) * step;
-    if (startMetres % step === 0) metres = startMetres;
-    for (; metres <= endMetres; metres += step) {
+    let metres = Math.ceil(lineStart / step) * step;
+    if (lineStart % step === 0) metres = lineStart;
+    for (; metres <= lineEnd; metres += step) {
       ticks.push({ metres, key: `km-${metres}` });
     }
-    if (endMetres % step !== 0) {
-      ticks.push({ metres: endMetres, key: `km-end-${endMetres}` });
+    if (lineEnd % step !== 0) {
+      ticks.push({ metres: lineEnd, key: `km-end-${lineEnd}` });
     }
     return ticks;
   })();
@@ -172,12 +179,14 @@ export function TrackCenterline({
         </span>
       </div>
       <div className="relative" style={{ width, height: rowHeight }}>
-        {/* Đường tim giữa 2 thanh ray */}
-        <div
-          aria-hidden
-          className="absolute left-0 w-full border-t-2 border-dashed border-slate-600"
-          style={{ top: axisY }}
-        />
+        {/* Đường tim chỉ dài theo extent tuyến — không kéo full canvas cho bằng tuyến kia */}
+        {axisBox ? (
+          <div
+            aria-hidden
+            className="absolute border-t-2 border-dashed border-slate-600"
+            style={{ top: axisY, left: axisBox.left, width: axisBox.width }}
+          />
+        ) : null}
 
         {chainageTicks.map(({ metres, key }) => {
           const x = (metres - startMetres) * TRACK_PIXELS_PER_METRE;

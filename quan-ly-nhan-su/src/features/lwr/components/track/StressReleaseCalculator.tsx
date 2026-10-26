@@ -51,7 +51,38 @@ const fieldClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3
 // Fields filled in on site (chainage, rail/air temperatures): tinted so they stand out from design parameters.
 const siteClass = "mt-1 w-full rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600";
 const SITE_KEYS: NumericKey[] = ["leftTemp", "rightTemp", "airTemp"];
-const formatTime = (iso: string) => iso ? new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi";
+/** Giờ hiện trường: 09:37:47 26/10/2026 (Asia/Ho_Chi_Minh). */
+function formatTime(iso: string) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")}:${get("second")} ${get("day")}/${get("month")}/${get("year")}`;
+}
+
+function formatDuration(startIso: string, endIso: string) {
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "";
+  const totalSec = Math.round((end - start) / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}g ${m}p ${s}s`;
+  if (m > 0) return `${m}p ${s}s`;
+  return `${s}s`;
+}
+
 const lockedClass = "mt-1 w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600";
 
 function initialFields(initialInput: StressInput): Record<NumericKey, string> {
@@ -221,8 +252,8 @@ export function StressReleaseCalculator({
       ["Lý trình vị trí kéo", jointChainage || endChainage || "Chưa nhập", ""],
       ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
     ] as StressPrintRow[] : []),
-    ["Thời gian bắt đầu", formatTime(startTime), ""],
-    ["Thời gian kết thúc", formatTime(endTime), ""],
+    ["Thời gian bắt đầu", formatTime(startTime) || "Chưa ghi", ""],
+    ["Thời gian kết thúc", formatTime(endTime) || "Chưa ghi", ""],
     ...visibleGroups.flatMap(g => g.fields.filter(([key]) => !["leftMovement", "rightMovement", "leftOuterMovement", "rightOuterMovement"].includes(key)).map(([key, label, unit]) => [label, input[key], unit] as StressPrintRow)),
   ];
   function applyRailType(nextType: string) {
@@ -354,12 +385,34 @@ export function StressReleaseCalculator({
           {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
         </>}
         <div className="grid grid-cols-2 gap-3">
-          {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => (
-            <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800">
-              <button type="button" onClick={() => set(new Date().toISOString())} className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600">{label}</button>
-              <div className="mt-1 flex items-center justify-between gap-1"><span>{formatTime(value)}</span>{value && <button type="button" onClick={() => set("")} className="underline">Xóa</button>}</div>
-            </div>
-          ))}
+          {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => {
+            const stamped = formatTime(value);
+            const duration = label === "Kết thúc" && startTime && value ? formatDuration(startTime, value) : "";
+            return (
+              <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+                <button
+                  type="button"
+                  onClick={() => set(new Date().toISOString())}
+                  className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+                >
+                  {label}
+                </button>
+                <div className="mt-1.5 min-h-[2.5rem]">
+                  {stamped ? (
+                    <>
+                      <p className="font-mono text-[12px] font-bold leading-tight text-amber-950">{stamped}</p>
+                      {duration ? <p className="mt-0.5 text-[10px] font-semibold text-amber-800">Thời lượng: {duration}</p> : null}
+                      <button type="button" onClick={() => set("")} className="mt-0.5 text-[11px] underline">
+                        Xóa
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-amber-700/80">Nhấn để ghi giờ hiện trường</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <label className="block text-xs text-slate-600">Loại ray
           <select className={fieldClass} value={railType} onChange={e => applyRailType(e.target.value)}>

@@ -182,13 +182,30 @@ export function TrackSchematic({
         </button>
         {hasCellsOnPlanLine && lineExtent.endMetres > lineExtent.startMetres ? (
           <p className="w-full text-xs text-emerald-700">
-            {planLine}: Km {formatChainage(lineExtent.startMetres)} – {formatChainage(lineExtent.endMetres)}
+            Đang chọn {planLine}: Km {formatChainage(lineExtent.startMetres)} – {formatChainage(lineExtent.endMetres)}
             {" · "}
             {(lineExtent.endMetres - lineExtent.startMetres) / 1000} km
           </p>
         ) : (
           <p className="w-full text-xs text-slate-500">{planLine}: chưa rải.</p>
         )}
+        <ul className="w-full space-y-0.5 text-[11px] text-slate-600">
+          {lineNames.map((line) => {
+            const span = lineTrackExtent(layout.rows, line);
+            const independent = span.endMetres > span.startMetres;
+            return (
+              <li key={line}>
+                {line}:{" "}
+                {independent
+                  ? `Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)} · ${(span.endMetres - span.startMetres) / 1000} km`
+                  : "chưa rải"}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="w-full text-[11px] font-medium text-slate-500">
+          Thượng và Hạ độc lập — không bắt buộc cùng chiều dài.
+        </p>
       </form>
 
       <TrackMapCanvas layout={layout}>

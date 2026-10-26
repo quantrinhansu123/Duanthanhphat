@@ -36,7 +36,10 @@ export function StructureLegend({
       aria-label="Chú thích ký hiệu công trình"
       data-testid="structure-legend"
     >
-      <h3 className="text-sm font-bold text-slate-800">Chú thích / Legend · ký hiệu công trình</h3>
+      <h3 className="text-sm font-bold text-slate-800">
+        Chú thích / Legend
+        <span className="mt-0.5 block text-xs font-semibold text-slate-600">Ký hiệu công trình</span>
+      </h3>
       <p className="mt-1 text-xs text-slate-500">
         Trên sơ đồ chỉ hiện biểu tượng trên đường tim. Tên và mã tra cứu tại đây.
       </p>
