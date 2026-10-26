@@ -13,13 +13,19 @@ import {
   visibleLongRailSpan,
   type TrackLayout,
 } from "@lwr/lib/track-editor";
-import { calculateStressRelease, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
+import { calculateStressRelease, ceilAbs, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 import { RailGrid } from "./RailGrid";
 import { StructureLegend } from "./StructureLegend";
 
 const noop = () => {};
+
+/** Chiều dài kéo trên bảng in: làm tròn đến mm nguyên (ceil theo độ lớn). */
+function formatPullMm(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  return ceilAbs(value, 0).toLocaleString("vi-VN", { maximumFractionDigits: 0 });
+}
 
 /** Giờ hiện trường trên bảng in: 09:37:47 26/10/2026. */
 function formatFieldTime(iso?: string) {
@@ -43,13 +49,15 @@ function formatFieldTime(iso?: string) {
 type LwrPrintSummary = {
   tempLabel: string;
   methodLabel: string;
+  /** Chiều dài kéo thiết kế: tính toán nếu T&lt;ngưỡng, = 0 nếu T≥ngưỡng. */
   designPullMm: string;
-  naturalPullMm: string;
+  /** Chiều dài kéo thực tế = thiết kế + chuyển vị mốc; = 0 khi giải toả tự nhiên. */
+  actualPullMm: string;
   startTimeLabel: string;
   endTimeLabel: string;
 };
 
-/** Tóm tắt bảng in: < ngưỡng → Có lực căng; ≥ ngưỡng → Tự nhiên. */
+/** Tóm tắt bảng in: T&lt;ngưỡng → Có lực căng; T≥ngưỡng → Tự nhiên (kéo = 0). */
 function lwrPrintSummary(params: StressInput): LwrPrintSummary {
   const startTimeLabel = formatFieldTime(params.startTime);
   const endTimeLabel = formatFieldTime(params.endTime);
@@ -59,8 +67,10 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
     return {
       tempLabel: formatStressNumber(result.averageTemp),
       methodLabel: tensor ? "Có lực căng" : "Tự nhiên",
-      designPullMm: tensor ? formatStressNumber(result.pullLength) : "0",
-      naturalPullMm: tensor ? "0" : formatStressNumber(result.freeExtension),
+      // calculatedPullLength = 0 khi T≥ngưỡng; ngược lại = giá trị tính toán (chưa bù Mt+Mp), mm nguyên.
+      designPullMm: formatPullMm(result.calculatedPullLength),
+      // pullLength = thiết kế + chuyển vị mốc; = 0 khi tự nhiên — mm nguyên.
+      actualPullMm: formatPullMm(result.pullLength),
       startTimeLabel,
       endTimeLabel,
     };
@@ -74,7 +84,7 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
       tempLabel: Number.isFinite(avgFallback) ? formatStressNumber(avgFallback) : "—",
       methodLabel: Number.isFinite(avgFallback) ? (tensor ? "Có lực căng" : "Tự nhiên") : "—",
       designPullMm: "—",
-      naturalPullMm: "—",
+      actualPullMm: "—",
       startTimeLabel,
       endTimeLabel,
     };
@@ -293,7 +303,9 @@ export function TrackPrint({
 
           <h2>Tổng hợp thông tin LWR</h2>
           <p style={{ fontSize: "8pt", color: "#555" }}>
-            Phương pháp: nhiệt độ giải toả &lt; ngưỡng khóa → Có lực căng; ≥ ngưỡng → Tự nhiên.
+            T&lt;ngưỡng → Có lực căng: kéo thiết kế = tính toán, kéo thực tế = thiết kế + chuyển vị mốc.
+            {" "}
+            T≥ngưỡng → Tự nhiên: kéo thiết kế = kéo thực tế = 0.
           </p>
           <table>
             <thead>
@@ -305,7 +317,7 @@ export function TrackPrint({
                 <th>T giải toả (°C)</th>
                 <th>Phương pháp giải toả</th>
                 <th>Chiều dài kéo thiết kế (mm)</th>
-                <th>Chiều dài kéo tự nhiên (mm)</th>
+                <th>Chiều dài kéo thực tế (mm)</th>
                 <th>Ngày/giờ bắt đầu</th>
                 <th>Ngày/giờ kết thúc</th>
                 <th>Hoàn thành</th>
@@ -321,7 +333,7 @@ export function TrackPrint({
                   <td>{summary.tempLabel}</td>
                   <td>{summary.methodLabel}</td>
                   <td>{summary.designPullMm}</td>
-                  <td>{summary.naturalPullMm}</td>
+                  <td>{summary.actualPullMm}</td>
                   <td>{summary.startTimeLabel}</td>
                   <td>{summary.endTimeLabel}</td>
                   <td>{rail.completedAt ? "Có" : "Chưa"}</td>
