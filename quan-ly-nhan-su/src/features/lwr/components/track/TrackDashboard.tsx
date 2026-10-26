@@ -301,7 +301,6 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     setSelectedLongRailId(longRail.id);
     setDetailOpen(false);
     setSelectedJoint(null);
-    scrollDetailIntoView();
     void upsertLongRail(longRail).then((result) => {
       if (!result.ok) setError(result.error ?? "Không lưu đoạn LWR lên Supabase.");
       else if (result.skipped && result.error) setLongRailSyncNote(result.error);
