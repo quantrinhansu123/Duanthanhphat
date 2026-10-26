@@ -30,6 +30,7 @@ import {
 } from "@lwr/lib/track-editor";
 import type { StressInput } from "@lwr/lib/stress-release";
 import {
+  deleteLongRailRemote,
   loadLongRails,
   preferNewerLongRails,
   syncLocalLongRailsToSupabase,
@@ -700,16 +701,46 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           }}
           onClearPlan={(line) => {
             const keys = rowKeysForLine(layout.rows, line);
-            const hasPlacement = layout.placements.some((item) => keys.has(item.rowKey));
-            const hasLongRail = layout.longRails.some((item) => keys.has(item.rowKey));
-            if (hasPlacement || hasLongRail) {
-              setError(`Còn công trình hoặc đoạn LWR trên ${line}. Xoá các mục đó trước khi xoá rải ray tuyến này.`);
-              return false;
+            const linePlacements = layout.placements.filter((item) => keys.has(item.rowKey));
+            const lineLongRails = layout.longRails.filter((item) => keys.has(item.rowKey));
+            const lineWeldLinkCount = Object.entries(layout.jointWeldLinks ?? {}).filter(([jointId, ids]) => {
+              if (!ids.length) return false;
+              return keys.has(jointId.split(":")[0]);
+            }).length;
+
+            if (linePlacements.length || lineLongRails.length || lineWeldLinkCount) {
+              const parts = [
+                linePlacements.length ? `${linePlacements.length} công trình` : "",
+                lineLongRails.length ? `${lineLongRails.length} đoạn LWR` : "",
+                lineWeldLinkCount ? `${lineWeldLinkCount} liên kết hàn` : "",
+              ].filter(Boolean);
+              const ok = window.confirm(
+                `Xoá rải ray ${line} sẽ xoá luôn ${parts.join(", ")} trên tuyến này.\nTuyến còn lại không đổi. Tiếp tục?`,
+              );
+              if (!ok) return false;
             }
-            return commit({
+
+            const removedLongRailIds = lineLongRails.map((item) => item.id);
+            const next: TrackLayout = {
               ...layout,
               rows: layout.rows.map((row) => (row.line === line ? { ...row, cells: [] } : row)),
-            });
+              placements: layout.placements.filter((item) => !keys.has(item.rowKey)),
+              longRails: layout.longRails.filter((item) => !keys.has(item.rowKey)),
+              jointWeldLinks: Object.fromEntries(
+                Object.entries(layout.jointWeldLinks ?? {}).filter(([jointId]) => !keys.has(jointId.split(":")[0])),
+              ),
+            };
+            if (!commit(next)) return false;
+
+            if (selectedLongRailId && removedLongRailIds.includes(selectedLongRailId)) {
+              setSelectedLongRailId(null);
+            }
+            for (const id of removedLongRailIds) {
+              void deleteLongRailRemote(id).then((result) => {
+                if (!result.ok) setError(result.error ?? "Không xoá được đoạn LWR trên Supabase.");
+              });
+            }
+            return true;
           }}
         >
           {(structures) => <RailGrid

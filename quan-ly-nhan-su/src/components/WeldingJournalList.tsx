@@ -14,7 +14,8 @@ import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import { deleteMapPoint, insertMapPoint, linkGpsPointToWeld } from "@/lib/mapPointsDb";
+import { deleteMapPoint, insertMapPoint, linkGpsPointToWeld, unlinkGpsPointsFromWeld } from "@/lib/mapPointsDb";
+import { createClient } from "@/lib/supabase/client";
 import {
   loadPersonnelCertificateOptions,
   loadPersonnelCertificateRows,
@@ -1245,9 +1246,9 @@ function JournalFormModal({
 
           {!linkedActive && (
           <>
-          {!quickActive && unlinkedGpsPoints && unlinkedGpsPoints.length > 0 && (
+          {!quickActive && (
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Điểm Autolisp (HT/HP/TT/TP)
+              Điểm Autolisp / Mã vị trí (HT/HP/TT/TP)
               <SelectMenu
                 value={form.toa_do_id}
                 onChange={(id) => {
@@ -1278,7 +1279,9 @@ function JournalFormModal({
                 buttonClassName="h-10 shadow-2xs font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                Chọn điểm thiết kế → tự điền Km/GPS. Hàn xen kẽ trái/phải thì chọn lại điểm.
+                {unlinkedGpsPoints.length > 0
+                  ? "Chọn điểm thiết kế → tự điền Km/GPS. Sau khi lưu, mã vị trí hiện trên bảng nhật ký."
+                  : "Chưa có điểm Autolisp trống. Import/thêm điểm ở Bản đồ rồi mở lại form, hoặc giữ điểm đang gắn (khi sửa)."}
               </span>
             </label>
           )}
@@ -1663,7 +1666,7 @@ export default function WeldingJournalList({
   const failedWeldMode = lockedResultFilter === "Không đạt";
   const { lang, t } = useLanguage();
   const router = useRouter();
-  const { points: gpsPoints, loading: gpsLoading, error: gpsError } = useWeldLogGpsPoints();
+  const { points: gpsPoints, loading: gpsLoading, error: gpsError, refetch: refetchGpsPoints } = useWeldLogGpsPoints();
 
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -1924,7 +1927,8 @@ export default function WeldingJournalList({
   const refetch = useCallback(() => {
     invalidateWeldReportCache();
     setReloadToken((token) => token + 1);
-  }, []);
+    void refetchGpsPoints();
+  }, [refetchGpsPoints]);
 
   function showToast(message: string) {
     setToast(message);
@@ -2376,6 +2380,18 @@ export default function WeldingJournalList({
         gio_bat_dau: values.gio_bat_dau,
         gio_ket_thuc: values.gio_ket_thuc,
       });
+      // RPC thường đã gắn toa_do; gọi lại để chắc mã vị trí hiện trên bảng.
+      if (values.toa_do_id) {
+        const supabase = createClient();
+        const { data: created } = await supabase
+          .from("lich_su_moi_han")
+          .select("id")
+          .eq("ma_lich_su", values.ma_lich_su.trim())
+          .maybeSingle();
+        if (created?.id) {
+          await linkGpsPointToWeld(values.toa_do_id, created.id);
+        }
+      }
       setFormOpen(false);
       setEditingRow(null);
       setEditingForm(null);
@@ -2448,8 +2464,8 @@ export default function WeldingJournalList({
           weldId: editingRow.id,
           weldCode: values.ma_lich_su,
         });
-      } else if (currentPoint) {
-        await deleteMapPoint(currentPoint.id);
+      } else {
+        await unlinkGpsPointsFromWeld(editingRow.id);
       }
 
       setFormOpen(false);

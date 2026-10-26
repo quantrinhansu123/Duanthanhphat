@@ -200,15 +200,53 @@ export async function insertMapPoint(
   return { point: rowToMapPoint(data as ToaDoRow) };
 }
 
-/** Liên kết điểm GPS với mối hàn */
-export async function linkGpsPointToWeld(pointId: string, weldId: string): Promise<boolean> {
-  if (!hasSupabaseEnv()) return false;
+/** Xóa cache danh sách điểm GPS (sau khi gắn/bỏ gắn mối hàn). */
+export function invalidateMapPointsCache() {
+  mapPointRequests.clear();
+}
+
+/**
+ * Liên kết điểm GPS/Autolisp với mối hàn.
+ * Gỡ liên kết điểm cũ của cùng mối hàn trước (unique lich_su_moi_han_id).
+ */
+export async function linkGpsPointToWeld(pointId: string, weldId: string): Promise<void> {
+  if (!hasSupabaseEnv()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể gắn mã vị trí.");
+  }
+  const supabase = createClient();
+  const { error: clearError } = await supabase
+    .from("toa_do")
+    .update({ lich_su_moi_han_id: null })
+    .eq("lich_su_moi_han_id", weldId)
+    .neq("id", pointId);
+  if (clearError) {
+    throw new Error(`Không gỡ điểm GPS cũ: ${clearError.message}`);
+  }
+  const { data, error } = await supabase
+    .from("toa_do")
+    .update({ lich_su_moi_han_id: weldId })
+    .eq("id", pointId)
+    .select("id, ma_diem")
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Không gắn mã vị trí: ${error.message}`);
+  }
+  if (!data?.id) {
+    throw new Error("Không tìm thấy điểm Autolisp để gắn.");
+  }
+  invalidateMapPointsCache();
+}
+
+/** Bỏ gắn mọi điểm GPS của một mối hàn. */
+export async function unlinkGpsPointsFromWeld(weldId: string): Promise<void> {
+  if (!hasSupabaseEnv() || !weldId) return;
   const supabase = createClient();
   const { error } = await supabase
     .from("toa_do")
-    .update({ lich_su_moi_han_id: weldId })
-    .eq("id", pointId);
-  return !error;
+    .update({ lich_su_moi_han_id: null })
+    .eq("lich_su_moi_han_id", weldId);
+  if (error) throw new Error(`Không gỡ mã vị trí: ${error.message}`);
+  invalidateMapPointsCache();
 }
 
 export async function deleteMapPoint(id: string): Promise<{ error?: string }> {

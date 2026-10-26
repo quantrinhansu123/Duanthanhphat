@@ -174,9 +174,12 @@ export function TrackSchematic({
           type="button"
           disabled={!ready || !hasCellsOnPlanLine}
           onClick={() => {
-            if (onClearPlan(planLine)) setNotice(`Đã xoá rải ray của ${planLine}.`);
+            if (onClearPlan(planLine)) {
+              setNotice(`Đã xoá rải ray ${planLine} (kèm công trình / LWR / liên kết hàn trên tuyến).`);
+            }
           }}
           className="h-10 rounded border px-3 text-sm text-red-700"
+          title="Xoá rải ray tuyến đang chọn; công trình và đoạn LWR trên tuyến sẽ xoá kèm (có hỏi xác nhận)."
         >
           Xoá rải {planLine.replace(/^TUYẾN\s+/i, "")}
         </button>

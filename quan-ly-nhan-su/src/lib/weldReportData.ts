@@ -1318,7 +1318,10 @@ async function attachLispCodesToJournalRows(rows: WeldReportRow[]): Promise<Weld
       .from("toa_do")
       .select("ma_diem, lich_su_moi_han_id")
       .in("lich_su_moi_han_id", chunk);
-    if (error) break;
+    if (error) {
+      console.warn("[attachLispCodesToJournalRows]", error.message);
+      continue;
+    }
     for (const point of data ?? []) {
       const weldId = String(point.lich_su_moi_han_id ?? "").trim();
       const code = String(point.ma_diem ?? "").trim();
