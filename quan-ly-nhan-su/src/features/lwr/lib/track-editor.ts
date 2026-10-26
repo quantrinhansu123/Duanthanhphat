@@ -298,6 +298,19 @@ export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: 
   };
 }
 
+/** Phạm vi lý trình của một tuyến (Thượng hoặc Hạ) — hai ray trái/phải cùng tuyến. */
+export function lineTrackExtent(rows: RailRow[], line: string): { startMetres: number; endMetres: number } {
+  return trackExtent(rows.filter((row) => row.line === line));
+}
+
+export function trackLineNames(rows: RailRow[]): string[] {
+  return Array.from(new Map(rows.map((row) => [row.line, row.line])).keys());
+}
+
+export function rowKeysForLine(rows: RailRow[], line: string): Set<string> {
+  return new Set(rows.filter((row) => row.line === line).map((row) => railRowKey(row)));
+}
+
 /** Cắt sơ đồ theo đoạn Km để in — giữ thanh/công trình/LWR giao với [start, end]. */
 export function sliceLayoutForPrint(layout: TrackLayout, startMetres: number, endMetres: number): TrackLayout {
   if (!(endMetres > startMetres)) {
@@ -322,13 +335,14 @@ export function sliceLayoutForPrint(layout: TrackLayout, startMetres: number, en
   return { ...layout, rows, longRails, placements };
 }
 
-/** Extend all rails together; original rows and existing cell values are preserved.
+/** Extend rails; pass `line` to only extend Thượng or Hạ (cả hai ray của tuyến đó).
  *  Empty rows start at Km 0+000. */
-export function extendRailRows(rows: RailRow[], count: number): RailRow[] {
+export function extendRailRows(rows: RailRow[], count: number, line?: string): RailRow[] {
   if (!Number.isInteger(count) || count < 1 || count > MAX_EXTENSION_SEGMENTS) {
     throw new RangeError(`Số thanh ghép thêm phải từ 1 đến ${MAX_EXTENSION_SEGMENTS}.`);
   }
   return rows.map((row) => {
+    if (line && row.line !== line) return row;
     const last = row.cells[row.cells.length - 1];
     const lastMetres = last ? parseChainage(last.to) : 0;
     const prefix = railRowKey(row);
@@ -808,16 +822,27 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
 }
 
 /** Planned 500 m intervals stop exactly at the project endpoint. */
-export function generateRailRows(rows: RailRow[], start: number, end: number): RailRow[] {
+/**
+ * Rải thanh ~500 m từ start→end.
+ * Truyền `line` (TUYẾN THƯỢNG / TUYẾN HẠ) để chỉ rải tuyến đó — chiều dài Thượng/Hạ độc lập.
+ */
+export function generateRailRows(rows: RailRow[], start: number, end: number, line?: string): RailRow[] {
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start || end - start > 500_000) {
     throw new RangeError("Nhập lý trình đầu/cuối theo mét nguyên, chiều dài tuyến tối đa 500 km.");
   }
-  return rows.map(row => {
+  if (line && !rows.some((row) => row.line === line)) {
+    throw new RangeError(`Không tìm thấy tuyến ${line}.`);
+  }
+  return rows.map((row) => {
+    if (line && row.line !== line) return row;
     const cells: RailCell[] = [];
     for (let from = start; from < end;) {
       const to = Math.min(end, (Math.floor(from / 500) + 1) * 500);
-      const old = row.cells.find(c => parseChainage(c.from) === from && parseChainage(c.to) === to);
-      cells.push({ ...(old ?? { from: formatChainage(from), to: formatChainage(to), temp: DEFAULT_NEW_RAIL_TEMPERATURE }), id: `${railRowKey(row)}-${String(cells.length + 1).padStart(2, "0")}` });
+      const old = row.cells.find((c) => parseChainage(c.from) === from && parseChainage(c.to) === to);
+      cells.push({
+        ...(old ?? { from: formatChainage(from), to: formatChainage(to), temp: DEFAULT_NEW_RAIL_TEMPERATURE }),
+        id: `${railRowKey(row)}-${String(cells.length + 1).padStart(2, "0")}`,
+      });
       from = to;
     }
     return { ...row, cells };

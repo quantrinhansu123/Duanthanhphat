@@ -17,6 +17,7 @@ import {
   visibleLongRailSpan,
   patchTrackCell,
   railRowKey,
+  rowKeysForLine,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
   validateTrackLayout,
@@ -620,22 +621,57 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           onRemove={(id) => {
             commit({ ...layout, placements: layout.placements.filter((item) => item.id !== id) });
           }}
-          onExtend={(count) => commit({ ...layout, rows: extendRailRows(layout.rows, count) })}
-          onPlan={(from, to) => {
-            const start = parseChainage(from), end = parseChainage(to);
+          onExtend={(count, line) => commit({ ...layout, rows: extendRailRows(layout.rows, count, line) })}
+          onPlan={(line, from, to) => {
+            const start = parseChainage(from);
+            const end = parseChainage(to);
             if (start === null || end === null) { setError("Nhập lý trình tuyến dạng Km0+000."); return false; }
             try {
-              const rows = generateRailRows(layout.rows, start, end);
-              const legacy = [...layout.placements, ...layout.longRails].some(item => item.startMetres === undefined);
-              if (legacy && JSON.stringify(rows) !== JSON.stringify(layout.rows)) { setError("Hãy lưu lại lý trình thực của công trình/đoạn LWR cũ trước khi thay đổi sơ đồ rải."); return false; }
-              if ([...layout.placements, ...layout.longRails].some(item => !getPlacementSpan(rows, item))) { setError("Phạm vi mới không bao phủ công trình hoặc đoạn thi công đã lưu."); return false; }
-              if (Object.values(layout.jointWeldLinks ?? {}).some(ids => ids.length) && JSON.stringify(rows) !== JSON.stringify(layout.rows)) { setError("Sơ đồ đã liên kết nhật ký hàn; cần tháo liên kết trước khi rải lại để tránh gắn sai mối hàn."); return false; }
+              const rows = generateRailRows(layout.rows, start, end, line);
+              const keys = rowKeysForLine(layout.rows, line);
+              const onLine = <T extends { rowKey: string; startMetres?: number }>(items: T[]) =>
+                items.filter((item) => keys.has(item.rowKey));
+              const linePlacements = onLine(layout.placements);
+              const lineLongRails = onLine(layout.longRails);
+              const legacy = [...linePlacements, ...lineLongRails].some((item) => item.startMetres === undefined);
+              const lineRowsBefore = layout.rows.filter((row) => row.line === line);
+              const lineRowsAfter = rows.filter((row) => row.line === line);
+              if (legacy && JSON.stringify(lineRowsAfter) !== JSON.stringify(lineRowsBefore)) {
+                setError(`Hãy lưu lại lý trình thực của công trình/đoạn LWR trên ${line} trước khi thay đổi sơ đồ rải.`);
+                return false;
+              }
+              if ([...linePlacements, ...lineLongRails].some((item) => !getPlacementSpan(rows, item))) {
+                setError(`Phạm vi mới của ${line} không bao phủ công trình hoặc đoạn thi công đã lưu trên tuyến này.`);
+                return false;
+              }
+              const lineChanged = JSON.stringify(lineRowsAfter) !== JSON.stringify(lineRowsBefore);
+              const lineHasWeldLinks = Object.entries(layout.jointWeldLinks ?? {}).some(([jointId, ids]) => {
+                if (!ids.length) return false;
+                const jointRowKey = jointId.split(":")[0];
+                return keys.has(jointRowKey);
+              });
+              if (lineChanged && lineHasWeldLinks) {
+                setError(`Sơ đồ ${line} đã liên kết nhật ký hàn; tháo liên kết trên tuyến này trước khi rải lại.`);
+                return false;
+              }
               return commit({ ...layout, rows });
-            } catch (cause) { setError(cause instanceof Error ? cause.message : "Không rải được tuyến."); return false; }
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : "Không rải được tuyến.");
+              return false;
+            }
           }}
-          onClearPlan={() => {
-            if (layout.placements.length || layout.longRails.length || Object.values(layout.jointWeldLinks ?? {}).some(ids => ids.length)) { setError("Sơ đồ còn công trình, đoạn thi công hoặc liên kết mối hàn. Xoá các mục liên quan trước để tránh mất dữ liệu."); return false; }
-            return commit({ ...layout, rows: layout.rows.map(row => ({ ...row, cells: [] })), jointWeldLinks: {} });
+          onClearPlan={(line) => {
+            const keys = rowKeysForLine(layout.rows, line);
+            const hasPlacement = layout.placements.some((item) => keys.has(item.rowKey));
+            const hasLongRail = layout.longRails.some((item) => keys.has(item.rowKey));
+            if (hasPlacement || hasLongRail) {
+              setError(`Còn công trình hoặc đoạn LWR trên ${line}. Xoá các mục đó trước khi xoá rải ray tuyến này.`);
+              return false;
+            }
+            return commit({
+              ...layout,
+              rows: layout.rows.map((row) => (row.line === line ? { ...row, cells: [] } : row)),
+            });
           }}
         >
           {(structures) => <RailGrid

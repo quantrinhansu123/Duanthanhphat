@@ -7,9 +7,10 @@ import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
   formatChainage,
   getPlacementSpan,
+  lineTrackExtent,
   parseChainage,
   railRowKey,
-  trackExtent,
+  trackLineNames,
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
@@ -30,9 +31,9 @@ interface TrackSchematicProps {
   onReloadSymbols: () => void;
   onPlacement: (placement: TrackPlacement) => boolean;
   onRemove: (id: string) => void;
-  onExtend: (count: number) => boolean;
-  onPlan: (start: string, end: string) => boolean;
-  onClearPlan: () => boolean;
+  onExtend: (count: number, line: string) => boolean;
+  onPlan: (line: string, start: string, end: string) => boolean;
+  onClearPlan: (line: string) => boolean;
   children: (structures: StructureLayer) => ReactNode;
 }
 
@@ -63,6 +64,8 @@ export function TrackSchematic({
   onClearPlan,
   children,
 }: TrackSchematicProps) {
+  const lineNames = trackLineNames(layout.rows);
+  const [planLine, setPlanLine] = useState(lineNames[0] ?? "TUYẾN THƯỢNG");
   const [rowKey, setRowKey] = useState("UT");
   const [structureFrom, setStructureFrom] = useState("");
   const [structureTo, setStructureTo] = useState("");
@@ -77,14 +80,25 @@ export function TrackSchematic({
 
   const row = layout.rows.find((item) => railRowKey(item) === rowKey) ?? layout.rows[0];
   const currentSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? (symbolId ? undefined : symbols[0]);
+  const planLineRows = layout.rows.filter((item) => item.line === planLine);
+  const hasCellsOnPlanLine = planLineRows.some((item) => item.cells.length > 0);
   const hasCells = layout.rows.some((item) => item.cells.length > 0);
+  const lineExtent = lineTrackExtent(layout.rows, planLine);
 
-  const extent = trackExtent(layout.rows);
   useEffect(() => {
-    if (!ready || extent.endMetres <= extent.startMetres) return;
-    setPlanFrom(formatChainage(extent.startMetres));
-    setPlanTo(formatChainage(extent.endMetres));
-  }, [ready, extent.startMetres, extent.endMetres]);
+    if (!lineNames.includes(planLine) && lineNames[0]) setPlanLine(lineNames[0]);
+  }, [lineNames, planLine]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (lineExtent.endMetres > lineExtent.startMetres) {
+      setPlanFrom(formatChainage(lineExtent.startMetres));
+      setPlanTo(formatChainage(lineExtent.endMetres));
+    } else {
+      setPlanFrom("0+000");
+      setPlanTo("");
+    }
+  }, [ready, planLine, lineExtent.startMetres, lineExtent.endMetres]);
 
   const clearEditor = useCallback(() => {
     setEditingId(null); setLabel(""); setFormError(null);
@@ -135,12 +149,46 @@ export function TrackSchematic({
 
   return (
     <section className="space-y-3" aria-label="Bố trí công trình trên tuyến">
-      <form className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4" onSubmit={e => { e.preventDefault(); if (onPlan(planFrom, planTo)) setNotice("Đã rải tuyến, chốt đúng lý trình cuối."); }}>
-        <div className="w-full"><h2 className="font-bold">Bước 1 · Khai tuyến</h2><p className="text-xs text-slate-500">Đánh số lý trình ~500 m trên 2 đường tim (Thượng / Hạ). Hiện 4 ray trái–phải + 2 tim tuyến. Thanh cuối chốt đúng lý trình, ví dụ Km17+584.</p></div>
-        <label className="text-xs">Lý trình đầu tuyến<input className={inputClass} value={planFrom} onChange={e => setPlanFrom(e.target.value)} placeholder="Km0+000" /></label>
-        <label className="text-xs">Chốt lý trình cuối tuyến<input className={inputClass} value={planTo} onChange={e => setPlanTo(e.target.value)} placeholder="Km17+584" required /></label>
-        <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật tuyến</button>
-        <button type="button" disabled={!ready || !hasCells} onClick={() => { if (onClearPlan()) setNotice("Đã xoá sơ đồ rải ray."); }} className="h-10 rounded border px-3 text-sm text-red-700">Xoá rải ray</button>
+      <form className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4" onSubmit={(e) => {
+        e.preventDefault();
+        if (onPlan(planLine, planFrom, planTo)) {
+          setNotice(`Đã rải ${planLine}: Km ${planFrom} – ${planTo}. Tuyến kia giữ nguyên chiều dài riêng.`);
+        }
+      }}>
+        <div className="w-full">
+          <h2 className="font-bold">Bước 1 · Khai tuyến (riêng Thượng / Hạ)</h2>
+          <p className="text-xs text-slate-500">
+            Mỗi tuyến rải độc lập vì chiều dài và công trình khác nhau. Chọn Thượng hoặc Hạ → nhập đầu–cuối → Rải.
+            Chỉ cập nhật 2 ray trái/phải của tuyến đang chọn; tuyến còn lại không đổi.
+          </p>
+        </div>
+        <label className="text-xs text-slate-600">Tuyến cần rải
+          <select className={inputClass} value={planLine} onChange={(e) => setPlanLine(e.target.value)} disabled={!ready}>
+            {lineNames.map((line) => <option key={line} value={line}>{line}</option>)}
+          </select>
+        </label>
+        <label className="text-xs">Lý trình đầu tuyến<input className={inputClass} value={planFrom} onChange={(e) => setPlanFrom(e.target.value)} placeholder="Km0+000" /></label>
+        <label className="text-xs">Chốt lý trình cuối tuyến<input className={inputClass} value={planTo} onChange={(e) => setPlanTo(e.target.value)} placeholder="Km17+584" required /></label>
+        <button disabled={!ready} className="h-10 rounded border bg-blue-700 px-3 text-sm text-white">Rải / cập nhật {planLine.replace(/^TUYẾN\s+/i, "")}</button>
+        <button
+          type="button"
+          disabled={!ready || !hasCellsOnPlanLine}
+          onClick={() => {
+            if (onClearPlan(planLine)) setNotice(`Đã xoá rải ray của ${planLine}.`);
+          }}
+          className="h-10 rounded border px-3 text-sm text-red-700"
+        >
+          Xoá rải {planLine.replace(/^TUYẾN\s+/i, "")}
+        </button>
+        {hasCellsOnPlanLine && lineExtent.endMetres > lineExtent.startMetres ? (
+          <p className="w-full text-xs text-emerald-700">
+            {planLine}: Km {formatChainage(lineExtent.startMetres)} – {formatChainage(lineExtent.endMetres)}
+            {" · "}
+            {(lineExtent.endMetres - lineExtent.startMetres) / 1000} km
+          </p>
+        ) : (
+          <p className="w-full text-xs text-slate-500">{planLine}: chưa rải.</p>
+        )}
       </form>
 
       <TrackMapCanvas layout={layout}>
@@ -176,12 +224,23 @@ export function TrackSchematic({
         <form className="mt-4 flex flex-wrap items-end gap-3 border-t pt-3" onSubmit={(event) => {
           event.preventDefault();
           const count = Number(appendCount);
-          if (!Number.isInteger(count) || count < 1 || count > 100) { setFormError("Mỗi lần ghép từ 1 đến 100 thanh trên mỗi dải."); return; }
-          if (onExtend(count)) { setFormError(null); setNotice(`Đã ghép thêm ${count} thanh × 500 m trên mỗi dải ray.`); }
+          if (!Number.isInteger(count) || count < 1 || count > 100) { setFormError("Mỗi lần ghép từ 1 đến 100 thanh trên mỗi dải của tuyến đang chọn."); return; }
+          if (onExtend(count, planLine)) {
+            setFormError(null);
+            setNotice(`Đã ghép thêm ${count} thanh × 500 m trên 2 ray của ${planLine}.`);
+          }
         }}>
-          <label className="text-xs text-slate-600">Số thanh ghép thêm / dải<input type="number" min={1} max={100} step={1} value={appendCount} onChange={(event) => setAppendCount(event.target.value)} className={`${inputClass} max-w-40`} /></label>
-          <button disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-800 disabled:opacity-40"><Plus className="size-4" />Ghép thêm thanh</button>
-          <p className="pb-2 text-xs text-slate-500">{hasCells ? `Thanh mới dài 500 m, nhiệt độ khóa 35°C. Tuyến hiện tại: Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}.` : "Lần đầu ghép sẽ tạo thanh từ Km 0+000, mỗi thanh 500 m, nhiệt độ khóa 35°C."}</p>
+          <label className="text-xs text-slate-600">Số thanh ghép thêm / dải (theo tuyến Bước 1)
+            <input type="number" min={1} max={100} step={1} value={appendCount} onChange={(event) => setAppendCount(event.target.value)} className={`${inputClass} max-w-40`} />
+          </label>
+          <button disabled={!ready} className="flex h-10 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-800 disabled:opacity-40">
+            <Plus className="size-4" />Ghép thêm · {planLine.replace(/^TUYẾN\s+/i, "")}
+          </button>
+          <p className="pb-2 text-xs text-slate-500">
+            {hasCellsOnPlanLine && lineExtent.endMetres > lineExtent.startMetres
+              ? `Ghép trên ${planLine}: Km ${formatChainage(lineExtent.startMetres)} – ${formatChainage(lineExtent.endMetres)}. Thanh mới 500 m, T khóa 35°C.`
+              : `Chưa rải ${planLine}. Dùng Bước 1 hoặc ghép sẽ tạo từ Km 0+000.`}
+          </p>
         </form>
       </div>
     </section>
