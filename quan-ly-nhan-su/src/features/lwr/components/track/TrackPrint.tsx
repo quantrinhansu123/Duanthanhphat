@@ -6,6 +6,7 @@ import {
   formatChainage,
   getPlacementSpan,
   parseChainage,
+  railCellLockTemp,
   railRowKey,
   sliceLayoutForPrint,
   trackExtent,
@@ -89,9 +90,10 @@ export function TrackPrint({
             const span = getPlacementSpan(sliced.rows, rail) ?? visibleLongRailSpan(sliced.rows, rail);
             return Boolean(span && from < span.endMetres && to > span.startMetres);
           });
+          const temp = railCellLockTemp(cell);
           const status = !cell.released
             ? "Chưa giải toả"
-            : cell.temp >= 30
+            : temp >= 30
               ? "Giải toả · T≥30"
               : "Giải toả · T<30";
           return {
@@ -101,7 +103,9 @@ export function TrackPrint({
             from: cell.from,
             to: cell.to,
             length: Math.max(0, to - from),
-            temp: cell.temp,
+            temp,
+            leftTemp: cell.leftTemp ?? temp,
+            rightTemp: cell.rightTemp ?? temp,
             status,
             lwr: cover?.code ?? "—",
           };
@@ -281,7 +285,9 @@ export function TrackPrint({
                 <th>Tuyến · Ray</th>
                 <th>Lý trình</th>
                 <th>Dài (m)</th>
-                <th>T (°C)</th>
+                <th>T trái</th>
+                <th>T phải</th>
+                <th>T khóa</th>
                 <th>Trạng thái</th>
                 <th>LWR</th>
               </tr>
@@ -293,13 +299,15 @@ export function TrackPrint({
                   <td>{row.line} · {row.rail}</td>
                   <td>Km{row.from} – {row.to}</td>
                   <td>{row.length}</td>
+                  <td>{row.leftTemp}</td>
+                  <td>{row.rightTemp}</td>
                   <td>{row.temp}</td>
                   <td>{row.status}</td>
                   <td>{row.lwr}</td>
                 </tr>
               ))}
               {shortRows.length === 0 ? (
-                <tr><td colSpan={7}>Chưa có thanh ngắn trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={9}>Chưa có thanh ngắn trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>

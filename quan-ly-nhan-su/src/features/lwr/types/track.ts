@@ -12,7 +12,15 @@ export interface RailCell {
   id: string;
   from: string;
   to: string;
+  /**
+   * Nhiệt độ khóa đường trên sơ đồ = (leftTemp + rightTemp) / 2 khi có đo hai bên.
+   * Dùng để tô màu thanh (xám / xanh T≥30 / cam T&lt;30 khi đã giải toả).
+   */
   temp: number;
+  /** Nhiệt độ ray trái đo tại hiện trường trước giải toả. */
+  leftTemp?: number;
+  /** Nhiệt độ ray phải đo tại hiện trường trước giải toả. */
+  rightTemp?: number;
   /** True after the user adds this short rail on the schematic. */
   placed?: boolean;
   /** True after stress release on this segment has passed. */

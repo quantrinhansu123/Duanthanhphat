@@ -5,8 +5,10 @@ import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { detailForCell } from "@lwr/lib/track-data";
 import { DEFAULT_STRESS_INPUT, type StressInput } from "@lwr/lib/stress-release";
 import {
+  lockTempFromSides,
   parseChainage,
   railCellLengthMetres,
+  railCellLockTemp,
   type RailCellPatch,
 } from "@lwr/lib/track-editor";
 import type { RailCell } from "@lwr/types/track";
@@ -48,7 +50,7 @@ export function ReleaseStatusButtons({
         </button>
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
-        Đạt → màu theo nhiệt độ khóa (≥30 xanh, &lt;30 cam). Không đạt → xám.
+        Đạt → màu theo T khóa (≥30 xanh, &lt;30 cam). Không đạt → xám. T khóa = (T trái + T phải) / 2.
       </p>
     </div>
   );
@@ -58,6 +60,11 @@ function sameChainage(draft: string, stored: string) {
   const parsed = parseChainage(draft);
   const current = parseChainage(stored);
   return parsed !== null && parsed === current;
+}
+
+function sideTempOf(cell: RailCell, side: "left" | "right") {
+  if (side === "left") return cell.leftTemp ?? cell.temp;
+  return cell.rightTemp ?? cell.temp;
 }
 
 export function RailDetailPanel({
@@ -82,10 +89,13 @@ export function RailDetailPanel({
   const content = useRef<HTMLDivElement>(null);
   const length = railCellLengthMetres(cell) ?? 0;
   const detail = detailForCell(cell);
+  const lockTemp = railCellLockTemp(cell);
+  const lengthLocked = Boolean(cell.released);
   const [fromDraft, setFromDraft] = useState(cell.from);
   const [toDraft, setToDraft] = useState(cell.to);
   const [lengthDraft, setLengthDraft] = useState(String(length));
-  const [tempDraft, setTempDraft] = useState(String(cell.temp));
+  const [leftTempDraft, setLeftTempDraft] = useState(String(sideTempOf(cell, "left")));
+  const [rightTempDraft, setRightTempDraft] = useState(String(sideTempOf(cell, "right")));
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,9 +106,10 @@ export function RailDetailPanel({
     setFromDraft(cell.from);
     setToDraft(cell.to);
     setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
-    setTempDraft(String(cell.temp));
+    setLeftTempDraft(String(sideTempOf(cell, "left")));
+    setRightTempDraft(String(sideTempOf(cell, "right")));
     setFieldError(null);
-  }, [cell.id, cell.from, cell.to, cell.temp]);
+  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp]);
 
   function apply(patch: RailCellPatch) {
     const ok = onChange(patch);
@@ -106,7 +117,8 @@ export function RailDetailPanel({
       setFromDraft(cell.from);
       setToDraft(cell.to);
       setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
-      setTempDraft(String(cell.temp));
+      setLeftTempDraft(String(sideTempOf(cell, "left")));
+      setRightTempDraft(String(sideTempOf(cell, "right")));
       return;
     }
     setFieldError(null);
@@ -129,6 +141,11 @@ export function RailDetailPanel({
   }
 
   function commitLength() {
+    if (lengthLocked) {
+      setLengthDraft(String(length));
+      setFieldError("Chiều dài đã khóa vì thanh đã giải toả. Bỏ Đạt nếu cần sửa tiếp.");
+      return;
+    }
     const next = Number(lengthDraft.trim().replace(",", "."));
     if (Number.isSafeInteger(next) && next === length) {
       setLengthDraft(String(length));
@@ -142,25 +159,68 @@ export function RailDetailPanel({
     apply({ lengthMetres: next });
   }
 
-  function commitTemp() {
-    const next = Number(tempDraft.trim().replace(",", "."));
-    if (Number.isFinite(next) && next === cell.temp) {
-      setTempDraft(String(cell.temp));
-      return;
-    }
-    if (!Number.isFinite(next)) {
-      setFieldError("Nhiệt độ khóa phải là số hữu hạn.");
-      setTempDraft(String(cell.temp));
-      return;
-    }
-    apply({ temp: next });
+  function parseSideTemp(draft: string, fallback: number) {
+    const next = Number(draft.trim().replace(",", "."));
+    if (!Number.isFinite(next)) return null;
+    return next;
   }
+
+  function commitSideTemps(nextLeft?: number, nextRight?: number) {
+    const left = nextLeft ?? parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
+    const right = nextRight ?? parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
+    if (left === null || right === null) {
+      setFieldError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
+      setLeftTempDraft(String(sideTempOf(cell, "left")));
+      setRightTempDraft(String(sideTempOf(cell, "right")));
+      return;
+    }
+    if (left === sideTempOf(cell, "left") && right === sideTempOf(cell, "right")) {
+      setLeftTempDraft(String(left));
+      setRightTempDraft(String(right));
+      return;
+    }
+    apply({ leftTemp: left, rightTemp: right });
+  }
+
+  function commitLeftTemp() {
+    const left = parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
+    if (left === null) {
+      setFieldError("Nhiệt độ ray trái phải là số hữu hạn.");
+      setLeftTempDraft(String(sideTempOf(cell, "left")));
+      return;
+    }
+    commitSideTemps(left, parseSideTemp(rightTempDraft, sideTempOf(cell, "right")) ?? sideTempOf(cell, "right"));
+  }
+
+  function commitRightTemp() {
+    const right = parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
+    if (right === null) {
+      setFieldError("Nhiệt độ ray phải phải là số hữu hạn.");
+      setRightTempDraft(String(sideTempOf(cell, "right")));
+      return;
+    }
+    commitSideTemps(parseSideTemp(leftTempDraft, sideTempOf(cell, "left")) ?? sideTempOf(cell, "left"), right);
+  }
+
+  const draftLockTemp = (() => {
+    const left = parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
+    const right = parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
+    if (left === null || right === null) return lockTemp;
+    try {
+      return lockTempFromSides(left, right);
+    } catch {
+      return lockTemp;
+    }
+  })();
 
   return (
     <aside aria-labelledby="rail-detail-title" className="flex h-[calc(100dvh-100px)] min-h-[400px] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-900 xl:sticky xl:top-0">
       <div className="flex h-full flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
-          <div><h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {cell.id}</h2><p className="text-sm text-slate-500">{detail.title}</p></div>
+          <div>
+            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {cell.id}</h2>
+            <p className="text-sm text-slate-500">{detail.title}</p>
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={onPrev} aria-label="Đoạn trước" className="rounded-lg border p-2"><ChevronLeft className="size-5" /></button>
             <button type="button" onClick={onNext} aria-label="Đoạn tiếp" className="rounded-lg border p-2"><ChevronRight className="size-5" /></button>
@@ -185,7 +245,7 @@ export function RailDetailPanel({
           <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <p className="col-span-2 text-xs font-semibold text-amber-900">
-              Sửa nhanh trên sơ đồ — đổi nhiệt độ rồi Enter/Blur; màu thanh: xám (tạo) · xanh (giải toả T≥30) · cam (T&lt;30).
+              Hiện trường: nhập T trái / T phải trước giải toả. T khóa = trung bình → tô màu sơ đồ. Chiều dài sửa hàng ngày đến khi Đạt.
             </p>
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
@@ -215,14 +275,16 @@ export function RailDetailPanel({
                 />
               </span>
             </label>
-            <label className="block min-w-0">
-              <span className="text-slate-600">Chiều dài đoạn</span>
+            <label className="block min-w-0 col-span-2 sm:col-span-1">
+              <span className="text-slate-600">Chiều dài đoạn {lengthLocked ? "(đã khóa)" : "(sửa hàng ngày)"}</span>
               <span className="flex items-center gap-1">
                 <input
                   className={inputClass}
                   inputMode="numeric"
                   value={lengthDraft}
                   aria-label="Chiều dài đoạn"
+                  disabled={lengthLocked}
+                  readOnly={lengthLocked}
                   onChange={(event) => setLengthDraft(event.target.value)}
                   onBlur={commitLength}
                   onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLength(); } }}
@@ -231,33 +293,65 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0">
-              <span className="font-semibold text-amber-900">Nhiệt độ khóa (°C)</span>
+              <span className="font-semibold text-amber-900">Nhiệt độ ray trái (°C)</span>
               <span className="flex items-center gap-1">
                 <input
                   className={`${inputClass} border-amber-400 bg-white`}
                   inputMode="decimal"
-                  value={tempDraft}
-                  aria-label="Nhiệt độ khóa trên sơ đồ"
-                  onChange={(event) => setTempDraft(event.target.value)}
-                  onBlur={commitTemp}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTemp(); } }}
+                  value={leftTempDraft}
+                  aria-label="Nhiệt độ ray trái"
+                  onChange={(event) => setLeftTempDraft(event.target.value)}
+                  onBlur={commitLeftTemp}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLeftTemp(); } }}
                 />
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">°C</span>
               </span>
             </label>
+            <label className="block min-w-0">
+              <span className="font-semibold text-amber-900">Nhiệt độ ray phải (°C)</span>
+              <span className="flex items-center gap-1">
+                <input
+                  className={`${inputClass} border-amber-400 bg-white`}
+                  inputMode="decimal"
+                  value={rightTempDraft}
+                  aria-label="Nhiệt độ ray phải"
+                  onChange={(event) => setRightTempDraft(event.target.value)}
+                  onBlur={commitRightTemp}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitRightTemp(); } }}
+                />
+                <span className="mt-1 shrink-0 font-semibold text-slate-500">°C</span>
+              </span>
+            </label>
+            <div className="col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+              <p className="text-xs font-semibold text-emerald-900">Nhiệt độ khóa đường (tính tự động)</p>
+              <p className="mt-1 font-bold text-emerald-800">
+                {draftLockTemp} °C
+                <span className="ml-2 text-xs font-medium text-emerald-700">= (T trái + T phải) / 2</span>
+              </p>
+            </div>
           </div>
           {fieldError ? (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">{fieldError}</p>
           ) : null}
           <StressReleaseCalculator
             compact
-            key={cell.id}
+            key={`${cell.id}-${lockTemp}`}
             segmentId={cell.id}
-            initialInput={{ ...DEFAULT_STRESS_INPUT, trackSide, leftLength: length, rightLength: 0, startChainage: cell.from, endChainage: cell.to, neutralTemp: cell.temp }}
+            initialInput={{
+              ...DEFAULT_STRESS_INPUT,
+              trackSide,
+              leftLength: length,
+              rightLength: 0,
+              startChainage: cell.from,
+              endChainage: cell.to,
+              neutralTemp: lockTemp,
+              leftTemp: sideTempOf(cell, "left"),
+              rightTemp: sideTempOf(cell, "right"),
+            }}
             onSave={onSaveParams}
           />
           <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-            Bảng tính bên trên: bấm <b>Lưu thông số</b> để ghi nhiệt độ/kéo lên đoạn LWR (tự tạo nếu chưa có). Thanh phía sau giữ nguyên chiều dài khi sửa lý trình.
+            Bấm <b>Lưu thông số</b> để ghi bảng tính lên đoạn LWR. Đổi T trái/phải cập nhật ngay màu thanh trên sơ đồ khi đã Đạt.
           </p>
         </div>
       </div>

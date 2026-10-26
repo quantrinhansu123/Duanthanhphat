@@ -16,6 +16,7 @@ import {
   parseChainage,
   visibleLongRailSpan,
   patchTrackCell,
+  railCellLockTemp,
   railRowKey,
   rowKeysForLine,
   trackExtent,
@@ -420,7 +421,11 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
       const span = getPlacementSpan(layout.rows, rail);
       return Boolean(span && span.startMetres < to && span.endMetres > from);
     });
-    const temp = Number.isFinite(params.neutralTemp) ? params.neutralTemp : cell.temp;
+    const leftTemp = Number.isFinite(params.leftTemp) ? params.leftTemp : (cell.leftTemp ?? cell.temp);
+    const rightTemp = Number.isFinite(params.rightTemp) ? params.rightTemp : (cell.rightTemp ?? cell.temp);
+    const temp = Number.isFinite(params.neutralTemp)
+      ? params.neutralTemp
+      : railCellLockTemp({ temp: cell.temp, leftTemp, rightTemp });
     let target: LongRail;
     let created = false;
     if (covering.length === 0) {
@@ -443,6 +448,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           ...params,
           startChainage: params.startChainage || cell.from,
           endChainage: params.endChainage || cell.to,
+          leftTemp,
+          rightTemp,
           neutralTemp: temp,
         },
         updatedAt: new Date().toISOString(),
@@ -459,6 +466,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           ...params,
           startChainage: target.params.startChainage || params.startChainage,
           endChainage: target.params.endChainage || params.endChainage,
+          leftTemp,
+          rightTemp,
           neutralTemp: temp,
         },
         updatedAt: new Date().toISOString(),
@@ -471,7 +480,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         : layout.longRails.map((item) => (item.id === target.id ? target : item)),
     };
     try {
-      nextLayout = patchTrackCell(nextLayout, cell.id, { temp });
+      nextLayout = patchTrackCell(nextLayout, cell.id, { leftTemp, rightTemp });
     } catch (cause) {
       return { ok: false, message: cause instanceof Error ? cause.message : "Không cập nhật được nhiệt độ thanh." };
     }

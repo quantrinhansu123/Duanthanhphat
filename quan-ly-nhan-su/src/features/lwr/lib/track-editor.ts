@@ -523,7 +523,10 @@ export type RailCellPatch = {
   from?: string;
   to?: string;
   lengthMetres?: number;
+  /** Ghi đè T khóa trực tiếp (hiếm); ưu tiên leftTemp/rightTemp → temp = trung bình. */
   temp?: number;
+  leftTemp?: number;
+  rightTemp?: number;
   released?: boolean;
 };
 
@@ -534,6 +537,28 @@ export function railCellLengthMetres(cell: RailCell): number | null {
   return to - from;
 }
 
+/** T khóa = (T trái + T phải) / 2. */
+export function lockTempFromSides(leftTemp: number, rightTemp: number): number {
+  if (!Number.isFinite(leftTemp) || !Number.isFinite(rightTemp)) {
+    throw new RangeError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
+  }
+  return Math.round(((leftTemp + rightTemp) / 2) * 1000) / 1000;
+}
+
+/** T khóa dùng tô màu / nhãn: ưu tiên trung bình hai bên nếu đã nhập. */
+export function railCellLockTemp(cell: Pick<RailCell, "temp" | "leftTemp" | "rightTemp">): number {
+  if (Number.isFinite(cell.leftTemp) && Number.isFinite(cell.rightTemp)) {
+    return lockTempFromSides(cell.leftTemp as number, cell.rightTemp as number);
+  }
+  return cell.temp;
+}
+
+function applySideTemps(cell: RailCell, leftTemp: number, rightTemp: number) {
+  cell.leftTemp = leftTemp;
+  cell.rightTemp = rightTemp;
+  cell.temp = lockTempFromSides(leftTemp, rightTemp);
+}
+
 /** Update one cell's chainage/length/temp. Later cells keep their length and slide. */
 export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellPatch): RailRow[] {
   const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
@@ -542,9 +567,22 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   const index = row.cells.findIndex((cell) => cell.id === cellId);
   const cell = row.cells[index];
 
-  if (patch.temp !== undefined) {
+  const hasSideTemps = patch.leftTemp !== undefined || patch.rightTemp !== undefined;
+  if (hasSideTemps) {
+    const left = patch.leftTemp !== undefined ? patch.leftTemp : (cell.leftTemp ?? cell.temp);
+    const right = patch.rightTemp !== undefined ? patch.rightTemp : (cell.rightTemp ?? cell.temp);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) {
+      throw new RangeError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
+    }
+    applySideTemps(cell, left, right);
+  } else if (patch.temp !== undefined) {
     if (!Number.isFinite(patch.temp)) throw new RangeError("Nhiệt độ khóa phải là số hữu hạn.");
     cell.temp = patch.temp;
+    // Đồng bộ hai bên nếu chưa đo riêng — giữ T khóa = T nhập.
+    if (cell.leftTemp === undefined && cell.rightTemp === undefined) {
+      cell.leftTemp = patch.temp;
+      cell.rightTemp = patch.temp;
+    }
   }
   if (patch.released !== undefined) {
     if (patch.released) cell.released = true;
@@ -553,7 +591,9 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
 
   const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
   if (!hasGeometry) {
-    if (patch.temp === undefined && patch.released === undefined) throw new RangeError("Không có thông số để cập nhật.");
+    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined) {
+      throw new RangeError("Không có thông số để cập nhật.");
+    }
     return next;
   }
 
@@ -638,12 +678,20 @@ export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailC
     const length = span.endMetres - span.startMetres;
     const rightLength = Math.min(item.params.rightLength, length);
     const nextParams = { ...item.params, leftLength: length - rightLength, rightLength };
-    if (patch.temp !== undefined && span.startCell.id === cellId) {
-      nextParams.neutralTemp = patch.temp;
+    const tempChanged =
+      patch.temp !== undefined
+      || patch.leftTemp !== undefined
+      || patch.rightTemp !== undefined;
+    if (tempChanged && span.startCell.id === cellId) {
+      nextParams.neutralTemp = railCellLockTemp(span.startCell);
+      if (Number.isFinite(span.startCell.leftTemp)) nextParams.leftTemp = span.startCell.leftTemp as number;
+      if (Number.isFinite(span.startCell.rightTemp)) nextParams.rightTemp = span.startCell.rightTemp as number;
     }
     if (
       nextParams.leftLength === item.params.leftLength
       && nextParams.neutralTemp === item.params.neutralTemp
+      && nextParams.leftTemp === item.params.leftTemp
+      && nextParams.rightTemp === item.params.rightTemp
     ) {
       return item;
     }
@@ -758,6 +806,8 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
       if (!isRecord(rawCell) || typeof rawCell.id !== "string" || !/^.+-\d+$/.test(rawCell.id)
         || typeof rawCell.from !== "string" || typeof rawCell.to !== "string"
         || typeof rawCell.temp !== "number" || !Number.isFinite(rawCell.temp)
+        || (rawCell.leftTemp !== undefined && (typeof rawCell.leftTemp !== "number" || !Number.isFinite(rawCell.leftTemp)))
+        || (rawCell.rightTemp !== undefined && (typeof rawCell.rightTemp !== "number" || !Number.isFinite(rawCell.rightTemp)))
         || (rawCell.placed !== undefined && typeof rawCell.placed !== "boolean")
         || (rawCell.released !== undefined && typeof rawCell.released !== "boolean")
         || cellIds.has(rawCell.id)) return null;
@@ -765,11 +815,19 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
       const end = parseChainage(rawCell.to);
       if (start === null || end === null || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
         || end <= start || (previousEnd !== null && previousEnd !== start)) return null;
+      const leftTemp = typeof rawCell.leftTemp === "number" ? rawCell.leftTemp : undefined;
+      const rightTemp = typeof rawCell.rightTemp === "number" ? rawCell.rightTemp : undefined;
+      const lockTemp =
+        leftTemp !== undefined && rightTemp !== undefined
+          ? lockTempFromSides(leftTemp, rightTemp)
+          : rawCell.temp;
       cells.push({
         id: rawCell.id,
         from: rawCell.from,
         to: rawCell.to,
-        temp: rawCell.temp,
+        temp: lockTemp,
+        ...(leftTemp !== undefined ? { leftTemp } : {}),
+        ...(rightTemp !== undefined ? { rightTemp } : {}),
         ...(rawCell.placed ? { placed: true } : {}),
         ...(rawCell.released ? { released: true } : {}),
       });

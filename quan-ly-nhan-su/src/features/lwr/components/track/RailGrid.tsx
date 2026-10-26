@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, formatChainage, type TrackPlacement, parseChainage, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, formatChainage, type TrackPlacement, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -36,7 +36,7 @@ function releaseTone(released: boolean, tempC: number) {
 
 function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number) {
   const done = Boolean(rail.completedAt) || Boolean(cellReleased);
-  const tempC = rail.params.neutralTemp ?? rail.params.airTemp ?? cellTemp ?? STRESS_PASS_TEMP_C;
+  const tempC = cellTemp ?? rail.params.neutralTemp ?? rail.params.airTemp ?? STRESS_PASS_TEMP_C;
   return releaseTone(done, tempC);
 }
 
@@ -160,8 +160,8 @@ export const RailGrid = memo(function RailGrid({
                 />;
               }
               if (cover) {
-                const tempC = cover.rail.params.neutralTemp ?? cover.rail.params.airTemp ?? cell.temp;
-                const tone = longRailTone(cover.rail, cell.released, cell.temp);
+                const tempC = railCellLockTemp(cell);
+                const tone = longRailTone(cover.rail, cell.released, tempC);
                 const done = Boolean(cover.rail.completedAt) || Boolean(cell.released);
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
                 const lengthM = Math.max(0, to - from);
@@ -190,12 +190,13 @@ export const RailGrid = memo(function RailGrid({
                 );
               }
               const lengthM = Math.max(0, to - from);
-              const bareLabel = shortRailChipLabel(cell.id, lengthM, cell.temp);
+              const tempC = railCellLockTemp(cell);
+              const bareLabel = shortRailChipLabel(cell.id, lengthM, tempC);
               const done = Boolean(cell.released);
-              const tone = releaseTone(done, cell.temp);
+              const tone = releaseTone(done, tempC);
               const statusNote = !done
                 ? "Chưa giải toả"
-                : cell.temp >= STRESS_PASS_TEMP_C
+                : tempC >= STRESS_PASS_TEMP_C
                   ? "Giải toả · T≥30"
                   : "Giải toả · T<30";
               return <span key={cell.id}>
