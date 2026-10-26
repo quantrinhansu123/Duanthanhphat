@@ -2364,43 +2364,53 @@ export default function ProjectManagement() {
         </span>
       </div>
 
-      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          <option value="Tất cả trạng thái">Tất cả trạng thái</option>
-          <option value="Đang triển khai">Đang triển khai</option>
-          <option value="Hoàn thành">Hoàn thành</option>
-          <option value="Tạm dừng">Tạm dừng</option>
-        </select>
+      <div className="mb-4 grid grid-cols-2 items-stretch gap-2.5 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
+        <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 sm:w-auto">
+          Trạng thái
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <option value="Tất cả trạng thái">Tất cả trạng thái</option>
+            <option value="Đang triển khai">Đang triển khai</option>
+            <option value="Hoàn thành">Hoàn thành</option>
+            <option value="Tạm dừng">Tạm dừng</option>
+          </select>
+        </label>
 
-        <select
-          value={weldTypeFilter}
-          onChange={(e) => setWeldTypeFilter(e.target.value)}
-          aria-label="Loại mối hàn"
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          <option value="Tất cả">Tất cả loại mối</option>
-          {WELD_TYPE_OPTIONS.map((type) => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
+        <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 sm:w-auto">
+          Loại mối hàn
+          <select
+            value={weldTypeFilter}
+            onChange={(e) => setWeldTypeFilter(e.target.value)}
+            aria-label="Loại mối hàn"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <option value="Tất cả">Tất cả loại mối</option>
+            {WELD_TYPE_OPTIONS.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </label>
 
-        <select
-          value={weldMethodFilter}
-          onChange={(e) => setWeldMethodFilter(e.target.value)}
-          aria-label="Công nghệ hàn"
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-        >
-          <option value="Tất cả">Tất cả công nghệ</option>
-          <option value="FBW">FBW</option>
-          <option value="ATW">ATW</option>
-        </select>
+        <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 sm:w-auto">
+          Công nghệ hàn
+          <select
+            value={weldMethodFilter}
+            onChange={(e) => setWeldMethodFilter(e.target.value)}
+            aria-label="Công nghệ hàn"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          >
+            <option value="Tất cả">Tất cả công nghệ</option>
+            <option value="FBW">FBW</option>
+            <option value="ATW">ATW</option>
+          </select>
+        </label>
 
         {/* Lọc theo dự án */}
-        <div ref={projectMenuRef} className="relative w-full sm:w-[220px]">
+        <div ref={projectMenuRef} className="relative w-full min-w-0 sm:w-[220px]">
+          <span className="mb-1 block text-[11px] font-semibold text-slate-500">Dự án</span>
           <button
             type="button"
             onClick={() => setProjectMenuOpen((v) => !v)}
@@ -2475,30 +2485,35 @@ export default function ProjectManagement() {
         </div>
 
         {/* Lọc theo thời gian dự án */}
-        <div className="flex items-center gap-1.5">
-          <input
-            type="date"
-            value={dateFrom}
-            max={dateTo || undefined}
-            onChange={(e) => setDateFrom(e.target.value)}
-            aria-label="Từ ngày"
-            className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
-          />
-          <span className="text-slate-400">–</span>
-          <input
-            type="date"
-            value={dateTo}
-            min={dateFrom || undefined}
-            onChange={(e) => setDateTo(e.target.value)}
-            aria-label="Đến ngày"
-            className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-xs sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
-          />
+        <div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 sm:col-span-1 sm:flex sm:items-end sm:gap-1.5">
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 sm:w-auto">
+            Từ ngày
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="Từ ngày"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 text-base sm:w-auto sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+            />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 sm:w-auto">
+            Đến ngày
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label="Đến ngày"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 text-base sm:w-auto sm:text-sm text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 cursor-pointer"
+            />
+          </label>
         </div>
 
         <button
           type="button"
           onClick={() => void openProjectModal(emptyProject(), "create")}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+          className="col-span-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:col-span-1 sm:w-auto sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm dự án
         </button>

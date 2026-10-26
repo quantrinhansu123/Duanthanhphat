@@ -192,7 +192,7 @@ export default function SparePartsList() {
 
   return (
     <main className="w-full px-4 pb-8 sm:px-6">
-      <div className="mb-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng phụ tùng</div>
           <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{filtered.length}</div>
@@ -240,11 +240,11 @@ export default function SparePartsList() {
             </button>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
           <select
             value={manufacturerFilter}
             onChange={(event) => setManufacturerFilter(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
             aria-label="Lọc theo nhà sản xuất"
           >
             <option value="">Tất cả nhà sản xuất</option>
@@ -255,7 +255,7 @@ export default function SparePartsList() {
           <select
             value={modelFilter}
             onChange={(event) => setModelFilter(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
             aria-label="Lọc theo model máy"
           >
             <option value="">Tất cả model máy</option>
@@ -266,7 +266,7 @@ export default function SparePartsList() {
           <select
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
             aria-label="Lọc theo nhóm"
           >
             <option value="">Tất cả nhóm</option>
@@ -277,7 +277,7 @@ export default function SparePartsList() {
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
             aria-label="Lọc theo trạng thái"
           >
             <option value="">Tất cả trạng thái</option>
@@ -294,7 +294,7 @@ export default function SparePartsList() {
                 setCategoryFilter("");
                 setStatusFilter("");
               }}
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
             >
               Xóa bộ lọc
             </button>

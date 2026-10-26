@@ -58,7 +58,7 @@ import { loadProjects } from "@/lib/projectsDb";
 import { currentViewer } from "@/lib/viewerAccess";
 
 const inputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
 
 type PersonOption = { id: string; name: string; chucVu: string };
@@ -359,10 +359,10 @@ export default function MachinePreShiftChecklist() {
   }
 
   return (
-    <main className="w-full px-3 pb-24 sm:px-6">
+    <main className="min-w-0 w-full max-w-full px-3 pb-24 sm:px-6">
       <section className="mb-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-xs sm:p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="min-w-[9.5rem] flex-1 sm:flex-none">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(9.5rem,0.6fr)_minmax(16rem,1fr)]">
+          <label className="min-w-0">
             <span className={labelCls}>Ngày</span>
             <input
               type="date"
@@ -371,7 +371,7 @@ export default function MachinePreShiftChecklist() {
               className={`${inputCls} font-mono`}
             />
           </label>
-          <div className="min-w-[16rem] flex-1">
+          <div className="min-w-0">
             <span className={labelCls}>Ca</span>
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
               {CHECKLIST_SHIFTS.map((item) => (

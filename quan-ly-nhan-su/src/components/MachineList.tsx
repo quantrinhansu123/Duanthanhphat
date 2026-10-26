@@ -1915,7 +1915,7 @@ export default function MachineList() {
           Đang đồng bộ danh sách máy từ Supabase…
         </div>
       )}
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng số máy</div>
           <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{list.length}</div>
@@ -1968,11 +1968,11 @@ export default function MachineList() {
         </div>
       </section>
 
-      <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+          className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
         >
           {["Tất cả trạng thái", ...statusOptions].map((s) => (
             <option key={s}>{s}</option>
@@ -1981,7 +1981,7 @@ export default function MachineList() {
         <button
           type="button"
           onClick={() => setFormModal({ machine: emptyMachine(), mode: "create" })}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:w-auto sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <Plus size={16} weight="bold" /> Thêm máy mới
         </button>

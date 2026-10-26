@@ -87,7 +87,7 @@ export default function FuelHistoryList() {
 
   return (
     <main className="w-full px-4 pb-8 sm:px-6">
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lượt cấp</div>
           <div className="mt-1 font-mono text-2xl font-bold tabular-nums text-slate-900">
@@ -109,7 +109,7 @@ export default function FuelHistoryList() {
         </div>
       </div>
 
-      <section className="mb-4 flex flex-wrap items-end gap-x-3 gap-y-2.5 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs sm:p-4">
+      <section className="mb-4 grid grid-cols-2 items-end gap-x-3 gap-y-2.5 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs sm:flex sm:flex-wrap sm:p-4">
         <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-48">
           Máy
           <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className={filterClass}>
@@ -130,13 +130,13 @@ export default function FuelHistoryList() {
         </label>
         <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-40">
           Từ ngày
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={`${filterClass} font-mono`} />
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={`${filterClass} font-mono text-base sm:text-sm`} />
         </label>
         <label className="flex w-full flex-col gap-1 text-[11px] font-semibold leading-4 text-slate-500 sm:w-40">
           Đến ngày
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={`${filterClass} font-mono`} />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={`${filterClass} font-mono text-base sm:text-sm`} />
         </label>
-        <div className="flex h-10 shrink-0 items-center gap-3">
+        <div className="col-span-2 flex h-10 items-center justify-between gap-3 sm:col-span-1 sm:shrink-0 sm:justify-start">
           {hasFilter && (
             <button
               type="button"
