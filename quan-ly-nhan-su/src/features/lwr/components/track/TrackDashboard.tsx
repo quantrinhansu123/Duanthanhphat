@@ -11,7 +11,7 @@ import {
   generateRailRows,
   formatChainage,
   getPlacementSpan,
-  isLongRailReleased,
+  countReleasedLwrSegments,
   longRailsOverlap,
   nextLongRailCode,
   parseChainage,
@@ -20,6 +20,7 @@ import {
   railCellLockTemp,
   railRowKey,
   rowKeysForLine,
+  syncLongRailCompletedAt,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
   validateTrackLayout,
@@ -107,8 +108,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     (sum, item) => sum + (parseChainage(item.to) ?? 0) - (parseChainage(item.from) ?? 0),
     0,
   );
-  /** Đếm khớp sơ đồ: completedAt hoặc mọi thanh ngắn trong đoạn đã Đạt / released. */
-  const releasedLongRailCount = layout.longRails.filter((rail) => isLongRailReleased(layout.rows, rail)).length;
+  /** Đếm khớp nút Đạt / chip Giải toả bên dưới (đoạn LWR + thanh Đạt chưa gắn LWR). */
+  const releasedLongRailCount = countReleasedLwrSegments(layout.rows, layout.longRails);
   const sideOpen = detailOpen || Boolean(selectedJoint);
 
   const reloadSymbols = useCallback(async () => {
@@ -492,18 +493,21 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     } catch (cause) {
       return { ok: false, message: cause instanceof Error ? cause.message : "Không cập nhật được nhiệt độ thanh." };
     }
+    // Đạt trước → Lưu thông số: gắn completedAt để thẻ “Đoạn LWR đã giải toả” đếm đúng.
+    nextLayout = syncLongRailCompletedAt(nextLayout);
     if (!commit(nextLayout)) {
       return { ok: false, message: "Không ghi được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web." };
     }
-    setSelectedLongRailId(target.id);
-    void upsertLongRail(target).then((result) => {
+    const saved = nextLayout.longRails.find((item) => item.id === target.id) ?? target;
+    setSelectedLongRailId(saved.id);
+    void upsertLongRail(saved).then((result) => {
       if (!result.ok) setError(result.error ?? "Không lưu đoạn LWR lên Supabase.");
     });
     return {
       ok: true,
       message: created
-        ? `Đã tạo đoạn LWR ${target.code} và lưu thông số + nhiệt độ ${temp}°C lên sơ đồ.`
-        : `Đã lưu thông số lên đoạn LWR ${target.code} và cập nhật nhiệt độ sơ đồ ${temp}°C.`,
+        ? `Đã tạo đoạn LWR ${saved.code} và lưu thông số + nhiệt độ ${temp}°C lên sơ đồ.`
+        : `Đã lưu thông số lên đoạn LWR ${saved.code} và cập nhật nhiệt độ sơ đồ ${temp}°C.`,
     };
   }
 
@@ -553,22 +557,18 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     if (!cell) return false;
     try {
       let next = patchTrackCell(layout, cell.id, patch);
-      // Đồng bộ completedAt với thanh đã Đạt trên sơ đồ — để thẻ “Đoạn LWR đã giải toả” đếm đúng.
+      // Đồng bộ completedAt với nút Đạt bên dưới — thẻ “Đoạn LWR đã giải toả” đếm theo sơ đồ.
       if (patch.released !== undefined) {
-        const now = new Date().toISOString();
-        next = {
-          ...next,
-          longRails: next.longRails.map((rail) => {
-            const done = isLongRailReleased(next.rows, { ...rail, completedAt: undefined });
-            if (done && !rail.completedAt) {
-              return { ...rail, completedAt: now, updatedAt: now };
-            }
-            if (!done && rail.completedAt) {
-              return { ...rail, completedAt: undefined, updatedAt: now };
-            }
-            return rail;
-          }),
-        };
+        const before = new Map(next.longRails.map((rail) => [rail.id, rail.completedAt]));
+        next = syncLongRailCompletedAt(next);
+        const changed = next.longRails.filter((rail) => before.get(rail.id) !== rail.completedAt);
+        if (!commit(next)) return false;
+        for (const rail of changed) {
+          void upsertLongRail(rail).then((result) => {
+            if (!result.ok) setError(result.error ?? "Không đồng bộ trạng thái giải toả LWR lên Supabase.");
+          });
+        }
+        return true;
       }
       return commit(next);
     } catch (cause) {

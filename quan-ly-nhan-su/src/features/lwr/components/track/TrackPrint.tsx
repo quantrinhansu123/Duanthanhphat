@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import {
   formatChainage,
   getPlacementSpan,
+  isLongRailReleased,
   parseChainage,
   railRowKey,
   sliceLayoutForPrint,
@@ -336,7 +337,7 @@ export function TrackPrint({
                   <td>{summary.actualPullMm}</td>
                   <td>{summary.startTimeLabel}</td>
                   <td>{summary.endTimeLabel}</td>
-                  <td>{rail.completedAt ? "Có" : "Chưa"}</td>
+                  <td>{isLongRailReleased(sliced.rows, rail) ? "Có" : "Chưa"}</td>
                 </tr>
               ))}
               {lwrRows.length === 0 ? (

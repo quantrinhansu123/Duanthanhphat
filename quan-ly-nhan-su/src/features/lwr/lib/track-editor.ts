@@ -297,6 +297,51 @@ export function isLongRailReleased(rows: RailRow[], rail: LongRail): boolean {
   return covered.length > 0 && covered.every((cell) => Boolean(cell.released));
 }
 
+/** Đồng bộ completedAt của đoạn LWR theo trạng thái Đạt của thanh ngắn trên sơ đồ. */
+export function syncLongRailCompletedAt(layout: TrackLayout, now = new Date().toISOString()): TrackLayout {
+  let changed = false;
+  const longRails = layout.longRails.map((rail) => {
+    const done = isLongRailReleased(layout.rows, { ...rail, completedAt: undefined });
+    if (done && !rail.completedAt) {
+      changed = true;
+      return { ...rail, completedAt: now, updatedAt: now };
+    }
+    if (!done && rail.completedAt) {
+      changed = true;
+      return { ...rail, completedAt: undefined, updatedAt: now };
+    }
+    return rail;
+  });
+  return changed ? { ...layout, longRails } : layout;
+}
+
+/**
+ * Đếm khớp sơ đồ / nút Đạt bên dưới:
+ * - Mỗi đoạn LWR đã giải toả (completedAt hoặc mọi thanh trong đoạn đã Đạt)
+ * - Cộng thêm thanh ngắn đã Đạt nhưng chưa gắn đoạn LWR (chip Giải toả trần)
+ */
+export function countReleasedLwrSegments(rows: RailRow[], longRails: LongRail[]): number {
+  const releasedRails = longRails.filter((rail) => isLongRailReleased(rows, rail)).length;
+  const coveredCellIds = new Set<string>();
+  for (const rail of longRails) {
+    const span = getPlacementSpan(rows, rail) ?? visibleLongRailSpan(rows, rail);
+    if (!span) continue;
+    for (const cell of span.row.cells) {
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      if (from === null || to === null) continue;
+      if (from < span.endMetres && to > span.startMetres) coveredCellIds.add(cell.id);
+    }
+  }
+  let bareReleased = 0;
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      if (cell.released && !coveredCellIds.has(cell.id)) bareReleased += 1;
+    }
+  }
+  return releasedRails + bareReleased;
+}
+
 export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: number } {
   const starts = rows.flatMap((row) => {
     const value = row.cells[0] ? parseChainage(row.cells[0].from) : null;
