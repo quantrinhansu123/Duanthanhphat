@@ -941,26 +941,32 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
       </div>
 
       {/* Thanh bộ lọc chính */}
-      <div className="mb-3 flex flex-wrap items-end gap-2.5">
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Từ ngày
+      <div className="mb-3 grid min-w-0 grid-cols-2 items-end gap-2.5 sm:flex sm:flex-wrap">
+        <div className="w-full min-w-0 sm:w-auto">
+          <label htmlFor="welding-history-date-from" className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Từ ngày
+          </label>
           <input
+            id="welding-history-date-from"
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
+            className="block h-10 w-full min-w-0 appearance-auto rounded-lg border border-slate-300 bg-white px-3 text-base font-normal text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:w-auto sm:text-sm"
           />
-        </label>
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-          Đến ngày
+        </div>
+        <div className="w-full min-w-0 sm:w-auto">
+          <label htmlFor="welding-history-date-to" className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">
+            Đến ngày
+          </label>
           <input
+            id="welding-history-date-to"
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150 font-mono"
+            className="block h-10 w-full min-w-0 appearance-auto rounded-lg border border-slate-300 bg-white px-3 text-base font-normal text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:w-auto sm:text-sm"
           />
-        </label>
-        <div className="mb-0.5 flex flex-wrap items-center gap-1">
+        </div>
+        <div className="col-span-2 mb-0.5 flex w-full items-center gap-1 sm:col-span-1 sm:w-auto">
           {(
             [
               { label: "30 ngày", days: 30, active: isPreset30 },
@@ -972,7 +978,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               key={preset.days}
               type="button"
               onClick={() => applyRecentDays(preset.days)}
-              className={`h-10 rounded-lg px-2.5 text-xs font-semibold transition-all cursor-pointer ${
+              className={`h-10 min-w-0 flex-1 rounded-lg px-1.5 text-center text-xs font-semibold transition-all cursor-pointer sm:flex-none sm:px-2.5 ${
                 preset.active
                   ? "bg-[#0047AB] text-white shadow-xs"
                   : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -985,7 +991,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           <button
             type="button"
             onClick={applyAllDates}
-            className={`h-10 rounded-lg px-2.5 text-xs font-semibold transition-all cursor-pointer ${
+            className={`h-10 min-w-0 flex-1 rounded-lg px-1.5 text-center text-xs font-semibold transition-all cursor-pointer sm:flex-none sm:px-2.5 ${
               isAllDates
                 ? "bg-[#0047AB] text-white shadow-xs"
                 : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -995,7 +1001,8 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             Tất cả
           </button>
         </div>
-        <div className="mb-0.5 min-w-[220px] w-[240px] [&_.relative]:mt-0">
+        <div className="mb-0.5 w-full min-w-0 sm:min-w-[220px] sm:w-[240px] [&_.relative]:mt-0">
+          <span className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">Thợ hàn</span>
           <FormCombo
             value={welder === "Tất cả thợ hàn" ? "" : welder}
             options={welderOptions
@@ -1009,26 +1016,32 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
           />
         </div>
         {lockedResult ? (
-          <div className="inline-flex h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3.5 text-xs sm:text-sm font-semibold text-rose-700 shadow-2xs">
-            Kết quả: {lockedResult}
+          <div className="w-full min-w-0 sm:w-auto">
+            <span className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">Kết quả</span>
+            <div className="inline-flex h-10 w-full items-center rounded-lg border border-rose-200 bg-rose-50 px-3.5 text-xs sm:w-auto sm:text-sm font-semibold text-rose-700 shadow-2xs">
+              {lockedResult}
+            </div>
           </div>
         ) : (
-          <select
-            value={result}
-            onChange={(e) => setResult(e.target.value)}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
-          >
-            {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
-              <option key={r} value={r}>{r === "Sửa chữa" ? "Hàn lại" : r}</option>
-            ))}
-          </select>
+          <label className="block w-full min-w-0 text-xs sm:w-auto sm:text-[13px] font-semibold text-slate-700">
+            Kết quả
+            <select
+              value={result}
+              onChange={(e) => setResult(e.target.value)}
+              className="mt-1.5 block h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+            >
+              {["Tất cả kết quả", "Đạt", "Không đạt", "Sửa chữa", "Chờ thí nghiệm"].map((r) => (
+                <option key={r} value={r}>{r === "Sửa chữa" ? "Hàn lại" : r}</option>
+              ))}
+            </select>
+          </label>
         )}
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        <label className="block w-full min-w-0 text-xs sm:w-auto sm:text-[13px] font-semibold text-slate-700">
           Loại hàn
           <select
             value={weldTypesSel.length === 1 ? weldTypesSel[0] : ""}
             onChange={(e) => setWeldTypesSel(e.target.value ? [e.target.value] : [])}
-            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+            className="mt-1.5 block h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             <option value="">Tất cả</option>
             {(configuredWeldTypes.length > 0 ? configuredWeldTypes : WELD_TYPE_OPTIONS).map((item) => (
@@ -1036,12 +1049,12 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             ))}
           </select>
         </label>
-        <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        <label className="block w-full min-w-0 text-xs sm:w-auto sm:text-[13px] font-semibold text-slate-700">
           Phương pháp hàn
           <select
             value={methodsSel.length === 1 ? methodsSel[0] : ""}
             onChange={(e) => setMethodsSel(e.target.value ? [e.target.value] : [])}
-            className="mt-1.5 block h-10 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
+            className="mt-1.5 block h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:w-auto sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 hover:text-slate-900 transition-all duration-150 cursor-pointer"
           >
             <option value="">Tất cả</option>
             {(configuredMethods.length > 0 ? configuredMethods : WELD_METHOD_OPTIONS).map((item) => (
@@ -1065,7 +1078,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               setMethodsSel([]);
               setWeldTypesSel([]);
             }}
-            className="mb-0.5 inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
+            className="col-span-2 mb-0.5 inline-flex h-10 w-auto items-center justify-self-start rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:col-span-1 sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 active:bg-slate-100 transition-all duration-150 cursor-pointer shadow-2xs"
           >
             Xóa lọc
           </button>
@@ -1089,7 +1102,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
               className={`text-slate-500 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
             />
             <span className="text-xs sm:text-sm font-bold text-slate-900">Bộ lọc chi tiết</span>
-            <span className="text-xs text-slate-500">Phương pháp hàn · Loại hàn · Máy · Loại ray · Dự án · Ca</span>
+            <span className="hidden text-xs text-slate-500 sm:inline">Phương pháp hàn · Loại hàn · Máy · Loại ray · Dự án · Ca</span>
             {advancedFilterCount > 0 && (
               <span className="inline-flex rounded-full bg-[#0047AB] px-2 py-0.5 text-[11px] font-bold text-white shadow-2xs font-mono tabular-nums">
                 {advancedFilterCount} đang chọn
@@ -1103,7 +1116,7 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
 
         {filtersOpen && (
           <div className="border-t border-slate-200 p-3.5 bg-slate-50/70">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
               <FilterGroup
                 title="Phương pháp hàn"
                 options={configuredMethods.length > 0 ? configuredMethods : WELD_METHOD_OPTIONS}

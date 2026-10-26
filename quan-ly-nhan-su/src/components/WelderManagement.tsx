@@ -1338,7 +1338,7 @@ export default function WelderManagement() {
   }
 
   return (
-    <div className="w-full px-4 sm:px-6 pb-16">
+    <div className="w-full px-4 sm:px-6 pb-8">
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold shadow-xl animate-in fade-in slide-in-from-bottom-5">
@@ -1433,7 +1433,7 @@ export default function WelderManagement() {
 
       {/* Search & Filters Bar - Image 16 / 17 exact */}
       <div className="mb-4 flex flex-col sm:flex-row gap-2.5 items-center justify-between">
-        <div className="flex flex-1 w-full sm:w-auto gap-2 flex-wrap items-center">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex-1 sm:w-auto">
           <MultiSelectCombobox title={isEn ? "Grade" : "Hạng"} options={rankOptions} selected={ranksSel} onChange={setRanksSel} />
           <MultiSelectCombobox title={isEn ? "Team" : "Tổ hàn"} options={teamOptions} selected={teamsSel} onChange={setTeamsSel} />
           <MultiSelectCombobox title={isEn ? "Rail Type" : "Loại ray"} options={railOptions} selected={railsSel} onChange={setRailsSel} />
@@ -1442,7 +1442,7 @@ export default function WelderManagement() {
           <MultiSelectCombobox title={isEn ? "Status" : "Trạng thái"} options={statusOptions} selected={statusesSel} onChange={setStatusesSel} />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex w-full flex-col items-center gap-2 sm:w-auto sm:flex-row sm:justify-end sm:gap-3">
           <span className="text-xs sm:text-sm text-slate-500 font-medium whitespace-nowrap">
             <strong className="text-slate-900 font-mono">{filtered.length}</strong> {isEn ? "results" : "kết quả"}
           </span>
