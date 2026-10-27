@@ -173,7 +173,7 @@ export function tensorThreshold(input: Pick<StressInput, "neutralTemp" | "lockTe
 }
 
 export function releaseMethodLabel(method: ReleaseMethod) {
-  return method === "TENSOR" ? "Có lực kéo (Rail Tensor)" : "Giải toả tự nhiên";
+  return method === "TENSOR" ? "Hàn có lực kéo" : "Giải toả tự nhiên";
 }
 
 export function validateStressInput(input: StressInput): string[] {

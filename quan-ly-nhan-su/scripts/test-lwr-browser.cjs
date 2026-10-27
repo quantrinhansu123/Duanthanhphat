@@ -35,7 +35,7 @@ const baseURL = process.env.LWR_TEST_URL || 'http://localhost:3010';
   for (const t of ['29.99', '30']) {
    await page.getByLabel('Nhiệt độ neo phía Km giảm T₁ (°C)', { exact: true }).fill(t);
    await page.getByLabel('Nhiệt độ neo phía Km tăng T₂ (°C)', { exact: true }).fill(t);
-   assert.match(await page.locator('tr').filter({ hasText: 'Phương pháp giải toả' }).innerText(), t === '30' ? /tự nhiên/ : /Có lực kéo/);
+   assert.match(await page.locator('tr').filter({ hasText: 'Phương pháp giải toả' }).innerText(), t === '30' ? /tự nhiên/ : /Hàn có lực kéo/);
   }
   await page.getByRole('button', { name: 'In A4', exact: true }).click();
   assert.equal(await page.locator('#stress-release-print').getByText('Con lăn cạnh', { exact: true }).count(), 1);
