@@ -2588,7 +2588,7 @@ export default function WeldingJournalList({
            <input
              value={searchDraft}
              onChange={(event) => setSearchDraft(event.target.value)}
-             placeholder="VD: PQ-FBW-… · FBW-25-10-26-0001 · 2026-9-11-001 · 42"
+             placeholder="VD: PQ-FBW-… · FBW-25-10-26-0001 · 25-10-26-0001"
              className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
            />
          </label>
