@@ -16,27 +16,7 @@ vm.runInNewContext(code, {
   console, Date, JSON, Array, Map, Set, Promise, Number, String, Object, Error, RegExp, Math,
   require: () => stub({ createClient: () => ({}), isSupabaseConfigured: () => false, formatSupabaseError: (e) => e?.message ?? String(e) }),
 });
-const { reportPhotos, reportNoteText, saveReportPhotos } = exports;
-
-test_main();
-async function test_main() {
-  assert.deepEqual(reportPhotos("ghi chú thường"), []);
-  assert.deepEqual(reportPhotos(null), []);
-  const a = "https://res.cloudinary.com/x/a.jpg";
-  const b = "https://res.cloudinary.com/x/b.jpg";
-  let header = await saveReportPhotos("2026-10-27", [a]);
-  assert.deepEqual(reportPhotos(header.ghiChu), [a]);
-  header = await saveReportPhotos("2026-10-27", [a, b]);
-  assert.deepEqual(reportPhotos(header.ghiChu), [a, b], "thêm ảnh giữ ảnh cũ");
-  header = await saveReportPhotos("2026-10-27", [b]);
-  assert.deepEqual(reportPhotos(header.ghiChu), [b]);
-  header = await saveReportPhotos("2026-10-27", []);
-  assert.deepEqual(reportPhotos(header.ghiChu), []);
-  assert.equal(reportNoteText(header.ghiChu), "");
-  assert.deepEqual(reportPhotos('x\n[ANH]["javascript:alert(1)","https://ok/a.png"]'), ["https://ok/a.png"], "chỉ nhận URL https");
-  assert.equal(reportNoteText("Ghi chú\n[ANH][]"), "Ghi chú", "ghi chú giữ nguyên, bỏ phần ảnh");
-  console.log("PASS test-daily-report-photos");
-}
+void 0;
 
 // ---- Phân loại mối hàn theo dải ray (TT/TP/HT/HP) với Supabase giả ----
 const tables = {
@@ -66,4 +46,4 @@ const counts = await ex2.railCountsForWelds([
 ]);
 assert.equal(`${counts.tt}/${counts.tp}/${counts.ht}/${counts.hp}/${counts.other}`, "1/2/1/0/1", "TT/TP/HT/HP + chưa phân loại");
 assert.equal(counts.tt + counts.tp + counts.ht + counts.hp + counts.other, 5, "tổng = tổng mối hàn trong ngày");
-console.log("PASS rail counts");
+console.log("PASS test-daily-report-rails");

@@ -837,45 +837,6 @@ function mapIncident(row: IncidentRowDb): DailyIncidentItem {
   };
 }
 
-const PHOTO_MARK = "\n[ANH]";
-
-/** Ảnh hiện trường lưu cuối bao_cao_ngay.ghi_chu sau dấu [ANH] (JSON mảng URL) — không cần thêm cột. */
-export function reportPhotos(ghiChu: string | null | undefined): string[] {
-  const text = ghiChu ?? "";
-  const at = text.indexOf(PHOTO_MARK);
-  if (at < 0) return [];
-  try {
-    const list = JSON.parse(text.slice(at + PHOTO_MARK.length));
-    return Array.isArray(list) ? list.filter((u): u is string => typeof u === "string" && /^https:\/\//.test(u)) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Ghi chú phiếu không kèm phần ảnh. */
-export function reportNoteText(ghiChu: string | null | undefined): string {
-  const text = ghiChu ?? "";
-  const at = text.indexOf(PHOTO_MARK);
-  return at < 0 ? text : text.slice(0, at);
-}
-
-export async function saveReportPhotos(ngayBaoCao: string, photos: string[]): Promise<DailyReportHeader> {
-  const build = (ghiChu: string) => reportNoteText(ghiChu) + (photos.length ? PHOTO_MARK + JSON.stringify(photos) : "");
-  if (!isSupabaseConfigured()) {
-    const header = ensureHeaderLocal(ngayBaoCao);
-    const store = readLocal();
-    const target = store.headers.find((h) => h.id === header.id);
-    if (target) target.ghiChu = build(target.ghiChu);
-    writeLocal(store);
-    return { ...header, ghiChu: build(header.ghiChu) };
-  }
-  const header = await ensureHeaderSupabase(ngayBaoCao);
-  const ghiChu = build(header.ghiChu);
-  const { error } = await createClient().from("bao_cao_ngay").update({ ghi_chu: ghiChu }).eq("id", header.id);
-  if (error) throw error;
-  return { ...header, ghiChu };
-}
-
 function mapHeader(row: HeaderRowDb): DailyReportHeader {
   return {
     id: row.id,
