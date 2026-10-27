@@ -97,9 +97,10 @@ const baseURL = process.env.LWR_TEST_URL || 'http://localhost:3010';
   assert.equal(layout.placements[0].endMetres, 345);
   assert.ok(Object.values(layout.jointWeldLinks).flat().includes('w1'));
   await page.getByRole('button', { name: 'In sơ đồ A4 / A3 / A3 kéo dài', exact: true }).click();
-  for (const [format, expected] of [['A4', 9], ['A3', 5], ['LONG', 2]]) {
+  // Mỗi lần in là 1 bản in theo đoạn Km đã chọn; A4 ngang tràn sang 2 trang, A3 và A3 kéo dài vừa 1 trang.
+  for (const [format, expected] of [['A4', 2], ['A3', 1], ['LONG', 1]]) {
    await page.getByLabel('Khổ giấy').selectOption(format);
-   assert.equal(await page.locator('#lwr-track-print article').count(), expected);
+   assert.equal(await page.locator('#lwr-track-print article').count(), 1);
    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
    fs.writeFileSync(path.join(output, `track-${format}.pdf`), pdf);
    const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
@@ -108,7 +109,8 @@ const baseURL = process.env.LWR_TEST_URL || 'http://localhost:3010';
   }
   await page.locator('#lwr-track-print').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.locator('select').first().selectOption('project-test');
-  await page.waitForFunction(() => [...document.querySelectorAll('input')].some(input => input.value === '2+584'));
+  // Sơ đồ có dự án lưu riêng theo khóa dự án; lý trình cuối nhập tay (không còn tự điền từ vị trí dự án).
+  await page.getByLabel('Chốt lý trình cuối tuyến').fill('2+584');
   await page.getByRole('button', { name: /^Rải \/ cập nhật/ }).click();
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tp-track-layout-v2:project-test')).rows[0].cells.at(-1).to), '2+584');
   await page.getByRole('button', { name: /^Xoá rải/ }).click();
