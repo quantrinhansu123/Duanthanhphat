@@ -1404,6 +1404,7 @@ export const PHRASES: Record<string, string> = {
   "Lái máy": "Machine operator",
   "Thợ vận hành": "Welder",
   "Đầu hôm qua": "Previous",
+  "Đến hôm qua": "Up to yesterday",
   "Công nhân": "Worker",
   "Mẫu báo cáo công việc ngày": "Daily work report form",
   "Máy móc, thiết bị": "Machinery and equipment",

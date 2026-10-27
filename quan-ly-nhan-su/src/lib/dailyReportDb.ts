@@ -511,6 +511,8 @@ export type DailyWorkJournalFill = {
   date: string;
   method: "ATW" | "FBW";
   homNay: string;
+  /** Tổng mối hàn cùng công nghệ từ trước ngày báo cáo (cột «Đến hôm qua»). */
+  denHomQua: string;
   tenMoiHan: string;
   mayChay: DailyWorkMachine[];
   ghiChu: string;
@@ -537,6 +539,32 @@ function journalWorkRange(row: JournalFillRow): { start: string; end: string } {
   const start = hhmm(row.gio_bat_dau) || hhmm(row.gio_han);
   const end = hhmm(row.gio_ket_thuc) || (start ? addHoursToWeldTime(start, DEFAULT_WELD_WORK_HOURS) : "");
   return { start, end };
+}
+
+/** Cộng số mối hàn (nhật ký hàn) của một công nghệ từ trước ngày `date`. Lỗi đọc → "" (không chặn điền form). */
+async function sumWeldsBefore(date: string, method: "ATW" | "FBW"): Promise<string> {
+  try {
+    const supabase = createClient();
+    let total = 0;
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from("lich_su_moi_han")
+        .select("so_luong_thuc_hien")
+        .lt("ngay_thuc_hien", date)
+        .eq("cong_nghe_han", method)
+        .order("id", { ascending: true })
+        .range(from, from + 999);
+      if (error) return "";
+      for (const row of data ?? []) {
+        const qty = Number((row as { so_luong_thuc_hien?: number | string | null }).so_luong_thuc_hien);
+        total += Number.isFinite(qty) && qty > 0 ? qty : 1;
+      }
+      if (!data || data.length < 1000) break;
+    }
+    return total > 0 ? String(total) : "";
+  } catch {
+    return "";
+  }
 }
 
 /** Gom nhật ký hàn theo ngày + công nghệ để điền form báo cáo ngày (phần Hôm nay). */
@@ -621,6 +649,8 @@ export async function loadDailyWorkFillFromJournal(
     }
   }
 
+  const denHomQua = await sumWeldsBefore(date, method);
+
   let weldTotal = 0;
   const codes: string[] = [];
   const machines = new Map<string, DailyWorkMachine & { weldQty: number }>();
@@ -676,6 +706,7 @@ export async function loadDailyWorkFillFromJournal(
     date,
     method,
     homNay: weldTotal > 0 ? String(weldTotal) : "",
+    denHomQua,
     tenMoiHan,
     mayChay,
     ghiChu:
@@ -684,6 +715,46 @@ export async function loadDailyWorkFillFromJournal(
         : `Không có bản ghi Nhật ký hàn ${method} ngày ${date}`,
     entryCount: rows.length,
   };
+}
+
+/** Máy + nhân lực của lần báo cáo gần nhất (trước ngày `beforeDate`) có cùng hạng mục — để không phải chọn lại mỗi ngày. */
+export async function loadLastWorkDefaults(
+  hangMuc: string,
+  beforeDate: string,
+): Promise<DailyWorkItem | null> {
+  const key = hangMuc.trim();
+  if (!key) return null;
+  if (!isSupabaseConfigured()) {
+    const store = readLocal();
+    const dateOf = new Map(store.headers.map((h) => [h.id, h.ngayBaoCao]));
+    const found = store.work
+      .filter((w) => w.phan === "hom_nay" && w.hangMuc.trim() === key && (dateOf.get(w.baoCaoId) ?? "") < beforeDate)
+      .sort((a, b) => (dateOf.get(b.baoCaoId) ?? "").localeCompare(dateOf.get(a.baoCaoId) ?? ""));
+    return found[0] ? normalizeLocalWork(found[0]) : null;
+  }
+  try {
+    const supabase = createClient();
+    const { data: headers, error } = await supabase
+      .from("bao_cao_ngay")
+      .select("id,ngay_bao_cao")
+      .lt("ngay_bao_cao", beforeDate)
+      .order("ngay_bao_cao", { ascending: false })
+      .limit(60);
+    if (error || !headers?.length) return null;
+    const dateOf = new Map((headers as { id: string; ngay_bao_cao: string }[]).map((h) => [h.id, h.ngay_bao_cao]));
+    const { data: rows } = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .select("*")
+      .eq("phan", "hom_nay")
+      .eq("hang_muc", key)
+      .in("bao_cao_id", [...dateOf.keys()]);
+    const best = ((rows as WorkRowDb[] | null) ?? []).sort((a, b) =>
+      (dateOf.get(b.bao_cao_id) ?? "").localeCompare(dateOf.get(a.bao_cao_id) ?? ""),
+    )[0];
+    return best ? mapWork(best) : null;
+  } catch {
+    return null;
+  }
 }
 
 function mapEquipment(row: EquipmentRowDb): DailyEquipmentItem {

@@ -20,6 +20,7 @@ import {
   loadDailyReport,
   loadDailyReportList,
   loadDailyWorkFillFromJournal,
+  loadLastWorkDefaults,
   loadHangMucSuggestions,
   matchWorkType,
   workMachineKey,
@@ -61,14 +62,16 @@ function todayIsoLocal() {
 /** Số mối tích lũy = hôm qua + hôm nay. */
 function applyJournalFill(
   form: WorkItemInput,
-  filled: { tenMoiHan: string; homNay: string; mayChay: DailyWorkMachine[]; ghiChu: string },
+  filled: { tenMoiHan: string; homNay: string; denHomQua: string; mayChay: DailyWorkMachine[]; ghiChu: string },
 ): WorkItemInput {
   const homNay = filled.homNay || form.homNay;
+  const denHomQua = filled.denHomQua || form.denHomQua;
   return {
     ...form,
     tenMoiHan: filled.tenMoiHan || form.tenMoiHan,
     homNay,
-    tichLuy: cumulativeWelds(form.denHomQua, homNay),
+    denHomQua,
+    tichLuy: cumulativeWelds(denHomQua, homNay),
     mayChay: filled.mayChay.length > 0 ? filled.mayChay : form.mayChay,
     ghiChu: filled.ghiChu || form.ghiChu,
   };
@@ -115,6 +118,16 @@ const ROLE_EMPTY_LABEL: Record<ManpowerRole, string> = {
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25";
 const labelCls = "mb-1 block text-[11px] font-semibold text-slate-600";
+
+/** Mã thời tiết WMO → nhãn ngắn. */
+function weatherLabel(code: number): string {
+  if (code === 0) return "Nắng";
+  if (code <= 3) return "Nhiều mây";
+  if (code <= 48) return "Sương mù";
+  if (code <= 67 || (code >= 80 && code <= 82)) return "Mưa";
+  if (code >= 95) return "Dông";
+  return "Nhiều mây";
+}
 
 function displayDate(iso: string) {
   const [y, m, d] = iso.split("-");
@@ -455,6 +468,32 @@ function PersonnelMultiSelect({
   );
 }
 
+/** Nhân lực chỉ ghi số lượng: lưu thành 1 mục {id:"", ten:"3"} nên DB/in ấn giữ nguyên. */
+function ManpowerCount({
+  label,
+  values,
+  onChange,
+}: {
+  label: string;
+  values: DailyWorkPerson[];
+  onChange: (people: DailyWorkPerson[]) => void;
+}) {
+  const shown = values.length === 1 && !values[0].id ? values[0].ten : values.length ? String(values.length) : "";
+  return (
+    <label>
+      <span className={labelCls}>{label}</span>
+      <input
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={shown}
+        onChange={(e) => onChange(e.target.value.trim() ? [{ id: "", ten: e.target.value.trim() }] : [])}
+        className={inputCls}
+      />
+    </label>
+  );
+}
+
 function PerformerMultiSelect({
   personnel,
   values,
@@ -584,6 +623,17 @@ function WorkFormModal({
               congViecId: type.id,
               tuyenHa: current.tuyenHa,
               tuyenThuong: current.tuyenThuong,
+              cht: current.cht,
+              kySu: current.kySu,
+              laiMay: current.laiMay,
+              thoVanHanh: current.thoVanHanh,
+              congNhan: current.congNhan,
+              chtTen: current.chtTen,
+              kySuTen: current.kySuTen,
+              laiMayTen: current.laiMayTen,
+              thoVanHanhTen: current.thoVanHanhTen,
+              congNhanTen: current.congNhanTen,
+              mayChay: current.mayChay,
             },
             filled,
           ),
@@ -605,6 +655,32 @@ function WorkFormModal({
       cancelled = true;
     };
   }, [open, phan, form.hangMuc, reportDate, workTypes]);
+
+  // Gán sẵn máy + số lượng nhân lực từ lần báo cáo gần nhất có cùng hạng mục.
+  useEffect(() => {
+    if (!open || phan !== "hom_nay" || !form.hangMuc.trim()) return;
+    let cancelled = false;
+    void loadLastWorkDefaults(form.hangMuc, reportDate || todayIsoLocal()).then((last) => {
+      if (cancelled || !last) return;
+      setForm((f) => ({
+        ...f,
+        mayChay: f.mayChay.length ? f.mayChay : last.mayChay,
+        cht: f.cht.length ? f.cht : last.cht,
+        kySu: f.kySu.length ? f.kySu : last.kySu,
+        laiMay: f.laiMay.length ? f.laiMay : last.laiMay,
+        thoVanHanh: f.thoVanHanh.length ? f.thoVanHanh : last.thoVanHanh,
+        congNhan: f.congNhan.length ? f.congNhan : last.congNhan,
+        chtTen: f.cht.length ? f.chtTen : last.chtTen,
+        kySuTen: f.kySu.length ? f.kySuTen : last.kySuTen,
+        laiMayTen: f.laiMay.length ? f.laiMayTen : last.laiMayTen,
+        thoVanHanhTen: f.thoVanHanh.length ? f.thoVanHanhTen : last.thoVanHanhTen,
+        congNhanTen: f.congNhan.length ? f.congNhanTen : last.congNhanTen,
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, phan, form.hangMuc, reportDate]);
 
   if (!open) return null;
 
@@ -716,6 +792,8 @@ function WorkFormModal({
               tuyenThuong: form.tuyenThuong,
               thucHien: form.thucHien,
               thucHienTen: formatPeopleNames(form.thucHien),
+              donVi: form.donVi || workType?.donViMacDinh || "mối hàn",
+              homNay: form.homNay.trim(),
               ghiChu: form.ghiChu.trim(),
             }
           : {
@@ -779,7 +857,7 @@ function WorkFormModal({
           {isNextDayPlan ? (
             <>
               <p className="text-xs text-slate-500">
-                Chỉ nhập việc cần làm ngày tiếp theo — không cần số mối hàn hay máy.
+                Nhập việc cần làm và khối lượng dự kiến ngày tiếp theo — máy và nhân lực không cần nhập.
               </p>
               <label>
                 <span className={labelCls}>Việc cần làm *</span>
@@ -807,6 +885,10 @@ function WorkFormModal({
                     onChange={(checked) => patch({ tuyenThuong: checked ? LINE_TICK : "" })}
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="KL dự kiến ngày tiếp theo" value={form.homNay} onChange={(v) => patch({ homNay: v })} />
+                <Field label="Đơn vị" value={form.donVi} onChange={(v) => patch({ donVi: v })} />
               </div>
               <PerformerMultiSelect
                 personnel={personnel}
@@ -886,7 +968,7 @@ function WorkFormModal({
               </div>
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
                 <Field label="Đơn vị" value={lang === "en" && form.donVi === "mối hàn" ? "Weld" : form.donVi} onChange={(v) => patch({ donVi: v })} />
-                <Field label="Số mối hàn hôm qua" value={form.denHomQua} onChange={(v) => patch({ denHomQua: v })} />
+                <Field label="Số mối hàn đến hôm qua" value={form.denHomQua} onChange={(v) => patch({ denHomQua: v })} />
                 <Field label="Số mối hàn hôm nay" value={form.homNay} onChange={(v) => patch({ homNay: v })} />
                 <label>
                   <span className={labelCls}>Số mối hàn tích lũy</span>
@@ -970,49 +1052,24 @@ function WorkFormModal({
                   </div>
                 )}
               </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-5">
-                <PersonnelMultiSelect
-                  label="CHT"
-                  role="cht"
-                  personnel={personnel}
-                  values={form.cht}
-                  onChange={(cht) => patch({ cht, chtTen: formatPeopleNames(cht) })}
-                />
-                <PersonnelMultiSelect
-                  label="Kỹ sư"
-                  role="ky_su"
-                  personnel={personnel}
-                  values={form.kySu}
-                  onChange={(kySu) => patch({ kySu, kySuTen: formatPeopleNames(kySu) })}
-                />
-                <PersonnelMultiSelect
-                  label="Lái máy"
-                  role="lai_may"
-                  personnel={personnel}
-                  values={form.laiMay}
-                  onChange={(laiMay) => patch({ laiMay, laiMayTen: formatPeopleNames(laiMay) })}
-                />
-                <PersonnelMultiSelect
-                  label="Thợ vận hành"
-                  role="tho_van_hanh"
-                  personnel={personnel}
-                  values={form.thoVanHanh}
-                  onChange={(thoVanHanh) =>
-                    patch({ thoVanHanh, thoVanHanhTen: formatPeopleNames(thoVanHanh) })
-                  }
-                />
-                <PersonnelMultiSelect
-                  label="Công nhân"
-                  role="cong_nhan"
-                  personnel={personnel}
-                  values={form.congNhan}
-                  onChange={(congNhan) =>
-                    patch({ congNhan, congNhanTen: formatPeopleNames(congNhan) })
-                  }
-                />
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+                {([
+                  ["CHT", "cht", "chtTen"],
+                  ["Kỹ sư", "kySu", "kySuTen"],
+                  ["Lái máy", "laiMay", "laiMayTen"],
+                  ["Thợ vận hành", "thoVanHanh", "thoVanHanhTen"],
+                  ["Công nhân", "congNhan", "congNhanTen"],
+                ] as const).map(([label, key, tenKey]) => (
+                  <ManpowerCount
+                    key={key}
+                    label={label}
+                    values={form[key]}
+                    onChange={(people) => patch({ [key]: people, [tenKey]: formatPeopleNames(people) })}
+                  />
+                ))}
               </div>
               <p className="text-[11px] text-slate-500">
-                Tick chọn nhiều người mỗi vai trò. Ưu tiên nhân sự đúng vị trí; vẫn chọn thêm người khác khi cần.
+                Chỉ nhập số lượng người mỗi vai trò — hệ thống nhớ và điền sẵn từ lần báo cáo trước.
               </p>
               <Field label="Ghi chú" value={form.ghiChu} onChange={(v) => patch({ ghiChu: v })} />
             </>
@@ -1191,6 +1248,27 @@ export default function DailyWorkReport() {
   const [listLoading, setListLoading] = useState(true);
   const [header, setHeader] = useState<DailyReportHeader | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+
+  // Thời tiết + nhiệt độ tự lấy (Open-Meteo, Phú Quốc); sai khác thì sửa tay — sửa tay không bị ghi đè.
+  const weatherEdited = useRef(false);
+  useEffect(() => {
+    weatherEdited.current = false;
+    const controller = new AbortController();
+    const url =
+      "https://api.open-meteo.com/v1/forecast?latitude=10.2&longitude=103.96&daily=weather_code,temperature_2m_mean&timezone=Asia%2FBangkok" +
+      `&start_date=${reportDate}&end_date=${reportDate}`;
+    fetch(url, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const code = data?.daily?.weather_code?.[0];
+        const temp = data?.daily?.temperature_2m_mean?.[0];
+        if (weatherEdited.current || code == null) return;
+        setWeather(weatherLabel(code));
+        if (temp != null) setTemperature(String(Math.round(temp)));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [reportDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1499,7 +1577,10 @@ export default function DailyWorkReport() {
             Thời tiết
             <input
               value={weather}
-              onChange={(e) => setWeather(e.target.value)}
+              onChange={(e) => {
+                weatherEdited.current = true;
+                setWeather(e.target.value);
+              }}
               placeholder="Nắng"
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
             />
@@ -1509,7 +1590,10 @@ export default function DailyWorkReport() {
             <span className="flex items-center gap-1.5">
             <input
               value={temperature}
-              onChange={(e) => setTemperature(e.target.value)}
+              onChange={(e) => {
+                weatherEdited.current = true;
+                setTemperature(e.target.value);
+              }}
               placeholder="31"
               inputMode="decimal"
               className="h-10 w-full rounded-lg sm:w-16 border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"

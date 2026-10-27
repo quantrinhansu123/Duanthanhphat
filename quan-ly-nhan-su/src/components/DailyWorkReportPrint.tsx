@@ -361,7 +361,7 @@ export default function DailyWorkReportPrint({
                 <th colSpan={2}>Tuyến thượng</th>
                 <th colSpan={2}>Tuyến hạ</th>
                 <th rowSpan={2}>Đơn vị</th>
-                <th rowSpan={2}>Đầu hôm qua</th>
+                <th rowSpan={2}>Đến hôm qua</th>
                 <th rowSpan={2}>Hôm nay</th>
                 <th rowSpan={2}>Tích lũy</th>
                 <th rowSpan={2}>Thiết kế</th>
