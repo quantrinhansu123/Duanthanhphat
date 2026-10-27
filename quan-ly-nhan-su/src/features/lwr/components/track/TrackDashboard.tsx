@@ -12,6 +12,8 @@ import {
   formatChainage,
   getPlacementSpan,
   countReleasedLwrSegments,
+  isLongRailReleased,
+  renumberLongRails,
   longRailsOverlap,
   nextLongRailCode,
   parseChainage,
@@ -76,11 +78,11 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
       </select>
     </label>
     {projectError && <p role="status" className="text-xs text-amber-700">Không tải đủ thông tin dự án: {projectError}</p>}
-    <ProjectTrackDashboard key={projectId} initialCellId={initialCellId} project={projects.find(p => p.id === projectId)} />
+    <ProjectTrackDashboard key={projectId} initialCellId={initialCellId} project={projects.find(p => p.id === projectId)} projects={projects} onAssigned={setProjectId} />
   </div>;
 }
 
-function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: TrackDashboardProps & { project?: Project }) {
+function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, projects = [], onAssigned }: TrackDashboardProps & { project?: Project; projects?: Project[]; onAssigned?: (projectId: string) => void }) {
   const projectId = project?.id;
   const storageKey = projectId ? `${TRACK_LAYOUT_STORAGE_KEY}:${projectId}` : TRACK_LAYOUT_STORAGE_KEY;
   const [selectedId, setSelectedId] = useState(initialCellId);
@@ -102,6 +104,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   const [printOpen, setPrintOpen] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
+  const [assignTo, setAssignTo] = useState("");
   /** Đã xác nhận tiếp tục khi chưa gán dự án (hỏi lại khi đổi dự án vì component remount theo key). */
   const projectAcknowledged = useRef(false);
 
@@ -259,6 +262,17 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   }, [layout.longRails, selectedLongRailId]);
 
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);
+  /** Số mối hàn nhật ký nằm trong các đoạn LWR đã giải toả. */
+  const releasedWeldCount = useMemo(() => {
+    const spans = layout.longRails
+      .filter((rail) => isLongRailReleased(layout.rows, rail))
+      .map((rail) => ({ rowKey: rail.rowKey, span: getPlacementSpan(layout.rows, rail) ?? visibleLongRailSpan(layout.rows, rail) }))
+      .filter((item): item is { rowKey: string; span: NonNullable<typeof item.span> } => item.span !== null);
+    return joints.reduce(
+      (sum, joint) => (spans.some((item) => item.rowKey === joint.rowKey && joint.metres >= item.span.startMetres && joint.metres <= item.span.endMetres) ? sum + joint.welds.length : sum),
+      0,
+    );
+  }, [joints, layout.longRails, layout.rows]);
 
   function commit(next: TrackLayout): boolean {
     if (!ready) {
@@ -617,6 +631,57 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
     });
   }, [ensureProject]);
 
+  /** Đánh số lại mọi đoạn LWR theo TT/TP/HT/HP, 1→n từng dải ray theo trình tự thi công. */
+  async function renumberAll() {
+    if (!ensureProject()) return;
+    if (!layout.longRails.length) {
+      setError("Chưa có đoạn LWR để đánh số.");
+      return;
+    }
+    const next = renumberLongRails(layout.rows, layout.longRails);
+    const changed = next.filter((rail, index) => rail.code !== layout.longRails[index].code);
+    if (!changed.length) {
+      setSavedNote("Mã các đoạn LWR đã đúng quy tắc TT/TP/HT/HP, không cần đánh số lại.");
+      return;
+    }
+    if (!window.confirm(`Đánh số lại ${changed.length} đoạn LWR theo TT/TP/HT/HP (1→n từng dải ray, theo lý trình thi công)? Mã cũ sẽ bị thay.`)) return;
+    if (!commit({ ...layout, longRails: next })) return;
+    for (const rail of changed) {
+      const result = await upsertLongRail({ ...rail, projectId: projectId ?? rail.projectId });
+      if (!result.ok) {
+        setError(result.error ?? "Không lưu đoạn LWR lên Supabase.");
+        return;
+      }
+    }
+    setError(null);
+    setSavedNote(`Đã đánh số lại ${changed.length} đoạn LWR theo TT/TP/HT/HP.`);
+  }
+
+  /** Chuyển sơ đồ đang chưa gán dự án sang một dự án (đoạn LWR + bố cục). */
+  async function assignToProject(targetId: string) {
+    const target = projects.find((item) => item.id === targetId);
+    if (!target || projectId) return;
+    if (!window.confirm(`Gán toàn bộ sơ đồ hiện tại (${layout.longRails.length} đoạn LWR) vào dự án «${target.name}»? Sơ đồ chưa gán dự án sẽ được chuyển sang dự án này.`)) return;
+    const key = `${TRACK_LAYOUT_STORAGE_KEY}:${targetId}`;
+    try {
+      if (localStorage.getItem(key) && !window.confirm("Dự án này đã có sơ đồ riêng. Ghi đè bằng sơ đồ hiện tại?")) return;
+      const moved = layout.longRails.map((rail) => ({ ...rail, projectId: targetId }));
+      localStorage.setItem(key, JSON.stringify({ ...layout, longRails: moved }));
+      for (const rail of moved) {
+        const result = await upsertLongRail(rail);
+        if (!result.ok) {
+          setError(result.error ?? "Không lưu đoạn LWR lên Supabase.");
+          return;
+        }
+      }
+      localStorage.removeItem(TRACK_LAYOUT_STORAGE_KEY);
+    } catch {
+      setError("Không gán được dự án: kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web.");
+      return;
+    }
+    onAssigned?.(targetId);
+  }
+
   async function saveAll() {
     if (!ensureProject()) return;
     if (!commit(layout)) return;
@@ -659,7 +724,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             tone: "text-teal-700",
           },
           { label: "Mối hàn (nhật ký)", value: String(weldCount), tone: "text-blue-700" },
-          { label: "Số mối hàn giải toả", value: `${weldsMapped}/${jointWithWelds} điểm`, tone: "text-emerald-700" },
+          { label: "Số mối hàn giải toả", value: `${releasedWeldCount} mối`, tone: "text-emerald-700" },
         ]}
       />
       <div
@@ -670,9 +735,21 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
           {project ? <>Đang gán dự án: <b>{project.name}</b></> : <><b>Chưa gán dự án.</b> Chọn dự án ở ô «Dự án» phía trên trước khi mở hoặc lưu thanh ray dài.</>}
           {savedNote && <span className="ml-2 text-xs opacity-80">{savedNote}</span>}
         </span>
-        <button type="button" onClick={() => void saveAll()} disabled={savingAll || !ready} className="rounded bg-[#0047AB] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {savingAll ? "Đang lưu…" : "Lưu sơ đồ"}
-        </button>
+        <span className="flex flex-wrap items-center gap-2">
+          {!project && projects.length > 0 && (
+            <>
+              <select aria-label="Chọn dự án để gán" value={assignTo} onChange={(e) => setAssignTo(e.target.value)} className="max-w-[260px] rounded border bg-white px-2 py-2 text-sm text-slate-900">
+                <option value="">Chọn dự án để gán…</option>
+                {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <button type="button" onClick={() => void assignToProject(assignTo)} disabled={!assignTo || !ready} className="rounded border border-amber-400 bg-white px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">Gán dự án</button>
+            </>
+          )}
+          <button type="button" onClick={() => void renumberAll()} disabled={!ready} className="rounded border bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-50" title="Đánh số lại TT/TP/HT/HP, 1→n từng dải ray theo trình tự thi công">Đánh số lại TT/TP/HT/HP</button>
+          <button type="button" onClick={() => void saveAll()} disabled={savingAll || !ready} className="rounded bg-[#0047AB] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {savingAll ? "Đang lưu…" : "Lưu sơ đồ"}
+          </button>
+        </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">Bấm mối hàn để chọn nhật ký tương ứng. Mã và công nghệ hàn được điền từ nhật ký.</p>

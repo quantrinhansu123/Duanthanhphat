@@ -163,6 +163,30 @@ export function nextLongRailCode(longRails: LongRail[], rowKey?: string): string
   return `LWR${String(next).padStart(2, "0")}`;
 }
 
+/**
+ * Đánh số lại mọi đoạn LWR theo TT/TP/HT/HP + 4 chữ số, chạy 1→n riêng từng dải ray
+ * theo trình tự thi công (lý trình đầu tăng dần). Nhãn chỉ đổi khi đang trùng mã cũ.
+ */
+export function renumberLongRails(rows: RailRow[], longRails: LongRail[], now = new Date().toISOString()): LongRail[] {
+  const next = new Map<string, LongRail>();
+  const byRow = new Map<string, LongRail[]>();
+  for (const rail of longRails) byRow.set(rail.rowKey, [...(byRow.get(rail.rowKey) ?? []), rail]);
+  for (const [rowKey, group] of byRow) {
+    const prefix = LONG_RAIL_CODE_PREFIX[rowKey];
+    if (!prefix) continue;
+    const startOf = (rail: LongRail) =>
+      (getPlacementSpan(rows, rail) ?? visibleLongRailSpan(rows, rail))?.startMetres ?? rail.startMetres ?? 0;
+    group
+      .sort((a, b) => startOf(a) - startOf(b) || a.id.localeCompare(b.id))
+      .forEach((rail, index) => {
+        const code = `${prefix}${String(index + 1).padStart(4, "0")}`;
+        if (code === rail.code) return;
+        next.set(rail.id, { ...rail, code, label: !rail.label || rail.label === rail.code ? code : rail.label, updatedAt: now });
+      });
+  }
+  return longRails.map((rail) => next.get(rail.id) ?? rail);
+}
+
 function cellRange(cell: RailCell): { from: number; to: number } | null {
   const from = parseChainage(cell.from);
   const to = parseChainage(cell.to);

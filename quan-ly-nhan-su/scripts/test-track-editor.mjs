@@ -8,6 +8,7 @@ import {
   extendRailRows,
   nextLongRailCode,
   railDisplayLabel,
+  renumberLongRails,
   patchTrackCell,
   placeShortRailSpan,
   updateRailCell,
@@ -117,4 +118,27 @@ test("rail display label shows TT/TP/HT/HP code with name", () => {
   assert.equal(railDisplayLabel("TUYẾN HẠ", "Ray trái"), "HT · Hạ trái");
   assert.equal(railDisplayLabel("TUYẾN HẠ", "Ray phải"), "HP · Hạ phải");
   assert.equal(railDisplayLabel("X", "Y"), "Y");
+});
+
+test("renumberLongRails assigns TT/TP/HT/HP 1..n per row by construction order", () => {
+  const layout = seededLayout();
+  const mk = (id, code, rowKey, startMetres, endMetres, label = "") => ({
+    id, code, label, rowKey, startCellId: "UT-01", endCellId: "UT-01", startMetres, endMetres,
+    params: { ...DEFAULT_STRESS_INPUT }, updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const rails = [
+    mk("b", "LWR02", "UT", 500, 1000, "LWR02"),
+    mk("a", "LWR01", "UT", 0, 500, "Doan dau"),
+    mk("c", "LW02", "DT", 0, 500, "LW02"),
+    mk("d", "X", "ZZ", 0, 500),
+  ];
+  const out = renumberLongRails(layout.rows, rails, "2026-02-02T00:00:00.000Z");
+  const byId = Object.fromEntries(out.map((r) => [r.id, r]));
+  assert.equal(byId.a.code, "TT0001");
+  assert.equal(byId.a.label, "Doan dau", "custom label is kept");
+  assert.equal(byId.b.code, "TT0002");
+  assert.equal(byId.b.label, "TT0002", "label equal to old code follows the new code");
+  assert.equal(byId.c.code, "HT0001");
+  assert.equal(byId.d.code, "X", "unknown row is untouched");
+  assert.equal(renumberLongRails(layout.rows, out).every((r, i) => r.code === out[i].code), true, "idempotent");
 });

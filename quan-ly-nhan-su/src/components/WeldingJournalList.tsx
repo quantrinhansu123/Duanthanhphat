@@ -1047,7 +1047,7 @@ function JournalFormModal({
                   {bulkSpanTooLong
                     ? "Chỉ điền tối đa 31 ngày mỗi lần."
                     : bulkDates.length > 0 && bulkCountSafe > 0
-                      ? `${bulkDates.length.toLocaleString("vi-VN")} ngày × ${bulkCountSafe.toLocaleString("vi-VN")} mối = ${bulkTotal.toLocaleString("vi-VN")} bản ghi.`
+                      ? `${bulkDates.length.toLocaleString("vi-VN")} ngày × ${bulkCountSafe.toLocaleString("vi-VN")} mối = ${bulkTotal.toLocaleString("vi-VN")} bản ghi · Dự án: ${selectedProject?.ma_du_an ? `${selectedProject.ma_du_an} · ` : ""}${selectedProject?.label ?? "chưa chọn"}.`
                       : "Chọn khoảng ngày hợp lệ và số mối lớn hơn 0."}
                 </p>
               </div>
@@ -2312,7 +2312,9 @@ export default function WeldingJournalList({
     const total = dates.length * count;
     const project = projectOptions.find((item) => item.id === values.du_an_id);
     const confirmed = window.confirm(
-      `Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project?.label ?? ""}", từ ${formatJournalDateIso(values.dateFrom)} đến ${formatJournalDateIso(values.dateTo)}.\nTổng ${total.toLocaleString("vi-VN")} bản ghi. Tiếp tục?`,
+      `KIỂM TRA DỰ ÁN: «${(project?.label ?? "").toUpperCase()}» — đúng dự án chưa?
+
+Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project?.label ?? ""}", từ ${formatJournalDateIso(values.dateFrom)} đến ${formatJournalDateIso(values.dateTo)}.\nTổng ${total.toLocaleString("vi-VN")} bản ghi. Tiếp tục?`,
     );
     if (!confirmed) return false;
 
