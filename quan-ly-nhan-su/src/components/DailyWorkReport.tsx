@@ -3,11 +3,14 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ComboBoxInput from "@/components/ComboBoxInput";
+import { uploadToCloudinary } from "@/lib/cloudinaryClient";
 import DailyWorkReportPrint from "@/components/DailyWorkReportPrint";
 import { CalendarBlank, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
 import MultiSelectMenu, { type MultiSelectOption } from "@/components/MultiSelectMenu";
 import {
   deleteDailyReport,
+  reportPhotos,
+  saveReportPhotos,
   deleteEquipmentItem,
   deleteIncidentItem,
   deleteWorkItem,
@@ -63,7 +66,16 @@ function todayIsoLocal() {
 /** Số mối tích lũy = hôm qua + hôm nay. */
 function applyJournalFill(
   form: WorkItemInput,
-  filled: { tenMoiHan: string; homNay: string; denHomQua: string; mayChay: DailyWorkMachine[]; ghiChu: string },
+  filled: {
+    tenMoiHan: string;
+    homNay: string;
+    denHomQua: string;
+    tuyenThuong?: string;
+    tuyenHa?: string;
+    chuaPhanLoai?: number;
+    mayChay: DailyWorkMachine[];
+    ghiChu: string;
+  },
 ): WorkItemInput {
   const homNay = filled.homNay || form.homNay;
   const denHomQua = filled.denHomQua || form.denHomQua;
@@ -72,9 +84,13 @@ function applyJournalFill(
     tenMoiHan: filled.tenMoiHan || form.tenMoiHan,
     homNay,
     denHomQua,
+    tuyenThuong: filled.tuyenThuong || form.tuyenThuong,
+    tuyenHa: filled.tuyenHa || form.tuyenHa,
     tichLuy: cumulativeWelds(denHomQua, homNay),
     mayChay: filled.mayChay.length > 0 ? filled.mayChay : form.mayChay,
-    ghiChu: filled.ghiChu || form.ghiChu,
+    ghiChu: [filled.ghiChu, filled.chuaPhanLoai ? `${filled.chuaPhanLoai} mối chưa gắn mã tọa độ (chưa phân tuyến/thanh)` : ""]
+      .filter(Boolean)
+      .join(" · ") || form.ghiChu,
   };
 }
 
@@ -1248,6 +1264,7 @@ export default function DailyWorkReport() {
   const [printAuto, setPrintAuto] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busyRowId, setBusyRowId] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [weather, setWeather] = useState("");
   const [temperature, setTemperature] = useState("");
   const [reportList, setReportList] = useState<DailyReportSummary[]>([]);
@@ -1440,6 +1457,34 @@ export default function DailyWorkReport() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
+  }
+
+  async function addPhotos(files: File[]) {
+    if (files.length === 0) return;
+    setPhotoBusy(true);
+    try {
+      const urls = [...reportPhotos(header?.ghiChu)];
+      for (const file of files) {
+        const uploaded = await uploadToCloudinary(file, "thanhphat/bao-cao-ngay");
+        if (uploaded.error || !uploaded.result) throw new Error(uploaded.error || "Không tải được ảnh");
+        urls.push(uploaded.result.secure_url);
+      }
+      setHeader(await saveReportPhotos(reportDate, urls));
+      void reloadList();
+      showToast(`Đã thêm ${files.length} ảnh`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thêm được ảnh");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto(url: string) {
+    try {
+      setHeader(await saveReportPhotos(reportDate, reportPhotos(header?.ghiChu).filter((u) => u !== url)));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không xóa được ảnh");
+    }
   }
 
   function projectLabel(duAnId: string | null | undefined) {
@@ -1638,6 +1683,49 @@ export default function DailyWorkReport() {
           </button>
         </div>
       </div>
+
+      <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-xs" aria-label="Ảnh hiện trường">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Ảnh hiện trường ngày {displayDate(reportDate)}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Ảnh được in thành các trang sau báo cáo (4 ảnh / trang).</p>
+          </div>
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            <Plus size={14} weight="bold" aria-hidden />
+            {photoBusy ? "Đang tải..." : "Thêm ảnh"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              disabled={photoBusy}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                void addPhotos(files);
+              }}
+            />
+          </label>
+        </div>
+        {reportPhotos(header?.ghiChu).length > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {reportPhotos(header?.ghiChu).map((url) => (
+              <div key={url} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="Ảnh hiện trường" className="h-24 w-full rounded-lg border border-slate-200 object-cover" />
+                <button
+                  type="button"
+                  aria-label="Xóa ảnh"
+                  onClick={() => void removePhoto(url)}
+                  className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-rose-600 shadow cursor-pointer"
+                >
+                  <X size={12} weight="bold" aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-slate-200 px-4 py-3">
@@ -1906,6 +1994,7 @@ export default function DailyWorkReport() {
         workNext={workNext}
         equipment={equipment}
         incidents={incidents}
+        photos={reportPhotos(header?.ghiChu)}
         autoPrint={printAuto}
         onClose={() => {
           setPrintOpen(false);

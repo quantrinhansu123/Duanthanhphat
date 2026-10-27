@@ -513,6 +513,11 @@ export type DailyWorkJournalFill = {
   homNay: string;
   /** Tổng mối hàn cùng công nghệ từ trước ngày báo cáo (cột «Đến hôm qua»). */
   denHomQua: string;
+  /** Mối hàn trong ngày theo dải ray (mã tọa độ TT/TP/HT/HP); tuyenThuong = "trái/phải". */
+  tuyenThuong: string;
+  tuyenHa: string;
+  /** Số mối chưa gắn mã tọa độ → chưa phân được tuyến/thanh. */
+  chuaPhanLoai: number;
   tenMoiHan: string;
   mayChay: DailyWorkMachine[];
   ghiChu: string;
@@ -539,6 +544,51 @@ function journalWorkRange(row: JournalFillRow): { start: string; end: string } {
   const start = hhmm(row.gio_bat_dau) || hhmm(row.gio_han);
   const end = hhmm(row.gio_ket_thuc) || (start ? addHoursToWeldTime(start, DEFAULT_WELD_WORK_HOURS) : "");
   return { start, end };
+}
+
+/** Đếm mối hàn theo dải ray qua mã tọa độ (toa_do.ma_diem: TT Thượng trái · TP Thượng phải · HT Hạ trái · HP Hạ phải). */
+export async function railCountsForWelds(rows: JournalFillRow[]) {
+  const counts = { tt: 0, tp: 0, ht: 0, hp: 0, other: 0 };
+  const qtyByCode = new Map<string, number>();
+  for (const row of rows) {
+    const code = (row.ma_lich_su ?? "").trim();
+    if (!code) continue;
+    const qty = Number(row.so_luong_thuc_hien);
+    qtyByCode.set(code, (qtyByCode.get(code) ?? 0) + (Number.isFinite(qty) && qty > 0 ? qty : 1));
+  }
+  const prefixOf = new Map<string, string>();
+  try {
+    const supabase = createClient();
+    const codes = [...qtyByCode.keys()];
+    for (let i = 0; i < codes.length; i += 150) {
+      const { data: weldRows } = await supabase
+        .from("lich_su_moi_han")
+        .select("id,ma_lich_su")
+        .in("ma_lich_su", codes.slice(i, i + 150));
+      const idToCode = new Map(((weldRows as { id: string; ma_lich_su: string }[] | null) ?? []).map((w) => [w.id, w.ma_lich_su]));
+      if (idToCode.size === 0) continue;
+      const { data: points } = await supabase
+        .from("toa_do")
+        .select("ma_diem,lich_su_moi_han_id")
+        .in("lich_su_moi_han_id", [...idToCode.keys()]);
+      for (const p of (points as { ma_diem: string | null; lich_su_moi_han_id: string }[] | null) ?? []) {
+        const prefix = /^(TT|TP|HT|HP)/i.exec((p.ma_diem ?? "").trim())?.[1]?.toUpperCase();
+        const code = idToCode.get(p.lich_su_moi_han_id);
+        if (prefix && code) prefixOf.set(code, prefix);
+      }
+    }
+  } catch {
+    /* không đọc được tọa độ → coi là chưa phân loại */
+  }
+  for (const [code, qty] of qtyByCode) {
+    const prefix = prefixOf.get(code);
+    if (prefix === "TT") counts.tt += qty;
+    else if (prefix === "TP") counts.tp += qty;
+    else if (prefix === "HT") counts.ht += qty;
+    else if (prefix === "HP") counts.hp += qty;
+    else counts.other += qty;
+  }
+  return counts;
 }
 
 /** Cộng số mối hàn (nhật ký hàn) của một công nghệ từ trước ngày `date`. Lỗi đọc → "" (không chặn điền form). */
@@ -650,6 +700,7 @@ export async function loadDailyWorkFillFromJournal(
   }
 
   const denHomQua = await sumWeldsBefore(date, method);
+  const rail = await railCountsForWelds(rows);
 
   let weldTotal = 0;
   const codes: string[] = [];
@@ -707,6 +758,9 @@ export async function loadDailyWorkFillFromJournal(
     method,
     homNay: weldTotal > 0 ? String(weldTotal) : "",
     denHomQua,
+    tuyenThuong: rail.tt + rail.tp > 0 ? `${rail.tt}/${rail.tp}` : "",
+    tuyenHa: rail.ht + rail.hp > 0 ? `${rail.ht}/${rail.hp}` : "",
+    chuaPhanLoai: rail.other,
     tenMoiHan,
     mayChay,
     ghiChu:
@@ -781,6 +835,45 @@ function mapIncident(row: IncidentRowDb): DailyIncidentItem {
     nguoiBaoCao: row.nguoi_bao_cao ?? "",
     boPhanBaoCao: row.bo_phan_bao_cao ?? "",
   };
+}
+
+const PHOTO_MARK = "\n[ANH]";
+
+/** Ảnh hiện trường lưu cuối bao_cao_ngay.ghi_chu sau dấu [ANH] (JSON mảng URL) — không cần thêm cột. */
+export function reportPhotos(ghiChu: string | null | undefined): string[] {
+  const text = ghiChu ?? "";
+  const at = text.indexOf(PHOTO_MARK);
+  if (at < 0) return [];
+  try {
+    const list = JSON.parse(text.slice(at + PHOTO_MARK.length));
+    return Array.isArray(list) ? list.filter((u): u is string => typeof u === "string" && /^https:\/\//.test(u)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Ghi chú phiếu không kèm phần ảnh. */
+export function reportNoteText(ghiChu: string | null | undefined): string {
+  const text = ghiChu ?? "";
+  const at = text.indexOf(PHOTO_MARK);
+  return at < 0 ? text : text.slice(0, at);
+}
+
+export async function saveReportPhotos(ngayBaoCao: string, photos: string[]): Promise<DailyReportHeader> {
+  const build = (ghiChu: string) => reportNoteText(ghiChu) + (photos.length ? PHOTO_MARK + JSON.stringify(photos) : "");
+  if (!isSupabaseConfigured()) {
+    const header = ensureHeaderLocal(ngayBaoCao);
+    const store = readLocal();
+    const target = store.headers.find((h) => h.id === header.id);
+    if (target) target.ghiChu = build(target.ghiChu);
+    writeLocal(store);
+    return { ...header, ghiChu: build(header.ghiChu) };
+  }
+  const header = await ensureHeaderSupabase(ngayBaoCao);
+  const ghiChu = build(header.ghiChu);
+  const { error } = await createClient().from("bao_cao_ngay").update({ ghi_chu: ghiChu }).eq("id", header.id);
+  if (error) throw error;
+  return { ...header, ghiChu };
 }
 
 function mapHeader(row: HeaderRowDb): DailyReportHeader {

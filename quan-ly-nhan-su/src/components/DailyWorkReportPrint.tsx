@@ -33,6 +33,8 @@ type DailyWorkReportPrintProps = {
   workNext: DailyWorkItem[];
   equipment: DailyEquipmentItem[];
   incidents: DailyIncidentItem[];
+  /** Ảnh hiện trường — in thành các trang sau báo cáo. */
+  photos?: string[];
   autoPrint?: boolean;
   onClose: () => void;
   onPrint: () => void;
@@ -75,6 +77,14 @@ function printNote(item: DailyWorkItem | null) {
   const names = item.tenMoiHan.trim();
   const note = isInternalNote(item.ghiChu) ? "" : item.ghiChu.trim();
   return [names, note].filter(Boolean).join(" · ");
+}
+
+/** "12/13" → số mối hàn ray trái / ray phải; giá trị tick cũ → ✓ cho cả hai ray. */
+function railCells(value: string | undefined): [string, string] {
+  const raw = (value ?? "").trim();
+  const m = /^(\d+)\/(\d+)$/.exec(raw);
+  if (m) return [m[1] === "0" ? "" : m[1], m[2] === "0" ? "" : m[2]];
+  return isTicked(raw) ? [TICK, TICK] : ["", ""];
 }
 
 function isTicked(value: string) {
@@ -190,10 +200,8 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
           <tr key={`work-${index}`}>
             <td className="tt">{showNumber ? serial : ""}</td>
             <td className="hang-muc">{row.hangMuc}</td>
-            <td className="tick">{item && isTicked(item.tuyenThuong) ? TICK : ""}</td>
-            <td className="tick">{item && isTicked(item.tuyenThuong) ? TICK : ""}</td>
-            <td className="tick">{item && isTicked(item.tuyenHa) ? TICK : ""}</td>
-            <td className="tick">{item && isTicked(item.tuyenHa) ? TICK : ""}</td>
+            {railCells(item?.tuyenThuong).map((value, i) => <td key={`t${i}`} className="tick">{value}</td>)}
+            {railCells(item?.tuyenHa).map((value, i) => <td key={`h${i}`} className="tick">{value}</td>)}
             <td>{item?.donVi || row.fallbackDonVi}</td>
             <td>{item?.denHomQua ?? ""}</td>
             <td>{item?.homNay ?? ""}</td>
@@ -233,6 +241,7 @@ export default function DailyWorkReportPrint({
   workNext,
   equipment,
   incidents,
+  photos = [],
   autoPrint = false,
   onClose,
   onPrint,
@@ -462,6 +471,20 @@ export default function DailyWorkReportPrint({
             </table>
           </div>
         </article>
+        {photos.length > 0 &&
+          Array.from({ length: Math.ceil(photos.length / 4) }, (_, page) => (
+            <article key={`photo-${page}`} className="print-sheet photo-sheet">
+              <div className="photo-title">
+                ẢNH HIỆN TRƯỜNG — Ngày {displayDateShort(reportDate)} (trang {page + 1}/{Math.ceil(photos.length / 4)})
+              </div>
+              <div className="photo-grid">
+                {photos.slice(page * 4, page * 4 + 4).map((url) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={url} src={url} alt="Ảnh hiện trường" />
+                ))}
+              </div>
+            </article>
+          ))}
       </div>
     </div>,
     document.body,
@@ -710,8 +733,12 @@ const PRINT_CSS = `
   letter-spacing: 0.04em;
 }
 #daily-report-print .stt { width: 10mm; }
+#daily-report-print .photo-title { font-weight: 700; text-align: center; margin-bottom: 4mm; font-size: 11pt; }
+#daily-report-print .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+#daily-report-print .photo-grid img { width: 100%; height: 82mm; object-fit: contain; border: 1px solid #000; }
 @media print {
   @page { size: A4 landscape; margin: 6mm; }
+  #daily-report-print .photo-sheet { break-before: page; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;
