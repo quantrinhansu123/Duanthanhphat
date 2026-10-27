@@ -136,12 +136,14 @@ export function TrackSchematic({
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const startMetres = parseChainage(structureFrom);
-    const endMetres = parseChainage(structureTo);
-    if (startMetres === null || endMetres === null || endMetres <= startMetres) {
+    const parsedStart = parseChainage(structureFrom);
+    const parsedEnd = parseChainage(structureTo);
+    if (parsedStart === null || parsedEnd === null || parsedEnd <= parsedStart) {
       setFormError("Nhập lý trình đầu/cuối hợp lệ trong phạm vi tuyến đã rải.");
       return;
     }
+    const startMetres = parsedStart;
+    const endMetres = parsedEnd;
     if (!currentSymbol) { setFormError("Hãy chọn ký hiệu đang có trong danh mục công trình."); return; }
 
     function buildForLine(line: string, id: string): TrackPlacement | null {

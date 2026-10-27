@@ -177,7 +177,7 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
         }
         break;
       }
-      const page = (data ?? []) as JournalRow[];
+      const page = (data ?? []) as unknown as JournalRow[];
       for (const row of page) {
         if (!row?.id) continue;
         const next = fromJournalRow(row);
