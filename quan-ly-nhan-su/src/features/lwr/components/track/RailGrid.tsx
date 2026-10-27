@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, memo, useEffect, useId, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Fragment, memo, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Image as ImageIcon, Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
+import { machineDayTone, type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
 import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
@@ -115,6 +116,8 @@ interface RailGridProps {
   appendError?: string | null;
   /** Đoạn đã lắp ray theo tuyến — vẽ nét đỏ trên dải ray. */
   installed?: Record<string, InstalledRange[]>;
+  /** Ảnh máy (danh-sach-may) gắn theo lý trình nhật ký — chế độ “Ảnh thiết bị trên ray”. */
+  machineMarkers?: MachineOnTrack[];
 }
 
 type AppendDraft = {
@@ -141,11 +144,41 @@ export const RailGrid = memo(function RailGrid({
   onRemove,
   appendError,
   installed,
+  machineMarkers = [],
 }: RailGridProps) {
   const [appendDraft, setAppendDraft] = useState<AppendDraft | null>(null);
+  const [deviceImageMode, setDeviceImageMode] = useState(false);
+  const [filterProject, setFilterProject] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const deviceScrollDone = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogTitleId = useId();
   const [submitted, setSubmitted] = useState(false);
+
+  const projectOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const item of machineMarkers) {
+      const name = item.project?.trim();
+      if (name && name !== "—") names.add(name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [machineMarkers]);
+
+  const filteredMachineMarkers = useMemo(() => {
+    return machineMarkers.filter((item) => {
+      if (filterProject && item.project !== filterProject) return false;
+      if (filterDateFrom) {
+        if (!item.date || item.date < filterDateFrom) return false;
+      }
+      if (filterDateTo) {
+        if (!item.date || item.date > filterDateTo) return false;
+      }
+      return true;
+    });
+  }, [machineMarkers, filterProject, filterDateFrom, filterDateTo]);
+
+  const filtersActive = Boolean(filterProject || filterDateFrom || filterDateTo);
   const appendOpen = appendDraft !== null;
   const appendStart = appendDraft ? parseChainage(appendDraft.from) : null;
   const appendEnd = appendDraft ? parseChainage(appendDraft.to) : null;
@@ -164,38 +197,187 @@ export const RailGrid = memo(function RailGrid({
     if (appendOpen) dialog?.showModal();
     else dialog?.close();
   }, [appendOpen]);
+
+  useEffect(() => {
+    deviceScrollDone.current = false;
+  }, [filterProject, filterDateFrom, filterDateTo]);
+
+  /** Bật chế độ ảnh máy / đổi lọc → tự cuộn ngang tới đoạn ray có máy đầu tiên. */
+  useEffect(() => {
+    if (!deviceImageMode) {
+      deviceScrollDone.current = false;
+      return;
+    }
+    if (filteredMachineMarkers.length === 0 || deviceScrollDone.current) return;
+
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        const scrollEl = document.querySelector('[data-testid="track-scroll"]') as HTMLElement | null;
+        if (!scrollEl) return;
+
+        const markers = Array.from(
+          scrollEl.querySelectorAll<HTMLElement>('[data-testid="machine-on-track"]'),
+        );
+        const ranked = markers
+          .map((el) => ({ el, metres: Number(el.dataset.machineMetres) }))
+          .filter((item) => Number.isFinite(item.metres))
+          .sort((a, b) => a.metres - b.metres);
+        const target = ranked[0]?.el ?? markers[0];
+
+        if (target) {
+          const markerRect = target.getBoundingClientRect();
+          const viewRect = scrollEl.getBoundingClientRect();
+          const delta =
+            markerRect.left + markerRect.width / 2 - (viewRect.left + viewRect.width / 2);
+          scrollEl.scrollBy({ left: delta, behavior: "smooth" });
+          deviceScrollDone.current = true;
+          return;
+        }
+
+        // Fallback khi DOM marker chưa kịp render: tính theo lý trình trong phạm vi sơ đồ.
+        const extentNow = trackExtent(rows);
+        const focus =
+          filteredMachineMarkers.find(
+            (item) => item.metres >= extentNow.startMetres && item.metres <= extentNow.endMetres,
+          ) ?? filteredMachineMarkers[0];
+        const x =
+          16 + 110 + (focus.metres - extentNow.startMetres) * TRACK_PIXELS_PER_METRE;
+        scrollEl.scrollTo({
+          left: Math.max(0, x - scrollEl.clientWidth / 2),
+          behavior: "smooth",
+        });
+        deviceScrollDone.current = true;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [deviceImageMode, filteredMachineMarkers, rows]);
+
   const extent = trackExtent(rows);
   const planned = Math.max(0, (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE);
   const lineWidth = planned > 0 ? planned : EMPTY_LINE;
   const width = lineWidth + ADD_GUTTER;
   return <div className="border-t border-slate-200 bg-white">
     <div className="space-y-1 border-b px-4 py-3">
-      <h2 className="text-sm font-bold">Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công</h2>
-      <p className="text-xs text-slate-600">
-        Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo ·
-        {" "}
-        <span className="font-semibold text-emerald-700">xanh</span> / <span className="font-semibold text-orange-600">cam</span> = đã giải toả.
-        {" "}
-        Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.
-        {" "}Đường tim: <span className="font-semibold text-slate-600">nét đứt</span> = ray chưa lắp · <span className="font-semibold text-red-600">nét đỏ</span> = ray đã lắp, sẵn sàng hàn.
-      </p>
-      <p className="text-xs text-slate-500">
-        Ghi chú: màu xanh khi T khóa ≥30°C, cam khi T khóa &lt;30°C (nhiệt độ đã hiện trên nhãn thanh, không lặp T≥30 / T&lt;30 trên từng ô).
-      </p>
-      <p className="text-xs text-slate-500">
-        Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m).
-        {" "}
-        <span className="font-semibold text-amber-800">Nền vàng</span> = Thượng ·
-        {" "}
-        <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ
-        {" "}
-        (hai tuyến độc lập, chiều dài không bắt buộc bằng nhau).
-        {" "}
-        Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold">
+          {deviceImageMode
+            ? "Chế độ ảnh thiết bị trên đường ray"
+            : "Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công"}
+        </h2>
+        <button
+          type="button"
+          data-testid="rail-grid-device-images"
+          aria-pressed={deviceImageMode}
+          onClick={() => setDeviceImageMode((open) => !open)}
+          className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-semibold ${
+            deviceImageMode
+              ? "border-amber-500 bg-amber-50 text-amber-950 ring-1 ring-amber-400"
+              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+          title={deviceImageMode ? "Tắt chế độ ảnh — hiện lại thanh LWR, mối hàn, lắp ray" : "Hiện ảnh máy (danh sách máy, xóa nền) theo lý trình nhật ký hàn; tạm ẩn phần khác"}
+        >
+          <ImageIcon className="size-4" aria-hidden />
+          {deviceImageMode ? "Đang xem ảnh thiết bị · Tắt" : "Ảnh thiết bị trên ray"}
+        </button>
+      </div>
+      {deviceImageMode ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2">
+            <label className="min-w-[10rem] flex-1 text-[11px] font-semibold text-slate-700">
+              Dự án
+              <select
+                data-testid="machine-filter-project"
+                className="mt-0.5 block w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+                value={filterProject}
+                onChange={(event) => setFilterProject(event.target.value)}
+              >
+                <option value="">Tất cả dự án</option>
+                {projectOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[11px] font-semibold text-slate-700">
+              Từ ngày
+              <input
+                type="date"
+                data-testid="machine-filter-date-from"
+                className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+                value={filterDateFrom}
+                max={filterDateTo || undefined}
+                onChange={(event) => setFilterDateFrom(event.target.value)}
+              />
+            </label>
+            <label className="text-[11px] font-semibold text-slate-700">
+              Đến ngày
+              <input
+                type="date"
+                data-testid="machine-filter-date-to"
+                className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+                value={filterDateTo}
+                min={filterDateFrom || undefined}
+                onChange={(event) => setFilterDateTo(event.target.value)}
+              />
+            </label>
+            {filtersActive ? (
+              <button
+                type="button"
+                className="h-8 rounded border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => {
+                  setFilterProject("");
+                  setFilterDateFrom("");
+                  setFilterDateTo("");
+                }}
+              >
+                Xóa lọc
+              </button>
+            ) : null}
+          </div>
+          <p className="text-xs text-amber-900">
+            Mỗi ngày: bôi màu đoạn hàn + 1 ảnh đại diện (luôn hiện ngày). Nhấn ảnh để xem giờ hoạt động trong ngày.
+            {machineMarkers.length === 0
+              ? " Chưa có mối hàn nào vừa có máy vừa có lý trình trong phạm vi sơ đồ."
+              : filteredMachineMarkers.length === 0
+                ? ` Có ${machineMarkers.length} ngày/đoạn nhưng không khớp bộ lọc Dự án/Ngày.`
+                : ` Đang hiện ${filteredMachineMarkers.length} ngày — đã cuộn tới đoạn gần nhất.`}
+            {" "}Bấm lại nút để trở về sơ đồ đầy đủ.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-slate-600">
+            Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo ·
+            {" "}
+            <span className="font-semibold text-emerald-700">xanh</span> / <span className="font-semibold text-orange-600">cam</span> = đã giải toả.
+            {" "}
+            Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.
+            {" "}Đường tim: <span className="font-semibold text-slate-600">nét đứt</span> = ray chưa lắp · <span className="font-semibold text-red-600">nét đỏ</span> = ray đã lắp, sẵn sàng hàn.
+          </p>
+          <p className="text-xs text-slate-500">
+            Ghi chú: màu xanh khi T khóa ≥30°C, cam khi T khóa &lt;30°C (nhiệt độ đã hiện trên nhãn thanh, không lặp T≥30 / T&lt;30 trên từng ô).
+          </p>
+          <p className="text-xs text-slate-500">
+            Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m).
+            {" "}
+            <span className="font-semibold text-amber-800">Nền vàng</span> = Thượng ·
+            {" "}
+            <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ
+            {" "}
+            (hai tuyến độc lập, chiều dài không bắt buộc bằng nhau).
+            {" "}
+            Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend.
+          </p>
+        </>
+      )}
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
-      <div className="space-y-3 px-4 py-3" style={{ width: 150 + width }}>
+      <div className={`px-4 py-3 ${deviceImageMode ? "space-y-2 overflow-visible" : "space-y-3"}`} style={{ width: 150 + width }}>
         {groupRowsByLine(rows).map((group) => {
           const groupExtent = lineTrackExtent(rows, group.line);
           const groupHasSpan = groupExtent.endMetres > groupExtent.startMetres;
@@ -203,7 +385,11 @@ export const RailGrid = memo(function RailGrid({
             ? trackSpanStyle(groupExtent.startMetres, groupExtent.endMetres, extent.startMetres)
             : null;
           return (
-          <div key={group.line} className={`space-y-1 p-2 ${lineZoneClass(group.line)}`} data-line={group.line}>
+          <div
+            key={group.line}
+            className={`${deviceImageMode ? "relative z-0 space-y-0 overflow-visible" : "space-y-1"} p-2 ${lineZoneClass(group.line)}`}
+            data-line={group.line}
+          >
             <p className="px-1 text-[10px] font-semibold text-slate-600">
               {group.line}
               {groupHasSpan
@@ -224,14 +410,14 @@ export const RailGrid = memo(function RailGrid({
           const key = railRowKey(row);
           const pairMate = indexInGroup === 0 ? group.rows[1] : undefined;
           return <Fragment key={key}><div className="grid grid-cols-[110px_1fr] gap-x-2">
-          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{railDisplayLabel(row.line, row.rail)}</div>
-          <div className="relative" style={{ width, height: 64 }}>
+          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: deviceImageMode ? 8 : 26 }}>{railDisplayLabel(row.line, row.rail)}</div>
+          <div className="relative" style={{ width, height: deviceImageMode ? 28 : 64 }}>
             <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
             {groupLineBox ? (
             <svg
               data-testid="rail-grid-line"
-              className="pointer-events-none absolute top-[34px] z-0 overflow-visible"
-              style={{ left: groupLineBox.left }}
+              className={`pointer-events-none absolute z-0 overflow-visible ${deviceImageMode ? "opacity-40" : ""}`}
+              style={{ left: groupLineBox.left, top: deviceImageMode ? 12 : 34 }}
               width={groupLineBox.width}
               height="2"
               aria-hidden
@@ -248,7 +434,26 @@ export const RailGrid = memo(function RailGrid({
               />
             </svg>
             ) : null}
-            {(installed?.[row.line] ?? []).map((range, i) => {
+            {deviceImageMode && filteredMachineMarkers.map((day, dayIndex) => {
+              const box = trackSpanStyle(day.startMetres, day.endMetres, extent.startMetres);
+              const tone = machineDayTone(dayIndex);
+              return (
+                <div
+                  key={`day-rail-${day.id}`}
+                  data-testid="rail-grid-machine-day"
+                  title={`${day.date ?? "Không rõ ngày"} · ${day.weldCount} mối · Km ${formatChainage(day.startMetres)} – ${formatChainage(day.endMetres)}`}
+                  className="pointer-events-none absolute z-[1] h-3 -translate-y-1/2 rounded-sm border"
+                  style={{
+                    left: box.left,
+                    width: Math.max(10, box.width),
+                    top: 14,
+                    background: tone.fill,
+                    borderColor: tone.ring,
+                  }}
+                />
+              );
+            })}
+            {!deviceImageMode && (installed?.[row.line] ?? []).map((range, i) => {
               const box = trackSpanStyle(range.from, range.to, extent.startMetres);
               return (
                 <div
@@ -260,7 +465,7 @@ export const RailGrid = memo(function RailGrid({
                 />
               );
             })}
-            {row.cells.map(cell => {
+            {!deviceImageMode && row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
               const cover = coveringLongRail(rowLongRails, from, to, selectedLongRailId);
@@ -328,7 +533,7 @@ export const RailGrid = memo(function RailGrid({
                 {chipDeleteButton(cell.id, box, onRemove)}
               </span>;
             })}
-            {jointsForRow(joints, row).map(joint => {
+            {!deviceImageMode && jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];
               const linked = joint.welds.length > 0;
               // Chưa liên kết nhật ký → xám (không lấy màu ATW/FBW từ thanh phủ).
@@ -351,7 +556,7 @@ export const RailGrid = memo(function RailGrid({
                 </button>
               );
             })}
-            {onAppend && (
+            {!deviceImageMode && onAppend && (
               <div className="absolute top-5 z-20" style={{ left: plusLeft }}>
                 <button
                   type="button"
@@ -368,8 +573,8 @@ export const RailGrid = memo(function RailGrid({
                       rightTemp: String(DEFAULT_NEW_RAIL_TEMPERATURE),
                     });
                   }}
-                  aria-label={`Thêm thanh ngắn phía sau ${row.line} ${row.rail}`}
-                  title="Nhập lý trình để thêm thanh ngắn"
+                  aria-label={`Thêm đoạn ray trên ${row.line} (cả trái và phải)`}
+                  title={`Nhập lý trình — áp cả 2 ray của ${row.line}`}
                   className="flex size-8 items-center justify-center rounded-full border border-dashed border-slate-500 bg-white text-slate-700 hover:border-blue-600 hover:text-blue-700"
                 >
                   <Plus className="size-4" />
@@ -381,7 +586,14 @@ export const RailGrid = memo(function RailGrid({
           </div>
         </div>
         {pairMate && (
-          <TrackCenterline structures={structures} rows={[row, pairMate]} startMetres={extent.startMetres} width={lineWidth} />
+          <TrackCenterline
+            structures={deviceImageMode ? undefined : structures}
+            machines={deviceImageMode ? filteredMachineMarkers : []}
+            rows={[row, pairMate]}
+            startMetres={extent.startMetres}
+            width={lineWidth}
+            imageMode={deviceImageMode}
+          />
         )}
         </Fragment>;
             })}
@@ -407,10 +619,12 @@ export const RailGrid = memo(function RailGrid({
         }) !== false) setAppendDraft(null);
       }}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 id={dialogTitleId} className="font-semibold">Thêm thanh ngắn</h3>
+          <h3 id={dialogTitleId} className="font-semibold">Thêm đoạn ray theo tuyến</h3>
           <button type="button" aria-label="Đóng popup" onClick={() => setAppendDraft(null)} className="rounded p-1 hover:bg-slate-100"><X className="size-5" /></button>
         </div>
-        <p className="mb-4 text-sm text-slate-600">Nhập lý trình và nhiệt độ hiện trường cho {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.line} · {rows.find(row => railRowKey(row) === appendDraft.rowKey)?.rail}.</p>
+        <p className="mb-4 text-sm text-slate-600">
+          Lắp theo tuyến <b>{rows.find(row => railRowKey(row) === appendDraft.rowKey)?.line}</b>: chỉ nhập lý trình — hệ thống áp <b>cả ray trái và phải</b> của tuyến (không lắp từng thanh đơn lẻ).
+        </p>
         <label className="block text-sm font-medium">
           Lý trình đầu
           <input autoFocus required className="mt-1 w-full rounded-lg border px-3 py-2" value={appendDraft.from} onChange={event => { setSubmitted(false); setAppendDraft({ ...appendDraft, from: event.target.value }); }} placeholder="0+000" aria-label="Lý trình đầu thanh ngắn" />

@@ -29,7 +29,7 @@ interface TrackSchematicProps {
   symbolError: string | null;
   selectedCellId?: string | null;
   onReloadSymbols: () => void;
-  onPlacement: (placement: TrackPlacement) => boolean;
+  onPlacement: (placement: TrackPlacement | TrackPlacement[]) => boolean;
   onRemove: (id: string) => void;
   onExtend: (count: number, line: string) => boolean;
   onPlan: (line: string, start: string, end: string) => boolean;
@@ -78,6 +78,7 @@ export function TrackSchematic({
   const [symbolId, setSymbolId] = useState("");
   const [label, setLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [structureBoth, setStructureBoth] = useState(true);
   const [appendCount, setAppendCount] = useState("1");
   const [installLine, setInstallLine] = useState(lineNames[0] ?? "TUYẾN THƯỢNG");
   const [installBoth, setInstallBoth] = useState(true);
@@ -137,22 +138,68 @@ export function TrackSchematic({
     event.preventDefault();
     const startMetres = parseChainage(structureFrom);
     const endMetres = parseChainage(structureTo);
-    const span = startMetres === null || endMetres === null ? null : getPlacementSpan(layout.rows, { rowKey, startCellId: "", endCellId: "", startMetres, endMetres });
-    if (!span) { setFormError("Nhập lý trình đầu/cuối hợp lệ trong phạm vi tuyến đã rải."); return; }
+    if (startMetres === null || endMetres === null || endMetres <= startMetres) {
+      setFormError("Nhập lý trình đầu/cuối hợp lệ trong phạm vi tuyến đã rải.");
+      return;
+    }
     if (!currentSymbol) { setFormError("Hãy chọn ký hiệu đang có trong danh mục công trình."); return; }
-    const lineAnchor =
-      layout.rows.find((item) => item.line === row.line && item.rail === "Ray trái") ?? row;
-    const placement: TrackPlacement = {
-      id: editingId ?? crypto.randomUUID(),
-      rowKey: railRowKey(lineAnchor),
-      startCellId: span.startCell.id,
-      endCellId: span.endCell.id,
-      startMetres: span.startMetres,
-      endMetres: span.endMetres,
-      symbolId: currentSymbol.id,
-      label: label.trim() || currentSymbol.name,
-    };
-    if (onPlacement(placement)) { clearEditor(); setNotice("Đã lưu công trình trên sơ đồ."); }
+
+    function buildForLine(line: string, id: string): TrackPlacement | null {
+      const lineAnchor =
+        layout.rows.find((item) => item.line === line && item.rail === "Ray trái")
+        ?? layout.rows.find((item) => item.line === line);
+      if (!lineAnchor) return null;
+      const key = railRowKey(lineAnchor);
+      const span = getPlacementSpan(layout.rows, {
+        rowKey: key,
+        startCellId: "",
+        endCellId: "",
+        startMetres,
+        endMetres,
+      });
+      if (!span) return null;
+      return {
+        id,
+        rowKey: key,
+        startCellId: span.startCell.id,
+        endCellId: span.endCell.id,
+        startMetres: span.startMetres,
+        endMetres: span.endMetres,
+        symbolId: currentSymbol!.id,
+        label: label.trim() || currentSymbol!.name,
+      };
+    }
+
+    const primary = buildForLine(row.line, editingId ?? crypto.randomUUID());
+    if (!primary) {
+      setFormError(`Lý trình không nằm trong phạm vi đã rải của ${row.line}.`);
+      return;
+    }
+
+    // Thêm mới + tick “cả 2 tuyến”: nhân bản sang tuyến kia (cùng Km; lệch thì sửa tay sau).
+    if (!editingId && structureBoth) {
+      const otherLine = lineNames.find((line) => line !== row.line);
+      const mirror = otherLine ? buildForLine(otherLine, crypto.randomUUID()) : null;
+      if (mirror) {
+        if (onPlacement([primary, mirror])) {
+          clearEditor();
+          setNotice(`Đã thêm công trình trên ${row.line.replace(/^TUYẾN\s+/i, "")} và ${otherLine!.replace(/^TUYẾN\s+/i, "")}. Lệch lý trình thì sửa từng tuyến.`);
+        }
+        return;
+      }
+      if (onPlacement(primary)) {
+        clearEditor();
+        setNotice(
+          `Đã thêm trên ${row.line.replace(/^TUYẾN\s+/i, "")}. Tuyến kia chưa rải / không phủ lý trình này — thêm tay hoặc sửa Km sau.`,
+        );
+      }
+      return;
+    }
+
+    if (onPlacement(primary)) {
+      clearEditor();
+      setNotice(editingId ? "Đã cập nhật công trình trên sơ đồ." : "Đã lưu công trình trên sơ đồ.");
+    }
   }
 
   return (
@@ -226,28 +273,32 @@ export function TrackSchematic({
           e.preventDefault();
           const lines = installBoth ? lineNames : [installLine];
           if (onInstall(lines, installFrom, installTo)) {
-            setNotice(`Đã cập nhật ray đã lắp ${installFrom} – ${installTo} (${lines.map((l) => l.replace(/^TUYẾNs+/i, "")).join(" + ")}). Lệch nhau chút thì chọn từng tuyến và nhập lại.`);
+            setNotice(
+              `Đã lắp ray ${installFrom} – ${installTo} trên ${lines.map((l) => l.replace(/^TUYẾN\s+/i, "")).join(" + ")} (cả 2 ray trái/phải của tuyến). Lệch Km giữa Thượng/Hạ thì bỏ tick và nhập từng tuyến.`,
+            );
           }
         }}
       >
         <div className="w-full">
           <h2 className="font-bold">Cập nhật lắp đặt ray</h2>
           <p className="text-xs text-slate-500">
-            Nét đứt = ray chưa lắp · nét đỏ = ray đã lắp, sẵn sàng hàn. Nhập lý trình đầu–cuối đoạn đã lắp; hằng ngày nhập lại lý trình cuối mới thì nét đỏ dài ra.
+            Nguyên lý: lắp theo <b>tuyến Thượng hoặc Hạ</b> + lý trình — không lắp từng thanh/từng ray đơn lẻ.
+            Chọn tuyến → nhập đầu–cuối → cập nhật; hệ thống áp cả ray trái và phải của tuyến đó.
+            Nét đứt = chưa lắp · nét đỏ = đã lắp, sẵn sàng hàn. Hằng ngày kéo dài bằng cách nhập lý trình cuối mới.
           </p>
         </div>
-        <label className="w-full text-xs text-slate-600 sm:w-auto sm:flex-1">Tuyến
+        <label className="w-full text-xs text-slate-600 sm:w-auto sm:flex-1">Tuyến lắp
           <select className={inputClass} value={installLine} onChange={(e) => setInstallLine(e.target.value)} disabled={!ready || installBoth}>
             {lineNames.map((line) => <option key={line} value={line}>{line}</option>)}
           </select>
         </label>
         <label className="flex h-10 items-center gap-2 text-xs text-slate-700">
           <input type="checkbox" checked={installBoth} onChange={(e) => setInstallBoth(e.target.checked)} />
-          Áp dụng cả 2 tuyến
+          Cùng lúc cả Thượng + Hạ
         </label>
-        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu đã lắp<input className={inputClass} value={installFrom} onChange={(e) => setInstallFrom(e.target.value)} placeholder="Km0+000" /></label>
-        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình cuối đã lắp<input className={inputClass} value={installTo} onChange={(e) => setInstallTo(e.target.value)} placeholder="Km3+500" required /></label>
-        <button disabled={!ready || !hasCells} className="h-10 rounded border bg-red-600 px-3 text-sm text-white disabled:opacity-40">Cập nhật ray đã lắp</button>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu<input className={inputClass} value={installFrom} onChange={(e) => setInstallFrom(e.target.value)} placeholder="Km0+000" /></label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình cuối<input className={inputClass} value={installTo} onChange={(e) => setInstallTo(e.target.value)} placeholder="Km3+500" required /></label>
+        <button disabled={!ready || !hasCells} className="h-10 rounded border bg-red-600 px-3 text-sm text-white disabled:opacity-40">Cập nhật lắp ray</button>
         <ul className="w-full space-y-1 text-[11px] text-slate-600">
           {lineNames.map((line) => (layout.installed?.[line] ?? []).map((range, index) => (
             <li key={`${line}-${index}`} className="flex items-center gap-2">
@@ -265,7 +316,12 @@ export function TrackSchematic({
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-base font-bold">Bước 2 · Nhập công trình trên tuyến</h2><p className="mt-1 text-xs text-slate-500">Chỉ chọn tuyến Thượng hoặc Hạ (không phân ray trái/phải). Biểu tượng trên đường tim giữa 2 ray; tên/mã xem Chú thích / Legend bên dưới.</p></div>
+          <div>
+            <h2 className="text-base font-bold">Bước 2 · Nhập công trình trên tuyến</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Chọn Thượng hoặc Hạ (không phân trái/phải). Tick “cả 2 tuyến” khi thêm mới → nhân bản cùng lý trình sang tuyến kia; lệch chút thì sửa tay sau.
+            </p>
+          </div>
           <Link href="/lwr-cong-trinh" className="text-sm font-medium text-blue-700 underline">Danh mục ký hiệu</Link>
         </div>
         <form onSubmit={submit} className="mt-4 space-y-3">
@@ -276,6 +332,12 @@ export function TrackSchematic({
             <label className="text-xs text-slate-600">Ký hiệu công trình<select className={inputClass} value={currentSymbol?.id ?? ""} onChange={(event) => setSymbolId(event.target.value)} disabled={!ready || !symbols.length}><option value="" disabled>Chọn từ danh mục ký hiệu</option>{symbols.map((symbol) => <option key={symbol.id} value={symbol.id}>{symbol.name} ({symbol.code})</option>)}</select></label>
           </div>
           <div className="flex flex-wrap items-end gap-3">
+            {!editingId ? (
+              <label className="flex h-10 items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={structureBoth} onChange={(e) => setStructureBoth(e.target.checked)} />
+                Thêm cả 2 tuyến (cùng Km)
+              </label>
+            ) : null}
             <label className="min-w-48 flex-1 text-xs text-slate-600">Tên hiển thị (tùy chọn)<input className={inputClass} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={currentSymbol?.name ?? "Ví dụ: Cầu C1"} maxLength={120} /></label>
             <div className="flex h-10 items-center gap-2 rounded-md bg-slate-50 px-2 text-xs text-slate-600"><SymbolImage symbol={currentSymbol} /><span>{`${structureFrom} – ${structureTo}`}</span></div>
             <button type="submit" disabled={!ready || !currentSymbol || !hasCells} className="flex h-10 items-center gap-1.5 rounded-md bg-blue-700 px-3 text-sm font-medium text-white disabled:opacity-40">{editingId ? <Check className="size-4" /> : <Plus className="size-4" />}{editingId ? "Lưu thay đổi" : "Thêm lên sơ đồ"}</button>

@@ -14,6 +14,14 @@ export interface JournalWeld {
   chainage: string | null;
   metres: number | null;
   failed: boolean;
+  /** Máy gắn nhật ký (thiet_bi) — dùng hiện ảnh thiết bị trên sơ đồ. */
+  machineId?: string | null;
+  machineCode?: string | null;
+  machineName?: string | null;
+  /** Giờ làm (HH:mm) — tính giờ hoạt động trong ngày. */
+  startTime?: string | null;
+  endTime?: string | null;
+  lunchHours?: number | null;
 }
 
 /** Khớp mối hàn tại ranh giới giữa hai thanh ray. */

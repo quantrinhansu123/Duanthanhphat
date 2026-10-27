@@ -592,6 +592,29 @@ export function placeShortRailSpan(
   return { rows: next, cellId: placed.id };
 }
 
+/**
+ * Lắp / đánh dấu thanh ngắn theo nguyên lý tuyến: cùng lúc cả 2 ray trái+phải của tuyến.
+ * Chỉ cần tuyến + lý trình — không lắp từng ray đơn lẻ.
+ */
+export function placeShortRailSpanOnLine(
+  rows: RailRow[],
+  line: string,
+  startMetres: number,
+  endMetres: number,
+  temps?: PlaceShortRailTemps,
+): { rows: RailRow[]; cellIds: string[] } {
+  const keys = [...rowKeysForLine(rows, line)];
+  if (!keys.length) throw new RangeError(`Không tìm thấy tuyến ${line}.`);
+  let next = rows;
+  const cellIds: string[] = [];
+  for (const key of keys) {
+    const placed = placeShortRailSpan(next, key, startMetres, endMetres, temps);
+    next = placed.rows;
+    cellIds.push(placed.cellId);
+  }
+  return { rows: next, cellIds };
+}
+
 /** Place the next hidden short rail on one row. Does not lengthen the planned line. */
 export function placeNextShortRail(rows: RailRow[], rowKey: string): RailRow[] {
   const target = rows.find((row) => railRowKey(row) === rowKey);

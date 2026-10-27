@@ -6,7 +6,7 @@ import {
   createInitialTrackLayout,
   defaultLongRailParams,
   extendRailRows,
-  placeShortRailSpan,
+  placeShortRailSpanOnLine,
   removeShortRail,
   addInstalledRange,
   removeInstalledRange,
@@ -27,7 +27,6 @@ import {
   syncLongRailCompletedAt,
   trackExtent,
   TRACK_LAYOUT_STORAGE_KEY,
-  validateTrackLayout,
   type LongRail,
   type RailCellPatch,
   type TrackLayout,
@@ -41,8 +40,18 @@ import {
   syncLocalLongRailsToSupabase,
   upsertLongRail,
 } from "@lwr/lib/long-rail-storage";
+import {
+  chooseTrackLayout,
+  deleteTrackLayout,
+  loadTrackLayout,
+  readStoredTrackLayout,
+  serializeTrackLayout,
+  trackLayoutHasEdits,
+  upsertTrackLayout,
+} from "@lwr/lib/track-layout-storage";
 import { loadStructureSymbols } from "@lwr/lib/structure-storage";
 import { loadJournalWelds } from "@lwr/lib/weld-journal";
+import { buildMachineOnTrack, loadMachineImageMap } from "@lwr/lib/machine-images";
 import { buildRailJoints } from "@lwr/lib/weld-track-map";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailRow } from "@lwr/types/track";
@@ -97,18 +106,49 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [longRailSyncNote, setLongRailSyncNote] = useState<string | null>(null);
+  const [layoutSyncNote, setLayoutSyncNote] = useState<string | null>(null);
   const [symbolError, setSymbolError] = useState<string | null>(null);
   const [weldError, setWeldError] = useState<string | null>(null);
   const [weldCount, setWeldCount] = useState(0);
   const [weldsMapped, setWeldsMapped] = useState(0);
   const [joints, setJoints] = useState<RailJoint[]>([]);
   const [journalWelds, setJournalWelds] = useState<JournalWeld[]>([]);
+  const [machineImages, setMachineImages] = useState<Record<string, string>>({});
   const [printOpen, setPrintOpen] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [assignTo, setAssignTo] = useState("");
   /** Đã xác nhận tiếp tục khi chưa gán dự án (hỏi lại khi đổi dự án vì component remount theo key). */
   const projectAcknowledged = useRef(false);
+  const savedAtRef = useRef<string | null>(null);
+  const editVersion = useRef(0);
+  const saveQueue = useRef(Promise.resolve());
+  const lastLayoutSave = useRef<Promise<{ ok: boolean; error?: string; skipped?: boolean }>>(
+    Promise.resolve({ ok: true }),
+  );
+
+  function rememberLocal(next: TrackLayout, savedAt: string | null = savedAtRef.current): boolean {
+    try {
+      localStorage.setItem(storageKey, serializeTrackLayout(next, savedAt));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function enqueueLayoutSave(next: TrackLayout, savedAt: string) {
+    const run = saveQueue.current.then(() => upsertTrackLayout(projectId, next, savedAt));
+    lastLayoutSave.current = run;
+    saveQueue.current = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
+  function noteLayoutSave(result: { ok: boolean; error?: string; skipped?: boolean }, savedAt: string) {
+    if (savedAtRef.current !== savedAt) return;
+    if (!result.ok) setError(result.error ?? "Không lưu sơ đồ lên Supabase.");
+    else if (result.skipped && result.error) setLayoutSyncNote(result.error);
+    else setLayoutSyncNote(null);
+  }
 
   /** Chưa gán dự án → hỏi "Bạn đã chọn/gán dự án chưa?" trước khi mở hoặc lưu thanh ray dài. */
   const ensureProject = useCallback(() => {
@@ -178,15 +218,20 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   useEffect(() => {
     let active = true;
     void (async () => {
+      const seenEdits = editVersion.current;
       let localLayout = createInitialTrackLayout();
+      let storedSavedAt: string | null = null;
+      let storedLayout: TrackLayout | null = null;
       try {
-        const stored = localStorage.getItem(storageKey);
+        const stored = readStoredTrackLayout(localStorage.getItem(storageKey));
         // Không tự rải cả Thượng+Hạ cùng một đoạn Km — hai tuyến độc lập, người dùng rải từng tuyến ở Bước 1.
-        if (stored) {
-          const restored = validateTrackLayout(JSON.parse(stored));
-          if (!restored) throw new Error("Sơ đồ đã lưu không hợp lệ. Dữ liệu gốc vẫn được giữ; chưa thể chỉnh sửa.");
-          localLayout = restored;
+        if (stored.invalid) throw new Error("Sơ đồ đã lưu không hợp lệ. Dữ liệu gốc vẫn được giữ; chưa thể chỉnh sửa.");
+        if (stored.layout) {
+          localLayout = stored.layout;
+          storedLayout = stored.layout;
+          storedSavedAt = stored.savedAt;
         }
+        savedAtRef.current = storedSavedAt;
         if (!active) return;
         setLayout(localLayout);
         // Local edits must not wait for the remote sync to finish.
@@ -198,6 +243,43 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
         return;
       }
       void reloadSymbols();
+      try {
+        const remoteLayout = await loadTrackLayout(projectId);
+        if (!active) return;
+        if (remoteLayout.error && remoteLayout.source === "local") {
+          setLayoutSyncNote(remoteLayout.error);
+        } else if (remoteLayout.source === "supabase" && editVersion.current === seenEdits) {
+          const chosen = chooseTrackLayout({
+            local: storedLayout,
+            localSavedAt: storedSavedAt,
+            remote: remoteLayout.layout,
+            remoteUpdatedAt: remoteLayout.updatedAt,
+          });
+          if (chosen.from === "remote") {
+            const savedAt = remoteLayout.updatedAt;
+            savedAtRef.current = savedAt;
+            localLayout = {
+              ...chosen.layout,
+              longRails: preferNewerLongRails(localLayout.longRails, chosen.layout.longRails),
+            };
+            setLayout(localLayout);
+            rememberLocal(localLayout, savedAt);
+          } else if (chosen.upload) {
+            const savedAt = storedSavedAt ?? new Date().toISOString();
+            savedAtRef.current = savedAt;
+            rememberLocal(chosen.layout, savedAt);
+            const uploaded = await enqueueLayoutSave(chosen.layout, savedAt);
+            if (!active) return;
+            if (savedAtRef.current === savedAt) {
+              if (!uploaded.ok) setLayoutSyncNote(uploaded.error ?? "Không đưa sơ đồ lên Supabase.");
+              else if (uploaded.skipped && uploaded.error) setLayoutSyncNote(uploaded.error);
+              else setLayoutSyncNote("Đã đưa sơ đồ local lên Supabase.");
+            }
+          }
+        }
+      } catch (cause) {
+        if (active) setLayoutSyncNote(cause instanceof Error ? cause.message : "Không đồng bộ sơ đồ Supabase.");
+      }
       try {
         const synced = await syncLocalLongRailsToSupabase(localLayout.longRails, projectId);
         if (!active) return;
@@ -211,11 +293,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
           setLongRailSyncNote(null);
           setLayout((current) => {
             const next = { ...current, longRails: preferNewerLongRails(current.longRails, remote.rails) };
-            try {
-              localStorage.setItem(storageKey, JSON.stringify(next));
-            } catch {
-              /* keep in-memory */
-            }
+            rememberLocal(next);
             return next;
           });
         }
@@ -228,6 +306,23 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     const refresh = () => {
       void reloadSymbols();
       void reloadWelds();
+      void loadTrackLayout(projectId).then((remoteLayout) => {
+        if (!active || remoteLayout.source !== "supabase" || !remoteLayout.layout || !remoteLayout.updatedAt) return;
+        const remoteTime = Date.parse(remoteLayout.updatedAt);
+        const localTime = savedAtRef.current ? Date.parse(savedAtRef.current) : Number.NaN;
+        if (Number.isFinite(localTime) && localTime >= remoteTime) return;
+        const savedAt = remoteLayout.updatedAt;
+        const schematic = remoteLayout.layout;
+        savedAtRef.current = savedAt;
+        setLayout((current) => {
+          const next = {
+            ...schematic,
+            longRails: preferNewerLongRails(current.longRails, schematic.longRails),
+          };
+          rememberLocal(next, savedAt);
+          return next;
+        });
+      });
       void loadLongRails([], projectId).then((remote) => {
         if (!active || remote.source !== "supabase") return;
         setLayout((current) => {
@@ -237,11 +332,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             && rails.every((item, index) => item === current.longRails[index]);
           if (same) return current;
           const next = { ...current, longRails: rails };
-          try {
-            localStorage.setItem(storageKey, JSON.stringify(next));
-          } catch {
-            /* ignore */
-          }
+          rememberLocal(next);
           return next;
         });
       });
@@ -258,10 +349,25 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   }, [layout.rows, layout.jointWeldLinks, layout.longRails, reloadWelds]);
 
   useEffect(() => {
+    let active = true;
+    void loadMachineImageMap().then((map) => {
+      if (active) setMachineImages(map);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedLongRailId && !layout.longRails.some((item) => item.id === selectedLongRailId)) {
       setSelectedLongRailId(null);
     }
   }, [layout.longRails, selectedLongRailId]);
+
+  const machineMarkers = useMemo(
+    () => buildMachineOnTrack(journalWelds, machineImages),
+    [journalWelds, machineImages],
+  );
 
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);
   /** Số mối hàn nhật ký nằm trong các đoạn LWR đã giải toả. */
@@ -281,15 +387,17 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       setError(error ?? "Sơ đồ chưa tải xong. Vui lòng thử lại sau giây lát.");
       return false;
     }
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      setLayout(next);
-      setError(null);
-      return true;
-    } catch {
+    const savedAt = new Date().toISOString();
+    editVersion.current += 1;
+    savedAtRef.current = savedAt;
+    if (!rememberLocal(next, savedAt)) {
       setError("Không lưu được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web.");
       return false;
     }
+    setLayout(next);
+    setError(null);
+    void enqueueLayoutSave(next, savedAt).then((result) => noteLayoutSave(result, savedAt));
+    return true;
   }
 
   const sideWasOpen = useRef(false);
@@ -305,18 +413,22 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     });
   }, [sideOpen]);
 
-  function savePlacement(placement: TrackPlacement) {
-    if (!getPlacementSpan(layout.rows, placement)) {
-      setError("Thanh bắt đầu và kết thúc phải đúng thứ tự trên cùng một dải ray.");
-      return false;
+  function savePlacement(input: TrackPlacement | TrackPlacement[]) {
+    const batch = Array.isArray(input) ? input : [input];
+    if (!batch.length) return false;
+    for (const placement of batch) {
+      if (!getPlacementSpan(layout.rows, placement)) {
+        setError("Thanh bắt đầu và kết thúc phải đúng thứ tự trên cùng một dải ray.");
+        return false;
+      }
     }
-    const exists = layout.placements.some((item) => item.id === placement.id);
-    return commit({
-      ...layout,
-      placements: exists
-        ? layout.placements.map((item) => (item.id === placement.id ? placement : item))
-        : [...layout.placements, placement],
-    });
+    let placements = [...layout.placements];
+    for (const placement of batch) {
+      const index = placements.findIndex((item) => item.id === placement.id);
+      if (index >= 0) placements[index] = placement;
+      else placements = [...placements, placement];
+    }
+    return commit({ ...layout, placements });
   }
 
   function persistLongRail(longRail: LongRail, existing: LongRail | undefined, nextRows?: RailRow[]) {
@@ -669,9 +781,19 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     if (!window.confirm(`Gán toàn bộ sơ đồ hiện tại (${layout.longRails.length} đoạn LWR) vào dự án «${target.name}»? Sơ đồ chưa gán dự án sẽ được chuyển sang dự án này.`)) return;
     const key = `${TRACK_LAYOUT_STORAGE_KEY}:${targetId}`;
     try {
-      if (localStorage.getItem(key) && !window.confirm("Dự án này đã có sơ đồ riêng. Ghi đè bằng sơ đồ hiện tại?")) return;
+      const remote = await loadTrackLayout(targetId);
+      const remoteHasEdits = Boolean(remote.layout && trackLayoutHasEdits(remote.layout));
+      if ((localStorage.getItem(key) || remoteHasEdits) && !window.confirm("Dự án này đã có sơ đồ riêng. Ghi đè bằng sơ đồ hiện tại?")) return;
+      await saveQueue.current;
       const moved = layout.longRails.map((rail) => ({ ...rail, projectId: targetId }));
-      localStorage.setItem(key, JSON.stringify({ ...layout, longRails: moved }));
+      const next = { ...layout, longRails: moved };
+      const savedAt = new Date().toISOString();
+      const saved = await upsertTrackLayout(targetId, next, savedAt);
+      if (!saved.ok) {
+        setError(saved.error ?? "Không lưu sơ đồ lên Supabase.");
+        return;
+      }
+      localStorage.setItem(key, serializeTrackLayout(next, savedAt));
       for (const rail of moved) {
         const result = await upsertLongRail(rail);
         if (!result.ok) {
@@ -679,7 +801,13 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
           return;
         }
       }
+      const removed = await deleteTrackLayout();
+      if (!removed.ok) {
+        setError(removed.error ?? "Không xoá được sơ đồ chưa gán dự án trên Supabase.");
+        return;
+      }
       localStorage.removeItem(TRACK_LAYOUT_STORAGE_KEY);
+      if (saved.skipped && saved.error) setLayoutSyncNote(saved.error);
     } catch {
       setError("Không gán được dự án: kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web.");
       return;
@@ -691,6 +819,12 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     if (!ensureProject()) return;
     if (!commit(layout)) return;
     setSavingAll(true);
+    const layoutResult = await lastLayoutSave.current;
+    if (!layoutResult.ok) {
+      setSavingAll(false);
+      setError(layoutResult.error ?? "Không lưu sơ đồ lên Supabase.");
+      return;
+    }
     let failed: string | null = null;
     for (const rail of layout.longRails) {
       const result = await upsertLongRail({ ...rail, projectId: projectId ?? rail.projectId });
@@ -705,7 +839,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       return;
     }
     setError(null);
-    setSavedNote(`Đã lưu sơ đồ lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ${layout.longRails.length} đoạn LWR · ${project ? `dự án «${project.name}»` : "chưa gán dự án"}`);
+    const where = layoutResult.skipped ? "trên trình duyệt" : "lên Supabase";
+    setSavedNote(`Đã lưu sơ đồ ${where} lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ${layout.longRails.length} đoạn LWR · ${project ? `dự án «${project.name}»` : "chưa gán dự án"}`);
   }
 
   const selectJoint = useCallback((joint: RailJoint) => {
@@ -769,6 +904,11 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       {longRailSyncNote && (
         <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           {longRailSyncNote}
+        </p>
+      )}
+      {layoutSyncNote && (
+        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {layoutSyncNote}
         </p>
       )}
       {weldError && (
@@ -899,6 +1039,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             onSelectLongRail={selectLongRail}
             embedded
             joints={joints}
+            machineMarkers={machineMarkers}
             selectedJointId={selectedJoint?.id ?? null}
             selectedId={cell?.id ?? ""}
             onSelect={selectCell}
@@ -917,16 +1058,22 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
                 setError("Nhập nhiệt độ ray trái/phải là số hữu hạn.");
                 return false;
               }
+              const anchor = layout.rows.find((item) => railRowKey(item) === rowKey);
+              if (!anchor) {
+                setError("Không tìm thấy dải ray trên sơ đồ.");
+                return false;
+              }
               try {
-                const placed = placeShortRailSpan(layout.rows, rowKey, start, end, temps);
+                // Lắp theo tuyến (Thượng/Hạ): cùng lúc cả 2 ray trái+phải.
+                const placed = placeShortRailSpanOnLine(layout.rows, anchor.line, start, end, temps);
                 if (!commit({ ...layout, rows: placed.rows })) return false;
-                setSelectedId(placed.cellId);
+                setSelectedId(placed.cellIds[0] ?? "");
                 setSelectedLongRailId(null);
                 setSelectedJoint(null);
-                setDetailOpen(true);
+                setDetailOpen(Boolean(placed.cellIds[0]));
                 return true;
               } catch (cause) {
-                setError(cause instanceof Error ? cause.message : "Không thêm được thanh ngắn.");
+                setError(cause instanceof Error ? cause.message : "Không thêm được đoạn ray trên tuyến.");
                 return false;
               }
             }}

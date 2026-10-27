@@ -16,6 +16,9 @@ type GpsRow = {
   tinh_trang_thi_nghiem?: string | null;
   ket_qua_moi_han?: string | null;
   so_luong_loi?: number | null;
+  may_id?: string | null;
+  ma_may?: string | null;
+  ten_may?: string | null;
 };
 
 type JournalRow = {
@@ -28,7 +31,18 @@ type JournalRow = {
   ten_tho_han?: string | null;
   tinh_trang_thi_nghiem?: string | null;
   so_luong_loi?: number | null;
+  may_id?: string | null;
+  ma_may?: string | null;
+  ten_may?: string | null;
+  gio_bat_dau?: string | null;
+  gio_ket_thuc?: string | null;
+  gio_nghi_trua?: number | string | null;
 };
+
+function normalizeTime(value: string | null | undefined): string | null {
+  const match = /^(\d{2}):(\d{2})/.exec((value ?? "").trim());
+  return match ? `${match[1]}:${match[2]}` : null;
+}
 
 function asStatus(value: string | null | undefined, failed: boolean): WeldTestStatus | string {
   const raw = (value ?? "").trim();
@@ -68,11 +82,15 @@ function fromGpsRow(row: GpsRow): JournalWeld | null {
     chainage: chain.chainage,
     metres: chain.metres,
     failed,
+    machineId: row.may_id?.trim() || null,
+    machineCode: row.ma_may?.trim() || null,
+    machineName: row.ten_may?.trim() || null,
   };
 }
 
 function fromJournalRow(row: JournalRow): JournalWeld {
   const failed = Number(row.so_luong_loi) > 0 || row.tinh_trang_thi_nghiem === "Không đạt";
+  const lunch = Number(row.gio_nghi_trua);
   return {
     id: row.id,
     code: row.ma_lich_su,
@@ -85,7 +103,22 @@ function fromJournalRow(row: JournalRow): JournalWeld {
     chainage: null,
     metres: null,
     failed,
+    machineId: row.may_id?.trim() || null,
+    machineCode: row.ma_may?.trim() || null,
+    machineName: row.ten_may?.trim() || null,
+    startTime: normalizeTime(row.gio_bat_dau),
+    endTime: normalizeTime(row.gio_ket_thuc),
+    lunchHours: Number.isFinite(lunch) && lunch > 0 ? lunch : null,
   };
+}
+
+function enrichHours(target: JournalWeld, source: JournalWeld) {
+  if (!target.startTime && source.startTime) target.startTime = source.startTime;
+  if (!target.endTime && source.endTime) target.endTime = source.endTime;
+  if (target.lunchHours == null && source.lunchHours != null) target.lunchHours = source.lunchHours;
+  if (!target.machineId && source.machineId) target.machineId = source.machineId;
+  if (!target.machineCode && source.machineCode) target.machineCode = source.machineCode;
+  if (!target.machineName && source.machineName) target.machineName = source.machineName;
 }
 
 /** Tải mối hàn từ cùng DB nhật ký (ưu tiên view GPS có lý trình). */
@@ -103,7 +136,7 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
       const { data, error } = await supabase
         .from("bao_cao_moi_han_gps")
         .select(
-          "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi",
+          "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may",
         )
         .order("ngay_thuc_hien", { ascending: false })
         .range(offset, offset + pageSize - 1);
@@ -119,18 +152,26 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
     }
   }
 
-  // 2) Bổ sung nhật ký chưa có trong GPS
+  // 2) Bổ sung nhật ký + giờ làm (bôi giờ hoạt động theo ngày trên sơ đồ máy)
   {
     const pageSize = 1000;
+    const selectFull =
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_nghi_trua";
+    const selectBasic =
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc";
+    let selectCols = selectFull;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase
         .from("bao_cao_moi_han_theo_du_an")
-        .select(
-          "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi",
-        )
+        .select(selectCols)
         .order("ngay_thuc_hien", { ascending: false })
         .range(offset, offset + pageSize - 1);
       if (error) {
+        if (selectCols === selectFull && /gio_nghi_trua/.test(error.message ?? "")) {
+          selectCols = selectBasic;
+          offset -= pageSize;
+          continue;
+        }
         if (byId.size === 0) {
           return { welds: [], source: "empty", error: error.message };
         }
@@ -138,8 +179,14 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
       }
       const page = (data ?? []) as JournalRow[];
       for (const row of page) {
-        if (!row?.id || byId.has(row.id)) continue;
-        byId.set(row.id, fromJournalRow(row));
+        if (!row?.id) continue;
+        const next = fromJournalRow(row);
+        const prev = byId.get(row.id);
+        if (prev) {
+          enrichHours(prev, next);
+          continue;
+        }
+        byId.set(row.id, next);
       }
       if (page.length < pageSize) break;
     }
