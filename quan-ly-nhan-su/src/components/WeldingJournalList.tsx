@@ -40,6 +40,7 @@ import {
   loadJournalProjectOptions,
   loadLatestProjectWeld,
   loadMachineFieldCodesForSuggestion,
+  loadWeldLunchBreak,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
   normalizeWeldTime,
@@ -119,6 +120,8 @@ type JournalFormValues = {
   ma_hien_truong: string;
   gio_bat_dau: string;
   gio_ket_thuc: string;
+  /** Giờ nghỉ trưa nhập tay ("" = không đổi/không có) — chỉ trừ khỏi giờ chạy máy. */
+  gio_nghi_trua: string;
 };
 
 function isInternalTrainingProject(label: string) {
@@ -183,6 +186,7 @@ function emptyJournalForm(
     ma_hien_truong: "",
     gio_bat_dau: "",
     gio_ket_thuc: "",
+    gio_nghi_trua: "",
   };
 }
 
@@ -205,6 +209,21 @@ type JournalSuggestion = Partial<
 >;
 
 type EntryMode = "manual" | "quick" | "linked";
+
+/** Giờ nghỉ trưa nhập tay: "" → undefined (không ghi), "0" → 0 (xóa), "1,5" → 1.5. */
+function parseLunchHours(value: string): number | undefined {
+  const text = value.trim().replace(",", ".");
+  if (!text) return undefined;
+  const hours = Number(text);
+  return Number.isFinite(hours) && hours >= 0 ? Math.min(8, hours) : undefined;
+}
+
+/** Số tiếng làm thực = (giờ kết thúc − bắt đầu) − nghỉ trưa. */
+function netWeldHours(from: string, to: string, lunch: string): number | null {
+  const gross = weldWorkHours(from, to);
+  if (gross == null) return null;
+  return Math.max(0, Math.round((gross - (parseLunchHours(lunch) ?? 0)) * 100) / 100);
+}
 
 function pickJournalSuggestion(values: JournalSuggestion): JournalSuggestion {
   return {
@@ -319,6 +338,7 @@ function journalRowToForm(
     ma_hien_truong: row.ma_hien_truong ?? "",
     gio_bat_dau: normalizeWeldTime(row.gio_bat_dau) ?? "",
     gio_ket_thuc: normalizeWeldTime(row.gio_ket_thuc) ?? "",
+    gio_nghi_trua: "",
   };
 }
 
@@ -1403,7 +1423,7 @@ function JournalFormModal({
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Ca hàn
               <SelectMenu
@@ -1441,10 +1461,21 @@ function JournalFormModal({
                 className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Nghỉ trưa (giờ)
+              <input
+                inputMode="decimal"
+                value={form.gio_nghi_trua}
+                onChange={(event) => setForm({ ...form, gio_nghi_trua: event.target.value.replace(/[^0-9.,]/g, "") })}
+                placeholder="VD: 1 hoặc 1.5"
+                title="Chỉ dùng tính giờ chạy máy, không in ra báo cáo"
+                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              />
+            </label>
             <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Số tiếng
               <div className="mt-1.5 flex h-10 min-w-[84px] items-center justify-center rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs sm:text-sm font-bold text-[#0047AB]">
-                {formatWeldWorkHours(weldWorkHours(form.gio_bat_dau, form.gio_ket_thuc)) || "—"}
+                {formatWeldWorkHours(netWeldHours(form.gio_bat_dau, form.gio_ket_thuc, form.gio_nghi_trua)) || "—"}
               </div>
             </div>
           </div>
@@ -1949,6 +1980,11 @@ export default function WeldingJournalList({
       setEditingRow(raw);
       setEditingForm(journalRowToForm(raw, gpsPointForRow(raw)));
       setFormOpen(true);
+      void loadWeldLunchBreak(raw.id).then((hours) => {
+        if (hours > 0) {
+          setEditingForm((current) => (current ? { ...current, gio_nghi_trua: String(hours) } : current));
+        }
+      });
     },
     [rows, gpsPointForRow],
   );
@@ -2445,6 +2481,7 @@ export default function WeldingJournalList({
         ma_hien_truong: values.ma_hien_truong,
         gio_bat_dau: values.gio_bat_dau,
         gio_ket_thuc: values.gio_ket_thuc,
+        gio_nghi_trua: parseLunchHours(values.gio_nghi_trua),
       });
       // RPC thường đã gắn toa_do; gọi lại để chắc mã vị trí hiện trên bảng.
       if (values.toa_do_id) {
@@ -2524,6 +2561,7 @@ export default function WeldingJournalList({
         ma_hien_truong: values.ma_hien_truong,
         gio_bat_dau: values.gio_bat_dau,
         gio_ket_thuc: values.gio_ket_thuc,
+        gio_nghi_trua: parseLunchHours(values.gio_nghi_trua),
       });
 
       if (values.toa_do_id) {

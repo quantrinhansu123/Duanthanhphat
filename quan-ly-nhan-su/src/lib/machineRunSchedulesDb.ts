@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   getJournalRowDateIso,
+  attachLunchBreaks,
   loadWeldReportRows,
   resolveWeldShift,
   weldWorkHours,
@@ -22,7 +23,9 @@ export const HOURS_PER_WELD_SHIFT = 8;
 
 /** Giờ máy của 1 bản ghi nhật ký: thực tế nếu có, không thì 8h (1 ca). */
 export function journalRowOperatingHours(row: WeldReportRow): number {
-  const actual = weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc);
+  const gross = weldWorkHours(row.gio_bat_dau, row.gio_ket_thuc);
+  // Trừ giờ nghỉ trưa nhập tay (chỉ ảnh hưởng giờ chạy máy).
+  const actual = gross != null ? Math.round((gross - (Number(row.gio_nghi_trua) || 0)) * 100) / 100 : gross;
   if (actual != null && actual > 0) return actual;
   return HOURS_PER_WELD_SHIFT;
 }
@@ -530,11 +533,12 @@ export async function importMachineRunReport(dateFrom: string, dateTo: string) {
   if (dateFrom > dateTo) throw new Error("Từ ngày phải trước hoặc bằng đến ngày.");
 
   const supabase = createClient();
-  const [journalRows, machineResult] = await Promise.all([
+  const [loadedRows, machineResult] = await Promise.all([
     loadWeldReportRows(dateFrom, dateTo, { mode: "full" }),
     supabase.from("thiet_bi").select("id,ma_may,ten_may"),
   ]);
   if (machineResult.error) throw new Error(formatSupabaseError(machineResult.error));
+  const journalRows = await attachLunchBreaks(loadedRows, dateFrom, dateTo);
 
   const machines = ((machineResult.data ?? []) as EquipmentRow[]).map((row) => ({
     id: row.id,

@@ -81,6 +81,8 @@ export type WeldReportRow = {
   /** Giờ làm HH:mm[:ss]; giờ kết thúc nhỏ hơn giờ bắt đầu = qua đêm. */
   gio_bat_dau?: string | null;
   gio_ket_thuc?: string | null;
+  /** Giờ nghỉ trưa — không có trong view báo cáo, nạp riêng bằng attachLunchBreaks(). */
+  gio_nghi_trua?: number | null;
 };
 
 export type WeldReportFilters = {
@@ -532,6 +534,8 @@ export type WeldJournalInsert = {
   gio_bat_dau?: string | null;
   /** HH:mm */
   gio_ket_thuc?: string | null;
+  /** Giờ nghỉ trưa (nhập tay) — chỉ trừ khỏi giờ chạy máy, không in ra báo cáo. undefined = không ghi. */
+  gio_nghi_trua?: number | null;
 };
 
 export type WeldJournalUpdate = WeldJournalInsert & {
@@ -924,11 +928,60 @@ async function ensureCertificateRecord(
   }
 }
 
+const WELD_LUNCH_MIGRATION_MESSAGE =
+  "Chưa thể lưu giờ nghỉ trưa vì migration_20261027_nhat_ky_han_gio_nghi_trua.sql chưa được chạy trên Supabase.";
+
+/** Ghi giờ nghỉ trưa (cột riêng, không qua RPC). Cột chưa có mà giá trị = 0 thì bỏ qua. */
+async function saveWeldLunchBreak(
+  supabase: ReturnType<typeof createClient>,
+  match: { id?: string; ma_lich_su?: string },
+  hours: number,
+) {
+  const value = Number.isFinite(hours) && hours > 0 ? Math.min(8, Math.round(hours * 100) / 100) : 0;
+  let request = supabase.from("lich_su_moi_han").update({ gio_nghi_trua: value });
+  if (match.id) request = request.eq("id", match.id);
+  else if (match.ma_lich_su) request = request.eq("ma_lich_su", match.ma_lich_su.trim());
+  else return;
+  const { error } = await request;
+  if (!error) return;
+  if (/gio_nghi_trua/.test(error.message ?? "")) {
+    if (value > 0) throw new Error(`Nhật ký đã được lưu (không thêm lại). ${WELD_LUNCH_MIGRATION_MESSAGE}`);
+    return;
+  }
+  throw new Error(`Nhật ký đã được lưu (không thêm lại). ${formatSupabaseError(error)}`);
+}
+
+/** Giờ nghỉ trưa đã lưu của 1 bản ghi (0 nếu chưa có hoặc cột chưa tạo). */
+export async function loadWeldLunchBreak(id: string): Promise<number> {
+  if (!isSupabaseConfigured() || !id) return 0;
+  const { data, error } = await createClient().from("lich_su_moi_han").select("gio_nghi_trua").eq("id", id).maybeSingle();
+  if (error) return 0;
+  return Number((data as { gio_nghi_trua?: number | string | null } | null)?.gio_nghi_trua ?? 0) || 0;
+}
+
+/** Gắn giờ nghỉ trưa vào các dòng báo cáo (chỉ nạp những bản ghi có nghỉ trưa > 0). */
+export async function attachLunchBreaks(rows: WeldReportRow[], dateFrom: string, dateTo: string): Promise<WeldReportRow[]> {
+  if (!rows.length || !isSupabaseConfigured()) return rows;
+  const { data, error } = await createClient()
+    .from("lich_su_moi_han")
+    .select("id,gio_nghi_trua")
+    .gte("ngay_thuc_hien", dateFrom)
+    .lte("ngay_thuc_hien", dateTo)
+    .gt("gio_nghi_trua", 0);
+  if (error || !data?.length) return rows;
+  const byId = new Map((data as { id: string; gio_nghi_trua: number | string }[]).map((item) => [item.id, Number(item.gio_nghi_trua) || 0]));
+  return rows.map((row) => (byId.has(row.id) ? { ...row, gio_nghi_trua: byId.get(row.id) } : row));
+}
+
 export async function insertWeldJournalEntry(payload: WeldJournalInsert) {
   try {
     const supabase = createClient();
     await ensureCertificateRecord(supabase, payload.tho_han_id, payload.chung_chi_su_dung);
     await insertWeldJournalEntryInner(payload);
+    if (payload.gio_nghi_trua && payload.gio_nghi_trua > 0) {
+      await saveWeldLunchBreak(supabase, { ma_lich_su: payload.ma_lich_su }, payload.gio_nghi_trua);
+      invalidateWeldReportCache();
+    }
   } catch (err) {
     throw new Error(
       clarifyWeldJournalError(err instanceof Error ? err.message : String(err), payload.chung_chi_su_dung),
@@ -1210,6 +1263,10 @@ export async function updateWeldJournalEntry(payload: WeldJournalUpdate) {
         `Đã đổi mã nhưng chưa cập nhật được mối hàn liên kết: ${formatSupabaseError(relink.error)}`,
       );
     }
+  }
+
+  if (payload.gio_nghi_trua !== undefined) {
+    await saveWeldLunchBreak(supabase, { id: payload.id }, payload.gio_nghi_trua ?? 0);
   }
 
   invalidateWeldReportCache();
