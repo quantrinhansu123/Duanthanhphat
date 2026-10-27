@@ -206,6 +206,34 @@ export async function insertMapPoint(
   return { point: rowToMapPoint(data as ToaDoRow) };
 }
 
+/**
+ * Gán mã tọa độ gõ tay cho mối hàn: RPC lưu nhật ký đã tự tạo điểm (mã TT toàn cục)
+ * khi có kinh/vĩ độ → đổi mã điểm đó; chưa có điểm thì thêm mới.
+ */
+export async function setWeldPointCode(
+  input: NewToaDoInput & { weldId: string },
+): Promise<{ error?: string }> {
+  const code = normalizeCoordinateCode(input.code);
+  if (!parseCoordinateCode(code)) {
+    return { error: "Mã Autolisp phải là HT/HP/TT/TP + số (vd HT0001, TT0166)" };
+  }
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("toa_do")
+    .select("id")
+    .eq("lich_su_moi_han_id", input.weldId)
+    .maybeSingle();
+  if (!existing) return insertMapPoint(input);
+  const { error } = await supabase
+    .from("toa_do")
+    .update({ ma_diem: code, du_an_id: input.projectId || null })
+    .eq("id", existing.id);
+  if (error?.code === "23505") return { error: `Mã ${code} đã có trong dự án này.` };
+  if (error) return { error: error.message };
+  invalidateMapPointsCache();
+  return {};
+}
+
 /** Xóa cache danh sách điểm GPS (sau khi gắn/bỏ gắn mối hàn). */
 export function invalidateMapPointsCache() {
   mapPointRequests.clear();

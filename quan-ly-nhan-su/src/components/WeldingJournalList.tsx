@@ -14,7 +14,7 @@ import { useWeldLogGpsPoints } from "@/hooks/useWeldLogGpsPoints";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
-import { deleteMapPoint, insertMapPoint, linkGpsPointToWeld, unlinkGpsPointsFromWeld } from "@/lib/mapPointsDb";
+import { deleteMapPoint, linkGpsPointToWeld, setWeldPointCode, unlinkGpsPointsFromWeld } from "@/lib/mapPointsDb";
 import { createClient } from "@/lib/supabase/client";
 import {
   loadPersonnelCertificateOptions,
@@ -2387,7 +2387,7 @@ export default function WeldingJournalList({
   }
 
   async function saveManualCoordinate(values: JournalFormValues, weldId: string) {
-    const res = await insertMapPoint({
+    const res = await setWeldPointCode({
       code: values.ma_toa_do,
       longitude: Number(values.kinh_do.replace(",", ".")),
       latitude: Number(values.vi_do.replace(",", ".")),
