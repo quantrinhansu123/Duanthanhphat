@@ -58,13 +58,15 @@ import {
 import { compareNewestDate } from "@/lib/dateOrder";
 import {
   buildWeldCodePrefix,
-  bumpTrailingCode,
+  COORDINATE_RAIL_LABELS,
+  COORDINATE_RAIL_PREFIXES,
   detectMachineWeldNumbering,
   fieldCodeFromSystemCode,
   hasOwnWeldSitePrefix,
   machineWeldCodeHint,
   machineWeldCodePlaceholder,
   normalizeWeldSitePrefix,
+  parseCoordinateCode,
   suggestMachineWeldCodeForMachine,
   suggestWeldCode,
 } from "@/lib/weldCode";
@@ -107,6 +109,8 @@ type JournalFormValues = {
   chung_chi_su_dung: string;
   ghi_chu: string;
   toa_do_id: string;
+  /** Mã tọa độ gõ tay (HT/HP/TT/TP + số) khi không chọn điểm Autolisp có sẵn. */
+  ma_toa_do: string;
   ly_trinh: string;
   kinh_do: string;
   vi_do: string;
@@ -170,6 +174,7 @@ function emptyJournalForm(
     chung_chi_su_dung: "",
     ghi_chu: "",
     toa_do_id: "",
+    ma_toa_do: "",
     ly_trinh: "",
     kinh_do: "",
     vi_do: "",
@@ -195,8 +200,6 @@ type JournalSuggestion = Partial<
     | "ca_han"
     | "gio_bat_dau"
     | "gio_ket_thuc"
-    | "ma_hien_truong"
-    | "ten_moi_han_theo_may"
   >
 >;
 
@@ -214,8 +217,6 @@ function pickJournalSuggestion(values: JournalSuggestion): JournalSuggestion {
     ca_han: values.ca_han,
     gio_bat_dau: values.gio_bat_dau,
     gio_ket_thuc: values.gio_ket_thuc,
-    ma_hien_truong: values.ma_hien_truong,
-    ten_moi_han_theo_may: values.ten_moi_han_theo_may,
   };
 }
 
@@ -248,8 +249,7 @@ function weldRowToSuggestion(row: WeldReportRow): JournalSuggestion {
     ca_han: resolveWeldShift(row),
     gio_bat_dau: normalizeWeldTime(row.gio_bat_dau) ?? undefined,
     gio_ket_thuc: normalizeWeldTime(row.gio_ket_thuc) ?? undefined,
-    // Không lấy mã hiện trường / trong máy từ mối cũ — form tự gợi ý mã tiếp theo
-    // (cùng rule Thủ công: nhớ lần cuối + tự tăng / max DB + 1).
+    // Không lấy mã hiện trường / trong máy từ mối cũ — form tự sinh theo ngày + nhật ký.
   };
 }
 
@@ -285,10 +285,6 @@ function applyJournalSuggestion(
   if (suggestion.ca_han && WELD_SHIFTS.includes(suggestion.ca_han)) next.ca_han = suggestion.ca_han;
   if (suggestion.gio_bat_dau) next.gio_bat_dau = suggestion.gio_bat_dau;
   if (suggestion.gio_ket_thuc) next.gio_ket_thuc = suggestion.gio_ket_thuc;
-  if (suggestion.ma_hien_truong?.trim()) next.ma_hien_truong = suggestion.ma_hien_truong.trim().toUpperCase();
-  if (suggestion.ten_moi_han_theo_may?.trim()) {
-    next.ten_moi_han_theo_may = suggestion.ten_moi_han_theo_may.trim().toUpperCase();
-  }
   return next;
 }
 
@@ -314,6 +310,7 @@ function journalRowToForm(
     chung_chi_su_dung: row.chung_chi_su_dung ?? "",
     ghi_chu: row.ghi_chu ?? "",
     toa_do_id: gpsPoint?.id ?? "",
+    ma_toa_do: "",
     ly_trinh: gpsPoint?.chainage ?? "",
     kinh_do: gpsPoint ? String(gpsPoint.longitude) : "",
     vi_do: gpsPoint ? String(gpsPoint.latitude) : "",
@@ -367,6 +364,7 @@ function JournalFormModal({
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
   const [machineFieldCodes, setMachineFieldCodes] = useState<string[]>([]);
   const [siteCodeEdited, setSiteCodeEdited] = useState(false);
+  const [gpsRailFilter, setGpsRailFilter] = useState("");
   const [machineCodeEdited, setMachineCodeEdited] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
@@ -433,29 +431,16 @@ function JournalFormModal({
         welders,
         machines,
       );
-      const remembered = mode === "create" ? readRememberedJournalEntry() : {};
-      const withBumpedCodes =
-        mode === "create"
-          ? {
-              ...next,
-              ma_hien_truong: remembered.ma_hien_truong
-                ? bumpTrailingCode(remembered.ma_hien_truong)
-                : next.ma_hien_truong,
-              ten_moi_han_theo_may: remembered.ten_moi_han_theo_may
-                ? bumpTrailingCode(remembered.ten_moi_han_theo_may)
-                : next.ten_moi_han_theo_may,
-            }
-          : next;
-      setForm(withBumpedCodes);
+      setForm(next);
       setProjectSuggestion(null);
-      initialImageIds.current = new Set(withBumpedCodes.anh_moi_han_lien_ket.map((asset) => asset.publicId));
+      initialImageIds.current = new Set(next.anh_moi_han_lien_ket.map((asset) => asset.publicId));
       removedImages.current = [];
       setImageError("");
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
-      setSiteCodeEdited(mode === "edit" && Boolean(withBumpedCodes.ma_hien_truong));
-      setMachineCodeEdited(mode === "edit" && Boolean(withBumpedCodes.ten_moi_han_theo_may));
+      setSiteCodeEdited(mode === "edit" && Boolean(next.ma_hien_truong));
+      setMachineCodeEdited(mode === "edit" && Boolean(next.ten_moi_han_theo_may));
       const today = defaultPerformedAt().slice(0, 10);
       setEntryMode("manual");
       setBulkDateFrom(today);
@@ -937,8 +922,8 @@ function JournalFormModal({
             />
             {mode === "create" && projectSuggestion && (
               <span className="mt-1.5 block rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-800">
-                Đã gợi ý theo mối gần nhất của dự án: {projectSuggestion.code}
-                {projectSuggestion.date ? ` · ${formatJournalDateIso(projectSuggestion.date)}` : ""}. Có thể sửa lại.
+                Đã gợi ý thợ hàn, máy, công nghệ theo mối gần nhất của dự án
+                {projectSuggestion.date ? ` · ${formatJournalDateIso(projectSuggestion.date)}` : ""}. Mã hệ thống / hiện trường / trong máy tự sinh theo ngày.
               </span>
             )}
             {mode === "create" && !form.du_an_id && (
@@ -1249,6 +1234,26 @@ function JournalFormModal({
           {!quickActive && (
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Điểm Autolisp / Mã vị trí (HT/HP/TT/TP)
+              <span className="mt-1.5 flex flex-wrap gap-1.5">
+                {["", ...COORDINATE_RAIL_PREFIXES].map((prefix) => (
+                  <button
+                    key={prefix || "all"}
+                    type="button"
+                    title={prefix ? COORDINATE_RAIL_LABELS[prefix as keyof typeof COORDINATE_RAIL_LABELS] : "Tất cả"}
+                    onClick={() => {
+                      setGpsRailFilter(prefix);
+                      if (prefix && !form.toa_do_id) setForm((prev) => ({ ...prev, ma_toa_do: prefix }));
+                    }}
+                    className={`h-7 cursor-pointer rounded-md border px-2.5 text-[11px] font-semibold ${
+                      gpsRailFilter === prefix
+                        ? "border-[#0047AB] bg-[#0047AB] text-white"
+                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {prefix || "Tất cả"}
+                  </button>
+                ))}
+              </span>
               <SelectMenu
                 value={form.toa_do_id}
                 onChange={(id) => {
@@ -1267,7 +1272,9 @@ function JournalFormModal({
                 }}
                 options={[
                   { value: "", label: "— Chưa gán điểm Autolisp —" },
-                  ...unlinkedGpsPoints.map((pt) => ({
+                  ...unlinkedGpsPoints
+                    .filter((pt) => !gpsRailFilter || pt.id === form.toa_do_id || pt.code.toUpperCase().startsWith(gpsRailFilter))
+                    .map((pt) => ({
                     value: pt.id,
                     label: `${pt.code}${pt.chainage ? ` · ${pt.chainage}` : ""}`,
                     hint: `${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
@@ -1284,6 +1291,37 @@ function JournalFormModal({
                   : "Chưa có điểm Autolisp trống. Import/thêm điểm ở Bản đồ rồi mở lại form, hoặc giữ điểm đang gắn (khi sửa)."}
               </span>
             </label>
+          )}
+          {!quickActive && !form.toa_do_id && (
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Hoặc nhập mã tọa độ
+                <input
+                  value={form.ma_toa_do}
+                  onChange={(event) => setForm({ ...form, ma_toa_do: event.target.value.toUpperCase() })}
+                  placeholder="HT0001 · chọn HT/HP/TT/TP ở trên"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </label>
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Kinh độ (lon)
+                <input
+                  value={form.kinh_do}
+                  onChange={(event) => setForm({ ...form, kinh_do: event.target.value })}
+                  placeholder="105.8427"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </label>
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Vĩ độ (lat)
+                <input
+                  value={form.vi_do}
+                  onChange={(event) => setForm({ ...form, vi_do: event.target.value })}
+                  placeholder="21.0160"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                />
+              </label>
+            </div>
           )}
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
             <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1303,15 +1341,12 @@ function JournalFormModal({
               Mã hiện trường (sơn bụng ray)
               <input
                 value={form.ma_hien_truong}
-                onChange={(event) => {
-                  setSiteCodeEdited(true);
-                  setForm({ ...form, ma_hien_truong: event.target.value.toUpperCase() });
-                }}
+                readOnly
                 placeholder="FBW-25-10-26-0001"
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                className="mt-1.5 h-10 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs sm:text-sm text-slate-800 shadow-2xs outline-hidden font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                CN-DD-MM-YY-xxxx · cùng số TT mã hệ thống · sửa được.
+                CN-DD-MM-YY-xxxx · TT 1→n theo nhật ký · tự sinh, không chỉnh tay.
               </span>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -2255,8 +2290,6 @@ export default function WeldingJournalList({
       ]);
       const usedCodes = new Set(prefixCodes);
       const usedMachineCodes = new Set(machineCodesDay0);
-      let lastSiteCode = "";
-      let lastMachineCode = "";
       let done = 0;
       let prevDate = "";
       for (const date of dates) {
@@ -2282,11 +2315,7 @@ export default function WeldingJournalList({
           usedCodes.add(maLichSu);
           const nextSiteCode = fieldCodeFromSystemCode(maLichSu);
           const nextMachineCode = suggestMachineWeldCodeForMachine(date, [...usedMachineCodes], machine);
-          if (nextSiteCode) lastSiteCode = nextSiteCode;
-          if (nextMachineCode) {
-            lastMachineCode = nextMachineCode;
-            usedMachineCodes.add(nextMachineCode);
-          }
+          if (nextMachineCode) usedMachineCodes.add(nextMachineCode);
           const gioHan = spreadWeldSlotTime(values.gio_bat_dau, values.gio_ket_thuc, index, count);
           await insertWeldJournalEntry({
             ma_lich_su: maLichSu,
@@ -2324,11 +2353,7 @@ export default function WeldingJournalList({
       setFormOpen(false);
       setEditingRow(null);
       setEditingForm(null);
-      rememberJournalEntry({
-        ...values,
-        ma_hien_truong: lastSiteCode || values.ma_hien_truong,
-        ten_moi_han_theo_may: lastMachineCode || values.ten_moi_han_theo_may,
-      });
+      rememberJournalEntry(values);
       refetch();
       showToast(`Đã điền ${done.toLocaleString("vi-VN")} mối hàn`);
       return true;
@@ -2341,9 +2366,35 @@ export default function WeldingJournalList({
     }
   }
 
+  /** Mã tọa độ gõ tay: cần HT/HP/TT/TP + số và kinh/vĩ độ hợp lệ. */
+  function manualCoordinateError(values: JournalFormValues) {
+    if (values.toa_do_id || !values.ma_toa_do.trim()) return "";
+    if (!parseCoordinateCode(values.ma_toa_do)) return "Mã tọa độ phải là HT/HP/TT/TP + số (vd HT0001).";
+    const lon = Number(values.kinh_do.replace(",", "."));
+    const lat = Number(values.vi_do.replace(",", "."));
+    if (!values.kinh_do.trim() || !values.vi_do.trim() || !Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return "Nhập kinh độ và vĩ độ cho mã tọa độ.";
+    }
+    return "";
+  }
+
+  async function saveManualCoordinate(values: JournalFormValues, weldId: string) {
+    const res = await insertMapPoint({
+      code: values.ma_toa_do,
+      longitude: Number(values.kinh_do.replace(",", ".")),
+      latitude: Number(values.vi_do.replace(",", ".")),
+      chainage: values.ly_trinh || undefined,
+      weldId,
+      weldCode: values.ma_lich_su,
+    });
+    if (res.error) throw new Error(res.error);
+  }
+
   async function handleCreate(values: JournalFormValues) {
     setSaving(true);
     try {
+      const coordError = manualCoordinateError(values);
+      if (coordError) throw new Error(coordError);
       const year = Number(values.performedAt.slice(0, 4)) || new Date().getFullYear();
       const kinhDoNum = values.kinh_do ? Number(values.kinh_do.replace(",", ".")) : null;
       const viDoNum = values.vi_do ? Number(values.vi_do.replace(",", ".")) : null;
@@ -2390,6 +2441,14 @@ export default function WeldingJournalList({
         if (created?.id) {
           await linkGpsPointToWeld(values.toa_do_id, created.id);
         }
+      } else if (values.ma_toa_do.trim()) {
+        const supabase = createClient();
+        const { data: created } = await supabase
+          .from("lich_su_moi_han")
+          .select("id")
+          .eq("ma_lich_su", values.ma_lich_su.trim())
+          .maybeSingle();
+        if (created?.id) await saveManualCoordinate(values, created.id);
       }
       setFormOpen(false);
       setEditingRow(null);
@@ -2409,6 +2468,8 @@ export default function WeldingJournalList({
     if (!editingRow) return;
     setSaving(true);
     try {
+      const coordError = manualCoordinateError(values);
+      if (coordError) throw new Error(coordError);
       const year = Number(values.performedAt.slice(0, 4)) || new Date().getFullYear();
       const kinhDoNum = values.kinh_do ? Number(values.kinh_do.replace(",", ".")) : null;
       const viDoNum = values.vi_do ? Number(values.vi_do.replace(",", ".")) : null;
@@ -2451,18 +2512,11 @@ export default function WeldingJournalList({
 
       if (values.toa_do_id) {
         await linkGpsPointToWeld(values.toa_do_id, editingRow.id);
-      } else if (kinhDoNum != null && viDoNum != null && Number.isFinite(kinhDoNum) && Number.isFinite(viDoNum)) {
+      } else if (values.ma_toa_do.trim()) {
         if (currentPoint) {
           await deleteMapPoint(currentPoint.id);
         }
-        await insertMapPoint({
-          code: values.ma_lich_su,
-          longitude: kinhDoNum,
-          latitude: viDoNum,
-          chainage: values.ly_trinh || undefined,
-          weldId: editingRow.id,
-          weldCode: values.ma_lich_su,
-        });
+        await saveManualCoordinate(values, editingRow.id);
       } else {
         await unlinkGpsPointsFromWeld(editingRow.id);
       }

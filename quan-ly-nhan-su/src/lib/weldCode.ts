@@ -1,11 +1,9 @@
 /** Mã nhật ký hàn (đồng bộ Autolisp / máy / sơn):
  * - Hệ thống:   {mã DA}-{CN}-{DD}-{MM}-{YY}-{xxxx}   · TT 1→n theo dự án + công nghệ
  * - Hiện trường:{CN}-{DD}-{MM}-{YY}-{xxxx}            · cùng số TT với mã hệ thống (= sơn bụng ray)
- * - Máy UN5:    {YYYY}-{M}-{D}-{xxx}                 · TT reset mỗi ngày (theo log máy)
- * - Máy K922:   {n}                                  · TT cộng dồn 1→n theo từng máy
- * - Máy khác:   {DD}-{MM}-{YY}-{xxxx}                · TT reset mỗi ngày (fallback)
+ * - Máy:        {DD}-{MM}-{YY}-{xxxx}                · TT 1→hết ngày, reset mỗi ngày (mọi máy)
  * - Tọa độ:     HT|HP|TT|TP + xxxx                    · Autolisp · TT 1→n theo từng dải ray
- * VD: PQ-FBW-25-10-26-0001 · FBW-25-10-26-0001 · 2026-9-11-001 · 42 · HT0001
+ * VD: PQ-FBW-25-10-26-0001 · FBW-25-10-26-0001 · 25-10-26-0001 · HT0001
  */
 
 export type MachineWeldNumbering = "un5" | "k922" | "day";
@@ -171,16 +169,10 @@ export function buildK922MachineWeldCode(sequence: number) {
   return String(Math.trunc(sequence));
 }
 
-/** Nhận diện họ máy để chọn rule mã trong máy. */
+/** Mã trong máy: mọi máy dùng DD-MM-YY-xxxx (TT reset mỗi ngày). */
 export function detectMachineWeldNumbering(
-  machine?: { code?: string | null; name?: string | null; model?: string | null } | null,
+  _machine?: { code?: string | null; name?: string | null; model?: string | null } | null,
 ): MachineWeldNumbering {
-  const blob = [machine?.code, machine?.name, machine?.model]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  if (blob.includes("un5")) return "un5";
-  if (blob.includes("k922") || blob.includes("kcm") || blob.includes("k920")) return "k922";
   return "day";
 }
 
