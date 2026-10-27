@@ -39,8 +39,16 @@ export interface LongRail {
   updatedAt: string;
 }
 
+/** Đoạn ray đã lắp xuống đường (mét) — vẽ nét đỏ thay cho nét đứt. */
+export interface InstalledRange {
+  from: number;
+  to: number;
+}
+
 export interface TrackLayout {
   jointWeldLinks?: Record<string, string[]>;
+  /** Đoạn đã lắp ray theo tuyến (khóa = tên tuyến, VD "TUYẾN THƯỢNG"). */
+  installed?: Record<string, InstalledRange[]>;
   version: 1;
   rows: RailRow[];
   placements: TrackPlacement[];
@@ -1000,7 +1008,62 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
   }
   const links = value.jointWeldLinks;
   if (links !== undefined && (!isRecord(links) || Object.values(links).some(ids => !Array.isArray(ids) || ids.some(id => typeof id !== "string")))) return null;
-  return { version: 1, rows, placements, longRails, jointWeldLinks: links as Record<string, string[]> | undefined };
+  const installed = parseInstalled(value.installed);
+  if (installed === null) return null;
+  return {
+    version: 1, rows, placements, longRails,
+    jointWeldLinks: links as Record<string, string[]> | undefined,
+    ...(installed ? { installed } : {}),
+  };
+}
+
+function parseInstalled(raw: unknown): Record<string, InstalledRange[]> | undefined | null {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) return null;
+  const out: Record<string, InstalledRange[]> = {};
+  for (const [line, list] of Object.entries(raw)) {
+    if (!Array.isArray(list)) return null;
+    const ranges: InstalledRange[] = [];
+    for (const item of list) {
+      if (!isRecord(item) || typeof item.from !== "number" || typeof item.to !== "number"
+        || !Number.isFinite(item.from) || !Number.isFinite(item.to) || item.to <= item.from) return null;
+      ranges.push({ from: item.from, to: item.to });
+    }
+    out[line] = ranges;
+  }
+  return out;
+}
+
+/** Thêm đoạn đã lắp [from,to] vào các tuyến; đoạn giao/chạm nhau được gộp (lắp thêm hằng ngày thì dài ra). */
+export function addInstalledRange(
+  installed: Record<string, InstalledRange[]> | undefined,
+  lines: string[],
+  from: number,
+  to: number,
+): Record<string, InstalledRange[]> {
+  if (!(to > from)) throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
+  const next = { ...(installed ?? {}) };
+  for (const line of lines) {
+    const merged: InstalledRange[] = [];
+    let cur = { from, to };
+    for (const r of [...(next[line] ?? [])].sort((a, b) => a.from - b.from)) {
+      if (r.to < cur.from || r.from > cur.to) merged.push(r);
+      else cur = { from: Math.min(cur.from, r.from), to: Math.max(cur.to, r.to) };
+    }
+    merged.push(cur);
+    next[line] = merged.sort((a, b) => a.from - b.from);
+  }
+  return next;
+}
+
+export function removeInstalledRange(
+  installed: Record<string, InstalledRange[]> | undefined,
+  line: string,
+  index: number,
+): Record<string, InstalledRange[]> {
+  const list = [...(installed?.[line] ?? [])];
+  list.splice(index, 1);
+  return { ...(installed ?? {}), [line]: list };
 }
 
 /** Planned 500 m intervals stop exactly at the project endpoint. */

@@ -8,6 +8,8 @@ import {
   extendRailRows,
   placeShortRailSpan,
   removeShortRail,
+  addInstalledRange,
+  removeInstalledRange,
   generateRailRows,
   formatChainage,
   getPlacementSpan,
@@ -830,6 +832,18 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
               return false;
             }
           }}
+          onInstall={(lines, from, to) => {
+            const start = parseChainage(from);
+            const end = parseChainage(to);
+            if (start === null || end === null || end <= start) {
+              setError("Nhập lý trình đã lắp dạng 0+000, cuối lớn hơn đầu.");
+              return false;
+            }
+            return commit({ ...layout, installed: addInstalledRange(layout.installed, lines, start, end) });
+          }}
+          onRemoveInstalled={(line, index) => {
+            commit({ ...layout, installed: removeInstalledRange(layout.installed, line, index) });
+          }}
           onClearPlan={(line) => {
             const keys = rowKeysForLine(layout.rows, line);
             const linePlacements = layout.placements.filter((item) => keys.has(item.rowKey));
@@ -855,6 +869,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             const next: TrackLayout = {
               ...layout,
               rows: layout.rows.map((row) => (row.line === line ? { ...row, cells: [] } : row)),
+              installed: layout.installed ? { ...layout.installed, [line]: [] } : undefined,
               placements: layout.placements.filter((item) => !keys.has(item.rowKey)),
               longRails: layout.longRails.filter((item) => !keys.has(item.rowKey)),
               jointWeldLinks: Object.fromEntries(
@@ -876,6 +891,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
         >
           {(structures) => <RailGrid
             structures={structures}
+            installed={layout.installed}
             appendError={error}
             rows={layout.rows}
             longRails={layout.longRails}

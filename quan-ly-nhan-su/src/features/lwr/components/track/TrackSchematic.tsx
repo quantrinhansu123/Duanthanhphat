@@ -34,6 +34,8 @@ interface TrackSchematicProps {
   onExtend: (count: number, line: string) => boolean;
   onPlan: (line: string, start: string, end: string) => boolean;
   onClearPlan: (line: string) => boolean;
+  onInstall: (lines: string[], from: string, to: string) => boolean;
+  onRemoveInstalled: (line: string, index: number) => void;
   children: (structures: StructureLayer) => ReactNode;
 }
 
@@ -62,6 +64,8 @@ export function TrackSchematic({
   onExtend,
   onPlan,
   onClearPlan,
+  onInstall,
+  onRemoveInstalled,
   children,
 }: TrackSchematicProps) {
   const lineNames = trackLineNames(layout.rows);
@@ -75,6 +79,10 @@ export function TrackSchematic({
   const [label, setLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [appendCount, setAppendCount] = useState("1");
+  const [installLine, setInstallLine] = useState(lineNames[0] ?? "TUYẾN THƯỢNG");
+  const [installBoth, setInstallBoth] = useState(true);
+  const [installFrom, setInstallFrom] = useState("0+000");
+  const [installTo, setInstallTo] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -209,6 +217,46 @@ export function TrackSchematic({
         <p className="w-full text-[11px] font-medium text-slate-500">
           Thượng và Hạ độc lập — không bắt buộc cùng chiều dài.
         </p>
+      </form>
+
+      <form
+        className="flex min-w-0 flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
+        aria-label="Cập nhật lắp đặt ray"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const lines = installBoth ? lineNames : [installLine];
+          if (onInstall(lines, installFrom, installTo)) {
+            setNotice(`Đã cập nhật ray đã lắp ${installFrom} – ${installTo} (${lines.map((l) => l.replace(/^TUYẾNs+/i, "")).join(" + ")}). Lệch nhau chút thì chọn từng tuyến và nhập lại.`);
+          }
+        }}
+      >
+        <div className="w-full">
+          <h2 className="font-bold">Cập nhật lắp đặt ray</h2>
+          <p className="text-xs text-slate-500">
+            Nét đứt = ray chưa lắp · nét đỏ = ray đã lắp, sẵn sàng hàn. Nhập lý trình đầu–cuối đoạn đã lắp; hằng ngày nhập lại lý trình cuối mới thì nét đỏ dài ra.
+          </p>
+        </div>
+        <label className="w-full text-xs text-slate-600 sm:w-auto sm:flex-1">Tuyến
+          <select className={inputClass} value={installLine} onChange={(e) => setInstallLine(e.target.value)} disabled={!ready || installBoth}>
+            {lineNames.map((line) => <option key={line} value={line}>{line}</option>)}
+          </select>
+        </label>
+        <label className="flex h-10 items-center gap-2 text-xs text-slate-700">
+          <input type="checkbox" checked={installBoth} onChange={(e) => setInstallBoth(e.target.checked)} />
+          Áp dụng cả 2 tuyến
+        </label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu đã lắp<input className={inputClass} value={installFrom} onChange={(e) => setInstallFrom(e.target.value)} placeholder="Km0+000" /></label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình cuối đã lắp<input className={inputClass} value={installTo} onChange={(e) => setInstallTo(e.target.value)} placeholder="Km3+500" required /></label>
+        <button disabled={!ready || !hasCells} className="h-10 rounded border bg-red-600 px-3 text-sm text-white disabled:opacity-40">Cập nhật ray đã lắp</button>
+        <ul className="w-full space-y-1 text-[11px] text-slate-600">
+          {lineNames.map((line) => (layout.installed?.[line] ?? []).map((range, index) => (
+            <li key={`${line}-${index}`} className="flex items-center gap-2">
+              <span className="font-semibold text-red-600">{line.replace(/^TUYẾNs+/i, "")}</span>
+              Km {formatChainage(range.from)} – {formatChainage(range.to)}
+              <button type="button" className="text-red-700 underline" onClick={() => onRemoveInstalled(line, index)}>Xóa</button>
+            </li>
+          )))}
+        </ul>
       </form>
 
       <TrackMapCanvas layout={layout}>

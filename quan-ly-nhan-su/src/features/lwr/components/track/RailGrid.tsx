@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -113,6 +113,8 @@ interface RailGridProps {
   ) => boolean | void;
   onRemove?: (cellId: string) => void;
   appendError?: string | null;
+  /** Đoạn đã lắp ray theo tuyến — vẽ nét đỏ trên dải ray. */
+  installed?: Record<string, InstalledRange[]>;
 }
 
 type AppendDraft = {
@@ -138,6 +140,7 @@ export const RailGrid = memo(function RailGrid({
   onAppend,
   onRemove,
   appendError,
+  installed,
 }: RailGridProps) {
   const [appendDraft, setAppendDraft] = useState<AppendDraft | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -174,6 +177,7 @@ export const RailGrid = memo(function RailGrid({
         <span className="font-semibold text-emerald-700">xanh</span> / <span className="font-semibold text-orange-600">cam</span> = đã giải toả.
         {" "}
         Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.
+        {" "}Đường tim: <span className="font-semibold text-slate-600">nét đứt</span> = ray chưa lắp · <span className="font-semibold text-red-600">nét đỏ</span> = ray đã lắp, sẵn sàng hàn.
       </p>
       <p className="text-xs text-slate-500">
         Ghi chú: màu xanh khi T khóa ≥30°C, cam khi T khóa &lt;30°C (nhiệt độ đã hiện trên nhãn thanh, không lặp T≥30 / T&lt;30 trên từng ô).
@@ -244,6 +248,18 @@ export const RailGrid = memo(function RailGrid({
               />
             </svg>
             ) : null}
+            {(installed?.[row.line] ?? []).map((range, i) => {
+              const box = trackSpanStyle(range.from, range.to, extent.startMetres);
+              return (
+                <div
+                  key={`installed-${i}`}
+                  data-testid="rail-grid-installed"
+                  title={`Đã lắp ray: Km ${formatChainage(range.from)} – ${formatChainage(range.to)}`}
+                  className="pointer-events-none absolute top-[33px] z-0 h-[3px] rounded-full bg-red-600"
+                  style={{ left: box.left, width: box.width }}
+                />
+              );
+            })}
             {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);

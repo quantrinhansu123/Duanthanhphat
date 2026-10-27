@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { DEFAULT_STRESS_INPUT } from "../src/features/lwr/lib/stress-release.ts";
 import { nextUnusedRailType } from "../src/features/lwr/lib/stress-release.ts";
 import {
+  addInstalledRange,
+  removeInstalledRange,
   createInitialTrackLayout,
   ensureRowSpan,
   extendRailRows,
@@ -141,4 +143,21 @@ test("renumberLongRails assigns TT/TP/HT/HP 1..n per row by construction order",
   assert.equal(byId.c.code, "HT0001");
   assert.equal(byId.d.code, "X", "unknown row is untouched");
   assert.equal(renumberLongRails(layout.rows, out).every((r, i) => r.code === out[i].code), true, "idempotent");
+});
+
+test("installed ranges: add to both lines, merge on extension, remove, survive validation", () => {
+  const lines = ["TUYẾN THƯỢNG", "TUYẾN HẠ"];
+  let inst = addInstalledRange(undefined, lines, 0, 1000);
+  assert.deepEqual(inst["TUYẾN HẠ"], [{ from: 0, to: 1000 }], "one entry adds the other line too");
+  inst = addInstalledRange(inst, ["TUYẾN THƯỢNG"], 1000, 3500);
+  assert.deepEqual(inst["TUYẾN THƯỢNG"], [{ from: 0, to: 3500 }], "touching ranges merge (daily extension)");
+  assert.deepEqual(inst["TUYẾN HẠ"], [{ from: 0, to: 1000 }], "other line untouched");
+  inst = addInstalledRange(inst, ["TUYẾN HẠ"], 2000, 2500);
+  assert.equal(inst["TUYẾN HẠ"].length, 2, "gap keeps separate segments");
+  inst = removeInstalledRange(inst, "TUYẾN HẠ", 0);
+  assert.deepEqual(inst["TUYẾN HẠ"], [{ from: 2000, to: 2500 }]);
+  assert.throws(() => addInstalledRange(inst, lines, 500, 500), RangeError);
+  const layout = { ...seededLayout(), installed: inst };
+  assert.deepEqual(validateTrackLayout(JSON.parse(JSON.stringify(layout))).installed, inst);
+  assert.equal(validateTrackLayout({ ...layout, installed: { "TUYẾN HẠ": [{ from: 5, to: 1 }] } }), null);
 });
