@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -220,7 +220,7 @@ export const RailGrid = memo(function RailGrid({
           const key = railRowKey(row);
           const pairMate = indexInGroup === 0 ? group.rows[1] : undefined;
           return <Fragment key={key}><div className="grid grid-cols-[110px_1fr] gap-x-2">
-          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{row.rail}</div>
+          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{railDisplayLabel(row.line, row.rail)}</div>
           <div className="relative" style={{ width, height: 64 }}>
             <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
             {groupLineBox ? (

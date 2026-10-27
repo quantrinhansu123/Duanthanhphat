@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { formatChainage, getPlacementSpan, type LongRail, type TrackLayout } from "@lwr/lib/track-editor";
+import { formatChainage, getPlacementSpan, railDisplayLabel, type LongRail, type TrackLayout } from "@lwr/lib/track-editor";
 import type { StressInput } from "@lwr/lib/stress-release";
 import { StressReleaseCalculator, type StressSaveResult } from "./StressReleaseCalculator";
 import { ReleaseStatusButtons } from "./RailDetailPanel";
@@ -56,7 +56,7 @@ export function LongRailDetailPanel({
         <dl className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-3 text-sm">
           <div>
             <dt className="text-slate-500">Dải ray</dt>
-            <dd className="font-semibold">{row ? `${row.line} · ${row.rail}` : longRail.rowKey}</dd>
+            <dd className="font-semibold">{row ? `${railDisplayLabel(row.line, row.rail)} (${row.line})` : longRail.rowKey}</dd>
           </div>
           <div>
             <dt className="text-slate-500">Chiều dài</dt>

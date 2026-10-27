@@ -7,6 +7,7 @@ import {
   getPlacementSpan,
   isLongRailReleased,
   parseChainage,
+  railDisplayLabel,
   railRowKey,
   sliceLayoutForPrint,
   trackExtent,
@@ -145,15 +146,19 @@ export function TrackPrint({
       const span = getPlacementSpan(sliced.rows, rail) ?? visibleLongRailSpan(sliced.rows, rail);
       if (!span) return [];
       const row = sliced.rows.find((item) => railRowKey(item) === rail.rowKey);
+      // Mối hàn nhật ký nằm trong đoạn LWR (cùng dải ray, trong khoảng lý trình).
+      const welds = joints
+        .filter((joint) => joint.rowKey === rail.rowKey && joint.metres >= span.startMetres && joint.metres <= span.endMetres)
+        .flatMap((joint) => joint.welds);
       return [{
         rail,
         span,
-        line: row?.line ?? "—",
-        side: row?.rail ?? "—",
+        railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
+        welds,
         summary: lwrPrintSummary(rail.params),
       }];
     });
-  }, [sliced]);
+  }, [sliced, joints]);
 
   function applyPresetKm(km: number) {
     const start = parseChainage(fromDraft) ?? extent.startMetres;
@@ -313,8 +318,12 @@ export function TrackPrint({
               <tr>
                 <th>Mã LWR</th>
                 <th>Tuyến · Ray</th>
+                <th>Loại ray</th>
                 <th>Lý trình</th>
                 <th>Dài (m)</th>
+                <th>T ray trái / phải (°C)</th>
+                <th>T khóa ray (°C)</th>
+                <th>Số mối hàn giải toả</th>
                 <th>T giải toả (°C)</th>
                 <th>Phương pháp giải toả</th>
                 <th>Chiều dài kéo thiết kế (mm)</th>
@@ -325,12 +334,16 @@ export function TrackPrint({
               </tr>
             </thead>
             <tbody>
-              {lwrRows.map(({ rail, span, line, side, summary }) => (
+              {lwrRows.map(({ rail, span, railLabel, welds, summary }) => (
                 <tr key={rail.id}>
                   <td>{rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code}</td>
-                  <td>{line} · {side}</td>
+                  <td>{railLabel}</td>
+                  <td>{rail.params.railType || "—"}</td>
                   <td>Km{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td>
                   <td>{span.endMetres - span.startMetres}</td>
+                  <td>{formatStressNumber(rail.params.leftTemp)} / {formatStressNumber(rail.params.rightTemp)}</td>
+                  <td>{formatStressNumber(rail.params.neutralTemp)}</td>
+                  <td>{welds.length}{welds.length > 0 ? ` (${welds.map((weld) => weld.code).join(", ")})` : ""}</td>
                   <td>{summary.tempLabel}</td>
                   <td>{summary.methodLabel}</td>
                   <td>{summary.designPullMm}</td>
@@ -341,7 +354,7 @@ export function TrackPrint({
                 </tr>
               ))}
               {lwrRows.length === 0 ? (
-                <tr><td colSpan={11}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={15}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>

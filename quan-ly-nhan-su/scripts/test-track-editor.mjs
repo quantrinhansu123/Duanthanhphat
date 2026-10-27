@@ -7,6 +7,7 @@ import {
   ensureRowSpan,
   extendRailRows,
   nextLongRailCode,
+  railDisplayLabel,
   patchTrackCell,
   placeShortRailSpan,
   updateRailCell,
@@ -108,4 +109,12 @@ test("each new long rail gets a different unused rail type", () => {
   assert.equal(nextUnusedRailType([]), "PB43");
   assert.equal(nextUnusedRailType(["PB43", "P50"]), "P60");
   assert.notEqual(nextUnusedRailType(["PB43"]), nextUnusedRailType([]));
+});
+
+test("rail display label shows TT/TP/HT/HP code with name", () => {
+  assert.equal(railDisplayLabel("TUYẾN THƯỢNG", "Ray trái"), "TT · Thượng trái");
+  assert.equal(railDisplayLabel("TUYẾN THƯỢNG", "Ray phải"), "TP · Thượng phải");
+  assert.equal(railDisplayLabel("TUYẾN HẠ", "Ray trái"), "HT · Hạ trái");
+  assert.equal(railDisplayLabel("TUYẾN HẠ", "Ray phải"), "HP · Hạ phải");
+  assert.equal(railDisplayLabel("X", "Y"), "Y");
 });
