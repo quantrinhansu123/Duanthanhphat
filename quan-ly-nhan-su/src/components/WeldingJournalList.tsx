@@ -2402,6 +2402,13 @@ export default function WeldingJournalList({
   async function handleCreate(values: JournalFormValues) {
     setSaving(true);
     try {
+      // Chỉ nhập kinh/vĩ độ: RPC tự tạo điểm mã TT toàn cục → đặt lại mã 1→n theo tuyến (dự án).
+      if (!values.toa_do_id && !values.ma_toa_do.trim() && values.kinh_do.trim() && values.vi_do.trim()) {
+        const routeCodes = gpsPoints
+          .filter((point) => (point.projectId ?? "") === values.du_an_id)
+          .map((point) => point.code);
+        values = { ...values, ma_toa_do: suggestCoordinateCode("TT", routeCodes) };
+      }
       const coordError = manualCoordinateError(values);
       if (coordError) throw new Error(coordError);
       const year = Number(values.performedAt.slice(0, 4)) || new Date().getFullYear();
