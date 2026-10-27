@@ -402,6 +402,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
 
   function saveLongRailParams(params: StressInput): StressSaveResult {
     if (!ready) return { ok: false, message: "Sơ đồ chưa tải xong. Đợi giây lát rồi bấm Lưu thông số lại." };
+    if (!ensureProject()) return { ok: false, message: "Chưa gán dự án — chọn dự án ở ô «Dự án» rồi bấm Lưu thông số lại." };
     if (!selectedLongRail) return { ok: false, message: "Chưa chọn đoạn LWR. Bấm đoạn trên sơ đồ rồi Lưu thông số." };
     const start = parseChainage(params.startChainage ?? "");
     const end = parseChainage(params.endChainage ?? "");
@@ -447,6 +448,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
 
   function saveCellCalculator(params: StressInput): StressSaveResult {
     if (!ready) return { ok: false, message: "Sơ đồ chưa tải xong. Đợi giây lát rồi bấm Lưu thông số lại." };
+    if (!ensureProject()) return { ok: false, message: "Chưa gán dự án — chọn dự án ở ô «Dự án» rồi bấm Lưu thông số lại." };
     if (!cell) return { ok: false, message: "Chưa chọn thanh ngắn." };
     const row = layout.rows.find((item) => item.cells.some((itemCell) => itemCell.id === cell.id));
     if (!row) return { ok: false, message: `Không tìm thấy dải ray chứa ${cell.id}.` };
@@ -593,6 +595,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
         const before = new Map(next.longRails.map((rail) => [rail.id, rail.completedAt]));
         next = syncLongRailCompletedAt(next);
         const changed = next.longRails.filter((rail) => before.get(rail.id) !== rail.completedAt);
+        if (changed.length > 0 && !ensureProject()) return false;
         if (!commit(next)) return false;
         for (const rail of changed) {
           void upsertLongRail(rail).then((result) => {

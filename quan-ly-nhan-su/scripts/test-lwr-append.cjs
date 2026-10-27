@@ -52,10 +52,13 @@ const assert = require('node:assert/strict');
     assert.equal(await detail.getByLabel('Lý trình đầu', { exact: true }).first().inputValue(), '2+000');
     assert.equal(await detail.getByLabel('Lý trình cuối', { exact: true }).first().inputValue(), '2+500');
     assert.equal(await detail.getByLabel('Ray của tuyến', { exact: false }).inputValue(), 'RIGHT');
-    await detail.getByLabel('Lý trình cuối', { exact: true }).last().fill('2+600');
-    await detail.getByLabel('Lý trình cuối', { exact: true }).last().press('Enter');
-    await page.waitForFunction(() => document.querySelector('aside input')?.value === '2+000');
-    assert.equal(await detail.getByLabel('Lý trình cuối', { exact: true }).first().inputValue(), '2+600');
+    // Form lý trình thanh nằm trước bảng tính: sửa ở form thanh, bảng tính (ô cuối) phải đồng bộ theo.
+    const endInputs = detail.getByLabel('Lý trình cuối', { exact: true });
+    await endInputs.first().fill('2+600');
+    await endInputs.first().press('Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('aside input')].filter(input => input.value === '2+600').length >= 2, null, { timeout: 5000 });
+    assert.equal(await endInputs.first().inputValue(), '2+600');
+    assert.equal(await endInputs.last().inputValue(), '2+600');
     console.log('PASS: add 0+300–1+400 during pending sync, reject overlap, preserve after reload');
   } finally {
     releaseSync();

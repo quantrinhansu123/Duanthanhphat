@@ -63,10 +63,12 @@ test("single rail uses pulling below 30 including 29.99 and natural release at 3
 });
 test("ambiguous chainage never assigns a weld to the wrong one of four rails", () => {
   const weld = { id: "w1", code: "FBW-1", metres: 500, method: "FBW" };
-  const initial = buildRailJoints(rows, [weld]);
+  // Mối nối chỉ tồn tại ở chỗ đã rải thanh: rải 2 thanh đầu của cả 4 ray → 4 mối nối cùng Km0+500 (mơ hồ).
+  const placedRows = rows.map((row) => ({ ...row, cells: row.cells.map((cell, index) => (index < 2 ? { ...cell, placed: true } : cell)) }));
+  const initial = buildRailJoints(placedRows, [weld]);
   assert.equal(initial.unmatched.length, 1);
   const target = initial.joints.find(j => j.rowKey === "DP" && j.metres === 500);
-  const linked = buildRailJoints(rows, [weld], 0, { [target.id]: ["w1"] });
+  const linked = buildRailJoints(placedRows, [weld], 0, { [target.id]: ["w1"] });
   assert.equal(linked.unmatched.length, 0);
   assert.equal(linked.joints.filter(j => j.welds.length)[0].rowKey, "DP");
   assert.match(weldMethodTone("FBW"), /blue/);
@@ -79,7 +81,8 @@ test("ambiguous chainage never assigns a weld to the wrong one of four rails", (
   const plannedJoint = { id: "j", rowKey: "UT", metres: 0, chainage: "0+000", leftCellId: "UT-01", rightCellId: "UT-01", welds: [] };
   const otherEnd = { ...plannedJoint, id: "end", metres: 500, chainage: "0+500" };
   const mid = { ...plannedJoint, id: "mid", metres: 250, chainage: "0+250" };
-  const later = { ...plannedJoint, id: "later", metres: 900, chainage: "0+900" };
+  // Sau vùng đã rải (thanh 1 và 2 đến Km1+000) → không tô màu.
+  const later = { ...plannedJoint, id: "later", metres: 1200, chainage: "1+200" };
   const journal = { ...plannedJoint, metres: 250, welds: [{ id: "w", code: "X", method: "Hàn hồ quang" }] };
   assert.equal(jointDisplayMethod(journal, [planned], rows), "Hàn hồ quang");
   assert.equal(jointDisplayMethod(otherEnd, [planned], rows), undefined);

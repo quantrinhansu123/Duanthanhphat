@@ -8,7 +8,12 @@ let pageReads = 0;
 let unexpectedError = false;
 const statuses = ["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"];
 const rows = Array.from({ length: 120 }, (_, index) => ({ id: String(index), tinh_trang_thi_nghiem: statuses[index % 4] }));
-const db = { from() {
+const db = { from(table) {
+  // Bảng toa_do (mã LISP gắn theo nhật ký): test này không cần điểm GPS → trả rỗng, không tính vào số lần đọc nhật ký.
+  if (table === "toa_do") {
+    const empty = { select() { return this; }, in() { return this; }, then(resolve) { return Promise.resolve({ error: null, data: [] }).then(resolve); } };
+    return empty;
+  }
   let columns = "", head = false, start = 0, end = 49, status;
   return {
     select(value, options) { columns = value; head = options?.head; return this; },
