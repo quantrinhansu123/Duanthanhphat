@@ -1015,6 +1015,18 @@ export default function WeldingHistoryList({ lockedResult }: WeldingHistoryListP
             onChange={(value) => setWelder(value || "Tất cả thợ hàn")}
           />
         </div>
+        <div className="mb-0.5 w-full min-w-0 sm:min-w-[220px] sm:w-[260px] [&_.relative]:mt-0">
+          <span className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">Dự án</span>
+          <FormCombo
+            value={projectsSel.length === 1 ? projectsSel[0] : ""}
+            options={projectOptions.map((p) => ({ value: p, label: p }))}
+            placeholder="Tất cả dự án"
+            searchable
+            searchPlaceholder="Gõ để tìm dự án..."
+            emptyText="Không tìm thấy dự án"
+            onChange={(value) => setProjectsSel(value ? [value] : [])}
+          />
+        </div>
         {lockedResult ? (
           <div className="w-full min-w-0 sm:w-auto">
             <span className="mb-1.5 block text-xs sm:text-[13px] font-semibold text-slate-700">Kết quả</span>

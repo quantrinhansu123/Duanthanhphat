@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check } from "@/components/icons";
 import {
   deriveSparePartStatus,
   sparePartCategories,
-  spareParts as seedParts,
   type SparePart,
   type SparePartStatus,
 } from "@/data/spareParts";
 import { MACHINE_MODELS } from "@/data/machines";
+import { deleteSpareParts, insertSparePart, loadSpareParts, updateSparePart } from "@/lib/sparePartsDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
 
 type ModalState =
@@ -47,7 +47,10 @@ function formatVnd(value: number) {
 }
 
 export default function SparePartsList() {
-  const [list, setList] = useState<SparePart[]>(seedParts);
+  const [list, setList] = useState<SparePart[]>([]);
+  const [persisted, setPersisted] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [manufacturerFilter, setManufacturerFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -59,6 +62,19 @@ export default function SparePartsList() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteText, setBulkDeleteText] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    loadSpareParts().then((result) => {
+      if (!active) return;
+      setList(result.parts);
+      setPersisted(result.persisted);
+      setLoadError(result.error ?? "");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const manufacturers = useMemo(() => {
     const set = new Set(list.map((item) => item.manufacturer).filter(Boolean));
@@ -105,9 +121,16 @@ export default function SparePartsList() {
     setBulkDeleteText("");
   }
 
-  function handleBulkDelete() {
+  async function handleBulkDelete() {
     if (bulkDeleteText.trim() !== "XÓA HẾT") return;
     const count = selectedIds.length;
+    if (persisted) {
+      const res = await deleteSpareParts(selectedIds);
+      if (res.error) {
+        showToast(res.error);
+        return;
+      }
+    }
     setList((current) => current.filter((item) => !selectedIds.includes(item.id)));
     setSelectedIds([]);
     closeBulkDelete();
@@ -140,7 +163,7 @@ export default function SparePartsList() {
     });
   }
 
-  function handleSave() {
+  async function handleSave() {
     const code = form.code.trim();
     const name = form.name.trim();
     const manufacturer = form.manufacturer.trim();
@@ -170,18 +193,37 @@ export default function SparePartsList() {
       unit: form.unit.trim() || "cái",
     };
 
+    if (!persisted) {
+      setError(loadError || "Chưa kết nối được database nên không lưu được phụ tùng.");
+      return;
+    }
+    setSaving(true);
+    const res = modal?.mode === "edit" ? await updateSparePart(payload) : await insertSparePart(payload);
+    setSaving(false);
+    if (res.error || !res.part) {
+      setError(res.error ?? "Không lưu được phụ tùng.");
+      return;
+    }
+    const saved = res.part;
     if (modal?.mode === "edit") {
-      setList((current) => current.map((item) => (item.id === modal.row.id ? payload : item)));
+      setList((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       showToast("Đã cập nhật phụ tùng");
     } else {
-      setList((current) => [payload, ...current]);
+      setList((current) => [saved, ...current]);
       showToast("Đã thêm phụ tùng");
     }
     setModal(null);
   }
 
-  function handleDelete(row: SparePart) {
+  async function handleDelete(row: SparePart) {
     if (!window.confirm(`Xóa phụ tùng ${row.code} — ${row.name}?`)) return;
+    if (persisted) {
+      const res = await deleteSpareParts([row.id]);
+      if (res.error) {
+        showToast(res.error);
+        return;
+      }
+    }
     setList((current) => current.filter((item) => item.id !== row.id));
     setSelectedIds((current) => current.filter((id) => id !== row.id));
     showToast("Đã xóa phụ tùng");
@@ -192,6 +234,11 @@ export default function SparePartsList() {
 
   return (
     <main className="w-full px-4 pb-8 sm:px-6">
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {loadError} Đang hiển thị dữ liệu mẫu, chưa lưu được.
+        </div>
+      )}
       <div className="mb-4 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4.5 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng phụ tùng</div>
@@ -546,7 +593,7 @@ export default function SparePartsList() {
                 <button type="button" onClick={() => setModal(null)} className="h-10 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm">
                   Hủy
                 </button>
-                <button type="button" onClick={handleSave} className="h-10 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm">
+                <button type="button" onClick={() => void handleSave()} disabled={saving} className="h-10 disabled:opacity-60 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm">
                   Lưu
                 </button>
               </div>

@@ -100,6 +100,22 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   const [joints, setJoints] = useState<RailJoint[]>([]);
   const [journalWelds, setJournalWelds] = useState<JournalWeld[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
+  /** Đã xác nhận tiếp tục khi chưa gán dự án (hỏi lại khi đổi dự án vì component remount theo key). */
+  const projectAcknowledged = useRef(false);
+
+  /** Chưa gán dự án → hỏi "Bạn đã chọn/gán dự án chưa?" trước khi mở hoặc lưu thanh ray dài. */
+  const ensureProject = useCallback(() => {
+    if (projectId || projectAcknowledged.current) return true;
+    const proceed = window.confirm(
+      "Bạn đã chọn/gán dự án chưa?" +
+        " Sơ đồ đang CHƯA gán dự án — chọn dự án ở ô «Dự án» phía trên để dữ liệu thuộc đúng dự án." +
+        " Bấm OK để vẫn tiếp tục (không gán dự án), Hủy để quay lại chọn dự án.",
+    );
+    if (proceed) projectAcknowledged.current = true;
+    return proceed;
+  }, [projectId]);
   const cells = layout.rows.flatMap((row) => row.cells);
   const cell = cells.find((item) => item.id === selectedId) ?? cells[0];
   const selectedLongRail = layout.longRails.find((item) => item.id === selectedLongRailId) ?? null;
@@ -288,6 +304,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   }
 
   function persistLongRail(longRail: LongRail, existing: LongRail | undefined, nextRows?: RailRow[]) {
+    if (!ensureProject()) return false;
     if (existing && (existing.rowKey !== longRail.rowKey || existing.startMetres !== longRail.startMetres || existing.endMetres !== longRail.endMetres)
       && (
         [existing.startMetres, existing.endMetres].some(m => (layout.jointWeldLinks?.[`${existing.rowKey}:km:${m}`]?.length ?? 0) > 0)
@@ -445,7 +462,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
         startMetres: from,
         endMetres: to,
       };
-      const code = nextLongRailCode(layout.longRails);
+      const code = nextLongRailCode(layout.longRails, key);
       target = {
         id: crypto.randomUUID(),
         code,
@@ -593,11 +610,33 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
   }, []);
 
   const selectLongRail = useCallback((id: string | null) => {
+    if (id && !ensureProject()) return;
     startTransition(() => {
       setSelectedLongRailId(id);
       setSelectedJoint(null);
     });
-  }, []);
+  }, [ensureProject]);
+
+  async function saveAll() {
+    if (!ensureProject()) return;
+    if (!commit(layout)) return;
+    setSavingAll(true);
+    let failed: string | null = null;
+    for (const rail of layout.longRails) {
+      const result = await upsertLongRail({ ...rail, projectId: projectId ?? rail.projectId });
+      if (!result.ok) {
+        failed = result.error ?? "Không lưu được đoạn LWR lên Supabase.";
+        break;
+      }
+    }
+    setSavingAll(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
+    setError(null);
+    setSavedNote(`Đã lưu sơ đồ lúc ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ${layout.longRails.length} đoạn LWR · ${project ? `dự án «${project.name}»` : "chưa gán dự án"}`);
+  }
 
   const selectJoint = useCallback((joint: RailJoint) => {
     startTransition(() => {
@@ -620,9 +659,21 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project }: Tra
             tone: "text-teal-700",
           },
           { label: "Mối hàn (nhật ký)", value: String(weldCount), tone: "text-blue-700" },
-          { label: "Đã gắn lý trình", value: `${weldsMapped}/${jointWithWelds} điểm`, tone: "text-emerald-700" },
+          { label: "Số mối hàn giải toả", value: `${weldsMapped}/${jointWithWelds} điểm`, tone: "text-emerald-700" },
         ]}
       />
+      <div
+        role="status"
+        className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm ${project ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}
+      >
+        <span>
+          {project ? <>Đang gán dự án: <b>{project.name}</b></> : <><b>Chưa gán dự án.</b> Chọn dự án ở ô «Dự án» phía trên trước khi mở hoặc lưu thanh ray dài.</>}
+          {savedNote && <span className="ml-2 text-xs opacity-80">{savedNote}</span>}
+        </span>
+        <button type="button" onClick={() => void saveAll()} disabled={savingAll || !ready} className="rounded bg-[#0047AB] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          {savingAll ? "Đang lưu…" : "Lưu sơ đồ"}
+        </button>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">Bấm mối hàn để chọn nhật ký tương ứng. Mã và công nghệ hàn được điền từ nhật ký.</p>
         <button type="button" onClick={() => setPrintOpen(true)} className="rounded border bg-white px-3 py-2 text-sm">In sơ đồ A4 / A3 / A3 kéo dài</button>

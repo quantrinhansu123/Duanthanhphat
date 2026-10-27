@@ -1494,6 +1494,7 @@ export const PHRASES: Record<string, string> = {
   "CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT": "THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY",
   "Đã cập nhật lý trình.": "Chainage updated.",
   "Đã gắn lý trình": "Chainage linked",
+  "Số mối hàn giải toả": "Released welds",
   "đã giải tỏa ứng suất": "stress released",
   "Đã giải toả": "Released",
   "Đã giải tỏa": "Released",

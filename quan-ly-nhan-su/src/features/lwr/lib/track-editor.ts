@@ -133,7 +133,22 @@ export function longRailsOverlap(
   return spanA.startMetres < spanB.endMetres && spanB.startMetres < spanA.endMetres;
 }
 
-export function nextLongRailCode(longRails: LongRail[], _rowKey?: string): string {
+/** Khóa dải ray của sơ đồ → mã Autolisp: Thượng trái TT · Thượng phải TP · Hạ trái HT · Hạ phải HP. */
+const LONG_RAIL_CODE_PREFIX: Record<string, string> = { UT: "TT", UP: "TP", DT: "HT", DP: "HP" };
+
+/**
+ * Mã thanh ray dài: TT/TP/HT/HP + số 4 chữ số, chạy liên tục từ 1 theo từng dải ray (VD TT0001, TT0002…).
+ * Không rõ dải ray thì giữ dạng cũ LWRnn.
+ */
+export function nextLongRailCode(longRails: LongRail[], rowKey?: string): string {
+  const prefix = rowKey ? LONG_RAIL_CODE_PREFIX[rowKey] : undefined;
+  if (prefix) {
+    const pattern = new RegExp(`^${prefix}(\\d+)$`, "i");
+    const used = longRails
+      .map((item) => Number(pattern.exec(item.code.trim())?.[1]))
+      .filter((n) => Number.isSafeInteger(n) && n > 0);
+    return `${prefix}${String((used.length ? Math.max(...used) : 0) + 1).padStart(4, "0")}`;
+  }
   const numbers = longRails
     .map((item) => Number(/^LWR(\d+)$/i.exec(item.code.trim())?.[1]))
     .filter((n) => Number.isSafeInteger(n) && n > 0);

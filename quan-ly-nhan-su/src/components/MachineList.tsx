@@ -42,8 +42,10 @@ import { loadMachineMaintenanceEvents } from "@/lib/maintenanceDb";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import {
   spareParts as seedSpareParts,
+  type SparePart,
   type SparePartStatus,
 } from "@/data/spareParts";
+import { loadSpareParts } from "@/lib/sparePartsDb";
 import {
   appendTrainedMachineToken,
   loadPersonnelCertificateRows,
@@ -590,9 +592,19 @@ function MachineDetailModal({
     [personnelRows, machine.code, machine.model],
   );
 
+  const [spareParts, setSpareParts] = useState<SparePart[]>(seedSpareParts);
+  useEffect(() => {
+    let active = true;
+    loadSpareParts().then((result) => {
+      if (active && result.persisted) setSpareParts(result.parts);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const compatibleSpareParts = useMemo(
-    () => seedSpareParts.filter((part) => sparePartFitsMachine(part, machine)),
-    [machine],
+    () => spareParts.filter((part) => sparePartFitsMachine(part, machine)),
+    [spareParts, machine],
   );
 
   const availablePersonnel = useMemo(

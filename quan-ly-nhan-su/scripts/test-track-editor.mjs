@@ -71,6 +71,14 @@ test("next long-rail code starts at LWR01", () => {
   assert.equal(nextLongRailCode([{ code: "LWR01" }, { code: "LWR07" }]), "LWR08");
 });
 
+test("long-rail code uses TT/TP/HT/HP per rail row, running 1..n", () => {
+  assert.equal(nextLongRailCode([], "UT"), "TT0001");
+  assert.equal(nextLongRailCode([{ code: "TT0001" }, { code: "TT0002" }, { code: "TP0009" }, { code: "LWR05" }], "UT"), "TT0003");
+  assert.equal(nextLongRailCode([{ code: "TT0001" }], "UP"), "TP0001");
+  assert.equal(nextLongRailCode([], "DT"), "HT0001");
+  assert.equal(nextLongRailCode([{ code: "HP0004" }], "DP"), "HP0005");
+});
+
 test("plus-button short rail uses exact chainage and proportional length", () => {
   const layout = seededLayout();
   const first = placeShortRailSpan(layout.rows, "UT", 0, 200);
