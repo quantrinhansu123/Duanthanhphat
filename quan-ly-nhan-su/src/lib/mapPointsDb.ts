@@ -36,6 +36,8 @@ export type NewToaDoInput = {
   order?: number;
   weldId?: string;
   weldCode?: string;
+  /** Dự án (tuyến) — mã HT/HP/TT/TP chạy 1→n riêng theo dự án. */
+  projectId?: string | null;
 };
 
 function rowToMapPoint(row: ToaDoRow): MapPoint {
@@ -192,11 +194,15 @@ export async function insertMapPoint(
       ghi_chu: input.note?.trim() || null,
       thu_tu: input.order ?? 0,
       lich_su_moi_han_id: input.weldId || null,
+      du_an_id: input.projectId || null,
     })
     .select("*")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: `Mã ${code} đã có trong dự án này.` };
+    return { error: error.message };
+  }
   return { point: rowToMapPoint(data as ToaDoRow) };
 }
 
@@ -295,13 +301,18 @@ export async function upsertMapPoints(
       ghi_chu: r.note?.trim() || null,
       thu_tu: r.order ?? idx + 1,
       lich_su_moi_han_id: resolvedWeldId,
+      du_an_id: r.projectId || null,
     };
   });
 
-  const { error, data } = await supabase
+  let { error, data } = await supabase
     .from("toa_do")
-    .upsert(inserts, { onConflict: "ma_diem" })
+    .upsert(inserts, { onConflict: "du_an_id,ma_diem" })
     .select("id");
+  // Chưa chạy migration unique (du_an_id, ma_diem) → quay về ràng buộc cũ unique (ma_diem).
+  if (error && /no unique or exclusion constraint/i.test(error.message)) {
+    ({ error, data } = await supabase.from("toa_do").upsert(inserts, { onConflict: "ma_diem" }).select("id"));
+  }
   if (error) return { error: error.message };
   return { upserted: data?.length ?? inserts.length };
 }

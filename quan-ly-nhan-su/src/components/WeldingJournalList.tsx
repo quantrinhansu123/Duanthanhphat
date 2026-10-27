@@ -67,6 +67,7 @@ import {
   machineWeldCodePlaceholder,
   normalizeWeldSitePrefix,
   parseCoordinateCode,
+  suggestCoordinateCode,
   suggestMachineWeldCodeForMachine,
   suggestWeldCode,
 } from "@/lib/weldCode";
@@ -333,6 +334,7 @@ function JournalFormModal({
   saving,
   bulkProgress = "",
   unlinkedGpsPoints = [],
+  allGpsPoints = [],
   onClose,
   onSubmit,
   onBulkSubmit,
@@ -349,6 +351,8 @@ function JournalFormModal({
   saving: boolean;
   bulkProgress?: string;
   unlinkedGpsPoints?: MapPoint[];
+  /** Mọi điểm GPS (cả đã gắn) — để gợi ý số mã tọa độ theo tuyến. */
+  allGpsPoints?: MapPoint[];
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void | Promise<void>;
   onBulkSubmit?: (values: BulkFillValues) => void | Promise<boolean | void>;
@@ -1242,7 +1246,11 @@ function JournalFormModal({
                     title={prefix ? COORDINATE_RAIL_LABELS[prefix as keyof typeof COORDINATE_RAIL_LABELS] : "Tất cả"}
                     onClick={() => {
                       setGpsRailFilter(prefix);
-                      if (prefix && !form.toa_do_id) setForm((prev) => ({ ...prev, ma_toa_do: prefix }));
+                      if (!prefix || form.toa_do_id) return;
+                      const routeCodes = allGpsPoints
+                        .filter((pt) => (pt.projectId ?? "") === form.du_an_id)
+                        .map((pt) => pt.code);
+                      setForm((prev) => ({ ...prev, ma_toa_do: suggestCoordinateCode(prefix, routeCodes) }));
                     }}
                     className={`h-7 cursor-pointer rounded-md border px-2.5 text-[11px] font-semibold ${
                       gpsRailFilter === prefix
@@ -2386,6 +2394,7 @@ export default function WeldingJournalList({
       chainage: values.ly_trinh || undefined,
       weldId,
       weldCode: values.ma_lich_su,
+      projectId: values.du_an_id || null,
     });
     if (res.error) throw new Error(res.error);
   }
@@ -3224,6 +3233,7 @@ export default function WeldingJournalList({
         recordId={editingRow?.id}
         saving={saving || bulkFillSaving}
         bulkProgress={bulkFillProgress}
+        allGpsPoints={gpsPoints}
         unlinkedGpsPoints={
           editingRow
             ? gpsPoints.filter((p) => !p.isLinked || p.weldId === editingRow.id)

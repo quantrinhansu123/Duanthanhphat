@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useLanguage } from "@/i18n/LanguageProvider";
+import { createClient } from "@/lib/supabase/client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowsIn, ArrowsOut } from "@/components/icons";
@@ -75,6 +76,8 @@ export default function MapView() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [projectId, setProjectId] = useState("");
+  const [projects, setProjects] = useState<{ id: string; du_an: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +97,21 @@ export default function MapView() {
   useEffect(() => {
     void reload(false);
   }, [reload]);
+
+  useEffect(() => {
+    if (!hasSupabaseEnv()) return;
+    createClient()
+      .from("du_an")
+      .select("id,du_an")
+      .order("du_an")
+      .then(({ data }) => setProjects((data ?? []) as { id: string; du_an: string }[]));
+  }, []);
+
+  /** Mã đã dùng trong tuyến (dự án) đang chọn — số HT/HP/TT/TP chạy 1→n riêng từng tuyến. */
+  const routeCodes = useMemo(
+    () => points.filter((point) => (point.projectId ?? "") === projectId).map((point) => point.code),
+    [points, projectId],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined" || points.length === 0) return;
@@ -183,8 +201,7 @@ export default function MapView() {
   }
 
   function suggestNextAutolispCode(prefix: CoordinateRailPrefix = form.railPrefix) {
-    const existing = points.map((point) => point.code);
-    return suggestCoordinateCode(prefix, existing);
+    return suggestCoordinateCode(prefix, routeCodes);
   }
 
   function openAddForm() {
@@ -219,6 +236,7 @@ export default function MapView() {
       latitude,
       chainage: form.chainage,
       order,
+      projectId: projectId || null,
     });
 
     setSaving(false);
@@ -233,7 +251,7 @@ export default function MapView() {
       railPrefix: nextPrefix,
       code: suggestCoordinateCode(
         nextPrefix,
-        [...points.map((p) => p.code), form.code],
+        [...routeCodes, form.code],
       ),
     });
     setStatusMsg(`Đã thêm ${res.point?.code}`);
@@ -290,7 +308,7 @@ export default function MapView() {
         return;
       }
 
-      const res = await upsertMapPoints(parsed.rows);
+      const res = await upsertMapPoints(parsed.rows.map((row) => ({ ...row, projectId: projectId || null })));
       if (res.error) {
         setErrorMsg(res.error);
         setSaving(false);
@@ -501,6 +519,30 @@ export default function MapView() {
         )}
       </div>
 
+      <label className="mb-3 block max-w-xl text-xs font-semibold text-slate-500">
+        Tuyến (dự án) cho điểm thêm mới / import Excel
+        <select
+          value={projectId}
+          onChange={(e) => {
+            const next = e.target.value;
+            setProjectId(next);
+            const codes = points.filter((point) => (point.projectId ?? "") === next).map((point) => point.code);
+            setForm((f) => ({ ...f, code: suggestCoordinateCode(f.railPrefix, codes) }));
+          }}
+          className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#0047AB]"
+        >
+          <option value="">— Chưa gán dự án —</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.du_an}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[10px] font-medium text-slate-400">
+          Mã HT/HP/TT/TP chạy 1→n riêng cho từng tuyến.
+        </span>
+      </label>
+
       {showForm && (
         <form
           onSubmit={(e) => void handleAdd(e)}
@@ -517,10 +559,7 @@ export default function MapView() {
                     setForm((f) => ({
                       ...f,
                       railPrefix: prefix,
-                      code: suggestCoordinateCode(
-                        prefix,
-                        points.map((point) => point.code),
-                      ),
+                      code: suggestCoordinateCode(prefix, routeCodes),
                     }))
                   }
                   className={`h-9 rounded-lg border px-2 text-[11px] font-bold font-mono transition ${
