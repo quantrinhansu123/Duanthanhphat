@@ -35,6 +35,7 @@ import {
 import type { StressInput } from "@lwr/lib/stress-release";
 import {
   deleteLongRailRemote,
+  duplicateLongRailCodes,
   loadLongRails,
   preferNewerLongRails,
   syncLocalLongRailsToSupabase,
@@ -433,6 +434,14 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
 
   function persistLongRail(longRail: LongRail, existing: LongRail | undefined, nextRows?: RailRow[]) {
     if (!ensureProject()) return false;
+    const nextRails = existing
+      ? layout.longRails.map((item) => (item.id === longRail.id ? longRail : item))
+      : [...layout.longRails, longRail];
+    const dupes = duplicateLongRailCodes(nextRails);
+    if (dupes.length) {
+      setError(`Mã đoạn LWR bị trùng trong sơ đồ: ${dupes.join(", ")}. Đổi mã hoặc bấm «Đánh số lại TT/TP/HT/HP» trước khi lưu.`);
+      return false;
+    }
     if (existing && (existing.rowKey !== longRail.rowKey || existing.startMetres !== longRail.startMetres || existing.endMetres !== longRail.endMetres)
       && (
         [existing.startMetres, existing.endMetres].some(m => (layout.jointWeldLinks?.[`${existing.rowKey}:km:${m}`]?.length ?? 0) > 0)
@@ -817,6 +826,13 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
 
   async function saveAll() {
     if (!ensureProject()) return;
+    const dupes = duplicateLongRailCodes(
+      layout.longRails.map((rail) => ({ ...rail, projectId: projectId ?? rail.projectId })),
+    );
+    if (dupes.length) {
+      setError(`Mã đoạn LWR bị trùng trong sơ đồ: ${dupes.join(", ")}. Đổi mã hoặc bấm «Đánh số lại TT/TP/HT/HP» trước khi lưu.`);
+      return;
+    }
     if (!commit(layout)) return;
     setSavingAll(true);
     const layoutResult = await lastLayoutSave.current;

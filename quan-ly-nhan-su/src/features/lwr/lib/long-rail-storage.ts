@@ -12,6 +12,11 @@ function isMissingTableError(message: string | undefined) {
   );
 }
 
+function isUniqueCodeError(message: string | undefined) {
+  const text = (message ?? "").toLowerCase();
+  return text.includes("lwr_long_rails_code_unique") || (text.includes("duplicate key") && text.includes("code"));
+}
+
 interface LongRailRow {
   id: string;
   code: string;
@@ -21,6 +26,21 @@ interface LongRailRow {
   end_cell_id: string;
   params: unknown;
   updated_at: string;
+}
+
+/** DB `code` column: bare mã khi chưa gán dự án, hoặc `projectId:mã` khi đã gán. */
+export function storageCode(rail: Pick<LongRail, "code" | "projectId">): string {
+  return rail.projectId ? `${rail.projectId}:${rail.code}` : rail.code;
+}
+
+/** Mã hiển thị bị trùng trong cùng sơ đồ (không lưu được lên unique code). */
+export function duplicateLongRailCodes(rails: LongRail[]): string[] {
+  const counts = new Map<string, number>();
+  for (const rail of rails) {
+    const key = storageCode(rail);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].filter(([, count]) => count > 1).map(([code]) => code);
 }
 
 function fromRow(row: LongRailRow): LongRail | null {
@@ -43,7 +63,7 @@ function fromRow(row: LongRailRow): LongRail | null {
 function toRow(rail: LongRail): LongRailRow {
   return {
     id: rail.id,
-    code: rail.projectId ? `${rail.projectId}:${rail.code}` : rail.code,
+    code: storageCode(rail),
     label: rail.label,
     row_key: rail.rowKey,
     start_cell_id: rail.startCellId,
@@ -62,25 +82,35 @@ export type LongRailLoadResult = {
 /** Keep the newer copy of each rail so a local method change is not overwritten. */
 export function preferNewerLongRails(local: LongRail[], remote: LongRail[]): LongRail[] {
   const localById = new Map(local.map((rail) => [rail.id, rail]));
-  const seen = new Set<string>();
+  const localByCode = new Map(local.map((rail) => [storageCode(rail), rail]));
+  const seenIds = new Set<string>();
+  const seenCodes = new Set<string>();
   const merged: LongRail[] = [];
   for (const remoteRail of remote) {
-    seen.add(remoteRail.id);
-    const localRail = localById.get(remoteRail.id);
+    seenIds.add(remoteRail.id);
+    seenCodes.add(storageCode(remoteRail));
+    const localRail = localById.get(remoteRail.id) ?? localByCode.get(storageCode(remoteRail));
     if (!localRail) {
       merged.push(remoteRail);
       continue;
     }
+    seenIds.add(localRail.id);
     const localTime = Date.parse(localRail.updatedAt);
     const remoteTime = Date.parse(remoteRail.updatedAt);
-    merged.push(
+    const pick =
       Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime >= remoteTime
         ? localRail
-        : remoteRail,
-    );
+        : remoteRail;
+    // Prefer remote id when codes match but UUIDs differ — avoids unique code insert conflicts later.
+    if (pick === localRail && localRail.id !== remoteRail.id && storageCode(localRail) === storageCode(remoteRail)) {
+      merged.push({ ...localRail, id: remoteRail.id });
+    } else {
+      merged.push(pick);
+    }
   }
   for (const rail of local) {
-    if (!seen.has(rail.id)) merged.push(rail);
+    if (seenIds.has(rail.id) || seenCodes.has(storageCode(rail))) continue;
+    merged.push(rail);
   }
   return merged;
 }
@@ -110,13 +140,46 @@ export async function loadLongRails(localFallback: LongRail[] = [], projectId?: 
   return { rails, source: "supabase" };
 }
 
-/** Insert or update one long rail on Supabase. No-ops when client missing / table not ready. */
+/**
+ * Insert or update one long rail.
+ * Upsert theo id; nếu mã (code) đã thuộc UUID khác thì xoá bản cũ rồi ghi đè — tránh lỗi
+ * lwr_long_rails_code_unique khi local tạo lại đoạn với UUID mới.
+ */
 export async function upsertLongRail(rail: LongRail): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   if (!supabase) return { ok: true, skipped: true, error: "Chưa cấu hình Supabase." };
-  const { error } = await supabase.from(TABLE).upsert(toRow(rail), { onConflict: "id" });
+  const row = toRow(rail);
+
+  const { data: byCode, error: lookupError } = await supabase
+    .from(TABLE)
+    .select("id")
+    .eq("code", row.code)
+    .maybeSingle();
+  if (lookupError && !isMissingTableError(lookupError.message)) {
+    return { ok: false, error: lookupError.message };
+  }
+  if (isMissingTableError(lookupError?.message)) {
+    return { ok: true, skipped: true, error: "Chưa chạy migration lwr_long_rails." };
+  }
+  if (byCode?.id && byCode.id !== row.id) {
+    const { error: deleteError } = await supabase.from(TABLE).delete().eq("id", byCode.id);
+    if (deleteError) {
+      if (isMissingTableError(deleteError.message)) {
+        return { ok: true, skipped: true, error: "Chưa chạy migration lwr_long_rails." };
+      }
+      return { ok: false, error: deleteError.message };
+    }
+  }
+
+  const { error } = await supabase.from(TABLE).upsert(row, { onConflict: "id" });
   if (!error) return { ok: true };
   if (isMissingTableError(error.message)) {
     return { ok: true, skipped: true, error: "Chưa chạy migration lwr_long_rails." };
+  }
+  if (isUniqueCodeError(error.message)) {
+    return {
+      ok: false,
+      error: `Mã đoạn LWR «${rail.code}» đã tồn tại trên máy chủ. Bấm «Đánh số lại TT/TP/HT/HP» hoặc đổi mã rồi lưu lại.`,
+    };
   }
   return { ok: false, error: error.message };
 }
@@ -140,6 +203,7 @@ export async function syncLocalLongRailsToSupabase(localRails: LongRail[], proje
   const missing = localRails.filter((item) => !remoteIds.has(item.id));
   let uploaded = 0;
   for (const rail of missing) {
+    // upsertLongRail gỡ bản remote trùng mã (UUID khác) trước khi ghi.
     const result = await upsertLongRail(rail);
     if (!result.ok) return { uploaded, error: result.error };
     if (!result.skipped) uploaded += 1;
