@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { trackExtent, TRACK_PIXELS_PER_METRE, type TrackLayout } from "@lwr/lib/track-editor";
 
 export const TrackMapCanvas = memo(function TrackMapCanvas({
@@ -67,7 +67,6 @@ export const TrackMapCanvas = memo(function TrackMapCanvas({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
         <h3 className="text-sm font-bold">Sơ đồ tuyến và dải ray · {columns} thanh / dải</h3>
         <div className="flex items-center gap-1.5">
-          <span className="mr-1 hidden items-center gap-2 text-xs text-slate-500 sm:flex"><ArrowLeftRight className="size-4" />Shift + lăn chuột / kéo</span>
           <button type="button" onClick={() => scrollByStep(-1)} disabled={!canLeft} aria-label="Cuộn sang trái" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronLeft className="size-4" /></button>
           <button type="button" onClick={() => scrollByStep(1)} disabled={!canRight} aria-label="Cuộn sang phải" className="rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"><ChevronRight className="size-4" /></button>
         </div>

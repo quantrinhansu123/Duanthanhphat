@@ -242,7 +242,6 @@ export function RailDetailPanel({
           </div>
         </header>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
-          <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
@@ -334,6 +333,9 @@ export function RailDetailPanel({
             compact
             key={`${cell.id}-${lockTemp}`}
             segmentId={cell.id}
+            statusSlot={
+              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
+            }
             initialInput={{
               ...DEFAULT_STRESS_INPUT,
               trackSide,
@@ -347,9 +349,6 @@ export function RailDetailPanel({
             }}
             onSave={onSaveParams}
           />
-          <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-            Bấm <b>Lưu thông số</b> để ghi bảng tính lên đoạn LWR. Đổi T trái/phải cập nhật ngay màu thanh trên sơ đồ khi đã Đạt.
-          </p>
         </div>
       </div>
     </aside>

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Shapes, Truck } from "lucide-react";
+import { Shapes, Truck, UserRound } from "lucide-react";
 import { safeImageUrl } from "@lwr/lib/safe-url";
 import {
   formatMachineDayHours,
   machineDayTone,
   safeMachineImageUrl,
+  safeWelderImageUrl,
   type MachineOnTrack,
 } from "@lwr/lib/machine-images";
 import type { StructureSymbol } from "@lwr/types/structure";
@@ -22,6 +23,7 @@ import {
   TRACK_PIXELS_PER_METRE,
 } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
+import { MachineDayDetailModal } from "./MachineDayDetailModal";
 
 interface PlottedPlacement {
   placement: TrackPlacement;
@@ -37,14 +39,36 @@ interface StructureCluster {
 
 const MARKER_W = 40;
 const MARKER_H = 28;
-const MARKER_W_IMAGE = 96;
-const MARKER_H_IMAGE = 78;
-const CLUSTER_GAP = 6;
-const SAME_CENTRE_PX = 12;
+/** Khối máy gọn: xe + avatar chồng góc + ngày (không kéo ngang/dài tên). */
+const MARKER_W_IMAGE = 72;
+const MARKER_H_IMAGE = 52;
+const LABEL_H = 14;
+const MACHINE_BLOCK_H = MARKER_H_IMAGE + 2 + LABEL_H;
+/** Khoảng trống giữa hai ô ký hiệu trong cùng cụm — đủ rộng để nhìn rõ từng hình. */
+const CLUSTER_GAP = 10;
+/**
+ * Gom công trình khi tâm gần nhau hơn bề ngang một ô.
+ * Trước đây 12px quá hẹp: hai ô 40px vẫn chồng lên nhau vì không được xếp hàng.
+ */
+const SAME_CENTRE_PX = MARKER_W;
 const SPAN_H = 6;
 const OVERLAP_H = 10;
 const TAB_MAX_W = 168;
-const DAY_BAND_H = 14;
+const DAY_BAND_H = 6;
+/**
+ * Gióng ảnh lên mối hàn trên thanh ray trên (hàng đầu cặp trái/phải trong RailGrid).
+ * Hàng ray height 64, nút mối top:20 size-8, space-y-1 giữa hàng ray và tim.
+ */
+const UPPER_RAIL_ROW_H = 64;
+const UPPER_RAIL_GAP = 4;
+const UPPER_RAIL_WELD_CENTER_Y = 20 + 16;
+const UPPER_RAIL_WELD_TIP_Y = -(UPPER_RAIL_GAP + UPPER_RAIL_ROW_H - UPPER_RAIL_WELD_CENTER_Y);
+/** Khoảng đáy khối ảnh → chấm mối trên ray. */
+const MACHINE_GAP_TO_RAIL = 6;
+const WORKER_BADGE = 34;
+/** Hai ngày gần nhau hơn (px) → xen kẽ độ cao để khỏi đè. */
+const MACHINE_STAGGER_PX = 84;
+const MACHINE_STAGGER_LIFT = 28;
 
 function SymbolThumb({
   symbol,
@@ -73,8 +97,65 @@ function structureLabel(item: PlottedPlacement) {
   return item.symbol?.code || item.placement.label || item.symbol?.name || "CT";
 }
 
-/** Gom công trình cùng (hoặc gần) một điểm tim → xếp hàng ngang. */
-function clusterStructures(items: PlottedPlacement[], startMetres: number): StructureCluster[] {
+function clusterHalfWidth(count: number, markerW: number) {
+  if (count <= 0) return 0;
+  return (count * markerW + (count - 1) * CLUSTER_GAP) / 2;
+}
+
+function recomputeAnchor(items: PlottedPlacement[], startMetres: number) {
+  if (items.length === 0) return 0;
+  return (
+    items.reduce(
+      (sum, item) => sum + (spanMid(item.span) - startMetres) * TRACK_PIXELS_PER_METRE,
+      0,
+    ) / items.length
+  );
+}
+
+/**
+ * Sau khi gom theo tâm, gộp tiếp các cụm mà hộp ký hiệu vẫn đè lên nhau
+ * (ví dụ 3 công trình lệch nhau 20–30 px quanh cùng lý trình).
+ */
+function mergeOverlappingClusters(
+  clusters: StructureCluster[],
+  startMetres: number,
+  markerW: number,
+): StructureCluster[] {
+  if (clusters.length < 2) return clusters;
+  let list = [...clusters].sort((a, b) => a.anchorX - b.anchorX);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const next: StructureCluster[] = [];
+    for (const cluster of list) {
+      const prev = next[next.length - 1];
+      if (!prev) {
+        next.push({ id: cluster.id, items: [...cluster.items], anchorX: cluster.anchorX });
+        continue;
+      }
+      const prevRight = prev.anchorX + clusterHalfWidth(prev.items.length, markerW);
+      const nextLeft = cluster.anchorX - clusterHalfWidth(cluster.items.length, markerW);
+      if (nextLeft < prevRight + CLUSTER_GAP) {
+        prev.items = [...prev.items, ...cluster.items].sort((a, b) =>
+          a.placement.id.localeCompare(b.placement.id),
+        );
+        prev.anchorX = recomputeAnchor(prev.items, startMetres);
+        changed = true;
+      } else {
+        next.push({ id: cluster.id, items: [...cluster.items], anchorX: cluster.anchorX });
+      }
+    }
+    list = next;
+  }
+  return list;
+}
+
+/** Gom công trình cùng (hoặc gần) một điểm tim → xếp hàng ngang, không chồng ô. */
+function clusterStructures(
+  items: PlottedPlacement[],
+  startMetres: number,
+  markerW: number = MARKER_W,
+): StructureCluster[] {
   const sorted = [...items].sort((a, b) => spanMid(a.span) - spanMid(b.span));
   const clusters: StructureCluster[] = [];
   for (const item of sorted) {
@@ -82,9 +163,7 @@ function clusterStructures(items: PlottedPlacement[], startMetres: number): Stru
     const hit = clusters.find((cluster) => Math.abs(cluster.anchorX - centreX) < SAME_CENTRE_PX);
     if (hit) {
       hit.items.push(item);
-      hit.anchorX =
-        hit.items.reduce((sum, other) => sum + (spanMid(other.span) - startMetres) * TRACK_PIXELS_PER_METRE, 0) /
-        hit.items.length;
+      hit.anchorX = recomputeAnchor(hit.items, startMetres);
     } else {
       clusters.push({
         id: item.placement.id,
@@ -96,7 +175,7 @@ function clusterStructures(items: PlottedPlacement[], startMetres: number): Stru
   for (const cluster of clusters) {
     cluster.items.sort((a, b) => a.placement.id.localeCompare(b.placement.id));
   }
-  return clusters;
+  return mergeOverlappingClusters(clusters, startMetres, markerW);
 }
 
 function markerLeft(cluster: StructureCluster, index: number, markerW: number) {
@@ -152,20 +231,57 @@ function MachineThumb({ machine }: { machine: MachineOnTrack }) {
         })();
   const [useFallback, setUseFallback] = useState(false);
   const src = useFallback ? fallback : (cutout ?? fallback);
-  if (!src) return <Truck className="size-10 shrink-0 text-slate-500" aria-hidden />;
+  if (!src) return <Truck className="size-8 shrink-0 text-slate-500" aria-hidden />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={cutout ?? fallback ?? machine.id}
       src={src}
       alt=""
-      className="h-14 w-[5.5rem] shrink-0 object-contain drop-shadow-md"
+      className="h-[3.25rem] w-[4.5rem] shrink-0 object-contain drop-shadow"
       decoding="async"
       onError={() => {
         if (!useFallback && fallback && fallback !== src) setUseFallback(true);
       }}
     />
   );
+}
+
+function WorkerBadge({ machine }: { machine: MachineOnTrack }) {
+  const src = safeWelderImageUrl(machine.welderImageUrl);
+  const label = machine.welderName && machine.welderName !== "—" ? machine.welderName : "Công nhân";
+  if (!src) {
+    return (
+      <span
+        className="flex shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-500 shadow"
+        style={{ width: WORKER_BADGE, height: WORKER_BADGE }}
+        title={label}
+        aria-label={label}
+      >
+        <UserRound className="size-4" aria-hidden />
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={label}
+      title={label}
+      className="shrink-0 rounded-full border-2 border-white object-cover shadow"
+      style={{ width: WORKER_BADGE, height: WORKER_BADGE }}
+      decoding="async"
+    />
+  );
+}
+
+/** Xen kẽ độ cao khi hai điểm gần nhau trên trục X. */
+function machineLiftByIndex(sortedXs: number[], index: number): number {
+  if (index <= 0) return 0;
+  const gap = Math.abs(sortedXs[index]! - sortedXs[index - 1]!);
+  if (gap >= MACHINE_STAGGER_PX) return 0;
+  const prevLift = machineLiftByIndex(sortedXs, index - 1);
+  return prevLift === 0 ? MACHINE_STAGGER_LIFT : 0;
 }
 
 function formatDayLabel(date: string | null) {
@@ -181,28 +297,24 @@ export function TrackCenterline({
   rows,
   startMetres,
   width,
-  imageMode = false,
 }: {
   structures?: StructureLayer;
-  /** Ảnh máy từ danh-sach-may, gắn theo lý trình nhật ký — chỉ dùng khi imageMode. */
+  /** Ảnh máy (danh-sach-may) gắn theo lý trình nhật ký — chồng lên sơ đồ chính. */
   machines?: MachineOnTrack[];
   rows: RailRow[];
   startMetres: number;
   width: number;
-  /** Chế độ ảnh thiết bị: ẩn công trình, hiện ảnh máy theo tọa độ nhật ký. */
-  imageMode?: boolean;
 }) {
   const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
   const markerW = MARKER_W;
   const markerH = MARKER_H;
-  const machineW = MARKER_W_IMAGE;
-  const machineH = MARKER_H_IMAGE;
+  const machineH = MACHINE_BLOCK_H;
+  const showMachines = machines.length > 0;
 
   const plottedStructures: PlottedPlacement[] = useMemo(
     () => {
-      if (imageMode) return [];
       return (structures?.placements ?? []).flatMap((placement) => {
         const lineName = rows[0]?.line;
         if (!lineName) return [];
@@ -215,16 +327,16 @@ export function TrackCenterline({
           : [];
       });
     },
-    [structures, rows, imageMode],
+    [structures, rows],
   );
 
   const clusters = useMemo(
-    () => clusterStructures(plottedStructures, startMetres),
-    [plottedStructures, startMetres],
+    () => clusterStructures(plottedStructures, startMetres, markerW),
+    [plottedStructures, startMetres, markerW],
   );
 
   const machinesOnLine = useMemo(() => {
-    if (!imageMode || machines.length === 0) return [];
+    if (machines.length === 0) return [];
     let lineStart = Number.POSITIVE_INFINITY;
     let lineEnd = Number.NEGATIVE_INFINITY;
     for (const row of rows) {
@@ -240,55 +352,46 @@ export function TrackCenterline({
     return machines.filter(
       (item) => item.endMetres >= lineStart - 1 && item.startMetres <= lineEnd + 1,
     );
-  }, [imageMode, machines, rows]);
+  }, [machines, rows]);
+
+  const machinePlacements = useMemo(() => {
+    const ranked = [...machinesOnLine]
+      .map((day) => ({ day, x: (day.metres - startMetres) * TRACK_PIXELS_PER_METRE }))
+      .sort((a, b) => a.x - b.x);
+    const xs = ranked.map((item) => item.x);
+    return ranked.map((item, index) => ({
+      ...item,
+      lift: machineLiftByIndex(xs, index),
+      toneIndex: machinesOnLine.findIndex((day) => day.id === item.day.id),
+    }));
+  }, [machinesOnLine, startMetres]);
 
   useEffect(() => {
-    if (!imageMode) setActiveDayId(null);
-  }, [imageMode]);
+    if (!showMachines) setActiveDayId(null);
+  }, [showMachines]);
 
-  useEffect(() => {
-    if (!activeDayId) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActiveDayId(null);
-    };
-    const onPointer = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("[data-machine-day]")) return;
-      setActiveDayId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPointer);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPointer);
-    };
-  }, [activeDayId]);
+  const activeDay = useMemo(
+    () => machinesOnLine.find((day) => day.id === activeDayId) ?? null,
+    [machinesOnLine, activeDayId],
+  );
 
-  const markerGapAboveAxis = imageMode ? 0 : 4;
-  const symbolStackH = imageMode
-    ? 0
-    : (plottedStructures.length === 0 ? 0 : markerH);
+  const markerGapAboveAxis = 4;
+  const symbolStackH = plottedStructures.length === 0 ? 0 : markerH;
   const chainageBandH = OVERLAP_H / 2 + 16;
-  const hoverExtra = !imageMode && hoverClusterId ? 56 : 0;
-  /** Chế độ ảnh: luôn chừa nửa ảnh + chỗ popup; trục tim cố định để ảnh không nhảy khi click. */
-  const padTop = imageMode
-    ? Math.max(8, machineH / 2 + 58)
-    : 4;
-  const padBottom = imageMode
-    ? Math.max(chainageBandH + 4, machineH / 2 + 4)
-    : 4;
+  const hoverExtra = hoverClusterId ? 56 : 0;
+  /** Ảnh máy overflow lên sát ray trên; tim chỉ chừa công trình + lý trình. */
+  const padTop = 4 + (showMachines ? 10 : 0);
+  const padBottom = 4;
   const rowHeight = Math.max(
-    imageMode ? machineH + chainageBandH + 72 : 40,
+    40,
     padTop + hoverExtra + symbolStackH + markerGapAboveAxis + chainageBandH + padBottom,
   );
-  const axisY = imageMode
-    ? padTop
-    : padTop + hoverExtra + symbolStackH + markerGapAboveAxis;
-  /** Ảnh cân giữa tim; nửa trên/dưới được đè lên ray trái/phải. */
-  const markerTop = imageMode
-    ? axisY - machineH / 2
-    : axisY - markerGapAboveAxis - markerH;
-  const giaoThoa = imageMode ? [] : overlapBands(plottedStructures);
+  const axisY = padTop + hoverExtra + symbolStackH + markerGapAboveAxis;
+  /** Đáy khối ảnh sát chấm mối trên ray trên. */
+  const machineBottomY = UPPER_RAIL_WELD_TIP_Y - MACHINE_GAP_TO_RAIL;
+  const machineBaseTop = machineBottomY - machineH;
+  const markerTop = axisY - markerGapAboveAxis - markerH;
+  const giaoThoa = overlapBands(plottedStructures);
 
   let lineStart = Number.POSITIVE_INFINITY;
   let lineEnd = Number.NEGATIVE_INFINITY;
@@ -320,7 +423,7 @@ export function TrackCenterline({
 
   return (
     <div
-      className={`grid grid-cols-[110px_1fr] gap-x-2 ${imageMode ? "relative z-30 overflow-visible" : ""}`}
+      className={`grid grid-cols-[110px_1fr] gap-x-2 ${showMachines ? "relative z-30 overflow-visible" : ""}`}
       data-testid="track-centerline"
       aria-label="Tim tuyến giữa hai ray"
     >
@@ -329,7 +432,7 @@ export function TrackCenterline({
           Tim · {rows[0]?.line?.replace(/^TUYẾN\s+/i, "") ?? ""}
         </span>
       </div>
-      <div className={`relative ${imageMode ? "overflow-visible" : ""}`} style={{ width, height: rowHeight }}>
+      <div className={`relative ${showMachines ? "overflow-visible" : ""}`} style={{ width, height: rowHeight }}>
         {axisBox ? (
           <div
             aria-hidden
@@ -350,26 +453,28 @@ export function TrackCenterline({
           );
         })}
 
-        {imageMode &&
-          machinesOnLine.map((day, index) => {
-            const tone = machineDayTone(index);
+        {machinePlacements.map(({ day, x, lift, toneIndex }) => {
+            const tone = machineDayTone(toneIndex >= 0 ? toneIndex : 0);
             const box = trackSpanStyle(day.startMetres, day.endMetres, startMetres);
-            const x = (day.metres - startMetres) * TRACK_PIXELS_PER_METRE;
             const open = activeDayId === day.id;
             const label = day.machineCode || day.machineName;
+            const welderLabel = day.welderName && day.welderName !== "—" ? day.welderName : "";
             const dayText = formatDayLabel(day.date);
             const hoursText = formatMachineDayHours(day.operatingHours);
+            const top = machineBaseTop - lift;
+            const stemTop = top + machineH;
+            const stemHeight = Math.max(2, UPPER_RAIL_WELD_TIP_Y - stemTop);
             return (
               <div
                 key={day.id}
-                className="pointer-events-none absolute inset-y-0 z-20"
+                className="pointer-events-none absolute inset-y-0 z-20 overflow-visible"
                 style={{ left: 0, width }}
                 data-machine-day={day.id}
               >
-                {/* Bôi màu cả đoạn hàn trong ngày */}
+                {/* Dải ngày mỏng trên tim */}
                 <span
                   aria-hidden
-                  className="absolute z-[11] -translate-y-1/2 rounded-sm border"
+                  className="absolute z-[11] -translate-y-1/2 rounded-full"
                   title={`${dayText} · ${hoursText} · ${day.weldCount} mối · Km ${formatChainage(day.startMetres)} – ${formatChainage(day.endMetres)}`}
                   style={{
                     left: box.left,
@@ -377,63 +482,65 @@ export function TrackCenterline({
                     top: axisY,
                     height: DAY_BAND_H,
                     background: tone.fill,
-                    borderColor: tone.ring,
                   }}
                 />
-                {/* 1 ảnh đại diện / ngày — căn giữa tim, được đè lên ray; click xem giờ */}
+                {/* Gióng ngắn xuống mối trên ray trên */}
+                <span
+                  aria-hidden
+                  className="absolute z-[12] w-px -translate-x-1/2"
+                  style={{
+                    left: x,
+                    top: stemTop,
+                    height: stemHeight,
+                    background: tone.ring,
+                    opacity: 0.55,
+                  }}
+                />
+                <span
+                  aria-hidden
+                  className="absolute z-[13] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-sm"
+                  style={{ left: x, top: UPPER_RAIL_WELD_TIP_Y, background: tone.ring }}
+                  title={day.weldCode ? `Mối cuối (ray trên): ${day.weldCode}` : "Mối hàn ray trên"}
+                />
                 <button
                   type="button"
                   data-testid="machine-on-track"
                   data-machine-metres={String(day.metres)}
                   aria-expanded={open}
-                  className={`pointer-events-auto absolute z-40 -translate-x-1/2 rounded-md border bg-white/90 px-1 pb-0.5 pt-1 shadow-md ${
-                    open ? "ring-2 ring-amber-400" : "ring-1 ring-slate-300/70"
+                  aria-haspopup="dialog"
+                  className={`pointer-events-auto absolute z-40 -translate-x-1/2 bg-transparent p-0 ${
+                    open ? "rounded-md ring-2 ring-amber-400 ring-offset-1" : ""
                   }`}
-                  style={{ left: x, top: markerTop, width: machineW, height: machineH }}
-                  title={`Nhấn để xem giờ hoạt động · ${dayText} · ${label}`}
-                  onClick={() => setActiveDayId((current) => (current === day.id ? null : day.id))}
+                  style={{ left: x, top, width: MARKER_W_IMAGE, height: machineH }}
+                  title={`Nhấn để xem nhật ký chạy máy · ${dayText} · ${label}${welderLabel ? ` · ${welderLabel}` : ""}`}
+                  onClick={() => setActiveDayId(day.id)}
                 >
-                  <span className="flex flex-col items-center gap-0.5">
-                    <MachineThumb machine={day} />
-                    <span className="w-full truncate text-center text-[9px] font-bold leading-3 text-slate-900">
+                  <span className="relative flex flex-col items-center gap-0.5">
+                    <span className="relative inline-flex items-end justify-center" style={{ height: MARKER_H_IMAGE, width: MARKER_W_IMAGE }}>
+                      <MachineThumb machine={day} />
+                      <span className="absolute -bottom-1 -right-1">
+                        <WorkerBadge machine={day} />
+                      </span>
+                      {day.weldCount > 1 ? (
+                        <span className="absolute -left-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-slate-800/90 px-1 text-[8px] font-bold leading-none text-white">
+                          {day.weldCount}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="max-w-full truncate rounded bg-white/90 px-1 text-center text-[9px] font-semibold leading-[14px] text-slate-800">
                       {dayText}
                     </span>
                   </span>
-                  {day.weldCount > 1 ? (
-                    <span className="absolute -right-1 -top-1 rounded-full bg-slate-800 px-1.5 text-[9px] font-bold text-white">
-                      {day.weldCount}
-                    </span>
-                  ) : null}
                 </button>
-                {open ? (
-                  <div
-                    role="status"
-                    data-testid="machine-day-hours"
-                    className="pointer-events-none absolute z-50 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 shadow-md"
-                    style={{ left: x, top: markerTop - 62, minWidth: 148, maxWidth: 200 }}
-                  >
-                    <span className="block text-[10px] font-bold text-amber-950">{dayText}</span>
-                    <span className="mt-0.5 block text-[11px] font-bold text-slate-900">
-                      Giờ hoạt động: {hoursText}
-                    </span>
-                    {day.workTimeRange ? (
-                      <span className="block font-mono text-[9px] text-slate-600">{day.workTimeRange}</span>
-                    ) : (
-                      <span className="block text-[9px] text-slate-500">Ước lượng 1 ca (chưa nhập giờ BĐ/KT)</span>
-                    )}
-                    <span className="mt-0.5 block truncate text-[9px] text-slate-700">{label}</span>
-                    <span className="block font-mono text-[9px] text-slate-500">
-                      Km {formatChainage(day.startMetres)} – {formatChainage(day.endMetres)}
-                      {" · "}
-                      {day.weldCount} mối
-                    </span>
-                  </div>
-                ) : null}
               </div>
             );
           })}
 
-        {!imageMode && structures &&
+        {activeDay ? (
+          <MachineDayDetailModal day={activeDay} onClose={() => setActiveDayId(null)} />
+        ) : null}
+
+        {structures &&
           clusters.map((cluster) => {
             const open = hoverClusterId === cluster.id;
             const activeId = activeTabId && cluster.items.some((item) => item.placement.id === activeTabId)
@@ -510,12 +617,19 @@ export function TrackCenterline({
                     setActiveTabId(cluster.items[0]?.placement.id ?? null);
                   }}
                 >
-                  <div className="flex items-center gap-1.5">
-                    {cluster.items.map((plotted) => {
+                  <div className="flex items-center" style={{ gap: CLUSTER_GAP }}>
+                    {cluster.items.map((plotted, index) => {
                       const codeOrName = structureLabel(plotted);
                       const selected =
                         structures.editingPlacementId === plotted.placement.id
                         || (open && activeId === plotted.placement.id);
+                      /** Trong cụm ≥2: lệch hình sang trái/phải thay vì luôn căn giữa — dễ đọc khi gần nhau. */
+                      const iconShift =
+                        cluster.items.length <= 1
+                          ? "justify-center"
+                          : index % 2 === 0
+                            ? "justify-start pl-0.5"
+                            : "justify-end pr-0.5";
                       return (
                         <button
                           key={plotted.placement.id}
@@ -529,7 +643,7 @@ export function TrackCenterline({
                           }}
                           aria-label={`Sửa ${codeOrName}`}
                           title={`${codeOrName} · Km ${formatChainage(plotted.span.startMetres)} – ${formatChainage(plotted.span.endMetres)}`}
-                          className={`flex shrink-0 items-center justify-center rounded border bg-white/95 shadow-sm hover:ring-2 hover:ring-blue-400 ${
+                          className={`flex shrink-0 items-center rounded border bg-white/95 shadow-sm hover:ring-2 hover:ring-blue-400 ${iconShift} ${
                             selected ? "ring-2 ring-blue-500" : "ring-1 ring-amber-400/50"
                           }`}
                           style={{ width: markerW, height: markerH }}

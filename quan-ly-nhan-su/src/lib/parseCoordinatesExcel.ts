@@ -152,6 +152,18 @@ export async function parseCoordinatesExcel(file: File): Promise<ExcelParseResul
       errors.push(`Dòng ${i + 1} (${code}): toạ độ ngoài khoảng hợp lệ`);
       continue;
     }
+    // Phú Quốc / Kiên Giang: kinh tuyến trục đúng là 104°30′ (EPSG:9207).
+    // Convert nhầm bằng 104°45′ → lon ≈ 104.24 → điểm ra biển phía đông đảo.
+    if (
+      latitude >= 9.8 &&
+      latitude <= 10.6 &&
+      longitude > 104.1 &&
+      longitude < 104.4
+    ) {
+      errors.push(
+        `Dòng ${i + 1} (${code}): kinh độ ${longitude} nghi lệch múi VN2000 (ra biển Phú Quốc). Kiểm tra lại: Kiên Giang dùng kinh tuyến trục 104°30′, không phải 104°45′.`,
+      );
+    }
 
     rows.push({
       code,

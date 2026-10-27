@@ -315,10 +315,15 @@ export default function MapView() {
         return;
       }
 
-      const warn =
-        parsed.errors.length > 0
-          ? ` · ${parsed.errors.length} dòng lỗi (bỏ qua)`
-          : "";
+      const seaWarns = parsed.errors.filter((msg) => msg.includes("ra biển"));
+      const otherErrs = parsed.errors.length - seaWarns.length;
+      const warnParts = [
+        otherErrs > 0 ? `${otherErrs} dòng lỗi (bỏ qua)` : "",
+        seaWarns.length > 0
+          ? `${seaWarns.length} điểm nghi ra biển (sai múi VN2000 104°45′ thay vì 104°30′ Kiên Giang)`
+          : "",
+      ].filter(Boolean);
+      const warn = warnParts.length ? ` · ${warnParts.join(" · ")}` : "";
       setStatusMsg(
         `Đã import ${res.upserted} điểm từ Excel (${file.name})${warn}`,
       );

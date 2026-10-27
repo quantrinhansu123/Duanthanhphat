@@ -12,6 +12,7 @@ type GpsRow = {
   ten_du_an?: string | null;
   cong_nghe_han?: string | null;
   loai_moi_han?: string | null;
+  tho_han_id?: string | null;
   ten_tho_han?: string | null;
   tinh_trang_thi_nghiem?: string | null;
   ket_qua_moi_han?: string | null;
@@ -28,6 +29,7 @@ type JournalRow = {
   du_an?: string | null;
   cong_nghe_han?: string | null;
   loai_moi_han?: string | null;
+  tho_han_id?: string | null;
   ten_tho_han?: string | null;
   tinh_trang_thi_nghiem?: string | null;
   so_luong_loi?: number | null;
@@ -78,6 +80,7 @@ function fromGpsRow(row: GpsRow): JournalWeld | null {
     method: row.cong_nghe_han?.trim() || "—",
     weldType: row.loai_moi_han?.trim() || "—",
     welder: row.ten_tho_han?.trim() || "—",
+    welderId: row.tho_han_id?.trim() || null,
     status: asStatus(statusText, failed),
     chainage: chain.chainage,
     metres: chain.metres,
@@ -99,6 +102,7 @@ function fromJournalRow(row: JournalRow): JournalWeld {
     method: row.cong_nghe_han?.trim() || "—",
     weldType: row.loai_moi_han?.trim() || "—",
     welder: row.ten_tho_han?.trim() || "—",
+    welderId: row.tho_han_id?.trim() || null,
     status: asStatus(row.tinh_trang_thi_nghiem, failed),
     chainage: null,
     metres: null,
@@ -119,6 +123,10 @@ function enrichHours(target: JournalWeld, source: JournalWeld) {
   if (!target.machineId && source.machineId) target.machineId = source.machineId;
   if (!target.machineCode && source.machineCode) target.machineCode = source.machineCode;
   if (!target.machineName && source.machineName) target.machineName = source.machineName;
+  if (!target.welderId && source.welderId) target.welderId = source.welderId;
+  if ((!target.welder || target.welder === "—") && source.welder && source.welder !== "—") {
+    target.welder = source.welder;
+  }
 }
 
 /** Tải mối hàn từ cùng DB nhật ký (ưu tiên view GPS có lý trình). */
@@ -132,15 +140,25 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
   // 1) View GPS — có ly_trinh gắn điểm
   {
     const pageSize = 1000;
+    const selectGps =
+      "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
+    const selectGpsNoWelderId =
+      "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
+    let selectCols = selectGps;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase
         .from("bao_cao_moi_han_gps")
-        .select(
-          "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may",
-        )
+        .select(selectCols)
         .order("ngay_thuc_hien", { ascending: false })
         .range(offset, offset + pageSize - 1);
-      if (error) break;
+      if (error) {
+        if (selectCols === selectGps && /tho_han_id/.test(error.message ?? "")) {
+          selectCols = selectGpsNoWelderId;
+          offset -= pageSize;
+          continue;
+        }
+        break;
+      }
       const page = (data ?? []) as GpsRow[];
       for (const row of page) {
         const weld = fromGpsRow(row);
@@ -156,8 +174,10 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
   {
     const pageSize = 1000;
     const selectFull =
-      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_nghi_trua";
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_nghi_trua";
     const selectBasic =
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc";
+    const selectNoWelderId =
       "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc";
     let selectCols = selectFull;
     for (let offset = 0; ; offset += pageSize) {
@@ -169,6 +189,14 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
       if (error) {
         if (selectCols === selectFull && /gio_nghi_trua/.test(error.message ?? "")) {
           selectCols = selectBasic;
+          offset -= pageSize;
+          continue;
+        }
+        if (
+          (selectCols === selectFull || selectCols === selectBasic)
+          && /tho_han_id/.test(error.message ?? "")
+        ) {
+          selectCols = selectNoWelderId;
           offset -= pageSize;
           continue;
         }

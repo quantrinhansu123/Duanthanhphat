@@ -68,13 +68,19 @@ export function chooseTrackLayout(input: {
   }
   const localTime = input.localSavedAt ? Date.parse(input.localSavedAt) : Number.NaN;
   const remoteTime = input.remoteUpdatedAt ? Date.parse(input.remoteUpdatedAt) : Number.NaN;
+  const localRich = layoutRichness(local as TrackLayout);
+  const remoteRich = layoutRichness(remote as TrackLayout);
+  // Bản local mới hơn nhưng mỏng hơn nhiều so với server → ưu tiên server (tránh đè mất bố trí/công trình).
   if (Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime)) {
+    if (remote && remoteRich > localRich * 1.25) {
+      return { layout: remote, upload: false, from: "remote" };
+    }
     return { layout: local as TrackLayout, upload: true, from: "local" };
   }
   if (Number.isFinite(localTime) && Number.isFinite(remoteTime)) {
     return { layout: remote as TrackLayout, upload: false, from: "remote" };
   }
-  if (local && remote && layoutRichness(local) > layoutRichness(remote)) {
+  if (local && remote && localRich > remoteRich) {
     return { layout: local, upload: true, from: "local" };
   }
   return { layout: remote as TrackLayout, upload: false, from: "remote" };

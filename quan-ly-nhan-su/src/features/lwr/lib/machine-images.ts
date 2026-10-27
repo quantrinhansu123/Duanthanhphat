@@ -13,12 +13,17 @@ export type MachineOnTrack = {
   machineId: string | null;
   machineCode: string;
   machineName: string;
-  /** Điểm đặt ảnh = giữa đoạn ngày. */
+  /** Điểm đặt ảnh = lý trình mối hàn cuối cùng trong ngày. */
   metres: number;
   startMetres: number;
   endMetres: number;
   chainage: string | null;
   imageUrl: string | null;
+  /** Thợ hàn / công nhân gắn mối cuối ngày — ảnh cạnh máy. */
+  welderId: string | null;
+  welderName: string;
+  welderImageUrl: string | null;
+  /** Mã mối hàn cuối ngày (điểm gióng ảnh). */
   weldCode: string;
   weldCount: number;
   /** Tên dự án (nhật ký) — dùng bộ lọc. */
@@ -99,16 +104,75 @@ export async function loadMachineImageMap(): Promise<Record<string, string>> {
   return map;
 }
 
+/** Cho phép URL ảnh nhân sự (https / data / đường dẫn tĩnh). */
+export function safeWelderImageUrl(url: string | null | undefined): string | null {
+  const raw = (url ?? "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  if (raw.startsWith("data:image/")) return raw;
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "https:") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Map employee_id + tên (không phân biệt hoa thường) → ảnh hồ sơ. */
+export async function loadWelderImageMap(): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  if (!supabase) return map;
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("nhan_su")
+      .select("employee_id,ho_ten,hinh_anh")
+      .order("ho_ten", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error || !data) return map;
+    const page = data as { employee_id: string; ho_ten: string | null; hinh_anh: string | null }[];
+    for (const row of page) {
+      const url = (row.hinh_anh ?? "").trim();
+      if (!url || url.endsWith(".svg")) continue;
+      if (row.employee_id) map[row.employee_id] = url;
+      const name = (row.ho_ten ?? "").trim().toLocaleLowerCase("vi");
+      if (name && !map[name]) map[name] = url;
+    }
+    if (page.length < pageSize) break;
+  }
+  return map;
+}
+
+type DayWeldPoint = {
+  metres: number;
+  code: string;
+  startTime: string | null;
+  endTime: string | null;
+  welderId: string | null;
+  welderName: string;
+};
+
 type DayBucket = {
   date: string | null;
   project: string;
-  metres: number[];
+  points: DayWeldPoint[];
   machineVotes: Map<string, { count: number; machineId: string | null; machineCode: string; machineName: string }>;
-  weldCodes: string[];
+  welderVotes: Map<string, { count: number; welderId: string | null; welderName: string }>;
   startTimes: string[];
   endTimes: string[];
   lunchHours: number;
 };
+
+/** Mối cuối ngày: lý trình lớn nhất; cùng lý trình thì giờ kết thúc/bắt đầu muộn hơn. */
+function pickLastWeldOfDay(points: DayWeldPoint[]): DayWeldPoint {
+  return [...points].sort((a, b) => {
+    if (a.metres !== b.metres) return a.metres - b.metres;
+    const aTime = a.endTime || a.startTime || "";
+    const bTime = b.endTime || b.startTime || "";
+    return aTime.localeCompare(bTime);
+  }).at(-1)!;
+}
 
 function dayOperatingHours(bucket: DayBucket): { hours: number; range: string | null } {
   const starts = [...bucket.startTimes].sort();
@@ -126,11 +190,12 @@ function dayOperatingHours(bucket: DayBucket): { hours: number; range: string | 
 }
 
 /**
- * Gom theo ngày (+ dự án): mỗi ngày chỉ 1 ảnh đại diện + đoạn lý trình min→max để bôi màu.
+ * Gom theo ngày (+ dự án): mỗi ngày 1 ảnh máy + ảnh công nhân đại diện + đoạn lý trình.
  */
 export function buildMachineOnTrack(
   welds: JournalWeld[],
   imageByKey: Record<string, string>,
+  welderImageByKey: Record<string, string> = {},
 ): MachineOnTrack[] {
   const buckets = new Map<string, DayBucket>();
 
@@ -147,17 +212,25 @@ export function buildMachineOnTrack(
       bucket = {
         date,
         project,
-        metres: [],
+        points: [],
         machineVotes: new Map(),
-        weldCodes: [],
+        welderVotes: new Map(),
         startTimes: [],
         endTimes: [],
         lunchHours: 0,
       };
       buckets.set(key, bucket);
     }
-    bucket.metres.push(weld.metres);
-    if (bucket.weldCodes.length < 8) bucket.weldCodes.push(weld.code);
+    const welderId = weld.welderId?.trim() || null;
+    const welderName = weld.welder?.trim() && weld.welder !== "—" ? weld.welder.trim() : "";
+    bucket.points.push({
+      metres: weld.metres,
+      code: weld.code,
+      startTime: weld.startTime ?? null,
+      endTime: weld.endTime ?? null,
+      welderId,
+      welderName,
+    });
     if (weld.startTime) bucket.startTimes.push(weld.startTime);
     if (weld.endTime) bucket.endTimes.push(weld.endTime);
     const lunch = Number(weld.lunchHours);
@@ -175,24 +248,37 @@ export function buildMachineOnTrack(
         machineName: weld.machineName?.trim() || machineCode || "Máy",
       });
     }
+    if (welderId || welderName) {
+      const welderKey = welderId || welderName.toLocaleLowerCase("vi");
+      const prevWelder = bucket.welderVotes.get(welderKey);
+      if (prevWelder) {
+        prevWelder.count += 1;
+        if (!prevWelder.welderName && welderName) prevWelder.welderName = welderName;
+        if (!prevWelder.welderId && welderId) prevWelder.welderId = welderId;
+      } else {
+        bucket.welderVotes.set(welderKey, { count: 1, welderId, welderName: welderName || "Công nhân" });
+      }
+    }
   }
 
   const out: MachineOnTrack[] = [];
   for (const [key, bucket] of buckets) {
-    if (bucket.metres.length === 0) continue;
-    let startMetres = bucket.metres[0];
-    let endMetres = bucket.metres[0];
-    for (const metres of bucket.metres) {
-      if (metres < startMetres) startMetres = metres;
-      if (metres > endMetres) endMetres = metres;
+    if (bucket.points.length === 0) continue;
+    let startMetres = bucket.points[0].metres;
+    let endMetres = bucket.points[0].metres;
+    for (const point of bucket.points) {
+      if (point.metres < startMetres) startMetres = point.metres;
+      if (point.metres > endMetres) endMetres = point.metres;
     }
-    // Một mối đơn → đoạn tối thiểu ~20 m để vẫn nhìn thấy màu.
-    if (endMetres - startMetres < 20) {
-      const pad = (20 - (endMetres - startMetres)) / 2;
-      startMetres = Math.max(0, startMetres - pad);
-      endMetres = endMetres + pad;
+    const last = pickLastWeldOfDay(bucket.points);
+    // Đoạn màu: min→max thực; mối đơn → đệm nhẹ để nhìn thấy.
+    let bandStart = startMetres;
+    let bandEnd = endMetres;
+    if (bandEnd - bandStart < 20) {
+      const pad = (20 - (bandEnd - bandStart)) / 2;
+      bandStart = Math.max(0, bandStart - pad);
+      bandEnd = bandEnd + pad;
     }
-    const metres = (startMetres + endMetres) / 2;
     let best: { count: number; machineId: string | null; machineCode: string; machineName: string } | null = null;
     for (const vote of bucket.machineVotes.values()) {
       if (!best || vote.count > best.count) best = vote;
@@ -202,19 +288,37 @@ export function buildMachineOnTrack(
       (best.machineId && imageByKey[best.machineId])
       || (best.machineCode && imageByKey[best.machineCode])
       || null;
+    // Ưu tiên thợ của mối cuối ngày (điểm gióng); không có thì lấy người hàn nhiều nhất.
+    let welderId = last.welderId;
+    let welderName = last.welderName;
+    if (!welderId && !welderName) {
+      let bestWelder: { count: number; welderId: string | null; welderName: string } | null = null;
+      for (const vote of bucket.welderVotes.values()) {
+        if (!bestWelder || vote.count > bestWelder.count) bestWelder = vote;
+      }
+      welderId = bestWelder?.welderId ?? null;
+      welderName = bestWelder?.welderName ?? "";
+    }
+    const welderImageUrl =
+      (welderId && welderImageByKey[welderId])
+      || (welderName && welderImageByKey[welderName.toLocaleLowerCase("vi")])
+      || null;
     const work = dayOperatingHours(bucket);
     out.push({
       id: `day:${key}`,
       machineId: best.machineId,
       machineCode: best.machineCode,
       machineName: best.machineName,
-      metres,
-      startMetres,
-      endMetres,
+      metres: last.metres,
+      startMetres: bandStart,
+      endMetres: bandEnd,
       chainage: null,
       imageUrl,
-      weldCode: bucket.weldCodes[0] ?? "",
-      weldCount: bucket.metres.length,
+      welderId,
+      welderName: welderName || "—",
+      welderImageUrl,
+      weldCode: last.code,
+      weldCount: bucket.points.length,
       project: bucket.project,
       date: bucket.date,
       operatingHours: work.hours,
@@ -232,13 +336,14 @@ export function buildMachineOnTrack(
 
 /** Màu bôi đoạn theo thứ tự ngày (ổn định theo id). */
 export function machineDayTone(index: number): { fill: string; ring: string } {
+  /** Nhạt hơn để không át thanh LWR / mối hàn trên sơ đồ chính. */
   const tones = [
-    { fill: "rgb(245 158 11 / 0.42)", ring: "rgb(217 119 6)" },
-    { fill: "rgb(14 165 233 / 0.38)", ring: "rgb(2 132 199)" },
-    { fill: "rgb(16 185 129 / 0.38)", ring: "rgb(5 150 105)" },
-    { fill: "rgb(168 85 247 / 0.35)", ring: "rgb(126 34 206)" },
-    { fill: "rgb(244 63 94 / 0.35)", ring: "rgb(225 29 72)" },
-    { fill: "rgb(99 102 241 / 0.38)", ring: "rgb(79 70 229)" },
+    { fill: "rgb(245 158 11 / 0.22)", ring: "rgb(217 119 6)" },
+    { fill: "rgb(14 165 233 / 0.2)", ring: "rgb(2 132 199)" },
+    { fill: "rgb(16 185 129 / 0.2)", ring: "rgb(5 150 105)" },
+    { fill: "rgb(168 85 247 / 0.18)", ring: "rgb(126 34 206)" },
+    { fill: "rgb(244 63 94 / 0.18)", ring: "rgb(225 29 72)" },
+    { fill: "rgb(99 102 241 / 0.2)", ring: "rgb(79 70 229)" },
   ];
   return tones[((index % tones.length) + tones.length) % tones.length];
 }

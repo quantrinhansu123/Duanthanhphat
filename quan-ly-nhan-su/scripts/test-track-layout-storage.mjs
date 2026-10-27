@@ -55,8 +55,17 @@ test("newer timestamp wins, legacy cache yields once the server has a schematic"
     remote,
     remoteUpdatedAt: "2026-10-27T14:00:00.000Z",
   });
-  assert.equal(newerLocal.from, "local");
-  assert.equal(newerLocal.upload, true);
+  // local chỉ thêm 1 đoạn, remote đã rải 4 → remote giàu hơn, không để local mỏng đè mất.
+  assert.equal(newerLocal.from, "remote");
+  assert.equal(newerLocal.upload, false);
+  const newerLocalRicher = chooseTrackLayout({
+    local: { ...initial, rows: extendRailRows(initial.rows, 6) },
+    localSavedAt: "2026-10-27T15:00:00.000Z",
+    remote,
+    remoteUpdatedAt: "2026-10-27T14:00:00.000Z",
+  });
+  assert.equal(newerLocalRicher.from, "local");
+  assert.equal(newerLocalRicher.upload, true);
   const newerRemote = chooseTrackLayout({
     local,
     localSavedAt: "2026-10-27T13:00:00.000Z",

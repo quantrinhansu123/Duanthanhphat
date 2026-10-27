@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ComboBoxInput from "@/components/ComboBoxInput";
 import DailyWorkReportPrint from "@/components/DailyWorkReportPrint";
@@ -1232,11 +1231,6 @@ function IncidentFormModal({
   );
 }
 
-const TrackDashboard = dynamic(
-  () => import("@lwr/components/track/TrackDashboard").then((m) => m.TrackDashboard),
-  { ssr: false },
-);
-
 export default function DailyWorkReport() {
   const today = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -1568,19 +1562,7 @@ export default function DailyWorkReport() {
         </div>
       )}
 
-      <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-[#f4f6fa] shadow-xs" aria-label="Theo dõi tiến độ thi công lắp đặt đường sắt">
-        <div className="border-b border-slate-200 bg-white px-4 py-3">
-          <h2 className="text-sm sm:text-base font-bold text-slate-900">Theo dõi tiến độ thi công lắp đặt đường sắt</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Giải phóng Excel: khai tuyến, nhập công trình, cập nhật ray đã lắp và đoạn LWR ngay tại đây. Dữ liệu dùng chung với menu Quản lý hàn ray LWR — nhập một nơi, hiện cả hai nơi.
-          </p>
-        </div>
-        <div className="p-3 sm:p-4">
-          <TrackDashboard />
-        </div>
-      </section>
-
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-4 mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
           <p className="mt-0.5 text-xs text-slate-500">

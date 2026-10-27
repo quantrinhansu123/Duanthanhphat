@@ -1,6 +1,10 @@
 /**
  * Import điểm Autolisp TT vào toa_do, rồi thử đồng bộ vài nhật ký hàn.
  *
+ * WGS trong sample phải theo múi Kiên Giang VN2000 TM-3 104°30′ (EPSG:9207).
+ * Không dùng 104°45′ — sẽ lệch +0.25° kinh độ ra biển Phú Quốc.
+ * Nếu phát hiện lại: node scripts/fix-toa-do-sea-shift.mjs --apply
+ *
  * Usage:
  *   node scripts/import-autolisp-and-sync-journal.mjs
  *   node scripts/import-autolisp-and-sync-journal.mjs --sync=5

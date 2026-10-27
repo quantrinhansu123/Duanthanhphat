@@ -50,9 +50,6 @@ export function LongRailDetailPanel({
         </button>
       </header>
       <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
-        {onPassChange && (
-          <ReleaseStatusButtons passed={passed} onChange={onPassChange} />
-        )}
         <dl className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-3 text-sm">
           <div>
             <dt className="text-slate-500">Dải ray</dt>
@@ -77,16 +74,16 @@ export function LongRailDetailPanel({
             </dd>
           </div>
         </dl>
-        <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-          {longRail.completedAt
-            ? "Đoạn đã giải toả xong — lý trình đầu/cuối không sửa được. Bỏ tick Hoàn thành ở form lý trình nếu cần mở lại."
-            : <>Cập nhật <b>lý trình cuối</b> mỗi ngày hàn xong tại form «Theo dõi lý trình thực tế». Bấm <b>Lưu thông số</b> để giữ bảng tính.</>}
-        </p>
         <StressReleaseCalculator
           key={longRail.id}
           compact
           segmentId={longRail.code}
           chainageLocked={Boolean(longRail.completedAt)}
+          statusSlot={
+            onPassChange
+              ? <ReleaseStatusButtons passed={passed} onChange={onPassChange} />
+              : undefined
+          }
           initialInput={{
             ...longRail.params,
             trackSide: longRail.rowKey.endsWith("T") ? "LEFT" : "RIGHT",

@@ -10,6 +10,8 @@ export interface JournalWeld {
   method: string;
   weldType: string;
   welder: string;
+  /** employee_id thợ hàn — lấy ảnh nhân sự trên sơ đồ. */
+  welderId?: string | null;
   status: WeldTestStatus | string;
   chainage: string | null;
   metres: number | null;

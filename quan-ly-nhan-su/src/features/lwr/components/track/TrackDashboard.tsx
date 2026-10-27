@@ -52,7 +52,7 @@ import {
 } from "@lwr/lib/track-layout-storage";
 import { loadStructureSymbols } from "@lwr/lib/structure-storage";
 import { loadJournalWelds } from "@lwr/lib/weld-journal";
-import { buildMachineOnTrack, loadMachineImageMap } from "@lwr/lib/machine-images";
+import { buildMachineOnTrack, loadMachineImageMap, loadWelderImageMap } from "@lwr/lib/machine-images";
 import { buildRailJoints } from "@lwr/lib/weld-track-map";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailRow } from "@lwr/types/track";
@@ -64,6 +64,7 @@ import { RailDetailPanel } from "./RailDetailPanel";
 import type { StressSaveResult } from "./StressReleaseCalculator";
 import { WeldJointPanel } from "./WeldJointPanel";
 import { TrackPrint } from "./TrackPrint";
+import SelectMenu from "@/components/SelectMenu";
 import { loadProjects } from "@/lib/projectsDb";
 import type { Project } from "@/data/projects";
 
@@ -82,13 +83,34 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
     void loadProjects({ includeProgress: false }).then(result => { if (active) { setProjects(result.projects); setProjectError(result.error ?? ""); } }).catch(cause => { if (active) setProjectError(String(cause)); });
     return () => { active = false; };
   }, []);
+  const projectOptions = useMemo(
+    () => [
+      { value: "", label: "Sơ đồ hiện có (chưa gán dự án)" },
+      ...projects.map((p) => ({
+        value: p.id,
+        label: p.name,
+        hint: p.maDuAn?.trim() || undefined,
+      })),
+    ],
+    [projects],
+  );
+
   return <div className="min-w-0 space-y-3">
-    <label className="block min-w-0 rounded border bg-white p-3 text-sm">Dự án
-      <select className="mt-1 block w-full min-w-0 rounded border p-2" value={projectId} onChange={e => setProjectId(e.target.value)}>
-        <option value="">Sơ đồ hiện có (chưa gán dự án)</option>
-        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-    </label>
+    <div className="block min-w-0 rounded border bg-white p-3 text-sm">
+      <span className="font-medium text-slate-800">Dự án</span>
+      <div className="mt-1">
+        <SelectMenu
+          searchable
+          value={projectId}
+          onChange={setProjectId}
+          options={projectOptions}
+          placeholder="Gõ tên / mã dự án để tìm…"
+          searchPlaceholder="Gõ để lọc dự án…"
+          emptyLabel="Không có dự án khớp"
+          buttonClassName="w-full min-w-0 rounded border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
+        />
+      </div>
+    </div>
     {projectError && <p role="status" className="text-xs text-amber-700">Không tải đủ thông tin dự án: {projectError}</p>}
     <ProjectTrackDashboard key={projectId} initialCellId={initialCellId} project={projects.find(p => p.id === projectId)} projects={projects} onAssigned={setProjectId} />
   </div>;
@@ -115,6 +137,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   const [joints, setJoints] = useState<RailJoint[]>([]);
   const [journalWelds, setJournalWelds] = useState<JournalWeld[]>([]);
   const [machineImages, setMachineImages] = useState<Record<string, string>>({});
+  const [welderImages, setWelderImages] = useState<Record<string, string>>({});
   const [printOpen, setPrintOpen] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
@@ -265,6 +288,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             };
             setLayout(localLayout);
             rememberLocal(localLayout, savedAt);
+            setLayoutSyncNote(null);
           } else if (chosen.upload) {
             const savedAt = storedSavedAt ?? new Date().toISOString();
             savedAtRef.current = savedAt;
@@ -274,7 +298,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             if (savedAtRef.current === savedAt) {
               if (!uploaded.ok) setLayoutSyncNote(uploaded.error ?? "Không đưa sơ đồ lên Supabase.");
               else if (uploaded.skipped && uploaded.error) setLayoutSyncNote(uploaded.error);
-              else setLayoutSyncNote("Đã đưa sơ đồ local lên Supabase.");
+              else setLayoutSyncNote(null);
             }
           }
         }
@@ -351,8 +375,10 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
 
   useEffect(() => {
     let active = true;
-    void loadMachineImageMap().then((map) => {
-      if (active) setMachineImages(map);
+    void Promise.all([loadMachineImageMap(), loadWelderImageMap()]).then(([machines, welders]) => {
+      if (!active) return;
+      setMachineImages(machines);
+      setWelderImages(welders);
     });
     return () => {
       active = false;
@@ -366,8 +392,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   }, [layout.longRails, selectedLongRailId]);
 
   const machineMarkers = useMemo(
-    () => buildMachineOnTrack(journalWelds, machineImages),
-    [journalWelds, machineImages],
+    () => buildMachineOnTrack(journalWelds, machineImages, welderImages),
+    [journalWelds, machineImages, welderImages],
   );
 
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);
@@ -889,7 +915,6 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       >
         <span>
           {project ? <>Đang gán dự án: <b>{project.name}</b></> : <><b>Chưa gán dự án.</b> Chọn dự án ở ô «Dự án» phía trên trước khi mở hoặc lưu thanh ray dài.</>}
-          {savedNote && <span className="ml-2 text-xs opacity-80">{savedNote}</span>}
         </span>
         <span className="flex flex-wrap items-center gap-2">
           {!project && projects.length > 0 && (
@@ -907,24 +932,13 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
           </button>
         </span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">Bấm mối hàn để chọn nhật ký tương ứng. Mã và công nghệ hàn được điền từ nhật ký.</p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <button type="button" onClick={() => setPrintOpen(true)} className="rounded border bg-white px-3 py-2 text-sm">In sơ đồ A4 / A3 / A3 kéo dài</button>
       </div>
       {printOpen && <TrackPrint projectName={project?.name} layout={layout} joints={joints} symbols={symbols} onClose={() => setPrintOpen(false)} />}
       {error && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
-        </p>
-      )}
-      {longRailSyncNote && (
-        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {longRailSyncNote}
-        </p>
-      )}
-      {layoutSyncNote && (
-        <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {layoutSyncNote}
         </p>
       )}
       {weldError && (

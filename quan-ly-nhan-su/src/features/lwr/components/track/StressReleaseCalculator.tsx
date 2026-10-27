@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   BUFFER_RAIL_LENGTH,
@@ -114,6 +114,7 @@ export function StressReleaseCalculator({
   onSave,
   onModeChange,
   chainageLocked = false,
+  statusSlot,
 }: {
   initialInput?: StressInput;
   segmentId?: string;
@@ -122,6 +123,8 @@ export function StressReleaseCalculator({
   onModeChange?: (mode: Mode) => void;
   /** Khóa lý trình đầu/cuối khi thanh LWR đã giải toả xong. */
   chainageLocked?: boolean;
+  /** Nút Đạt / Không đạt — đặt ngay dưới Lưu thông số / In A4. */
+  statusSlot?: ReactNode;
 }) {
   const { lang, t } = useLanguage();
   const [fields, setFields] = useState(() => initialFields(initialInput));
@@ -267,24 +270,6 @@ export function StressReleaseCalculator({
       alpha: String(profile.alpha),
     }));
   }
-  function exportCsv() {
-    if (!result || !canExport) return;
-    const data = [["Bảng tính toán giải tỏa ứng suất", modes[mode]], ...(segmentId ? [["Đoạn ray", segmentId]] : []),
-      ["Loại ray", railLabel],
-      ...inputRows.map(([label, value, unit]) => [label, String(value), unit]),
-      ["KÉO (nhiệt độ giảm)"], ...tension.map(([label, value, unit]) => [label, String(value), unit]),
-      ["NÉN (nhiệt độ tăng)"], ...compression.map(([label, value, unit]) => [label, String(value), unit]),
-      ["Kết quả", "Giá trị", "Đơn vị"], ...rows.map(([label, value, unit]) => [label, value === null ? "Không áp dụng" : String(value), unit]),
-      ...(buffer ? [
-        ["Khe hở tính toán (dự phòng)", "Giới hạn dưới ở nhiệt độ cao nhất (mm)", "Ký hiệu", "Giới hạn trên ở nhiệt độ thấp nhất (mm)", "Công thức dưới", "Công thức trên", "Kết luận"],
-        ...gapRows.map(row => [row.label, String(row.lower), row.symbol, String(row.upper), row.lowerFormula, row.upperFormula, row.feasible ? "Có khoảng thoả mãn" : "Không có khoảng thoả mãn"]),
-      ] : []),
-      ...notices.map(note => ["Ghi chú", note])];
-    // Xu\u1EA5t file theo ng\u00F4n ng\u1EEF \u0111ang ch\u1ECDn (EN: d\u1ECBch nh\u00E3n, ghi ch\u00FA, k\u1EBFt lu\u1EADn).
-    const csv = "\uFEFF" + data.map(row => row.map(cell => `"${t(String(cell)).replaceAll('"', '""')}"`).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = `${lang === "en" ? "stress-release" : "giai-toa"}-${mode}${segmentId ? `-${segmentId}` : ""}.csv`; a.click(); URL.revokeObjectURL(url);
-  }
   const results = result && <>
     <div className="thermal-results grid gap-3 sm:grid-cols-2">
       <ResultTable title="KÉO (nhiệt độ giảm) · biên độ giảm lớn nhất" rows={tension} />
@@ -345,15 +330,22 @@ export function StressReleaseCalculator({
       >
         Lưu thông số
       </button>
-      <button type="button" disabled={!canExport} onClick={exportCsv} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-40">Xuất CSV</button>
       <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
     </div>
   );
   return <div className="mx-auto max-w-7xl space-y-4 text-slate-800">
-    <header className={`flex gap-3 ${compact ? "flex-col" : "flex-wrap items-start justify-between"}`}>
-      {compact ? actions : title}
-      {compact ? title : actions}
-    </header>
+    {compact && statusSlot ? (
+      <div className="space-y-3">
+        {actions}
+        {statusSlot}
+        {title}
+      </div>
+    ) : (
+      <header className={`flex gap-3 ${compact ? "flex-col" : "flex-wrap items-start justify-between"}`}>
+        {compact ? actions : title}
+        {compact ? title : actions}
+      </header>
+    )}
     {saveNotice && (
       <p
         role="status"

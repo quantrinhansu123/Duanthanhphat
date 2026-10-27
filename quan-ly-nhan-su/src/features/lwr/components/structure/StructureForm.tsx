@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
+import { STATUS_OPTIONS } from "@lwr/lib/structure-data";
 import { safeImageUrl, validateImage } from "@lwr/lib/safe-url";
-import type { StructureInput, StructureSymbol } from "@lwr/types/structure";
+import type { StructureInput, StructureStatus, StructureSymbol } from "@lwr/types/structure";
 
 interface StructureFormProps {
   initial: StructureSymbol | null;
@@ -25,12 +26,33 @@ const EMPTY: StructureInput = {
   image_url: null,
 };
 
+function toFormState(initial: StructureSymbol | null): StructureInput {
+  if (!initial) return { ...EMPTY };
+  return {
+    code: initial.code,
+    name: initial.name,
+    name_en: initial.name_en ?? "",
+    line: initial.line ?? "",
+    km_start: initial.km_start,
+    km_end: initial.km_end,
+    status: initial.status,
+    managing_unit: initial.managing_unit ?? "",
+    note: initial.note ?? "",
+    image_url: initial.image_url,
+  };
+}
+
+function emptyToNull(value: string | null | undefined) {
+  const text = (value ?? "").trim();
+  return text || null;
+}
+
 const inputCls =
   "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
 /** Add/edit modal. Avatar image is pasted (Ctrl+V) from the clipboard or picked from disk. */
 export function StructureForm({ initial, saving, onCancel, onSubmit }: StructureFormProps) {
-  const [form, setForm] = useState<StructureInput>(initial ?? EMPTY);
+  const [form, setForm] = useState<StructureInput>(() => toFormState(initial));
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(safeImageUrl(initial?.image_url));
   const [removed, setRemoved] = useState(false);
@@ -81,7 +103,19 @@ export function StructureForm({ initial, saving, onCancel, onSubmit }: Structure
           e.preventDefault();
           const name = form.name.trim();
           if (!name) return;
-          onSubmit({ ...form, name, code: initial?.code || crypto.randomUUID() }, file, removed);
+          onSubmit(
+            {
+              ...form,
+              name,
+              name_en: emptyToNull(form.name_en),
+              line: emptyToNull(form.line),
+              managing_unit: emptyToNull(form.managing_unit),
+              note: emptyToNull(form.note),
+              code: initial?.code || crypto.randomUUID(),
+            },
+            file,
+            removed,
+          );
         }}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -93,13 +127,49 @@ export function StructureForm({ initial, saving, onCancel, onSubmit }: Structure
           </button>
         </div>
 
-        <label className="mb-4 block text-xs text-slate-600">
+        <label className="mb-3 block text-xs text-slate-600">
           Tên ký hiệu *
           <input
             required
             className={inputCls}
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
+          />
+        </label>
+
+        <label className="mb-3 block text-xs text-slate-600">
+          Tên tiếng Anh
+          <input
+            className={inputCls}
+            value={form.name_en ?? ""}
+            onChange={(e) => set("name_en", e.target.value)}
+            placeholder="English name"
+          />
+        </label>
+
+        <label className="mb-3 block text-xs text-slate-600">
+          Trạng thái
+          <select
+            className={inputCls}
+            value={form.status}
+            onChange={(e) => set("status", e.target.value as StructureStatus)}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="mb-3 block text-xs text-slate-600">
+          Ghi chú
+          <textarea
+            className={`${inputCls} min-h-[72px] resize-y`}
+            value={form.note ?? ""}
+            onChange={(e) => set("note", e.target.value)}
+            placeholder="Ghi chú thêm (không bắt buộc)"
+            rows={3}
           />
         </label>
 

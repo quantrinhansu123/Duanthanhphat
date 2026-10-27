@@ -3,7 +3,7 @@
 import { Fragment, memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Image as ImageIcon, Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
-import { machineDayTone, type MachineOnTrack } from "@lwr/lib/machine-images";
+import { type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
 import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
@@ -116,7 +116,7 @@ interface RailGridProps {
   appendError?: string | null;
   /** Đoạn đã lắp ray theo tuyến — vẽ nét đỏ trên dải ray. */
   installed?: Record<string, InstalledRange[]>;
-  /** Ảnh máy (danh-sach-may) gắn theo lý trình nhật ký — chế độ “Ảnh thiết bị trên ray”. */
+  /** Ảnh máy (danh-sach-may) gắn theo lý trình nhật ký — chồng lên sơ đồ chính. */
   machineMarkers?: MachineOnTrack[];
 }
 
@@ -147,7 +147,8 @@ export const RailGrid = memo(function RailGrid({
   machineMarkers = [],
 }: RailGridProps) {
   const [appendDraft, setAppendDraft] = useState<AppendDraft | null>(null);
-  const [deviceImageMode, setDeviceImageMode] = useState(false);
+  /** Bật/tắt lớp ảnh máy chồng trên sơ đồ chính (không ẩn thanh LWR / mối hàn). */
+  const [showMachineImages, setShowMachineImages] = useState(true);
   const [filterProject, setFilterProject] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -202,9 +203,9 @@ export const RailGrid = memo(function RailGrid({
     deviceScrollDone.current = false;
   }, [filterProject, filterDateFrom, filterDateTo]);
 
-  /** Bật chế độ ảnh máy / đổi lọc → tự cuộn ngang tới đoạn ray có máy đầu tiên. */
+  /** Bật ảnh máy / đổi lọc → tự cuộn ngang tới máy đầu tiên trên sơ đồ chính. */
   useEffect(() => {
-    if (!deviceImageMode) {
+    if (!showMachineImages) {
       deviceScrollDone.current = false;
       return;
     }
@@ -236,7 +237,6 @@ export const RailGrid = memo(function RailGrid({
           return;
         }
 
-        // Fallback khi DOM marker chưa kịp render: tính theo lý trình trong phạm vi sơ đồ.
         const extentNow = trackExtent(rows);
         const focus =
           filteredMachineMarkers.find(
@@ -256,128 +256,92 @@ export const RailGrid = memo(function RailGrid({
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [deviceImageMode, filteredMachineMarkers, rows]);
+  }, [showMachineImages, filteredMachineMarkers, rows]);
 
   const extent = trackExtent(rows);
   const planned = Math.max(0, (extent.endMetres - extent.startMetres) * TRACK_PIXELS_PER_METRE);
   const lineWidth = planned > 0 ? planned : EMPTY_LINE;
   const width = lineWidth + ADD_GUTTER;
+  const visibleMachines = showMachineImages ? filteredMachineMarkers : [];
+
   return <div className="border-t border-slate-200 bg-white">
     <div className="space-y-1 border-b px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold">
-          {deviceImageMode
-            ? "Chế độ ảnh thiết bị trên đường ray"
-            : "Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công"}
+          Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công
         </h2>
         <button
           type="button"
           data-testid="rail-grid-device-images"
-          aria-pressed={deviceImageMode}
-          onClick={() => setDeviceImageMode((open) => !open)}
+          aria-pressed={showMachineImages}
+          onClick={() => setShowMachineImages((open) => !open)}
           className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-semibold ${
-            deviceImageMode
+            showMachineImages
               ? "border-amber-500 bg-amber-50 text-amber-950 ring-1 ring-amber-400"
               : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
           }`}
-          title={deviceImageMode ? "Tắt chế độ ảnh — hiện lại thanh LWR, mối hàn, lắp ray" : "Hiện ảnh máy (danh sách máy, xóa nền) theo lý trình nhật ký hàn; tạm ẩn phần khác"}
+          title={showMachineImages ? "Ẩn ảnh máy trên sơ đồ" : "Hiện ảnh máy (xóa nền) theo lý trình nhật ký hàn trên sơ đồ chính"}
         >
           <ImageIcon className="size-4" aria-hidden />
-          {deviceImageMode ? "Đang xem ảnh thiết bị · Tắt" : "Ảnh thiết bị trên ray"}
+          {showMachineImages ? "Đang hiện ảnh máy" : "Hiện ảnh máy"}
         </button>
       </div>
-      {deviceImageMode ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2">
-            <label className="min-w-[10rem] flex-1 text-[11px] font-semibold text-slate-700">
-              Dự án
-              <select
-                data-testid="machine-filter-project"
-                className="mt-0.5 block w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
-                value={filterProject}
-                onChange={(event) => setFilterProject(event.target.value)}
-              >
-                <option value="">Tất cả dự án</option>
-                {projectOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-[11px] font-semibold text-slate-700">
-              Từ ngày
-              <input
-                type="date"
-                data-testid="machine-filter-date-from"
-                className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
-                value={filterDateFrom}
-                max={filterDateTo || undefined}
-                onChange={(event) => setFilterDateFrom(event.target.value)}
-              />
-            </label>
-            <label className="text-[11px] font-semibold text-slate-700">
-              Đến ngày
-              <input
-                type="date"
-                data-testid="machine-filter-date-to"
-                className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
-                value={filterDateTo}
-                min={filterDateFrom || undefined}
-                onChange={(event) => setFilterDateTo(event.target.value)}
-              />
-            </label>
-            {filtersActive ? (
-              <button
-                type="button"
-                className="h-8 rounded border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => {
-                  setFilterProject("");
-                  setFilterDateFrom("");
-                  setFilterDateTo("");
-                }}
-              >
-                Xóa lọc
-              </button>
-            ) : null}
-          </div>
-          <p className="text-xs text-amber-900">
-            Mỗi ngày: bôi màu đoạn hàn + 1 ảnh đại diện (luôn hiện ngày). Nhấn ảnh để xem giờ hoạt động trong ngày.
-            {machineMarkers.length === 0
-              ? " Chưa có mối hàn nào vừa có máy vừa có lý trình trong phạm vi sơ đồ."
-              : filteredMachineMarkers.length === 0
-                ? ` Có ${machineMarkers.length} ngày/đoạn nhưng không khớp bộ lọc Dự án/Ngày.`
-                : ` Đang hiện ${filteredMachineMarkers.length} ngày — đã cuộn tới đoạn gần nhất.`}
-            {" "}Bấm lại nút để trở về sơ đồ đầy đủ.
-          </p>
+      {showMachineImages ? (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2">
+          <label className="min-w-[10rem] flex-1 text-[11px] font-semibold text-slate-700">
+            Dự án
+            <select
+              data-testid="machine-filter-project"
+              className="mt-0.5 block w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+              value={filterProject}
+              onChange={(event) => setFilterProject(event.target.value)}
+            >
+              <option value="">Tất cả dự án</option>
+              {projectOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold text-slate-700">
+            Từ ngày
+            <input
+              type="date"
+              data-testid="machine-filter-date-from"
+              className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+              value={filterDateFrom}
+              max={filterDateTo || undefined}
+              onChange={(event) => setFilterDateFrom(event.target.value)}
+            />
+          </label>
+          <label className="text-[11px] font-semibold text-slate-700">
+            Đến ngày
+            <input
+              type="date"
+              data-testid="machine-filter-date-to"
+              className="mt-0.5 block rounded border border-slate-300 bg-white px-2 py-1.5 text-xs font-normal text-slate-800"
+              value={filterDateTo}
+              min={filterDateFrom || undefined}
+              onChange={(event) => setFilterDateTo(event.target.value)}
+            />
+          </label>
+          {filtersActive ? (
+            <button
+              type="button"
+              className="h-8 rounded border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => {
+                setFilterProject("");
+                setFilterDateFrom("");
+                setFilterDateTo("");
+              }}
+            >
+              Xóa lọc
+            </button>
+          ) : null}
         </div>
-      ) : (
-        <>
-          <p className="text-xs text-slate-600">
-            Màu thanh: <span className="font-semibold text-slate-500">xám</span> = đã tạo ·
-            {" "}
-            <span className="font-semibold text-emerald-700">xanh</span> / <span className="font-semibold text-orange-600">cam</span> = đã giải toả.
-            {" "}
-            Mối hàn: xanh FBW · đỏ nhiệt nhôm · vàng ray đơn.
-            {" "}Đường tim: <span className="font-semibold text-slate-600">nét đứt</span> = ray chưa lắp · <span className="font-semibold text-red-600">nét đỏ</span> = ray đã lắp, sẵn sàng hàn.
-          </p>
-          <p className="text-xs text-slate-500">
-            Ghi chú: màu xanh khi T khóa ≥30°C, cam khi T khóa &lt;30°C (nhiệt độ đã hiện trên nhãn thanh, không lặp T≥30 / T&lt;30 trên từng ô).
-          </p>
-          <p className="text-xs text-slate-500">
-            Đường tim nằm giữa Ray trái/phải mỗi tuyến (mốc ~500 m).
-            {" "}
-            <span className="font-semibold text-amber-800">Nền vàng</span> = Thượng ·
-            {" "}
-            <span className="font-semibold text-sky-800">Nền xanh nhạt</span> = Hạ
-            {" "}
-            (hai tuyến độc lập, chiều dài không bắt buộc bằng nhau).
-            {" "}
-            Ký hiệu công trình chỉ hiện biểu tượng — tra tên ở Legend.
-          </p>
-        </>
-      )}
+      ) : null}
     </div>
     <div className={embedded ? "" : "overflow-x-auto"}>
-      <div className={`px-4 py-3 ${deviceImageMode ? "space-y-2 overflow-visible" : "space-y-3"}`} style={{ width: 150 + width }}>
+      <div className={`px-4 py-3 space-y-3 ${showMachineImages ? "overflow-visible" : ""}`} style={{ width: 150 + width }}>
         {groupRowsByLine(rows).map((group) => {
           const groupExtent = lineTrackExtent(rows, group.line);
           const groupHasSpan = groupExtent.endMetres > groupExtent.startMetres;
@@ -387,7 +351,7 @@ export const RailGrid = memo(function RailGrid({
           return (
           <div
             key={group.line}
-            className={`${deviceImageMode ? "relative z-0 space-y-0 overflow-visible" : "space-y-1"} p-2 ${lineZoneClass(group.line)}`}
+            className={`relative z-0 space-y-1 overflow-visible p-2 ${lineZoneClass(group.line)}`}
             data-line={group.line}
           >
             <p className="px-1 text-[10px] font-semibold text-slate-600">
@@ -410,14 +374,14 @@ export const RailGrid = memo(function RailGrid({
           const key = railRowKey(row);
           const pairMate = indexInGroup === 0 ? group.rows[1] : undefined;
           return <Fragment key={key}><div className="grid grid-cols-[110px_1fr] gap-x-2">
-          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: deviceImageMode ? 8 : 26 }}>{railDisplayLabel(row.line, row.rail)}</div>
-          <div className="relative" style={{ width, height: deviceImageMode ? 28 : 64 }}>
+          <div className="text-[11px] font-semibold leading-4 text-slate-700" style={{ paddingTop: 26 }}>{railDisplayLabel(row.line, row.rail)}</div>
+          <div className="relative overflow-visible" style={{ width, height: 64 }}>
             <div className="absolute inset-x-0 bottom-0" style={{ top: 0 }}>
             {groupLineBox ? (
             <svg
               data-testid="rail-grid-line"
-              className={`pointer-events-none absolute z-0 overflow-visible ${deviceImageMode ? "opacity-40" : ""}`}
-              style={{ left: groupLineBox.left, top: deviceImageMode ? 12 : 34 }}
+              className="pointer-events-none absolute z-0 overflow-visible"
+              style={{ left: groupLineBox.left, top: 34 }}
               width={groupLineBox.width}
               height="2"
               aria-hidden
@@ -434,26 +398,7 @@ export const RailGrid = memo(function RailGrid({
               />
             </svg>
             ) : null}
-            {deviceImageMode && filteredMachineMarkers.map((day, dayIndex) => {
-              const box = trackSpanStyle(day.startMetres, day.endMetres, extent.startMetres);
-              const tone = machineDayTone(dayIndex);
-              return (
-                <div
-                  key={`day-rail-${day.id}`}
-                  data-testid="rail-grid-machine-day"
-                  title={`${day.date ?? "Không rõ ngày"} · ${day.weldCount} mối · Km ${formatChainage(day.startMetres)} – ${formatChainage(day.endMetres)}`}
-                  className="pointer-events-none absolute z-[1] h-3 -translate-y-1/2 rounded-sm border"
-                  style={{
-                    left: box.left,
-                    width: Math.max(10, box.width),
-                    top: 14,
-                    background: tone.fill,
-                    borderColor: tone.ring,
-                  }}
-                />
-              );
-            })}
-            {!deviceImageMode && (installed?.[row.line] ?? []).map((range, i) => {
+            {(installed?.[row.line] ?? []).map((range, i) => {
               const box = trackSpanStyle(range.from, range.to, extent.startMetres);
               return (
                 <div
@@ -465,7 +410,7 @@ export const RailGrid = memo(function RailGrid({
                 />
               );
             })}
-            {!deviceImageMode && row.cells.map(cell => {
+            {row.cells.map(cell => {
               const from = parseChainage(cell.from) ?? 0, to = parseChainage(cell.to) ?? 0;
               const box = trackSpanStyle(from, to, extent.startMetres);
               const cover = coveringLongRail(rowLongRails, from, to, selectedLongRailId);
@@ -533,7 +478,7 @@ export const RailGrid = memo(function RailGrid({
                 {chipDeleteButton(cell.id, box, onRemove)}
               </span>;
             })}
-            {!deviceImageMode && jointsForRow(joints, row).map(joint => {
+            {jointsForRow(joints, row).map(joint => {
               const weld = joint.welds[0];
               const linked = joint.welds.length > 0;
               // Chưa liên kết nhật ký → xám (không lấy màu ATW/FBW từ thanh phủ).
@@ -556,7 +501,7 @@ export const RailGrid = memo(function RailGrid({
                 </button>
               );
             })}
-            {!deviceImageMode && onAppend && (
+            {onAppend && (
               <div className="absolute top-5 z-20" style={{ left: plusLeft }}>
                 <button
                   type="button"
@@ -587,12 +532,11 @@ export const RailGrid = memo(function RailGrid({
         </div>
         {pairMate && (
           <TrackCenterline
-            structures={deviceImageMode ? undefined : structures}
-            machines={deviceImageMode ? filteredMachineMarkers : []}
+            structures={structures}
+            machines={visibleMachines}
             rows={[row, pairMate]}
             startMetres={extent.startMetres}
             width={lineWidth}
-            imageMode={deviceImageMode}
           />
         )}
         </Fragment>;
