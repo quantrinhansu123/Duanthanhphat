@@ -2032,6 +2032,64 @@ export default function WeldingJournalList({
     }
   }
 
+  /** Xuất biên bản Appendix 5 (FBW) theo bộ lọc: mỗi ngày × 20 mối hàn một file. */
+  async function handleExportAppendix5() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { fillAppendix5Fbw, APPENDIX5_MAX_ROWS } = await import("@/lib/fillAppendix5Fbw");
+      const exportRows = (
+        await exportFilteredWeldJournal({
+          query: appliedQuery,
+          projects: projectFilter,
+          resultFilter,
+          linkedWeldFilter,
+          weldTypeFilter,
+          weldMethodFilter: "FBW",
+          dateFrom,
+          dateTo,
+        })
+      )
+        .filter((row) => row.cong_nghe_han === "FBW" && row.ngay_thuc_hien)
+        .sort(
+          (a, b) =>
+            (a.ngay_thuc_hien ?? "").localeCompare(b.ngay_thuc_hien ?? "") ||
+            a.ma_lich_su.localeCompare(b.ma_lich_su, "vi"),
+        );
+      if (!exportRows.length) {
+        setToast("Không có mối hàn FBW nào trong bộ lọc để xuất biên bản.");
+        return;
+      }
+      const byDate = new Map<string, WeldReportRow[]>();
+      for (const row of exportRows) {
+        const key = row.ngay_thuc_hien!.slice(0, 10);
+        byDate.set(key, [...(byDate.get(key) ?? []), row]);
+      }
+      let files = 0;
+      for (const [iso, dayRows] of byDate) {
+        for (let start = 0; start < dayRows.length; start += APPENDIX5_MAX_ROWS) {
+          const chunk = dayRows.slice(start, start + APPENDIX5_MAX_ROWS);
+          const blob = await fillAppendix5Fbw(
+            chunk.map((row) => ({ row, chainage: gpsPointForRow(row)?.chainage })),
+            { date: formatJournalDateIso(iso), location: chunk[0].du_an },
+          );
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `Appendix5-FBW-${iso}${dayRows.length > APPENDIX5_MAX_ROWS ? `-${start / APPENDIX5_MAX_ROWS + 1}` : ""}.xlsx`;
+          link.click();
+          URL.revokeObjectURL(url);
+          files++;
+        }
+      }
+      setToast(`Đã xuất ${files} biên bản Appendix 5 (${exportRows.length} mối hàn FBW).`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Không xuất được biên bản Appendix 5.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function handleExportExcel() {
     if (exporting) return;
     setExporting(true);
@@ -2780,6 +2838,15 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         >
           <DownloadSimple size={16} weight="bold" aria-hidden />
           {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleExportAppendix5()}
+          disabled={exporting || loading}
+          title="Điền biên bản nghiệm thu Appendix 5 (FBW) từ nhật ký hàn theo bộ lọc hiện tại"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-4 text-xs font-semibold text-indigo-700 shadow-2xs hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+        >
+          Xuất Appendix 5
         </button>
         {!failedWeldMode ? (
           <>
