@@ -23,7 +23,20 @@ type PrintWorkRow = {
   fallbackMay: string;
 };
 
+export type DailyPrintDay = {
+  reportDate: string;
+  weather: string;
+  temperature: string;
+  workToday: DailyWorkItem[];
+  workNext: DailyWorkItem[];
+  equipment: DailyEquipmentItem[];
+  incidents: DailyIncidentItem[];
+  acceptedCount?: number | null;
+};
+
 type DailyWorkReportPrintProps = {
+  /** In nhiều ngày: mỗi phần tử là một trang; bỏ trống thì in ngày theo các prop bên dưới. */
+  days?: DailyPrintDay[];
   open: boolean;
   reportDate: string;
   weather: string;
@@ -33,6 +46,8 @@ type DailyWorkReportPrintProps = {
   workNext: DailyWorkItem[];
   equipment: DailyEquipmentItem[];
   incidents: DailyIncidentItem[];
+  /** Mối được nghiệm thu đạt trong ngày (theo đợt nghiệm thu); null = chưa có dữ liệu. */
+  acceptedCount?: number | null;
   autoPrint?: boolean;
   onClose: () => void;
   onPrint: () => void;
@@ -218,7 +233,7 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
             <td className="wrap">{item?.kySuTen ?? ""}</td>
             <td className="wrap">{item?.laiMayTen ?? ""}</td>
             <td className="wrap">{item?.thoVanHanhTen ?? ""}</td>
-            <td className="wrap">{item?.congNhanTen ?? ""}</td>
+            <td className="wrap">{item?.congNhanTen ?? ""}{item?.vnrTen ? ` (VNR: ${item.vnrTen})` : ""}</td>
             <td>{manpowerRange(row, "gioBatDau")}</td>
             <td>{manpowerRange(row, "gioKetThuc")}</td>
             <td className="wrap note">{printNote(item)}</td>
@@ -230,6 +245,7 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
 }
 
 export default function DailyWorkReportPrint({
+  days,
   open,
   reportDate,
   weather,
@@ -239,6 +255,7 @@ export default function DailyWorkReportPrint({
   workNext,
   equipment,
   incidents,
+  acceptedCount = null,
   autoPrint = false,
   onClose,
   onPrint,
@@ -272,11 +289,9 @@ export default function DailyWorkReportPrint({
   if (!open || typeof document === "undefined") return null;
 
   const types = workTypes.length > 0 ? workTypes : DEFAULT_WORK_TYPES;
-  const todayRows = alignCatalogRows(types, workToday);
-  const nextRows = alignNextRows(types, workNext);
-  const equipmentRows = padFooter(equipment, null);
-  const incidentRows = padFooter(incidents, null);
-  const nextDate = displayDateShort(addDaysIso(reportDate, 1));
+  const sheets: DailyPrintDay[] = days?.length
+    ? days
+    : [{ reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount }];
 
   return createPortal(
     <div id="daily-report-print" role="dialog" aria-modal="true" aria-labelledby="daily-report-print-title">
@@ -301,7 +316,15 @@ export default function DailyWorkReportPrint({
       </div>
 
       <div className="print-stage">
-        <article className="print-sheet">
+        {sheets.map((day) => {
+        const { reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount = null } = day;
+        const todayRows = alignCatalogRows(types, workToday);
+        const nextRows = alignNextRows(types, workNext);
+        const equipmentRows = padFooter(equipment, null);
+        const incidentRows = padFooter(incidents, null);
+        const nextDate = displayDateShort(addDaysIso(reportDate, 1));
+        return (
+        <article key={reportDate} className="print-sheet">
           <header className="doc-head">
             <div className="doc-title-block">
               <div>DỰ ÁN: TUYẾN TÀU ĐIỆN ĐÔ THỊ LOẠI 1 TẠI ĐẶC KHU PHÚ QUỐC</div>
@@ -318,6 +341,11 @@ export default function DailyWorkReportPrint({
             <span>
               Thời tiết: <b>{weather || "............"}</b>
             </span>
+            {acceptedCount != null && (
+              <span>
+                Nghiệm thu trong ngày: <b>{acceptedCount} mối</b>
+              </span>
+            )}
             <span>
               Nhiệt độ trung bình: <b>{temperature ? `${temperature}°C` : "............"}</b>
             </span>
@@ -468,6 +496,8 @@ export default function DailyWorkReportPrint({
             </table>
           </div>
         </article>
+        );
+        })}
       </div>
     </div>,
     document.body,
@@ -738,6 +768,9 @@ const PRINT_CSS = `
   }
   #daily-report-print .print-stage {
     display: contents;
+  }
+  #daily-report-print .print-sheet + .print-sheet {
+    break-before: page;
   }
   #daily-report-print .print-sheet {
     width: auto;

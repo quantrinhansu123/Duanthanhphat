@@ -13,6 +13,7 @@ import ReportTabBar from "@/components/ReportTabBar";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
+import QualityLoginDialog from "@/components/QualityLoginDialog";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { canReceiveOilAlert } from "@/lib/viewerAccess";
 
@@ -221,6 +222,7 @@ export default function AppShell({ tab }: AppShellProps) {
 
   return (
     <ReportFilterProvider>
+    <QualityLoginDialog />
     <div className="app-workspace flex h-dvh overflow-hidden bg-[#f4f6fa] text-[#0f172a]">
       <a href="#main-content" className="skip-link print:hidden">{lang === "en" ? "Skip to content" : "Đi đến nội dung chính"}</a>
       {/* Desktop Sidebar */}

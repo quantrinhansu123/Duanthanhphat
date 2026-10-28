@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import * as XLSX from "xlsx";
 import { Camera, CaretRight, DownloadSimple, MapPin, PencilSimple, TrashSimple, UploadSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
@@ -86,6 +87,13 @@ import {
 } from "@/lib/weldingCertificates";
 import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
+import WeldQualityBadge from "@/components/WeldQualityBadge";
+import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
+import { loadQualityJournal, exportQualityJournal, selectFilteredQuality, qualityRequest, notifyWeldQualityChanged } from "@/lib/weldQualityClient";
+import { parseWeldQualityExcel, qualityExcelColumns } from "@/lib/weldQualityExcel";
+
+const WeldQualityDialog = dynamic(() => import("@/components/WeldQualityDialog"));
+const WeldQualityBulkDialog = dynamic(() => import("@/components/WeldQualityBulkDialog"));
 
 const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
@@ -351,6 +359,7 @@ function JournalFormModal({
   machines,
   existingCodes,
   recordId,
+  qualityRecorded = false,
   saving,
   bulkProgress = "",
   unlinkedGpsPoints = [],
@@ -368,6 +377,7 @@ function JournalFormModal({
   existingCodes: string[];
   /** Id bản ghi đang sửa — bỏ qua khi kiểm tra trùng mã. */
   recordId?: string;
+  qualityRecorded?: boolean;
   saving: boolean;
   bulkProgress?: string;
   unlinkedGpsPoints?: MapPoint[];
@@ -1414,12 +1424,14 @@ function JournalFormModal({
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Tình trạng thí nghiệm
               <SelectMenu
+                disabled={qualityRecorded}
                 value={form.result}
                 onChange={(result) => setForm({ ...form, result: result as JournalFormValues["result"] })}
                 options={["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((value) => ({ value, label: value }))}
                 className="mt-1.5"
                 buttonClassName="h-10 shadow-2xs"
               />
+              {qualityRecorded && <span className="mt-1 block text-xs font-normal text-slate-500">Kết quả đã ghi nhận; cập nhật trong Kiểm tra chất lượng.</span>}
             </label>
           </div>
 
@@ -1746,6 +1758,17 @@ export default function WeldingJournalList({
   const [appliedQuery, setAppliedQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
+  const [qualityStatusFilter, setQualityStatusFilter] = useState("Tất cả");
+  const [qualityReady, setQualityReady] = useState(false);
+  const [qualityError, setQualityError] = useState("");
+  const [qualityRow, setQualityRow] = useState<WeldReportRow | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState<Map<string, WeldQualitySelection>>(new Map());
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [bulkQualityEntries, setBulkQualityEntries] = useState<WeldQualitySelection[] | null>(null);
+  const selectionToken = useRef(0);
+  const qualityExcelInputRef = useRef<HTMLInputElement>(null);
+  const [qualityImporting, setQualityImporting] = useState(false);
+  const [qualityImportReport, setQualityImportReport] = useState("");
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
   const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
@@ -1847,7 +1870,7 @@ export default function WeldingJournalList({
     let active = true;
     setLoading(true);
     setError("");
-    loadWeldJournalPage({
+    const filters = {
       page,
       pageSize: PAGE_SIZE,
       query: appliedQuery,
@@ -1858,7 +1881,21 @@ export default function WeldingJournalList({
       weldMethodFilter,
       dateFrom,
       dateTo,
-    })
+      qualityStatusFilter,
+    };
+    setQualityReady(false);
+    const loadPage = async () => {
+      try {
+        const result = await loadQualityJournal(filters);
+        if (active) { setQualityReady(true); setQualityError(""); }
+        return result;
+      } catch (qualityLoadError) {
+        if (active) setQualityError(qualityLoadError instanceof Error ? qualityLoadError.message : "Không tải được chất lượng.");
+        if (qualityStatusFilter !== "Tất cả") throw qualityLoadError;
+        return loadWeldJournalPage(filters);
+      }
+    };
+    loadPage()
       .then((result) => {
         if (!active) return;
         setRows(result.rows);
@@ -1884,7 +1921,13 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter, reloadToken]);
+
+  useEffect(() => {
+    selectionToken.current += 1;
+    setSelectedQuality(new Map());
+    setSelectingAll(false);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
@@ -1956,6 +1999,8 @@ export default function WeldingJournalList({
             : (row.nguyen_nhan_loi?.trim() || row.ghi_chu?.trim() || "Chưa ghi nguyên nhân"),
         resultType: pass ? ("pass" as const) : ("fail" as const),
         testStatus,
+        qualityStatus: row.tinh_trang_chat_luong,
+        qualityVersion: row.phien_ban_chat_luong ?? 0,
         shift: resolveWeldShift(row),
       };
     });
@@ -1999,7 +2044,7 @@ export default function WeldingJournalList({
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -2014,6 +2059,70 @@ export default function WeldingJournalList({
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  function qualityFilters() {
+    return { page: 1, query: appliedQuery, projects: projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter };
+  }
+
+  function toggleQualityRow(id: string) {
+    const row = rows.find((r) => r.id === id);
+    if (!row || !qualityReady) return;
+    setSelectedQuality((current) => {
+      const next = new Map(current);
+      if (next.has(id)) next.delete(id);
+      else next.set(id, { id, ma_lich_su: row.ma_lich_su, phien_ban: row.phien_ban_chat_luong ?? 0 });
+      return next;
+    });
+  }
+
+  const pageSelected = rows.length > 0 && rows.every((r) => selectedQuality.has(r.id));
+  function toggleQualityPage() {
+    setSelectedQuality((current) => {
+      const next = new Map(current);
+      for (const row of rows) {
+        if (pageSelected) next.delete(row.id);
+        else next.set(row.id, { id: row.id, ma_lich_su: row.ma_lich_su, phien_ban: row.phien_ban_chat_luong ?? 0 });
+      }
+      return next;
+    });
+  }
+
+  async function selectAllQuality() {
+    const token = ++selectionToken.current;
+    setSelectingAll(true);
+    try {
+      const { entries } = await selectFilteredQuality(qualityFilters());
+      if (token === selectionToken.current) setSelectedQuality(new Map(entries.map((e) => [e.id, e])));
+    } catch (err) { if (token === selectionToken.current) setQualityError(err instanceof Error ? err.message : "Không chọn được danh sách."); }
+    finally { if (token === selectionToken.current) setSelectingAll(false); }
+  }
+
+  async function handleQualityExcel(file: File) {
+    setQualityImporting(true); setQualityImportReport("");
+    let saved = 0;
+    let cancelled = false;
+    const failures: string[] = [];
+    try {
+      const entries = await parseWeldQualityExcel(file);
+      if (!window.confirm(`Nhập kiểm tra cho ${entries.length} mối? Ô trống giữ dữ liệu hiện tại. Mối có phiên bản đã thay đổi sẽ bị từ chối.`)) { cancelled = true; return; }
+      for (let offset = 0; offset < entries.length; offset += 100) {
+        setQualityImportReport(`Đang nhập ${offset}/${entries.length} kiểm tra…`);
+        const { results } = await qualityRequest<{ results: { id: string; error?: string }[] }>({ action: "import", entries: entries.slice(offset, offset + 100) });
+        for (const result of results) {
+          if (result.error) failures.push(`${result.id}: ${result.error}`);
+          else saved += 1;
+        }
+      }
+    } catch (err) { failures.push(err instanceof Error ? err.message : "Không nhập được file kiểm tra."); }
+    finally {
+      setQualityImporting(false);
+      if (!cancelled) {
+        setSelectedQuality(new Map()); refetch();
+        setQualityImportReport(`Đã lưu ${saved} kiểm tra.${failures.length ? `\n${failures.join("\n")}` : ""}`);
+        notifyWeldQualityChanged();
+      }
+    }
   }
 
   async function confirmDeleteJournal() {
@@ -2094,7 +2203,7 @@ export default function WeldingJournalList({
     if (exporting) return;
     setExporting(true);
     try {
-      const exportRows = await exportFilteredWeldJournal({
+      const exportFilters = {
         query: appliedQuery,
         projects: projectFilter,
         resultFilter,
@@ -2103,7 +2212,10 @@ export default function WeldingJournalList({
         weldMethodFilter,
         dateFrom,
         dateTo,
-      });
+      };
+      const exportRows = qualityReady || qualityStatusFilter !== "Tất cả"
+        ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter })).rows
+        : await exportFilteredWeldJournal(exportFilters);
 
       const gpsByWeldId = new Map(
         gpsPoints.filter((point) => point.weldId).map((point) => [point.weldId!, point]),
@@ -2158,6 +2270,7 @@ export default function WeldingJournalList({
           "Lý do không đạt": row.nguyen_nhan_loi?.trim() || "",
           "Tình trạng thí nghiệm": resolveWeldTestStatus(row),
           "Ghi chú": row.ghi_chu?.trim() || "",
+          ...(qualityReady ? qualityExcelColumns(row) : {}),
         };
       });
 
@@ -2733,7 +2846,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           />
         </div>
         <div className="min-w-0 text-xs font-semibold text-slate-700">
-          Tình trạng
+          Kết quả NDT
           <SelectMenu
             value={resultFilter}
             onChange={setResultFilter}
@@ -2742,6 +2855,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
           />
+        </div>
+        <div className="min-w-0 text-xs font-semibold text-slate-700">
+          Tình trạng chất lượng
+          <SelectMenu value={qualityStatusFilter} onChange={setQualityStatusFilter} options={["Tất cả", ...WELD_QUALITY_STATUSES].map((value) => ({ value, label: value }))} className="mt-1" buttonClassName="h-10 shadow-2xs" />
         </div>
         <div className="min-w-0 text-xs font-semibold text-slate-700">
           Mối liên kết
@@ -2875,6 +2992,17 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
        </div>
       </div>
 
+      {qualityError && <div role="status" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Kiểm tra chất lượng: {qualityError} {qualityStatusFilter === "Tất cả" && "Nhật ký và kết quả NDT hiện có vẫn được hiển thị."}<button type="button" className="ml-2 min-h-9 font-semibold underline" onClick={() => setReloadToken((n) => n + 1)}>Thử lại</button></div>}
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-sm">
+        <span className="mr-auto font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</span>
+        <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
+        <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy danh sách…" : `Chọn toàn bộ ${total.toLocaleString("vi-VN")} kết quả lọc`}</button>
+        <button type="button" disabled={!selectedQuality.size} className="min-h-11 rounded-lg px-3 text-slate-600 disabled:opacity-50" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
+        <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-11 rounded-lg bg-blue-700 px-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])}>Đạt tất trực quan / NDT</button>
+        <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập kiểm tra…" : "Nhập kiểm tra Excel"}</button>
+        <input ref={qualityExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" aria-label="File kiểm tra chất lượng" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void handleQualityExcel(file); }} />
+      </div>
+      {qualityImportReport && <div role="status" className="mb-3 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 p-3 text-sm">{qualityImportReport}</div>}
       <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">{heading}</div>
@@ -2888,8 +3016,9 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         {/* Danh sách dạng thẻ — mobile & tablet */}
         <div className="mt-3.5 space-y-2.5 lg:hidden">
           {pageRows.map((w) => (
+            <div key={w.id} className="flex items-start gap-1">
+            <label className="flex h-11 w-11 shrink-0 items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label>
             <button
-              key={w.id}
               type="button"
               onClick={() => setDetailId(w.id)}
               className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xs transition-colors hover:border-[#0047AB]/40 hover:bg-blue-50/40 cursor-pointer"
@@ -2910,6 +3039,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   </span>
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
+                <div className="mt-2"><WeldQualityBadge status={w.qualityStatus} /></div>
                 <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-slate-600">
                   <span className="truncate" title="Mã vị trí">VT · {w.lispCode}</span>
@@ -2929,6 +3059,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                 <CaretRight size={16} weight="bold" aria-hidden />
               </span>
             </button>
+            </div>
           ))}
           {pageRows.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-300 px-3 py-10 text-center text-sm text-slate-500">
@@ -2943,6 +3074,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1280px]" : "min-w-[1400px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <th className="p-1"><label className="flex h-11 w-11 items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={pageSelected} onChange={toggleQualityPage} aria-label="Chọn tất cả mối trên trang này" /></label></th>
                 <th className="p-2.5 font-semibold">Ngày thực hiện</th>
                 <th className="p-2.5 font-semibold">Ca hàn</th>
                 <th className="p-2.5 font-semibold">Người trực tiếp hàn</th>
@@ -2957,7 +3089,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
-                <th className="p-2.5 font-semibold">Tình trạng</th>
+                <th className="p-2.5 font-semibold">Kết quả NDT</th>
+                <th className="p-2.5 font-semibold">Tình trạng chất lượng</th>
                 <th className="p-2.5 font-semibold">Thao tác</th>
               </tr>
             </thead>
@@ -2968,6 +3101,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   onClick={() => setDetailId(w.id)}
                   className="cursor-pointer text-xs sm:text-sm text-slate-700 hover:bg-blue-50/50 transition-colors"
                 >
+                  <td className="p-1" onClick={(e) => e.stopPropagation()}><label className="flex h-11 w-11 items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label></td>
                   <td className="p-2.5 whitespace-nowrap font-mono text-xs text-slate-500">{w.performedDate}</td>
                   <td className="p-2.5 whitespace-nowrap font-semibold text-slate-800">{w.shift}</td>
                   <td className="p-2.5 font-semibold text-slate-900">{w.operator}</td>
@@ -3016,8 +3150,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                       {w.testStatus}
                     </span>
                   </td>
+                  <td className="p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
                   <td className="p-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
+                      <button type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-800 hover:bg-blue-100" onClick={(e) => { e.stopPropagation(); const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -3048,7 +3184,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={16} className="px-3 py-10 text-center text-sm text-slate-500">
                     {lockedResultFilter === "Không đạt"
                       ? "Không có mối hàn lỗi phù hợp với bộ lọc."
                       : "Không có nhật ký hàn phù hợp với bộ lọc."}
@@ -3199,6 +3335,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                 )}
               </div>
 
+              <div className="mt-3"><WeldQualityBadge status={detailRaw?.tinh_trang_chat_luong} /></div>
               <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                 {[
                   ["Ngày thực hiện", detailView.performedDate],
@@ -3313,6 +3450,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               >
                 <TrashSimple size={14} weight="bold" /> Xóa
               </button>
+              <button type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-800" onClick={() => { if (detailRaw) setQualityRow(detailRaw); setDetailId(null); }}>Kiểm tra chất lượng</button>
               <button
                 type="button"
                 onClick={() => {
@@ -3345,6 +3483,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         machines={machineOptions}
         existingCodes={rows.map((row) => row.ma_lich_su)}
         recordId={editingRow?.id}
+        qualityRecorded={Boolean(editingRow?.kiem_tra_chat_luong?.nguoi_ghi_nhan)}
         saving={saving || bulkFillSaving}
         bulkProgress={bulkFillProgress}
         allGpsPoints={gpsPoints}
@@ -3376,6 +3515,12 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         }}
       />
 
+      {qualityRow && <WeldQualityDialog key={qualityRow.id} row={qualityRow} onClose={() => setQualityRow(null)} onSaved={() => {
+        setSelectedQuality((current) => { const next = new Map(current); next.delete(qualityRow.id); return next; }); refetch();
+      }} />}
+      {bulkQualityEntries && <WeldQualityBulkDialog entries={bulkQualityEntries} onClose={() => setBulkQualityEntries(null)} onDone={(ids) => {
+        setSelectedQuality((current) => { const next = new Map(current); for (const id of ids) next.delete(id); return next; }); refetch();
+      }} />}
       {machineError && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Chưa tải được danh mục máy: {machineError}. Hãy chạy supabase/lich_chay_may.sql.
