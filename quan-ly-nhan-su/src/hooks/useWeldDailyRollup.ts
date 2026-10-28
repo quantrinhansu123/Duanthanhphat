@@ -15,6 +15,12 @@ const EMPTY_RESULT: WeldDailyRollupResult = {
 export function useWeldDailyRollup() {
   const [result, setResult] = useState<WeldDailyRollupResult>(EMPTY_RESULT);
   const [loading, setLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision((n) => n + 1);
+    window.addEventListener("weld-quality-changed", refresh);
+    return () => window.removeEventListener("weld-quality-changed", refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -38,7 +44,7 @@ export function useWeldDailyRollup() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [revision]);
 
   return { ...result, loading };
 }

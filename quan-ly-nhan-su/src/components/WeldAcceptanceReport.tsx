@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Plus, Printer, TrashSimple } from "@/components/icons";
 import { useLanguage } from "@/i18n/LanguageProvider";
 
@@ -67,7 +68,34 @@ function emptyRow(): WeldAcceptanceRow {
 const cellInput =
   "w-full min-w-0 border-0 bg-transparent px-0.5 py-0.5 text-center text-[10px] text-slate-900 outline-hidden focus:bg-blue-50 print:bg-transparent print:focus:bg-transparent";
 
+const WeldAcceptanceWorkflow = dynamic(() => import("@/components/WeldAcceptanceWorkflow"), { ssr: false });
+const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { ssr: false });
+
+// Nhật ký thi công = Báo cáo ngày (tự điền từ nhật ký hàn, tự lưu theo ngày, in một/nhiều ngày).
 export default function WeldAcceptanceReport() {
+  const [tab, setTab] = useState<"nghiem-thu" | "quy-trinh" | "nhat-ky">("quy-trinh");
+  return (
+    <>
+      <div className="no-print flex gap-2 px-4 sm:px-6 pb-3">
+        {([["quy-trinh", "RFI & Nghiệm thu"], ["nghiem-thu", "Biên bản nghiệm thu"], ["nhat-ky", "Nhật ký thi công"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`h-9 rounded-lg px-4 text-xs sm:text-sm font-semibold cursor-pointer ${
+              tab === id ? "bg-[#0047AB] text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "nhat-ky" ? <DailyWorkReport /> : tab === "quy-trinh" ? <WeldAcceptanceWorkflow /> : <WeldAcceptanceForm />}
+    </>
+  );
+}
+
+function WeldAcceptanceForm() {
   // Giá trị mặc định theo ngôn ngữ đang chọn (EN: bản in ra tiếng Anh; người dùng vẫn sửa được).
   const { lang, t } = useLanguage();
   const [hour, setHour] = useState("16");

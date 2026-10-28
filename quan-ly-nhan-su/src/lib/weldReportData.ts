@@ -1,5 +1,6 @@
 import { ndtDefectLabel } from "@/data/error-library";
 import type { WeldType } from "@/data/weldTypes";
+import type { SavedWeldInspection, SavedWeldQualityRule, WeldQualityStatus } from "@/lib/weldQuality";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -39,6 +40,10 @@ export type WeldLinkedImageAsset = {
 };
 
 export type WeldReportRow = {
+  tinh_trang_chat_luong?: WeldQualityStatus;
+  phien_ban_chat_luong?: number | null;
+  kiem_tra_chat_luong?: SavedWeldInspection | null;
+  tieu_chuan_chat_luong?: SavedWeldQualityRule | null;
   id: string;
   created_at?: string;
   ma_lich_su: string;
@@ -1330,6 +1335,7 @@ export function listFailedWeldsInDateRange(
 }
 
 export type WeldJournalPageQuery = {
+  qualityStatusFilter?: string;
   page: number;
   pageSize?: number;
   query?: string;
@@ -1376,7 +1382,7 @@ function journalPageSelect(
 }
 
 /** Ngày mới trước; trong cùng ngày sắp theo mã hệ thống tăng dần (TT 0001→n). */
-function orderJournalByWeldTime<T>(request: T, withCreatedAt: boolean, withExtras: boolean): T {
+export function orderJournalByWeldTime<T>(request: T, withCreatedAt: boolean, withExtras: boolean): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let next: any = request;
   next = next.order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
@@ -1432,6 +1438,7 @@ let journalHasWeldExtras = true;
 let journalHasSiteExtras = true;
 
 type JournalListFilter = {
+  qualityStatusFilter?: string;
   query?: string;
   project?: string;
   projects?: string[];
@@ -1463,7 +1470,7 @@ function journalSearchOrFilter(query: string) {
 }
 
 /** Áp dụng bộ lọc chung của trang nhật ký hàn lên query Supabase. */
-function applyJournalListFilters<T>(
+export function applyJournalListFilters<T>(
   request: T,
   filters: JournalListFilter,
   mode: "status" | "legacy" = "status",
@@ -1479,6 +1486,9 @@ function applyJournalListFilters<T>(
   const q = (filters.query ?? "").trim();
   const dateFrom = normalizeJournalDateFilter(filters.dateFrom);
   const dateTo = normalizeJournalDateFilter(filters.dateTo);
+  if (filters.qualityStatusFilter && filters.qualityStatusFilter !== "Tất cả") {
+    next = next.eq("tinh_trang_chat_luong", filters.qualityStatusFilter);
+  }
 
   if (projects.length > 0) next = next.in("du_an", projects);
   else if (project && project !== "Tất cả dự án") next = next.eq("du_an", project);

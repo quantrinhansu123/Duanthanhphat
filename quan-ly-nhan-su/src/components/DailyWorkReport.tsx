@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import ComboBoxInput from "@/components/ComboBoxInput";
-import DailyWorkReportPrint from "@/components/DailyWorkReportPrint";
+import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
+import { loadAcceptedOnDate } from "@/lib/weldQualityClient";
 import { CalendarBlank, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
 import MultiSelectMenu, { type MultiSelectOption } from "@/components/MultiSelectMenu";
 import {
@@ -642,11 +643,13 @@ function WorkFormModal({
               laiMay: current.laiMay,
               thoVanHanh: current.thoVanHanh,
               congNhan: current.congNhan,
+              vnr: current.vnr,
               chtTen: current.chtTen,
               kySuTen: current.kySuTen,
               laiMayTen: current.laiMayTen,
               thoVanHanhTen: current.thoVanHanhTen,
               congNhanTen: current.congNhanTen,
+              vnrTen: current.vnrTen,
               mayChay: current.mayChay,
             },
             filled,
@@ -684,11 +687,13 @@ function WorkFormModal({
         laiMay: f.laiMay.length ? f.laiMay : last.laiMay,
         thoVanHanh: f.thoVanHanh.length ? f.thoVanHanh : last.thoVanHanh,
         congNhan: f.congNhan.length ? f.congNhan : last.congNhan,
+        vnr: f.vnr.length ? f.vnr : last.vnr,
         chtTen: f.cht.length ? f.chtTen : last.chtTen,
         kySuTen: f.kySu.length ? f.kySuTen : last.kySuTen,
         laiMayTen: f.laiMay.length ? f.laiMayTen : last.laiMayTen,
         thoVanHanhTen: f.thoVanHanh.length ? f.thoVanHanhTen : last.thoVanHanhTen,
         congNhanTen: f.congNhan.length ? f.congNhanTen : last.congNhanTen,
+        vnrTen: f.vnr.length ? f.vnrTen : last.vnrTen,
       }));
     });
     return () => {
@@ -1066,13 +1071,14 @@ function WorkFormModal({
                   </div>
                 )}
               </div>
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-6">
                 {([
                   ["CHT", "cht", "chtTen"],
                   ["Kỹ sư", "kySu", "kySuTen"],
                   ["Lái máy", "laiMay", "laiMayTen"],
                   ["Thợ vận hành", "thoVanHanh", "thoVanHanhTen"],
                   ["Công nhân", "congNhan", "congNhanTen"],
+                  ["VNR", "vnr", "vnrTen"],
                 ] as const).map(([label, key, tenKey]) => (
                   <ManpowerCount
                     key={key}
@@ -1083,7 +1089,7 @@ function WorkFormModal({
                 ))}
               </div>
               <p className="text-[11px] text-slate-500">
-                Chỉ nhập số lượng người mỗi vai trò — hệ thống nhớ và điền sẵn từ lần báo cáo trước.
+                Chỉ nhập số lượng người mỗi vai trò (VNR = số người phía VNR, không tính trùng vào Công nhân) — hệ thống nhớ và điền sẵn từ lần báo cáo trước.
               </p>
               <Field label="Ghi chú" value={form.ghiChu} onChange={(v) => patch({ ghiChu: v })} />
             </>
@@ -1266,6 +1272,33 @@ export default function DailyWorkReport() {
   const [reportList, setReportList] = useState<DailyReportSummary[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [header, setHeader] = useState<DailyReportHeader | null>(null);
+  const [acceptedCount, setAcceptedCount] = useState<number | null>(null);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [batchDays, setBatchDays] = useState<DailyPrintDay[] | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+
+  // In nhiều ngày: mỗi ngày một trang, đọc lại từ dữ liệu đã lưu (không đếm theo số lần in).
+  async function printRange() {
+    const picked = reportList
+      .filter((r) => (!rangeFrom || r.ngayBaoCao >= rangeFrom) && (!rangeTo || r.ngayBaoCao <= rangeTo))
+      .sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao))
+      .slice(0, 31);
+    if (!picked.length) { setToast("Không có phiếu nào trong khoảng ngày đã chọn."); return; }
+    setBatchBusy(true);
+    try {
+      const days: DailyPrintDay[] = [];
+      for (const row of picked) {
+        const bundle = await loadDailyReport(row.ngayBaoCao);
+        const accepted = await loadAcceptedOnDate(row.ngayBaoCao, row.duAnId).then((r) => r.count).catch(() => null);
+        days.push({ reportDate: row.ngayBaoCao, weather: "", temperature: "", workToday: bundle.workToday, workNext: bundle.workNext,
+          equipment: bundle.equipment, incidents: bundle.incidents, acceptedCount: accepted });
+      }
+      setBatchDays(days); setPrintAuto(false); setPrintOpen(true);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Không tải được các phiếu để in.");
+    } finally { setBatchBusy(false); }
+  }
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
   // Thời tiết + nhiệt độ tự lấy (Open-Meteo, Phú Quốc); sai khác thì sửa tay — sửa tay không bị ghi đè.
@@ -1359,6 +1392,17 @@ export default function DailyWorkReport() {
     setReportList(result.rows);
     setListLoading(false);
   }, []);
+
+  // Khối lượng nghiệm thu trong ngày (cần đăng nhập; lỗi/chưa đăng nhập thì bỏ trống, không chặn báo cáo).
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => loadAcceptedOnDate(reportDate, header?.duAnId)
+      .then((r) => { if (!cancelled) setAcceptedCount(r.count); })
+      .catch(() => { if (!cancelled) setAcceptedCount(null); });
+    load();
+    window.addEventListener("weld-quality-changed", load);
+    return () => { cancelled = true; window.removeEventListener("weld-quality-changed", load); };
+  }, [reportDate, header?.duAnId]);
 
   const reload = useCallback(async (date: string) => {
     setLoading(true);
@@ -1691,6 +1735,18 @@ export default function DailyWorkReport() {
             </div>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-xs text-slate-600">
+          <span className="font-semibold">In nhiều ngày:</span>
+          <input type="date" value={rangeFrom} onChange={(e) => setRangeFrom(e.target.value)} aria-label="Từ ngày" className="h-9 rounded-lg border border-slate-300 px-2" />
+          <span>–</span>
+          <input type="date" value={rangeTo} onChange={(e) => setRangeTo(e.target.value)} aria-label="Đến ngày" className="h-9 rounded-lg border border-slate-300 px-2" />
+          <button type="button" onClick={() => void printRange()} disabled={batchBusy || !reportList.length}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">
+            <Printer size={14} weight="bold" aria-hidden />
+            {batchBusy ? "Đang tải…" : "In các ngày"}
+          </button>
+          <span className="text-slate-400">tối đa 31 ngày, mỗi ngày một trang</span>
+        </div>
         {listLoading ? (
           <div className="px-4 py-8 text-center text-sm text-slate-500">Đang tải danh sách...</div>
         ) : reportList.length === 0 ? (
@@ -1919,10 +1975,13 @@ export default function DailyWorkReport() {
         workNext={workNext}
         equipment={equipment}
         incidents={incidents}
+        days={batchDays ?? undefined}
+        acceptedCount={acceptedCount}
         autoPrint={printAuto}
         onClose={() => {
           setPrintOpen(false);
           setPrintAuto(false);
+          setBatchDays(null);
         }}
         onPrint={() => window.print()}
       />

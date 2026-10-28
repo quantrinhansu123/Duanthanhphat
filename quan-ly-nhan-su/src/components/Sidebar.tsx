@@ -5,10 +5,12 @@ import Link from "next/link";
 import type { Icon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { navigation } from "@/data/navigation";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
+  SignOut,
   Users,
   GraduationCap,
   Wrench,
@@ -227,6 +229,19 @@ export default function Sidebar({
             <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>TP</span>
           </div>
         )}
+        <button
+          type="button"
+          onClick={async () => {
+            try { await createClient().auth.signOut(); } catch { /* vẫn chuyển về trang đăng nhập */ }
+            window.location.assign("/login");
+          }}
+          aria-label={lang === "en" ? "Sign out" : "Đăng xuất"}
+          title={lang === "en" ? "Sign out" : "Đăng xuất"}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-medium text-blue-200/80 hover:bg-white/[0.08] hover:text-white transition-colors duration-150 cursor-pointer"
+        >
+          <SignOut size={16} weight="bold" aria-hidden />
+          {!collapsed && <span>{lang === "en" ? "Sign out" : "Đăng xuất"}</span>}
+        </button>
         <button
           type="button"
           onClick={onToggle}

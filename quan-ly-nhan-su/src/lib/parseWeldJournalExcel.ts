@@ -196,6 +196,13 @@ export function downloadWeldJournalExcelTemplate() {
   ws["!cols"] = headers.map((h) => ({ wch: Math.max(14, h.length + 2) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "nhat_ky_han");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Kiểm tra chất lượng mối hàn"],
+    ["File mẫu này dùng để tạo nhật ký sản xuất; kết quả thí nghiệm cũ không tạo kết luận nghiệm thu."],
+    ["Để nhập kiểm tra: Xuất Excel nhật ký, điền các cột sau mài/NDT, giữ nguyên Mã bản ghi và Phiên bản kiểm tra rồi chọn Nhập kiểm tra Excel."],
+    ["Ô trống trong file kiểm tra giữ nguyên dữ liệu hiện tại; số 0 là số đo thực tế. Có thể xóa một giá trị trong màn hình Kiểm tra chất lượng."],
+    ["Dung sai cần tiêu chí đã xác nhận theo dự án/công nghệ/loại mối. Không tự áp ví dụ PQ."],
+  ]), "huong_dan_chat_luong");
   XLSX.writeFile(wb, "mau-nhat-ky-han.xlsx");
 }
 

@@ -106,6 +106,8 @@ export {
   Spinner,
   House,
   SignOut,
+  SignIn,
+  Envelope,
   Printer,
   Link,
   DotOutline,

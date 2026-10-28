@@ -15,6 +15,7 @@ import { useProjectsData } from "@/hooks/useProjectsData";
 import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
 import { useWeldDailyRollup } from "@/hooks/useWeldDailyRollup";
 import { useOverviewAggregates } from "@/hooks/useOverviewAggregates";
+import { useDashboardQuality } from "@/hooks/useDashboardQuality";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { compareNewestDate } from "@/lib/dateOrder";
 import { buildDailyWeldPlan, loadTheoreticalProgressViewRows } from "@/lib/projectsDb";
@@ -73,17 +74,18 @@ const PROJECT_COLORS = [
 const CHART_ZOOM_MAX = 8;
 const LOOKUP_PAGE_SIZE = 80;
 
-type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending";
+type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind";
 
 const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   projects: "Dự án",
   all: "Tổng mối hàn",
   today: "Hôm nay",
   latest: "Ngày gần nhất",
-  passed: "Đạt",
+  passed: "Nghiệm thu đạt",
   failed: "Không đạt",
   rework: "Mối hàn lại",
   pending: "Chờ thí nghiệm",
+  grind: "Chờ mài",
 };
 
 function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
@@ -815,7 +817,8 @@ export default function OverviewDashboard() {
         (sum, row, index) => (getJournalRowDateIso(row, index) === yesterdayIso ? sum + 1 : sum),
         0,
       );
-  const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0);
+  const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0 && point.date <= todayIso);
+  const quality = useDashboardQuality(appliedFilters);
   const errorReasonRows = useMemo(
     () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalDefectStats(detailRows),
     [detailRows, overviewAggregateErrorReasons, showFastAggregate],
@@ -1634,20 +1637,20 @@ export default function OverviewDashboard() {
           </div>
         </button>
 
-        {/* Card 4: Đạt */}
+        {/* Card 4: Nghiệm thu đạt (theo đợt nghiệm thu hoàn thành, không phải NDT đạt) */}
         <button type="button" onClick={() => setLookup("passed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
-              ĐẠT
+              NGHIỆM THU ĐẠT
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {fmt(productionWelds.passed)}
+                {quality ? fmt(quality.acceptedCount) : "—"}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{productionWelds.tested > 0 ? pctComma(productionWelds.passed, productionWelds.tested) : "—"}</span> số mối sx đã thí nghiệm
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && total > 0 ? pctComma(quality.acceptedCount, total) : "—"}</span> tổng mối hàn thực hiện
             </div>
           </div>
           <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1687,6 +1690,14 @@ export default function OverviewDashboard() {
             <span className="text-xs text-slate-400">mối</span>
           </div>
           <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
+        </button>
+        <button type="button" onClick={() => setLookup("grind")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-slate-600">CHỜ MÀI</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.waitingCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Chưa mài hoặc chưa đủ trực quan/số đo</div>
         </button>
       </div>
 
@@ -2692,7 +2703,7 @@ export default function OverviewDashboard() {
         <ReportLookupDialog
           kind={lookup}
           loading={lookup !== "projects" && loading && selectedRows.length === 0}
-          welds={weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
           projects={selectedProjects.map((project) => ({
             id: project.id,
             name: project.name,

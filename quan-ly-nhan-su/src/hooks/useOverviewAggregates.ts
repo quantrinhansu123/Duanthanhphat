@@ -33,6 +33,12 @@ export function useOverviewAggregates(
   const [result, setResult] = useState<OverviewAggregateResult>(EMPTY_OVERVIEW_AGGREGATE);
   const [loading, setLoading] = useState(enabled);
   const key = useMemo(() => filtersKey(filters), [filters]);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision((n) => n + 1);
+    window.addEventListener("weld-quality-changed", refresh);
+    return () => window.removeEventListener("weld-quality-changed", refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +77,7 @@ export function useOverviewAggregates(
     };
     // `key` ổn định theo nội dung lọc — tránh refetch khi object filters đổi reference.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, key]);
+  }, [enabled, key, revision]);
 
   return { ...result, loading };
 }

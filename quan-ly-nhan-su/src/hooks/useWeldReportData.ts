@@ -23,6 +23,10 @@ export function useWeldReportData(
   const refetch = useCallback(() => {
     setReloadKey((key) => key + 1);
   }, []);
+  useEffect(() => {
+    window.addEventListener("weld-quality-changed", refetch);
+    return () => window.removeEventListener("weld-quality-changed", refetch);
+  }, [refetch]);
 
   useEffect(() => {
     if (!enabled) {

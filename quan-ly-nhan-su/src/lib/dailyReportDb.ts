@@ -40,6 +40,8 @@ export type DailyWorkManpower = {
   laiMay: DailyWorkPerson[];
   thoVanHanh: DailyWorkPerson[];
   congNhan: DailyWorkPerson[];
+  /** Số người VNR (công nhân phía VNR), lưu trong nhan_luc.vnr. */
+  vnr: DailyWorkPerson[];
   /** Ngày tiếp theo — người được giao thực hiện. */
   thucHien: DailyWorkPerson[];
 };
@@ -64,6 +66,7 @@ export type DailyWorkItem = {
   laiMay: DailyWorkPerson[];
   thoVanHanh: DailyWorkPerson[];
   congNhan: DailyWorkPerson[];
+  vnr: DailyWorkPerson[];
   thucHien: DailyWorkPerson[];
   /** Hiển thị bảng — ghép tên từ danh sách. */
   chtTen: string;
@@ -71,6 +74,7 @@ export type DailyWorkItem = {
   laiMayTen: string;
   thoVanHanhTen: string;
   congNhanTen: string;
+  vnrTen: string;
   thucHienTen: string;
   ghiChu: string;
 };
@@ -326,6 +330,7 @@ function parseManpower(row: WorkRowDb): DailyWorkManpower {
     laiMay: pick("lai_may", row.lai_may_id, row.lai_may_ten ?? numStr(row.so_lai_may)),
     thoVanHanh: pick("tho_van_hanh", row.tho_van_hanh_id, row.tho_van_hanh_ten ?? numStr(row.so_tho_van_hanh)),
     congNhan: pick("cong_nhan", row.cong_nhan_id, row.cong_nhan_ten ?? numStr(row.so_cong_nhan)),
+    vnr: bag ? parsePeopleList(bag.vnr) : [],
     thucHien,
   };
 }
@@ -356,12 +361,14 @@ function mapWork(row: WorkRowDb): DailyWorkItem {
     laiMay: manpower.laiMay,
     thoVanHanh: manpower.thoVanHanh,
     congNhan: manpower.congNhan,
+    vnr: manpower.vnr,
     thucHien: manpower.thucHien,
     chtTen: formatPeopleNames(manpower.cht) || (row.cht_ten ?? ""),
     kySuTen: formatPeopleNames(manpower.kySu) || (row.ky_su_ten ?? ""),
     laiMayTen: formatPeopleNames(manpower.laiMay) || (row.lai_may_ten ?? ""),
     thoVanHanhTen: formatPeopleNames(manpower.thoVanHanh) || (row.tho_van_hanh_ten ?? ""),
     congNhanTen: formatPeopleNames(manpower.congNhan) || (row.cong_nhan_ten ?? ""),
+    vnrTen: formatPeopleNames(manpower.vnr),
     thucHienTen: formatPeopleNames(manpower.thucHien),
     ghiChu: row.ghi_chu ?? "",
   };
@@ -394,7 +401,7 @@ export const DEFAULT_WORK_TYPES: DailyWorkType[] = [
   {
     id: "a1111111-1111-4111-8111-111111111102",
     ma: "HAN-CGM-TUYEN",
-    ten: "Hàn cháy giáp mép trên tuyến",
+    ten: "Hàn ray chảy giáp mép trên tuyến",
     moTa: "Hàn tiếp xúc đối đầu (FBW) trên tuyến",
     thuTu: 2,
     loaiMayMacDinh: "Máy hàn ray",
@@ -483,6 +490,7 @@ export function workTypeWeldMethod(workType: DailyWorkType | null | undefined): 
   if (
     workType.ma.startsWith("HAN-CGM") ||
     blob.includes("cháy giáp") ||
+    blob.includes("chảy giáp") ||
     blob.includes("chay giap") ||
     blob.includes("fbw")
   ) {
@@ -878,6 +886,7 @@ function normalizeLocalWork(item: LegacyLocalWork): DailyWorkItem {
   const congNhan = Array.isArray(item.congNhan)
     ? item.congNhan
     : legacyPeople(item.congNhanId, item.congNhanTen);
+  const vnr = Array.isArray(item.vnr) ? item.vnr : [];
   const thucHien = Array.isArray(item.thucHien) ? item.thucHien : [];
   return {
     ...item,
@@ -887,12 +896,14 @@ function normalizeLocalWork(item: LegacyLocalWork): DailyWorkItem {
     laiMay,
     thoVanHanh,
     congNhan,
+    vnr,
     thucHien,
     chtTen: formatPeopleNames(cht) || item.chtTen || "",
     kySuTen: formatPeopleNames(kySu) || item.kySuTen || "",
     laiMayTen: formatPeopleNames(laiMay) || item.laiMayTen || "",
     thoVanHanhTen: formatPeopleNames(thoVanHanh) || item.thoVanHanhTen || "",
     congNhanTen: formatPeopleNames(congNhan) || item.congNhanTen || "",
+    vnrTen: formatPeopleNames(vnr) || item.vnrTen || "",
     thucHienTen: formatPeopleNames(thucHien) || item.thucHienTen || "",
   };
 }
@@ -950,12 +961,14 @@ const EMPTY_MANPOWER = {
   laiMay: [] as DailyWorkPerson[],
   thoVanHanh: [] as DailyWorkPerson[],
   congNhan: [] as DailyWorkPerson[],
+  vnr: [] as DailyWorkPerson[],
   thucHien: [] as DailyWorkPerson[],
   chtTen: "",
   kySuTen: "",
   laiMayTen: "",
   thoVanHanhTen: "",
   congNhanTen: "",
+  vnrTen: "",
   thucHienTen: "",
 };
 
@@ -969,6 +982,7 @@ function manpowerColumns(input: Pick<WorkItemInput, keyof DailyWorkManpower>) {
       lai_may: peoplePayload(input.laiMay),
       tho_van_hanh: peoplePayload(input.thoVanHanh),
       cong_nhan: peoplePayload(input.congNhan),
+      vnr: peoplePayload(input.vnr),
       thuc_hien: peoplePayload(input.thucHien),
     },
     cht_id: firstId(input.cht),
@@ -1291,6 +1305,7 @@ export async function insertWorkItem(
       laiMayTen: formatPeopleNames(input.laiMay),
       thoVanHanhTen: formatPeopleNames(input.thoVanHanh),
       congNhanTen: formatPeopleNames(input.congNhan),
+      vnrTen: formatPeopleNames(input.vnr),
       thucHienTen: formatPeopleNames(input.thucHien),
     };
     store.work.push(item);
@@ -1366,6 +1381,7 @@ export async function insertWorkItem(
       input.laiMay.length > 1 ||
       input.thoVanHanh.length > 1 ||
       input.congNhan.length > 1 ||
+      input.vnr.length > 0 ||
       input.thucHien.length > 0;
     if (multi) {
       throw new Error(
