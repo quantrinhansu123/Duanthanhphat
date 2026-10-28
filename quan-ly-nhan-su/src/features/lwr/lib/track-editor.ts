@@ -425,7 +425,27 @@ export function rowKeysForLine(rows: RailRow[], line: string): Set<string> {
   return new Set(rows.filter((row) => row.line === line).map((row) => railRowKey(row)));
 }
 
-/** Cắt sơ đồ theo đoạn Km để in — giữ thanh/công trình/LWR giao với [start, end]. */
+/** Cắt đoạn ray đã lắp còn giao với cửa sổ in — nét đỏ trên bản in. */
+function clipInstalledRanges(
+  installed: Record<string, InstalledRange[]> | undefined,
+  startMetres: number,
+  endMetres: number,
+): Record<string, InstalledRange[]> | undefined {
+  if (!installed) return undefined;
+  const next: Record<string, InstalledRange[]> = {};
+  for (const [line, ranges] of Object.entries(installed)) {
+    const clipped: InstalledRange[] = [];
+    for (const range of ranges) {
+      const from = Math.max(range.from, startMetres);
+      const to = Math.min(range.to, endMetres);
+      if (to > from) clipped.push({ from, to });
+    }
+    if (clipped.length) next[line] = clipped;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
+/** Cắt sơ đồ theo đoạn Km để in — giữ thanh/công trình/LWR và nét đỏ lắp ray giao với [start, end]. */
 export function sliceLayoutForPrint(layout: TrackLayout, startMetres: number, endMetres: number): TrackLayout {
   if (!(endMetres > startMetres)) {
     throw new RangeError("Lý trình in: cuối phải lớn hơn đầu.");
@@ -446,7 +466,13 @@ export function sliceLayoutForPrint(layout: TrackLayout, startMetres: number, en
     const span = getPlacementSpan(layout.rows, placement);
     return Boolean(span && span.startMetres < endMetres && span.endMetres > startMetres);
   });
-  return { ...layout, rows, longRails, placements };
+  return {
+    ...layout,
+    rows,
+    longRails,
+    placements,
+    installed: clipInstalledRanges(layout.installed, startMetres, endMetres),
+  };
 }
 
 /** Extend rails; pass `line` to only extend Thượng or Hạ (cả hai ray của tuyến đó).

@@ -207,7 +207,9 @@ export function TrackPrint({
       @media print {
         @page { size:${config.size}; margin:8mm; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
-        #lwr-track-print { position:static; overflow:visible; background:white; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+        #lwr-track-print, #lwr-track-print * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+        #lwr-track-print { position:static; overflow:visible; background:white; }
+        #lwr-track-print [data-testid="rail-grid-installed"] line { stroke:#dc2626 !important; }
         #lwr-track-print .toolbar { display:none; }
         #lwr-track-print article { width:auto; margin:0; padding:0; break-after:page; }
         #lwr-track-print article:last-child { break-after:auto; }
@@ -294,6 +296,7 @@ export function TrackPrint({
               rows={sliced.rows}
               longRails={sliced.longRails}
               joints={filteredJoints}
+              installed={sliced.installed}
               selectedId=""
               onSelect={noop}
               embedded

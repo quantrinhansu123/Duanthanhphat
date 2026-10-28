@@ -400,14 +400,28 @@ export const RailGrid = memo(function RailGrid({
             ) : null}
             {(installed?.[row.line] ?? []).map((range, i) => {
               const box = trackSpanStyle(range.from, range.to, extent.startMetres);
+              const span = Math.max(1, box.width);
               return (
-                <div
+                <svg
                   key={`installed-${i}`}
                   data-testid="rail-grid-installed"
-                  title={`Đã lắp ray: Km ${formatChainage(range.from)} – ${formatChainage(range.to)}`}
-                  className="pointer-events-none absolute top-[33px] z-0 h-[3px] rounded-full bg-red-600"
-                  style={{ left: box.left, width: box.width }}
-                />
+                  className="pointer-events-none absolute z-[1] overflow-visible"
+                  style={{ left: box.left, top: 32 }}
+                  width={span}
+                  height="4"
+                  aria-hidden
+                >
+                  <title>{`Đã lắp ray: Km ${formatChainage(range.from)} – ${formatChainage(range.to)}`}</title>
+                  <line
+                    x1="0"
+                    y1="2"
+                    x2={span}
+                    y2="2"
+                    stroke="#dc2626"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
               );
             })}
             {row.cells.map(cell => {
