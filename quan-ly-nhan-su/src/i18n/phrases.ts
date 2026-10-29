@@ -250,7 +250,6 @@ export const PHRASES: Record<string, string> = {
   "Còn hiệu lực": "Valid",
   "Sắp hết hạn": "Expiring soon",
   "Hết hạn": "Expired",
-  "Đạt": "Pass",
   "Không đạt": "Fail",
   "Đang học": "In progress",
   "Hoàn thành": "Completed",

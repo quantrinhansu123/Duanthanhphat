@@ -97,7 +97,7 @@ function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso:
   if (kind === "passed") {
     return rows.filter((row) => {
       const q = row.tinh_trang_chat_luong;
-      return row.loai_moi_han === "Sản xuất" && (q === "Đạt" || q === "Nghiệm thu đạt" || resolveWeldTestStatus(row) === "Đạt");
+      return row.loai_moi_han === "Sản xuất" && (q === "Đạt" || resolveWeldTestStatus(row) === "Đạt");
     });
   }
   if (kind === "failed") {
@@ -110,7 +110,7 @@ function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso:
   if (kind === "pending") {
     return rows.filter((row) => {
       const q = row.tinh_trang_chat_luong;
-      return q === "Chờ siêu âm và nghiệm thu" || q === "Chờ thí nghiệm" || resolveWeldTestStatus(row) === "Chờ thí nghiệm";
+      return q === "Chờ siêu âm và nghiệm thu" || resolveWeldTestStatus(row) === "Chờ thí nghiệm";
     });
   }
   if (kind === "grind") {

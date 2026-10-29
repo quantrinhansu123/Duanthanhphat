@@ -75,7 +75,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
       setDraft(inspection);
       setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
       setRules(data.rules);
-      setAccepted(data.summary.tinh_trang === "Đạt" || data.summary.tinh_trang === "Nghiệm thu đạt");
+      setAccepted(data.summary.tinh_trang === "Đạt");
     }).catch((e) => { if (active) setError(e instanceof Error ? e.message : "Không tải được kiểm tra."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
