@@ -71,7 +71,7 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
       mapUrl: w.vi_do != null && w.kinh_do != null ? mapLink(w.vi_do, w.kinh_do) : "", coords: w.vi_do != null && w.kinh_do != null ? `${w.vi_do.toFixed(6)}, ${w.kinh_do.toFixed(6)}` : "" }));
   } else if (record) {
     const { dot } = record, rfi = dot.phieu_yeu_cau_nghiem_thu, t = { ...((dot.thong_tin ?? {}) as Record<string, string>), ...(latest?.thong_tin ?? {}) };
-    projectName = String(rfi.du_an?.ten_du_an ?? rfi.du_an?.name ?? "");
+    projectName = String(rfi.du_an?.du_an ?? rfi.du_an?.ten_du_an ?? rfi.du_an?.name ?? "");
     const all = recordRows(record);
     rows = kind === "giai-doan" ? [] : all.filter((r) => r.result === "Đạt");
     counts = `Tổng ${all.length} mối trong RFI ${rfi.so_phieu}: chấp nhận ${all.filter((r) => r.result === "Đạt").length}, không đạt ${all.filter((r) => r.result === "Không đạt").length}, chưa nghiệm thu ${all.filter((r) => r.result === "Chưa nghiệm thu").length}.`;

@@ -6,6 +6,7 @@ import { completeAcceptance, loadRecords, loadRecordSet, loadRfiCandidates, load
   publishRfi, setRecordSign, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { defaultDecisions, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
+import WeldBbntDocument from "@/components/WeldBbntDocument";
 
 const input = "h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs sm:text-sm";
 const btn = "h-9 rounded-lg px-4 text-xs sm:text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
@@ -22,6 +23,7 @@ export default function WeldAcceptanceWorkflow() {
   const [projectId, setProjectId] = useState("");
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
+  const [bbnt, setBbnt] = useState<RecordSet | null>(null);
 
   useEffect(() => {
     loadProjects({ includeProgress: false }).then((r) => {
@@ -38,6 +40,9 @@ export default function WeldAcceptanceWorkflow() {
   async function openRecord(id: string, kind: DocKind) {
     setView({ kind, record: await loadRecordSet(id) });
   }
+  async function openBbnt(id: string) {
+    setBbnt(await loadRecordSet(id));
+  }
 
   return (
     <div className="px-4 sm:px-6 pb-8 no-print-root">
@@ -53,10 +58,11 @@ export default function WeldAcceptanceWorkflow() {
         <div className="no-print">
           {tab === "rfi" && <RfiPanel projectId={projectId} onOpen={openRfi} />}
           {tab === "accept" && <AcceptPanel projectId={projectId} />}
-          {tab === "records" && <RecordsPanel projectId={projectId} onOpen={openRecord} />}
+          {tab === "records" && <RecordsPanel projectId={projectId} onOpen={openRecord} onOpenBbnt={openBbnt} />}
         </div>
       )}
       {view && <WeldAcceptanceDocument view={view} onClose={() => setView(null)} />}
+      {bbnt && <WeldBbntDocument record={bbnt} onClose={() => setBbnt(null)} />}
     </div>
   );
 }
@@ -248,7 +254,7 @@ function AcceptPanel({ projectId }: { projectId: string }) {
   );
 }
 
-function RecordsPanel({ projectId, onOpen }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown }) {
+function RecordsPanel({ projectId, onOpen, onOpenBbnt }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onOpenBbnt: (id: string) => unknown }) {
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [error, setError] = useState("");
   const refresh = useCallback(() => loadRecords(projectId).then((r) => setRecords(r.records)), [projectId]);
@@ -274,6 +280,7 @@ function RecordsPanel({ projectId, onOpen }: { projectId: string; onOpen: (id: s
                     </button>)}
                 </span>);
             })}
+            <button type="button" className={secondary} onClick={() => Promise.resolve(onOpenBbnt(r.id)).catch((e) => setError(message(e)))}>BBNT mối hàn</button>
           </div>
         </div>))}
       {!records.length && <p className="text-sm text-slate-500">Chưa có hồ sơ nghiệm thu.</p>}
