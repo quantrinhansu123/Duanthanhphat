@@ -1,3 +1,5 @@
+import { navigation } from "@/data/navigation";
+
 export type CatalogItem = {
   id: string;
   code: string;
@@ -20,17 +22,63 @@ export type InitialAccount = {
   username: string;
   fullName: string;
   email: string;
-  role: "Quản trị" | "Nhân viên";
+  /** Một trong permissionRoles (hoặc "Nhân viên" của dữ liệu cũ). */
+  role: string;
   status: "Hoạt động" | "Khóa";
   createdAt: string;
   note: string;
 };
 
+export const permissionActions = ["view", "edit", "delete"] as const;
+export type PermissionAction = (typeof permissionActions)[number];
+export type Permission = Record<PermissionAction, boolean>;
+/** vai trò → mã chức năng (id tab trong navigation) → quyền */
+export type RolePermissions = Record<string, Record<string, Permission>>;
+
+/** Vai trò theo "TCW_Bang_phan_quyen_ung_dung.docx". */
+export const permissionRoles = [
+  "Quản trị",
+  "Lãnh đạo",
+  "Chỉ huy trưởng dự án",
+  "Kỹ sư hiện trường",
+  "Thợ hàn / thợ vận hành",
+  "Quản lý máy",
+  "Bộ phận khác",
+] as const;
+
+const perm = (view: boolean, edit: boolean, del = false): Permission => ({ view, edit, delete: del });
+const NONE = perm(false, false);
+const WELDER_TABS = ["kiem-tra-may-truoc-ca", "lich-su-cap-nhien-lieu"];
+
+/** Mặc định theo phạm vi áp dụng trong file Word. */
+export function defaultPermission(role: string, groupId: string, tabId: string): Permission {
+  switch (role) {
+    case "Quản trị": return perm(true, true, true);
+    case "Chỉ huy trưởng dự án":
+    case "Kỹ sư hiện trường": return perm(true, true);
+    case "Thợ hàn / thợ vận hành": return WELDER_TABS.includes(tabId) ? perm(true, true) : NONE;
+    case "Quản lý máy": return groupId === "may-moc" ? perm(true, true) : NONE;
+    default: return perm(true, false); // Lãnh đạo, Bộ phận khác: chỉ xem
+  }
+}
+
+export const defaultPermissions: RolePermissions = Object.fromEntries(
+  permissionRoles.map((role) => [
+    role,
+    Object.fromEntries(
+      navigation.flatMap((g) => g.children.map((c) => [c.id, defaultPermission(role, g.id, c.id)])),
+    ),
+  ]),
+);
+
 export type StoredSystemConfiguration = {
   catalogs: CatalogItem[];
   settings: SystemSettings;
   accounts: InitialAccount[];
+  permissions?: RolePermissions;
   updatedAt?: string;
+  /** Chỉ có khi lưu: quyền chưa đồng bộ được sang database. */
+  syncWarning?: string | null;
 };
 
 export const catalogGroups = [
@@ -118,3 +166,21 @@ export const initialAccounts: InitialAccount[] = [
     note: "Thợ hàn – tài khoản mẫu",
   },
 ];
+
+/**
+ * Quyền của email trên một chức năng — dùng chung cho giao diện và máy chủ.
+ * Email chưa có trong danh sách tài khoản → không hạn chế; tài khoản Khóa → không có quyền nào.
+ */
+export function checkPermission(
+  config: Pick<StoredSystemConfiguration, "accounts" | "permissions">,
+  email: string | undefined,
+  tabId: string,
+  action: PermissionAction,
+): boolean {
+  const account = email ? config.accounts.find((a) => a.email.toLowerCase() === email.toLowerCase()) : undefined;
+  if (!account) return true;
+  if (account.status === "Khóa") return false;
+  const stored = config.permissions?.[account.role]?.[tabId];
+  const groupId = navigation.find((g) => g.children.some((c) => c.id === tabId))?.id ?? "";
+  return (stored ?? defaultPermission(account.role, groupId, tabId))[action];
+}

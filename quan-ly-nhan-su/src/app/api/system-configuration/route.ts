@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   catalogGroups,
+  defaultPermissions,
+  permissionRoles,
+  type RolePermissions,
   defaultSystemSettings,
   initialAccounts,
   sharedCatalogs,
@@ -12,6 +15,8 @@ import {
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
+import { syncPermissionsToDb } from "@/lib/server/syncPermissions";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 const FILE_PATH = "system-configuration.json";
 const groupSet = new Set<string>(catalogGroups);
@@ -91,22 +96,38 @@ function validate(body: unknown): StoredSystemConfiguration {
       username,
       fullName: cleanText(account.fullName, 200),
       email: cleanText(account.email, 300),
-      role: account.role === "Quản trị" ? "Quản trị" : "Nhân viên",
+      role: (permissionRoles as readonly string[]).includes(account.role) ? account.role : "Nhân viên",
       status: account.status === "Khóa" ? "Khóa" : "Hoạt động",
       createdAt: cleanText(account.createdAt, 10),
       note: cleanText(account.note, 1000),
     } satisfies InitialAccount;
   });
 
-  return { catalogs, settings, accounts, updatedAt: new Date().toISOString() };
+  const rawPerms = (input.permissions ?? {}) as Record<string, Record<string, Partial<Record<string, unknown>>> | undefined>;
+  const permissions: RolePermissions = {};
+  for (const role of permissionRoles) {
+    permissions[role] = {};
+    for (const tabId of Object.keys(defaultPermissions[role])) {
+      const d = defaultPermissions[role][tabId];
+      const r = rawPerms[role]?.[tabId];
+      permissions[role][tabId] = r
+        ? { view: Boolean(r.view), edit: Boolean(r.edit), delete: Boolean(r.delete) }
+        : d;
+    }
+  }
+
+  return { catalogs, settings, accounts, permissions, updatedAt: new Date().toISOString() };
 }
 
 export async function GET() {
+  const denied = await requireAccess(null);
+  if (denied) return denied;
   try {
     const stored = await readPrivateJson<StoredSystemConfiguration>(FILE_PATH);
     const configuration = stored ?? defaults;
     return NextResponse.json({
       ...configuration,
+      permissions: configuration.permissions ?? defaultPermissions,
       catalogs: withRequiredWeldTypes(configuration.catalogs.filter((item) => item.group !== "Nhà máy")),
     });
   } catch (error) {
@@ -115,10 +136,13 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireAccess("cau-hinh", "edit");
+  if (denied) return denied;
   try {
     const configuration = validate(await request.json());
     await writePrivateJson(FILE_PATH, configuration);
-    return NextResponse.json(configuration);
+    const syncWarning = await syncPermissionsToDb(configuration);
+    return NextResponse.json({ ...configuration, syncWarning });
   } catch (error) {
     const message = error instanceof Error ? error.message : formatSupabaseError(error);
     return NextResponse.json({ error: message }, { status: 400 });

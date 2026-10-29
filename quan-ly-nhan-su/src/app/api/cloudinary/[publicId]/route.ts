@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 type RouteParams = {
   params: Promise<{ publicId: string }>;
 };
 
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const denied = await requireAccess(null);
+  if (denied) return denied;
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
   const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();

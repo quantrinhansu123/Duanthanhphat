@@ -6,8 +6,11 @@ import {
   isGoogleDriveConfigured,
   MAX_DRIVE_DOCUMENT_BYTES,
 } from "@/lib/googleDrive/server";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess("tai-lieu", "edit");
+  if (denied) return denied;
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json(
       { error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE },

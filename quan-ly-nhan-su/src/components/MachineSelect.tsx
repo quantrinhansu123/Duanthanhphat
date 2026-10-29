@@ -119,6 +119,7 @@ export default function MachineSelect({
         <button
           type="button"
           aria-label="Xóa máy đã chọn"
+          data-keep-visible
           onClick={() => onChange("")}
           className="absolute right-7 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
         >

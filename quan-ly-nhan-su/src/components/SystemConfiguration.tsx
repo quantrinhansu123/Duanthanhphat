@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import AccountCreateModal, { PasswordField, roleOptions } from "@/components/AccountCreateModal";
+import { navigation } from "@/data/navigation";
 import { Check, DotsThree } from "@/components/icons";
 import {
   catalogGroups,
+  defaultPermissions,
   defaultSystemSettings,
+  permissionActions,
+  permissionRoles,
+  type PermissionAction,
+  type RolePermissions,
   initialAccounts as seedAccounts,
   sharedCatalogs as seedCatalogs,
   type CatalogGroup,
@@ -17,7 +24,134 @@ import {
   saveSystemConfiguration,
 } from "@/lib/systemConfigurationClient";
 
-type ConfigTab = "catalogs" | "settings" | "accounts";
+type ConfigTab = "catalogs" | "settings" | "accounts" | "permissions";
+
+const actionLabels: Record<PermissionAction, string> = { view: "Xem", edit: "Sửa", delete: "Xóa" };
+
+function PermissionsPanel({
+  permissions,
+  setPermissions,
+}: {
+  permissions: RolePermissions;
+  setPermissions: (next: RolePermissions) => void;
+}) {
+  const [role, setRole] = useState<string>(permissionRoles[0]);
+
+  function toggle(tabId: string, action: PermissionAction) {
+    const current = permissions[role]?.[tabId] ?? { view: false, edit: false, delete: false };
+    const next = {
+      ...permissions,
+      [role]: { ...permissions[role], [tabId]: { ...current, [action]: !current[action] } },
+    };
+    setPermissions(next);
+  }
+
+  const tabIds = navigation.flatMap((g) => g.children.map((c) => c.id));
+
+  function toggleAll(action: PermissionAction, value: boolean) {
+    setPermissions({
+      ...permissions,
+      [role]: Object.fromEntries(
+        tabIds.map((id) => [
+          id,
+          { ...(permissions[role]?.[id] ?? { view: false, edit: false, delete: false }), [action]: value },
+        ]),
+      ),
+    });
+  }
+
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap gap-1.5 sm:gap-2">
+        {permissionRoles.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setRole(r)}
+            className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
+              role === r
+                ? "bg-[#0047AB] text-white shadow-xs"
+                : "bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-400 shadow-2xs"
+            }`}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+        <table className="w-full text-left text-xs sm:text-sm">
+          <thead className="bg-slate-50 text-slate-600">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Chức năng — {role}</th>
+              {permissionActions.map((a) => (
+                <th key={a} className="w-28 px-4 py-3 text-center font-semibold">{actionLabels[a]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-200 bg-blue-50/50">
+              <td className="px-4 py-2.5 font-semibold text-[#0047AB]">Chọn tất cả</td>
+              {permissionActions.map((a) => (
+                <td key={a} className="px-4 py-2.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={tabIds.every((id) => permissions[role]?.[id]?.[a])}
+                    onChange={(e) => toggleAll(a, e.target.checked)}
+                    aria-label={`Chọn tất cả - ${actionLabels[a]}`}
+                    className="h-4 w-4 cursor-pointer rounded accent-[#0047AB]"
+                  />
+                </td>
+              ))}
+            </tr>
+            {navigation.map((group) => (
+              <Fragment key={group.id}>
+                <tr className="bg-slate-100/70">
+                  <td colSpan={4} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    {group.label}
+                  </td>
+                </tr>
+                {group.children.map((fn) => (
+                  <tr key={fn.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 pl-8 font-medium text-slate-800">{fn.label}</td>
+                    {permissionActions.map((a) => (
+                      <td key={a} className="px-4 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(permissions[role]?.[fn.id]?.[a])}
+                          onChange={() => toggle(fn.id, a)}
+                          aria-label={`${role} - ${fn.label} - ${actionLabels[a]}`}
+                          className="h-4 w-4 cursor-pointer rounded accent-[#0047AB]"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/** Menu "⋯" của dòng: đóng khi bấm ra ngoài hoặc nhấn Esc. */
+function useRowMenu() {
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !(e.target as Element).closest("[data-row-menu]")) setOpen(null);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return [open, setOpen] as const;
+}
 
 function CatalogModal({
   item,
@@ -100,7 +234,7 @@ function CatalogsPanel({
   onPersist?: (nextCatalogs: CatalogItem[]) => Promise<void> | void;
 }) {
   const [group, setGroup] = useState<CatalogGroup>("Loại ray");
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useRowMenu();
   const [modal, setModal] = useState<{ item: CatalogItem; mode: "create" | "edit" } | null>(null);
 
   const filtered = useMemo(() => catalogs.filter((c) => c.group === group), [catalogs, group]);
@@ -184,7 +318,7 @@ function CatalogsPanel({
                       {c.active ? "Đang dùng" : "Ngừng"}
                     </span>
                   </td>
-                  <td className="relative px-2 py-3">
+                  <td data-row-menu className="relative px-2 py-3">
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}
@@ -345,6 +479,135 @@ function SettingsPanel({
   );
 }
 
+const inputCls =
+  "mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
+
+function AccountModal({
+  account,
+  onClose,
+  onSave,
+}: {
+  account: InitialAccount;
+  onClose: () => void;
+  onSave: (account: InitialAccount) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(account);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (password && password.length < 6) {
+      setError("Mật khẩu mới tối thiểu 6 ký tự.");
+      return;
+    }
+    if (password) {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/system-configuration/accounts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email, password }),
+        });
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Không đổi được mật khẩu");
+        setBusy(false);
+        return;
+      }
+    }
+    onSave(form);
+  }
+  const rows: [string, string][] = [
+    ["Tên đăng nhập", account.username],
+    ["Họ tên", account.fullName],
+    ["Email", account.email || "—"],
+    ["Vai trò", account.role],
+    ["Trạng thái", account.status],
+    ["Ngày tạo", new Date(account.createdAt + "T00:00:00").toLocaleDateString("vi-VN")],
+    ["Ghi chú", account.note || "—"],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-[480px] rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900">
+          {editing ? "Chỉnh sửa nhân viên" : "Chi tiết nhân viên"}
+        </h3>
+        {editing ? (
+          <div className="mt-4 space-y-3.5">
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Tên đăng nhập
+              <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={`${inputCls} font-mono`} />
+            </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Họ tên
+              <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputCls} />
+            </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Email
+              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputCls} />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Vai trò
+                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputCls}>
+                  {roleOptions(form.role).map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+                Trạng thái
+                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as InitialAccount["status"] })} className={inputCls}>
+                  <option>Hoạt động</option>
+                  <option>Khóa</option>
+                </select>
+              </label>
+            </div>
+            <PasswordField label="Mật khẩu mới" value={password} onChange={setPassword} placeholder="Để trống nếu không đổi" />
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Ghi chú
+              <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={3} className={`${inputCls} h-auto py-2`} />
+            </label>
+          </div>
+        ) : (
+          <dl className="mt-4 divide-y divide-slate-100 text-xs sm:text-sm">
+            {rows.map(([k, v]) => (
+              <div key={k} className="flex gap-3 py-2.5">
+                <dt className="w-32 shrink-0 font-semibold text-slate-500">{k}</dt>
+                <dd className="font-medium text-slate-900 break-words">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {error && <p role="alert" className="mt-3 text-xs font-semibold text-rose-600">{error}</p>}
+        <div className="mt-6 flex justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={editing ? () => { setForm(account); setPassword(""); setError(null); setEditing(false); } : onClose}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
+          >
+            {editing ? "Hủy" : "Đóng"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={editing ? () => void save() : () => setEditing(true)}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
+          >
+            {editing ? "Lưu" : "Chỉnh sửa"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccountsPanel({
   accounts,
   setAccounts,
@@ -354,7 +617,17 @@ function AccountsPanel({
   setAccounts: React.Dispatch<React.SetStateAction<InitialAccount[]>>;
   onPersist?: (nextAccounts: InitialAccount[]) => Promise<void> | void;
 }) {
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useRowMenu();
+  const [creating, setCreating] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = accounts.find((a) => a.id === selectedId) ?? null;
+
+  function handleSaveAccount(updated: InitialAccount) {
+    const nextAccounts = accounts.map((a) => (a.id === updated.id ? updated : a));
+    setAccounts(nextAccounts);
+    setSelectedId(null);
+    if (onPersist) void onPersist(nextAccounts);
+  }
 
   const filtered = useMemo(
     () =>
@@ -380,21 +653,10 @@ function AccountsPanel({
     if (onPersist) void onPersist(nextAccounts);
   }
 
-  function handleAddAccount() {
-    const nextAccounts: InitialAccount[] = [
-      {
-        id: String(Date.now()),
-        username: `user${accounts.length + 1}`,
-        fullName: "Nhân viên mới",
-        email: "",
-        role: "Nhân viên",
-        status: "Hoạt động",
-        createdAt: new Date().toISOString().slice(0, 10),
-        note: "Tài khoản thêm thủ công",
-      },
-      ...accounts,
-    ];
+  function handleCreated(account: InitialAccount) {
+    const nextAccounts = [account, ...accounts];
     setAccounts(nextAccounts);
+    setCreating(false);
     if (onPersist) void onPersist(nextAccounts);
   }
 
@@ -408,7 +670,7 @@ function AccountsPanel({
       <div className="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
         <button
           type="button"
-          onClick={handleAddAccount}
+          onClick={() => setCreating(true)}
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm tài khoản
@@ -432,7 +694,11 @@ function AccountsPanel({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((a) => (
-                <tr key={a.id} className="hover:bg-slate-50/80 transition-colors duration-150">
+                <tr
+                  key={a.id}
+                  onClick={() => setSelectedId(a.id)}
+                  className="cursor-pointer hover:bg-slate-50/80 transition-colors duration-150"
+                >
                   <td className="px-4 py-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">{a.username}</td>
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{a.fullName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{a.email || "—"}</td>
@@ -458,7 +724,7 @@ function AccountsPanel({
                     {new Date(a.createdAt + "T00:00:00").toLocaleDateString("vi-VN")}
                   </td>
                   <td className="max-w-[180px] px-3.5 py-3 text-xs text-slate-500">{a.note}</td>
-                  <td className="relative px-2 py-3">
+                  <td data-row-menu className="relative px-2 py-3" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => setMenuOpen(menuOpen === a.id ? null : a.id)}
@@ -499,6 +765,10 @@ function AccountsPanel({
           </table>
         </div>
       </div>
+      {creating && <AccountCreateModal onClose={() => setCreating(false)} onCreate={handleCreated} />}
+      {selected && (
+        <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} />
+      )}
     </>
   );
 }
@@ -508,6 +778,7 @@ export default function SystemConfiguration() {
   const [catalogs, setCatalogs] = useState(seedCatalogs);
   const [settings, setSettings] = useState(defaultSystemSettings);
   const [accounts, setAccounts] = useState(seedAccounts);
+  const [permissions, setPermissions] = useState<RolePermissions>(defaultPermissions);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -521,6 +792,7 @@ export default function SystemConfiguration() {
         setCatalogs(data.catalogs);
         setSettings(data.settings);
         setAccounts(data.accounts);
+        if (data.permissions) setPermissions(data.permissions);
       })
       .catch((err) => {
         console.error("Lỗi tải cấu hình:", err);
@@ -537,16 +809,19 @@ export default function SystemConfiguration() {
     newCatalogs: CatalogItem[] = catalogs,
     newSettings: SystemSettings = settings,
     newAccounts: InitialAccount[] = accounts,
+    newPermissions: RolePermissions = permissions,
   ) {
     setSaving(true);
     setSaveError(null);
     try {
-      await saveSystemConfiguration({
+      const result = await saveSystemConfiguration({
         catalogs: newCatalogs,
         settings: newSettings,
         accounts: newAccounts,
+        permissions: newPermissions,
       });
-      setSaved(true);
+      if (result.syncWarning) setSaveError(result.syncWarning);
+      else setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Lỗi lưu cấu hình hệ thống";
@@ -560,6 +835,7 @@ export default function SystemConfiguration() {
     { id: "catalogs", label: "Danh mục dùng chung", count: catalogs.length },
     { id: "settings", label: "Cấu hình hệ thống" },
     { id: "accounts", label: "Tài khoản khởi tạo", count: accounts.length },
+    { id: "permissions", label: "Phân quyền" },
   ];
 
   return (
@@ -601,14 +877,16 @@ export default function SystemConfiguration() {
               <Check size={14} weight="bold" /> Đã lưu thay đổi
             </span>
           )}
-          <button
-            type="button"
-            disabled={saving || loading}
-            onClick={() => void persist()}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-60 px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer"
-          >
-            {saving ? "Đang lưu…" : "Lưu thay đổi"}
-          </button>
+          {tab === "permissions" && (
+            <button
+              type="button"
+              disabled={saving || loading}
+              onClick={() => void persist()}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-60 px-4 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all cursor-pointer"
+            >
+              {saving ? "Đang lưu…" : "Lưu thay đổi"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -632,6 +910,12 @@ export default function SystemConfiguration() {
           accounts={accounts}
           setAccounts={setAccounts}
           onPersist={(next) => persist(catalogs, settings, next)}
+        />
+      )}
+      {tab === "permissions" && (
+        <PermissionsPanel
+          permissions={permissions}
+          setPermissions={setPermissions}
         />
       )}
     </main>

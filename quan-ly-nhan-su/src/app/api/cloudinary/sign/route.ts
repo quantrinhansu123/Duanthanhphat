@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 const ALLOWED_FOLDERS = new Set([
   "thanhphat/certificates",
@@ -13,6 +14,8 @@ const ALLOWED_FOLDERS = new Set([
 ]);
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess(null);
+  if (denied) return denied;
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
   const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
   const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();

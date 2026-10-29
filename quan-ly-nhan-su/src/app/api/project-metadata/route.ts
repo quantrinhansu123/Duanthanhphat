@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ProjectMetadata, ProjectMetadataStore } from "@/data/projectMetadata";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 const FILE_PATH = "project-metadata.json";
 const statuses = new Set(["Đang triển khai", "Hoàn thành", "Tạm dừng"]);
@@ -37,6 +38,8 @@ function validate(value: unknown): ProjectMetadata {
 }
 
 export async function GET() {
+  const denied = await requireAccess("quan-ly-du-an", "view");
+  if (denied) return denied;
   try {
     const metadata = await readPrivateJson<ProjectMetadataStore>(FILE_PATH);
     return NextResponse.json({ metadata: metadata ?? {} });
@@ -46,6 +49,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireAccess("quan-ly-du-an", "edit");
+  if (denied) return denied;
   try {
     const body = await request.json() as { projectId?: unknown; metadata?: unknown; store?: Record<string, unknown> };
     const currentStore = await readPrivateJson<ProjectMetadataStore>(FILE_PATH) ?? {};
@@ -67,6 +72,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireAccess("quan-ly-du-an", "delete");
+  if (denied) return denied;
   try {
     const projectId = new URL(request.url).searchParams.get("projectId")?.trim();
     if (!projectId) return NextResponse.json({ error: "Thiếu mã dự án." }, { status: 400 });

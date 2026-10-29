@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { navigation } from "@/data/navigation";
+import { useAccess } from "@/lib/useAccess";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
@@ -53,6 +54,10 @@ export default function Sidebar({
 }: SidebarProps) {
   const router = useRouter();
   const { lang } = useLanguage();
+  const { can } = useAccess();
+  const visibleGroups = navigation
+    .map((g) => ({ ...g, children: g.children.filter((c) => can(c.id, "view")) }))
+    .filter((g) => g.children.length > 0);
   const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
@@ -134,7 +139,7 @@ export default function Sidebar({
         </div>
 
         <div className="flex flex-col gap-1 pb-2">
-          {navigation.map((item) => {
+          {visibleGroups.map((item) => {
             const isOpen = openGroups.includes(item.id);
             const isChildActive = item.children.some((c) => c.id === activeId);
             const GroupIcon = icons[item.id];
@@ -232,7 +237,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={async () => {
-            try { await createClient().auth.signOut(); } catch { /* vẫn chuyển về trang đăng nhập */ }
+            try { sessionStorage.removeItem("tp-access-v1"); await createClient().auth.signOut(); } catch { /* vẫn chuyển về trang đăng nhập */ }
             window.location.assign("/login");
           }}
           aria-label={lang === "en" ? "Sign out" : "Đăng xuất"}

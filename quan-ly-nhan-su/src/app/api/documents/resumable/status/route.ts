@@ -4,6 +4,7 @@ import {
   isGoogleDriveConfigured,
   MAX_DRIVE_DOCUMENT_BYTES,
 } from "@/lib/googleDrive/server";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 const DRIVE_UPLOAD_HOSTS = new Set(["www.googleapis.com", "upload.googleapis.com"]);
 const DRIVE_UPLOAD_PATH = /^\/upload\/drive\/v3\/files(?:\/[A-Za-z0-9_-]{10,200})?$/;
@@ -32,6 +33,8 @@ function validatedSessionUrl(value: unknown) {
  * Google Drive đã nhận đủ nội dung và trả về metadata của file.
  */
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess("tai-lieu", "edit");
+  if (denied) return denied;
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json({ error: GOOGLE_DRIVE_CONFIGURATION_MESSAGE }, { status: 503 });
   }

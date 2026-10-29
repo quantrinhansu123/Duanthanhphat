@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { INITIAL_COMPLIANCE_STANDARDS } from "@/data/complianceStandards";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 const CERT_STATUSES = new Set(["Chưa cập nhật", "Còn hiệu lực", "Sắp hết hạn", "Hết hạn"]);
 const COMPLIANCE_STATUSES = new Set(["Chưa đánh giá", "Thiếu minh chứng", "Đáp ứng một phần", "Đạt"]);
@@ -17,6 +18,8 @@ function nullableText(value: unknown, max = 4000) {
 }
 
 export async function GET() {
+  const denied = await requireAccess(null);
+  if (denied) return denied;
   try {
     const supabase = createAdminClient();
     let standards = await supabase.from("tieu_chuan_qlcl").select("*");
@@ -59,6 +62,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const kind = text(body.kind, 32);
+    const denied = await requireAccess(kind === "certificate" ? "chung-chi-cong-ty" : "tieu-chuan-tcvn", "edit");
+    if (denied) return denied;
     const item = body.item && typeof body.item === "object"
       ? body.item as Record<string, unknown>
       : {};
@@ -166,6 +171,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireAccess("chung-chi-cong-ty", "delete");
+  if (denied) return denied;
   try {
     const url = new URL(request.url);
     const kind = url.searchParams.get("kind");

@@ -6,6 +6,7 @@ import {
   isDocumentStorageConfigured,
   updateStoredDocument,
 } from "@/lib/documentStorage";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 type RouteParams = {
   params: Promise<{ fileId: string }>;
@@ -19,6 +20,8 @@ function notConfigured() {
 }
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
+  const denied = await requireAccess("tai-lieu", "view");
+  if (denied) return denied;
   if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {
@@ -45,6 +48,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
+  const denied = await requireAccess("tai-lieu", "edit");
+  if (denied) return denied;
   if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {
@@ -67,6 +72,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+  const denied = await requireAccess("tai-lieu", "delete");
+  if (denied) return denied;
   if (!isDocumentStorageConfigured()) return notConfigured();
 
   try {

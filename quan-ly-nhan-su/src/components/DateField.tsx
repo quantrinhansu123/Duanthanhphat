@@ -243,6 +243,7 @@ export default function DateField({ value, onChange, placeholder, className = ""
                 onChange("");
                 setOpen(false);
               }}
+              data-keep-visible
               className="rounded px-1.5 py-0.5 text-slate-500 hover:text-slate-800 cursor-pointer"
             >
               Xóa

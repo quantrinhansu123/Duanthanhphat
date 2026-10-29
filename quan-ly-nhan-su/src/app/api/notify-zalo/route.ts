@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 /** Gửi tin Zalo OA tới Chỉ huy trưởng và quản trị viên. Bỏ qua nếu chưa cấu hình token. */
 export async function POST(request: Request) {
+  const denied = await requireAccess(null);
+  if (denied) return denied;
   const token = process.env.ZALO_OA_ACCESS_TOKEN?.trim();
   const recipients = [
     ...(process.env.ZALO_COMMANDER_USER_IDS ?? "").split(","),

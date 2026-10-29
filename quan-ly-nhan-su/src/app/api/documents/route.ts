@@ -4,8 +4,11 @@ import {
   isDocumentStorageConfigured,
   listStoredDocuments,
 } from "@/lib/documentStorage";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 export async function GET() {
+  const denied = await requireAccess("tai-lieu", "view");
+  if (denied) return denied;
   if (!isDocumentStorageConfigured()) {
     return NextResponse.json(
       {

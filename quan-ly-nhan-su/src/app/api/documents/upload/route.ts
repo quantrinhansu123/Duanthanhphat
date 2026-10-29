@@ -4,10 +4,13 @@ import {
   MAX_DOCUMENT_BYTES,
   uploadStoredDocument,
 } from "@/lib/documentStorage";
+import { requireAccess } from "@/lib/server/requireAccess";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const denied = await requireAccess("tai-lieu", "edit");
+  if (denied) return denied;
   if (!isDocumentStorageConfigured()) {
     return NextResponse.json({ error: "Chưa cấu hình Supabase để lưu tài liệu." }, { status: 503 });
   }

@@ -4,12 +4,14 @@ import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { List, CaretRight, ArrowLeft } from "@/components/icons";
+import { List, CaretRight } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import ReportTabBar from "@/components/ReportTabBar";
+import DeleteGuard from "@/components/DeleteGuard";
+import { useAccess } from "@/lib/useAccess";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
@@ -201,7 +203,18 @@ export default function AppShell({ tab }: AppShellProps) {
   const clock = useClientClock(lang);
 
   const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
-  const content = current ? viewRenderers[current]?.() ?? null : null;
+  const { ready: accessReady, can } = useAccess();
+  const canView = can(current, "view");
+  const canEdit = can(current, "edit");
+  const canDelete = can(current, "delete");
+  const firstAllowed = navigation.flatMap((g) => g.children).find((c) => can(c.id, "view"))?.id;
+  const content = current && canView ? viewRenderers[current]?.() ?? null : null;
+
+  // Không có quyền xem tab hiện tại → chuyển sang chức năng đầu tiên được phép.
+  useEffect(() => {
+    if (accessReady && !canView && firstAllowed && firstAllowed !== current) go(firstAllowed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessReady, canView, firstAllowed, current]);
 
   function go(id: string) {
     const targetId = !id || id === "bc-san-luong" ? HOME_TAB : id;
@@ -210,14 +223,6 @@ export default function AppShell({ tab }: AppShellProps) {
     setActiveTab(targetId);
     setMobileNavOpen(false);
     router.push(href);
-  }
-
-  function goBack() {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-    go("");
   }
 
   return (
@@ -267,21 +272,6 @@ export default function AppShell({ tab }: AppShellProps) {
             >
               <List size={20} weight="bold" aria-hidden />
             </button>
-
-            {current ? (
-              <button
-                type="button"
-                onClick={goBack}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#0047AB] hover:border-slate-300 transition-all cursor-pointer"
-                aria-label={lang === "en" ? "Go back" : "Quay lại"}
-                title={lang === "en" ? "Back to previous page" : "Về trang trước"}
-              >
-                <ArrowLeft size={16} weight="bold" aria-hidden />
-                <span className="hidden sm:inline">{lang === "en" ? "Back" : "Quay lại"}</span>
-              </button>
-            ) : null}
-
-            {current ? <span className="hidden sm:block h-5 w-px shrink-0 bg-slate-200" aria-hidden /> : null}
 
             {crumb ? (
               <nav className="flex min-w-0 items-center gap-1.5" aria-label={lang === "en" ? "Breadcrumb" : "Đường dẫn"}>
@@ -373,12 +363,28 @@ export default function AppShell({ tab }: AppShellProps) {
             </div>
           )}
 
-          {content ? (
-            content
+          {!accessReady ? (
+            <div role="status" className="w-full px-4 sm:px-6 py-16 text-center text-sm text-slate-500">Đang tải quyền truy cập…</div>
+          ) : !canView ? (
+            <div className="w-full px-4 sm:px-6 py-16 text-center text-sm font-semibold text-slate-600">
+              Bạn không có quyền xem chức năng này.
+            </div>
+          ) : content ? (
+            canEdit ? (
+              <DeleteGuard active={!canDelete}>{content}</DeleteGuard>
+            ) : (
+              <>
+                <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Bạn chỉ có quyền xem chức năng này.
+                </div>
+                {/* fieldset disabled khóa mọi ô nhập và nút bấm bên trong */}
+                <fieldset disabled className="min-w-0 border-0 p-0 m-0"><DeleteGuard active={!canDelete}>{content}</DeleteGuard></fieldset>
+              </>
+            )
           ) : (
             <div className="w-full px-4 sm:px-6 pb-8">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {(group?.children ?? []).map((child) => {
+                {(group?.children ?? []).filter((c) => can(c.id, "view")).map((child) => {
                   const active = child.id === current;
                   const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
                   const childDesc =
