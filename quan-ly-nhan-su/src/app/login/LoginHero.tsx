@@ -15,14 +15,6 @@ export default function LoginHero() {
     <section className="relative hidden overflow-hidden bg-gradient-to-br from-[#1b3570] via-[#1e3a7a] to-[#142a5c] px-14 py-12 text-white lg:flex lg:flex-col lg:justify-center lg:gap-10">
       <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/5" />
       <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-white/5" />
-      <div className="relative flex items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="TCW" className="h-14 w-14 rounded-full bg-white object-contain p-0.5 shadow-lg" />
-        <div>
-          <div className="text-lg font-bold leading-tight">Thành Phát</div>
-          <div className="text-sm text-blue-100/80">Quản lý hàn ray</div>
-        </div>
-      </div>
       <div className="relative">
         <h1 className="text-4xl font-extrabold leading-tight tracking-tight xl:text-5xl">
           Quản lý hàn ray<br /><span className="text-[#9cc0ff]">chính xác &amp; liên tục</span>
