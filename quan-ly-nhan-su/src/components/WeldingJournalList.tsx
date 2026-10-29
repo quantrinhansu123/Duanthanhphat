@@ -99,13 +99,15 @@ const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
-type JournalStage = "all" | "han-xong" | "mai-xong" | "sieu-am-xong";
-/** Giai đoạn hiện tại của mối (loại trừ nhau) theo "Tình trạng chất lượng"; Không đạt / Không thí nghiệm và mối cũ chưa có dữ liệu chất lượng chỉ xem ở "Tất cả". */
+type JournalStage = "all" | "han-xong" | "mai-xong" | "sua-chua" | "ky-bb" | "dat";
+/** Giai đoạn theo trình tự chất lượng mới (một cột tình trạng; bỏ cột Kết quả NDT trên UI). */
 const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
-  { id: "han-xong", label: "Hàn xong", hint: "Đã hàn, chờ mài", statuses: ["Chờ mài"] },
-  { id: "mai-xong", label: "Mài xong", hint: "Đã mài và đạt trực quan/số đo, chờ siêu âm", statuses: ["Chờ thí nghiệm"] },
-  { id: "sieu-am-xong", label: "Siêu âm xong", hint: "Siêu âm đạt, chờ nghiệm thu hoặc đã nghiệm thu", statuses: ["Chờ nghiệm thu", "Nghiệm thu đạt"] },
+  { id: "han-xong", label: "Hàn / Chờ mài", hint: "Đã hàn hoặc đang chờ mài", statuses: ["Hàn", "Chờ mài"] },
+  { id: "mai-xong", label: "Chờ siêu âm & NT", hint: "Đã mài đạt, chờ siêu âm và nghiệm thu", statuses: ["Chờ siêu âm và nghiệm thu"] },
+  { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan/độ lệch không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
+  { id: "ky-bb", label: "Chờ ký BB", hint: "Đủ điều kiện — chờ ký biên bản", statuses: ["Chờ ký biên bản"] },
+  { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },
 ];
 
 type JournalProjectOption = { id: string; label: string; ma_du_an: string };
@@ -2877,17 +2879,19 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             buttonClassName="h-10 shadow-2xs"
           />
         </div>
-        <div className="min-w-0 text-xs font-semibold text-slate-700">
-          Kết quả NDT
-          <SelectMenu
-            value={resultFilter}
-            onChange={setResultFilter}
-            options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
-            disabled={Boolean(lockedResultFilter)}
-            className="mt-1"
-            buttonClassName="h-10 shadow-2xs"
-          />
-        </div>
+        {failedWeldMode ? (
+          <div className="min-w-0 text-xs font-semibold text-slate-700">
+            Kết quả NDT (lịch sử)
+            <SelectMenu
+              value={resultFilter}
+              onChange={setResultFilter}
+              options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
+              disabled={Boolean(lockedResultFilter)}
+              className="mt-1"
+              buttonClassName="h-10 shadow-2xs"
+            />
+          </div>
+        ) : null}
         <div className="min-w-0 text-xs font-semibold text-slate-700">
           Tình trạng chất lượng
           <SelectMenu value={stage === "all" ? qualityStatusSelect : "Tất cả"} onChange={setQualityStatusSelect} disabled={stage !== "all"} options={["Tất cả", ...WELD_QUALITY_STATUSES].map((value) => ({ value, label: value }))} className="mt-1" buttonClassName="h-10 shadow-2xs" />
@@ -3058,20 +3062,9 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="block min-w-0 font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${
-                    w.testStatus === "Đạt"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : w.testStatus === "Không đạt"
-                        ? "border-rose-200 bg-rose-50 text-rose-700"
-                        : w.testStatus === "Không thí nghiệm"
-                          ? "border-slate-200 bg-slate-50 text-slate-600"
-                          : "border-amber-200 bg-amber-50 text-amber-700"
-                  }`}>
-                    {w.testStatus}
-                  </span>
+                  <WeldQualityBadge status={w.qualityStatus} />
                 </div>
                 <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
-                <div className="mt-2"><WeldQualityBadge status={w.qualityStatus} /></div>
                 <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-slate-600">
                   <span className="truncate" title="Mã vị trí">VT · {w.lispCode}</span>
@@ -3121,7 +3114,9 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
-                <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
+                {failedWeldMode ? (
+                  <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
+                ) : null}
                 <th className="min-w-[12rem] whitespace-nowrap p-2.5 font-semibold">Tình trạng chất lượng</th>
                 <th className="p-2.5 font-semibold">Thao tác</th>
               </tr>
@@ -3160,6 +3155,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   >
                     {w.failureReason}
                   </td>
+                  {failedWeldMode ? (
                   <td className="p-2.5 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold shadow-2xs ${
                       w.testStatus === "Đạt"
@@ -3182,6 +3178,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                       {w.testStatus}
                     </span>
                   </td>
+                  ) : null}
                   <td className="whitespace-nowrap p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
                   <td className="p-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">

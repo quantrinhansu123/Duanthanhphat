@@ -335,7 +335,7 @@ export default function AppShell({ tab }: AppShellProps) {
         </header>
 
         <main id="main-content" tabIndex={-1}
-          className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
+          className={`app-workspace-main min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
         >
           {reportTab && (
             <div className="shrink-0 bg-[#f4f6fa]">

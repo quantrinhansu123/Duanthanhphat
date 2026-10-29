@@ -1,6 +1,12 @@
 import { ndtDefectLabel } from "@/data/error-library";
 import type { WeldType } from "@/data/weldTypes";
-import type { SavedWeldInspection, SavedWeldQualityRule, WeldQualityStatus } from "@/lib/weldQuality";
+import {
+  normalizeWeldQualityStatus,
+  WELD_QUALITY_STATUS_ALIASES,
+  type SavedWeldInspection,
+  type SavedWeldQualityRule,
+  type WeldQualityStatus,
+} from "@/lib/weldQuality";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -1487,8 +1493,20 @@ export function applyJournalListFilters<T>(
   const dateFrom = normalizeJournalDateFilter(filters.dateFrom);
   const dateTo = normalizeJournalDateFilter(filters.dateTo);
   if (filters.qualityStatusFilter && filters.qualityStatusFilter !== "Tất cả") {
-    const statuses = filters.qualityStatusFilter.split(",");
-    next = statuses.length > 1 ? next.in("tinh_trang_chat_luong", statuses) : next.eq("tinh_trang_chat_luong", statuses[0]);
+    // Mỗi trạng thái mới kèm tên cũ (nếu có) để lọc được cả trước/sau migration view.
+    const statuses = new Set<string>();
+    for (const raw of filters.qualityStatusFilter.split(",")) {
+      const s = raw.trim();
+      if (!s) continue;
+      statuses.add(s);
+      const normalized = normalizeWeldQualityStatus(s);
+      if (normalized) statuses.add(normalized);
+      for (const [oldName, neu] of Object.entries(WELD_QUALITY_STATUS_ALIASES)) {
+        if (neu === s || neu === normalized) statuses.add(oldName);
+      }
+    }
+    const list = [...statuses];
+    next = list.length > 1 ? next.in("tinh_trang_chat_luong", list) : next.eq("tinh_trang_chat_luong", list[0]);
   }
 
   if (projects.length > 0) next = next.in("du_an", projects);

@@ -38,19 +38,29 @@ assert.throws(() => rules.validateGeometryMeasurements({ doc_mat_lan: "0" }));
 assert.throws(() => rules.validateGeometryMeasurements({ wrong: 0 }));
 
 const rule = { dung_sai: limits, yeu_cau_ndt: true, ndt_truoc_rfi: false, can_cu_mien_ndt: null };
+const empty = { ngay_mai: null, truc_quan: null, gia_tri_do: {}, phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null };
 const inspection = { ngay_mai: "2026-10-28", truc_quan: "Đạt", gia_tri_do: measurements, phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null };
-assert.equal(rules.evaluateWeldQuality(null, rule, "Sản xuất").status, "Chưa có dữ liệu chất lượng");
-assert.equal(rules.evaluateWeldQuality({ ...inspection, ngay_mai: null }, rule, "Sản xuất").status, "Chờ mài");
-assert.equal(rules.evaluateWeldQuality(inspection, rule, "Thử nghiệm").status, "Chờ thí nghiệm");
+
+assert.equal(rules.evaluateWeldQuality(null, rule, "Sản xuất").status, "Hàn");
+assert.equal(rules.evaluateWeldQuality(empty, rule, "Sản xuất").status, "Chờ mài");
+// Mọi loại mối hàn cùng trình tự — không còn nhảy thẳng Chờ thí nghiệm cho Thử nghiệm/Chấp thuận.
+assert.equal(rules.evaluateWeldQuality(empty, rule, "Thử nghiệm").status, "Chờ mài");
+assert.equal(rules.evaluateWeldQuality(empty, rule, "Chấp thuận").status, "Chờ mài");
+assert.equal(rules.evaluateWeldQuality(inspection, rule, "Thử nghiệm").status, "Chờ siêu âm và nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").status, "Chờ siêu âm và nghiệm thu");
 assert.equal(rules.evaluateWeldQuality(inspection, null, "Sản xuất").rfiEligible, false);
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").rfiEligible, true);
 assert.equal(rules.evaluateWeldQuality(inspection, { ...rule, ndt_truoc_rfi: true }, "Sản xuất").rfiEligible, false);
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").acceptanceEligible, false);
+
 const ndtPass = { ...inspection, ket_qua_ndt: "Đạt", ngay_ndt: "2026-10-28" };
-assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "Chờ nghiệm thu");
-assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", true).status, "Nghiệm thu đạt");
-assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt" }, rule, "Sản xuất").rfiEligible, false);
-assert.equal(rules.evaluateWeldQuality({ ...ndtPass, ket_qua_ndt: "Không đạt" }, rule, "Sản xuất").acceptanceEligible, false);
+assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "Chờ ký biên bản");
+assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", true).status, "Đạt");
+assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt" }, rule, "Sản xuất").status, "Sửa chữa/khắc phục");
+assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt", xu_ly_truc_quan: "khong_dat" }, rule, "Sản xuất").status, "Không đạt");
+assert.equal(rules.evaluateWeldQuality({ ...ndtPass, ket_qua_ndt: "Không đạt" }, rule, "Sản xuất").status, "Không đạt");
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, ly_do_loai_nghiem_thu: "Lỗi hiện trường" }, rule, "Sản xuất").status, "Không đạt");
 assert.equal(rules.evaluateWeldQuality(inspection, { ...rule, yeu_cau_ndt: false, can_cu_mien_ndt: "Fixture" }, "Đào tạo").status, "Không thí nghiệm");
-console.log("PASS: numeric input, four geometry bounds, missing values, RFI/NDT eligibility, quality lifecycle");
+assert.equal(rules.normalizeWeldQualityStatus("Nghiệm thu đạt"), "Đạt");
+assert.equal(rules.normalizeWeldQualityStatus("Chờ thí nghiệm"), "Chờ siêu âm và nghiệm thu");
+console.log("PASS: unified quality lifecycle (no NDT column), repair path, signing wait, aliases");

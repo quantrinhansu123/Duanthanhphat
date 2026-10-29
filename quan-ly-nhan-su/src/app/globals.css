@@ -25,6 +25,33 @@
 .app-workspace :where(thead th) { letter-spacing: 0.015em; }
 .app-workspace :where(tbody tr):hover { background-color: #eff6ff; }
 .app-workspace :where(main) { scrollbar-gutter: stable; }
+
+/* Ảnh nền mờ bên trong workspace (sau đăng nhập) */
+.app-workspace-main {
+  position: relative;
+  isolation: isolate;
+  background-color: #f4f6fa;
+}
+.app-workspace-main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("/bg-tcw.jpg");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.09;
+  filter: blur(1.5px);
+}
+.app-workspace-main > * {
+  position: relative;
+  z-index: 1;
+}
+@media print {
+  .app-workspace-main::before { display: none !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   .app-workspace *, .app-workspace *::before, .app-workspace *::after {
     animation-duration: 0.01ms !important;

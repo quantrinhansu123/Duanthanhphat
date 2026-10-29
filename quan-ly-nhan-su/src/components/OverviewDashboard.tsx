@@ -81,10 +81,10 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   all: "Tổng mối hàn",
   today: "Hôm nay",
   latest: "Ngày gần nhất",
-  passed: "Nghiệm thu đạt",
+  passed: "Đạt",
   failed: "Không đạt",
   rework: "Mối hàn lại",
-  pending: "Chờ thí nghiệm",
+  pending: "Chờ siêu âm và nghiệm thu",
   grind: "Chờ mài",
 };
 
@@ -95,13 +95,27 @@ function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso:
     return latestDate ? rows.filter((row, index) => getJournalRowDateIso(row, index) === latestDate) : [];
   }
   if (kind === "passed") {
-    return rows.filter((row) => row.loai_moi_han === "Sản xuất" && resolveWeldTestStatus(row) === "Đạt");
+    return rows.filter((row) => {
+      const q = row.tinh_trang_chat_luong;
+      return row.loai_moi_han === "Sản xuất" && (q === "Đạt" || q === "Nghiệm thu đạt" || resolveWeldTestStatus(row) === "Đạt");
+    });
   }
   if (kind === "failed") {
-    return rows.filter((row) => row.loai_moi_han === "Sản xuất" && resolveWeldTestStatus(row) === "Không đạt");
+    return rows.filter((row) => {
+      const q = row.tinh_trang_chat_luong;
+      return row.loai_moi_han === "Sản xuất" && (q === "Không đạt" || resolveWeldTestStatus(row) === "Không đạt");
+    });
   }
   if (kind === "rework") return rows.filter((row) => Boolean(row.moi_han_lien_ket?.trim()));
-  if (kind === "pending") return rows.filter((row) => resolveWeldTestStatus(row) === "Chờ thí nghiệm");
+  if (kind === "pending") {
+    return rows.filter((row) => {
+      const q = row.tinh_trang_chat_luong;
+      return q === "Chờ siêu âm và nghiệm thu" || q === "Chờ thí nghiệm" || resolveWeldTestStatus(row) === "Chờ thí nghiệm";
+    });
+  }
+  if (kind === "grind") {
+    return rows.filter((row) => row.tinh_trang_chat_luong === "Chờ mài" || row.tinh_trang_chat_luong === "Hàn");
+  }
   return [];
 }
 

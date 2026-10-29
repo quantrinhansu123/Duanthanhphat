@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applyJournalListFilters, orderJournalByWeldTime, WELD_TEST_STATUSES,
   type WeldJournalPageQuery, type WeldJournalPageResult, type WeldReportRow } from "@/lib/weldReportData";
-import { emptyWeldInspection, GEOMETRY_CRITERIA, parseWeldMeasurement, validateGeometryLimits, WELD_QUALITY_STATUSES,
+import { emptyWeldInspection, GEOMETRY_CRITERIA, normalizeWeldQualityStatus, parseWeldMeasurement, validateGeometryLimits, WELD_QUALITY_STATUSES, WELD_QUALITY_STATUS_ALIASES,
   type GeometryLimits, type QualityResult, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { createWeldQualityRule, loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
@@ -50,7 +50,8 @@ export function parseQualityFilters(value: unknown): WeldJournalPageQuery {
   const linkedWeldFilter = text(v.linkedWeldFilter ?? "Tất cả", 40);
   const weldTypeFilter = text(v.weldTypeFilter ?? "Tất cả", 40);
   const weldMethodFilter = text(v.weldMethodFilter ?? "Tất cả", 20);
-  if (!(qualityStatusFilter === "Tất cả" || qualityStatusFilter.split(",").every((s) => (WELD_QUALITY_STATUSES as string[]).includes(s))) || !["Tất cả", ...WELD_TEST_STATUSES].includes(resultFilter) ||
+  const knownQuality = new Set<string>([...WELD_QUALITY_STATUSES, ...Object.keys(WELD_QUALITY_STATUS_ALIASES)]);
+  if (!(qualityStatusFilter === "Tất cả" || qualityStatusFilter.split(",").every((s) => knownQuality.has(s) || Boolean(normalizeWeldQualityStatus(s)))) || !["Tất cả", ...WELD_TEST_STATUSES].includes(resultFilter) ||
     !["Tất cả", "Có liên kết", "Chưa liên kết"].includes(linkedWeldFilter) ||
     !["Tất cả", "Sản xuất", "Đào tạo", "Thử nghiệm", "Chấp thuận", "Tần suất"].includes(weldTypeFilter) ||
     !["Tất cả", "FBW", "ATW"].includes(weldMethodFilter)) throw new QualityApiError("Giá trị bộ lọc không hợp lệ.");
@@ -109,13 +110,16 @@ export function parseQualityInspection(value: unknown, actor: string): SavedWeld
   if (Object.keys(measurements).some((k) => !GEOMETRY_CRITERIA.includes(k as typeof GEOMETRY_CRITERIA[number]))) throw new QualityApiError("Tiêu chí số đo không hợp lệ.");
   const phuong_phap_ndt = v.phuong_phap_ndt ?? "Siêu âm";
   if (phuong_phap_ndt !== "Siêu âm" && phuong_phap_ndt !== "Từ tính" && phuong_phap_ndt !== "Thẩm thấu") throw new QualityApiError("Phương pháp NDT không hợp lệ.");
+  const xuLy = v.xu_ly_truc_quan == null || v.xu_ly_truc_quan === "" ? null : v.xu_ly_truc_quan;
+  if (xuLy !== null && xuLy !== "sua_chua" && xuLy !== "khong_dat") throw new QualityApiError("Cách xử lý trực quan/độ lệch không hợp lệ.");
   const parsed: SavedWeldInspection = { ...emptyWeldInspection(qualityUuid(v.moi_han_id)),
     phien_ban: version(v.phien_ban), tieu_chuan_id: v.tieu_chuan_id ? qualityUuid(v.tieu_chuan_id) : null,
     ngay_mai: qualityDate(v.ngay_mai), truc_quan: result(v.truc_quan),
     gia_tri_do: Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, parseWeldMeasurement(measurements[k])])),
     phuong_phap_ndt, ket_qua_ndt: result(v.ket_qua_ndt), ngay_ndt: qualityDate(v.ngay_ndt),
     nguoi_ghi_nhan: actor, ghi_chu: v.ghi_chu == null ? null : text(v.ghi_chu, 4000),
-    ly_do_loai_nghiem_thu: v.ly_do_loai_nghiem_thu == null ? null : text(v.ly_do_loai_nghiem_thu, 4000) || null };
+    ly_do_loai_nghiem_thu: v.ly_do_loai_nghiem_thu == null ? null : text(v.ly_do_loai_nghiem_thu, 4000) || null,
+    xu_ly_truc_quan: xuLy };
   if (parsed.truc_quan && !parsed.ngay_mai) throw new QualityApiError("Hãy nhập ngày mài trước khi kết luận trực quan.");
   if (parsed.ket_qua_ndt && !parsed.ngay_ndt) throw new QualityApiError("Hãy nhập ngày thí nghiệm NDT.");
   return parsed;

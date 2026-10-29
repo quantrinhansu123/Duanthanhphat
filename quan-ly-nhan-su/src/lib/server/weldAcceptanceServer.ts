@@ -47,7 +47,7 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(du_an_id)").eq("con_hieu_luc", true)
     .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("moi_han_id").range(a, b));
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
-  const isEligible = (q: QualityRow) => q.du_dieu_kien_rfi && q.tinh_trang !== "Nghiệm thu đạt" && !inRfi.has(q.moi_han_id);
+  const isEligible = (q: QualityRow) => q.du_dieu_kien_rfi && q.tinh_trang !== "Đạt" && q.tinh_trang !== "Nghiệm thu đạt" && !inRfi.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
   const ids = eligible.map((q) => q.moi_han_id);
   const welds = await chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>

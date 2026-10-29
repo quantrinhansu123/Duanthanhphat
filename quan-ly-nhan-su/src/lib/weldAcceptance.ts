@@ -62,11 +62,18 @@ export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter)
 /** Lý do mối chưa được phát RFI, theo tình trạng chất lượng. */
 export function rfiBlockReason(tinhTrang: string): string {
   switch (tinhTrang) {
+    case "Đạt":
     case "Nghiệm thu đạt": return "Đã nghiệm thu đạt";
     case "Không đạt": return "Kiểm tra không đạt";
     case "Không thí nghiệm": return "Không thuộc diện thí nghiệm/nghiệm thu";
+    case "Hàn":
     case "Chưa có dữ liệu chất lượng": return "Chưa ghi nhận kiểm tra";
     case "Chờ mài": return "Chưa mài hoặc thiếu trực quan/số đo";
+    case "Sửa chữa/khắc phục": return "Đang sửa chữa/khắc phục sau trực quan hoặc độ lệch";
+    case "Chờ siêu âm và nghiệm thu":
+    case "Chờ thí nghiệm": return "Chưa có siêu âm đạt";
+    case "Chờ ký biên bản":
+    case "Chờ nghiệm thu": return "Chờ ký biên bản / hoàn thành nghiệm thu";
     default: return "Chưa đủ điều kiện (thiếu trực quan, hình học hoặc NDT theo tiêu chí)";
   }
 }

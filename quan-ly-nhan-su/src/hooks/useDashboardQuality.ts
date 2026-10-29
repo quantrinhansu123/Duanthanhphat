@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { filterWeldReportRows, type WeldReportFilters, type WeldReportRow } from "@/lib/weldReportData";
 import { loadDashboardQuality } from "@/lib/weldQualityClient";
 
-/** Mối "Nghiệm thu đạt" / "Chờ mài" cho Dashboard. Một nguồn duy nhất → số thẻ luôn bằng danh sách mở ra. */
+/** Mối "Đạt" / "Chờ mài" cho Dashboard. Một nguồn duy nhất → số thẻ luôn bằng danh sách mở ra. */
 export function useDashboardQuality(filters: WeldReportFilters) {
   const [data, setData] = useState<{ accepted: WeldReportRow[]; waiting: WeldReportRow[] } | null>(null);
   const key = JSON.stringify([filters.projects ?? [], filters.dateFrom ?? "", filters.dateTo ?? ""]);

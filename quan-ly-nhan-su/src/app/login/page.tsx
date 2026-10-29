@@ -6,10 +6,18 @@ export const metadata: Metadata = { title: "Đăng nhập · Quản lý hàn ray
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-dvh bg-white text-slate-900 lg:grid-cols-[1.1fr_1fr]">
+    <main className="relative grid min-h-dvh text-slate-900 lg:grid-cols-[1.1fr_1fr]">
+      {/* Mobile / nhỏ: ảnh nền ngoài full trang phía sau form */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-cover bg-center lg:hidden"
+        style={{ backgroundImage: "url(/bg-tcw.jpg)" }}
+      />
+      <div aria-hidden className="absolute inset-0 bg-[#071633]/55 lg:hidden" />
+
       <LoginHero />
-      <section className="flex flex-col justify-center px-6 py-12 sm:px-16">
-        <div className="mx-auto w-full max-w-md">
+      <section className="relative z-10 flex flex-col justify-center px-6 py-12 sm:px-16 lg:bg-white">
+        <div className="mx-auto w-full max-w-md rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-slate-200/80 backdrop-blur-sm sm:p-8 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none lg:ring-0 lg:backdrop-blur-none">
           <div className="mb-8 flex items-center justify-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="TCW" className="h-24 w-24 shrink-0 rounded-full object-contain shadow-md ring-1 ring-slate-200 sm:h-28 sm:w-28" />

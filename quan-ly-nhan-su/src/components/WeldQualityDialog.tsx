@@ -74,7 +74,8 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
       const inspection = data.inspection ?? emptyWeldInspection(row.id);
       setDraft(inspection);
       setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
-      setRules(data.rules); setAccepted(data.summary.tinh_trang === "Nghiệm thu đạt");
+      setRules(data.rules);
+      setAccepted(data.summary.tinh_trang === "Đạt" || data.summary.tinh_trang === "Nghiệm thu đạt");
     }).catch((e) => { if (active) setError(e instanceof Error ? e.message : "Không tải được kiểm tra."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -116,7 +117,16 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
             {!rule && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Chưa có tiêu chí áp dụng. Có thể lưu kết quả đo; chưa đủ căn cứ để kết luận hình học đạt hoặc phát RFI.</p>}
             <section className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">1. Kiểm tra sau mài</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Ngày hoàn thành mài<input type="date" className={input} value={draft.ngay_mai ?? ""} onChange={(e) => setDraft({ ...draft, ngay_mai: e.target.value || null })} /></label>
-                <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => setDraft({ ...draft, truc_quan: e.target.value as SavedWeldInspection["truc_quan"] || null })}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>
+                <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => setDraft({ ...draft, truc_quan: (e.target.value as SavedWeldInspection["truc_quan"]) || null, xu_ly_truc_quan: e.target.value === "Không đạt" ? (draft.xu_ly_truc_quan ?? "sua_chua") : null })}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>
+              {draft.truc_quan === "Không đạt" || assessment?.geometry === "Không đạt" ? (
+                <fieldset className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <legend className="px-1 text-sm font-semibold text-amber-950">Xử lý khi trực quan / độ lệch không đạt</legend>
+                  <div className="mt-1 flex flex-col gap-2 text-sm">
+                    <label className="flex min-h-11 items-center gap-2"><input type="radio" name="xu-ly-tq" checked={(draft.xu_ly_truc_quan ?? "sua_chua") === "sua_chua"} onChange={() => setDraft({ ...draft, xu_ly_truc_quan: "sua_chua", ly_do_loai_nghiem_thu: null })} />Sửa chữa / khắc phục</label>
+                    <label className="flex min-h-11 items-center gap-2"><input type="radio" name="xu-ly-tq" checked={draft.xu_ly_truc_quan === "khong_dat"} onChange={() => setDraft({ ...draft, xu_ly_truc_quan: "khong_dat" })} />Không đạt (chủ sở hữu quyết định)</label>
+                  </div>
+                </fieldset>
+              ) : null}
               <div className="mt-4 space-y-3">{GEOMETRY_CRITERIA.map((k) => {
                 const limit = rule?.dung_sai[k] ?? null;
                 const outcome = evaluateGeometryCriterion(measurements[k], limit);

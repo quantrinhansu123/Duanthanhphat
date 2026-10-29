@@ -1,38 +1,75 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
+import PhotoReportPrintSheet from "@/components/PhotoReportPrintSheet";
+import { loadDailyReport, type DailyWorkType } from "@/lib/dailyReportDb";
 import { loadProjects } from "@/lib/projectsDb";
 import { compressImage, emptyPhotoReport, loadPhotoReport, newPhotoItem, savePhotoReport, type PhotoReport } from "@/lib/photoReportDb";
+import { loadAcceptedOnDate } from "@/lib/weldQualityClient";
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/25";
 const lbl = "flex flex-col text-xs font-semibold text-slate-600";
 const today = () => new Date().toLocaleDateString("sv-SE");
-const css = `@media screen { #photo-print { display: none; } }
-@media print {
-  body * { visibility: hidden !important; }
-  #photo-print, #photo-print * { visibility: visible !important; }
-  #photo-print { position: absolute; left: 0; top: 0; width: 100%; }
-  #photo-print tr { break-inside: avoid; }
-  @page { size: A4; margin: 12mm; }
-}`;
 
 // Mặc định theo mẫu của dự án Phú Quốc; dự án khác tự nhập vì tiêu đề báo cáo khác nhau theo dự án.
 const PQ = { goiThau: "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray", hangMuc: "Thi công hàn ray" };
 
-export default function PhotoReportForm() {
+type PhotoReportFormProps = {
+  /** Nhúng trong Báo cáo ngày — dùng chung ngày/dự án với phiếu ngày. */
+  embedded?: boolean;
+  date?: string;
+  onDateChange?: (date: string) => void;
+  projectId?: string;
+  onProjectIdChange?: (projectId: string) => void;
+};
+
+export default function PhotoReportForm({
+  embedded = false,
+  date: dateProp,
+  onDateChange,
+  projectId: projectIdProp,
+  onProjectIdChange,
+}: PhotoReportFormProps) {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [projectId, setProjectId] = useState("");
-  const [date, setDate] = useState(today());
+  const [projectIdLocal, setProjectIdLocal] = useState("");
+  const [dateLocal, setDateLocal] = useState(today());
   const [r, setR] = useState<PhotoReport>(emptyPhotoReport);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printDay, setPrintDay] = useState<DailyPrintDay | null>(null);
+  const [workTypes, setWorkTypes] = useState<DailyWorkType[]>([]);
+
+  const projectId = projectIdProp ?? projectIdLocal;
+  const date = dateProp ?? dateLocal;
+
+  function setProjectId(next: string) {
+    if (onProjectIdChange) onProjectIdChange(next);
+    else setProjectIdLocal(next);
+  }
+
+  function setDate(next: string) {
+    if (onDateChange) onDateChange(next);
+    else setDateLocal(next);
+  }
 
   useEffect(() => {
     loadProjects({ includeProgress: false }).then((res) => {
       setProjects(res.projects.map((p) => ({ id: p.id, name: p.name })));
-      setProjectId((cur) => cur || res.projects[0]?.id || "");
+      if (!projectIdProp) {
+        setProjectIdLocal((cur) => cur || res.projects[0]?.id || "");
+      }
     }).catch(() => setProjects([]));
-  }, []);
+  }, [projectIdProp]);
+
+  useEffect(() => {
+    if (projectIdProp) setProjectIdLocal(projectIdProp);
+  }, [projectIdProp]);
+
+  useEffect(() => {
+    if (dateProp) setDateLocal(dateProp);
+  }, [dateProp]);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "";
   const isPq = /phú quốc/i.test(projectName);
@@ -61,19 +98,47 @@ export default function PhotoReportForm() {
     const res = await savePhotoReport(projectId, date, r);
     setStatus(res.source === "supabase" ? "Đã lưu." : `Đã lưu trên máy này — chưa lên Supabase${res.error ? `: ${res.error}` : ""}.`);
     setBusy(false);
+    return res;
   }
 
-  const printItems = r.items.length % 2 ? [...r.items, { id: "pad", noiDung: "", anh: "" }] : r.items;
-  const rows = Array.from({ length: printItems.length / 2 }, (_, i) => printItems.slice(i * 2, i * 2 + 2));
-  const [y, m, d] = date.split("-");
+  /** In cùng báo cáo ngày của cùng dự án / ngày. */
+  async function printWithDaily() {
+    if (!projectId) return;
+    setBusy(true);
+    try {
+      await savePhotoReport(projectId, date, r);
+      const bundle = await loadDailyReport(date);
+      const accepted = await loadAcceptedOnDate(date, projectId).then((res) => res.count).catch(() => null);
+      setWorkTypes(bundle.workTypes);
+      setPrintDay({
+        reportDate: date,
+        weather: "",
+        temperature: "",
+        workToday: bundle.workToday,
+        workNext: bundle.workNext,
+        equipment: bundle.equipment,
+        incidents: bundle.incidents,
+        acceptedCount: accepted,
+        duAnId: projectId,
+        projectName,
+        photo: r,
+      });
+      setPrintOpen(true);
+      setStatus("Đã mở bản in: báo cáo ngày + báo cáo ảnh.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Không mở được bản in.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="px-4 sm:px-6 pb-8">
-      <style>{css}</style>
+    <div className={embedded ? "pb-2" : "px-4 sm:px-6 pb-8"}>
       <div className="no-print divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-800 shadow-sm">
         <div className="flex flex-wrap items-end gap-3 pb-5">
           <label className={`${lbl} min-w-[16rem] flex-1`}>Dự án
             <select className={inp} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              {!projectId ? <option value="">Chọn dự án</option> : null}
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
@@ -81,10 +146,11 @@ export default function PhotoReportForm() {
             <input className={inp} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="flex gap-2">
-            <button type="button" disabled={busy || !projectId} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu"}</button>
-            <button type="button" disabled={!projectId} onClick={() => window.print()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
+            <button type="button" disabled={busy || !projectId} onClick={() => void save()} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu"}</button>
+            <button type="button" disabled={busy || !projectId} onClick={() => void printWithDaily()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In cùng báo cáo ngày</button>
           </div>
-          {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
+          {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") || status.startsWith("Đã mở") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
+          <p className="basis-full text-xs text-slate-500">In từ tab này hoặc tab Báo cáo ngày đều kèm mẫu báo cáo ảnh cùng ngày / dự án.</p>
         </div>
 
         <div className="grid gap-4 py-5 sm:grid-cols-2">
@@ -118,26 +184,31 @@ export default function PhotoReportForm() {
         </div>
       </div>
 
-      <article id="photo-print" className="text-[13px] leading-6 text-black" style={{ fontFamily: "'Times New Roman', serif" }}>
-        <div className="text-center font-bold uppercase">
-          <div>Dự án: {projectName}</div>
-          <div>{r.goiThau}</div>
-          <div>Hạng mục: {r.hangMuc}</div>
-          <h2 className="mt-2 text-lg">Báo cáo ảnh</h2>
-          <div className="text-xs font-normal normal-case">Ngày {d} tháng {m} năm {y}</div>
+      <div className="no-print mt-6 overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="mb-3 text-xs font-semibold text-slate-500">Xem trước mẫu báo cáo ảnh</p>
+        <div className="mx-auto w-[210mm] origin-top scale-[0.72] sm:scale-90">
+          <PhotoReportPrintSheet projectName={projectName} date={date} report={r} className="photo-preview-sheet" />
         </div>
-        <table className="mt-3 w-full table-fixed border-collapse">
-          <tbody>
-            {rows.flatMap((pair, i) => [
-              <tr key={`n${i}`}>{pair.map((it, j) => <td key={j} className="border border-black p-1.5 align-top"><b>Nội dung: </b>{it.noiDung}</td>)}</tr>,
-              <tr key={`a${i}`}>{pair.map((it, j) => (
-                <td key={j} className="h-[62mm] border border-black p-1.5 text-center align-middle">
-                  {it.anh ? <img src={it.anh} alt="" className="mx-auto max-h-[58mm] max-w-full object-contain" /> : null}
-                </td>))}</tr>,
-            ])}
-          </tbody>
-        </table>
-      </article>
+      </div>
+
+      <DailyWorkReportPrint
+        open={printOpen}
+        reportDate={date}
+        weather=""
+        temperature=""
+        workTypes={workTypes}
+        workToday={printDay?.workToday ?? []}
+        workNext={printDay?.workNext ?? []}
+        equipment={printDay?.equipment ?? []}
+        incidents={printDay?.incidents ?? []}
+        days={printDay ? [printDay] : undefined}
+        acceptedCount={printDay?.acceptedCount ?? null}
+        duAnId={projectId}
+        projectName={projectName}
+        photo={r}
+        onClose={() => { setPrintOpen(false); setPrintDay(null); }}
+        onPrint={() => window.print()}
+      />
     </div>
   );
 }

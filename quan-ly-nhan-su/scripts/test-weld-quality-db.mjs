@@ -11,6 +11,7 @@ const { PGlite } = await import(pathToFileURL(resolve(process.argv[2])).href);
 const db = new PGlite();
 const migration = fs.readFileSync(new URL("../../supabase/migration_20261028_nghiem_thu_moi_han.sql", import.meta.url), "utf8");
 const journalMigration = fs.readFileSync(new URL("../../supabase/migration_20261028_nhat_ky_kiem_tra_chat_luong.sql", import.meta.url), "utf8");
+const flowMigration = fs.readFileSync(new URL("../../supabase/migration_20261029_chat_luong_trinh_tu_moi.sql", import.meta.url), "utf8");
 const uuid = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const project = uuid(1);
 const oldWeld = uuid(100);
@@ -60,12 +61,13 @@ try {
   await db.exec(migration);
   await db.exec(journalMigration);
   await db.exec(journalMigration);
+  await db.exec(flowMigration);
   assert.equal(await scalar("select count(*)::integer from kiem_tra_moi_han"), 0, "No backfill of historic passes");
-  assert.equal(await getStatus(oldWeld), "Chưa có dữ liệu chất lượng");
+  assert.equal(await getStatus(oldWeld), "Hàn");
   assert.equal(await scalar("select tinh_trang_thi_nghiem from lich_su_moi_han where id=$1", [oldWeld]), "Đạt");
   assert.equal(await scalar("select count(*)::integer from tieu_chuan_nghiem_thu_moi_han"), 0, "No unapproved PQ seed");
   await query("insert into lich_su_moi_han values ($1,'TRIAL',$2,'FBW','Chấp thuận','2026-10-28','Đạt',0)", [uuid(105), project]);
-  assert.equal(await getStatus(uuid(105)), "Chờ thí nghiệm");
+  assert.equal(await getStatus(uuid(105)), "Chờ mài", "Chấp thuận cùng trình tự mọi loại mối hàn");
   await query("delete from lich_su_moi_han where id=$1", [uuid(105)]);
 
   // Lối insert cũ chỉ có quyền anon vẫn khởi tạo chất lượng và báo lỗi nếu trigger thất bại.
@@ -97,7 +99,7 @@ try {
 
   for (const id of [a, b, c]) await save(id, 1);
   assert.equal(await scalar("select tinh_trang_thi_nghiem from lich_su_moi_han where id=$1", [a]), "Chờ thí nghiệm", "Explicit quality inspection applies the confirmed NDT rule");
-  assert.equal(await getStatus(a), "Chờ thí nghiệm");
+  assert.equal(await getStatus(a), "Chờ siêu âm và nghiệm thu");
   const baseInspection = { ngay_mai: "2026-10-28", truc_quan: "Đạt", gia_tri_do: measurements, phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null };
   const baseRule = { dung_sai: limits, yeu_cau_ndt: true, ndt_truoc_rfi: false, can_cu_mien_ndt: null };
   for (const policy of [
@@ -150,8 +152,8 @@ try {
   assert.equal(await scalar("select tinh_trang_thi_nghiem from lich_su_moi_han where id=$1", [a]), "Đạt");
   await expectError("update lich_su_moi_han set tinh_trang_thi_nghiem='Không đạt',so_luong_loi=1 where id=$1", [a], /hãy cập nhật tại đó/);
   await save(b, 2, "Đạt");
-  assert.equal(await getStatus(a), "Chờ nghiệm thu");
-  assert.equal(await getStatus(b), "Chờ nghiệm thu");
+  assert.equal(await getStatus(a), "Chờ ký biên bản");
+  assert.equal(await getStatus(b), "Chờ ký biên bản");
   await assert.rejects(() => complete(batch, results.map((r) => ({ ...r, ket_qua: "Đạt" }))), /chưa đủ điều kiện/);
 
   // Lỗi ở cuối RPC phải hoàn tác đợt, trạng thái và toàn bộ hồ sơ.
@@ -163,15 +165,15 @@ try {
   assert.equal(await scalar("select count(*)::integer from dot_nghiem_thu"), 0);
   assert.equal(await scalar("select count(*)::integer from ho_so_nghiem_thu"), 0);
   assert.equal(await scalar("select count(*)::integer from phieu_yeu_cau_nghiem_thu_moi where con_hieu_luc"), 3);
-  assert.equal(await getStatus(a), "Chờ nghiệm thu");
+  assert.equal(await getStatus(a), "Chờ ký biên bản");
   await db.exec("reset role; drop trigger test_document_failure on ho_so_nghiem_thu; set role service_role");
   assert.equal(await complete(), batch);
   assert.equal(await complete(), batch, "Retry does not complete twice");
   assert.equal(await scalar("select count(*)::integer from ho_so_nghiem_thu"), 3);
   assert.equal(await scalar("select count(*)::integer from dot_nghiem_thu_moi where ket_qua='Đạt'"), 1);
-  assert.equal(await getStatus(a), "Nghiệm thu đạt");
+  assert.equal(await getStatus(a), "Đạt");
   assert.equal(await getStatus(b), "Không đạt", "Field rejection remains a failure even when NDT passed");
-  assert.equal(await getStatus(c), "Chờ thí nghiệm");
+  assert.equal(await getStatus(c), "Chờ siêu âm và nghiệm thu");
   await assert.rejects(() => save(a, 3, "Đạt"), /Mối đã nghiệm thu/);
   const before = await scalar("select du_lieu_chot from ho_so_nghiem_thu order by loai limit 1");
   await query("update lich_su_moi_han set ma_lich_su='NEW-CODE' where id=$1", [a]);
@@ -183,7 +185,7 @@ try {
   await assert.rejects(() => publish(uuid(302), [a]), /chưa đủ điều kiện/);
   await assert.rejects(() => publish(uuid(303), [b]), /chưa đủ điều kiện/);
   await save(b, 4, "Đạt");
-  assert.equal(await getStatus(b), "Chờ nghiệm thu", "Explicit reinspection clears field rejection, history remains");
+  assert.equal(await getStatus(b), "Chờ ký biên bản", "Explicit reinspection clears field rejection, history remains");
   await publish(uuid(303), [b]);
 
   // Khi đã có hồ sơ, chạy lại migration vẫn bảo toàn dữ liệu.

@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import ComboBoxInput from "@/components/ComboBoxInput";
 import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
+import { loadPhotoReport, type PhotoReport } from "@/lib/photoReportDb";
+import { photoReportHasContent } from "@/components/PhotoReportPrintSheet";
 import { loadAcceptedOnDate } from "@/lib/weldQualityClient";
-import { CalendarBlank, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
+import { CalendarBlank, Camera, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
+
+const PhotoReportForm = dynamic(() => import("@/components/PhotoReport"), { ssr: false });
 import MultiSelectMenu, { type MultiSelectOption } from "@/components/MultiSelectMenu";
 import {
   deleteDailyReport,
@@ -1271,6 +1276,8 @@ export default function DailyWorkReport() {
   const [rangeTo, setRangeTo] = useState("");
   const [batchDays, setBatchDays] = useState<DailyPrintDay[] | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  /** Tab trong Báo cáo ngày: phiếu ngày | mẫu báo cáo ảnh. */
+  const [innerTab, setInnerTab] = useState<"ngay" | "anh">("ngay");
 
   // In nhiều ngày: mỗi ngày một trang, đọc lại từ dữ liệu đã lưu (không đếm theo số lần in).
   async function printRange() {
@@ -1285,8 +1292,20 @@ export default function DailyWorkReport() {
       for (const row of picked) {
         const bundle = await loadDailyReport(row.ngayBaoCao);
         const accepted = await loadAcceptedOnDate(row.ngayBaoCao, row.duAnId).then((r) => r.count).catch(() => null);
-        days.push({ reportDate: row.ngayBaoCao, weather: "", temperature: "", workToday: bundle.workToday, workNext: bundle.workNext,
-          equipment: bundle.equipment, incidents: bundle.incidents, acceptedCount: accepted });
+        const photo = await loadPhotoForPrint(row.duAnId, row.ngayBaoCao);
+        days.push({
+          reportDate: row.ngayBaoCao,
+          weather: "",
+          temperature: "",
+          workToday: bundle.workToday,
+          workNext: bundle.workNext,
+          equipment: bundle.equipment,
+          incidents: bundle.incidents,
+          acceptedCount: accepted,
+          duAnId: row.duAnId,
+          projectName: projectLabel(row.duAnId),
+          photo,
+        });
       }
       setBatchDays(days); setPrintAuto(false); setPrintOpen(true);
     } catch (e) {
@@ -1498,6 +1517,16 @@ export default function DailyWorkReport() {
     return projects.find((project) => project.id === duAnId)?.name || "—";
   }
 
+  async function loadPhotoForPrint(duAnId: string | null | undefined, date: string): Promise<PhotoReport | null> {
+    if (!duAnId) return null;
+    try {
+      const res = await loadPhotoReport(duAnId, date);
+      return photoReportHasContent(res.report) ? res.report : null;
+    } catch {
+      return null;
+    }
+  }
+
   function openAdd(kind: ModalState["kind"]) {
     setAddMenuOpen(false);
     setModal({ kind });
@@ -1508,7 +1537,22 @@ export default function DailyWorkReport() {
     try {
       setPrintAuto(autoPrint);
       setReportDate(row.ngayBaoCao);
-      await reload(row.ngayBaoCao);
+      const bundle = await reload(row.ngayBaoCao);
+      const accepted = await loadAcceptedOnDate(row.ngayBaoCao, row.duAnId).then((r) => r.count).catch(() => null);
+      const photo = await loadPhotoForPrint(row.duAnId, row.ngayBaoCao);
+      setBatchDays([{
+        reportDate: row.ngayBaoCao,
+        weather: "",
+        temperature: "",
+        workToday: bundle.workToday,
+        workNext: bundle.workNext,
+        equipment: bundle.equipment,
+        incidents: bundle.incidents,
+        acceptedCount: accepted,
+        duAnId: row.duAnId,
+        projectName: projectLabel(row.duAnId),
+        photo,
+      }]);
       setPrintOpen(true);
     } finally {
       setBusyRowId("");
@@ -1521,6 +1565,30 @@ export default function DailyWorkReport() {
 
   function printDay(row: DailyReportSummary) {
     return openDayPrint(row, true);
+  }
+
+  function projectIdForDate(date: string, fallback?: string | null) {
+    return fallback || reportList.find((row) => row.ngayBaoCao === date)?.duAnId || null;
+  }
+
+  async function printCurrent() {
+    setPrintAuto(false);
+    const duAnId = projectIdForDate(reportDate, header?.duAnId);
+    const photo = await loadPhotoForPrint(duAnId, reportDate);
+    setBatchDays([{
+      reportDate,
+      weather,
+      temperature,
+      workToday,
+      workNext,
+      equipment,
+      incidents,
+      acceptedCount,
+      duAnId,
+      projectName: projectLabel(duAnId),
+      photo,
+    }]);
+    setPrintOpen(true);
   }
 
   async function editDay(row: DailyReportSummary) {
@@ -1606,11 +1674,61 @@ export default function DailyWorkReport() {
         </div>
       )}
 
-      <div className="mb-4 mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Trong báo cáo ngày">
+          {([
+            ["ngay", "Báo cáo ngày", CalendarBlank],
+            ["anh", "Báo cáo ảnh", Camera],
+          ] as const).map(([id, label, Icon]) => {
+            const active = innerTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setInnerTab(id)}
+                className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold cursor-pointer sm:text-sm ${
+                  active
+                    ? "bg-[#0047AB] text-white shadow-xs"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Icon size={15} weight={active ? "fill" : "regular"} aria-hidden />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => void printCurrent()}
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] px-3.5 text-xs font-semibold text-white shadow-xs hover:bg-[#00388A] cursor-pointer sm:text-sm"
+        >
+          <Printer size={15} weight="bold" aria-hidden />
+          In báo cáo
+        </button>
+      </div>
+
+      {innerTab === "anh" ? (
+        <PhotoReportForm
+          embedded
+          date={reportDate}
+          onDateChange={setReportDate}
+          {...(header?.duAnId
+            ? {
+                projectId: header.duAnId,
+                onProjectIdChange: (id: string) => setHeader((h) => (h ? { ...h, duAnId: id } : h)),
+              }
+            : {})}
+        />
+      ) : (
+      <>
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Mỗi dòng là một ngày đã báo cáo. Nhấn Thêm mới để nhập công việc, thiết bị hoặc sự cố.
+            Mỗi dòng là một ngày đã báo cáo. Nhấn Thêm mới để nhập công việc, thiết bị hoặc sự cố. Báo cáo ảnh nằm tab bên cạnh — in kèm nhau.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-600 shadow-xs sm:flex sm:flex-wrap sm:items-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
@@ -1664,17 +1782,6 @@ export default function DailyWorkReport() {
           >
             Mở Nhật ký hàn
           </a>
-          <button
-            type="button"
-            onClick={() => {
-              setPrintAuto(false);
-              setPrintOpen(true);
-            }}
-            className="col-span-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
-          >
-            <Printer size={15} weight="bold" aria-hidden />
-            In báo cáo
-          </button>
         </div>
       </div>
 
@@ -1940,6 +2047,8 @@ export default function DailyWorkReport() {
           }
         }}
       />
+      </>
+      )}
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
@@ -1959,6 +2068,8 @@ export default function DailyWorkReport() {
         incidents={incidents}
         days={batchDays ?? undefined}
         acceptedCount={acceptedCount}
+        duAnId={header?.duAnId}
+        projectName={projectLabel(header?.duAnId)}
         autoPrint={printAuto}
         onClose={() => {
           setPrintOpen(false);

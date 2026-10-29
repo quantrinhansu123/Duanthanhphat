@@ -19,7 +19,7 @@ export default function WeldQualityBulkDialog({ entries, onClose, onDone }: {
   return <dialog ref={ref} aria-labelledby="bulk-quality-title" onClose={onClose} onCancel={(e) => { if (busy) e.preventDefault(); }}
     className="m-auto max-h-[90dvh] w-[calc(100%_-_1.5rem)] max-w-lg overflow-y-auto rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/50">
     <h2 id="bulk-quality-title" className="text-lg font-bold">Đánh dấu đạt cho {entries.length.toLocaleString("vi-VN")} mối đã chọn</h2>
-    <p className="mt-2 text-sm text-slate-600">Chỉ thay đổi tiêu chí bên dưới. Không tự điền số đo, không xóa lỗi tại nghiệm thu và không chuyển thành Nghiệm thu đạt.</p>
+    <p className="mt-2 text-sm text-slate-600">Chỉ thay đổi tiêu chí bên dưới. Không tự điền số đo, không xóa lỗi tại nghiệm thu và không chuyển thành Đạt.</p>
     <form className="mt-4 space-y-4" onSubmit={async (e) => {
       e.preventDefault(); stop.current = false; setBusy(true); setErrors([]); setProcessed(0);
       const saved: string[] = [], failures: string[] = [];

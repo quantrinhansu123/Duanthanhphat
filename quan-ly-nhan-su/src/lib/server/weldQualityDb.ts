@@ -57,6 +57,7 @@ export async function saveWeldQualityInspection(
     p_nguoi_ghi_nhan: inspection.nguoi_ghi_nhan,
     p_ghi_chu: inspection.ghi_chu,
     p_ly_do_loai_nghiem_thu: inspection.ly_do_loai_nghiem_thu ?? null,
+    p_xu_ly_truc_quan: inspection.xu_ly_truc_quan ?? null,
   }).single();
   if (error) throw new Error(formatSupabaseError(error));
   return data as SavedWeldInspection;

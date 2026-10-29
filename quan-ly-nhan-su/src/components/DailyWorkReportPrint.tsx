@@ -11,6 +11,8 @@ import {
   type DailyWorkItem,
   type DailyWorkType,
 } from "@/lib/dailyReportDb";
+import { emptyPhotoReport, type PhotoReport } from "@/lib/photoReportDb";
+import PhotoReportPrintSheet from "@/components/PhotoReportPrintSheet";
 
 const TICK = "✓";
 const MIN_WORK_ROWS = 5;
@@ -32,6 +34,11 @@ export type DailyPrintDay = {
   equipment: DailyEquipmentItem[];
   incidents: DailyIncidentItem[];
   acceptedCount?: number | null;
+  /** Dự án gắn phiếu — dùng tải / in mẫu báo cáo ảnh cùng trang. */
+  duAnId?: string | null;
+  projectName?: string;
+  /** Mẫu báo cáo ảnh cùng ngày (đã tải sẵn trước khi mở bản in). */
+  photo?: PhotoReport | null;
 };
 
 type DailyWorkReportPrintProps = {
@@ -48,6 +55,9 @@ type DailyWorkReportPrintProps = {
   incidents: DailyIncidentItem[];
   /** Mối được nghiệm thu đạt trong ngày (theo đợt nghiệm thu); null = chưa có dữ liệu. */
   acceptedCount?: number | null;
+  duAnId?: string | null;
+  projectName?: string;
+  photo?: PhotoReport | null;
   autoPrint?: boolean;
   onClose: () => void;
   onPrint: () => void;
@@ -256,6 +266,9 @@ export default function DailyWorkReportPrint({
   equipment,
   incidents,
   acceptedCount = null,
+  duAnId = null,
+  projectName = "",
+  photo = null,
   autoPrint = false,
   onClose,
   onPrint,
@@ -291,7 +304,7 @@ export default function DailyWorkReportPrint({
   const types = workTypes.length > 0 ? workTypes : DEFAULT_WORK_TYPES;
   const sheets: DailyPrintDay[] = days?.length
     ? days
-    : [{ reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount }];
+    : [{ reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount, duAnId, projectName, photo }];
 
   return createPortal(
     <div id="daily-report-print" role="dialog" aria-modal="true" aria-labelledby="daily-report-print-title">
@@ -299,9 +312,11 @@ export default function DailyWorkReportPrint({
       <div className="print-toolbar">
         <div>
           <div id="daily-report-print-title" className="toolbar-title">
-            Mẫu báo cáo công việc ngày
+            Mẫu báo cáo công việc ngày + báo cáo ảnh
           </div>
-          <div className="toolbar-sub">Khổ A4 ngang — kiểm tra rồi in hoặc lưu PDF</div>
+          <div className="toolbar-sub">
+            Báo cáo ngày (A4 ngang) rồi báo cáo ảnh (A4 dọc) — kiểm tra rồi in hoặc lưu PDF
+          </div>
         </div>
         <div className="toolbar-actions">
           <button type="button" onClick={onPrint} className="btn-print">
@@ -317,14 +332,16 @@ export default function DailyWorkReportPrint({
 
       <div className="print-stage">
         {sheets.map((day) => {
-        const { reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount = null } = day;
+        const { reportDate, weather, temperature, workToday, workNext, equipment, incidents, acceptedCount = null, photo: dayPhoto, projectName: dayProject = "" } = day;
         const todayRows = alignCatalogRows(types, workToday);
         const nextRows = alignNextRows(types, workNext);
         const equipmentRows = padFooter(equipment, null);
         const incidentRows = padFooter(incidents, null);
         const nextDate = displayDateShort(addDaysIso(reportDate, 1));
+        const photoSheet = dayPhoto ?? emptyPhotoReport();
         return (
-        <article key={reportDate} className="print-sheet">
+        <div key={reportDate} className="print-day-block">
+        <article className="print-sheet">
           <header className="doc-head">
             <div className="doc-title-block">
               <div>DỰ ÁN: TUYẾN TÀU ĐIỆN ĐÔ THỊ LOẠI 1 TẠI ĐẶC KHU PHÚ QUỐC</div>
@@ -496,6 +513,8 @@ export default function DailyWorkReportPrint({
             </table>
           </div>
         </article>
+        <PhotoReportPrintSheet projectName={dayProject} date={reportDate} report={photoSheet} />
+        </div>
         );
         })}
       </div>
@@ -746,8 +765,14 @@ const PRINT_CSS = `
   letter-spacing: 0.04em;
 }
 #daily-report-print .stt { width: 10mm; }
+#daily-report-print .photo-sheet {
+  margin: 0 auto 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
 @media print {
   @page { size: A4 landscape; margin: 6mm; }
+  @page daily-page { size: A4 landscape; margin: 6mm; }
+  @page photo-page { size: A4 portrait; margin: 12mm; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;
@@ -769,10 +794,11 @@ const PRINT_CSS = `
   #daily-report-print .print-stage {
     display: contents;
   }
-  #daily-report-print .print-sheet + .print-sheet {
-    break-before: page;
+  #daily-report-print .print-day-block {
+    display: contents;
   }
   #daily-report-print .print-sheet {
+    page: daily-page;
     width: auto;
     min-height: 0;
     margin: 0;
@@ -780,10 +806,25 @@ const PRINT_CSS = `
     box-shadow: none;
     zoom: 1;
   }
+  #daily-report-print .photo-sheet {
+    page: photo-page;
+    break-before: page;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  #daily-report-print .print-day-block + .print-day-block .print-sheet {
+    break-before: page;
+  }
 }
 @media screen {
   #daily-report-print .print-sheet {
     zoom: 0.82;
+  }
+  #daily-report-print .photo-sheet {
+    zoom: 0.72;
   }
 }
 `;

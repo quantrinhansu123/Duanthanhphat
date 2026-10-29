@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (body.action === "rule") return NextResponse.json({ rule: await createQualityRuleForWeld(body, actor) });
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
-      const [accepted, waiting] = await Promise.all(["Nghiệm thu đạt", "Chờ mài"].map((qualityStatusFilter) =>
+      const [accepted, waiting] = await Promise.all(["Đạt", "Chờ mài"].map((qualityStatusFilter) =>
         loadQualityJournalRows(parseQualityFilters({ ...base, qualityStatusFilter, page: 1, pageSize: 1000 }))));
       return NextResponse.json({ accepted, waiting });
     }

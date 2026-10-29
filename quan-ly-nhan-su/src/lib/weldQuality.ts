@@ -21,12 +21,50 @@ export type WeldQualityInspection = {
   ket_qua_ndt: QualityResult;
   ngay_ndt: string | null;
   ly_do_loai_nghiem_thu?: string | null;
+  /** Khi trực quan/độ lệch không đạt: mặc định sửa chữa; chủ sở hữu chọn không đạt thì ghi ly_do. */
+  xu_ly_truc_quan?: "sua_chua" | "khong_dat" | null;
 };
 
-export type WeldQualityStatus = "Chưa có dữ liệu chất lượng" | "Chờ mài" | "Chờ thí nghiệm" |
-  "Chờ nghiệm thu" | "Không thí nghiệm" | "Không đạt" | "Nghiệm thu đạt";
+/**
+ * Trình tự thống nhất mọi loại mối hàn (bỏ cột Kết quả NDT trên UI).
+ * Hàn → Chờ mài → Chờ siêu âm và nghiệm thu → (Sửa chữa/khắc phục) → Chờ ký biên bản → Đạt
+ * + Không đạt / Không thí nghiệm.
+ */
+export type WeldQualityStatus =
+  | "Hàn"
+  | "Chờ mài"
+  | "Chờ siêu âm và nghiệm thu"
+  | "Sửa chữa/khắc phục"
+  | "Chờ ký biên bản"
+  | "Đạt"
+  | "Không đạt"
+  | "Không thí nghiệm";
 
-export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = ["Chưa có dữ liệu chất lượng", "Chờ mài", "Chờ thí nghiệm", "Chờ nghiệm thu", "Không thí nghiệm", "Không đạt", "Nghiệm thu đạt"];
+export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
+  "Hàn",
+  "Chờ mài",
+  "Chờ siêu âm và nghiệm thu",
+  "Sửa chữa/khắc phục",
+  "Chờ ký biên bản",
+  "Đạt",
+  "Không đạt",
+  "Không thí nghiệm",
+];
+
+/** Map tên trạng thái cũ (DB/UI trước đổi) → tên mới. */
+export const WELD_QUALITY_STATUS_ALIASES: Record<string, WeldQualityStatus> = {
+  "Chưa có dữ liệu chất lượng": "Hàn",
+  "Chờ thí nghiệm": "Chờ siêu âm và nghiệm thu",
+  "Chờ nghiệm thu": "Chờ ký biên bản",
+  "Nghiệm thu đạt": "Đạt",
+};
+
+export function normalizeWeldQualityStatus(value: string | null | undefined): WeldQualityStatus | null {
+  if (!value) return null;
+  if ((WELD_QUALITY_STATUSES as string[]).includes(value)) return value as WeldQualityStatus;
+  return WELD_QUALITY_STATUS_ALIASES[value] ?? null;
+}
+
 export const GEOMETRY_LABELS: Record<GeometryCriterion, string> = {
   doc_mat_lan: "Dọc trên mặt lăn",
   ngang_nam_ray: "Ngang trên nấm ray",
@@ -57,9 +95,22 @@ export type SavedWeldQualityRule = WeldQualityRule & {
 export type WeldQualitySelection = { id: string; phien_ban: number; ma_lich_su: string };
 
 export function emptyWeldInspection(weldId: string): SavedWeldInspection {
-  return { moi_han_id: weldId, tieu_chuan_id: null, ngay_mai: null, truc_quan: null, gia_tri_do: {},
-    phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null, ly_do_loai_nghiem_thu: null,
-    phien_ban: 0, nguoi_ghi_nhan: null, ghi_chu: null, updated_at: "" };
+  return {
+    moi_han_id: weldId,
+    tieu_chuan_id: null,
+    ngay_mai: null,
+    truc_quan: null,
+    gia_tri_do: {},
+    phuong_phap_ndt: "Siêu âm",
+    ket_qua_ndt: null,
+    ngay_ndt: null,
+    ly_do_loai_nghiem_thu: null,
+    xu_ly_truc_quan: null,
+    phien_ban: 0,
+    nguoi_ghi_nhan: null,
+    ghi_chu: null,
+    updated_at: "",
+  };
 }
 
 /** Giữ ô trống khác số 0; không nhận số mũ, dấu phân nhóm hoặc đơn vị lẫn trong số đo. */
@@ -122,26 +173,38 @@ export function evaluateGeometryCriterion(value: number | null, limit: GeometryL
     (limit.max !== null && (value > limit.max || (!limit.maxInclusive && value === limit.max))) ? "Không đạt" : "Đạt";
 }
 
+/**
+ * Tình trạng chất lượng — cùng trình tự mọi loại mối hàn (không còn nhánh riêng Chấp thuận/Thử nghiệm).
+ * `weldType` giữ tham số để tương thích chữ ký cũ; không còn ảnh hưởng nhánh status.
+ */
 export function evaluateWeldQuality(
   inspection: WeldQualityInspection | null,
   rule: WeldQualityRule | null,
-  weldType: string,
+  _weldType: string,
   accepted = false,
 ) {
   const geometry = inspection ? evaluateGeometry(inspection.gia_tri_do, rule?.dung_sai ?? null) : null;
   const internalPass = Boolean(inspection?.ngay_mai && inspection.truc_quan === "Đạt" && geometry === "Đạt");
   const ndtPass = Boolean(rule && (!rule.yeu_cau_ndt || (inspection?.ket_qua_ndt === "Đạt" && inspection.ngay_ndt)));
-  const failed = Boolean(inspection?.ly_do_loai_nghiem_thu) || inspection?.truc_quan === "Không đạt" ||
-    geometry === "Không đạt" || inspection?.ket_qua_ndt === "Không đạt";
-  const rfiEligible = Boolean(rule && internalPass && !failed && (!rule.ndt_truoc_rfi || ndtPass));
-  const acceptanceEligible = Boolean(rule && internalPass && ndtPass && !failed);
+  const ndtFail = inspection?.ket_qua_ndt === "Không đạt";
+  const visualGeoFail = inspection?.truc_quan === "Không đạt" || geometry === "Không đạt";
+  const fieldReject = Boolean(inspection?.ly_do_loai_nghiem_thu);
+  const forceFail = fieldReject || inspection?.xu_ly_truc_quan === "khong_dat";
+  const repairPath = Boolean(visualGeoFail && !ndtFail && !forceFail);
+  const failed = ndtFail || forceFail || (visualGeoFail && inspection?.xu_ly_truc_quan === "khong_dat");
+  const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath && (!rule.ndt_truoc_rfi || ndtPass));
+  const acceptanceEligible = Boolean(rule && internalPass && ndtPass && !ndtFail && !forceFail && !repairPath);
+
   let status: WeldQualityStatus;
-  if (accepted) status = "Nghiệm thu đạt";
-  else if (!inspection) status = "Chưa có dữ liệu chất lượng";
-  else if (failed) status = "Không đạt";
+  if (accepted) status = "Đạt";
+  else if (!inspection) status = "Hàn";
+  else if (ndtFail || forceFail) status = "Không đạt";
+  else if (repairPath) status = "Sửa chữa/khắc phục";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";
-  else if (internalPass && ndtPass) status = "Chờ nghiệm thu";
-  else if (internalPass || weldType === "Thử nghiệm" || weldType === "Chấp thuận") status = "Chờ thí nghiệm";
+  else if (internalPass && ndtPass) status = "Chờ ký biên bản";
+  else if (internalPass) status = "Chờ siêu âm và nghiệm thu";
+  // Hàn xong → tự động Chờ mài (mọi loại mối hàn).
   else status = "Chờ mài";
-  return { geometry, internalPass, ndtPass, rfiEligible, acceptanceEligible, status };
+
+  return { geometry, internalPass, ndtPass, rfiEligible, acceptanceEligible, status, repairPath, failed };
 }
