@@ -99,13 +99,24 @@ export async function listRfis(projectId: string) {
 export async function loadRfiDetail(rfiId: string) {
   const { data: rfi, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", rfiId).single();
   if (error) throw error;
-  const links = await fetchAll<{ moi_han_id: string; con_hieu_luc: boolean; du_lieu_chot: { moi_han?: { ma_lich_su?: string } } }>((a, b) =>
+  const links = await fetchAll<{ moi_han_id: string; con_hieu_luc: boolean; du_lieu_chot: { moi_han?: { ma_lich_su?: string; ngay_thuc_hien?: string | null } } }>((a, b) =>
     db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id,con_hieu_luc,du_lieu_chot").eq("phieu_id", rfiId).order("moi_han_id").range(a, b));
   const quality = await chunked<{ moi_han_id: string; phien_ban: number | null; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean }>(
     links.map((l) => l.moi_han_id), (p) => db().from("chat_luong_moi_han").select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_nghiem_thu").in("moi_han_id", p));
   const q = new Map(quality.map((x) => [x.moi_han_id, x]));
+  // Vị trí hiện trường của từng mối (lý trình + toạ độ) để phiếu có link dẫn thẳng tới mối.
+  const points = await chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null; kinh_do: number | null; vi_do: number | null }>(
+    links.map((l) => l.moi_han_id), (p) => db().from("toa_do").select("lich_su_moi_han_id,ly_trinh,kinh_do,vi_do").in("lich_su_moi_han_id", p));
+  const where = new Map<string, (typeof points)[number]>();
+  for (const pt of points) { // ưu tiên điểm có toạ độ hợp lệ
+    const cur = where.get(pt.lich_su_moi_han_id);
+    if (!cur || (cur.vi_do == null && pt.vi_do != null)) where.set(pt.lich_su_moi_han_id, pt);
+  }
   const welds = links.map((l) => ({ moi_han_id: l.moi_han_id, con_hieu_luc: l.con_hieu_luc,
-    ma_lich_su: l.du_lieu_chot.moi_han?.ma_lich_su ?? "", phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
+    ma_lich_su: l.du_lieu_chot.moi_han?.ma_lich_su ?? "", ngay_thuc_hien: l.du_lieu_chot.moi_han?.ngay_thuc_hien ?? null,
+    ly_trinh: where.get(l.moi_han_id)?.ly_trinh ?? null,
+    vi_do: where.get(l.moi_han_id)?.vi_do == null ? null : Number(where.get(l.moi_han_id)?.vi_do),
+    kinh_do: where.get(l.moi_han_id)?.kinh_do == null ? null : Number(where.get(l.moi_han_id)?.kinh_do), phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
     tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false }));
   welds.sort((a, b) => a.ma_lich_su.localeCompare(b.ma_lich_su, "vi", { numeric: true }));
   return { rfi, welds };

@@ -27,7 +27,10 @@ const css = `@media print {
   @page { size: A4; margin: 15mm; }
 }`;
 
-type Row = { code: string; date: string; method: "FBW" | "ATW" | ""; result: string; note: string };
+type Row = { code: string; date: string; method: "FBW" | "ATW" | ""; result: string; note: string; km?: string; mapUrl?: string; coords?: string };
+
+/** Link Google Maps dẫn thẳng tới vị trí mối ngoài hiện trường. */
+const mapLink = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat},${lng}`;
 
 function recordRows(record: RecordSet): Row[] {
   return record.moi.map((m) => {
@@ -64,7 +67,8 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
     const { rfi, welds } = view.rfi, t = rfi.thong_tin ?? {};
     projectName = view.rfi.projectName;
     headline = [["Số phiếu", rfi.so_phieu], ["Ngày mời nghiệm thu", rfi.ngay_moi], ["Địa điểm", t.dia_diem ?? ""], ["Bên mời", t.ben_moi ?? ""], ["Bên nhận", t.ben_nhan ?? ""], ["Phạm vi", t.pham_vi ?? ""], ["Người lập", rfi.nguoi_lap]];
-    rows = welds.map((w) => ({ code: w.ma_lich_su, date: "", method: "", result: "", note: "" }));
+    rows = welds.map((w) => ({ code: w.ma_lich_su, date: w.ngay_thuc_hien ?? "", method: "", result: "", note: "", km: w.ly_trinh ?? "",
+      mapUrl: w.vi_do != null && w.kinh_do != null ? mapLink(w.vi_do, w.kinh_do) : "", coords: w.vi_do != null && w.kinh_do != null ? `${w.vi_do.toFixed(6)}, ${w.kinh_do.toFixed(6)}` : "" }));
   } else if (record) {
     const { dot } = record, rfi = dot.phieu_yeu_cau_nghiem_thu, t = { ...((dot.thong_tin ?? {}) as Record<string, string>), ...(latest?.thong_tin ?? {}) };
     projectName = String(rfi.du_an?.ten_du_an ?? rfi.du_an?.name ?? "");
@@ -108,10 +112,18 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
         {counts && <p className="mt-3">{counts}</p>}
         {rows.length > 0 && (
           <table className="mt-3 w-full border-collapse text-xs">
-            <thead><tr>{["STT", "Mã mối hàn", ...(kind === "rfi" ? [] : ["Ngày hàn", "Kết quả"])].map((h) => <th key={h} className="border border-slate-700 p-1">{h}</th>)}</tr></thead>
+            <thead><tr>{["STT", "Mã mối hàn", ...(kind === "rfi" ? ["Ngày hàn", "Lý trình", "Vị trí hiện trường"] : ["Ngày hàn", "Kết quả"])].map((h) => <th key={h} className="border border-slate-700 p-1">{h}</th>)}</tr></thead>
             <tbody>{rows.map((r, i) => (
               <tr key={r.code + i}><td className="border border-slate-700 p-1 text-center">{i + 1}</td><td className="border border-slate-700 p-1">{r.code}</td>
-                {kind !== "rfi" && <><td className="border border-slate-700 p-1 text-center">{r.date}</td><td className="border border-slate-700 p-1 text-center">{r.result}</td></>}</tr>))}
+                {kind === "rfi" ? (
+                  <>
+                    <td className="border border-slate-700 p-1 text-center">{r.date || "—"}</td>
+                    <td className="border border-slate-700 p-1 text-center">{r.km || "—"}</td>
+                    <td className="border border-slate-700 p-1">
+                      {r.mapUrl ? <><a href={r.mapUrl} target="_blank" rel="noreferrer" className="text-[#0047AB] underline">Mở vị trí mối</a><div className="text-[9px] text-slate-500">{r.coords}</div></> : "Chưa có toạ độ"}
+                    </td>
+                  </>
+                ) : <><td className="border border-slate-700 p-1 text-center">{r.date}</td><td className="border border-slate-700 p-1 text-center">{r.result}</td></>}</tr>))}
             </tbody>
           </table>)}
         <div className="mt-8 grid grid-cols-3 gap-4 text-center">
