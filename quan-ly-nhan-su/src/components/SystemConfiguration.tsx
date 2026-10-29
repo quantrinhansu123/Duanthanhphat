@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import AccountCreateModal, { PasswordField, roleOptions } from "@/components/AccountCreateModal";
+import AccountCreateModal, { CredentialsModal, PasswordField, accountEmail, generatePassword, roleOptions } from "@/components/AccountCreateModal";
 import { navigation } from "@/data/navigation";
 import { Check, DotsThree } from "@/components/icons";
 import {
@@ -486,10 +486,12 @@ function AccountModal({
   account,
   onClose,
   onSave,
+  onGrant,
 }: {
   account: InitialAccount;
   onClose: () => void;
   onSave: (account: InitialAccount) => void;
+  onGrant: (account: InitialAccount, password: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(account);
@@ -521,9 +523,28 @@ function AccountModal({
     }
     onSave(form);
   }
+  async function grant() {
+    const email = accountEmail(account);
+    const pw = generatePassword();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/system-configuration/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pw }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
+      onGrant({ ...account, email, id: payload.id ?? account.id }, pw);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không cấp được tài khoản");
+      setBusy(false);
+    }
+  }
   const rows: [string, string][] = [
-    ["Tên đăng nhập", account.username],
     ["Họ tên", account.fullName],
+    ["Ngày sinh", account.birthDate ? new Date(account.birthDate + "T00:00:00").toLocaleDateString("vi-VN") : "—"],
     ["Email", account.email || "—"],
     ["Vai trò", account.role],
     ["Trạng thái", account.status],
@@ -540,10 +561,6 @@ function AccountModal({
         </h3>
         {editing ? (
           <div className="mt-4 space-y-3.5">
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-              Tên đăng nhập
-              <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={`${inputCls} font-mono`} />
-            </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Họ tên
               <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputCls} />
@@ -594,6 +611,16 @@ function AccountModal({
           >
             {editing ? "Hủy" : "Đóng"}
           </button>
+          {!editing && !account.email && account.birthDate && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void grant()}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0047AB] bg-white px-4 text-xs sm:text-sm font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-60 cursor-pointer"
+            >
+              {busy ? "Đang cấp…" : "Cấp tài khoản"}
+            </button>
+          )}
           <button
             type="button"
             disabled={busy}
@@ -620,6 +647,7 @@ function AccountsPanel({
   const [menuOpen, setMenuOpen] = useRowMenu();
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const selected = accounts.find((a) => a.id === selectedId) ?? null;
 
   function handleSaveAccount(updated: InitialAccount) {
@@ -646,10 +674,18 @@ function AccountsPanel({
   }
 
   function handleDelete(account: InitialAccount) {
-    if (!window.confirm(`Xóa tài khoản "${account.username}"?`)) return;
+    if (!window.confirm(`Xóa tài khoản "${account.fullName}"?`)) return;
     const nextAccounts = accounts.filter((a) => a.id !== account.id);
     setAccounts(nextAccounts);
     setMenuOpen(null);
+    if (onPersist) void onPersist(nextAccounts);
+  }
+
+  function handleGranted(account: InitialAccount, password: string) {
+    const nextAccounts = accounts.map((a) => (a.id === selectedId ? account : a));
+    setAccounts(nextAccounts);
+    setSelectedId(null);
+    setCredentials({ email: account.email, password });
     if (onPersist) void onPersist(nextAccounts);
   }
 
@@ -682,8 +718,7 @@ function AccountsPanel({
           <table className="w-full min-w-[900px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
-                <th className="px-4 py-3">Tên đăng nhập</th>
-                <th className="px-3.5 py-3">Họ tên</th>
+                <th className="px-4 py-3">Họ tên</th>
                 <th className="px-3.5 py-3">Email</th>
                 <th className="px-3.5 py-3">Vai trò</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
@@ -699,8 +734,7 @@ function AccountsPanel({
                   onClick={() => setSelectedId(a.id)}
                   className="cursor-pointer hover:bg-slate-50/80 transition-colors duration-150"
                 >
-                  <td className="px-4 py-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">{a.username}</td>
-                  <td className="px-3.5 py-3 font-semibold text-slate-900">{a.fullName}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{a.fullName}</td>
                   <td className="px-3.5 py-3 text-slate-700">{a.email || "—"}</td>
                   <td className="px-3.5 py-3">
                     <span
@@ -756,7 +790,7 @@ function AccountsPanel({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy tài khoản</div>
                   </td>
                 </tr>
@@ -767,8 +801,9 @@ function AccountsPanel({
       </div>
       {creating && <AccountCreateModal onClose={() => setCreating(false)} onCreate={handleCreated} />}
       {selected && (
-        <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} />
+        <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} onGrant={handleGranted} />
       )}
+      {credentials && <CredentialsModal {...credentials} onClose={() => setCredentials(null)} />}
     </>
   );
 }

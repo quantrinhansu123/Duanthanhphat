@@ -89,13 +89,11 @@ function validate(body: unknown): StoredSystemConfiguration {
 
   const accounts = input.accounts.slice(0, 500).map((raw, index) => {
     const account = raw as InitialAccount;
-    const username = cleanText(account.username, 120);
-    if (!username) throw new Error(`Tài khoản dòng ${index + 1} chưa có tên đăng nhập.`);
     return {
       id: cleanText(account.id, 120) || `account-${Date.now()}-${index}`,
-      username,
       fullName: cleanText(account.fullName, 200),
       email: cleanText(account.email, 300),
+      birthDate: cleanText(account.birthDate, 10),
       role: (permissionRoles as readonly string[]).includes(account.role) ? account.role : "Nhân viên",
       status: account.status === "Khóa" ? "Khóa" : "Hoạt động",
       createdAt: cleanText(account.createdAt, 10),

@@ -19,9 +19,9 @@ export type SystemSettings = {
 
 export type InitialAccount = {
   id: string;
-  username: string;
   fullName: string;
   email: string;
+  birthDate?: string;
   /** Một trong permissionRoles (hoặc "Nhân viên" của dữ liệu cũ). */
   role: string;
   status: "Hoạt động" | "Khóa";
@@ -127,7 +127,6 @@ export const defaultSystemSettings: SystemSettings = {
 export const initialAccounts: InitialAccount[] = [
   {
     id: "1",
-    username: "cong",
     fullName: "Nguyễn Đắc Công",
     email: "congnd@thanhphat.vn",
     role: "Quản trị",
@@ -137,7 +136,6 @@ export const initialAccounts: InitialAccount[] = [
   },
   {
     id: "2",
-    username: "tiep",
     fullName: "Đặng Ngọc Tiếp",
     email: "tiepdn@thanhphat.vn",
     role: "Quản trị",
@@ -147,7 +145,6 @@ export const initialAccounts: InitialAccount[] = [
   },
   {
     id: "3",
-    username: "kimanh",
     fullName: "Lê Thị Kim Anh",
     email: "anhltk@thanhphat.vn",
     role: "Nhân viên",
@@ -157,7 +154,6 @@ export const initialAccounts: InitialAccount[] = [
   },
   {
     id: "4",
-    username: "minh",
     fullName: "Phạm Văn Minh",
     email: "minhpv@thanhphat.vn",
     role: "Nhân viên",

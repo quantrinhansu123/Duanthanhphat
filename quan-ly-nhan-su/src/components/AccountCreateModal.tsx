@@ -48,6 +48,54 @@ export function PasswordField({
   );
 }
 
+/** "Phạm Văn Minh" + "1990" → "minh1990" (tên cuối, bỏ dấu). */
+function accountHandle(fullName: string, birthDate: string): string {
+  const last = fullName.trim().split(/\s+/).pop() ?? "";
+  const ascii = last.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return ascii + birthDate.slice(0, 4);
+}
+
+export const accountEmail = (a: { fullName: string; birthDate?: string }) =>
+  `${accountHandle(a.fullName, a.birthDate ?? "")}@thanhphat.vn`;
+
+const PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+export function generatePassword(length = 12): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (b) => PASSWORD_CHARS[b % PASSWORD_CHARS.length]).join("");
+}
+
+export function CredentialsModal({ email, password, onClose }: { email: string; password: string; onClose: () => void }) {
+  const text = `Tài khoản: ${email}\nMật khẩu: ${password}`;
+  const btn = "inline-flex h-10 items-center justify-center rounded-lg px-4 text-xs sm:text-sm font-semibold cursor-pointer";
+  const ghost = `${btn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
+  function download() {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${email.split("@")[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" />
+      <div className="relative z-10 w-full max-w-[520px] rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xl">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900">Tài khoản nhân sự vừa tạo</h3>
+        <p className="mt-3 text-xs sm:text-sm text-slate-600">Lưu thông tin để bàn giao cho nhân viên. Mật khẩu chỉ hiển thị ở lần cấp này.</p>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className={labelCls}>Tài khoản<input readOnly value={email} className={`${inputCls} font-mono`} /></label>
+          <label className={labelCls}>Mật khẩu đã sinh<input readOnly value={password} className={`${inputCls} font-mono`} /></label>
+        </div>
+        <div className="mt-6 flex justify-end gap-2.5">
+          <button type="button" onClick={onClose} className={ghost}>Đóng</button>
+          <button type="button" onClick={download} className={ghost}>Tải thông tin</button>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(text)} className={`${btn} bg-[#0047AB] hover:bg-[#00388A] text-white`}>Sao chép</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AccountCreateModal({
   onClose,
   onCreate,
@@ -57,42 +105,23 @@ export default function AccountCreateModal({
 }) {
   const [form, setForm] = useState<InitialAccount>({
     id: "",
-    username: "",
     fullName: "",
     email: "",
+    birthDate: "",
     role: "Bộ phận khác",
     status: "Hoạt động",
     createdAt: new Date().toISOString().slice(0, 10),
     note: "",
   });
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    if (!form.username.trim() || !form.fullName.trim() || !form.email.trim()) {
-      setError("Nhập tên đăng nhập, họ tên và email.");
+  function submit() {
+    const year = Number(form.birthDate?.slice(0, 4));
+    if (!form.fullName.trim() || !(year >= 1900 && year <= new Date().getFullYear())) {
+      setError("Nhập họ tên và ngày sinh hợp lệ.");
       return;
     }
-    if (password.length < 6) {
-      setError("Mật khẩu tối thiểu 6 ký tự.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/system-configuration/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, password }),
-      });
-      const payload = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-      if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
-      onCreate({ ...form, id: payload.id ?? String(Date.now()) });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tạo được tài khoản");
-      setBusy(false);
-    }
+    onCreate({ ...form, id: String(Date.now()) });
   }
 
   return (
@@ -102,18 +131,13 @@ export default function AccountCreateModal({
         <h3 className="text-base sm:text-lg font-bold text-slate-900">Thêm tài khoản</h3>
         <div className="mt-4 space-y-3.5">
           <label className={labelCls}>
-            Tên đăng nhập
-            <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={`${inputCls} font-mono`} />
-          </label>
-          <label className={labelCls}>
             Họ tên
             <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputCls} />
           </label>
           <label className={labelCls}>
-            Email (dùng để đăng nhập)
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputCls} />
+            Ngày sinh
+            <input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} className={inputCls} />
           </label>
-          <PasswordField label="Mật khẩu" value={password} onChange={setPassword} />
           <div className="grid grid-cols-2 gap-3">
             <label className={labelCls}>
               Vai trò
@@ -141,8 +165,8 @@ export default function AccountCreateModal({
           <button type="button" onClick={onClose} className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs">
             Hủy
           </button>
-          <button type="button" disabled={busy} onClick={() => void submit()} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] disabled:opacity-60 px-4 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer">
-            {busy ? "Đang tạo…" : "Thêm tài khoản"}
+          <button type="button" onClick={submit} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs cursor-pointer">
+            Thêm tài khoản
           </button>
         </div>
       </div>

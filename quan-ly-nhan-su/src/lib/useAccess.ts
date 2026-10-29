@@ -5,7 +5,7 @@ import { checkPermission, type PermissionAction, type StoredSystemConfiguration 
 import { createClient } from "@/lib/supabase/client";
 import { loadSystemConfiguration } from "@/lib/systemConfigurationClient";
 
-type Loaded = { email?: string; metaName?: string; config: Pick<StoredSystemConfiguration, "accounts" | "permissions"> };
+type Loaded = { email?: string; metaName?: string; metaBirth?: string; config: Pick<StoredSystemConfiguration, "accounts" | "permissions"> };
 
 /** Chữ cái đầu của hai từ cuối trong tên (email thì lấy phần trước @); chưa có tên thì "TP". */
 export function initials(name: string) {
@@ -53,9 +53,10 @@ export function useAccess() {
       let next: Loaded;
       try {
         const [{ data }, config] = await Promise.all([createClient().auth.getUser(), loadSystemConfiguration()]);
-        const meta = data.user?.user_metadata as { full_name?: unknown; name?: unknown } | undefined;
+        const meta = data.user?.user_metadata as { full_name?: unknown; name?: unknown; birth_date?: unknown } | undefined;
         const metaName = [meta?.full_name, meta?.name].find((v): v is string => typeof v === "string" && v.trim() !== "");
         next = slim(data.user?.email ?? undefined, metaName?.trim(), config);
+        if (typeof meta?.birth_date === "string") next.metaBirth = meta.birth_date;
         try {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(next));
         } catch {
@@ -80,7 +81,8 @@ export function useAccess() {
     loaded !== null && checkPermission(loaded.config, loaded.email, tabId, action);
 
   // Tên hiển thị: họ tên trong danh sách tài khoản → họ tên trong tài khoản đăng nhập → phần tên trước @ của email (không hiện nguyên email).
-  const userName = loaded?.config.accounts[0]?.fullName.trim() || loaded?.metaName || loaded?.email?.split("@")[0] || "";
+  const userName = loaded?.metaName || loaded?.config.accounts[0]?.fullName.trim() || loaded?.email?.split("@")[0] || "";
 
-  return { ready: loaded !== null, can, userName };
+  const birthDate = loaded?.metaBirth || loaded?.config.accounts[0]?.birthDate || "";
+  return { ready: loaded !== null, can, userName, email: loaded?.email ?? "", birthDate };
 }

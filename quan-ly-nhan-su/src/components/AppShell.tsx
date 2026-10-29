@@ -16,6 +16,7 @@ import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 import QualityLoginDialog from "@/components/QualityLoginDialog";
+import UserMenu from "@/components/UserMenu";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { canReceiveOilAlert } from "@/lib/viewerAccess";
 
@@ -203,7 +204,7 @@ export default function AppShell({ tab }: AppShellProps) {
   const clock = useClientClock(lang);
 
   const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
-  const { ready: accessReady, can, userName } = useAccess();
+  const { ready: accessReady, can, userName, email, birthDate } = useAccess();
   const canView = can(current, "view");
   const canEdit = can(current, "edit");
   const canDelete = can(current, "delete");
@@ -319,7 +320,8 @@ export default function AppShell({ tab }: AppShellProps) {
             {canReceiveOilAlert() ? (
               <NotificationBell label={lang === "en" ? "Notifications" : "Thông báo"} />
             ) : null}
-            <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
+            <div className="border-l border-slate-200 pl-2.5 sm:pl-4">
+              <UserMenu name={userName} email={email} birthDate={birthDate}>
               <div className="hidden md:block text-right leading-tight">
                 <div className="max-w-[220px] truncate text-xs sm:text-sm font-semibold text-slate-900">{userName || "…"}</div>
                 <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Standard welds, safe journeys" : "Mối hàn chuẩn, chuyến tàu an toàn"}</div>
@@ -327,6 +329,7 @@ export default function AppShell({ tab }: AppShellProps) {
               <div className="relative h-8 w-8 sm:h-9 sm:w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-slate-200 hover:ring-blue-200 transition-all shadow-xs">
                 <span className="grid h-full place-items-center text-xs font-semibold text-white" aria-hidden>{initials(userName)}</span>
               </div>
+              </UserMenu>
             </div>
           </div>
         </header>
