@@ -70,15 +70,16 @@ const cellInput =
 
 const WeldAcceptanceWorkflow = dynamic(() => import("@/components/WeldAcceptanceWorkflow"), { ssr: false });
 const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { ssr: false });
+const PhotoReportForm = dynamic(() => import("@/components/PhotoReport"), { ssr: false });
 const ConstructionDiaryForm = dynamic(() => import("@/components/ConstructionDiary"), { ssr: false });
 
 // Nhật ký thi công = Báo cáo ngày (tự điền từ nhật ký hàn, tự lưu theo ngày, in một/nhiều ngày).
 export default function WeldAcceptanceReport() {
-  const [tab, setTab] = useState<"nghiem-thu" | "quy-trinh" | "nhat-ky" | "nhat-ky-ngay">("quy-trinh");
+  const [tab, setTab] = useState<"nghiem-thu" | "quy-trinh" | "nhat-ky" | "nhat-ky-ngay" | "bao-cao-anh">("quy-trinh");
   return (
     <>
       <div className="no-print flex gap-2 px-4 sm:px-6 pb-3">
-        {([["quy-trinh", "RFI & Nghiệm thu"], ["nghiem-thu", "Biên bản nghiệm thu"], ["nhat-ky", "Nhật ký thi công"], ["nhat-ky-ngay", "Nhật ký hàng ngày"]] as const).map(([id, label]) => (
+        {([["quy-trinh", "RFI & Nghiệm thu"], ["nghiem-thu", "Biên bản nghiệm thu"], ["nhat-ky", "Nhật ký thi công"], ["nhat-ky-ngay", "Nhật ký hàng ngày"], ["bao-cao-anh", "Báo cáo ảnh"]] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -91,7 +92,7 @@ export default function WeldAcceptanceReport() {
           </button>
         ))}
       </div>
-      {tab === "nhat-ky-ngay" ? <ConstructionDiaryForm /> : tab === "nhat-ky" ? <DailyWorkReport /> : tab === "quy-trinh" ? <WeldAcceptanceWorkflow /> : <WeldAcceptanceForm />}
+      {tab === "bao-cao-anh" ? <PhotoReportForm /> : tab === "nhat-ky-ngay" ? <ConstructionDiaryForm /> : tab === "nhat-ky" ? <DailyWorkReport /> : tab === "quy-trinh" ? <WeldAcceptanceWorkflow /> : <WeldAcceptanceForm />}
     </>
   );
 }
