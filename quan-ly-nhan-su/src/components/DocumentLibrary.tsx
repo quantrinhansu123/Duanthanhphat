@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@/components/icons";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
+  createDocumentFolder,
+  deleteDocumentFolder,
   deleteDriveDocument,
+  fetchDocumentFolders,
+  renameDocumentFolder,
   fetchDriveDocuments,
   replaceDocumentContentInDrive,
   updateDriveDocumentMeta,
@@ -50,6 +54,27 @@ export default function DocumentLibrary() {
   const [description, setDescription] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Thư mục tự tạo: ALL = tất cả, NONE = chưa phân loại, còn lại là tên thư mục.
+  const ALL = "__all";
+  const NONE = "__none";
+  const [folders, setFolders] = useState<string[]>([]);
+  const [activeFolder, setActiveFolder] = useState(ALL);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [uploadFolder, setUploadFolder] = useState("");
+  const [editFolder, setEditFolder] = useState("");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  // Thư mục lưu dạng đường dẫn "Cha/Con"; hiển thị bằng " › ".
+  const folderLabel = (path: string) => path.split("/").join(" › ");
+  const inTree = (path: string, root: string) => path === root || path.startsWith(`${root}/`);
+  const isRealFolder = activeFolder !== ALL && activeFolder !== NONE;
+  const lastName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+  const subfolders = folders.filter((f) =>
+    isRealFolder ? f.startsWith(`${activeFolder}/`) && !f.slice(activeFolder.length + 1).includes("/") : !f.includes("/"),
+  );
+
   // Thay thế nội dung file (Drive media patch)
   const [replacingDoc, setReplacingDoc] = useState<DriveDocumentItem | null>(null);
   const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
@@ -68,12 +93,83 @@ export default function DocumentLibrary() {
 
   useEffect(() => {
     void reload();
+    void fetchDocumentFolders().then((res) => {
+      setFolders(res.folders);
+      if (res.error) setErrorMsg(res.error);
+    });
   }, [reload]);
 
-  const filtered = useMemo(
-    () => [...items].sort((a, b) => b.createdTime.localeCompare(a.createdTime)),
-    [items],
+  // Tài liệu gắn thư mục đã bị xóa khỏi danh sách coi như chưa phân loại.
+  const folderOf = useCallback(
+    (doc: DriveDocumentItem) => {
+      const name = doc.appProperties?.thu_muc ?? "";
+      return folders.includes(name) ? name : "";
+    },
+    [folders],
   );
+
+  const filtered = useMemo(
+    () =>
+      [...items]
+        .filter((d) =>
+          activeFolder === ALL
+            ? true
+            : activeFolder === NONE
+              ? folderOf(d) === ""
+              : inTree(folderOf(d), activeFolder),
+        )
+        .sort((a, b) => b.createdTime.localeCompare(a.createdTime)),
+    [items, activeFolder, folderOf],
+  );
+
+  async function handleCreateFolder(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await createDocumentFolder(newFolderName, isRealFolder ? activeFolder : "");
+    if (res.error) {
+      setErrorMsg(res.error);
+      setStatusMsg(null);
+      return;
+    }
+    setFolders(res.folders);
+    if (res.created) setActiveFolder(res.created);
+    setNewFolderName("");
+    setNewFolderOpen(false);
+    setErrorMsg(null);
+    setStatusMsg(`Đã tạo thư mục: ${folderLabel(res.created ?? "")}`);
+  }
+
+  async function handleRenameFolder(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await renameDocumentFolder(activeFolder, renameValue);
+    setSaving(false);
+    if (res.error) {
+      setErrorMsg(res.error);
+      setStatusMsg(null);
+      return;
+    }
+    setFolders(res.folders);
+    if (res.created) setActiveFolder(res.created);
+    setRenameOpen(false);
+    setErrorMsg(null);
+    setStatusMsg(`Đã đổi tên thư mục: ${folderLabel(res.created ?? "")}`);
+    await reload();
+  }
+
+  async function handleDeleteFolder(path: string) {
+    if (!confirm(`Xóa thư mục "${folderLabel(path)}" (cùng các thư mục con)?`)) return;
+    const res = await deleteDocumentFolder(path);
+    if (res.error) {
+      setErrorMsg(res.error);
+      setStatusMsg(null);
+      return;
+    }
+    setFolders(res.folders);
+    // Lùi về thư mục cha.
+    setActiveFolder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ALL);
+    setErrorMsg(null);
+    setStatusMsg(`Đã xóa thư mục: ${folderLabel(path)}`);
+  }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +189,7 @@ export default function DocumentLibrary() {
       title.trim() || file.name,
       description.trim(),
       (percent) => setUploadProgress(percent),
+      uploadFolder ? { thu_muc: uploadFolder } : undefined,
     );
 
     setSaving(false);
@@ -170,6 +267,7 @@ export default function DocumentLibrary() {
     // EN: ô tên hiển thị bản dịch; không sửa thì khi lưu vẫn giữ tên gốc.
     setTitle(lang === "en" ? t(doc.name) : doc.name);
     setDescription(doc.description || "");
+    setEditFolder(folderOf(doc));
     setShowForm(false);
     setErrorMsg(null);
     setStatusMsg(null);
@@ -194,6 +292,7 @@ export default function DocumentLibrary() {
       editing.id,
       savedTitle,
       description,
+      editFolder,
     );
     setSaving(false);
 
@@ -243,10 +342,143 @@ export default function DocumentLibrary() {
         </div>
       </div>
 
+      <div className="mb-4 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
+        {/* Đường dẫn: Tất cả › Cha › Con */}
+        <nav aria-label="Đường dẫn thư mục" className="mb-3 flex flex-wrap items-center gap-1 text-xs sm:text-sm">
+          <button
+            type="button"
+            onClick={() => setActiveFolder(ALL)}
+            className={`rounded-md px-2 py-1 font-semibold cursor-pointer ${activeFolder === ALL ? "text-slate-900" : "text-[#0047AB] hover:bg-blue-50"}`}
+          >
+            Tất cả <span className="font-mono text-[11px] opacity-70">{items.length}</span>
+          </button>
+          {activeFolder === NONE && <span className="px-1 text-slate-400">›</span>}
+          {activeFolder === NONE && <span className="px-2 py-1 font-semibold text-slate-900">Chưa phân loại</span>}
+          {isRealFolder &&
+            activeFolder.split("/").map((part, i, parts) => {
+              const path = parts.slice(0, i + 1).join("/");
+              const last = i === parts.length - 1;
+              return (
+                <span key={path} className="flex items-center gap-1">
+                  <span className="px-1 text-slate-400">›</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFolder(path)}
+                    className={`rounded-md px-2 py-1 font-semibold cursor-pointer ${last ? "text-slate-900" : "text-[#0047AB] hover:bg-blue-50"}`}
+                  >
+                    {part}
+                  </button>
+                </span>
+              );
+            })}
+        </nav>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {subfolders.map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setActiveFolder(f)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            >
+              📁 {lastName(f)}{" "}
+              <span className="ml-1 font-mono text-[11px] opacity-70">
+                {items.filter((d) => inTree(folderOf(d), f)).length}
+              </span>
+            </button>
+          ))}
+          {!isRealFolder && activeFolder !== NONE && (
+            <button
+              type="button"
+              onClick={() => setActiveFolder(NONE)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+            >
+              Chưa phân loại{" "}
+              <span className="ml-1 font-mono text-[11px] opacity-70">{items.filter((d) => folderOf(d) === "").length}</span>
+            </button>
+          )}
+
+          {newFolderOpen ? (
+            <form onSubmit={handleCreateFolder} className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder={isRealFolder ? "Tên thư mục con" : "Tên thư mục"}
+                maxLength={80}
+                className="h-9 w-44 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="submit" className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] cursor-pointer">
+                Tạo
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+            </form>
+          ) : (
+            activeFolder !== NONE && (
+              <button
+                type="button"
+                onClick={() => { setNewFolderOpen(true); setRenameOpen(false); }}
+                className="rounded-lg border border-dashed border-[#0047AB]/50 bg-blue-50/50 px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer"
+              >
+                {isRealFolder ? "+ Tạo thư mục con" : "+ Tạo thư mục"}
+              </button>
+            )
+          )}
+
+          {isRealFolder && (
+            renameOpen ? (
+              <form onSubmit={handleRenameFolder} className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  maxLength={80}
+                  className="h-9 w-44 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100"
+                />
+                <button type="submit" disabled={saving} className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs sm:text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-60 cursor-pointer">
+                  Lưu tên
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRenameOpen(false)}
+                  className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Hủy
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setRenameValue(lastName(activeFolder)); setRenameOpen(true); setNewFolderOpen(false); }}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Đổi tên
+              </button>
+            )
+          )}
+          {isRealFolder && (
+            <button
+              type="button"
+              onClick={() => void handleDeleteFolder(activeFolder)}
+              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs sm:text-sm font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
+            >
+              Xóa thư mục này
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-xs">
         <button
           type="button"
           onClick={() => {
+            setUploadFolder(isRealFolder ? activeFolder : "");
             setShowForm((v) => !v);
             closeEdit();
             setReplacingDoc(null);
@@ -295,6 +527,19 @@ export default function DocumentLibrary() {
                 className={fileInputClass}
                 required
               />
+            </div>
+            <div>
+              <label className={labelClass}>Thư mục</label>
+              <select
+                value={uploadFolder}
+                onChange={(e) => setUploadFolder(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Chưa phân loại</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>{folderLabel(f)}</option>
+                ))}
+              </select>
             </div>
             <div className="sm:col-span-2">
               <label className={labelClass}>Mô tả</label>
@@ -374,6 +619,19 @@ export default function DocumentLibrary() {
               <div className="px-3 py-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-lg font-mono">
                 {formatFileSize(editing.size)}
               </div>
+            </div>
+            <div>
+              <label className={labelClass}>Thư mục</label>
+              <select
+                value={editFolder}
+                onChange={(e) => setEditFolder(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Chưa phân loại</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>{folderLabel(f)}</option>
+                ))}
+              </select>
             </div>
             <div className="sm:col-span-2">
               <label className={labelClass}>Mô tả</label>
@@ -514,6 +772,11 @@ export default function DocumentLibrary() {
                     <td className="px-4 py-3.5">
                       <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                         <span>{doc.name}</span>
+                        {folderOf(doc) && (
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-[#0047AB]">
+                            {folderLabel(folderOf(doc))}
+                          </span>
+                        )}
                         {doc.appProperties?.last_replaced_at && (
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                             Đã thay tệp

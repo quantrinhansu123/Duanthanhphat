@@ -126,6 +126,7 @@ export async function updateDriveDocumentMeta(
   fileId: string,
   title: string,
   description: string,
+  folder?: string,
 ): Promise<{ success: boolean; item?: DriveDocumentItem; error?: string }> {
   try {
     const res = await fetch(`/api/documents/${fileId}`, {
@@ -134,6 +135,7 @@ export async function updateDriveDocumentMeta(
       body: JSON.stringify({
         name: title.trim(),
         description: description.trim(),
+        ...(folder !== undefined ? { folder } : {}),
       }),
     });
     const data = await res.json();
@@ -197,3 +199,31 @@ export async function replaceDocumentContentInDrive(
     return { success: false, error: message };
   }
 }
+
+async function folderRequest(init?: RequestInit, query = ""): Promise<{ folders: string[]; error?: string; created?: string }> {
+  try {
+    const res = await fetch(`/api/document-folders${query}`, { cache: "no-store", ...init });
+    const data = (await res.json().catch(() => ({}))) as { folders?: string[]; error?: string; created?: string };
+    return res.ok ? { folders: data.folders ?? [], created: data.created } : { folders: [], error: data.error || `HTTP ${res.status}` };
+  } catch (err: unknown) {
+    return { folders: [], error: err instanceof Error ? err.message : "Lỗi kết nối mạng" };
+  }
+}
+
+export const fetchDocumentFolders = () => folderRequest();
+
+const jsonInit = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+/** parent = đường dẫn thư mục cha ("" = cấp gốc). Kết quả `created` là đường dẫn đầy đủ. */
+export const createDocumentFolder = (name: string, parent = "") =>
+  folderRequest(jsonInit("POST", { name, parent }));
+
+export const renameDocumentFolder = (path: string, name: string) =>
+  folderRequest(jsonInit("PATCH", { path, name }));
+
+export const deleteDocumentFolder = (path: string) =>
+  folderRequest({ method: "DELETE" }, `?path=${encodeURIComponent(path)}`);

@@ -76,11 +76,13 @@ export async function listStoredDocuments(): Promise<DriveDocumentItem[]> {
 
 async function readRow(id: string) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("tai_lieu")
-    .select("id,ten,mo_ta,file_path,file_url,file_size,created_at,updated_at")
-    .eq("id", id)
-    .maybeSingle();
+  const columns = "id,ten,mo_ta,file_path,file_url,file_size,created_at,updated_at";
+  let result = await supabase.from("tai_lieu").select(`${columns},thuoc_tinh`).eq("id", id).maybeSingle();
+  // DB cũ chưa có cột thuoc_tinh → đọc lại không có cột đó.
+  if (result.error && /thuoc_tinh/.test(result.error.message)) {
+    result = await supabase.from("tai_lieu").select(columns).eq("id", id).maybeSingle();
+  }
+  const { data, error } = result;
   if (error) throw new Error(missingTable(error) ? DOCUMENT_SETUP_MESSAGE : formatSupabaseError(error));
   if (!data) throw new Error("Không tìm thấy tài liệu.");
   return data as TaiLieuRow;
@@ -132,16 +134,26 @@ export async function uploadStoredDocument(input: {
   return toItem(inserted.data as TaiLieuRow);
 }
 
-export async function updateStoredDocument(id: string, patch: { name?: string; description?: string }) {
+export async function updateStoredDocument(
+  id: string,
+  patch: { name?: string; description?: string; folder?: string },
+) {
   const supabase = createAdminClient();
-  const body: { ten?: string; mo_ta?: string | null } = {};
+  const body: { ten?: string; mo_ta?: string | null; thuoc_tinh?: Record<string, string> } = {};
   if (patch.name !== undefined) body.ten = patch.name.trim();
   if (patch.description !== undefined) body.mo_ta = patch.description.trim() || null;
+  if (patch.folder !== undefined) {
+    // Gộp vào thuoc_tinh hiện có; thư mục rỗng = bỏ khỏi thư mục.
+    const { thuoc_tinh } = await readRow(id);
+    const { thu_muc: _old, ...rest } = thuoc_tinh && typeof thuoc_tinh === "object" ? thuoc_tinh : ({} as Record<string, string>);
+    void _old;
+    body.thuoc_tinh = patch.folder.trim() ? { ...rest, thu_muc: patch.folder.trim() } : rest;
+  }
   const { data, error } = await supabase
     .from("tai_lieu")
     .update(body)
     .eq("id", id)
-    .select("id,ten,mo_ta,file_path,file_url,file_size,created_at,updated_at")
+    .select("id,ten,mo_ta,file_path,file_url,file_size,thuoc_tinh,created_at,updated_at")
     .single();
   if (error) throw new Error(formatSupabaseError(error));
   return toItem(data as TaiLieuRow);

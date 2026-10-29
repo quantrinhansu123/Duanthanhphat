@@ -28,12 +28,16 @@ export async function readPrivateJson<T>(path: string): Promise<T | null> {
   if (bucketsError) throw bucketsError;
   if (!buckets?.some((bucket) => bucket.id === BUCKET)) return null;
 
-  const { data, error } = await supabase.storage.from(BUCKET).download(path);
-  if (error) {
-    if (isMissing(error)) return null;
+  // download() có thể trả bản cũ từ CDN tới ~15 giây sau khi ghi; ký URL mới + tham số chống cache để luôn đọc bản mới nhất.
+  const { data: signed, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
+  if (error || !signed) {
+    if (!error || isMissing(error) || /not found/i.test(error.message)) return null;
     throw error;
   }
-  return JSON.parse(await data.text()) as T;
+  const response = await fetch(`${signed.signedUrl}&cb=${Date.now()}`, { cache: "no-store" });
+  if (response.status === 404 || response.status === 400) return null;
+  if (!response.ok) throw new Error(`Không đọc được ${path}: HTTP ${response.status}`);
+  return JSON.parse(await response.text()) as T;
 }
 
 export async function writePrivateJson(path: string, value: unknown) {

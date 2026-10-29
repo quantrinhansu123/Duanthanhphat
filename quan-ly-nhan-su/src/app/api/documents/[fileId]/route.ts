@@ -60,10 +60,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name : undefined;
     const description = typeof body.description === "string" ? body.description : undefined;
-    if (name === undefined && description === undefined) {
+    const folder = typeof body.folder === "string" ? body.folder : undefined;
+    if (name === undefined && description === undefined && folder === undefined) {
       return NextResponse.json({ error: "Không có nội dung cần cập nhật." }, { status: 400 });
     }
-    const item = await updateStoredDocument(fileId, { name, description });
+    const item = await updateStoredDocument(fileId, { name, description, folder });
     return NextResponse.json({ item });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Không cập nhật được tài liệu.";
