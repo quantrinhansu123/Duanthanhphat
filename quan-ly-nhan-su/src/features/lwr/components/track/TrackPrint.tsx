@@ -209,7 +209,7 @@ export function TrackPrint({
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
         #lwr-track-print, #lwr-track-print * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
         #lwr-track-print { position:static; overflow:visible; background:white; }
-        #lwr-track-print [data-testid="rail-grid-installed"] line { stroke:#dc2626 !important; }
+        #lwr-track-print [data-testid="rail-grid-installed"] line { stroke:#dc2626 !important; stroke-width:calc(3px / var(--fit)) !important; }
         #lwr-track-print .toolbar { display:none; }
         #lwr-track-print article { width:auto; margin:0; padding:0; break-after:page; }
         #lwr-track-print article:last-child { break-after:auto; }
@@ -291,7 +291,7 @@ export function TrackPrint({
             Chọn đoạn ngắn hơn nếu sơ đồ không vừa một trang.
           </p>
 
-          <div style={{ zoom: fit, fontFamily: "system-ui, sans-serif" }}>
+          <div style={{ zoom: fit, fontFamily: "system-ui, sans-serif", ["--fit" as string]: fit }}>
             <RailGrid
               rows={sliced.rows}
               longRails={sliced.longRails}
