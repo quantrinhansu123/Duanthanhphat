@@ -8,18 +8,29 @@ export const newPhotoItem = (): PhotoItem => ({ id: crypto.randomUUID(), noiDung
 export const emptyPhotoReport = (): PhotoReport => ({ goiThau: "", hangMuc: "", items: Array.from({ length: 4 }, newPhotoItem) });
 
 const localKey = (projectId: string, date: string) => `bao-cao-anh-ngay:${projectId}:${date}`;
+const memKey = (projectId: string, date: string) => `${projectId}|${date}`;
+const photoMemCache = new Map<string, { report: PhotoReport | null; source: "supabase" | "local"; error?: string }>();
 
 /** Đọc báo cáo ảnh; Supabase lỗi/chưa có bảng thì dùng bản lưu trên máy này. */
 export async function loadPhotoReport(projectId: string, date: string): Promise<{ report: PhotoReport | null; source: "supabase" | "local"; error?: string }> {
+  const cached = photoMemCache.get(memKey(projectId, date));
+  if (cached) return cached;
+
   let error: string | undefined;
   if (isSupabaseConfigured()) {
     const res = await createClient().from("bao_cao_anh_ngay").select("du_lieu").eq("du_an_id", projectId).eq("ngay", date).maybeSingle();
-    if (!res.error) return { report: (res.data?.du_lieu as PhotoReport | undefined) ?? null, source: "supabase" };
+    if (!res.error) {
+      const result = { report: (res.data?.du_lieu as PhotoReport | undefined) ?? null, source: "supabase" as const };
+      photoMemCache.set(memKey(projectId, date), result);
+      return result;
+    }
     error = formatSupabaseError(res.error);
   }
   try {
     const raw = window.localStorage.getItem(localKey(projectId, date));
-    return { report: raw ? (JSON.parse(raw) as PhotoReport) : null, source: "local", error };
+    const result = { report: raw ? (JSON.parse(raw) as PhotoReport) : null, source: "local" as const, error };
+    photoMemCache.set(memKey(projectId, date), result);
+    return result;
   } catch {
     return { report: null, source: "local", error };
   }
@@ -29,19 +40,23 @@ export async function savePhotoReport(projectId: string, date: string, report: P
   let error: string | undefined;
   if (isSupabaseConfigured()) {
     const res = await createClient().from("bao_cao_anh_ngay").upsert({ du_an_id: projectId, ngay: date, du_lieu: report }, { onConflict: "du_an_id,ngay" });
-    if (!res.error) return { source: "supabase" };
+    if (!res.error) {
+      photoMemCache.set(memKey(projectId, date), { report, source: "supabase" });
+      return { source: "supabase" };
+    }
     error = formatSupabaseError(res.error);
   }
   try {
     window.localStorage.setItem(localKey(projectId, date), JSON.stringify(report));
+    photoMemCache.set(memKey(projectId, date), { report, source: "local", error });
   } catch {
     return { source: "local", error: "Bộ nhớ trình duyệt đầy, chưa lưu được ảnh" + (error ? ` (${error})` : "") };
   }
   return { source: "local", error };
 }
 
-/** Thu nhỏ ảnh về tối đa 1280px, JPEG 0.75 (~100-250 KB) để lưu trong jsonb. */
-export function compressImage(file: File, maxSide = 1280): Promise<string> {
+/** Thu nhỏ ảnh về tối đa 960px, JPEG 0.7 — đủ in A4, payload nhẹ hơn khi tải lại. */
+export function compressImage(file: File, maxSide = 960): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -52,7 +67,7 @@ export function compressImage(file: File, maxSide = 1280): Promise<string> {
       canvas.height = Math.round(img.height * k);
       canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.75));
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Không đọc được ảnh")); };
     img.src = url;

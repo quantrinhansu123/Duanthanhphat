@@ -420,7 +420,22 @@ export const DEFAULT_WORK_TYPES: DailyWorkType[] = [
   },
 ];
 
+let workTypesPromise: Promise<{ types: DailyWorkType[]; error?: string }> | null = null;
+
 export async function loadWorkTypes(): Promise<{ types: DailyWorkType[]; error?: string }> {
+  if (!workTypesPromise) {
+    workTypesPromise = fetchWorkTypes().finally(() => {
+      /* giữ cache; gọi lại chỉ khi invalidate */
+    });
+  }
+  return workTypesPromise;
+}
+
+export function invalidateWorkTypesCache() {
+  workTypesPromise = null;
+}
+
+async function fetchWorkTypes(): Promise<{ types: DailyWorkType[]; error?: string }> {
   if (!isSupabaseConfigured()) {
     return { types: DEFAULT_WORK_TYPES, error: "Chưa cấu hình Supabase — dùng danh mục mẫu" };
   }
@@ -435,6 +450,7 @@ export async function loadWorkTypes(): Promise<{ types: DailyWorkType[]; error?:
     const types = (data as WorkTypeRowDb[] | null)?.map(mapWorkType) ?? [];
     return { types: types.length > 0 ? types : DEFAULT_WORK_TYPES };
   } catch (error) {
+    workTypesPromise = null;
     return {
       types: DEFAULT_WORK_TYPES,
       error: formatSupabaseError(error),
@@ -442,8 +458,20 @@ export async function loadWorkTypes(): Promise<{ types: DailyWorkType[]; error?:
   }
 }
 
+let hangMucSuggestionsPromise: Promise<string[]> | null = null;
+
 /** Giá trị «Việc cần làm / Nội dung công việc» đã từng lưu — dùng cho combobox chọn hoặc nhập mới. */
 export async function loadHangMucSuggestions(): Promise<string[]> {
+  if (!hangMucSuggestionsPromise) {
+    hangMucSuggestionsPromise = fetchHangMucSuggestions().catch((error) => {
+      hangMucSuggestionsPromise = null;
+      throw error;
+    });
+  }
+  return hangMucSuggestionsPromise;
+}
+
+async function fetchHangMucSuggestions(): Promise<string[]> {
   const uniq = new Map<string, string>();
   function add(raw: string | null | undefined) {
     const text = (raw ?? "").trim();
@@ -1104,6 +1132,17 @@ function ensureHeaderLocal(
     writeLocal(store);
   }
   return header;
+}
+
+/** Gắn / cập nhật dự án cho phiếu báo cáo ngày (tạo phiếu nháp nếu chưa có). */
+export async function ensureDailyReportProject(
+  ngayBaoCao: string,
+  duAnId: string,
+): Promise<DailyReportHeader> {
+  const id = uuidOrNull(duAnId);
+  if (!id) throw new Error("Chọn dự án hợp lệ");
+  if (!isSupabaseConfigured()) return ensureHeaderLocal(ngayBaoCao, undefined, id);
+  return ensureHeaderSupabase(ngayBaoCao, undefined, id);
 }
 
 export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBundle> {

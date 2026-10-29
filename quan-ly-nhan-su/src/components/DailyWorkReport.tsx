@@ -19,6 +19,7 @@ import {
   emptyEquipmentInput,
   emptyIncidentInput,
   emptyWorkInput,
+  ensureDailyReportProject,
   formatPeopleNames,
   insertEquipmentItem,
   insertIncidentItem,
@@ -1278,6 +1279,11 @@ export default function DailyWorkReport() {
   const [batchBusy, setBatchBusy] = useState(false);
   /** Tab trong Báo cáo ngày: phiếu ngày | mẫu báo cáo ảnh. */
   const [innerTab, setInnerTab] = useState<"ngay" | "anh">("ngay");
+  /** Chỉ mount form ảnh sau lần mở tab đầu — giữ mount để không tải lại base64 khi đổi tab. */
+  const [photoTabReady, setPhotoTabReady] = useState(false);
+  useEffect(() => {
+    if (innerTab === "anh") setPhotoTabReady(true);
+  }, [innerTab]);
 
   // In nhiều ngày: mỗi ngày một trang, đọc lại từ dữ liệu đã lưu (không đếm theo số lần in).
   async function printRange() {
@@ -1351,32 +1357,33 @@ export default function DailyWorkReport() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const pickersLoaded = useRef(false);
+  const ensurePickersLoaded = useCallback(() => {
+    if (pickersLoaded.current) return;
+    pickersLoaded.current = true;
     loadJournalMachineOptions()
-      .then((options) => {
-        if (!cancelled) setMachines(options);
-      })
-      .catch(() => {
-        if (!cancelled) setMachines([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
+      .then(setMachines)
+      .catch(() => setMachines([]));
     loadHangMucSuggestions()
-      .then((options) => {
-        if (!cancelled) setHangMucSaved(options);
+      .then(setHangMucSaved)
+      .catch(() => setHangMucSaved([]));
+    loadPersonnelPickerRows()
+      .then((rows) => {
+        setPersonnel(
+          rows
+            .filter((row) => {
+              const status = (row.trang_thai ?? "Hoạt động").trim();
+              return !status || status === "Hoạt động";
+            })
+            .map((row) => ({
+              id: row.employee_id,
+              name: row.ho_ten?.trim() || "—",
+              chucVu: row.chuc_vu?.trim() || "",
+              maNhanSu: row.ma_nhan_su?.trim() || "",
+            })),
+        );
       })
-      .catch(() => {
-        if (!cancelled) setHangMucSaved([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setPersonnel([]));
   }, []);
 
   const hangMucOptions = useMemo(() => {
@@ -1450,19 +1457,33 @@ export default function DailyWorkReport() {
     autoFilledDates.current.add(reportDate);
     let cancelled = false;
     void (async () => {
-      const created: DailyWorkItem[] = [];
       const seen = new Set<string>();
-      for (const type of types) {
+      const jobs = types.flatMap((type) => {
         const method = workTypeWeldMethod(type);
-        if (!method || seen.has(method)) continue;
+        if (!method || seen.has(method)) return [];
         seen.add(method);
+        return [{ type, method }];
+      });
+      const fills = await Promise.all(
+        jobs.map(async ({ type, method }) => {
+          try {
+            const filled = await loadDailyWorkFillFromJournal(reportDate, method);
+            return filled.entryCount > 0 ? { type, filled } : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const created: DailyWorkItem[] = [];
+      for (const row of fills) {
+        if (!row) continue;
         try {
-          const filled = await loadDailyWorkFillFromJournal(reportDate, method);
-          if (cancelled || filled.entryCount === 0) continue;
-          const item = await insertWorkItem(reportDate, "hom_nay", {
-            ...applyJournalFill(emptyWorkInput(type), filled),
-          });
-          created.push(item);
+          created.push(
+            await insertWorkItem(reportDate, "hom_nay", {
+              ...applyJournalFill(emptyWorkInput(row.type), row.filled),
+            }),
+          );
         } catch {
           /* bỏ qua loại không điền được */
         }
@@ -1478,34 +1499,6 @@ export default function DailyWorkReport() {
       cancelled = true;
     };
   }, [loading, loadError, reportDate, workToday.length, workTypes, reloadList]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const rows = await loadPersonnelPickerRows();
-        if (cancelled) return;
-        setPersonnel(
-          rows
-            .filter((row) => {
-              const status = (row.trang_thai ?? "Hoạt động").trim();
-              return !status || status === "Hoạt động";
-            })
-            .map((row) => ({
-              id: row.employee_id,
-              name: row.ho_ten?.trim() || "—",
-              chucVu: row.chuc_vu?.trim() || "",
-              maNhanSu: row.ma_nhan_su?.trim() || "",
-            })),
-        );
-      } catch {
-        if (!cancelled) setPersonnel([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   function showToast(message: string) {
     setToast(message);
@@ -1528,6 +1521,7 @@ export default function DailyWorkReport() {
   }
 
   function openAdd(kind: ModalState["kind"]) {
+    ensurePickersLoaded();
     setAddMenuOpen(false);
     setModal({ kind });
   }
@@ -1570,6 +1564,39 @@ export default function DailyWorkReport() {
   function projectIdForDate(date: string, fallback?: string | null) {
     return fallback || reportList.find((row) => row.ngayBaoCao === date)?.duAnId || null;
   }
+
+  /** Dự án gắn với phiếu ngày đang chọn (header hoặc danh sách). */
+  const linkedProjectId = projectIdForDate(reportDate, header?.duAnId) || "";
+
+  async function onPhotoProjectChange(id: string) {
+    if (!id) {
+      setHeader((h) => (h ? { ...h, duAnId: null } : h));
+      return;
+    }
+    try {
+      const next = await ensureDailyReportProject(reportDate, id);
+      setHeader(next);
+      void reloadList();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không gắn được dự án");
+    }
+  }
+
+  // Vào tab ảnh: nếu phiếu ngày chưa có du_an_id nhưng danh sách đã biết → ghi lại (không reload list).
+  useEffect(() => {
+    if (innerTab !== "anh") return;
+    const fromList = reportList.find((row) => row.ngayBaoCao === reportDate)?.duAnId;
+    if (!fromList || header?.duAnId) return;
+    let cancelled = false;
+    ensureDailyReportProject(reportDate, fromList)
+      .then((next) => {
+        if (!cancelled) setHeader(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [innerTab, reportDate, header?.duAnId, reportList]);
 
   async function printCurrent() {
     setPrintAuto(false);
@@ -1710,19 +1737,20 @@ export default function DailyWorkReport() {
         </button>
       </div>
 
-      {innerTab === "anh" ? (
-        <PhotoReportForm
-          embedded
-          date={reportDate}
-          onDateChange={setReportDate}
-          {...(header?.duAnId
-            ? {
-                projectId: header.duAnId,
-                onProjectIdChange: (id: string) => setHeader((h) => (h ? { ...h, duAnId: id } : h)),
-              }
-            : {})}
-        />
-      ) : (
+      {photoTabReady ? (
+        <div className={innerTab === "anh" ? undefined : "hidden"} hidden={innerTab !== "anh"}>
+          <PhotoReportForm
+            embedded
+            active={innerTab === "anh"}
+            date={reportDate}
+            onDateChange={setReportDate}
+            projectId={linkedProjectId}
+            onProjectIdChange={(id) => void onPhotoProjectChange(id)}
+            projects={projects}
+          />
+        </div>
+      ) : null}
+      <div className={innerTab === "ngay" ? undefined : "hidden"} hidden={innerTab !== "ngay"}>
       <>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -2048,7 +2076,7 @@ export default function DailyWorkReport() {
         }}
       />
       </>
-      )}
+      </div>
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">

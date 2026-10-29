@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
 import PhotoReportPrintSheet from "@/components/PhotoReportPrintSheet";
 import { loadDailyReport, type DailyWorkType } from "@/lib/dailyReportDb";
@@ -18,20 +18,26 @@ const PQ = { goiThau: "Gói thầu XL-03: Cung cấp và thi công lắp đặt 
 type PhotoReportFormProps = {
   /** Nhúng trong Báo cáo ngày — dùng chung ngày/dự án với phiếu ngày. */
   embedded?: boolean;
+  /** Tab đang mở — chỉ tải dữ liệu ảnh khi active (tránh tải base64 khi còn ở tab ngày). */
+  active?: boolean;
   date?: string;
   onDateChange?: (date: string) => void;
   projectId?: string;
   onProjectIdChange?: (projectId: string) => void;
+  /** Danh sách dự án từ cha — bỏ tải trùng khi nhúng. */
+  projects?: { id: string; name: string }[];
 };
 
 export default function PhotoReportForm({
   embedded = false,
+  active = true,
   date: dateProp,
   onDateChange,
   projectId: projectIdProp,
   onProjectIdChange,
+  projects: projectsProp,
 }: PhotoReportFormProps) {
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projectsLocal, setProjectsLocal] = useState<{ id: string; name: string }[]>([]);
   const [projectIdLocal, setProjectIdLocal] = useState("");
   const [dateLocal, setDateLocal] = useState(today());
   const [r, setR] = useState<PhotoReport>(emptyPhotoReport);
@@ -40,7 +46,10 @@ export default function PhotoReportForm({
   const [printOpen, setPrintOpen] = useState(false);
   const [printDay, setPrintDay] = useState<DailyPrintDay | null>(null);
   const [workTypes, setWorkTypes] = useState<DailyWorkType[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const loadedKeyRef = useRef("");
 
+  const projects = projectsProp ?? projectsLocal;
   const projectId = projectIdProp ?? projectIdLocal;
   const date = dateProp ?? dateLocal;
 
@@ -55,47 +64,68 @@ export default function PhotoReportForm({
   }
 
   useEffect(() => {
-    loadProjects({ includeProgress: false }).then((res) => {
-      setProjects(res.projects.map((p) => ({ id: p.id, name: p.name })));
-      if (!projectIdProp) {
-        setProjectIdLocal((cur) => cur || res.projects[0]?.id || "");
-      }
-    }).catch(() => setProjects([]));
+    if (projectsProp) return;
+    let live = true;
+    loadProjects({ includeProgress: false })
+      .then((res) => {
+        if (!live) return;
+        setProjectsLocal(res.projects.map((p) => ({ id: p.id, name: p.name })));
+        if (projectIdProp === undefined && !embedded) {
+          setProjectIdLocal((cur) => cur || res.projects[0]?.id || "");
+        }
+      })
+      .catch(() => {
+        if (live) setProjectsLocal([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectsProp, projectIdProp, embedded]);
+
+  useEffect(() => {
+    if (projectIdProp !== undefined) setProjectIdLocal(projectIdProp);
   }, [projectIdProp]);
 
   useEffect(() => {
-    if (projectIdProp) setProjectIdLocal(projectIdProp);
-  }, [projectIdProp]);
-
-  useEffect(() => {
-    if (dateProp) setDateLocal(dateProp);
+    if (dateProp !== undefined) setDateLocal(dateProp);
   }, [dateProp]);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "";
   const isPq = /phú quốc/i.test(projectName);
 
   useEffect(() => {
-    if (!projectId || !date) return;
+    if (!active || !projectId || !date) return;
+    const key = `${projectId}|${date}`;
+    if (loadedKeyRef.current === key) return;
     let live = true;
     setStatus("Đang tải…");
     loadPhotoReport(projectId, date).then((res) => {
       if (!live) return;
+      loadedKeyRef.current = key;
       setR(res.report ?? { ...emptyPhotoReport(), ...(isPq ? PQ : {}) });
       setStatus(res.source === "local" ? `Đang dùng bản lưu trên máy này${res.error ? ` (${res.error})` : ""}.` : "");
     });
-    return () => { live = false; };
-  }, [projectId, date, isPq]);
+    return () => {
+      live = false;
+    };
+  }, [active, projectId, date, isPq]);
 
   const patch = (id: string, p: Partial<PhotoReport["items"][number]>) => setR((c) => ({ ...c, items: c.items.map((i) => (i.id === id ? { ...i, ...p } : i)) }));
 
   async function pick(id: string, file?: File) {
     if (!file) return;
-    try { patch(id, { anh: await compressImage(file) }); } catch (e) { setStatus(e instanceof Error ? e.message : "Không đọc được ảnh"); }
+    try {
+      patch(id, { anh: await compressImage(file) });
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Không đọc được ảnh");
+    }
   }
 
   async function save() {
+    if (!projectId) return;
     setBusy(true);
     const res = await savePhotoReport(projectId, date, r);
+    loadedKeyRef.current = `${projectId}|${date}`;
     setStatus(res.source === "supabase" ? "Đã lưu." : `Đã lưu trên máy này — chưa lên Supabase${res.error ? `: ${res.error}` : ""}.`);
     setBusy(false);
     return res;
@@ -136,6 +166,14 @@ export default function PhotoReportForm({
     <div className={embedded ? "pb-2" : "px-4 sm:px-6 pb-8"}>
       <div className="no-print divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-800 shadow-sm">
         <div className="flex flex-wrap items-end gap-3 pb-5">
+          {embedded ? (
+            <p className="basis-full rounded-lg border border-[#0047AB]/20 bg-[#0047AB]/5 px-3 py-2 text-xs text-slate-700">
+              Đang gắn với phiếu <span className="font-semibold">Báo cáo ngày</span>
+              {date ? <> · ngày <span className="font-semibold tabular-nums">{date}</span></> : null}
+              {projectName ? <> · dự án <span className="font-semibold">{projectName}</span></> : <> · <span className="font-semibold text-amber-700">chưa chọn dự án</span></>}
+              . Đổi dự án / ngày ở đây cũng đổi phiếu ngày.
+            </p>
+          ) : null}
           <label className={`${lbl} min-w-[16rem] flex-1`}>Dự án
             <select className={inp} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               {!projectId ? <option value="">Chọn dự án</option> : null}
@@ -147,10 +185,16 @@ export default function PhotoReportForm({
           </label>
           <div className="flex gap-2">
             <button type="button" disabled={busy || !projectId} onClick={() => void save()} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu"}</button>
-            <button type="button" disabled={busy || !projectId} onClick={() => void printWithDaily()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In cùng báo cáo ngày</button>
+            {!embedded ? (
+              <button type="button" disabled={busy || !projectId} onClick={() => void printWithDaily()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In cùng báo cáo ngày</button>
+            ) : null}
           </div>
           {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") || status.startsWith("Đã mở") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
-          <p className="basis-full text-xs text-slate-500">In từ tab này hoặc tab Báo cáo ngày đều kèm mẫu báo cáo ảnh cùng ngày / dự án.</p>
+          <p className="basis-full text-xs text-slate-500">
+            {embedded
+              ? "Ảnh lưu theo cùng dự án và ngày với phiếu báo cáo ngày. Nút In báo cáo phía trên in cả hai mẫu."
+              : "In từ tab này hoặc tab Báo cáo ngày đều kèm mẫu báo cáo ảnh cùng ngày / dự án."}
+          </p>
         </div>
 
         <div className="grid gap-4 py-5 sm:grid-cols-2">
@@ -168,7 +212,7 @@ export default function PhotoReportForm({
                 </div>
                 <label className={lbl}>Nội dung<textarea className={inp} rows={2} value={it.noiDung} onChange={(e) => patch(it.id, { noiDung: e.target.value })} placeholder="Ghi nội dung công việc hàng ngày" /></label>
                 <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
-                  {it.anh ? <img src={it.anh} alt={`Ảnh ${idx + 1}`} className="h-full w-full object-contain" /> : <span className="text-xs text-slate-500">Chưa có ảnh</span>}
+                  {it.anh ? <img src={it.anh} alt={`Ảnh ${idx + 1}`} className="h-full w-full object-contain" loading="lazy" decoding="async" /> : <span className="text-xs text-slate-500">Chưa có ảnh</span>}
                 </div>
                 <div className="flex gap-3 text-xs font-semibold">
                   <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50">
@@ -184,11 +228,21 @@ export default function PhotoReportForm({
         </div>
       </div>
 
-      <div className="no-print mt-6 overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="mb-3 text-xs font-semibold text-slate-500">Xem trước mẫu báo cáo ảnh</p>
-        <div className="mx-auto w-[210mm] origin-top scale-[0.72] sm:scale-90">
-          <PhotoReportPrintSheet projectName={projectName} date={date} report={r} className="photo-preview-sheet" />
-        </div>
+      <div className="no-print mt-4">
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          className="h-9 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          {showPreview ? "Ẩn xem trước mẫu in" : "Xem trước mẫu in"}
+        </button>
+        {showPreview ? (
+          <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mx-auto w-[210mm] origin-top scale-[0.72] sm:scale-90">
+              <PhotoReportPrintSheet projectName={projectName} date={date} report={r} className="photo-preview-sheet" />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <DailyWorkReportPrint
