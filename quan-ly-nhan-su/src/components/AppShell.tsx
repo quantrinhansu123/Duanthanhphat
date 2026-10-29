@@ -11,7 +11,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import ReportTabBar from "@/components/ReportTabBar";
 import DeleteGuard from "@/components/DeleteGuard";
-import { useAccess } from "@/lib/useAccess";
+import { initials, useAccess } from "@/lib/useAccess";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
@@ -203,7 +203,7 @@ export default function AppShell({ tab }: AppShellProps) {
   const clock = useClientClock(lang);
 
   const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
-  const { ready: accessReady, can } = useAccess();
+  const { ready: accessReady, can, userName } = useAccess();
   const canView = can(current, "view");
   const canEdit = can(current, "edit");
   const canDelete = can(current, "delete");
@@ -321,11 +321,11 @@ export default function AppShell({ tab }: AppShellProps) {
             ) : null}
             <div className="flex items-center gap-2.5 border-l border-slate-200 pl-2.5 sm:pl-4">
               <div className="hidden md:block text-right leading-tight">
-                <div className="text-xs sm:text-sm font-semibold text-slate-900">{lang === "en" ? "Workspace" : "Không gian làm việc"}</div>
-                <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Thanh Phat" : "Thành Phát"}</div>
+                <div className="max-w-[220px] truncate text-xs sm:text-sm font-semibold text-slate-900">{userName || "…"}</div>
+                <div className="text-[11px] font-medium text-slate-500">{lang === "en" ? "Standard welds, safe journeys" : "Mối hàn chuẩn, chuyến tàu an toàn"}</div>
               </div>
               <div className="relative h-8 w-8 sm:h-9 sm:w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-slate-200 hover:ring-blue-200 transition-all shadow-xs">
-                <span className="grid h-full place-items-center text-xs font-semibold text-white" aria-hidden>TP</span>
+                <span className="grid h-full place-items-center text-xs font-semibold text-white" aria-hidden>{initials(userName)}</span>
               </div>
             </div>
           </div>

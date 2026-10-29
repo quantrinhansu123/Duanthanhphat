@@ -5,15 +5,22 @@ import { checkPermission, type PermissionAction, type StoredSystemConfiguration 
 import { createClient } from "@/lib/supabase/client";
 import { loadSystemConfiguration } from "@/lib/systemConfigurationClient";
 
-type Loaded = { email?: string; config: Pick<StoredSystemConfiguration, "accounts" | "permissions"> };
+type Loaded = { email?: string; metaName?: string; config: Pick<StoredSystemConfiguration, "accounts" | "permissions"> };
+
+/** Chữ cái đầu của hai từ cuối trong tên (email thì lấy phần trước @); chưa có tên thì "TP". */
+export function initials(name: string) {
+  const words = name.split("@")[0].trim().split(/\s+/).filter(Boolean);
+  return (words.slice(-2).map((w) => w[0]).join("") || "TP").toLocaleUpperCase("vi");
+}
 
 const CACHE_KEY = "tp-access-v1";
 
 /** Chỉ giữ tài khoản + quyền của chính người đăng nhập để lưu cache. */
-function slim(email: string | undefined, config: StoredSystemConfiguration): Loaded {
+function slim(email: string | undefined, metaName: string | undefined, config: StoredSystemConfiguration): Loaded {
   const account = email ? config.accounts.find((a) => a.email.toLowerCase() === email.toLowerCase()) : undefined;
   return {
     email,
+    metaName,
     config: {
       accounts: account ? [account] : [],
       permissions: account && config.permissions ? { [account.role]: config.permissions[account.role] } : undefined,
@@ -46,7 +53,9 @@ export function useAccess() {
       let next: Loaded;
       try {
         const [{ data }, config] = await Promise.all([createClient().auth.getUser(), loadSystemConfiguration()]);
-        next = slim(data.user?.email ?? undefined, config);
+        const meta = data.user?.user_metadata as { full_name?: unknown; name?: unknown } | undefined;
+        const metaName = [meta?.full_name, meta?.name].find((v): v is string => typeof v === "string" && v.trim() !== "");
+        next = slim(data.user?.email ?? undefined, metaName?.trim(), config);
         try {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(next));
         } catch {
@@ -70,5 +79,8 @@ export function useAccess() {
   const can = (tabId: string, action: PermissionAction) =>
     loaded !== null && checkPermission(loaded.config, loaded.email, tabId, action);
 
-  return { ready: loaded !== null, can };
+  // Tên hiển thị: họ tên trong danh sách tài khoản → họ tên trong tài khoản đăng nhập → phần tên trước @ của email (không hiện nguyên email).
+  const userName = loaded?.config.accounts[0]?.fullName.trim() || loaded?.metaName || loaded?.email?.split("@")[0] || "";
+
+  return { ready: loaded !== null, can, userName };
 }

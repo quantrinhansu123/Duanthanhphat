@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { navigation } from "@/data/navigation";
-import { useAccess } from "@/lib/useAccess";
+import { initials, useAccess } from "@/lib/useAccess";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
@@ -54,7 +54,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const router = useRouter();
   const { lang } = useLanguage();
-  const { can } = useAccess();
+  const { can, userName } = useAccess();
   const visibleGroups = navigation
     .map((g) => ({ ...g, children: g.children.filter((c) => can(c.id, "view")) }))
     .filter((g) => g.children.length > 0);
@@ -220,18 +220,18 @@ export default function Sidebar({
         {!collapsed ? (
           <div className="flex items-center gap-3 rounded-xl bg-white/[0.08] border border-white/5 px-3 py-2.5">
             <div className="relative h-9 w-9 flex-none overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-white/20">
-              <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>TP</span>
+              <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>{initials(userName)}</span>
             </div>
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-xs sm:text-sm font-semibold text-white">Thành Phát</div>
+              <div className="truncate text-xs sm:text-sm font-semibold text-white">{userName || "…"}</div>
               <div className="truncate text-[11px] font-medium text-blue-200/80">
-                {lang === "en" ? "Workspace" : "Không gian làm việc"}
+                {lang === "en" ? "Standard welds, safe journeys" : "Mối hàn chuẩn, chuyến tàu an toàn"}
               </div>
             </div>
           </div>
         ) : (
           <div className="relative mx-auto h-9 w-9 overflow-hidden rounded-full bg-[#0047AB] ring-2 ring-white/20">
-            <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>TP</span>
+            <span className="grid h-full place-items-center text-xs font-semibold" aria-hidden>{initials(userName)}</span>
           </div>
         )}
         <button
