@@ -1487,7 +1487,8 @@ export function applyJournalListFilters<T>(
   const dateFrom = normalizeJournalDateFilter(filters.dateFrom);
   const dateTo = normalizeJournalDateFilter(filters.dateTo);
   if (filters.qualityStatusFilter && filters.qualityStatusFilter !== "Tất cả") {
-    next = next.eq("tinh_trang_chat_luong", filters.qualityStatusFilter);
+    const statuses = filters.qualityStatusFilter.split(",");
+    next = statuses.length > 1 ? next.in("tinh_trang_chat_luong", statuses) : next.eq("tinh_trang_chat_luong", statuses[0]);
   }
 
   if (projects.length > 0) next = next.in("du_an", projects);

@@ -45,12 +45,12 @@ export function parseQualityFilters(value: unknown): WeldJournalPageQuery {
   const page = v.page ?? 1, pageSize = v.pageSize ?? 50;
   if (typeof page !== "number" || !Number.isSafeInteger(page) || page < 1 || typeof pageSize !== "number" || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new QualityApiError("Phân trang không hợp lệ.");
   if (v.projects != null && (!Array.isArray(v.projects) || v.projects.length > 100)) throw new QualityApiError("Bộ lọc dự án không hợp lệ.");
-  const qualityStatusFilter = text(v.qualityStatusFilter ?? "Tất cả", 80);
+  const qualityStatusFilter = text(v.qualityStatusFilter ?? "Tất cả", 300);
   const resultFilter = text(v.resultFilter ?? "Tất cả", 40);
   const linkedWeldFilter = text(v.linkedWeldFilter ?? "Tất cả", 40);
   const weldTypeFilter = text(v.weldTypeFilter ?? "Tất cả", 40);
   const weldMethodFilter = text(v.weldMethodFilter ?? "Tất cả", 20);
-  if (!["Tất cả", ...WELD_QUALITY_STATUSES].includes(qualityStatusFilter) || !["Tất cả", ...WELD_TEST_STATUSES].includes(resultFilter) ||
+  if (!(qualityStatusFilter === "Tất cả" || qualityStatusFilter.split(",").every((s) => (WELD_QUALITY_STATUSES as string[]).includes(s))) || !["Tất cả", ...WELD_TEST_STATUSES].includes(resultFilter) ||
     !["Tất cả", "Có liên kết", "Chưa liên kết"].includes(linkedWeldFilter) ||
     !["Tất cả", "Sản xuất", "Đào tạo", "Thử nghiệm", "Chấp thuận", "Tần suất"].includes(weldTypeFilter) ||
     !["Tất cả", "FBW", "ATW"].includes(weldMethodFilter)) throw new QualityApiError("Giá trị bộ lọc không hợp lệ.");

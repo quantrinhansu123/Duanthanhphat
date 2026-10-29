@@ -99,6 +99,15 @@ const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
+type JournalStage = "all" | "han-xong" | "mai-xong" | "sieu-am-xong";
+/** Giai đoạn hiện tại của mối (loại trừ nhau) theo "Tình trạng chất lượng"; Không đạt / Không thí nghiệm và mối cũ chưa có dữ liệu chất lượng chỉ xem ở "Tất cả". */
+const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
+  { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
+  { id: "han-xong", label: "Hàn xong", hint: "Đã hàn, chờ mài", statuses: ["Chờ mài"] },
+  { id: "mai-xong", label: "Mài xong", hint: "Đã mài và đạt trực quan/số đo, chờ siêu âm", statuses: ["Chờ thí nghiệm"] },
+  { id: "sieu-am-xong", label: "Siêu âm xong", hint: "Siêu âm đạt, chờ nghiệm thu hoặc đã nghiệm thu", statuses: ["Chờ nghiệm thu", "Nghiệm thu đạt"] },
+];
+
 type JournalProjectOption = { id: string; label: string; ma_du_an: string };
 
 type JournalFormValues = {
@@ -1758,7 +1767,10 @@ export default function WeldingJournalList({
   const [appliedQuery, setAppliedQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
-  const [qualityStatusFilter, setQualityStatusFilter] = useState("Tất cả");
+  const [qualityStatusSelect, setQualityStatusSelect] = useState("Tất cả");
+  // Ba nhật ký theo giai đoạn của mối hàn; chọn giai đoạn thì thay cho ô lọc "Tình trạng chất lượng".
+  const [stage, setStage] = useState<JournalStage>("all");
+  const qualityStatusFilter = JOURNAL_STAGES.find((s) => s.id === stage)?.statuses?.join(",") ?? qualityStatusSelect;
   const [qualityReady, setQualityReady] = useState(false);
   const [qualityError, setQualityError] = useState("");
   const [qualityRow, setQualityRow] = useState<WeldReportRow | null>(null);
@@ -2792,6 +2804,26 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         ) : null}
       </div>
 
+      {!failedWeldMode && (
+        <div role="tablist" aria-label="Nhật ký theo giai đoạn" className="mb-3 flex flex-wrap gap-1.5">
+          {JOURNAL_STAGES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={stage === s.id}
+              title={s.hint}
+              onClick={() => { setStage(s.id); setPage(1); }}
+              className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors cursor-pointer ${
+                stage === s.id ? "bg-[#0047AB] text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mb-4 space-y-2.5">
        <form
          className="flex flex-col gap-2 sm:flex-row sm:items-end"
@@ -2858,7 +2890,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         </div>
         <div className="min-w-0 text-xs font-semibold text-slate-700">
           Tình trạng chất lượng
-          <SelectMenu value={qualityStatusFilter} onChange={setQualityStatusFilter} options={["Tất cả", ...WELD_QUALITY_STATUSES].map((value) => ({ value, label: value }))} className="mt-1" buttonClassName="h-10 shadow-2xs" />
+          <SelectMenu value={stage === "all" ? qualityStatusSelect : "Tất cả"} onChange={setQualityStatusSelect} disabled={stage !== "all"} options={["Tất cả", ...WELD_QUALITY_STATUSES].map((value) => ({ value, label: value }))} className="mt-1" buttonClassName="h-10 shadow-2xs" />
         </div>
         <div className="min-w-0 text-xs font-semibold text-slate-700">
           Mối liên kết
@@ -3071,7 +3103,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         </div>
 
         <div className="table-scroll hidden lg:block overflow-x-auto mt-3.5 -mx-1 px-1">
-          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1280px]" : "min-w-[1400px]"}`}>
+          <table className={`w-full border-collapse text-left ${failedWeldMode ? "min-w-[1360px]" : "min-w-[1520px]"}`}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="p-1"><label className="flex h-11 w-11 items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={pageSelected} onChange={toggleQualityPage} aria-label="Chọn tất cả mối trên trang này" /></label></th>
@@ -3089,8 +3121,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="p-2.5 font-semibold">Lý do không đạt</th>
-                <th className="p-2.5 font-semibold">Kết quả NDT</th>
-                <th className="p-2.5 font-semibold">Tình trạng chất lượng</th>
+                <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
+                <th className="min-w-[12rem] whitespace-nowrap p-2.5 font-semibold">Tình trạng chất lượng</th>
                 <th className="p-2.5 font-semibold">Thao tác</th>
               </tr>
             </thead>
@@ -3150,7 +3182,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                       {w.testStatus}
                     </span>
                   </td>
-                  <td className="p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
+                  <td className="whitespace-nowrap p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
                   <td className="p-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <button type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-800 hover:bg-blue-100" onClick={(e) => { e.stopPropagation(); const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
