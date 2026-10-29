@@ -1,5 +1,5 @@
 -- Trình tự chất lượng thống nhất mọi loại mối hàn; bỏ nhánh riêng Chấp thuận/Thử nghiệm.
--- Tên trạng thái mới: Hàn → Chờ mài → Chờ siêu âm và nghiệm thu → Sửa chữa/khắc phục
+-- Tên trạng thái mới: Chờ mài (ngay khi tạo nhật ký hàn) → Chờ siêu âm và nghiệm thu → Sửa chữa/khắc phục
 --   → Chờ ký biên bản → Đạt | Không đạt | Không thí nghiệm.
 -- Cột Kết quả NDT trên UI không còn dùng để điều khiển tình trạng (vẫn lưu ket_qua_ndt trong kiểm tra).
 
@@ -33,7 +33,7 @@ select ls.id as moi_han_id, ls.du_an_id, ls.loai_moi_han, ls.cong_nghe_han, ls.n
       select 1 from public.dot_nghiem_thu_moi dm
       where dm.moi_han_id = ls.id and dm.ket_qua = 'Đạt'
     ) then 'Đạt'
-    when kt.moi_han_id is null then 'Hàn'
+    when kt.moi_han_id is null then 'Chờ mài'
     when flags.ndt_loi or flags.ep_khong_dat then 'Không đạt'
     when flags.sua_chua then 'Sửa chữa/khắc phục'
     when tc.yeu_cau_ndt = false then 'Không thí nghiệm'
@@ -65,6 +65,10 @@ cross join lateral (
       false
     ) as sua_chua
 ) flags;
+
+drop function if exists public.luu_kiem_tra_moi_han(
+  uuid, integer, uuid, date, text, jsonb, text, text, date, text, text, text
+);
 
 create or replace function public.luu_kiem_tra_moi_han(
   p_moi_han_id uuid, p_phien_ban integer, p_tieu_chuan_id uuid, p_ngay_mai date, p_truc_quan text,

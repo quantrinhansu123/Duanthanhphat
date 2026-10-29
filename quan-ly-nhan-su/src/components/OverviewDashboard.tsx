@@ -114,7 +114,7 @@ function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso:
     });
   }
   if (kind === "grind") {
-    return rows.filter((row) => row.tinh_trang_chat_luong === "Chờ mài" || row.tinh_trang_chat_luong === "Hàn");
+    return rows.filter((row) => row.tinh_trang_chat_luong === "Chờ mài");
   }
   return [];
 }

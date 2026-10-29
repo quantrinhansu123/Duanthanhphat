@@ -27,11 +27,10 @@ export type WeldQualityInspection = {
 
 /**
  * Trình tự thống nhất mọi loại mối hàn (bỏ cột Kết quả NDT trên UI).
- * Hàn → Chờ mài → Chờ siêu âm và nghiệm thu → (Sửa chữa/khắc phục) → Chờ ký biên bản → Đạt
+ * Chờ mài (ngay khi tạo nhật ký hàn) → Chờ siêu âm và nghiệm thu → (Sửa chữa/khắc phục) → Chờ ký biên bản → Đạt
  * + Không đạt / Không thí nghiệm.
  */
 export type WeldQualityStatus =
-  | "Hàn"
   | "Chờ mài"
   | "Chờ siêu âm và nghiệm thu"
   | "Sửa chữa/khắc phục"
@@ -41,7 +40,6 @@ export type WeldQualityStatus =
   | "Không thí nghiệm";
 
 export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
-  "Hàn",
   "Chờ mài",
   "Chờ siêu âm và nghiệm thu",
   "Sửa chữa/khắc phục",
@@ -53,7 +51,8 @@ export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
 
 /** Map tên trạng thái cũ (DB/UI trước đổi) → tên mới. */
 export const WELD_QUALITY_STATUS_ALIASES: Record<string, WeldQualityStatus> = {
-  "Chưa có dữ liệu chất lượng": "Hàn",
+  "Hàn": "Chờ mài",
+  "Chưa có dữ liệu chất lượng": "Chờ mài",
   "Chờ thí nghiệm": "Chờ siêu âm và nghiệm thu",
   "Chờ nghiệm thu": "Chờ ký biên bản",
   "Nghiệm thu đạt": "Đạt",
@@ -197,7 +196,7 @@ export function evaluateWeldQuality(
 
   let status: WeldQualityStatus;
   if (accepted) status = "Đạt";
-  else if (!inspection) status = "Hàn";
+  else if (!inspection) status = "Chờ mài";
   else if (ndtFail || forceFail) status = "Không đạt";
   else if (repairPath) status = "Sửa chữa/khắc phục";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";

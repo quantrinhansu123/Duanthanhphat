@@ -63,7 +63,7 @@ try {
   await db.exec(journalMigration);
   await db.exec(flowMigration);
   assert.equal(await scalar("select count(*)::integer from kiem_tra_moi_han"), 0, "No backfill of historic passes");
-  assert.equal(await getStatus(oldWeld), "Hàn");
+  assert.equal(await getStatus(oldWeld), "Chờ mài");
   assert.equal(await scalar("select tinh_trang_thi_nghiem from lich_su_moi_han where id=$1", [oldWeld]), "Đạt");
   assert.equal(await scalar("select count(*)::integer from tieu_chuan_nghiem_thu_moi_han"), 0, "No unapproved PQ seed");
   await query("insert into lich_su_moi_han values ($1,'TRIAL',$2,'FBW','Chấp thuận','2026-10-28','Đạt',0)", [uuid(105), project]);

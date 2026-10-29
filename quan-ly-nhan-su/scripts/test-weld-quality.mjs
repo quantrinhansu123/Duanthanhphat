@@ -41,7 +41,7 @@ const rule = { dung_sai: limits, yeu_cau_ndt: true, ndt_truoc_rfi: false, can_cu
 const empty = { ngay_mai: null, truc_quan: null, gia_tri_do: {}, phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null };
 const inspection = { ngay_mai: "2026-10-28", truc_quan: "Đạt", gia_tri_do: measurements, phuong_phap_ndt: "Siêu âm", ket_qua_ndt: null, ngay_ndt: null };
 
-assert.equal(rules.evaluateWeldQuality(null, rule, "Sản xuất").status, "Hàn");
+assert.equal(rules.evaluateWeldQuality(null, rule, "Sản xuất").status, "Chờ mài");
 assert.equal(rules.evaluateWeldQuality(empty, rule, "Sản xuất").status, "Chờ mài");
 // Mọi loại mối hàn cùng trình tự — không còn nhảy thẳng Chờ thí nghiệm cho Thử nghiệm/Chấp thuận.
 assert.equal(rules.evaluateWeldQuality(empty, rule, "Thử nghiệm").status, "Chờ mài");

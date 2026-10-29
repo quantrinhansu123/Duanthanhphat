@@ -12,8 +12,7 @@ export default function WeldQualityBadge({ status }: { status?: string | null })
             normalized === "Chờ thí nghiệm" ||
             normalized === "Chờ ký biên bản" ||
             normalized === "Chờ nghiệm thu" ||
-            normalized === "Sửa chữa/khắc phục" ||
-            normalized === "Hàn"
+            normalized === "Sửa chữa/khắc phục"
           ? "border-amber-200 bg-amber-50 text-amber-900"
           : "border-slate-200 bg-slate-50 text-slate-700";
   return (

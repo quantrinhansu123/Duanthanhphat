@@ -103,7 +103,7 @@ type JournalStage = "all" | "han-xong" | "mai-xong" | "sua-chua" | "ky-bb" | "da
 /** Giai đoạn theo trình tự chất lượng mới (một cột tình trạng; bỏ cột Kết quả NDT trên UI). */
 const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
-  { id: "han-xong", label: "Hàn / Chờ mài", hint: "Đã hàn hoặc đang chờ mài", statuses: ["Hàn", "Chờ mài"] },
+  { id: "han-xong", label: "Chờ mài", hint: "Đã hàn, đang chờ mài", statuses: ["Chờ mài"] },
   { id: "mai-xong", label: "Chờ siêu âm & NT", hint: "Đã mài đạt, chờ siêu âm và nghiệm thu", statuses: ["Chờ siêu âm và nghiệm thu"] },
   { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan/độ lệch không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
   { id: "ky-bb", label: "Chờ ký BB", hint: "Đủ điều kiện — chờ ký biên bản", statuses: ["Chờ ký biên bản"] },
