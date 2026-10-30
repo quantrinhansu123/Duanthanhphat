@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { parseCoordinateCode } from "@/lib/weldCode";
 
 export type DocKind = "rfi" | "hoan-thanh" | "phu-luc" | "giai-doan";
 
@@ -150,6 +151,11 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
   const kinhGui = t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
+  const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
+  const upper = routes.some((r) => r === "TT" || r === "TP");
+  const lower = routes.some((r) => r === "HT" || r === "HP");
+  const missingRoutes = welds.filter((_, i) => !routes[i]);
+  const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
   return (
     <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[13px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
@@ -166,8 +172,9 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
       <p className="mt-3 font-bold">1. Đối tượng nghiệm thu:</p>
       <p className="pl-4">- Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
       <p className="mt-2 font-bold">2. Vị trí nghiệm thu:</p>
-      <p className="pl-4">- Tuyến: ❐ Tuyến thượng &nbsp; ❐ Tuyến hạ</p>
-      <p className="pl-4">- Lý trình: Từ Km {km[0]?.v ?? DOTS} đến Km {km.length ? km[km.length - 1].v : DOTS}</p>
+      <p className="pl-4">- Tuyến: {upper ? "☑" : "☐"} Tuyến thượng &nbsp; {lower ? "☑" : "☐"} Tuyến hạ</p>
+      {missingRoutes.length > 0 && <p className="pl-4">- Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
+      <p className="pl-4">- Lý trình: Từ {chainage(km[0]?.v)} đến {chainage(km[km.length - 1]?.v)}</p>
       <p className="pl-4">- Tên mối hàn: {welds.map((w) => w.ma_lich_su).join(", ") || DOTS}</p>
       <p className="mt-2 font-bold">3. Thời gian nghiệm thu:</p>
       <p className="pl-4">Bắt đầu: ….h… ngày …… tháng …… năm ……</p>

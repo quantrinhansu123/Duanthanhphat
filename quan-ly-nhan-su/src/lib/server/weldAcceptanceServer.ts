@@ -134,8 +134,8 @@ export async function loadRfiDetail(rfiId: string) {
     links.map((l) => l.moi_han_id), (p) => db().from("chat_luong_moi_han").select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_nghiem_thu").in("moi_han_id", p));
   const q = new Map(quality.map((x) => [x.moi_han_id, x]));
   // Vị trí hiện trường của từng mối (lý trình + toạ độ) để phiếu có link dẫn thẳng tới mối.
-  const points = await chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null; kinh_do: number | null; vi_do: number | null }>(
-    links.map((l) => l.moi_han_id), (p) => db().from("toa_do").select("lich_su_moi_han_id,ly_trinh,kinh_do,vi_do").in("lich_su_moi_han_id", p));
+  const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null; kinh_do: number | null; vi_do: number | null }>(
+    links.map((l) => l.moi_han_id), (p) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh,kinh_do,vi_do").in("lich_su_moi_han_id", p));
   const where = new Map<string, (typeof points)[number]>();
   for (const pt of points) { // ưu tiên điểm có toạ độ hợp lệ
     const cur = where.get(pt.lich_su_moi_han_id);
@@ -144,6 +144,7 @@ export async function loadRfiDetail(rfiId: string) {
   const welds = links.map((l) => ({ moi_han_id: l.moi_han_id, con_hieu_luc: l.con_hieu_luc,
     ma_lich_su: l.du_lieu_chot.moi_han?.ma_lich_su ?? "", ngay_thuc_hien: l.du_lieu_chot.moi_han?.ngay_thuc_hien ?? null,
     ly_trinh: where.get(l.moi_han_id)?.ly_trinh ?? null,
+    ma_diem: where.get(l.moi_han_id)?.ma_diem ?? null,
     vi_do: where.get(l.moi_han_id)?.vi_do == null ? null : Number(where.get(l.moi_han_id)?.vi_do),
     kinh_do: where.get(l.moi_han_id)?.kinh_do == null ? null : Number(where.get(l.moi_han_id)?.kinh_do), phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
     tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false }));
