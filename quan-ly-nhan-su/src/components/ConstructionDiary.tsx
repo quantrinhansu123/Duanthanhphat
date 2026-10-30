@@ -15,9 +15,23 @@ const css = `@media screen { #diary-print { display: none; } }
 @media print {
   body * { visibility: hidden !important; }
   #diary-print, #diary-print * { visibility: visible !important; }
-  #diary-print { position: absolute; left: 0; top: 0; width: 100%; }
-  #diary-print .pb { break-before: page; }
-  @page { size: A4; margin: 15mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+  body *:has(#diary-print) { position: static !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  aside, header, .no-print { display: none !important; }
+  #diary-print {
+    position: absolute; left: 0; top: 0; width: 100%; padding-top: 18mm;
+    font-family: 'Times New Roman', serif; font-size: 10pt; line-height: 18pt; color: black;
+  }
+  #diary-print h2 { margin: 0; font-size: 13pt; line-height: 20pt; }
+  #diary-print > h2, #diary-print > p:nth-of-type(-n+2) { text-align: center; }
+  #diary-print p { margin: 0; }
+  #diary-print .whitespace-pre-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #diary-print .diary-heading { margin-top: 7pt; font-weight: bold; }
+  #diary-print .diary-section { break-inside: avoid; }
+  #diary-print .diary-dots { height: 18pt; border-bottom: 1px dotted black; }
+  #diary-print .diary-signatures { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; font-weight: bold; margin-top: 20pt; break-inside: avoid; }
+  #diary-print .diary-signatures .font-normal { font-weight: normal; }
+  @page { size: A4 portrait; margin: 12mm; }
 }`;
 
 const SECTIONS = [
@@ -150,24 +164,24 @@ export default function ConstructionDiaryForm() {
         </fieldset>
       </div>
 
-      <article id="diary-print" className="text-[13px] leading-6 text-black" style={{ fontFamily: "'Times New Roman', serif" }}>
+      <article id="diary-print">
         <h2 className="text-center text-base font-bold">B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
         <p className="text-center">Dự án: {projectName}</p>
         <p className="text-center">Ngày {day} tháng {m} năm {y}</p>
-        <p className="mt-2 font-bold">1. Thời tiết</p>
+        <p className="diary-heading">1. Thời tiết</p>
         <p>{(["Bình thường", "Mưa", "Nắng"] as const).map((w) => `${d.thoiTiet === w ? "☑" : "☐"} ${w}`).join("     ")}     Nhiệt độ: {d.nhietDo || "……"}°C</p>
         <p>Sáng: {d.sang || "……………"}     Chiều: {d.chieu || "……………"}     Tối: {d.toi || "……………"}</p>
-        <p className="mt-2 font-bold">2. Tình hình nhân lực, thiết bị thi công:</p>
+        <p className="diary-heading">2. Tình hình nhân lực, thiết bị thi công:</p>
         <p>2.1 Nhân lực: Ban chỉ huy: {d.banChiHuy || "……"} (người); Cán bộ kỹ thuật: {d.canBoKyThuat || "……"} (người); Công nhân: {d.congNhan || "……"} (người)</p>
         <p>2.2 Thiết bị:</p>
-        <Block text={d.thietBi} min={4} />
+        <Block text={d.thietBi} min={1} />
         {SECTIONS.map(([k, label, rows]) => (
-          <div key={k} className={k === "nghiemThuHangNgay" ? "pb" : ""}>
-            <p className="mt-2 font-bold">{label}{k === "noiDungCongViec" ? " (3.1)" : ""}:</p>
-            <Block text={d[k]} min={rows} />
+          <div key={k} className="diary-section">
+            <p className="diary-heading">{label}{k === "noiDungCongViec" ? " (3.1)" : ""}:</p>
+            <Block text={d[k]} min={k === "noiDungCongViec" || k === "nghiemThuHangNgay" || k === "suCo" ? 1 : rows} />
           </div>
         ))}
-        <div className="mt-6 grid grid-cols-3 text-center font-bold">
+        <div className="diary-signatures grid grid-cols-3 text-center font-bold">
           <div>TƯ VẤN GIÁM SÁT<div className="font-normal">(Ký, ghi rõ họ tên)</div></div>
           <div>NHÀ THẦU CHÍNH<div className="font-normal">(Ký, ghi rõ họ tên)</div></div>
           <div>NHÀ THẦU PHỤ<div className="font-normal">(Ký, ghi rõ họ tên)</div></div>
@@ -180,7 +194,7 @@ export default function ConstructionDiaryForm() {
 /** Văn bản đã nhập, hoặc các dòng chấm để điền tay khi để trống. */
 function Block({ text, min }: { text: string; min: number }) {
   if (text.trim()) return <p className="whitespace-pre-wrap">{text}</p>;
-  return <>{Array.from({ length: min }, (_, i) => <p key={i} className="overflow-hidden">{"…".repeat(120)}</p>)}</>;
+  return <>{Array.from({ length: min }, (_, i) => <p key={i} className="diary-dots" aria-hidden="true">&nbsp;</p>)}</>;
 }
 
 function Card({ title, hint, wide, children }: { title: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
