@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld } from "@/lib/server/weldQualityJournal";
-import { loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new QualityApiError("JSON không hợp lệ."); }
     const body = object(value);
+    if (body.action === "diary-defaults") return NextResponse.json(await loadDiaryDefaults(body));
     if (body.action === "list") return NextResponse.json(await loadQualityJournalPage(parseQualityFilters(body.filters)));
     if (body.action === "export") return NextResponse.json({ rows: await loadQualityJournalRows(parseQualityFilters(body.filters)) });
     if (body.action === "selection") {

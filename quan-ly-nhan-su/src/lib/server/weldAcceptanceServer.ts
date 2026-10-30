@@ -4,6 +4,7 @@ import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
 import { filterRfiCandidates, rfiBlockReason, type RfiCandidate } from "@/lib/weldAcceptance";
+import { diaryWorkText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 
 const db = () => createAdminClient();
 
@@ -32,6 +33,34 @@ async function chunked<T>(ids: string[], load: (part: string[]) => PromiseLike<{
     out.push(...(data ?? []));
   }
   return out;
+}
+
+export async function loadDiaryDefaults(body: Record<string, unknown>) {
+  const projectId = qualityUuid(body.du_an_id);
+  const date = qualityDate(body.date);
+  if (!date) throw new QualityApiError("Nhập ngày nhật ký.");
+  const [welds, ground, rfis] = await Promise.all([
+    fetchAll<DiaryWork>((a, b) => db().from("lich_su_moi_han")
+      .select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien").eq("du_an_id", projectId).eq("ngay_thuc_hien", date).order("id").range(a, b)),
+    fetchAll<{ moi_han_id: string }>((a, b) => db().from("kiem_tra_moi_han")
+      .select("moi_han_id,lich_su_moi_han!inner(du_an_id)").eq("lich_su_moi_han.du_an_id", projectId).eq("ngay_mai", date).order("moi_han_id").range(a, b)),
+    fetchAll<{ id: string; so_phieu: string }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
+      .select("id,so_phieu").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("id").range(a, b)),
+  ]);
+  const links = (await Promise.all(rfis.map(async (rfi) => ({ ...rfi, rows: await fetchAll<{ moi_han_id: string }>((a, b) =>
+    db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id").eq("phieu_id", rfi.id).order("moi_han_id").range(a, b)) }))));
+  const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...links.flatMap((r) => r.rows.map((w) => w.moi_han_id))])];
+  const [all, points] = await Promise.all([
+    chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien").eq("du_an_id", projectId).in("id", p)),
+    chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
+      .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
+  ]);
+  const located = new Map(all.map((w) => [w.id, { ...w, ...points.find((p) => p.lich_su_moi_han_id === w.id) }]));
+  const select = (keys: string[]) => keys.flatMap((id) => located.has(id) ? [located.get(id)!] : []);
+  return {
+    noiDungCongViec: [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind")].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
+    nghiemThuHangNgay: links.map((r) => `${diaryWorkText(select(r.rows.map((w) => w.moi_han_id)), "accept")} (Theo phiếu ${r.so_phieu}, ngày mời ${date.split("-").reverse().join("/")}).`).join("\n") || "Không có công tác nghiệm thu",
+  };
 }
 
 type QualityRow = { moi_han_id: string; phien_ban: number | null; tinh_trang: string; du_dieu_kien_rfi: boolean };
