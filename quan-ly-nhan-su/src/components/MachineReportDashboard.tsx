@@ -14,6 +14,10 @@ import { useReportFilters } from "@/contexts/ReportFilterContext";
 import type { Machine } from "@/data/machines";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
+import ProjectEquipmentReport from "@/components/ProjectEquipmentReport";
+import { loadProjects } from "@/lib/projectsDb";
+import { equipmentQuantity } from "@/lib/projectEquipment";
+import type { Project } from "@/data/projects";
 import {
   loadMachineReportSummary,
   type MachineReportSummary,
@@ -47,12 +51,6 @@ function normalizeMachineStatus(status: string): MachineStatus {
   if (status === "Đang làm việc" || status === "Bảo trì" || status === "Hỏng") return status;
   if (status === "Hoạt động") return "Đang làm việc";
   return "Sẵn sàng";
-}
-
-/** Máy chưa gán dự án (trống / dấu gạch). */
-function isUnassignedProject(project?: string | null) {
-  const value = project?.trim() ?? "";
-  return !value || value === "—" || value === "-";
 }
 
 function machineDetailHref(code: string) {
@@ -99,6 +97,7 @@ export default function MachineReportDashboard() {
   const [activeSlide, setActiveSlide] = useState(0);
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
+  const [equipmentProjects, setEquipmentProjects] = useState<Project[]>([]);
   const [machineSummaryError, setMachineSummaryError] = useState("");
   const [machineStatusFilter, setMachineStatusFilter] = useState<MachineStatusFilter>("Tất cả máy");
 
@@ -107,10 +106,12 @@ export default function MachineReportDashboard() {
     Promise.all([
       loadMachineReportSummary(),
       loadMachineCatalog(),
+      loadProjects({ includeProgress: false }),
     ])
-      .then(([summary, catalog]) => {
+      .then(([summary, catalog, projects]) => {
         if (!active) return;
         setMachineSummary(summary);
+        setEquipmentProjects(projects.projects);
         // Trang báo cáo không được hiển thị số liệu mẫu khi DB không trả dữ liệu.
         setMachineCatalog(catalog.source === "supabase" ? catalog.machines : []);
         if (catalog.source !== "supabase" || catalog.error) {
@@ -154,7 +155,7 @@ export default function MachineReportDashboard() {
 
   /** Chỉ sổ theo danh sách máy trong DB (thiet_bi). */
   const machinePerformance = useMemo(() => {
-    return machineCatalog.map((machine) => {
+    return machineCatalog.filter((machine) => !appliedFilters.projects.length || equipmentProjects.some((p) => (appliedFilters.projects.includes(p.name) || appliedFilters.projects.includes(p.id)) && p.machineTypes.includes(machine.code))).map((machine) => {
       const code = machine.code;
       const stat = machineStatsByCode.get(code);
       const report = machineSummaryByCode.get(code);
@@ -163,11 +164,14 @@ export default function MachineReportDashboard() {
       const errorRate = errorRateValue.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
       const status = normalizeMachineStatus(report?.status ?? machine.status ?? "Sẵn sàng");
       const operatingHours = report?.operatingHours ?? machine.operatingHours ?? 0;
+      const assigned = equipmentProjects.filter((p) => p.status !== "Hoàn thành" && p.machineTypes.includes(code));
+      const remaining = Math.max(0, equipmentQuantity(machine) - assigned.reduce((sum, p) => sum + (p.machineQuantities?.[code] ?? 1), 0));
       return {
         code,
         name: report?.machineName ?? machine.name ?? code,
         location: report?.location || machine.location || "Chưa cập nhật",
-        currentProject: machine.currentProject ?? "",
+        currentProject: assigned.map((p) => p.name).join("; "),
+        remaining,
         image: machine.image,
         plant: machine.plant || machine.location || "Chưa cập nhật",
         nextMaintenance: machine.nextMaintenance,
@@ -180,7 +184,7 @@ export default function MachineReportDashboard() {
         status,
       };
     });
-  }, [machineCatalog, machineStatsByCode, machineSummaryByCode]);
+  }, [machineCatalog, machineStatsByCode, machineSummaryByCode, equipmentProjects, appliedFilters.projects]);
 
   const machinesRecommended = useMemo(() => {
     const candidates = machinePerformance
@@ -236,8 +240,8 @@ export default function MachineReportDashboard() {
   const maxOperatingHours = Math.max(...filteredMachinePerformance.map((machine) => machine.operatingHours), 1);
   const operatingMachines = machinePerformance.filter((machine) => machine.status === "Đang làm việc").length;
   const availableMachines = machinePerformance.filter(
-    (machine) => isUnassignedProject(machine.currentProject) && machine.status !== "Bảo trì",
-  ).length;
+    (machine) => machine.status === "Sẵn sàng",
+  ).reduce((sum, machine) => sum + machine.remaining, 0);
   const machinesInMaintenance = machinePerformance.filter((machine) => machine.status === "Bảo trì").length;
   const totalOperatingHours = machineSummary.reduce((total, machine) => total + machine.operatingHours, 0);
   const dataError = error || machineSummaryError;
@@ -246,6 +250,7 @@ export default function MachineReportDashboard() {
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 lg:px-6 py-3 sm:py-4 flex flex-col gap-4 text-slate-700 text-sm">
+      <ProjectEquipmentReport projectNames={appliedFilters.projects} />
       <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${dataError ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-[#0047AB]"}`}>
         {dataError
           ? `Không tải đủ dữ liệu Supabase: ${dataError}`
@@ -279,14 +284,14 @@ export default function MachineReportDashboard() {
         <div className="flex items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold uppercase tracking-wider text-sky-700">
-              SỐ MÁY KHẢ DỤNG
+              SỐ BỘ THIẾT BỊ KHẢ DỤNG
             </div>
             <div className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
               {availableMachines}
             </div>
             <div className="mt-2.5 text-xs text-emerald-700 font-medium">
               <span className="text-slate-400 font-normal">
-                Chưa gán dự án và không bảo trì
+              Số bộ còn lại sau khi trừ phần đã gán dự án
               </span>
             </div>
           </div>
@@ -576,7 +581,7 @@ export default function MachineReportDashboard() {
                 </div>
                 <div>
                   <div className="text-xs text-slate-500 font-medium">Máy sẵn sàng phân công</div>
-                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-slate-900">{availableMachines} máy</div>
+                  <div className="mt-0.5 text-base sm:text-lg font-bold font-mono tabular-nums text-slate-900">{availableMachines} bộ</div>
                 </div>
               </div>
 

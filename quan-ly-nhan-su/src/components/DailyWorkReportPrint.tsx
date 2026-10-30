@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Printer, X } from "@/components/icons";
 import {
@@ -212,12 +212,11 @@ function Lines({ values }: { values: string[] }) {
 }
 
 function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: boolean }) {
-  let serial = 0;
   return (
     <>
       {rows.map((row, index) => {
         const showNumber = numbered && Boolean(row.hangMuc.trim() || row.item);
-        if (showNumber) serial += 1;
+        const serial = showNumber ? rows.slice(0, index + 1).filter((r) => r.hangMuc.trim() || r.item).length : "";
         const item = row.item;
         return (
           <tr key={`work-${index}`}>
@@ -466,18 +465,21 @@ export default function DailyWorkReportPrint({
                 <tr>
                   <th className="stt">STT</th>
                   <th>Thiết bị</th>
-                  <th>Số lượng</th>
+                  <th>Số lượng (bộ)</th>
                   <th>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>
                 {equipmentRows.map((row, index) => (
-                  <tr key={row?.id ?? `eq-${index}`}>
+                  <Fragment key={row?.id ?? `eq-${index}`}>
+                  {row?.id.startsWith("project:") && row.boPhan !== equipmentRows[index - 1]?.boPhan && <tr><td colSpan={4} className="left"><b>{row.boPhan}</b></td></tr>}
+                  <tr>
                     <td className="stt">{row ? index + 1 : ""}</td>
                     <td className="left">{row?.tenThietBi ?? ""}</td>
                     <td>{row?.soLuong ?? ""}</td>
                     <td className="left">{row?.ghiChu ?? ""}</td>
                   </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

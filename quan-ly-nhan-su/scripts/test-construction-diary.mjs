@@ -56,6 +56,8 @@ const { loadDiaryDefaults } = load("server/weldAcceptanceServer", {
   "@/lib/server/weldQualityJournal": { qualityUuid: (v) => v, qualityDate: (v) => v },
   "@/lib/server/weldQualityDb": {}, "@/lib/weldAcceptance": {},
   "@/lib/constructionDiaryAuto": { diaryWorkText },
+  "@/lib/server/projectEquipment": { loadProjectEquipment: async () => [] },
+  "@/lib/projectEquipment": { projectEquipmentText: () => "Chưa gán thiết bị" },
 });
 const defaults = await loadDiaryDefaults({ du_an_id: "p", date: "2026-10-29" });
 assert.match(defaults.noiDungCongViec, /Hàn chảy giáp mép.*Khối lượng: 2 mối/);

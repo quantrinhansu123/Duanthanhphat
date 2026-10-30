@@ -5,6 +5,7 @@ import {
 } from "@/data/machines";
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
+import { equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 
 const LOCAL_STORAGE_MACHINES_KEY = "tp_machines_extended_v3";
 
@@ -78,7 +79,9 @@ function deleteLocalOverride(idOrCode: string) {
   if (typeof window === "undefined") return;
   try {
     const current = readLocalOverrides();
-    delete current[idOrCode];
+    for (const [key, machine] of Object.entries(current)) {
+      if (key === idOrCode || machine.id === idOrCode || machine.code === idOrCode) delete current[key];
+    }
     window.localStorage.setItem(LOCAL_STORAGE_MACHINES_KEY, JSON.stringify(current));
   } catch (err) {
     console.warn("Lỗi xóa cấu hình máy trong LocalStorage:", err);
@@ -300,46 +303,15 @@ export async function loadMachineCatalog(): Promise<{
 
 /** Chỉ mã + tên máy cho form dự án — tránh select(*) nặng. */
 export async function loadMachinePickerOptions(): Promise<
-  Array<{ code: string; name: string; weldingTechnology?: string }>
+  Array<{ code: string; name: string; model?: string; weldingTechnology?: string; group: EquipmentGroup; quantity: number }>
 > {
-  if (!isSupabaseConfigured()) {
-    return seedMachines.map((machine) => ({
-      code: machine.code,
-      name: machine.name,
-      weldingTechnology: machine.weldingTechnology,
-    }));
-  }
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("thiet_bi")
-    .select("ma_may,ten_may,cong_nghe_han")
-    .order("ma_may", { ascending: true });
-  if (error) {
-    const fallback = await supabase
-      .from("thiet_bi")
-      .select("ma_may,ten_may")
-      .order("ma_may", { ascending: true });
-    if (fallback.error) {
-      return seedMachines.map((machine) => ({
-        code: machine.code,
-        name: machine.name,
-        weldingTechnology: machine.weldingTechnology,
-      }));
-    }
-    return (fallback.data ?? [])
-      .map((row) => ({
-        code: String(row.ma_may ?? "").trim(),
-        name: String(row.ten_may ?? "").trim() || String(row.ma_may ?? "").trim(),
-      }))
-      .filter((row) => row.code);
-  }
-  return (data ?? [])
-    .map((row) => ({
-      code: String(row.ma_may ?? "").trim(),
-      name: String(row.ten_may ?? "").trim() || String(row.ma_may ?? "").trim(),
-      weldingTechnology: String(row.cong_nghe_han ?? "").trim() || undefined,
-    }))
-    .filter((row) => row.code);
+  if (!isSupabaseConfigured()) return seedMachines.map((m) => ({ code: m.code, name: m.name, weldingTechnology: m.weldingTechnology, group: equipmentGroup(m), quantity: equipmentQuantity(m) }));
+  const { data, error } = await createClient().from("thiet_bi").select("ma_may,ten_may,loai_may,cong_nghe_han,model,thong_so").order("ma_may");
+  if (error) throw new Error(formatSupabaseError(error));
+  return (data ?? []).map((r) => {
+    const machine = { name: r.ten_may, type: r.loai_may ?? "", weldingTechnology: r.cong_nghe_han ?? "", model: r.model ?? "", specs: r.thong_so as Machine["specs"] };
+    return { code: r.ma_may, name: r.ten_may, model: machine.model, weldingTechnology: machine.weldingTechnology, group: equipmentGroup(machine), quantity: equipmentQuantity(machine) };
+  });
 }
 
 export async function syncRealMachinesToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
@@ -466,6 +438,7 @@ async function updateMachineRow(
 }
 
 export async function createMachine(machine: Machine): Promise<Machine> {
+  if (!Number.isSafeInteger(Number(machine.specs?.quantity ?? 1)) || Number(machine.specs?.quantity ?? 1) < 1) throw new Error("Số lượng bộ phải là số nguyên dương.");
   if (!isSupabaseConfigured()) {
     writeLocalOverride(machine);
     return machine;
@@ -527,6 +500,7 @@ export async function createMachine(machine: Machine): Promise<Machine> {
 }
 
 export async function updateMachine(machine: Machine): Promise<void> {
+  if (!Number.isSafeInteger(Number(machine.specs?.quantity ?? 1)) || Number(machine.specs?.quantity ?? 1) < 1) throw new Error("Số lượng bộ phải là số nguyên dương.");
   if (!isSupabaseConfigured()) {
     writeLocalOverride(machine);
     return;

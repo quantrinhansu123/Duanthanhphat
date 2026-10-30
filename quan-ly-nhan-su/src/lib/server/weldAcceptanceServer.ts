@@ -5,6 +5,8 @@ import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJourna
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
 import { filterRfiCandidates, rfiBlockReason, type RfiCandidate } from "@/lib/weldAcceptance";
 import { diaryWorkText, type DiaryWork } from "@/lib/constructionDiaryAuto";
+import { loadProjectEquipment } from "@/lib/server/projectEquipment";
+import { projectEquipmentText } from "@/lib/projectEquipment";
 
 const db = () => createAdminClient();
 
@@ -57,7 +59,9 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   const located = new Map(all.map((w) => [w.id, { ...w, ...points.find((p) => p.lich_su_moi_han_id === w.id) }]));
   const select = (keys: string[]) => keys.flatMap((id) => located.has(id) ? [located.get(id)!] : []);
+  const equipment = await loadProjectEquipment(projectId);
   return {
+    thietBi: projectEquipmentText(equipment),
     noiDungCongViec: [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind")].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
     nghiemThuHangNgay: links.map((r) => `${diaryWorkText(select(r.rows.map((w) => w.moi_han_id)), "accept")} (Theo phiếu ${r.so_phieu}, ngày mời ${date.split("-").reverse().join("/")}).`).join("\n") || "Không có công tác nghiệm thu",
   };

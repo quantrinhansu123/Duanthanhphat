@@ -81,9 +81,9 @@ export const navigation: NavItem[] = [
       },
       {
         id: "danh-sach-may",
-        label: "Danh sách máy hàn",
+        label: "Danh sách máy và thiết bị",
         labelEn: "Welding Machines",
-        description: "Mã máy, model, vị trí hiện tại, trạng thái và số mối hàn",
+        description: "Máy hàn, máy và thiết bị khác · model, số lượng bộ và dự án sử dụng",
         descriptionEn: "Machine code, model, current location, operating status, and weld count",
       },
       {

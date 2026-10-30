@@ -5,7 +5,7 @@ import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, loadDiary, saveDiary, type ConstructionDiary } from "@/lib/constructionDiaryDb";
 import { qualityRequest } from "@/lib/weldQualityClient";
 
-type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay">;
+type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi">;
 const loadDefaults = (projectId: string, date: string) => qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date });
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/25";
@@ -90,7 +90,7 @@ export default function ConstructionDiaryForm() {
     try {
       const defaults = await loadDefaults(projectId, date);
       setD((cur) => ({ ...cur, ...defaults }));
-      setStatus("Đã tự điền mục 3 và 3.2. Có thể sửa nội dung rồi bấm Lưu.");
+      setStatus("Đã tự điền thiết bị dự án và mục 3 / 3.2. Có thể sửa nội dung rồi bấm Lưu.");
     } catch { setStatus("Không tải được dữ liệu tự điền. Nội dung hiện tại được giữ nguyên."); }
     finally { setBusy(false); }
   }
@@ -118,7 +118,7 @@ export default function ConstructionDiaryForm() {
             <input disabled={busy} className={inp} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="flex gap-2">
-            <button type="button" disabled={busy || loading || !projectId} onClick={autofill} title="Thay nội dung mục 3 và 3.2 bằng dữ liệu hàn, mài và RFI" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại mục 3 / 3.2</button>
+            <button type="button" disabled={busy || loading || !projectId} onClick={autofill} title="Điền thiết bị được gán dự án và công tác hàn, mài, RFI" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền thiết bị / công việc</button>
             <button type="button" disabled={busy || loading || !projectId} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu"}</button>
             <button type="button" disabled={busy || loading || !projectId} onClick={() => window.print()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
           </div>

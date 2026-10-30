@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import ComboBoxInput from "@/components/ComboBoxInput";
 import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
 import { loadPhotoReport, type PhotoReport } from "@/lib/photoReportDb";
@@ -50,6 +51,8 @@ import SelectMenu from "@/components/SelectMenu";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions, type JournalMachineOption } from "@/lib/machineRunSchedulesDb";
 import { loadProjects } from "@/lib/projectsDb";
+import { loadProjectEquipment } from "@/lib/projectEquipmentDb";
+import type { ProjectEquipment } from "@/lib/projectEquipment";
 import { addHoursToWeldTime, DEFAULT_WELD_WORK_HOURS } from "@/lib/weldReportData";
 import { deaccent } from "@/i18n/deaccent";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -600,17 +603,25 @@ function WorkFormModal({
   const [error, setError] = useState("");
   const [filling, setFilling] = useState(false);
   const [fillNote, setFillNote] = useState("");
+  const [assignedMachines, setAssignedMachines] = useState<ProjectEquipment[]>([]);
+  useEffect(() => {
+    if (!open || !projectId) { setAssignedMachines([]); return; }
+    let live = true;
+    setAssignedMachines([]);
+    loadProjectEquipment(projectId).then((rows) => { if (live) setAssignedMachines(rows.filter((m) => !m.missing)); }).catch((e) => { if (live) setError(e instanceof Error ? e.message : "Không tải được thiết bị dự án."); });
+    return () => { live = false; };
+  }, [open, projectId]);
 
   const machineOptions = useMemo<MultiSelectOption[]>(
     () =>
-      machines.map((m) => ({
+      (projectId ? assignedMachines.map((m) => ({ ...m, lastRunDate: "" })) : machines).map((m) => ({
         value: m.id,
         label: m.name.trim() || m.code,
         hint: [m.code, m.lastRunDate ? `chạy gần nhất ${displayDate(m.lastRunDate)}` : ""]
           .filter(Boolean)
           .join(" · "),
       })),
-    [machines],
+    [machines, projectId, assignedMachines],
   );
 
   useEffect(() => {
@@ -632,7 +643,7 @@ function WorkFormModal({
     let cancelled = false;
     setFilling(true);
     setError("");
-    void loadDailyWorkFillFromJournal(date, method)
+    void loadDailyWorkFillFromJournal(date, method, projectId || undefined)
       .then((filled) => {
         if (cancelled) return;
         setForm((current) =>
@@ -676,7 +687,7 @@ function WorkFormModal({
     return () => {
       cancelled = true;
     };
-  }, [open, phan, form.hangMuc, reportDate, workTypes]);
+  }, [open, phan, form.hangMuc, reportDate, workTypes, projectId]);
 
   // Gán sẵn máy + số lượng nhân lực từ lần báo cáo gần nhất có cùng hạng mục.
   useEffect(() => {
@@ -743,7 +754,7 @@ function WorkFormModal({
     setFillNote("");
     try {
       if (reportDate !== date) onReportDateChange(date);
-      const filled = await loadDailyWorkFillFromJournal(date, weldMethod);
+      const filled = await loadDailyWorkFillFromJournal(date, weldMethod, projectId || undefined);
       setForm((f) => applyJournalFill(f, filled));
       setFillNote(
         filled.entryCount > 0
@@ -763,12 +774,12 @@ function WorkFormModal({
       mayChay: keys.map((key) => {
         const existing = f.mayChay.find((m) => workMachineKey(m) === key);
         if (existing) return existing;
-        const machine = machines.find((m) => m.id === key);
+        const machine = assignedMachines.find((m) => m.id === key) ?? machines.find((m) => m.id === key);
         return {
           mayId: key.startsWith("code:") ? "" : key,
           maMay: machine?.code ?? "",
           tenMay: machine?.name ?? "",
-          soLuong: "1",
+          soLuong: String(assignedMachines.find((m) => m.id === key)?.quantity ?? 1),
           gioBatDau: "",
           gioKetThuc: "",
         };
@@ -1436,7 +1447,7 @@ export default function DailyWorkReport() {
     setLoadError(bundle.error ?? "");
     setLoading(false);
     return bundle;
-  }, []);
+  }, [setWorkTypes]);
 
   useEffect(() => {
     void reload(reportDate);
@@ -1467,7 +1478,7 @@ export default function DailyWorkReport() {
       const fills = await Promise.all(
         jobs.map(async ({ type, method }) => {
           try {
-            const filled = await loadDailyWorkFillFromJournal(reportDate, method);
+            const filled = await loadDailyWorkFillFromJournal(reportDate, method, header?.duAnId || undefined);
             return filled.entryCount > 0 ? { type, filled } : null;
           } catch {
             return null;
@@ -1498,7 +1509,7 @@ export default function DailyWorkReport() {
     return () => {
       cancelled = true;
     };
-  }, [loading, loadError, reportDate, workToday.length, workTypes, reloadList]);
+  }, [loading, loadError, reportDate, workToday.length, workTypes, reloadList, header?.duAnId]);
 
   function showToast(message: string) {
     setToast(message);
@@ -1665,6 +1676,7 @@ export default function DailyWorkReport() {
   }
 
   async function removeEquipment(id: string) {
+    if (id.startsWith("project:")) { showToast("Thiết bị này được gán từ dự án. Chỉnh danh sách trong Quản lý dự án."); return; }
     if (!window.confirm("Xóa thiết bị này?")) return;
     try {
       await deleteEquipmentItem(id);
@@ -1804,12 +1816,12 @@ export default function DailyWorkReport() {
             <span>°C</span>
             </span>
           </label>
-          <a
+          <Link
             href="/nhat-ky-han"
             className="col-span-2 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
             Mở Nhật ký hàn
-          </a>
+          </Link>
         </div>
       </div>
 

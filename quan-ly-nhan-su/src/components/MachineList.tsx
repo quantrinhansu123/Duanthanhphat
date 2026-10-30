@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -12,8 +12,6 @@ import {
   machines as seedMachines,
   getMachineCategory,
   machineCategoryFieldMatrix,
-  MACHINE_CATEGORIES,
-  transportVehicleKey,
   type Machine,
   type EquipmentAsset,
   type WeldingUnitDetail,
@@ -54,7 +52,9 @@ import {
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
-import Link from "next/link";
+import Link from "next/link";
+import { equipmentGroup, equipmentQuantity } from "@/lib/projectEquipment";
+
 
 // window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
 const tr = (vi: string, en: string) => (document.documentElement.lang === "en" ? en : vi);
@@ -848,7 +848,7 @@ function MachineDetailModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
           {tab === "welding" && (
             <div className="space-y-5">
-              {/* Ảnh máy hàn */}
+              {/* Ảnh máy / thiết bị */}
               <div className="space-y-2.5">
                 <div className="relative mx-auto h-[240px] w-full max-w-[640px] overflow-hidden rounded-xl bg-slate-900 border border-slate-200 shadow-md sm:h-[300px]">
                   <Image
@@ -1475,6 +1475,10 @@ function MachineFormModal({
       window.alert(tr("Vui lòng nhập mã máy.", "Please enter the machine code."));
       return;
     }
+    if (!Number.isSafeInteger(Number(form.specs?.quantity ?? 1)) || Number(form.specs?.quantity ?? 1) < 1) {
+      window.alert("Số lượng bộ phải là số nguyên dương.");
+      return;
+    }
 
     // Đảm bảo đồng bộ ảnh máy chính từ weldingUnit
     const syncImage = form.weldingUnit?.coverImage || form.image;
@@ -1510,10 +1514,10 @@ function MachineFormModal({
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-4 bg-white">
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-              {isCreate ? "Thêm máy hàn mới" : "Thông tin máy hàn"}
+              {isCreate ? "Thêm máy / thiết bị mới" : "Thông tin máy / thiết bị"}
             </div>
             <h2 className="mt-0.5 text-base sm:text-lg font-bold text-slate-900 truncate">
-              {isCreate ? "Máy hàn mới" : form.name}
+              {isCreate ? "Máy / thiết bị mới" : form.name}
             </h2>
           </div>
           <button
@@ -1530,7 +1534,7 @@ function MachineFormModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
           <div className="space-y-4">
               <ImageUploader
-                title="Ảnh máy hàn"
+                title="Ảnh máy / thiết bị"
                 folder="thanhphat/machines"
                 coverImage={form.weldingUnit?.coverImage || form.image}
                 coverAsset={form.weldingUnit?.coverAsset}
@@ -1558,6 +1562,16 @@ function MachineFormModal({
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <label className="text-sm font-semibold">Nhóm thiết bị
+                  <select className="mt-1 w-full rounded-lg border border-slate-300 p-2" value={equipmentGroup(form)}
+                    onChange={(e) => setForm({ ...form, specs: { ...form.specs, equipmentGroup: e.target.value } })}>
+                    <option value="welding">Máy hàn</option><option value="other">Máy và thiết bị khác</option>
+                  </select>
+                </label>
+                <label className="text-sm font-semibold">Số lượng (bộ cùng model)
+                  <input type="number" min={1} step={1} className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                    value={Number(form.specs?.quantity ?? 1)} onChange={(e) => setForm({ ...form, specs: { ...form.specs, quantity: Number(e.target.value) } })} />
+                </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Mã máy
                   <input
@@ -1581,7 +1595,7 @@ function MachineFormModal({
               </div>
 
               <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
-                Tên máy hàn
+                Tên máy / thiết bị
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -1615,7 +1629,7 @@ function MachineFormModal({
                 </label>
               </div>
 
-              {fields.weldingProcess && (
+              {equipmentGroup(form) === "welding" && fields.weldingProcess && (
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Quy trình hàn
                   <ComboBoxInput
@@ -1630,7 +1644,7 @@ function MachineFormModal({
                 </label>
               )}
 
-              {fields.railType && (
+              {equipmentGroup(form) === "welding" && fields.railType && (
                 <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
                   Loại ray hàn
                   <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
@@ -1754,6 +1768,7 @@ export default function MachineList() {
   const [detailTab, setDetailTab] = useState<DetailTab>("welding");
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [equipmentTab, setEquipmentTab] = useState<"welding" | "other">("welding");
 
   useEffect(() => {
     let active = true;
@@ -1806,47 +1821,21 @@ export default function MachineList() {
   }, []);
 
   const filtered = useMemo(
-    () => list.filter((m) => status === "Tất cả trạng thái" || m.status === status),
-    [list, status],
+    () => list.filter((m) => equipmentGroup(m) === equipmentTab && (status === "Tất cả trạng thái" || m.status === status)),
+    [list, status, equipmentTab],
   );
 
-  const running = list.filter((m) => m.status === "Đang làm việc").length;
-  const ready = list.filter((m) => m.status === "Sẵn sàng").length;
-  const maint = list.filter((m) => m.status === "Bảo trì").length;
-  const broken = list.filter((m) => m.status === "Hỏng").length;
+  const total = list.reduce((sum, m) => sum + equipmentQuantity(m), 0);
+  const running = list.filter((m) => m.status === "Đang làm việc").reduce((sum, m) => sum + equipmentQuantity(m), 0);
+  const ready = list.filter((m) => m.status === "Sẵn sàng").reduce((sum, m) => sum + equipmentQuantity(m), 0);
+  const maint = list.filter((m) => m.status === "Bảo trì").reduce((sum, m) => sum + equipmentQuantity(m), 0);
+  const broken = list.filter((m) => m.status === "Hỏng").reduce((sum, m) => sum + equipmentQuantity(m), 0);
 
-  const typeSummary = useMemo(() => {
-    return MACHINE_CATEGORIES.map((category) => {
-      if (category === "Phương tiện") {
-        // Đếm xe chở máy (hồ sơ phương tiện gắn kèm) + thiết bị loại Phương tiện.
-        const byKey = new Map<string, Machine>();
-        for (const machine of list) {
-          const key = transportVehicleKey(machine);
-          if (!key || byKey.has(key)) continue;
-          byKey.set(key, machine);
-        }
-        const rows = [...byKey.values()];
-        return {
-          category,
-          total: rows.length,
-          working: rows.filter((m) => m.status === "Đang làm việc").length,
-          ready: rows.filter((m) => m.status === "Sẵn sàng").length,
-          maint: rows.filter((m) => m.status === "Bảo trì").length,
-          broken: rows.filter((m) => m.status === "Hỏng").length,
-        };
-      }
-      const rows = list.filter((m) => getMachineCategory(m) === category);
-      return {
-        category,
-        total: rows.length,
-        working: rows.filter((m) => m.status === "Đang làm việc").length,
-        ready: rows.filter((m) => m.status === "Sẵn sàng").length,
-        maint: rows.filter((m) => m.status === "Bảo trì").length,
-        broken: rows.filter((m) => m.status === "Hỏng").length,
-      };
-    });
-  }, [list]);
-
+  const typeSummary = useMemo(() => ([['welding', 'Máy hàn'], ['other', 'Máy và thiết bị khác']] as const).map(([group, category]) => {
+    const rows = list.filter((m) => equipmentGroup(m) === group);
+    const count = (status?: Machine['status']) => rows.filter((m) => !status || m.status === status).reduce((sum, m) => sum + equipmentQuantity(m), 0);
+    return { category, total: count(), working: count('Đang làm việc'), ready: count('Sẵn sàng'), maint: count('Bảo trì'), broken: count('Hỏng') };
+  }), [list]);
   function openEdit(machine: Machine) {
     setDetail(null);
     setFormModal({ machine, mode: "edit" });
@@ -1929,8 +1918,8 @@ export default function MachineList() {
       )}
       <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng số máy</div>
-          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{list.length}</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng số bộ thiết bị</div>
+          <div className="mt-2 font-mono text-3xl font-bold tabular-nums text-slate-900">{total}</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Đang hoạt động</div>
@@ -1950,7 +1939,7 @@ export default function MachineList() {
       <section className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-bold text-slate-900">Bảng tổng hợp số lượng các loại máy</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Danh sách thiết bị theo loại · Nhiệt nhôm / Flash Butt / Phương tiện</p>
+          <p className="mt-0.5 text-xs text-slate-500">Tổng số bộ theo hai nhóm thiết bị</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
@@ -1981,6 +1970,8 @@ export default function MachineList() {
       </section>
 
       <div className="mb-4 grid grid-cols-2 gap-2.5 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
+        {([["welding", "Máy hàn"], ["other", "Máy và thiết bị khác"]] as const).map(([group, label]) => <button key={group} type="button" aria-pressed={equipmentTab === group}
+          onClick={() => setEquipmentTab(group)} className={`h-10 rounded-lg border px-4 text-sm font-semibold ${equipmentTab === group ? "bg-[#0047AB] text-white" : "border-slate-300 bg-white"}`}>{label}</button>)}
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -1992,14 +1983,20 @@ export default function MachineList() {
         </select>
         <button
           type="button"
-          onClick={() => setFormModal({ machine: emptyMachine(), mode: "create" })}
+          onClick={() => setFormModal({ machine: { ...emptyMachine(), specs: { equipmentGroup: equipmentTab, quantity: 1 } }, mode: "create" })}
           className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:w-auto sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <Plus size={16} weight="bold" /> Thêm máy mới
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+      {equipmentTab === "other" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-slate-50"><tr>{["Mã thiết bị", "Tên thiết bị", "Model", "Số lượng (bộ)", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+          <tbody>{filtered.map((m) => <tr key={m.id} className="border-t border-slate-200"><td className="p-3">{m.code}</td><td className="p-3">{m.name}</td><td className="p-3">{m.model}</td><td className="p-3 text-right font-semibold">{equipmentQuantity(m)}</td><td className="p-3">{m.status}</td><td className="p-3"><button type="button" onClick={() => openEdit(m)} className="mr-3 text-[#0047AB]">Sửa</button><button type="button" onClick={() => void handleDelete(m)} className="text-rose-700">Xóa</button></td></tr>)}
+            {!filtered.length && <tr><td colSpan={6} className="p-5 text-center text-slate-500">Chưa có máy / thiết bị khác.</td></tr>}
+          </tbody></table>
+      </div>}
+      <div className={`${equipmentTab === "other" ? "hidden" : ""} overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
         <ul className="divide-y divide-slate-100">
           {filtered.map((m) => {
             const selected = activeId === m.id;
@@ -2042,7 +2039,8 @@ export default function MachineList() {
                       </span>
                       {m.model ? <span className="font-medium text-slate-700">{m.model}</span> : null}
                       <span className="text-slate-300" aria-hidden>·</span>
-                      <span>{getMachineCategory(m)}</span>
+                      <span>{equipmentGroup(m) === "other" ? "Máy và thiết bị khác" : getMachineCategory(m)}</span>
+                      <span className="font-semibold">Số lượng: {equipmentQuantity(m)} bộ</span>
                       <span className="text-slate-300" aria-hidden>·</span>
                       <span>
                         <span className="font-mono tabular-nums font-semibold text-slate-700">

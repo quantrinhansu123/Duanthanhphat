@@ -3,6 +3,8 @@ import type { ProjectMetadata, ProjectMetadataStore } from "@/data/projectMetada
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
 import { requireAccess } from "@/lib/server/requireAccess";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { equipmentQuantity } from "@/lib/projectEquipment";
 
 const FILE_PATH = "project-metadata.json";
 const statuses = new Set(["Đang triển khai", "Hoàn thành", "Tạm dừng"]);
@@ -27,14 +29,44 @@ function cleanDateArray(value: unknown) {
 
 function validate(value: unknown): ProjectMetadata {
   const input = value && typeof value === "object" ? value as Partial<ProjectMetadata> : {};
+  const machineTypes = cleanArray(input.machineTypes);
+  const machineQuantities: Record<string, number> = {};
+  for (const code of machineTypes) {
+    const quantity = input.machineQuantities?.[code] ?? 1;
+    if (!Number.isSafeInteger(quantity) || quantity < 1) throw new RangeError(`Số lượng bộ của ${code} phải là số nguyên dương.`);
+    machineQuantities[code] = quantity;
+  }
   return {
     status: statuses.has(input.status || "") ? input.status as ProjectMetadata["status"] : "Đang triển khai",
     personnelIds: cleanArray(input.personnelIds),
-    machineTypes: cleanArray(input.machineTypes),
+    machineTypes,
+    machineQuantities,
     weldTypes: cleanArray(input.weldTypes),
     railTypes: cleanArray(input.railTypes),
     offDays: cleanDateArray(input.offDays),
   };
+}
+
+async function validateEquipment(projectId: string, metadata: ProjectMetadata, store: ProjectMetadataStore) {
+  if (!metadata.machineTypes.length) return;
+  const { data, error } = await createAdminClient().from("thiet_bi").select("ma_may,thong_so").in("ma_may", metadata.machineTypes);
+  if (error) throw error;
+  for (const code of metadata.machineTypes) {
+    const machine = data?.find((r) => r.ma_may === code);
+    const quantity = metadata.machineQuantities?.[code] ?? 1;
+    const existing = store[projectId];
+    const assigned = existing?.machineTypes.includes(code) ? existing.machineQuantities?.[code] ?? 1 : 0;
+    if (!machine) {
+      if (assigned && quantity === assigned) continue;
+      throw new RangeError(`Thiết bị ${code} không còn trong danh mục. Hãy chọn lại mã thiết bị.`);
+    }
+    const stock = equipmentQuantity({ specs: machine.thong_so });
+    if (quantity > stock) throw new RangeError(`Số bộ ${code} vượt số lượng trong danh mục.`);
+    const previous = existing?.status === "Hoàn thành" ? 0 : assigned;
+    const elsewhere = Object.entries(store).filter(([id, p]) => id !== projectId && p.status !== "Hoàn thành" && p.machineTypes.includes(code))
+      .reduce((sum, [, p]) => sum + (p.machineQuantities?.[code] ?? 1), 0);
+    if (metadata.status !== "Hoàn thành" && quantity > previous && quantity + elsewhere > stock) throw new RangeError(`${code}: số lượng còn có thể gán là ${Math.max(0, stock - elsewhere)} bộ.`);
+  }
 }
 
 export async function GET() {
@@ -56,18 +88,22 @@ export async function PUT(request: Request) {
     const currentStore = await readPrivateJson<ProjectMetadataStore>(FILE_PATH) ?? {};
     if (body.store && typeof body.store === "object") {
       for (const [id, meta] of Object.entries(body.store)) {
-        currentStore[id.trim()] = validate(meta);
+        const metadata = validate(meta);
+        await validateEquipment(id.trim(), metadata, currentStore);
+        currentStore[id.trim()] = metadata;
       }
       await writePrivateJson(FILE_PATH, currentStore);
       return NextResponse.json({ metadata: currentStore });
     }
     const projectId = typeof body.projectId === "string" ? body.projectId.trim().slice(0, 180) : "";
     if (!projectId) return NextResponse.json({ error: "Thiếu mã dự án." }, { status: 400 });
-    currentStore[projectId] = validate(body.metadata);
+    const metadata = validate(body.metadata);
+    await validateEquipment(projectId, metadata, currentStore);
+    currentStore[projectId] = metadata;
     await writePrivateJson(FILE_PATH, currentStore);
     return NextResponse.json({ metadata: currentStore[projectId] });
   } catch (error) {
-    return NextResponse.json({ error: formatSupabaseError(error) }, { status: 500 });
+    return NextResponse.json({ error: formatSupabaseError(error) }, { status: error instanceof RangeError ? 400 : 500 });
   }
 }
 

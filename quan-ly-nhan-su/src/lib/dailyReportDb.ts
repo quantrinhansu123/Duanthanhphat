@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
+import { loadProjectEquipment } from "@/lib/projectEquipmentDb";
 import {
   addHoursToWeldTime,
   DEFAULT_WELD_WORK_HOURS,
@@ -657,6 +658,7 @@ async function sumWeldsBefore(date: string, method: "ATW" | "FBW"): Promise<stri
 export async function loadDailyWorkFillFromJournal(
   date: string,
   method: "ATW" | "FBW",
+  projectId?: string,
 ): Promise<DailyWorkJournalFill> {
   if (!date.trim()) throw new Error("Thiếu ngày để lấy nhật ký hàn");
   if (!isSupabaseConfigured()) {
@@ -683,11 +685,13 @@ export async function loadDailyWorkFillFromJournal(
   ) {
     let lastError: unknown = null;
     for (const columns of selects) {
-      const result = await supabase
+      let query = supabase
         .from(table)
         .select(columns)
         .eq("ngay_thuc_hien", date)
-        .eq("cong_nghe_han", method)
+        .eq("cong_nghe_han", method);
+      if (projectId) query = query.eq("du_an_id", projectId);
+      const result = await query
         .order("ma_lich_su", { ascending: true })
         .limit(2000);
       if (!result.error) return (result.data as JournalFillRow[] | null) ?? [];
@@ -1147,11 +1151,19 @@ export async function ensureDailyReportProject(
 
 export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBundle> {
   const workTypesBundle = await loadWorkTypes();
-  const withTypes = (bundle: Omit<DailyReportBundle, "workTypes">): DailyReportBundle => ({
-    ...bundle,
-    workTypes: workTypesBundle.types,
-    error: bundle.error || workTypesBundle.error,
-  });
+  const withTypes = async (bundle: Omit<DailyReportBundle, "workTypes">): Promise<DailyReportBundle> => {
+    let equipment = bundle.equipment;
+    let equipmentError = "";
+    if (bundle.header?.duAnId) {
+      try {
+        const assigned = await loadProjectEquipment(bundle.header.duAnId);
+        const linked: DailyEquipmentItem[] = assigned.map((m, i) => ({ id: `project:${m.id}`, baoCaoId: bundle.header!.id, thuTu: i,
+          tenThietBi: `${m.name}${m.model ? ` (${m.model})` : ""}`, soLuong: m.missing ? "" : String(m.quantity), boPhan: m.group === "welding" ? "1. Máy hàn" : "2. Máy và thiết bị khác", nguoiSuDung: "", ghiChu: m.missing ? "Cần gán lại đúng mã thiết bị trong dự án" : `Gán từ dự án · ${m.code}` }));
+        equipment = [...linked, ...equipment.filter((e) => !e.id.startsWith("project:") && !linked.some((r) => r.tenThietBi === e.tenThietBi))];
+      } catch (error) { equipmentError = `Chưa tải được thiết bị dự án: ${formatSupabaseError(error)}`; }
+    }
+    return { ...bundle, equipment, workTypes: workTypesBundle.types, error: bundle.error || workTypesBundle.error || equipmentError };
+  };
 
   if (!isSupabaseConfigured()) {
     const store = readLocal();

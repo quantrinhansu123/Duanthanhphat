@@ -21,6 +21,7 @@ export type Project = {
   plannedWeldCount: number;
   personnelIds: string[];
   machineTypes: string[];
+  machineQuantities?: Record<string, number>;
   weldTypes: string[];
   railTypes: string[];
   /** Ngày nghỉ trong khoảng dự án (ISO yyyy-mm-dd). */

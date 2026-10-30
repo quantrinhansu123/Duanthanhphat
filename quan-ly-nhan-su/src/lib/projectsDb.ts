@@ -324,7 +324,7 @@ export function duAnRowToProject(
     managerId: row.nguoi_phu_trach ?? undefined,
     plant: "",
     staffCount: personnelIds.length,
-    machineCount: (metadata?.machineTypes ?? []).length,
+    machineCount: (metadata?.machineTypes ?? []).reduce((sum, code) => sum + (metadata?.machineQuantities?.[code] ?? 1), 0),
     status: metadata?.status ?? "Đang triển khai",
     startDate,
     endDate,
@@ -332,6 +332,7 @@ export function duAnRowToProject(
     plannedWeldCount,
     personnelIds,
     machineTypes: metadata?.machineTypes ?? [],
+    machineQuantities: metadata?.machineQuantities ?? {},
     weldTypes: metadata?.weldTypes ?? [],
     railTypes,
     offDays,
@@ -468,6 +469,7 @@ export async function insertDuAn(payload: {
   status?: Project["status"];
   personnelIds?: string[];
   machineTypes?: string[];
+  machineQuantities?: Record<string, number>;
   weldTypes?: string[];
   railTypes?: string[];
   offDays?: string[];
@@ -518,6 +520,7 @@ export async function insertDuAn(payload: {
     status: payload.status ?? "Đang triển khai",
     personnelIds: payload.personnelIds ?? [],
     machineTypes: payload.machineTypes ?? [],
+    machineQuantities: payload.machineQuantities ?? {},
     weldTypes: payload.weldTypes ?? [],
     railTypes: payload.railTypes ?? [],
     offDays,
@@ -525,7 +528,7 @@ export async function insertDuAn(payload: {
   try {
     await saveProjectMetadata(String(data.id), metadata);
   } catch (metadataError) {
-    console.warn("Could not save project metadata:", metadataError);
+    return { error: metadataError instanceof Error ? metadataError.message : "Không lưu được máy / thiết bị của dự án." };
   }
   invalidateProjectsCache();
   return {
@@ -548,6 +551,7 @@ export async function updateDuAn(
     status?: Project["status"];
     personnelIds?: string[];
     machineTypes?: string[];
+  machineQuantities?: Record<string, number>;
     weldTypes?: string[];
     railTypes?: string[];
     offDays?: string[];
@@ -628,6 +632,7 @@ export async function updateDuAn(
     status: patch.status ?? "Đang triển khai",
     personnelIds: patch.personnelIds ?? [],
     machineTypes: patch.machineTypes ?? [],
+    machineQuantities: patch.machineQuantities ?? {},
     weldTypes: patch.weldTypes ?? [],
     railTypes: patch.railTypes ?? [],
     offDays,
@@ -635,7 +640,7 @@ export async function updateDuAn(
   try {
     await saveProjectMetadata(projectId, metadata);
   } catch (metadataError) {
-    console.warn("Could not save project metadata:", metadataError);
+    return { error: metadataError instanceof Error ? metadataError.message : "Không lưu được máy / thiết bị của dự án." };
   }
   invalidateProjectsCache();
   return { project: duAnRowToProject(updatedRow, patch.manager?.trim() ?? "", metadata) };

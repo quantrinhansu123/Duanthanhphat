@@ -43,11 +43,12 @@ import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
 import { loadMachinePickerOptions } from "@/lib/machineCatalogDb";
 import { REPORT_MACHINES } from "@/lib/weldReportData";
 import { loadTongMoiHanNam } from "@/lib/tongMoiHanNamDb";
+import ProjectEquipmentTable from "@/components/ProjectEquipmentTable";
 
 const MACHINE_TYPES = [...REPORT_MACHINES];
 /** Mỗi trang giữ trọn các ngày, tối đa khoảng này dòng dự án. */
 const PROGRESS_PAGE_ROW_CAP = 24;
-type ProjectMachineOption = { code: string; name: string; weldingTechnology?: string };
+type ProjectMachineOption = { code: string; name: string; model?: string; weldingTechnology?: string; group?: "welding" | "other"; quantity?: number };
 type ProjectPersonnelOption = Pick<
   PersonnelCertificateRow,
   "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han"
@@ -740,7 +741,7 @@ function ProjectInfoFields({
   function updateForm(patch: Partial<Project>) {
     const next = { ...form, ...patch };
     next.staffCount = next.personnelIds.length;
-    next.machineCount = next.machineTypes.length;
+    next.machineCount = next.machineTypes.reduce((sum, code) => sum + (next.machineQuantities?.[code] ?? 1), 0);
     next.offDays = clampOffDaysToRange(
       next.offDays ?? [],
       next.startDate,
@@ -939,18 +940,26 @@ function ProjectInfoFields({
         }}
       />
 
-      <CheckboxGroup
-        label="Loại máy"
-        hint="Chọn các loại máy hàn sử dụng trong dự án"
-        options={machineOptions.map((m) => m.code)}
-        selected={form.machineTypes}
-        onChange={(machineTypes) => updateForm({ machineTypes })}
-        readOnly={readOnly}
-        renderLabel={(code) => {
-          const machine = machineOptions.find((m) => m.code === code);
-          return machine ? `${machine.code} · ${machine.name}` : code;
-        }}
-      />
+      <div className="space-y-3">
+        {form.machineTypes.filter((code) => !machineOptions.some((m) => m.code === code)).map((code) => <label key={code} className="flex items-center gap-2 text-xs text-amber-800">
+          <input type="checkbox" checked disabled={readOnly} onChange={() => updateForm({ machineTypes: form.machineTypes.filter((c) => c !== code) })} />
+          {code} — chưa liên kết danh mục; bỏ chọn và gán lại đúng mã máy / thiết bị.
+        </label>)}
+        {([["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"]] as const).map(([group, label]) => <div key={group}>
+          <CheckboxGroup label={label} hint="Gán máy / thiết bị từ danh mục vào dự án" searchable
+            options={machineOptions.filter((m) => (m.group ?? "welding") === group).map((m) => m.code)}
+            selected={form.machineTypes.filter((code) => machineOptions.some((m) => m.code === code && (m.group ?? "welding") === group))} onChange={(selected) => {
+              const otherCodes = form.machineTypes.filter((code) => (machineOptions.find((m) => m.code === code)?.group ?? "welding") !== group);
+              updateForm({ machineTypes: [...new Set([...otherCodes, ...selected])] });
+            }} readOnly={readOnly} renderLabel={(code) => { const m = machineOptions.find((item) => item.code === code); return `${code} · ${m?.name ?? ""}`; }} />
+          {machineOptions.filter((m) => form.machineTypes.includes(m.code) && (m.group ?? "welding") === group).map((m) => <label key={m.code} className="mt-2 flex items-center justify-between gap-3 text-xs">
+            <span>{m.code} · Số lượng (bộ), danh mục: {m.quantity ?? 1}</span>
+            <input aria-label={`Số lượng bộ ${m.code}`} type="number" min={1} max={m.quantity ?? 1} step={1} disabled={readOnly}
+              className="w-20 rounded border border-slate-300 px-2 py-1" value={form.machineQuantities?.[m.code] ?? 1}
+              onChange={(e) => updateForm({ machineQuantities: { ...form.machineQuantities, [m.code]: Number(e.target.value) } })} />
+          </label>)}
+        </div>)}
+      </div>
 
       <CheckboxGroup
         label="Loại ray"
@@ -1673,7 +1682,7 @@ function ProjectModal({
       ? [{ id: "progress" as const, label: "Xem kế hoạch theo ngày", count: progressCount }]
       : [
           { id: "personnel" as const, label: "Nhân sự", count: personnelCount },
-          { id: "machines" as const, label: "Lịch chạy máy", count: machineRuns.runs.length },
+          { id: "machines" as const, label: "Máy và thiết bị", count: form.machineTypes.length },
           { id: "progress" as const, label: "Tiến độ lý thuyết", count: progressCount },
         ]),
   ];
@@ -1768,12 +1777,18 @@ function ProjectModal({
             />
           )}
           {tab === "machines" && (
+            <div className="space-y-5">
+            <ProjectEquipmentTable rows={form.machineTypes.map((code) => {
+              const m = machineOptions.find((m) => m.code === code);
+              return { id: code, code, name: m?.name ?? `${code} — chưa liên kết danh mục`, model: m?.model ?? "", group: m?.group ?? "welding", quantity: form.machineQuantities?.[code] ?? 1, missing: !m };
+            })} />
             <ProjectMachineRunsTab
               projectId={project.id}
               runs={machineRuns.runs}
               loading={machineRuns.loading}
               error={machineRuns.error}
             />
+            </div>
           )}
           {tab === "progress" && (
             <ProjectTheoreticalProgressTab
@@ -1811,6 +1826,14 @@ function ProjectModal({
                   window.alert("Vui lòng nhập tên dự án.");
                   return;
                 }
+                for (const code of form.machineTypes) {
+                  const quantity = form.machineQuantities?.[code] ?? 1;
+                  const available = machineOptions.find((m) => m.code === code)?.quantity ?? quantity;
+                  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > available) {
+                    window.alert(`Số lượng ${code} phải là số nguyên từ 1 đến ${available} bộ.`);
+                    return;
+                  }
+                }
                 if (!form.location.trim()) {
                   window.alert("Vui lòng nhập vị trí.");
                   return;
@@ -1836,7 +1859,7 @@ function ProjectModal({
                   location: form.location.trim(),
                   plant: "",
                   staffCount: form.personnelIds.length,
-                  machineCount: form.machineTypes.length,
+                  machineCount: form.machineTypes.reduce((sum, code) => sum + (form.machineQuantities?.[code] ?? 1), 0),
                   offDays: clampOffDaysToRange(form.offDays ?? [], form.startDate, form.endDate),
                   theoreticalProgress: form.theoreticalProgress ?? buildDailyWeldPlan(
                     form.plannedWeldCount,
@@ -2093,6 +2116,7 @@ export default function ProjectManagement() {
           status: updated.status,
           personnelIds: updated.personnelIds,
           machineTypes: updated.machineTypes,
+          machineQuantities: updated.machineQuantities ?? {},
           weldTypes: updated.weldTypes,
           railTypes: updated.railTypes,
           offDays: updated.offDays ?? [],
@@ -2113,6 +2137,7 @@ export default function ProjectManagement() {
                     status: updated.status,
                     personnelIds: updated.personnelIds,
                     machineTypes: updated.machineTypes,
+          machineQuantities: updated.machineQuantities ?? {},
                     weldTypes: updated.weldTypes,
                     railTypes: updated.railTypes ?? [],
                     offDays: updated.offDays ?? [],
@@ -2144,6 +2169,7 @@ export default function ProjectManagement() {
           status: project.status,
           personnelIds: project.personnelIds,
           machineTypes: project.machineTypes,
+          machineQuantities: project.machineQuantities ?? {},
           weldTypes: project.weldTypes,
           railTypes: project.railTypes,
           offDays: project.offDays ?? [],
