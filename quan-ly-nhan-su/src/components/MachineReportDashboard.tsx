@@ -18,6 +18,8 @@ import ProjectEquipmentReport from "@/components/ProjectEquipmentReport";
 import { loadProjects } from "@/lib/projectsDb";
 import { equipmentQuantity } from "@/lib/projectEquipment";
 import type { Project } from "@/data/projects";
+import { loadEquipmentLocations } from "@/lib/warehousesDb";
+import { equipmentLocationLabel, type EquipmentLocation } from "@/lib/warehouses";
 import {
   loadMachineReportSummary,
   type MachineReportSummary,
@@ -98,6 +100,7 @@ export default function MachineReportDashboard() {
   const [machineSummary, setMachineSummary] = useState<MachineReportSummary[]>([]);
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
   const [equipmentProjects, setEquipmentProjects] = useState<Project[]>([]);
+  const [equipmentLocations, setEquipmentLocations] = useState<EquipmentLocation[]>([]);
   const [machineSummaryError, setMachineSummaryError] = useState("");
   const [machineStatusFilter, setMachineStatusFilter] = useState<MachineStatusFilter>("Tất cả máy");
 
@@ -107,11 +110,13 @@ export default function MachineReportDashboard() {
       loadMachineReportSummary(),
       loadMachineCatalog(),
       loadProjects({ includeProgress: false }),
+      loadEquipmentLocations(),
     ])
-      .then(([summary, catalog, projects]) => {
+      .then(([summary, catalog, projects, locations]) => {
         if (!active) return;
         setMachineSummary(summary);
         setEquipmentProjects(projects.projects);
+        setEquipmentLocations(locations.locations);
         // Trang báo cáo không được hiển thị số liệu mẫu khi DB không trả dữ liệu.
         setMachineCatalog(catalog.source === "supabase" ? catalog.machines : []);
         if (catalog.source !== "supabase" || catalog.error) {
@@ -166,10 +171,11 @@ export default function MachineReportDashboard() {
       const operatingHours = report?.operatingHours ?? machine.operatingHours ?? 0;
       const assigned = equipmentProjects.filter((p) => p.status !== "Hoàn thành" && p.machineTypes.includes(code));
       const remaining = Math.max(0, equipmentQuantity(machine) - assigned.reduce((sum, p) => sum + (p.machineQuantities?.[code] ?? 1), 0));
+      const position = equipmentLocations.find((m) => m.id === machine.id);
       return {
         code,
         name: report?.machineName ?? machine.name ?? code,
-        location: report?.location || machine.location || "Chưa cập nhật",
+        location: position ? equipmentLocationLabel(position) : report?.location || machine.location || "Chưa cập nhật",
         currentProject: assigned.map((p) => p.name).join("; "),
         remaining,
         image: machine.image,
@@ -184,7 +190,7 @@ export default function MachineReportDashboard() {
         status,
       };
     });
-  }, [machineCatalog, machineStatsByCode, machineSummaryByCode, equipmentProjects, appliedFilters.projects]);
+  }, [machineCatalog, machineStatsByCode, machineSummaryByCode, equipmentProjects, appliedFilters.projects, equipmentLocations]);
 
   const machinesRecommended = useMemo(() => {
     const candidates = machinePerformance

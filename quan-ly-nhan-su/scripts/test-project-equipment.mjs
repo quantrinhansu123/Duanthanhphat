@@ -89,6 +89,7 @@ const catalog = load("../src/lib/machineCatalogDb.ts", {
   "@/lib/supabase/client": {},
   "@/lib/supabase/env": { isSupabaseConfigured: () => false },
   "@/lib/projectEquipment": rules,
+  "@/lib/warehousesDb": {},
 }, { window: { localStorage: { getItem: () => JSON.stringify(overrides), setItem: (_, value) => { overrides = JSON.parse(value); } } } });
 await catalog.deleteMachine("g");
 assert.equal(overrides.g, undefined);

@@ -54,6 +54,8 @@ import {
 import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Link from "next/link";
 import { equipmentGroup, equipmentQuantity } from "@/lib/projectEquipment";
+import { loadEquipmentLocations } from "@/lib/warehousesDb";
+import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type Warehouse } from "@/lib/warehouses";
 
 
 // window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
@@ -1389,6 +1391,8 @@ function MachineFormModal({
   mode,
   modelSuggestions = [],
   techSuggestions = [],
+  warehouses,
+  currentLocation,
   onClose,
   onSave,
 }: {
@@ -1396,6 +1400,8 @@ function MachineFormModal({
   mode: "create" | "edit";
   modelSuggestions?: string[];
   techSuggestions?: string[];
+  warehouses: Warehouse[];
+  currentLocation?: EquipmentLocation;
   onClose: () => void;
   onSave: (updated: Machine) => void;
 }) {
@@ -1486,6 +1492,7 @@ function MachineFormModal({
 
     onSave({
       ...form,
+      location: warehouses.find((w) => w.id === form.specs?.warehouseId)?.address || form.location,
       manufacturer: form.manufacturer.trim(),
       image: syncImage,
       gallery: syncGallery,
@@ -1532,6 +1539,21 @@ function MachineFormModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
+          <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <h3 className="font-bold text-slate-900">Vị trí máy / thiết bị: Kho hoặc Dự án</h3>
+            <label className="block text-sm font-semibold">Kho lưu thiết bị chưa gán dự án
+              <select value={String(form.specs?.warehouseId ?? "")} onChange={(e) => setForm({ ...form, location: "", specs: { ...form.specs, warehouseId: e.target.value } })}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 font-normal">
+                <option value="">Chưa chọn kho</option>
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name} · {w.address}</option>)}
+                {form.specs?.warehouseId && !warehouses.some((w) => w.id === form.specs?.warehouseId) ? <option value={String(form.specs.warehouseId)}>Kho chưa tải được / không còn tồn tại</option> : null}
+              </select>
+            </label>
+            {form.location && !form.specs?.warehouseId && <p className="text-xs text-slate-600">Vị trí đã nhập trước đây: {form.location}</p>}
+            <p className="text-xs text-slate-600">Kho giữ số bộ còn lại sau khi trừ số bộ đã gán dự án. Chọn kho khác để chuyển phần thiết bị còn trong kho.</p>
+            <div className="text-sm"><b>Dự án đang sử dụng:</b>{currentLocation?.projects.length ? <ul className="mt-1 list-inside list-disc">{currentLocation.projects.map((p) => <li key={p.id}>{p.name}: {p.quantity} bộ</li>)}</ul> : <p>Chưa gán dự án.</p>}</div>
+            <div className="flex flex-wrap gap-4 text-sm font-semibold text-[#0047AB]"><Link target="_blank" href="/quan-ly-kho">Thêm / sửa danh mục kho</Link><Link target="_blank" href="/quan-ly-du-an">Gán / chuyển thiết bị vào dự án</Link></div>
+          </section>
           <div className="space-y-4">
               <ImageUploader
                 title="Ảnh máy / thiết bị"
@@ -1769,6 +1791,18 @@ export default function MachineList() {
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [equipmentTab, setEquipmentTab] = useState<"welding" | "other">("welding");
+  const [locationBundle, setLocationBundle] = useState<LocationBundle>({ warehouses: [], locations: [] });
+  const [locationError, setLocationError] = useState("");
+  useEffect(() => {
+    let live = true;
+    const refresh = () => { void loadEquipmentLocations().then((r) => { if (live) { setLocationBundle(r); setLocationError(""); } }).catch((e) => { if (live) setLocationError(e instanceof Error ? e.message : "Không tải được vị trí thiết bị."); }); };
+    refresh(); window.addEventListener("focus", refresh);
+    return () => { live = false; window.removeEventListener("focus", refresh); };
+  }, [list]);
+  const locationLabel = (m: Machine) => {
+    const location = locationBundle.locations.find((r) => r.id === m.id);
+    return location ? equipmentLocationLabel(location) : m.location || "Đang tải vị trí…";
+  };
 
   useEffect(() => {
     let active = true;
@@ -1906,6 +1940,7 @@ export default function MachineList() {
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
+      {locationError && <p role="status" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Chưa tải được vị trí kho / dự án: {locationError}</p>}
       {dataError && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 sm:text-sm">
           {source === "seed" ? "Đang dùng dữ liệu mẫu. " : "Lỗi dữ liệu máy: "}{dataError}
@@ -1991,9 +2026,9 @@ export default function MachineList() {
       </div>
 
       {equipmentTab === "other" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-slate-50"><tr>{["Mã thiết bị", "Tên thiết bị", "Model", "Số lượng (bộ)", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
-          <tbody>{filtered.map((m) => <tr key={m.id} className="border-t border-slate-200"><td className="p-3">{m.code}</td><td className="p-3">{m.name}</td><td className="p-3">{m.model}</td><td className="p-3 text-right font-semibold">{equipmentQuantity(m)}</td><td className="p-3">{m.status}</td><td className="p-3"><button type="button" onClick={() => openEdit(m)} className="mr-3 text-[#0047AB]">Sửa</button><button type="button" onClick={() => void handleDelete(m)} className="text-rose-700">Xóa</button></td></tr>)}
-            {!filtered.length && <tr><td colSpan={6} className="p-5 text-center text-slate-500">Chưa có máy / thiết bị khác.</td></tr>}
+        <table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50"><tr>{["Mã thiết bị", "Tên thiết bị", "Model", "Số lượng (bộ)", "Vị trí: Kho / Dự án", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+          <tbody>{filtered.map((m) => <tr key={m.id} className="border-t border-slate-200"><td className="p-3">{m.code}</td><td className="p-3">{m.name}</td><td className="p-3">{m.model}</td><td className="p-3 text-right font-semibold">{equipmentQuantity(m)}</td><td className="max-w-sm p-3 text-xs">{locationLabel(m)}</td><td className="p-3">{m.status}</td><td className="p-3"><button type="button" onClick={() => openEdit(m)} className="mr-3 text-[#0047AB]">Sửa</button><button type="button" onClick={() => void handleDelete(m)} className="text-rose-700">Xóa</button></td></tr>)}
+            {!filtered.length && <tr><td colSpan={7} className="p-5 text-center text-slate-500">Chưa có máy / thiết bị khác.</td></tr>}
           </tbody></table>
       </div>}
       <div className={`${equipmentTab === "other" ? "hidden" : ""} overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
@@ -2041,6 +2076,7 @@ export default function MachineList() {
                       <span className="text-slate-300" aria-hidden>·</span>
                       <span>{equipmentGroup(m) === "other" ? "Máy và thiết bị khác" : getMachineCategory(m)}</span>
                       <span className="font-semibold">Số lượng: {equipmentQuantity(m)} bộ</span>
+                      <span className="basis-full text-xs text-slate-600">Vị trí: {locationLabel(m)}</span>
                       <span className="text-slate-300" aria-hidden>·</span>
                       <span>
                         <span className="font-mono tabular-nums font-semibold text-slate-700">
@@ -2125,7 +2161,7 @@ export default function MachineList() {
                     ["Loại thiết bị", getMachineCategory(m)],
                     ["Trạng thái", m.status],
                     ["Vị trí", m.location],
-                    ["Dự án hiện tại", m.currentProject],
+                    ["Vị trí Kho / Dự án", locationLabel(m)],
                     ["Người vận hành", m.operator],
                     ["Người phụ trách", m.personInCharge],
                     ["Tổ", m.team],
@@ -2259,6 +2295,8 @@ export default function MachineList() {
       {formModal && (
         <MachineFormModal
           machine={formModal.machine}
+          warehouses={locationBundle.warehouses}
+          currentLocation={locationBundle.locations.find((m) => m.id === formModal.machine.id)}
           mode={formModal.mode}
           modelSuggestions={Array.from(
             new Set([

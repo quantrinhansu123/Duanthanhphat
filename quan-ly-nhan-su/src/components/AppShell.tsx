@@ -40,6 +40,7 @@ const ComplianceStandardsList = dynamic(
 const TrainingHistoryLookup = dynamic(
   () => import("@/components/TrainingHistoryLookup"), { loading: TabLoading, ssr: false });
 const MachineList = dynamic(() => import("@/components/MachineList"), { loading: TabLoading, ssr: false });
+const WarehouseManagement = dynamic(() => import("@/components/WarehouseManagement"), { loading: TabLoading, ssr: false });
 const WeldingTrayList = dynamic(() => import("@/components/WeldingTrayList"), { loading: TabLoading, ssr: false });
 const MaintenanceCalendar = dynamic(() => import("@/components/MaintenanceCalendar"), { loading: TabLoading, ssr: false });
 const ErrorLibrary = dynamic(() => import("@/components/ErrorLibrary"), { loading: TabLoading, ssr: false });
@@ -81,6 +82,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "tieu-chuan-tcvn": () => <ComplianceStandardsList />,
   "tra-cuu-dao-tao": () => <TrainingHistoryLookup />,
   "danh-sach-may": () => <MachineList />,
+  "quan-ly-kho": () => <WarehouseManagement />,
   "quan-ly-khay-han": () => <WeldingTrayList />,
   "lich-bao-tri": () => <MaintenanceCalendar />,
   "thu-vien-loi": () => <ErrorLibrary mode="machine" />,

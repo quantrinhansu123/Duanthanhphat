@@ -87,6 +87,11 @@ export const navigation: NavItem[] = [
         descriptionEn: "Machine code, model, current location, operating status, and weld count",
       },
       {
+        id: "quan-ly-kho", label: "Quản lý kho", labelEn: "Warehouse Management",
+        description: "Tên kho, địa chỉ và máy / thiết bị đang lưu trong kho",
+        descriptionEn: "Warehouses, addresses and stored machinery / equipment",
+      },
+      {
         id: "kiem-tra-may-truoc-ca",
         label: "Checklist máy trước ca",
         labelEn: "Pre-shift Machine Checklist",

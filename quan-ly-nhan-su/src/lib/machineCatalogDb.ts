@@ -6,6 +6,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
+import { loadWarehouses } from "@/lib/warehousesDb";
 
 const LOCAL_STORAGE_MACHINES_KEY = "tp_machines_extended_v3";
 
@@ -437,8 +438,16 @@ async function updateMachineRow(
   return result;
 }
 
+async function validateWarehouse(machine: Machine) {
+  const id = machine.specs?.warehouseId;
+  if (!id || !isSupabaseConfigured()) return;
+  const warehouses = await loadWarehouses();
+  if (!warehouses.some((w) => w.id === id)) throw new Error("Kho không còn tồn tại. Vui lòng chọn lại kho.");
+}
+
 export async function createMachine(machine: Machine): Promise<Machine> {
   if (!Number.isSafeInteger(Number(machine.specs?.quantity ?? 1)) || Number(machine.specs?.quantity ?? 1) < 1) throw new Error("Số lượng bộ phải là số nguyên dương.");
+  await validateWarehouse(machine);
   if (!isSupabaseConfigured()) {
     writeLocalOverride(machine);
     return machine;
@@ -501,6 +510,7 @@ export async function createMachine(machine: Machine): Promise<Machine> {
 
 export async function updateMachine(machine: Machine): Promise<void> {
   if (!Number.isSafeInteger(Number(machine.specs?.quantity ?? 1)) || Number(machine.specs?.quantity ?? 1) < 1) throw new Error("Số lượng bộ phải là số nguyên dương.");
+  await validateWarehouse(machine);
   if (!isSupabaseConfigured()) {
     writeLocalOverride(machine);
     return;
