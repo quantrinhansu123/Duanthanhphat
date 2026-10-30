@@ -271,9 +271,7 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
     throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
 
-  if (input.issuedAt && input.expiresAt && input.expiresAt < input.issuedAt) {
-    throw new Error("Ngày hết hạn phải từ ngày cấp trở đi.");
-  }
+  validateCertificateDates(input.issuedAt, input.expiresAt);
 
   const dbStatus: CertificateDbStatus =
     input.status === "Thu hồi"
@@ -300,7 +298,18 @@ export async function createPersonnelCertificates(input: CreatePersonnelCertific
 }
 
 const CERTIFICATE_TYPE_EXTRAS_MIGRATION_MESSAGE =
-  "Chưa thể lưu nhà cung cấp / loại dây hàn vì migration_20261015_chung_chi_nha_cung_cap_day_han.sql chưa được chạy trên Supabase.";
+  "Cơ sở dữ liệu chưa hỗ trợ nhà cung cấp / loại dây hàn. Cần chạy supabase/migration_20261015_chung_chi_nha_cung_cap_day_han.sql rồi lưu lại; thông tin đã nhập vẫn được giữ trên biểu mẫu.";
+
+function validateCertificateDates(issuedAt?: string, expiresAt?: string) {
+  if (!issuedAt || !expiresAt) throw new Error("Vui lòng nhập ngày cấp và ngày hết hạn chứng chỉ.");
+  for (const value of [issuedAt, expiresAt]) {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+      throw new Error("Ngày chứng chỉ không hợp lệ.");
+    }
+  }
+  if (expiresAt < issuedAt) throw new Error("Ngày hết hạn phải từ ngày cấp trở đi.");
+}
 
 /** Bỏ cột chưa có trên DB cũ khỏi payload; báo lỗi nếu người dùng đã nhập giá trị cho cột đó. */
 function dropMissingGroupColumn(payload: Record<string, string | null>, message: string | undefined): boolean {
@@ -329,20 +338,26 @@ export async function createCertificateType(input: {
   wireType?: string;
   notes?: string;
   employeeIds?: string[];
-  issuedAt?: string;
-  expiresAt?: string;
+  issuedAt: string;
+  expiresAt: string;
   imageUrl?: string;
   cloudinaryPublicId?: string;
 }): Promise<{ id: string; name: string }> {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase nên không thể thêm chứng chỉ.");
   const title = input.title.trim();
   if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+  validateCertificateDates(input.issuedAt, input.expiresAt);
   if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
     throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
 
   const employeeIds = (input.employeeIds ?? []).filter(Boolean);
   const weldScope = input.weldScope?.trim() || null;
+  // Kiểm tra schema trước khi RPC tạo chứng chỉ để tránh báo lỗi sau khi đã ghi một phần.
+  if (input.supplier?.trim() || input.wireType?.trim()) {
+    const { error } = await createClient().from("chung_chi_nhom").select("nha_cung_cap, loai_day_han").limit(0);
+    if (error) throw new Error(/nha_cung_cap|loai_day_han/.test(error.message ?? "") ? CERTIFICATE_TYPE_EXTRAS_MIGRATION_MESSAGE : formatSupabaseError(error));
+  }
   if (employeeIds.length > 0) {
     await createPersonnelCertificates({
       title,
@@ -401,6 +416,8 @@ export async function createCertificateType(input: {
   const insertPayload: Record<string, string | null> = {
     ten_nhom: title,
     ma_nhom: input.code?.trim() || null,
+    ngay_cap: input.issuedAt || null,
+    ngay_het_han: input.expiresAt || null,
     don_vi_cap: input.organization?.trim() || null,
     may_ap_dung: input.machine?.trim() || null,
     moi_han_ap_dung: weldScope,
@@ -425,6 +442,8 @@ export async function createCertificateType(input: {
 export type UpdateCertificateTypeInput = {
   id: string;
   title: string;
+  issuedAt: string;
+  expiresAt: string;
   code?: string;
   organization?: string;
   machine?: string;
@@ -442,14 +461,20 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
   const title = input.title.trim();
   if (!title) throw new Error("Vui lòng nhập tên loại chứng chỉ.");
+  validateCertificateDates(input.issuedAt, input.expiresAt);
   if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
     throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
 
   const supabase = createClient();
+  const { data: previousGroup, error: previousGroupError } = await supabase
+    .from("chung_chi_nhom").select("ngay_cap, ngay_het_han").eq("id", input.id).single();
+  if (previousGroupError) throw new Error(formatSupabaseError(previousGroupError));
   const groupUpdate: Record<string, string | null> = {
     ten_nhom: title,
     ma_nhom: input.code?.trim() || null,
+    ngay_cap: input.issuedAt,
+    ngay_het_han: input.expiresAt,
     don_vi_cap: input.organization?.trim() || null,
     may_ap_dung: input.machine?.trim() || null,
     moi_han_ap_dung: input.weldScope?.trim() || null,
@@ -473,6 +498,17 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
     ({ error: groupError } = await updateGroup());
   }
   if (groupError) throw new Error(formatSupabaseError(groupError));
+
+  if (previousGroup.ngay_cap !== input.issuedAt || previousGroup.ngay_het_han !== input.expiresAt) {
+    // Chỉ đổi ngày cùng đợt cấp hoặc hồ sơ thiếu ngày; giữ ngày riêng của từng người.
+    const previousIssue = previousGroup.ngay_cap ? `eq.${previousGroup.ngay_cap}` : "is.null";
+    const previousExpiry = previousGroup.ngay_het_han ? `eq.${previousGroup.ngay_het_han}` : "is.null";
+    const { error } = await supabase.from("chung_chi")
+      .update({ ngay_cap: input.issuedAt, ngay_het_han: input.expiresAt })
+      .eq("nhom_id", input.id)
+      .or(`and(ngay_cap.is.null,ngay_het_han.is.null),and(ngay_cap.${previousIssue},ngay_het_han.${previousExpiry})`);
+    if (error) throw new Error(formatSupabaseError(error));
+  }
 
   const certificateUpdate: Record<string, string | null> = {
     ten_chung_chi: title,

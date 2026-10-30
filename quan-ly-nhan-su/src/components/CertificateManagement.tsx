@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CertificateThumbnail from "@/components/CertificateThumbnail";
+import DateField from "@/components/DateField";
 import {
   CaretDown,
   Eye,
@@ -684,6 +685,8 @@ export default function CertificateManagement() {
   const [form, setForm] = useState({
     title: "",
     code: "",
+    issuedAt: "",
+    expiresAt: "",
     organization: "",
     machine: "",
     weldScope: [] as string[],
@@ -713,8 +716,8 @@ export default function CertificateManagement() {
     try {
       const [rows, groups, registry] = await Promise.all([
         loadPersonnelCertificateRows(),
-        fetchCertificateGroups().catch(() => [] as CertificateGroupOption[]),
-        loadCertificateRegistry().catch(() => ({ certificates: [] as Certificate[], personnel: [] })),
+        fetchCertificateGroups(),
+        loadCertificateRegistry(),
       ]);
       setPersonnelRows(rows);
       setCatalogGroups(groups);
@@ -787,7 +790,10 @@ export default function CertificateManagement() {
     }
 
     for (const row of welders) {
-      const certs = parseCertificateList(row.chung_chi);
+      const certs = new Set([
+        ...parseCertificateList(row.chung_chi),
+        ...certificateItems.filter((cert) => cert.employeeId === row.employee_id).map((cert) => cert.title),
+      ]);
       for (const titleRaw of certs) {
         const title = titleRaw.trim();
         if (!title) continue;
@@ -829,7 +835,7 @@ export default function CertificateManagement() {
         ),
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key));
-  }, [catalogGroups, welders]);
+  }, [catalogGroups, welders, certificateItems]);
 
   const filtered = useMemo(
     () =>
@@ -1040,6 +1046,8 @@ export default function CertificateManagement() {
     setForm({
       title: "",
       code: "",
+      issuedAt: "",
+      expiresAt: "",
       organization: "",
       machine: "",
       weldScope: [],
@@ -1065,6 +1073,8 @@ export default function CertificateManagement() {
     setForm({
       title: row.title,
       code: row.group?.code || "",
+      issuedAt: row.group?.issueDate?.slice(0, 10) || "",
+      expiresAt: row.group?.expiryDate?.slice(0, 10) || "",
       organization: row.group?.issuer || "",
       machine: row.group?.machine || "",
       weldScope: parseWeldScopeTokens(row.group?.weldScope).filter((token) =>
@@ -1145,6 +1155,8 @@ export default function CertificateManagement() {
           id: editTarget.group.id,
           title: form.title,
           code: form.code,
+          issuedAt: form.issuedAt,
+          expiresAt: form.expiresAt,
           organization: form.organization,
           machine: form.machine,
           weldScope: serializeWeldScope(form.weldScope),
@@ -1160,6 +1172,8 @@ export default function CertificateManagement() {
         await createCertificateType({
           title: form.title.trim() || editTarget.title,
           code: form.code,
+          issuedAt: form.issuedAt,
+          expiresAt: form.expiresAt,
           organization: form.organization,
           machine: form.machine,
           weldScope: serializeWeldScope(form.weldScope),
@@ -1254,6 +1268,8 @@ export default function CertificateManagement() {
       await createCertificateType({
         title,
         code: form.code,
+        issuedAt: form.issuedAt,
+        expiresAt: form.expiresAt,
         organization: form.organization,
         machine: form.machine,
         weldScope: serializeWeldScope(form.weldScope),
@@ -1282,11 +1298,11 @@ export default function CertificateManagement() {
       )}
 
       <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-[#0047AB]">
-        Danh mục loại chứng chỉ · thống kê nhân sự từ{" "}
+        Loại chứng chỉ được khai báo tại đây; thêm vào danh mục chưa cấp cho nhân sự. Cấp qua khóa đào tạo cho học viên đạt hoặc gán trực tiếp tại{" "}
         <Link href="/ho-so-tho-han" className="font-bold underline underline-offset-2 hover:text-blue-800">
           Hồ sơ thợ hàn
         </Link>
-        {" · "}không tạo ảnh mẫu
+        . Ngày cấp và hết hạn được lưu theo đợt cấp; mỗi nhân sự có thể có ngày riêng.
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
@@ -1380,7 +1396,7 @@ export default function CertificateManagement() {
           className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-3.5 text-xs sm:w-auto sm:justify-start sm:text-sm font-semibold text-white shadow-xs cursor-pointer"
         >
           <Plus size={14} weight="bold" />
-          Thêm chứng chỉ
+          Thêm loại chứng chỉ
         </button>
       </div>
 
@@ -1469,7 +1485,7 @@ export default function CertificateManagement() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-400">
           Không tìm thấy loại chứng chỉ phù hợp.{" "}
           <button type="button" onClick={openAddModal} className="font-semibold text-[#0047AB] hover:underline cursor-pointer">
-            Thêm chứng chỉ mới
+            Thêm loại chứng chỉ
           </button>
         </div>
       ) : (
@@ -1514,6 +1530,10 @@ export default function CertificateManagement() {
                               Chưa có nhà cung cấp / loại dây hàn
                             </div>
                           )}
+                          <div className="mt-1 text-xs text-slate-600">
+                            Cấp: {formatIsoDate(row.group?.issueDate) || "Chưa cập nhật"}
+                            {" · "}Hết hạn: {formatIsoDate(row.group?.expiryDate) || "Chưa cập nhật"}
+                          </div>
                           <button
                             type="button"
                             onClick={() => setTypeDetail(row)}
@@ -1671,7 +1691,7 @@ export default function CertificateManagement() {
                     ? editTarget.group
                       ? "Sửa loại chứng chỉ"
                       : "Sửa / đưa chứng chỉ cũ vào danh mục"
-                    : "Thêm chứng chỉ mới"}
+                    : "Thêm loại chứng chỉ"}
                 </h2>
               </div>
               <button
@@ -1685,6 +1705,9 @@ export default function CertificateManagement() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
+              <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                Khai báo loại chứng chỉ và ngày của đợt cấp. Khóa đào tạo dùng loại này để cấp cho học viên đạt; cũng có thể gán trực tiếp trong hồ sơ thợ hàn.
+              </p>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   Tên loại chứng chỉ *
@@ -1720,6 +1743,22 @@ export default function CertificateManagement() {
                     placeholder="VD: Sở GTVT"
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Ngày cấp *
+                    <DateField value={form.issuedAt} onChange={(issuedAt) => setForm((f) => ({ ...f, issuedAt }))} className="mt-1" />
+                  </label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Ngày hết hạn *
+                    <DateField value={form.expiresAt} onChange={(expiresAt) => setForm((f) => ({ ...f, expiresAt }))} className="mt-1" />
+                  </label>
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Bắt buộc nhập đủ hai ngày. Khi sửa, cập nhật hồ sơ dùng ngày chung và hồ sơ chưa có ngày; giữ nguyên hồ sơ có ngày riêng.
+                </p>
               </div>
 
               <div>
@@ -1919,7 +1958,7 @@ export default function CertificateManagement() {
                 disabled={saving || uploadingImg}
                 className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-bold text-white cursor-pointer disabled:opacity-50"
               >
-                {saving ? "Đang lưu…" : uploadingImg ? "Đang tải ảnh…" : editTarget ? "Lưu thay đổi" : "Thêm chứng chỉ"}
+                {saving ? "Đang lưu…" : uploadingImg ? "Đang tải ảnh…" : editTarget ? "Lưu thay đổi" : "Thêm loại chứng chỉ"}
               </button>
             </div>
           </form>
