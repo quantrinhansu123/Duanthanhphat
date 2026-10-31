@@ -56,9 +56,9 @@ export default function WeldAcceptanceWorkflow() {
       </div>
       {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (
         <div className="no-print">
-          {tab === "rfi" && <RfiPanel projectId={projectId} onOpen={openRfi} />}
-          {tab === "accept" && <AcceptPanel projectId={projectId} />}
-          {tab === "records" && <RecordsPanel projectId={projectId} onOpen={openRecord} onOpenBbnt={openBbnt} />}
+          {tab === "rfi" && <RfiPanel key={projectId} projectId={projectId} onOpen={openRfi} />}
+          {tab === "accept" && <AcceptPanel key={projectId} projectId={projectId} />}
+          {tab === "records" && <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onOpenBbnt={openBbnt} />}
         </div>
       )}
       {view && <WeldAcceptanceDocument view={view} onClose={() => setView(null)} />}
@@ -68,6 +68,8 @@ export default function WeldAcceptanceWorkflow() {
 }
 
 function RfiPanel({ projectId, onOpen }: { projectId: string; onOpen: (r: RfiSummary) => unknown }) {
+  const [kind, setKind] = useState<"nghiem-thu" | "theo-doi">("nghiem-thu");
+  const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
   const [info, setInfo] = useState<{ missing: string[]; excluded: Record<string, number>; total: number } | null>(null);
@@ -84,7 +86,7 @@ function RfiPanel({ projectId, onOpen }: { projectId: string; onOpen: (r: RfiSum
     const [list, num] = await Promise.all([loadRfis(projectId), loadRfiNumber(projectId)]);
     setRfis(list.rfis); setSoPhieu(num.so_phieu);
   }, [projectId]);
-  useEffect(() => { setRows([]); setInfo(null); setSelected(new Set()); setError(""); refresh().catch((e) => setError(message(e))); }, [projectId, refresh]);
+  useEffect(() => { setRows([]); setInfo(null); setSelected(new Set()); setError(""); requestId.current = crypto.randomUUID(); refresh().catch((e) => setError(message(e))); }, [projectId, kind, refresh]);
 
   async function search() {
     setBusy(true); setError("");
@@ -97,9 +99,9 @@ function RfiPanel({ projectId, onOpen }: { projectId: string; onOpen: (r: RfiSum
   async function publish() {
     setBusy(true); setError("");
     try {
-      await publishRfi({ id: requestId.current, du_an_id: projectId, so_phieu: soPhieu, ngay_moi: ngayMoi, moi_han_ids: [...selected], thong_tin: thongTin });
+      await publishRfi({ id: requestId.current, du_an_id: projectId, so_phieu: soPhieu, ngay_moi: ngayMoi, moi_han_ids: monitoring ? [] : [...selected], thong_tin: thongTin, loai_rfi: kind, filters });
       requestId.current = crypto.randomUUID(); // chỉ đổi ID sau khi thành công để thử lại không tạo phiếu thứ hai
-      setSelected(new Set()); await refresh(); await search();
+      setSelected(new Set()); await refresh(); if (!monitoring) await search();
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   const toggle = (id: string) => setSelected((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -107,15 +109,22 @@ function RfiPanel({ projectId, onOpen }: { projectId: string; onOpen: (r: RfiSum
 
   return (
     <section className="space-y-3">
+      <div role="group" aria-label="Loại RFI" className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} aria-pressed={!monitoring} onClick={() => setKind("nghiem-thu")} className={!monitoring ? primary : secondary}>1. RFI nghiệm thu</button>
+        <button type="button" disabled={busy} aria-pressed={monitoring} onClick={() => setKind("theo-doi")} className={monitoring ? primary : secondary}>2. RFI theo dõi công việc hàn</button>
+      </div>
+      {monitoring && <p className="text-sm text-slate-600">Nhập phạm vi mối hàn và/hoặc lý trình để mời theo dõi công việc hàn. Phiếu này không xác nhận chất lượng nghiệm thu.</p>}
       <div className="flex flex-wrap items-end gap-2">
-        <input className={input} placeholder="Tìm mã mối" onChange={set("query")} />
-        <input className={input} placeholder="Từ mối" onChange={set("nameFrom")} />
-        <input className={input} placeholder="Đến mối" onChange={set("nameTo")} />
-        <input className={input} type="date" title="Từ ngày hàn" onChange={set("dateFrom")} />
-        <input className={input} type="date" title="Đến ngày hàn" onChange={set("dateTo")} />
-        <input className={`${input} w-28`} placeholder="Từ Km0+000" onChange={set("kmFrom")} />
-        <input className={`${input} w-28`} placeholder="Đến Km2+000" onChange={set("kmTo")} />
-        <button type="button" className={primary} disabled={busy} onClick={search}>Tìm mối đủ điều kiện</button>
+        {!monitoring && <>
+        <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
+        <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
+        <input className={input} type="date" title="Đến ngày hàn" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
+        </>}
+        <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
+        <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
+        <input className={`${input} w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
+        <input className={`${input} w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
+        {!monitoring && <button type="button" className={primary} disabled={busy} onClick={search}>Tìm mối đủ điều kiện</button>}
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {info && (
@@ -150,13 +159,13 @@ function RfiPanel({ projectId, onOpen }: { projectId: string; onOpen: (r: RfiSum
         <input className={input} placeholder="Bên mời (nhà thầu)" value={thongTin.ben_moi} onChange={(e) => setThongTin({ ...thongTin, ben_moi: e.target.value })} />
         <input className={input} placeholder="Bên nhận (TVGS/CĐT)" value={thongTin.ben_nhan} onChange={(e) => setThongTin({ ...thongTin, ben_nhan: e.target.value })} />
         <input className={input} placeholder="Phạm vi" value={thongTin.pham_vi} onChange={(e) => setThongTin({ ...thongTin, pham_vi: e.target.value })} />
-        <button type="button" className={primary} disabled={busy || !selected.size || !soPhieu.trim()} onClick={publish}>Phát hành RFI ({selected.size} mối)</button>
+        <button type="button" className={primary} disabled={busy || (!monitoring && !selected.size) || !soPhieu.trim() || !ngayMoi} onClick={publish}>{monitoring ? "Phát hành RFI theo dõi" : `Phát hành RFI (${selected.size} mối)`}</button>
       </div>
       <h3 className="text-sm font-bold">Phiếu đã phát hành</h3>
       <ul className="divide-y divide-slate-100 text-sm">
         {rfis.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span>{r.so_phieu} · {r.ngay_moi} · {r.tong_moi} mối (còn {r.con_lai}) · {r.trang_thai}</span>
+            <span>{r.so_phieu} · {r.ngay_moi} · {r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi công việc hàn" : `${r.tong_moi} mối (còn ${r.con_lai})`} · {r.trang_thai}</span>
             <button type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r)).catch((e) => setError(message(e)))}>Xem / In</button>
           </li>))}
         {!rfis.length && <li className="py-2 text-slate-500">Chưa có phiếu.</li>}

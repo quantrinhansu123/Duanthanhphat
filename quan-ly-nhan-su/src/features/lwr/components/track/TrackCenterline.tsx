@@ -311,7 +311,7 @@ export function TrackCenterline({
   const markerW = MARKER_W;
   const markerH = MARKER_H;
   const machineH = MACHINE_BLOCK_H;
-  const showMachines = machines.length > 0;
+  const showMachines = machines.some((machine) => machine.line === rows[0]?.line);
 
   const plottedStructures: PlottedPlacement[] = useMemo(
     () => {
@@ -347,10 +347,10 @@ export function TrackCenterline({
         if (to !== null && to > lineEnd) lineEnd = to;
       }
     }
-    if (!Number.isFinite(lineStart) || !Number.isFinite(lineEnd)) return machines;
+    if (!Number.isFinite(lineStart) || !Number.isFinite(lineEnd)) return [];
     // Giữ ngày nếu đoạn hàn giao với phạm vi tuyến.
     return machines.filter(
-      (item) => item.endMetres >= lineStart - 1 && item.startMetres <= lineEnd + 1,
+      (item) => item.line === rows[0]?.line && item.metres >= lineStart - 1 && item.metres <= lineEnd + 1,
     );
   }, [machines, rows]);
 

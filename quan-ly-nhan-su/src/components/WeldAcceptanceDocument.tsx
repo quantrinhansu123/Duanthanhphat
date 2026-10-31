@@ -146,6 +146,7 @@ const DOTS = "……………";
 
 function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
+  const monitoring = t.loai_rfi === "theo-doi";
   const [y, m, d] = rfi.ngay_moi.split("-");
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
@@ -160,8 +161,8 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
     <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[13px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
       <p className="mt-2 text-right italic">{pq?.noiLap ?? DOTS}, ngày {d ?? DOTS} tháng {m ?? DOTS} năm {y ?? DOTS}</p>
-      <h2 className="mt-3 text-center text-lg font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
-      <p className="text-center">Số: {rfi.so_phieu}/YCNT</p>
+      <h2 className="mt-3 text-center text-lg font-bold">{monitoring ? "PHIẾU YÊU CẦU THEO DÕI CÔNG VIỆC HÀN (RFI)" : "PHIẾU YÊU CẦU NGHIỆM THU"}</h2>
+      <p className="text-center">Số: {rfi.so_phieu}/{monitoring ? "RFI" : "YCNT"}</p>
       <dl className="mt-3 grid grid-cols-[6rem_1fr]">
         <dt>Dự án</dt><dd>: {projectName || DOTS}</dd>
         <dt>Gói thầu</dt><dd>: {pq?.goiThau ?? DOTS}</dd>
@@ -169,19 +170,25 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
         <dt>Địa điểm</dt><dd>: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
       </dl>
       <div className="mt-2 flex gap-2"><b>Kính gửi:</b><div>{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
-      <p className="mt-3 font-bold">1. Đối tượng nghiệm thu:</p>
-      <p className="pl-4">- Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
-      <p className="mt-2 font-bold">2. Vị trí nghiệm thu:</p>
+      <p className="mt-3 font-bold">1. {monitoring ? "Công việc đề nghị theo dõi" : "Đối tượng nghiệm thu"}:</p>
+      <p className="pl-4">- {monitoring ? "Theo dõi công việc thi công hàn ray" : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến"}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
+      <p className="mt-2 font-bold">2. {monitoring ? "Phạm vi theo dõi" : "Vị trí nghiệm thu"}:</p>
       <p className="pl-4">- Tuyến: {upper ? "☑" : "☐"} Tuyến thượng &nbsp; {lower ? "☑" : "☐"} Tuyến hạ</p>
       {missingRoutes.length > 0 && <p className="pl-4">- Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
-      <p className="pl-4">- Lý trình: Từ {chainage(km[0]?.v)} đến {chainage(km[km.length - 1]?.v)}</p>
-      <p className="pl-4">- Tên mối hàn: {welds.map((w) => w.ma_lich_su).join(", ") || DOTS}</p>
-      <p className="mt-2 font-bold">3. Thời gian nghiệm thu:</p>
+      <p className="pl-4">- Lý trình: Từ {chainage(monitoring ? t.kmFrom : km[0]?.v)} đến {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
+      <p className="pl-4">- Tên mối hàn: {monitoring ? [t.nameFrom, t.nameTo].filter(Boolean).join(" – ") || DOTS : welds.map((w) => w.ma_lich_su).join(", ") || DOTS}</p>
+      <p className="mt-2 font-bold">3. Thời gian {monitoring ? "theo dõi" : "nghiệm thu"}:</p>
       <p className="pl-4">Bắt đầu: ….h… ngày …… tháng …… năm ……</p>
+      {monitoring ? <>
+        <p className="mt-2 font-bold">4. Nội dung đề nghị:</p>
+        <p>Đề nghị Tư vấn giám sát đến công trường theo dõi công việc hàn trong phạm vi nêu trên vào ngày {d}/{m}/{y}.</p>
+        <p>Phiếu theo dõi công việc hàn; kết quả kiểm tra và nghiệm thu được ghi nhận theo hồ sơ riêng.</p>
+      </> : <>
       <p className="mt-2 font-bold">4. Đánh giá công việc:</p>
       <p>- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác.</p>
       <p>- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra, nghiệm thu.</p>
       <p>- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu để Nhà thầu triển khai các công việc tiếp theo.</p>
+      </>}
       <div className="mt-4 grid grid-cols-2 gap-4 text-center">
         <div><b>NHÀ THẦU CHÍNH</b><div className="mt-12">Tên: {pq ? "Nguyễn Tất Đạt" : DOTS}<br />Chức vụ: Chỉ huy trưởng</div></div>
         <div><b>NHÀ THẦU PHỤ</b><div className="mt-12">Tên: {pq ? "Trần Công Tiến" : DOTS}<br />Chức vụ: Chỉ huy trưởng</div></div>

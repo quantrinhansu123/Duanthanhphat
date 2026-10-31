@@ -34,6 +34,19 @@ export function compareWeldCodes(a: string, b: string): number {
   return a.localeCompare(b, "vi", { numeric: true, sensitivity: "base" });
 }
 
+export function validateMonitoringRange(range: { nameFrom: string; nameTo: string; kmFrom: string; kmTo: string }) {
+  const byName = Boolean(range.nameFrom || range.nameTo), byKm = Boolean(range.kmFrom || range.kmTo);
+  if (!byName && !byKm) throw new Error("Nhập khoảng từ mối – đến mối và/hoặc từ Km – đến Km.");
+  if (byName && (!range.nameFrom || !range.nameTo)) throw new Error("Nhập đủ từ mối và đến mối.");
+  if (byName && compareWeldCodes(range.nameFrom, range.nameTo) > 0) throw new Error("Từ mối phải đứng trước hoặc bằng đến mối.");
+  if (byKm) {
+    const from = parseChainageMeters(range.kmFrom), to = parseChainageMeters(range.kmTo);
+    if (from == null || to == null || !Number.isFinite(from) || !Number.isFinite(to) || from > to) {
+      throw new Error("Nhập đủ khoảng lý trình hợp lệ, từ Km không lớn hơn đến Km.");
+    }
+  }
+}
+
 export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter) {
   const q = (f.query ?? "").trim().toLowerCase();
   const kmFrom = f.kmFrom ? parseChainageMeters(f.kmFrom) : null;

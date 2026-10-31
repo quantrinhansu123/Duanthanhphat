@@ -86,6 +86,8 @@ for (const invalid of [
   await assert.rejects(api.createCertificateType({ title: "K922", ...invalid }));
   await assert.rejects(api.updateCertificateType({ id: "group", title: "K922", ...invalid }));
   await assert.rejects(api.createPersonnelCertificates({ title: "K922", employeeIds: ["person"], status: "Còn hiệu lực", ...invalid }));
+  await assert.rejects(api.updateCertificateRecord({id:"cert",title:"K922",status:"Còn hiệu lực",...invalid}));
+  await assert.rejects(api.syncGroupCertificates({groupId:"group",title:"K922",employeeIds:["person"],status:"Còn hiệu lực",...invalid}));
   assert.equal(writes, 0, "Invalid dates must fail before writing");
   assert.equal(rpcCalls, 0, "Do not issue a personal certificate with invalid dates");
 }

@@ -26,7 +26,6 @@ import {
 } from "@/lib/certificatesDb";
 import {
   loadPersonnelCertificateRows,
-  updatePersonnelCertificates,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import {
@@ -1211,22 +1210,7 @@ export default function CertificateManagement() {
     setSaving(true);
     setActionError("");
     try {
-      if (deleteTarget.group) {
-        await deleteCertificateType(deleteTarget.group.id);
-      } else {
-        const key = normalizeCertTitle(deleteTarget.title);
-        const affected = personnelRows.filter((row) =>
-          parseCertificateList(row.chung_chi).some((title) => normalizeCertTitle(title) === key),
-        );
-        await Promise.all(
-          affected.map((row) =>
-            updatePersonnelCertificates(
-              row.employee_id,
-              parseCertificateList(row.chung_chi).filter((title) => normalizeCertTitle(title) !== key),
-            ),
-          ),
-        );
-      }
+      await deleteCertificateType(deleteTarget.group?.id, deleteTarget.title);
       const deletedTitle = deleteTarget.title;
       setDeleteTarget(null);
       showToast(`Đã xóa loại chứng chỉ “${deletedTitle}”.`);

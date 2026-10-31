@@ -3,7 +3,7 @@
 import { Fragment, memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Image as ImageIcon, Plus, X } from "lucide-react";
 import type { StructureSymbol } from "@lwr/types/structure";
-import { type MachineOnTrack } from "@lwr/lib/machine-images";
+import { latestMachinePositions, type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
 import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
@@ -148,7 +148,7 @@ export const RailGrid = memo(function RailGrid({
 }: RailGridProps) {
   const [appendDraft, setAppendDraft] = useState<AppendDraft | null>(null);
   /** Bật/tắt lớp ảnh máy chồng trên sơ đồ chính (không ẩn thanh LWR / mối hàn). */
-  const [showMachineImages, setShowMachineImages] = useState(true);
+  const [showMachineImages, setShowMachineImages] = useState(false);
   const [filterProject, setFilterProject] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -167,7 +167,7 @@ export const RailGrid = memo(function RailGrid({
   }, [machineMarkers]);
 
   const filteredMachineMarkers = useMemo(() => {
-    return machineMarkers.filter((item) => {
+    return latestMachinePositions(machineMarkers.filter((item) => {
       if (filterProject && item.project !== filterProject) return false;
       if (filterDateFrom) {
         if (!item.date || item.date < filterDateFrom) return false;
@@ -176,7 +176,7 @@ export const RailGrid = memo(function RailGrid({
         if (!item.date || item.date > filterDateTo) return false;
       }
       return true;
-    });
+    }));
   }, [machineMarkers, filterProject, filterDateFrom, filterDateTo]);
 
   const filtersActive = Boolean(filterProject || filterDateFrom || filterDateTo);
@@ -280,12 +280,13 @@ export const RailGrid = memo(function RailGrid({
               ? "border-amber-500 bg-amber-50 text-amber-950 ring-1 ring-amber-400"
               : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
           }`}
-          title={showMachineImages ? "Ẩn ảnh máy trên sơ đồ" : "Hiện ảnh máy (xóa nền) theo lý trình nhật ký hàn trên sơ đồ chính"}
+          title={showMachineImages ? "Ẩn ảnh máy trên sơ đồ" : "Hiện vị trí máy tại tuyến / mối hàn của ngày làm việc cuối cùng"}
         >
           <ImageIcon className="size-4" aria-hidden />
-          {showMachineImages ? "Đang hiện ảnh máy" : "Hiện ảnh máy"}
+          {showMachineImages ? "Đang hiện máy ngày cuối" : "Hiện máy ngày cuối"}
         </button>
       </div>
+      {showMachineImages && <p className="text-xs text-slate-600">Mỗi máy chỉ hiện vị trí ngày cuối trong phạm vi lọc, tại tuyến và mối hàn đã được gắn trên sơ đồ.</p>}
       {showMachineImages ? (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-2">
           <label className="min-w-[10rem] flex-1 text-[11px] font-semibold text-slate-700">

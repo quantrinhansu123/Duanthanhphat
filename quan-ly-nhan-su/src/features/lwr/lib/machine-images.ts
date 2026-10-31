@@ -30,6 +30,8 @@ export type MachineOnTrack = {
   project: string;
   /** YYYY-MM-DD; null = không rõ ngày. */
   date: string | null;
+  line?: string;
+  lastWorkTime?: string;
   /** Giờ hoạt động trong ngày (ước lượng từ giờ BĐ→KT hoặc 8h/ca). */
   operatingHours: number;
   /** Khoảng giờ làm hiển thị, vd. 07:00–16:00. */
@@ -145,6 +147,7 @@ export async function loadWelderImageMap(): Promise<Record<string, string>> {
 }
 
 type DayWeldPoint = {
+  id: string;
   metres: number;
   code: string;
   startTime: string | null;
@@ -164,13 +167,12 @@ type DayBucket = {
   lunchHours: number;
 };
 
-/** Mối cuối ngày: lý trình lớn nhất; cùng lý trình thì giờ kết thúc/bắt đầu muộn hơn. */
+/** Mối cuối ngày theo giờ; thiếu giờ thì dùng thứ tự mã mối. */
 function pickLastWeldOfDay(points: DayWeldPoint[]): DayWeldPoint {
   return [...points].sort((a, b) => {
-    if (a.metres !== b.metres) return a.metres - b.metres;
     const aTime = a.endTime || a.startTime || "";
     const bTime = b.endTime || b.startTime || "";
-    return aTime.localeCompare(bTime);
+    return aTime.localeCompare(bTime) || a.code.localeCompare(b.code, "vi", { numeric: true }) || a.metres - b.metres;
   }).at(-1)!;
 }
 
@@ -196,6 +198,7 @@ export function buildMachineOnTrack(
   welds: JournalWeld[],
   imageByKey: Record<string, string>,
   welderImageByKey: Record<string, string> = {},
+  lineByWeldId: Record<string, string> = {},
 ): MachineOnTrack[] {
   const buckets = new Map<string, DayBucket>();
 
@@ -206,7 +209,7 @@ export function buildMachineOnTrack(
     if (!machineId && !machineCode) continue;
     const date = weld.date?.slice(0, 10) || null;
     const project = weld.project?.trim() || "—";
-    const key = `${date ?? "no-date"}|${project}`;
+    const key = `${machineId || machineCode}|${date ?? "no-date"}|${project}`;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = {
@@ -224,6 +227,7 @@ export function buildMachineOnTrack(
     const welderId = weld.welderId?.trim() || null;
     const welderName = weld.welder?.trim() && weld.welder !== "—" ? weld.welder.trim() : "";
     bucket.points.push({
+      id: weld.id,
       metres: weld.metres,
       code: weld.code,
       startTime: weld.startTime ?? null,
@@ -321,6 +325,8 @@ export function buildMachineOnTrack(
       weldCount: bucket.points.length,
       project: bucket.project,
       date: bucket.date,
+      line: lineByWeldId[last.id],
+      lastWorkTime: last.endTime || last.startTime || "",
       operatingHours: work.hours,
       workTimeRange: work.range,
     });
@@ -332,6 +338,18 @@ export function buildMachineOnTrack(
       || a.startMetres - b.startMetres
       || a.project.localeCompare(b.project, "vi"),
   );
+}
+
+/** Chỉ giữ vị trí ngày cuối của từng máy trong phạm vi lọc. */
+export function latestMachinePositions(markers: MachineOnTrack[]): MachineOnTrack[] {
+  const latest = new Map<string, MachineOnTrack>();
+  for (const marker of markers) {
+    if (!marker.date) continue;
+    const key = marker.machineId || marker.machineCode;
+    const previous = latest.get(key);
+    if (!previous || `${marker.date}T${marker.lastWorkTime ?? ""}` > `${previous.date}T${previous.lastWorkTime ?? ""}`) latest.set(key, marker);
+  }
+  return [...latest.values()];
 }
 
 /** Màu bôi đoạn theo thứ tự ngày (ổn định theo id). */

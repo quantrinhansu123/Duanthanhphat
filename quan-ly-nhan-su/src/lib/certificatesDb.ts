@@ -590,21 +590,22 @@ export async function updateCertificateType(input: UpdateCertificateTypeInput): 
 }
 
 /** Xóa một loại chứng chỉ cùng toàn bộ hồ sơ chứng chỉ thuộc nhóm. */
-export async function deleteCertificateType(id: string): Promise<void> {
+export async function deleteCertificateType(id?: string, title?: string): Promise<void> {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
-  if (!id.trim()) throw new Error("Thiếu mã loại chứng chỉ để xóa.");
+  if (!id?.trim() && !title?.trim()) throw new Error("Thiếu mã hoặc tên loại chứng chỉ để xóa.");
+  await deleteCertificate({ ...(id ? { groupId: id } : {}), ...(title ? { title } : {}) });
+}
 
-  const supabase = createClient();
-  const { error: certificateError } = await supabase.from("chung_chi").delete().eq("nhom_id", id);
-  if (certificateError) throw new Error(formatSupabaseError(certificateError));
-
-  const { error: groupError } = await supabase.from("chung_chi_nhom").delete().eq("id", id);
-  if (groupError) throw new Error(formatSupabaseError(groupError));
+async function deleteCertificate(params: Record<string, string>) {
+  const response = await fetch(`/api/certificates?${new URLSearchParams(params)}`, { method: "DELETE" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Không xóa được chứng chỉ.");
 }
 
 /** Cập nhật chi tiết 1 chứng chỉ */
 export async function updateCertificateRecord(input: UpdateCertificateInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  validateCertificateDates(input.issuedAt, input.expiresAt);
   if (input.imageUrl && !input.imageUrl.startsWith("https://") && !input.imageUrl.startsWith("/api/documents/")) {
     throw new Error("Ảnh chứng chỉ phải là URL HTTPS (Cloudinary) hoặc liên kết tài liệu Drive (/api/documents/...).");
   }
@@ -668,6 +669,7 @@ export type SyncGroupCertificatesInput = {
 /** Đồng bộ danh sách người sở hữu và thông tin của nhóm chứng chỉ */
 export async function syncGroupCertificates(input: SyncGroupCertificatesInput) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
+  validateCertificateDates(input.issuedAt, input.expiresAt);
   if (input.employeeIds.length === 0) {
     throw new Error("Nhóm chứng chỉ phải có ít nhất 1 người sở hữu.");
   }
@@ -838,9 +840,7 @@ export async function revokeCertificateRecord(id: string) {
 /** Xóa hoàn toàn chứng chỉ khỏi DB */
 export async function deleteCertificateRecord(id: string) {
   if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase.");
-  const supabase = createClient();
-  const { error } = await supabase.from("chung_chi").delete().eq("id", id);
-  if (error) throw new Error(formatSupabaseError(error));
+  await deleteCertificate({ id });
 }
 
 /** Chỉ cho phép xóa asset khi không còn hồ sơ hoặc nhóm chứng chỉ nào tham chiếu. */

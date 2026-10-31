@@ -195,7 +195,11 @@ export default function CertificateFormModal({
       return;
     }
 
-    if (form.issuedAt && form.expiresAt && form.expiresAt < form.issuedAt) {
+    if (!form.issuedAt || !form.expiresAt) {
+      setError("Vui lòng nhập ngày cấp và ngày hết hạn chứng chỉ.");
+      return;
+    }
+    if (form.expiresAt < form.issuedAt) {
       setError("Ngày hết hạn phải từ ngày cấp trở đi.");
       return;
     }
@@ -293,7 +297,7 @@ export default function CertificateFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Ngày cấp
+                  Ngày cấp *
                 </label>
                 <div className="mt-1">
                   <DateField
@@ -304,7 +308,7 @@ export default function CertificateFormModal({
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Ngày hết hạn
+                  Ngày hết hạn *
                 </label>
                 <div className="mt-1">
                   <DateField

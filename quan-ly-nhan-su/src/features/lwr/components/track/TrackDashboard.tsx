@@ -392,8 +392,15 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   }, [layout.longRails, selectedLongRailId]);
 
   const machineMarkers = useMemo(
-    () => buildMachineOnTrack(journalWelds, machineImages, welderImages),
-    [journalWelds, machineImages, welderImages],
+    () => {
+      const lineByWeldId: Record<string, string> = {};
+      for (const joint of joints) {
+        const line = layout.rows.find((row) => railRowKey(row) === joint.rowKey)?.line;
+        if (line) for (const weld of joint.welds) lineByWeldId[weld.id] = line;
+      }
+      return buildMachineOnTrack(journalWelds, machineImages, welderImages, lineByWeldId);
+    },
+    [journalWelds, machineImages, welderImages, joints, layout.rows],
   );
 
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);

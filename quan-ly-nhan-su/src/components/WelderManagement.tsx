@@ -940,6 +940,11 @@ export default function WelderManagement() {
     const file = e.target.files?.[0];
     const cert = certUploadTargetRef.current;
     if (!file || !cert || !selectedWelder) return;
+    if (!cert.ngay_cap || !cert.ngay_het_han || cert.ngay_het_han < cert.ngay_cap) {
+      window.alert(isEn ? "Enter valid issue and expiry dates before uploading the certificate PDF." : "Vui lòng cập nhật ngày cấp và ngày hết hạn hợp lệ trước khi tải PDF chứng chỉ.");
+      openEditLiveCert(cert);
+      return;
+    }
 
     setUploadingCertId(cert.id);
     setCertUploadProgress(0);

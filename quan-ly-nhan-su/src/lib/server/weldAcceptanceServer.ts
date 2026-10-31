@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { filterRfiCandidates, rfiBlockReason, type RfiCandidate } from "@/lib/weldAcceptance";
+import { filterRfiCandidates, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
@@ -131,6 +131,27 @@ export async function nextRfiNumber(projectId: string) {
 }
 
 export async function publishRfi(body: Record<string, unknown>, actor: string) {
+  if (body.loai_rfi === "theo-doi") {
+    const range = object(body.filters ?? {});
+    const fields = { nameFrom: str(range.nameFrom, 100), nameTo: str(range.nameTo, 100), kmFrom: str(range.kmFrom, 40), kmTo: str(range.kmTo, 40) };
+    try { validateMonitoringRange(fields); } catch (error) { throw new QualityApiError((error as Error).message); }
+    const date = qualityDate(body.ngay_moi), number = str(body.so_phieu, 80);
+    if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
+    const info = object(body.thong_tin ?? {});
+    const payload = { id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: number, ngay_moi: date, nguoi_lap: actor,
+      thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi), loai_rfi: "theo-doi", ...fields } };
+    const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
+    if (error) {
+      if (error.code !== "23505") throw error;
+      const existing = await db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", payload.id).single();
+      if (existing.error || !existing.data || ["du_an_id", "so_phieu", "ngay_moi", "nguoi_lap"].some((k) => existing.data[k] !== payload[k as keyof typeof payload])
+        || Object.entries(payload.thong_tin).some(([k, value]) => existing.data.thong_tin?.[k] !== value)) {
+        throw new QualityApiError("Số phiếu hoặc mã yêu cầu đã được dùng. Tải lại danh sách rồi thử lại.", 409);
+      }
+    }
+    return { id: payload.id };
+  }
+  if (body.loai_rfi && body.loai_rfi !== "nghiem-thu") throw new QualityApiError("Loại RFI không hợp lệ.");
   const ids = body.moi_han_ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > 2000) throw new QualityApiError("Chọn 1–2000 mối cho một phiếu.");
   const ngay = qualityDate(body.ngay_moi);

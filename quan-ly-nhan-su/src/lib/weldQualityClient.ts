@@ -73,7 +73,7 @@ export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_
 export const loadRfiCandidates = (du_an_id: string, filters: RfiCandidateFilter) =>
   qualityRequest<{ rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number }>({ action: "rfi-candidates", du_an_id, filters });
 export const loadRfiNumber = (du_an_id: string) => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id });
-export async function publishRfi(input: { id: string; du_an_id: string; so_phieu: string; ngay_moi: string; moi_han_ids: string[]; thong_tin: Record<string, string> }) {
+export async function publishRfi(input: { id: string; du_an_id: string; so_phieu: string; ngay_moi: string; moi_han_ids: string[]; thong_tin: Record<string, string>; loai_rfi?: "nghiem-thu" | "theo-doi"; filters?: RfiCandidateFilter }) {
   try { return await qualityRequest<{ id: string }>({ action: "rfi-publish", ...input }); } finally { notifyWeldQualityChanged(); }
 }
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
