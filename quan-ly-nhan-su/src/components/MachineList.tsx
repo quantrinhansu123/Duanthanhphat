@@ -53,7 +53,7 @@ import {
 } from "@/lib/personnelCertificatesDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Link from "next/link";
-import { equipmentGroup, equipmentQuantity } from "@/lib/projectEquipment";
+import { EQUIPMENT_GROUP_LABELS, equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 import { loadEquipmentLocations } from "@/lib/warehousesDb";
 import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type Warehouse } from "@/lib/warehouses";
 
@@ -1588,7 +1588,9 @@ function MachineFormModal({
                 <label className="text-sm font-semibold">Nhóm thiết bị
                   <select className="mt-1 w-full rounded-lg border border-slate-300 p-2" value={equipmentGroup(form)}
                     onChange={(e) => setForm({ ...form, specs: { ...form.specs, equipmentGroup: e.target.value } })}>
-                    <option value="welding">Máy hàn</option><option value="other">Máy và thiết bị khác</option>
+                    <option value="welding">Máy hàn</option>
+                    <option value="other">Máy và thiết bị khác</option>
+                    <option value="materials">Vật tư</option>
                   </select>
                 </label>
                 <label className="text-sm font-semibold">Số lượng (bộ cùng model)
@@ -1791,7 +1793,7 @@ export default function MachineList() {
   const [detailTab, setDetailTab] = useState<DetailTab>("welding");
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [equipmentTab, setEquipmentTab] = useState<"welding" | "other">("welding");
+  const [equipmentTab, setEquipmentTab] = useState<EquipmentGroup>("welding");
   const [locationBundle, setLocationBundle] = useState<LocationBundle>({ warehouses: [], locations: [] });
   const [locationError, setLocationError] = useState("");
   useEffect(() => {
@@ -1866,10 +1868,10 @@ export default function MachineList() {
   const maint = list.filter((m) => m.status === "Bảo trì").reduce((sum, m) => sum + equipmentQuantity(m), 0);
   const broken = list.filter((m) => m.status === "Hỏng").reduce((sum, m) => sum + equipmentQuantity(m), 0);
 
-  const typeSummary = useMemo(() => ([['welding', 'Máy hàn'], ['other', 'Máy và thiết bị khác']] as const).map(([group, category]) => {
+  const typeSummary = useMemo(() => (Object.entries(EQUIPMENT_GROUP_LABELS) as [EquipmentGroup, string][]).map(([group, category]) => {
     const rows = list.filter((m) => equipmentGroup(m) === group);
-    const count = (status?: Machine['status']) => rows.filter((m) => !status || m.status === status).reduce((sum, m) => sum + equipmentQuantity(m), 0);
-    return { category, total: count(), working: count('Đang làm việc'), ready: count('Sẵn sàng'), maint: count('Bảo trì'), broken: count('Hỏng') };
+    const count = (status?: Machine["status"]) => rows.filter((m) => !status || m.status === status).reduce((sum, m) => sum + equipmentQuantity(m), 0);
+    return { category, total: count(), working: count("Đang làm việc"), ready: count("Sẵn sàng"), maint: count("Bảo trì"), broken: count("Hỏng") };
   }), [list]);
   function openEdit(machine: Machine) {
     setDetail(null);
@@ -1975,7 +1977,7 @@ export default function MachineList() {
       <section className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-bold text-slate-900">Bảng tổng hợp số lượng các loại máy</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Tổng số bộ theo hai nhóm thiết bị</p>
+          <p className="mt-0.5 text-xs text-slate-500">Tổng số bộ theo nhóm thiết bị / vật tư</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
@@ -2006,8 +2008,17 @@ export default function MachineList() {
       </section>
 
       <div className="mb-4 grid grid-cols-2 gap-2.5 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
-        {([["welding", "Máy hàn"], ["other", "Máy và thiết bị khác"]] as const).map(([group, label]) => <button key={group} type="button" aria-pressed={equipmentTab === group}
-          onClick={() => setEquipmentTab(group)} className={`h-10 rounded-lg border px-4 text-sm font-semibold ${equipmentTab === group ? "bg-[#0047AB] text-white" : "border-slate-300 bg-white"}`}>{label}</button>)}
+        {(Object.entries(EQUIPMENT_GROUP_LABELS) as [EquipmentGroup, string][]).map(([group, label]) => (
+          <button
+            key={group}
+            type="button"
+            aria-pressed={equipmentTab === group}
+            onClick={() => setEquipmentTab(group)}
+            className={`h-10 rounded-lg border px-4 text-sm font-semibold ${equipmentTab === group ? "bg-[#0047AB] text-white" : "border-slate-300 bg-white"}`}
+          >
+            {label}
+          </button>
+        ))}
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -2022,17 +2033,17 @@ export default function MachineList() {
           onClick={() => setFormModal({ machine: { ...emptyMachine(), specs: { equipmentGroup: equipmentTab, quantity: 1 } }, mode: "create" })}
           className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:w-auto sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
-          <Plus size={16} weight="bold" /> Thêm máy mới
+          <Plus size={16} weight="bold" /> {equipmentTab === "materials" ? "Thêm vật tư" : "Thêm máy mới"}
         </button>
       </div>
 
-      {equipmentTab === "other" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {equipmentTab !== "welding" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50"><tr>{["Mã thiết bị", "Tên thiết bị", "Model", "Số lượng (bộ)", "Vị trí: Kho / Dự án", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
           <tbody>{filtered.map((m) => <tr key={m.id} className="border-t border-slate-200"><td className="p-3">{m.code}</td><td className="p-3">{m.name}</td><td className="p-3">{m.model}</td><td className="p-3 text-right font-semibold">{equipmentQuantity(m)}</td><td className="max-w-sm p-3 text-xs">{locationLabel(m)}</td><td className="p-3">{m.status}</td><td className="p-3"><button type="button" onClick={() => openEdit(m)} className="mr-3 text-[#0047AB]">Sửa</button><button type="button" onClick={() => void handleDelete(m)} className="text-rose-700">Xóa</button></td></tr>)}
-            {!filtered.length && <tr><td colSpan={7} className="p-5 text-center text-slate-500">Chưa có máy / thiết bị khác.</td></tr>}
+            {!filtered.length && <tr><td colSpan={7} className="p-5 text-center text-slate-500">{equipmentTab === "materials" ? "Chưa có vật tư." : "Chưa có máy / thiết bị khác."}</td></tr>}
           </tbody></table>
       </div>}
-      <div className={`${equipmentTab === "other" ? "hidden" : ""} overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
+      <div className={`${equipmentTab !== "welding" ? "hidden" : ""} overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
         <ul className="divide-y divide-slate-100">
           {filtered.map((m) => {
             const selected = activeId === m.id;
@@ -2075,7 +2086,7 @@ export default function MachineList() {
                       </span>
                       {m.model ? <span className="font-medium text-slate-700">{m.model}</span> : null}
                       <span className="text-slate-300" aria-hidden>·</span>
-                      <span>{equipmentGroup(m) === "other" ? "Máy và thiết bị khác" : getMachineCategory(m)}</span>
+                      <span>{EQUIPMENT_GROUP_LABELS[equipmentGroup(m)] || getMachineCategory(m)}</span>
                       <span className="font-semibold">Số lượng: {equipmentQuantity(m)} bộ</span>
                       <span className="basis-full text-xs text-slate-600">Vị trí: {locationLabel(m)}</span>
                       <span className="text-slate-300" aria-hidden>·</span>

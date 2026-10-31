@@ -48,7 +48,7 @@ import ProjectEquipmentTable from "@/components/ProjectEquipmentTable";
 const MACHINE_TYPES = [...REPORT_MACHINES];
 /** Mỗi trang giữ trọn các ngày, tối đa khoảng này dòng dự án. */
 const PROGRESS_PAGE_ROW_CAP = 24;
-type ProjectMachineOption = { code: string; name: string; model?: string; weldingTechnology?: string; group?: "welding" | "other"; quantity?: number };
+type ProjectMachineOption = { code: string; name: string; model?: string; weldingTechnology?: string; group?: "welding" | "other" | "materials"; quantity?: number };
 type ProjectPersonnelOption = Pick<
   PersonnelCertificateRow,
   "employee_id" | "ho_ten" | "chuc_vu" | "ma_nhan_su" | "to_han"
@@ -945,7 +945,7 @@ function ProjectInfoFields({
           <input type="checkbox" checked disabled={readOnly} onChange={() => updateForm({ machineTypes: form.machineTypes.filter((c) => c !== code) })} />
           {code} — chưa liên kết danh mục; bỏ chọn và gán lại đúng mã máy / thiết bị.
         </label>)}
-        {([["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"]] as const).map(([group, label]) => <div key={group}>
+        {([["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"], ["materials", "3. Vật tư"]] as const).map(([group, label]) => <div key={group}>
           <CheckboxGroup label={label} hint="Gán máy / thiết bị từ danh mục vào dự án" searchable
             options={machineOptions.filter((m) => (m.group ?? "welding") === group).map((m) => m.code)}
             selected={form.machineTypes.filter((code) => machineOptions.some((m) => m.code === code && (m.group ?? "welding") === group))} onChange={(selected) => {

@@ -1,8 +1,15 @@
 import { getMachineCategory, type Machine } from "@/data/machines";
 
-export type EquipmentGroup = "welding" | "other";
+export type EquipmentGroup = "welding" | "other" | "materials";
+export const EQUIPMENT_GROUP_LABELS: Record<EquipmentGroup, string> = {
+  welding: "Máy hàn",
+  other: "Máy và thiết bị khác",
+  materials: "Vật tư",
+};
 export function equipmentGroup(machine: Pick<Machine, "type" | "name" | "model" | "weldingTechnology" | "specs">): EquipmentGroup {
-  if (machine.specs?.equipmentGroup === "other" || machine.specs?.equipmentGroup === "welding") return machine.specs.equipmentGroup;
+  const stored = machine.specs?.equipmentGroup;
+  if (stored === "other" || stored === "welding" || stored === "materials") return stored;
+  if (/vật tư|vat tu|phụ tùng|phu tung|vật liệu|consumable|spare/i.test(`${machine.type} ${machine.name}`)) return "materials";
   return getMachineCategory(machine) === "Phương tiện" || /mài|khoan|cắt|phát điện|nâng|kích|máy nén|máy bơm/i.test(`${machine.type} ${machine.name}`) ? "other" : "welding";
 }
 export function equipmentQuantity(machine: Pick<Machine, "specs">): number {
@@ -16,10 +23,11 @@ export function assignedEquipment(machines: Pick<Machine, "id" | "code" | "name"
     id: m.id, code: m.code, name: m.name, model: m.model, group: equipmentGroup(m), quantity: project.machineQuantities?.[m.code] ?? 1,
   }));
   for (const code of selected) if (!machines.some((m) => m.code === code)) rows.push({ id: `unlinked:${code}`, code, name: `${code} — chưa liên kết danh mục`, model: "", group: "welding", quantity: 0, missing: true });
-  return rows.sort((a, b) => Number(a.group === "other") - Number(b.group === "other"));
+  const order: Record<EquipmentGroup, number> = { welding: 0, other: 1, materials: 2 };
+  return rows.sort((a, b) => order[a.group] - order[b.group] || a.code.localeCompare(b.code, "vi"));
 }
 export function projectEquipmentText(equipment: ProjectEquipment[]): string {
-  return ([ ["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"] ] as const).map(([group, title]) => {
+  return ([ ["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"], ["materials", "3. Vật tư"] ] as const).map(([group, title]) => {
     const rows = equipment.filter((m) => m.group === group);
     return `${title}:\n${rows.map((m) => m.missing ? `- ${m.name}; cần gán lại trong dự án` : `- ${m.name}${m.model ? ` (${m.model})` : ""}: ${m.quantity} bộ`).join("\n") || "Chưa gán thiết bị"}`;
   }).join("\n");

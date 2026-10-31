@@ -1291,22 +1291,22 @@ export default function CertificateManagement() {
 
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Loại chứng chỉ</div>
-          <div className="mt-1.5 text-2xl font-bold font-mono text-slate-900">{totalTypes}</div>
+          <div className="text-xs font-extrabold uppercase tracking-wider text-slate-700">Loại chứng chỉ</div>
+          <div className="mt-1.5 text-2xl font-extrabold font-mono text-slate-900">{totalTypes}</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Có nhân sự sở hữu</div>
-          <div className="mt-1.5 text-2xl font-bold font-mono text-[#0047AB]">{typesWithHolders}</div>
+          <div className="text-xs font-extrabold uppercase tracking-wider text-[#0047AB]">Có nhân sự sở hữu</div>
+          <div className="mt-1.5 text-2xl font-extrabold font-mono text-[#0047AB]">{typesWithHolders}</div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-emerald-600">Thợ hàn có chứng chỉ</div>
-          <div className="mt-1.5 text-2xl font-bold font-mono text-emerald-700">
+          <div className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">Thợ hàn có chứng chỉ</div>
+          <div className="mt-1.5 text-2xl font-extrabold font-mono text-emerald-800">
             {weldersWithCert}/{welders.length}
           </div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng lượt sở hữu</div>
-          <div className="mt-1.5 text-2xl font-bold font-mono text-slate-900">{totalAssignments}</div>
+          <div className="text-xs font-extrabold uppercase tracking-wider text-slate-700">Tổng lượt sở hữu</div>
+          <div className="mt-1.5 text-2xl font-extrabold font-mono text-slate-900">{totalAssignments}</div>
         </div>
       </div>
 
@@ -1348,7 +1348,7 @@ export default function CertificateManagement() {
         <select
           value={methodFilter}
           onChange={(event) => setMethodFilter(event.target.value)}
-          className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:w-auto sm:text-sm"
+          className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-hidden focus:border-[#0047AB] sm:w-auto sm:text-sm"
           aria-label="Lọc theo phương pháp hàn"
         >
           <option value="">Phương pháp hàn</option>
@@ -1358,7 +1358,7 @@ export default function CertificateManagement() {
         <select
           value={machineFilter}
           onChange={(event) => setMachineFilter(event.target.value)}
-          className="h-9 w-full max-w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 outline-hidden focus:border-[#0047AB] sm:w-auto sm:max-w-[220px] sm:text-sm"
+          className="h-9 w-full max-w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 outline-hidden focus:border-[#0047AB] sm:w-auto sm:max-w-[220px] sm:text-sm"
           aria-label="Lọc theo máy"
         >
           <option value="">Tất cả máy</option>
@@ -1402,7 +1402,7 @@ export default function CertificateManagement() {
             <div className="table-scroll overflow-x-auto">
               <table className="w-full min-w-[1040px] border-collapse text-left text-xs sm:text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-extrabold uppercase tracking-wider text-slate-800">
                     <th className="w-12 px-3.5 py-3">#</th>
                     <th className="min-w-[200px] px-3.5 py-3">Họ và tên</th>
                     <th className="px-3.5 py-3">Mã nhân sự</th>
@@ -1417,13 +1417,13 @@ export default function CertificateManagement() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredOwners.map((row, index) => (
                     <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-3.5 py-3 font-mono text-slate-400">{index + 1}</td>
+                      <td className="px-3.5 py-3 font-mono font-bold text-slate-600">{index + 1}</td>
                       <td className="px-3.5 py-3">
-                        <div className="font-semibold text-slate-900">{row.name}</div>
+                        <div className="font-extrabold text-slate-900">{row.name}</div>
                       </td>
-                      <td className="px-3.5 py-3 font-mono text-[#0047AB]">{row.code}</td>
-                      <td className="px-3.5 py-3 text-slate-700">{row.position}</td>
-                      <td className="px-3.5 py-3 text-slate-700">{row.team}</td>
+                      <td className="px-3.5 py-3 font-mono font-bold text-[#0047AB]">{row.code}</td>
+                      <td className="px-3.5 py-3 font-semibold text-slate-800">{row.position}</td>
+                      <td className="px-3.5 py-3 font-semibold text-slate-800">{row.team}</td>
                       <td className="px-3.5 py-3">
                         <div className="flex flex-wrap gap-1.5">
                           {row.certificates.map((item) => (
@@ -1475,13 +1475,15 @@ export default function CertificateManagement() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
           <div className="table-scroll overflow-x-auto">
-            <table className="w-full min-w-[800px] border-collapse text-left text-xs sm:text-sm">
+            <table className="w-full min-w-[960px] border-collapse text-left text-xs sm:text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-extrabold uppercase tracking-wider text-slate-800">
                   <th className="w-12 px-3.5 py-3">#</th>
-                  <th className="min-w-[320px] px-3.5 py-3">Loại chứng chỉ</th>
+                  <th className="min-w-[280px] px-3.5 py-3">Loại chứng chỉ</th>
+                  <th className="min-w-[110px] whitespace-nowrap px-3.5 py-3">Ngày cấp</th>
+                  <th className="min-w-[120px] whitespace-nowrap px-3.5 py-3">Ngày hết hạn</th>
                   <th className="px-3.5 py-3 text-right">Số nhân sự</th>
-                  <th className="min-w-[280px] px-3.5 py-3">Nhân sự sở hữu</th>
+                  <th className="min-w-[240px] px-3.5 py-3">Nhân sự sở hữu</th>
                   <th className="w-[110px] px-2 py-3 text-right">Thao tác</th>
                   <th className="w-12 px-2 py-3" aria-label="Mở rộng" />
                 </tr>
@@ -1491,55 +1493,59 @@ export default function CertificateManagement() {
                   const open = Boolean(expanded[row.key]);
                   const preview = row.holders.slice(0, 3);
                   const more = Math.max(0, row.holders.length - preview.length);
+                  const issueDate = formatIsoDate(row.group?.issueDate);
+                  const expiryDate = formatIsoDate(row.group?.expiryDate);
                   return (
                     <Fragment key={row.key}>
                       <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-3.5 py-3 font-mono text-slate-400">{index + 1}</td>
+                        <td className="px-3.5 py-3 font-mono font-bold text-slate-600">{index + 1}</td>
                         <td className="px-3.5 py-3">
                           <button
                             type="button"
                             onClick={() => setTypeDetail(row)}
                             className="text-left cursor-pointer group"
                           >
-                            <div className="font-semibold text-slate-900 leading-snug group-hover:text-[#0047AB] transition-colors">
+                            <div className="font-extrabold text-slate-900 leading-snug group-hover:text-[#0047AB] transition-colors">
                               {row.title}
                             </div>
                           </button>
                           {certificateTypeSummary(row.group) ? (
-                            <div className="mt-0.5 text-xs font-medium text-slate-600">
+                            <div className="mt-0.5 text-xs font-bold text-slate-700">
                               {certificateTypeSummary(row.group)}
                             </div>
                           ) : (
-                            <div className="mt-0.5 text-[11px] text-slate-400">
+                            <div className="mt-0.5 text-[11px] font-semibold text-slate-600">
                               Chưa có nhà cung cấp / loại dây hàn
                             </div>
                           )}
-                          <div className="mt-1 text-xs text-slate-600">
-                            Cấp: {formatIsoDate(row.group?.issueDate) || "Chưa cập nhật"}
-                            {" · "}Hết hạn: {formatIsoDate(row.group?.expiryDate) || "Chưa cập nhật"}
-                          </div>
                           <button
                             type="button"
                             onClick={() => setTypeDetail(row)}
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#0047AB] hover:underline cursor-pointer"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-extrabold text-[#0047AB] hover:underline cursor-pointer"
                           >
                             <Eye size={12} weight="bold" aria-hidden />
                             Xem chi tiết
                           </button>
                         </td>
+                        <td className="px-3.5 py-3 whitespace-nowrap font-mono font-bold text-slate-900">
+                          {issueDate || <span className="font-semibold text-slate-600">Chưa cập nhật</span>}
+                        </td>
+                        <td className="px-3.5 py-3 whitespace-nowrap font-mono font-bold text-slate-900">
+                          {expiryDate || <span className="font-semibold text-slate-600">Chưa cập nhật</span>}
+                        </td>
                         <td className="px-3.5 py-3 text-right">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-[#0047AB]">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-extrabold text-[#0047AB]">
                             <Users size={12} weight="bold" />
                             {row.holders.length}
                           </span>
                         </td>
                         <td className="px-3.5 py-3">
                           {row.holders.length === 0 ? (
-                            <span className="text-slate-400">—</span>
+                            <span className="font-semibold text-slate-500">—</span>
                           ) : (
-                            <div className="text-slate-700">
+                            <div className="font-bold text-slate-800">
                               {preview.map((h) => h.name).join(", ")}
-                              {more > 0 ? <span className="text-slate-400"> +{more}</span> : null}
+                              {more > 0 ? <span className="font-semibold text-slate-600"> +{more}</span> : null}
                             </div>
                           )}
                         </td>
@@ -1586,7 +1592,7 @@ export default function CertificateManagement() {
                       </tr>
                       {open && (
                         <tr className="bg-slate-50/70">
-                          <td colSpan={6} className="px-3.5 py-3">
+                          <td colSpan={8} className="px-3.5 py-3">
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                               {row.holders.map((holder) => {
                                 const cert = resolveHolderCertificate(row.title, holder);

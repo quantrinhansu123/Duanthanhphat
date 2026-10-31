@@ -9,6 +9,29 @@ const field =
 const REMEMBER_KEY = "tp-remember-email";
 const icon = "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400";
 
+/** Xóa phiên Supabase hỏng (refresh_token 400) trước khi đăng nhập lại. */
+function clearStaleAuthSession() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("sb-") && key.includes("auth")) localStorage.removeItem(key);
+    }
+  } catch { /* localStorage bị chặn */ }
+  try {
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith("sb-") && key.includes("auth")) sessionStorage.removeItem(key);
+    }
+  } catch { /* sessionStorage bị chặn */ }
+  try {
+    const cookies = document.cookie.split(";");
+    for (const part of cookies) {
+      const name = part.split("=")[0]?.trim();
+      if (name && name.startsWith("sb-")) {
+        document.cookie = `${name}=; Max-Age=0; path=/`;
+      }
+    }
+  } catch { /* cookie bị chặn */ }
+}
+
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,6 +42,7 @@ export default function LoginForm() {
 
   // Điền sẵn email đã ghi nhớ; mật khẩu do trình duyệt tự điền (không lưu mật khẩu trong app).
   useEffect(() => {
+    clearStaleAuthSession();
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
       if (saved) { setEmail(saved); setRemember(true); }
@@ -29,23 +53,40 @@ export default function LoginForm() {
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const { error: failure } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
-      if (failure) { setError("Email hoặc mật khẩu không đúng."); return; }
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
+        setError("Chưa cấu hình Supabase trên máy này. Kiểm tra .env.local rồi khởi động lại npm run dev.");
+        return;
+      }
+      // Phiên cũ / refresh_token hết hạn gây POST .../token?grant_type=refresh_token 400.
+      clearStaleAuthSession();
+      const supabase = createClient();
+      try { await supabase.auth.signOut({ scope: "local" }); } catch { /* bỏ phiên local nếu còn */ }
+      const { error: failure } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (failure) {
+        const detail = failure.message?.trim();
+        setError(
+          /invalid login|invalid credentials|email|password/i.test(detail || "")
+            ? "Email hoặc mật khẩu không đúng."
+            : `Không đăng nhập được: ${detail || failure.name || "lỗi không rõ"}`,
+        );
+        return;
+      }
       try {
-        if (remember) {
-          localStorage.setItem(REMEMBER_KEY, email.trim());
-          // Nhờ trình duyệt (Chrome/Edge) lưu mật khẩu vào kho mật khẩu của nó, không lưu trong app.
-          const Credential = (window as unknown as { PasswordCredential?: new (init: { id: string; password: string }) => Credential }).PasswordCredential;
-          if (Credential && navigator.credentials) await navigator.credentials.store(new Credential({ id: email.trim(), password }));
-        } else {
-          localStorage.removeItem(REMEMBER_KEY);
-        }
+        if (remember) localStorage.setItem(REMEMBER_KEY, email.trim());
+        else localStorage.removeItem(REMEMBER_KEY);
       } catch { /* không ghi nhớ được thì vẫn đăng nhập bình thường */ }
       // Chỉ quay về đường dẫn nội bộ để tránh chuyển hướng sang website khác.
       const next = new URLSearchParams(window.location.search).get("next") ?? "";
       window.location.assign(next.startsWith("/") && !next.startsWith("//") ? next : "/");
-    } catch {
-      setError("Không kết nối được hệ thống đăng nhập.");
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : "";
+      setError(
+        detail.includes("NEXT_PUBLIC_SUPABASE")
+          ? "Chưa cấu hình Supabase trên máy này. Kiểm tra .env.local rồi khởi động lại npm run dev."
+          : detail
+            ? `Không kết nối được hệ thống đăng nhập: ${detail}`
+            : "Không kết nối được hệ thống đăng nhập. Kiểm tra mạng hoặc khởi động lại server.",
+      );
     } finally { setBusy(false); }
   }
 

@@ -49,21 +49,25 @@ export default function WarehouseManagement() {
     {status && <p role="status" className="rounded-lg border border-slate-200 bg-white p-3 text-sm">{status}</p>}
     {loading ? <p role="status">Đang tải danh sách kho…</p> : <>
       {missing > 0 && <p className="text-sm text-amber-800">Còn {missing} bộ chưa chọn kho lưu trữ.</p>}
-      {conflicts.length > 0 && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <h2 className="font-bold">Phân công thiết bị cần kiểm tra</h2>
-        <ul className="mt-2 space-y-2">{conflicts.map((m) => <li key={m.id}>
-          <Link href={`/danh-sach-may?${new URLSearchParams({ may: m.code })}`} className="font-semibold underline">{m.code}</Link>
-          {m.excessQuantity > 0 && <span>: đang gán vượt {m.excessQuantity} bộ.</span>}
-          {m.projects.filter((p) => p.missing).map((p) => <span key={p.id}> Phân công {p.quantity} bộ còn tham chiếu {p.name.toLowerCase()}.</span>)}
-        </li>)}</ul>
-        <Link href="/quan-ly-du-an" className="mt-2 inline-block font-semibold underline">Mở dự án để kiểm tra phân công</Link>
-      </section>}
-      {missing > 0 && <section className="rounded-xl border border-amber-200 bg-white p-4 text-sm">
-        <h2 className="font-bold">Thiết bị cần bổ sung vị trí kho</h2>
-        <ul className="mt-2 space-y-2">{bundle.locations.filter((m) => !m.warehouseId && m.warehouseQuantity > 0).map((m) => <li key={m.id}>
-          <Link href={`/danh-sach-may?${new URLSearchParams({ may: m.code })}`} className="font-semibold text-[#0047AB] underline">{m.code} · {m.name}</Link>: {m.warehouseQuantity} bộ
-        </li>)}</ul>
-      </section>}
+      {(conflicts.length > 0 || missing > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          {conflicts.length > 0 && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <h2 className="font-bold">Phân công thiết bị cần kiểm tra</h2>
+            <ul className="mt-2 space-y-2">{conflicts.map((m) => <li key={m.id}>
+              <Link href={`/danh-sach-may?${new URLSearchParams({ may: m.code })}`} className="font-semibold underline">{m.code}</Link>
+              {m.excessQuantity > 0 && <span>: đang gán vượt {m.excessQuantity} bộ.</span>}
+              {m.projects.filter((p) => p.missing).map((p) => <span key={p.id}> Phân công {p.quantity} bộ còn tham chiếu {p.name.toLowerCase()}.</span>)}
+            </li>)}</ul>
+            <Link href="/quan-ly-du-an" className="mt-2 inline-block font-semibold underline">Mở dự án để kiểm tra phân công</Link>
+          </section>}
+          {missing > 0 && <section className="rounded-xl border border-amber-200 bg-white p-4 text-sm">
+            <h2 className="font-bold">Thiết bị cần bổ sung vị trí kho</h2>
+            <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto">{bundle.locations.filter((m) => !m.warehouseId && m.warehouseQuantity > 0).map((m) => <li key={m.id}>
+              <Link href={`/danh-sach-may?${new URLSearchParams({ may: m.code })}`} className="font-semibold text-[#0047AB] underline">{m.code} · {m.name}</Link>: {m.warehouseQuantity} bộ
+            </li>)}</ul>
+          </section>}
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[650px] text-left text-sm">
         <thead className="bg-slate-50"><tr>{["Tên kho", "Địa chỉ / vị trí", "Số bộ trong kho", "Thao tác"].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead>
         <tbody>{bundle.warehouses.map((w) => <tr key={w.id} className="border-t border-slate-200"><td className="p-3 font-semibold">{w.name}</td><td className="p-3">{w.address}</td><td className="p-3">{bundle.locations.filter((m) => m.warehouseId === w.id).reduce((sum, m) => sum + m.warehouseQuantity, 0)}</td><td className="p-3"><div className="flex flex-wrap gap-3">
