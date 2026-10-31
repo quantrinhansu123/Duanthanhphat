@@ -106,8 +106,8 @@ assert.equal(saves[0].gia_tri_do.doc_mat_lan, -0.1, "Blank import cells preserve
 assert.equal(saves[0].gia_tri_do.phang_mat_lan, 0.2);
 await assert.rejects(() => journal.importQualityBatch({ entries: [{ moi_han_id: id(1), phien_ban: 4, patch: { ly_do_loai_nghiem_thu: null } }] }, "actor"), /không hợp lệ/);
 saves = []; peakSaves = 0;
-await journal.markQualityBatch({ kind: "visual", date: "2026-10-28", entries: Array.from({ length: 7 }, (_, i) => ({ id: id(i + 10), phien_ban: 0 })) }, "actor");
-assert.equal(saves.length, 7);
+await journal.markQualityBatch({ kind: "visual", date: "2026-10-28", entries: Array.from({ length: 21 }, (_, i) => ({ id: id(i + 10), phien_ban: 0 })) }, "actor");
+assert.equal(saves.length, 21, "All 21 selected welds are processed");
 assert.ok(peakSaves > 1 && peakSaves <= 5, "Batch processing bounds concurrency without serializing all 100 requests");
 
 const phrases = load("../src/i18n/phrases.ts");

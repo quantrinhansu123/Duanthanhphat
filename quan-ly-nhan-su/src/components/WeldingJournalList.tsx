@@ -92,8 +92,13 @@ import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQual
 import { loadQualityJournal, exportQualityJournal, selectFilteredQuality, qualityRequest, notifyWeldQualityChanged } from "@/lib/weldQualityClient";
 import { parseWeldQualityExcel, qualityExcelColumns } from "@/lib/weldQualityExcel";
 
-const WeldQualityDialog = dynamic(() => import("@/components/WeldQualityDialog"));
-const WeldQualityBulkDialog = dynamic(() => import("@/components/WeldQualityBulkDialog"));
+// Keep lazy dialogs from suspending the journal and resetting its selection effects.
+const WeldQualityDialog = dynamic(() => import("@/components/WeldQualityDialog"), {
+  loading: () => <p role="status">Đang mở kiểm tra chất lượng…</p>,
+});
+const WeldQualityBulkDialog = dynamic(() => import("@/components/WeldQualityBulkDialog"), {
+  loading: () => <p role="status">Đang mở kiểm tra hàng loạt…</p>,
+});
 
 const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
