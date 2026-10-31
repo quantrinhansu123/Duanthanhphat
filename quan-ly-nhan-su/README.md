@@ -82,6 +82,17 @@ node scripts/test-weld-quality-journal.mjs
 
 Script kiểm tra xác thực/origin, người ghi nhận từ server, lọc trước phân trang, chọn/xuất hơn 1.000 dòng, thao tác hàng loạt có lỗi, phiên bản, bảo toàn số đo và Excel Việt/Anh. Bài `test-weld-quality-db.mjs` phía trên kiểm tra cả hai migration, đồng bộ NDT và chặn sửa qua đường cũ. Chưa hoàn tất thử nhập–lưu trên trình duyệt/DB thật do chưa có cấu hình đăng nhập; không có dữ liệu thử được ghi vào DB thật.
 
+## RFI và bộ 3 biên bản nghiệm thu
+
+Chạy `supabase/migration_20261031_rfi_quy_trinh.sql` sau các migration chất lượng 28–29/10. Migration thay thế RPC phát/hoàn thành RFI, tạo sẵn bộ hồ sơ nháp khi phát phiếu, bổ sung thao tác ký chung và đồng bộ tình trạng Đạt với đủ 3 chữ ký. RFI cũ đang hiệu lực chưa có hồ sơ được bổ sung bộ nháp; hồ sơ đã có được giữ nguyên.
+
+- RFI mới chỉ chọn mối **Chờ siêu âm và nghiệm thu**, chưa thuộc RFI hiệu lực khác.
+- Sau phát RFI, xác nhận in để mở đủ bộ **(1) Phụ lục**, **(2) Nghiệm thu công việc**, **(3) Hoàn thành công việc**. Có thể in lại cả bộ từ Hồ sơ nghiệm thu. Biên bản (3) gồm 2 trang; phụ lục chia 20 mối/trang.
+- Bản in riêng và cả bộ dùng cùng mẫu. Kết quả chưa kiểm tra để trống; không tự kết luận đạt hoặc tự điền số đo.
+- Hoàn thành nghiệm thu cập nhật bộ nháp, không tạo bộ thứ hai. Chỉ xác nhận **Đã ký** sau hoàn thành kiểm tra và có đủ cả 3 biên bản; đặt lại **Chờ ký** đồng bộ cả bộ. Báo cáo ngày chỉ tính mối đã ký đủ hồ sơ.
+
+Kiểm thử: `node scripts/test-rfi-print.mjs`, `node scripts/test-rfi-monitoring.mjs`, `node scripts/test-weld-acceptance.mjs` và `node scripts/test-rfi-lifecycle-db.mjs <đường-dẫn-pglite/dist/index.js>`. Bài cuối kiểm tra giao dịch, phát phiếu tạo đủ 3 hồ sơ, lọc trạng thái, lưu lại đợt nháp, thử lại yêu cầu, thiếu biên bản và ký/bỏ ký đồng bộ trên PostgreSQL tạm.
+
 ## Biến môi trường Vercel
 
 - `NEXT_PUBLIC_SUPABASE_URL`

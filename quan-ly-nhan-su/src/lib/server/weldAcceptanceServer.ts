@@ -264,13 +264,9 @@ export async function acceptedOnDate(body: Record<string, unknown>) {
   const date = qualityDate(body.date);
   if (!date) throw new QualityApiError("Nhập ngày cần xem.");
   const projectId = body.du_an_id ? qualityUuid(body.du_an_id) : null;
-  let query = db().from("dot_nghiem_thu_moi")
-    .select("moi_han_id,dot_nghiem_thu!inner(ngay_nghiem_thu,phieu_yeu_cau_nghiem_thu!inner(du_an_id))", { count: "exact", head: true })
-    .eq("ket_qua", "Đạt").eq("dot_nghiem_thu.ngay_nghiem_thu", date);
-  if (projectId) query = query.eq("dot_nghiem_thu.phieu_yeu_cau_nghiem_thu.du_an_id", projectId);
-  const { count, error } = await query;
+  const { data, error } = await db().rpc("dem_moi_nghiem_thu_da_ky", { p_ngay: date, p_du_an_id: projectId });
   if (error) throw error;
-  return { count: count ?? 0 };
+  return { count: Number(data ?? 0) };
 }
 
 export async function listRecords(projectId: string) {
@@ -310,21 +306,13 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
 
 export async function setSignStatus(body: Record<string, unknown>) {
   if (body.tinh_trang_ky !== "Chờ ký" && body.tinh_trang_ky !== "Đã ký") throw new QualityApiError("Tình trạng ký không hợp lệ.");
-  // Một nút cho cả bộ 3 biên bản: thiếu bất kỳ hồ sơ nào cũng coi như chưa đủ điều kiện.
-  if (body.dot_id) {
-    const dotId = qualityUuid(body.dot_id);
-    const { data: docs, error: listError } = await db().from("ho_so_nghiem_thu").select("id,loai").eq("dot_id", dotId);
-    if (listError) throw listError;
-    const required = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
-    const present = new Set((docs ?? []).map((d) => d.loai));
-    if (required.some((loai) => !present.has(loai))) {
-      throw new QualityApiError("Thiếu một trong ba biên bản — chưa đủ điều kiện ký bộ hồ sơ.");
-    }
-    const { error } = await db().from("ho_so_nghiem_thu").update({ tinh_trang_ky: body.tinh_trang_ky }).eq("dot_id", dotId);
+  let dotId = body.dot_id ? qualityUuid(body.dot_id) : "";
+  if (!dotId) {
+    const { data, error } = await db().from("ho_so_nghiem_thu").select("dot_id").eq("id", qualityUuid(body.id)).single();
     if (error) throw error;
-    return { ok: true, count: docs?.length ?? 0 };
+    dotId = data.dot_id;
   }
-  const { error } = await db().from("ho_so_nghiem_thu").update({ tinh_trang_ky: body.tinh_trang_ky }).eq("id", qualityUuid(body.id));
+  const { error } = await db().rpc("ky_bo_ho_so_moi_han", { p_dot_id: dotId, p_tinh_trang_ky: body.tinh_trang_ky });
   if (error) throw error;
-  return { ok: true };
+  return { ok: true, count: 3 };
 }

@@ -196,8 +196,8 @@ export const navigation: NavItem[] = [
         id: "bien-ban-moi-han",
         label: "Biên bản mối hàn",
         labelEn: "Weld Acceptance Report",
-        description: "Biên bản nghiệm thu chất lượng mối hàn nhiệt nhôm — bảng chi tiết và xuất bản in",
-        descriptionEn: "Thermite weld quality acceptance report — detailed table and print export",
+        description: "Phát RFI, kiểm tra nghiệm thu và in bộ 3 biên bản mối hàn",
+        descriptionEn: "Issue RFIs, record acceptance and print the three weld acceptance documents",
       },
       {
         id: "bc-moi-han-theo-nam",

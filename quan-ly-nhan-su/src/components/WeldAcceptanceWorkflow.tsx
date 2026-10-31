@@ -97,6 +97,7 @@ export default function WeldAcceptanceWorkflow() {
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
   const [issuedList, setIssuedList] = useState<RfiSummary[] | null>(null);
   const [printPack, setPrintPack] = useState<RecordSet | null>(null);
+  const consumeEditRfi = useCallback(() => setEditRfiId(null), []);
 
   useEffect(() => {
     const remembered = (() => {
@@ -122,6 +123,9 @@ export default function WeldAcceptanceWorkflow() {
   }
   async function openRecord(id: string, kind: DocKind) {
     setView({ kind, record: await loadRecordSet(id) });
+  }
+  async function openPrintPack(id: string) {
+    setPrintPack(await loadRecordSet(id));
   }
   function startEditRfi(rfi: RfiSummary) {
     setView(null);
@@ -176,7 +180,7 @@ export default function WeldAcceptanceWorkflow() {
               key={projectId}
               projectId={projectId}
               editRfiId={editRfiId}
-              onEditConsumed={() => setEditRfiId(null)}
+              onEditConsumed={consumeEditRfi}
               onOpen={openRfi}
               onOpenIssuedList={setIssuedList}
               onPublished={afterPublishedRfi}
@@ -186,7 +190,7 @@ export default function WeldAcceptanceWorkflow() {
             <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} />
           )}
           {tab === "records" && (
-            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} />
+            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} />
           )}
         </div>
       )}
@@ -278,11 +282,12 @@ function RfiPanel({
         const inferred = inferRoutes(d.welds);
         setThongTin({
           ...info,
-          tuyen_thuong: info.tuyen_thuong || inferred.upper,
-          tuyen_ha: info.tuyen_ha || inferred.lower,
+          tuyen_thuong: d.rfi.thong_tin?.tuyen_thuong == null ? inferred.upper : info.tuyen_thuong,
+          tuyen_ha: d.rfi.thong_tin?.tuyen_ha == null ? inferred.lower : info.tuyen_ha,
         });
         setKind(d.rfi.thong_tin?.loai_rfi === "theo-doi" ? "theo-doi" : "nghiem-thu");
         setOkMsg(`Đang sửa phiếu ${d.rfi.so_phieu}. Lưu sẽ cập nhật thông tin in (không đổi danh sách mối).`);
+        setBusy(false);
         onEditConsumed();
         requestAnimationFrame(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       })
@@ -358,8 +363,8 @@ function RfiPanel({
         const inferred = inferRoutes(d.welds);
         setThongTin({
           ...info,
-          tuyen_thuong: info.tuyen_thuong || inferred.upper,
-          tuyen_ha: info.tuyen_ha || inferred.lower,
+          tuyen_thuong: d.rfi.thong_tin?.tuyen_thuong == null ? inferred.upper : info.tuyen_thuong,
+          tuyen_ha: d.rfi.thong_tin?.tuyen_ha == null ? inferred.lower : info.tuyen_ha,
         });
         setOkMsg(`Đang sửa phiếu ${d.rfi.so_phieu}. Đổi thông tin bên dưới rồi bấm «Lưu sửa phiếu».`);
         requestAnimationFrame(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -606,7 +611,7 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   return (
     <section className="space-y-3">
       <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-        Tab này chọn kết quả nghiệm thu cho các phiếu RFI đã phát. Sau khi bấm <b>Hoàn thành nghiệm thu</b>, hệ thống mở <b>Biên bản nghiệm thu giai đoạn công việc</b> và lưu đủ hồ sơ ở tab Hồ sơ nghiệm thu.
+        Bộ 3 biên bản đã có từ lúc phát RFI để in mang đi. Sau khi siêu âm và kiểm tra, bấm <b>Hoàn thành nghiệm thu</b> để cập nhật kết quả, rồi xác nhận ký chung tại <b>Hồ sơ nghiệm thu</b>.
       </p>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {done && <p className="text-sm text-green-700">{done}</p>}
@@ -663,7 +668,7 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   );
 }
 
-function RecordsPanel({ projectId, onOpen }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown }) {
+function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onPrint: (id: string) => Promise<void> }) {
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -720,12 +725,13 @@ function RecordsPanel({ projectId, onOpen }: { projectId: string; onOpen: (id: s
               <button
                 type="button"
                 className={allSigned ? secondary : primary}
-                disabled={busy || !complete}
-                title={!complete ? "Thiếu một trong ba biên bản" : undefined}
+                disabled={busy || !complete || r.thong_tin?.draft === true}
+                title={!complete ? "Thiếu một trong ba biên bản" : r.thong_tin?.draft === true ? "Hoàn thành kiểm tra và nghiệm thu trước khi xác nhận ký" : undefined}
                 onClick={() => void toggleSignSet(r)}
               >
                 {allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký"}
               </button>
+              <button type="button" className={secondary} disabled={busy || !complete} onClick={() => onPrint(r.id).catch((e) => setError(message(e)))}>In đủ bộ (1)(2)(3)</button>
             </div>
           </div>
         );

@@ -69,7 +69,7 @@ export type RecordSummary = { id: string; ngay_nghiem_thu: string; nguoi_lap: st
 export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_thu: Record<string, unknown> & { du_an: Record<string, unknown> } };
   ho_so: { id: string; loai: string; tinh_trang_ky: string; du_lieu_chot: unknown }[];
   sua_doi?: { id: string; ho_so_id: string; phien_ban: number; thong_tin: Record<string, string>; ly_do: string; nguoi_sua: string; created_at: string }[];
-  moi: { moi_han_id: string; ket_qua: string; ly_do: string | null; du_lieu_chot: { moi_han?: Record<string, unknown>; kiem_tra?: Record<string, unknown> } }[] };
+  moi: { moi_han_id: string; ket_qua: string; ly_do: string | null; du_lieu_chot: { moi_han?: Record<string, unknown>; kiem_tra?: Record<string, unknown>; tieu_chuan?: Record<string, unknown> } }[] };
 
 export const loadRfiCandidates = (du_an_id: string, filters: RfiCandidateFilter) =>
   qualityRequest<{ rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number }>({ action: "rfi-candidates", du_an_id, filters });
@@ -89,8 +89,11 @@ export const loadRecords = (du_an_id: string) => qualityRequest<{ records: Recor
 export const loadRecordSet = (id: string) => qualityRequest<RecordSet>({ action: "record-set", id });
 export const setRecordSign = (id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") => qualityRequest<{ ok: true }>({ action: "record-sign", id, tinh_trang_ky });
 /** Ký / bỏ ký đồng bộ cả bộ 3 biên bản của một đợt. */
-export const setRecordSetSign = (dot_id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") =>
-  qualityRequest<{ ok: true; count?: number }>({ action: "record-sign", dot_id, tinh_trang_ky });
+export async function setRecordSetSign(dot_id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") {
+  const result = await qualityRequest<{ ok: true; count?: number }>({ action: "record-sign", dot_id, tinh_trang_ky });
+  notifyWeldQualityChanged();
+  return result;
+}
 
 export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: string; dateTo?: string }) =>
   qualityRequest<{ accepted: WeldReportRow[]; waiting: WeldReportRow[] }>({ action: "dashboard-quality", filters });
