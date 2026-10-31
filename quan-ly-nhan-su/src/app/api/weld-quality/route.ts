@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld } from "@/lib/server/weldQualityJournal";
-import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     if (body.action === "rfi-publish") return NextResponse.json(await publishRfi(body, actor));
     if (body.action === "rfi-list") return NextResponse.json({ rfis: await listRfis(qualityUuid(body.du_an_id)) });
     if (body.action === "rfi-detail") return NextResponse.json(await loadRfiDetail(qualityUuid(body.id)));
+    if (body.action === "rfi-update") return NextResponse.json(await updateRfi(body));
     if (body.action === "accept-complete") return NextResponse.json(await completeRfi(body, actor));
     if (body.action === "accepted-on-date") return NextResponse.json(await acceptedOnDate(body));
     if (body.action === "record-list") return NextResponse.json({ records: await listRecords(qualityUuid(body.du_an_id)) });

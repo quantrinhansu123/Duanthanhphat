@@ -72,14 +72,24 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
     loadQualityInspection(row.id).then((data) => {
       if (!active) return;
       const inspection = data.inspection ?? emptyWeldInspection(row.id);
-      setDraft(inspection);
+      let next = inspection;
+      // Nhớ tiêu chí đã chọn lần trước trên cùng dự án khi mối chưa gắn tiêu chí.
+      if (!inspection.tieu_chuan_id) {
+        try {
+          const remembered = window.localStorage.getItem(`weld-quality-last-rule:${row.du_an_id}`);
+          if (remembered && data.rules.some((r) => r.id === remembered && r.dang_ap_dung)) {
+            next = { ...inspection, tieu_chuan_id: remembered };
+          }
+        } catch { /* ignore */ }
+      }
+      setDraft(next);
       setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
       setRules(data.rules);
       setAccepted(data.summary.tinh_trang === "Đạt");
     }).catch((e) => { if (active) setError(e instanceof Error ? e.message : "Không tải được kiểm tra."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [row.id, reload]);
+  }, [row.id, row.du_an_id, reload]);
   const rule = rules.find((r) => r.id === draft?.tieu_chuan_id) ?? null;
   const parseErrors: Partial<Record<GeometryCriterion, string>> = {};
   const measurements = Object.fromEntries(GEOMETRY_CRITERIA.map((k) => {
@@ -106,12 +116,21 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
           setSaving(true); setError(""); setMessage("");
           try {
             const saved = await saveQualityInspection({ ...draft, gia_tri_do: measurements });
+            if (saved.tieu_chuan_id) {
+              try { window.localStorage.setItem(`weld-quality-last-rule:${row.du_an_id}`, saved.tieu_chuan_id); } catch { /* ignore */ }
+            }
             setDraft(saved); setMessage("Đã lưu kiểm tra. Tình trạng được tính từ kết quả thực tế."); onSaved();
           } catch (err) { setError(err instanceof Error ? err.message : "Không lưu được kiểm tra."); }
           finally { setSaving(false); }
         }}>
           <fieldset disabled={saving || blocked || setupRule} className="space-y-5">
-            <label className="block text-sm font-semibold">Tiêu chí áp dụng<select className={input} value={draft.tieu_chuan_id ?? ""} onChange={(e) => setDraft({ ...draft, tieu_chuan_id: e.target.value || null })}>
+            <label className="block text-sm font-semibold">Tiêu chí áp dụng<select className={input} value={draft.tieu_chuan_id ?? ""} onChange={(e) => {
+              const id = e.target.value || null;
+              setDraft({ ...draft, tieu_chuan_id: id });
+              if (id) {
+                try { window.localStorage.setItem(`weld-quality-last-rule:${row.du_an_id}`, id); } catch { /* ignore */ }
+              }
+            }}>
               <option value="">Chưa chọn tiêu chí</option>{rules.filter((r) => r.dang_ap_dung || r.id === draft.tieu_chuan_id).map((r) => <option key={r.id} value={r.id}>{r.ten} · v{r.phien_ban}{r.dang_ap_dung ? "" : " · Lưu theo bản cũ"}</option>)}
             </select></label>
             {!rule && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Chưa có tiêu chí áp dụng. Có thể lưu kết quả đo; chưa đủ căn cứ để kết luận hình học đạt hoặc phát RFI.</p>}

@@ -161,7 +161,7 @@ storage.set("nhat-ky-thi-cong-ngay:p:2027-10-29", "broken JSON");
 assert.equal((await diaryDb.loadDiary("p", date)).saved, false);
 console.log("construction diary save/reload/blank/local fallback/network/storage checks OK");
 
-const { reportWeatherFields, weatherLabel } = load("reportWeather");
+const { reportWeatherFields, weatherLabel, weatherDetailLabel } = load("reportWeather");
 const weatherData = {
   daily: { time: ["2026-10-29"], weather_code: [61], temperature_2m_mean: [27.4] },
   hourly: { time: ["2026-10-29T07:00", "2026-10-29T13:00", "2026-10-29T19:00"], weather_code: [0, 61, 3], temperature_2m: [25.8, 29.2, 27.1] },
@@ -174,8 +174,12 @@ assert.equal(weather.toi, "Nhiều mây, 27°C");
 assert.equal(reportWeatherFields({...weatherData,hourly:{...weatherData.hourly,weather_code:[0,61,0]}},"2026-10-29").toi,"Trời quang, 27°C");
 assert.throws(() => reportWeatherFields(weatherData, "2026-10-30"), /Chưa có dữ liệu/);
 assert.throws(() => reportWeatherFields({daily: {time: ["2026-10-29"], weather_code: [null]}}, "2026-10-29"), /Chưa có dữ liệu/);
-assert.equal(weatherLabel(95), "Dông");
-assert.equal(weatherLabel(71), "Tuyết");
+// Biểu mẫu NKTC chỉ có 3 ô: Bình thường / Mưa / Nắng
+assert.equal(weatherLabel(95), "Mưa");
+assert.equal(weatherLabel(71), "Bình thường");
+assert.equal(weatherLabel(0), "Nắng");
+assert.equal(weatherDetailLabel(95), "Dông");
+assert.equal(weatherDetailLabel(71), "Tuyết");
 console.log("weather date, morning/afternoon/evening, missing-data checks OK");
 
 let point = {vi_do: 10.2, kinh_do: 103.96}, weatherFetches = 0, location = "";

@@ -40,11 +40,11 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
   const pages = Array.from({ length: Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE)) }, (_, p) => rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Biên bản nghiệm thu mối hàn">
       <style>{css}</style>
-      <div className="weld-doc-actions mx-auto mb-3 flex max-w-[1100px] justify-end gap-2">
-        <button type="button" onClick={() => window.print()} className="h-9 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white cursor-pointer">In / Lưu PDF</button>
-        <button type="button" onClick={onClose} className="h-9 rounded-lg bg-white px-4 text-sm font-semibold cursor-pointer">Đóng</button>
+      <div className="weld-doc-actions sticky top-0 z-[110] mx-auto mb-3 flex max-w-[1100px] flex-wrap justify-end gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+        <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+        <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
       <div id="weld-bbnt-print" className="mx-auto max-w-[1100px] text-[11px] text-slate-900">
         {pages.map((page, p) => (

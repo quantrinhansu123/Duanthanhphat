@@ -138,8 +138,11 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     const date = qualityDate(body.ngay_moi), number = str(body.so_phieu, 80);
     if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
     const info = object(body.thong_tin ?? {});
+    const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
     const payload = { id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: number, ngay_moi: date, nguoi_lap: actor,
-      thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi), loai_rfi: "theo-doi", ...fields } };
+      thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
+        tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha), gio_bat_dau: str(info.gio_bat_dau, 10),
+        loai_rfi: "theo-doi", ...fields } };
     const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
     if (error) {
       if (error.code !== "23505") throw error;
@@ -158,8 +161,20 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   if (!ngay) throw new QualityApiError("Nhập ngày mời nghiệm thu.");
   const soPhieu = str(body.so_phieu, 80);
   if (!soPhieu) throw new QualityApiError("Nhập số phiếu.");
+  const info = object(body.thong_tin ?? {});
+  const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
+  const thong_tin = {
+    dia_diem: str(info.dia_diem),
+    ben_moi: str(info.ben_moi),
+    ben_nhan: str(info.ben_nhan),
+    pham_vi: str(info.pham_vi),
+    tuyen_thuong: flag(info.tuyen_thuong),
+    tuyen_ha: flag(info.tuyen_ha),
+    gio_bat_dau: str(info.gio_bat_dau, 10),
+    loai_rfi: "nghiem-thu",
+  };
   const id = await publishWeldRfi({ id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
-    moi_han_ids: ids.map(qualityUuid), nguoi_lap: actor, thong_tin: object(body.thong_tin ?? {}) });
+    moi_han_ids: ids.map(qualityUuid), nguoi_lap: actor, thong_tin });
   return { id };
 }
 
@@ -169,6 +184,35 @@ export async function listRfis(projectId: string) {
     .eq("du_an_id", projectId).order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
   return data.map(({ phieu_yeu_cau_nghiem_thu_moi: m, ...r }) => ({ ...r, tong_moi: m.length, con_lai: m.filter((x) => x.con_hieu_luc).length }));
+}
+
+/** Sửa thông tin phiếu YCNT/RFI đã phát (không đổi danh sách mối đã chốt). */
+export async function updateRfi(body: Record<string, unknown>) {
+  const id = qualityUuid(body.id);
+  const { data: existing, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", id).single();
+  if (error) throw error;
+  const soPhieu = str(body.so_phieu, 80);
+  const ngay = qualityDate(body.ngay_moi);
+  if (!soPhieu) throw new QualityApiError("Nhập số phiếu.");
+  if (!ngay) throw new QualityApiError("Nhập ngày mời nghiệm thu.");
+  const info = object(body.thong_tin ?? {});
+  const prev = object(existing.thong_tin ?? {});
+  const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
+  const thong_tin = {
+    ...prev,
+    dia_diem: str(info.dia_diem),
+    ben_moi: str(info.ben_moi),
+    ben_nhan: str(info.ben_nhan),
+    pham_vi: str(info.pham_vi),
+    tuyen_thuong: flag(info.tuyen_thuong ?? prev.tuyen_thuong),
+    tuyen_ha: flag(info.tuyen_ha ?? prev.tuyen_ha),
+    gio_bat_dau: str(info.gio_bat_dau ?? prev.gio_bat_dau, 10),
+  };
+  const { error: upd } = await db().from("phieu_yeu_cau_nghiem_thu")
+    .update({ so_phieu: soPhieu, ngay_moi: ngay, thong_tin })
+    .eq("id", id);
+  if (upd) throw upd;
+  return { id };
 }
 
 /** Mối của RFI kèm tình trạng hiện tại để chọn nghiệm thu. */

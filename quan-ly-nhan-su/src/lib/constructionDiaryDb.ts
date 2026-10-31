@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
-/** Nội dung phần B "Tình hình thi công hàng ngày" (mẫu NKTC trang 6-7). */
+/** Nội dung phần B "Tình hình thi công hàng ngày" — biểu mẫu dự án (NKTC trang 6–7). */
 export type ConstructionDiary = {
   thoiTiet: string;
   nhietDo: string;

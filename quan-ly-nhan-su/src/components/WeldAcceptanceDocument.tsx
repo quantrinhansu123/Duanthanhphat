@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { parseCoordinateCode } from "@/lib/weldCode";
 
@@ -12,10 +12,9 @@ const TITLES: Record<DocKind, string> = {
   rfi: "PHIẾU YÊU CẦU NGHIỆM THU (RFI)",
   "hoan-thanh": "PHIẾU NGHIỆM THU HOÀN THÀNH CÔNG VIỆC XÂY DỰNG",
   "phu-luc": "PHỤ LỤC NGHIỆM THU CÔNG VIỆC XÂY DỰNG",
-  "giai-doan": "PHIẾU NGHIỆM THU GIAI ĐOẠN XÂY DỰNG",
+  "giai-doan": "BIÊN BẢN NGHIỆM THU GIAI ĐOẠN CÔNG VIỆC",
 };
 const METHOD_TEXT = { FBW: "Hàn ray chảy giáp mép trên tuyến (FBW)", ATW: "Hàn nhiệt nhôm trên tuyến (ATW)" } as const;
-// Chưa nhận mẫu chính thức: bản in dùng bố cục tạm và nói rõ trên giấy.
 const TEMPLATE_VERSION = "Mẫu tạm v0 — chờ mẫu chính thức";
 
 const css = `@media print {
@@ -30,7 +29,6 @@ const css = `@media print {
 
 type Row = { code: string; date: string; method: "FBW" | "ATW" | ""; result: string; note: string; km?: string; mapUrl?: string; coords?: string };
 
-/** Link Google Maps dẫn thẳng tới vị trí mối ngoài hiện trường. */
 const mapLink = (lat: number, lng: number) => `https://www.google.com/maps?q=${lat},${lng}`;
 
 function recordRows(record: RecordSet): Row[] {
@@ -43,7 +41,14 @@ function recordRows(record: RecordSet): Row[] {
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
-export default function WeldAcceptanceDocument({ view, onClose }: { view: View; onClose: () => void }) {
+const flagOn = (v: unknown) => v === true || v === "1" || v === "true";
+
+export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
+  view: View;
+  onClose: () => void;
+  /** Mở form sửa phiếu YCNT (chỉ khi xem RFI). */
+  onEditRfi?: (rfi: RfiSummary) => void;
+}) {
   const { kind } = view;
   const [record, setRecord] = useState(view.record);
   const [editing, setEditing] = useState(false);
@@ -53,6 +58,14 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
   const hoSo = record?.ho_so.find((h) => h.loai === LOAI[kind]);
   const revisions = (record?.sua_doi ?? []).filter((r) => r.ho_so_id === hoSo?.id);
   const latest = revisions[revisions.length - 1];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function saveRevision() {
     if (!hoSo || !record) return;
@@ -67,14 +80,15 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
   if (view.rfi) {
     const { rfi, welds } = view.rfi, t = rfi.thong_tin ?? {};
     projectName = view.rfi.projectName;
-    headline = [["Số phiếu", rfi.so_phieu], ["Ngày mời nghiệm thu", rfi.ngay_moi], ["Địa điểm", t.dia_diem ?? ""], ["Bên mời", t.ben_moi ?? ""], ["Bên nhận", t.ben_nhan ?? ""], ["Phạm vi", t.pham_vi ?? ""], ["Người lập", rfi.nguoi_lap]];
+    headline = [["Số phiếu", rfi.so_phieu], ["Ngày mời nghiệm thu", rfi.ngay_moi], ["Giờ bắt đầu", t.gio_bat_dau || ""], ["Địa điểm", t.dia_diem ?? ""], ["Bên mời", t.ben_moi ?? ""], ["Bên nhận", t.ben_nhan ?? ""], ["Phạm vi", t.pham_vi ?? ""], ["Người lập", rfi.nguoi_lap]];
     rows = welds.map((w) => ({ code: w.ma_lich_su, date: w.ngay_thuc_hien ?? "", method: "", result: "", note: "", km: w.ly_trinh ?? "",
       mapUrl: w.vi_do != null && w.kinh_do != null ? mapLink(w.vi_do, w.kinh_do) : "", coords: w.vi_do != null && w.kinh_do != null ? `${w.vi_do.toFixed(6)}, ${w.kinh_do.toFixed(6)}` : "" }));
   } else if (record) {
     const { dot } = record, rfi = dot.phieu_yeu_cau_nghiem_thu, t = { ...((dot.thong_tin ?? {}) as Record<string, string>), ...(latest?.thong_tin ?? {}) };
     projectName = String(rfi.du_an?.du_an ?? rfi.du_an?.ten_du_an ?? rfi.du_an?.name ?? "");
     const all = recordRows(record);
-    rows = kind === "giai-doan" ? [] : all.filter((r) => r.result === "Đạt");
+    rows = kind === "giai-doan" ? all.filter((r) => r.result === "Đạt") : all.filter((r) => r.result === "Đạt");
+    if (kind === "giai-doan" && rows.length === 0) rows = all;
     counts = `Tổng ${all.length} mối trong RFI ${rfi.so_phieu}: chấp nhận ${all.filter((r) => r.result === "Đạt").length}, không đạt ${all.filter((r) => r.result === "Không đạt").length}, chưa nghiệm thu ${all.filter((r) => r.result === "Chưa nghiệm thu").length}.`;
     headline = [["Số RFI", String(rfi.so_phieu)], ["Ngày nghiệm thu", String(dot.ngay_nghiem_thu)], ["Địa điểm", t.dia_diem ?? ""], ["Thành phần tham dự", t.thanh_phan ?? ""], ["Người lập", String(dot.nguoi_lap)]];
   }
@@ -82,15 +96,20 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
   const signed = hoSo?.tinh_trang_ky;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={TITLES[kind]}>
       <style>{css}</style>
-      <div className="weld-doc-actions mx-auto mb-3 flex max-w-3xl justify-end gap-2">
+      <div className="weld-doc-actions sticky top-0 z-[110] mx-auto mb-3 flex max-w-3xl flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+        {kind === "rfi" && view.rfi && onEditRfi ? (
+          <button type="button" onClick={() => onEditRfi(view.rfi!.rfi)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+            Sửa phiếu
+          </button>
+        ) : null}
         {hoSo && (
           <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ly_do: "" }); setEditing((v) => !v); }}
-            className="h-9 rounded-lg bg-white px-4 text-sm font-semibold cursor-pointer">Sửa thông tin in</button>
+            className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
-        <button type="button" onClick={() => window.print()} className="h-9 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white cursor-pointer">In / Lưu PDF</button>
-        <button type="button" onClick={onClose} className="h-9 rounded-lg bg-white px-4 text-sm font-semibold cursor-pointer">Đóng</button>
+        <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+        <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
       {editing && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
@@ -137,7 +156,6 @@ export default function WeldAcceptanceDocument({ view, onClose }: { view: View; 
   );
 }
 
-// Mặc định theo mẫu "Phiếu YCNT công việc" của dự án Phú Quốc; dự án khác để trống cho điền tay.
 const PQ = {
   goiThau: "Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray", diaDiem: "Đặc khu Phú Quốc, Tỉnh An Giang", noiLap: "Phú Quốc",
   kinhGui: ["Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc;", "Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North)."],
@@ -153,10 +171,15 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
     .sort((a, b) => a.n - b.n);
   const kinhGui = t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
-  const upper = routes.some((r) => r === "TT" || r === "TP");
-  const lower = routes.some((r) => r === "HT" || r === "HP");
+  const autoUpper = routes.some((r) => r === "TT" || r === "TP");
+  const autoLower = routes.some((r) => r === "HT" || r === "HP");
+  const hasRouteOverride = "tuyen_thuong" in t || "tuyen_ha" in t;
+  const upper = hasRouteOverride ? flagOn(t.tuyen_thuong) : autoUpper;
+  const lower = hasRouteOverride ? flagOn(t.tuyen_ha) : autoLower;
   const missingRoutes = welds.filter((_, i) => !routes[i]);
   const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
+  const gio = (t.gio_bat_dau || "").trim();
+  const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
   return (
     <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[13px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
@@ -174,11 +197,11 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
       <p className="pl-4">- {monitoring ? "Theo dõi công việc thi công hàn ray" : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến"}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
       <p className="mt-2 font-bold">2. {monitoring ? "Phạm vi theo dõi" : "Vị trí nghiệm thu"}:</p>
       <p className="pl-4">- Tuyến: {upper ? "☑" : "☐"} Tuyến thượng &nbsp; {lower ? "☑" : "☐"} Tuyến hạ</p>
-      {missingRoutes.length > 0 && <p className="pl-4">- Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
+      {missingRoutes.length > 0 && !hasRouteOverride && <p className="pl-4">- Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
       <p className="pl-4">- Lý trình: Từ {chainage(monitoring ? t.kmFrom : km[0]?.v)} đến {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
       <p className="pl-4">- Tên mối hàn: {monitoring ? [t.nameFrom, t.nameTo].filter(Boolean).join(" – ") || DOTS : welds.map((w) => w.ma_lich_su).join(", ") || DOTS}</p>
       <p className="mt-2 font-bold">3. Thời gian {monitoring ? "theo dõi" : "nghiệm thu"}:</p>
-      <p className="pl-4">Bắt đầu: ….h… ngày …… tháng …… năm ……</p>
+      <p className="pl-4">Bắt đầu: {hh || "…. "}h{mm || "…"} ngày {d || "……"} tháng {m || "……"} năm {y || "……"}</p>
       {monitoring ? <>
         <p className="mt-2 font-bold">4. Nội dung đề nghị:</p>
         <p>Đề nghị Tư vấn giám sát đến công trường theo dõi công việc hàn trong phạm vi nêu trên vào ngày {d}/{m}/{y}.</p>
