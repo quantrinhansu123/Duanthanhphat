@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { completeAcceptance, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiNumber, loadRfis,
   publishRfi, setRecordSign, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
@@ -61,8 +62,8 @@ export default function WeldAcceptanceWorkflow() {
           {tab === "records" && <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onOpenBbnt={openBbnt} />}
         </div>
       )}
-      {view && <WeldAcceptanceDocument view={view} onClose={() => setView(null)} />}
-      {bbnt && <WeldBbntDocument record={bbnt} onClose={() => setBbnt(null)} />}
+      {view && createPortal(<WeldAcceptanceDocument view={view} onClose={() => setView(null)} />, document.body)}
+      {bbnt && createPortal(<WeldBbntDocument record={bbnt} onClose={() => setBbnt(null)} />, document.body)}
     </div>
   );
 }
