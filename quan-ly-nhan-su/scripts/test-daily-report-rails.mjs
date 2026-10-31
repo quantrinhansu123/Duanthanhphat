@@ -16,7 +16,17 @@ vm.runInNewContext(code, {
   console, Date, JSON, Array, Map, Set, Promise, Number, String, Object, Error, RegExp, Math,
   require: () => stub({ createClient: () => ({}), isSupabaseConfigured: () => false, formatSupabaseError: (e) => e?.message ?? String(e) }),
 });
-void 0;
+store.set("bao-cao-ngay-local-v1", JSON.stringify({
+  headers: [
+    { id: "own", ngayBaoCao: "2026-10-27", duAnId: "p" },
+    { id: "other", ngayBaoCao: "2026-10-28", duAnId: "q" },
+  ],
+  work: ["own", "other"].map((id) => ({ ...exports.emptyWorkInput(), id, baoCaoId: id, phan: "hom_nay", hangMuc: "Hàn ray" })),
+  equipment: [], incidents: [],
+}));
+assert.equal((await exports.loadLastWorkDefaults("Hàn ray", "2026-10-29", "p")).id, "own");
+assert.equal(await exports.loadLastWorkDefaults("Hàn ray", "2026-10-29", "unknown"), null);
+assert.equal(await exports.loadLastWorkDefaults("Hàn ray", "2026-10-29", ""), null);
 
 // ---- Phân loại mối hàn theo dải ray (TT/TP/HT/HP) với Supabase giả ----
 const tables = {

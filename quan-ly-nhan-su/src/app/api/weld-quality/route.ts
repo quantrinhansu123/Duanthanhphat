@@ -5,6 +5,7 @@ import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQ
 import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
+import { loadProjectWeather } from "@/lib/server/projectWeather";
 
 function failure(error: unknown) {
   const message = formatSupabaseError(error);
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new QualityApiError("JSON không hợp lệ."); }
     const body = object(value);
+    if (body.action === "report-weather") return NextResponse.json(await loadProjectWeather(body));
     if (body.action === "diary-defaults") return NextResponse.json(await loadDiaryDefaults(body));
     if (body.action === "list") return NextResponse.json(await loadQualityJournalPage(parseQualityFilters(body.filters)));
     if (body.action === "export") return NextResponse.json({ rows: await loadQualityJournalRows(parseQualityFilters(body.filters)) });

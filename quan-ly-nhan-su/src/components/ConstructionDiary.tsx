@@ -3,10 +3,19 @@
 import { useEffect, useState } from "react";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, loadDiary, saveDiary, type ConstructionDiary } from "@/lib/constructionDiaryDb";
-import { qualityRequest } from "@/lib/weldQualityClient";
+import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
 
-type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi">;
-const loadDefaults = (projectId: string, date: string) => qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date });
+type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi" | "banChiHuy" | "canBoKyThuat" | "congNhan" | "nhanLucNguon">;
+async function loadDefaults(projectId: string, date: string) {
+  const [work, weather] = await Promise.allSettled([
+    qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date }),
+    loadReportWeather(projectId, date),
+  ]);
+  return {
+    values: { ...(work.status === "fulfilled" ? work.value : {}), ...(weather.status === "fulfilled" ? weather.value : {}) },
+    warning: [work, weather].flatMap((r) => r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : "Chưa tải được dữ liệu tự điền; có thể nhập tay."] : []).join(" "),
+  };
+}
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/25";
 const lbl = "flex flex-col text-xs font-semibold text-slate-600";
@@ -68,15 +77,19 @@ export default function ConstructionDiaryForm() {
       let diary = r.diary;
       let warning = "";
       if (!r.saved) {
-        try { diary = { ...diary, ...await loadDefaults(projectId, date) }; }
-        catch { warning = "Chưa tải được dữ liệu tự điền. Có thể nhập tay hoặc bấm Tự điền lại."; }
+        const defaults = await loadDefaults(projectId, date);
+        diary = { ...diary, ...defaults.values };
+        warning = defaults.warning;
       }
       if (!live) return;
       setD(diary);
       setStatus([r.source === "local" ? `Đang dùng bản lưu trên máy này${r.error ? ` (${r.error})` : ""}.` : "", warning].filter(Boolean).join(" "));
       setLoading(false);
     }).catch(() => {
-      if (live) setStatus("Không tải được nhật ký. Vui lòng chọn lại ngày để thử lại.");
+      if (live) {
+        setD(EMPTY_DIARY);
+        setStatus("Không tải được nhật ký. Vui lòng chọn lại ngày để thử lại.");
+      }
     });
     return () => { live = false; };
   }, [projectId, date]);
@@ -89,8 +102,8 @@ export default function ConstructionDiaryForm() {
     setBusy(true);
     try {
       const defaults = await loadDefaults(projectId, date);
-      setD((cur) => ({ ...cur, ...defaults }));
-      setStatus("Đã tự điền thiết bị dự án và mục 3 / 3.2. Có thể sửa nội dung rồi bấm Lưu.");
+      setD((cur) => ({ ...cur, ...defaults.values }));
+      setStatus(defaults.warning || "Đã tự điền thời tiết, nhân lực, thiết bị và mục 3 / 3.2. Có thể sửa nội dung rồi bấm Lưu.");
     } catch { setStatus("Không tải được dữ liệu tự điền. Nội dung hiện tại được giữ nguyên."); }
     finally { setBusy(false); }
   }
@@ -117,37 +130,34 @@ export default function ConstructionDiaryForm() {
           <label className={lbl}>Ngày
             <input disabled={busy} className={inp} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
-          <div className="flex gap-2">
-            <button type="button" disabled={busy || loading || !projectId} onClick={autofill} title="Điền thiết bị được gán dự án và công tác hàn, mài, RFI" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền thiết bị / công việc</button>
-            <button type="button" disabled={busy || loading || !projectId} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu"}</button>
-            <button type="button" disabled={busy || loading || !projectId} onClick={() => window.print()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy || loading || !projectId || !date} onClick={autofill} title="Điền lại thời tiết, nhân lực, thiết bị dự án và công việc theo ngày đang chọn" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại</button>
+            <button type="button" disabled={busy || loading || !projectId || !date} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang xử lý…" : "Lưu"}</button>
+            <button type="button" disabled={busy || loading || !projectId || !date} onClick={() => window.print()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
           </div>
           {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
         </div>
 
         <fieldset disabled={loading || busy} className="grid gap-x-8 gap-y-5 py-5 lg:grid-cols-2">
           <Card title="1. Thời tiết">
-            <div role="radiogroup" aria-label="Thời tiết" className="flex flex-wrap gap-2">
-              {(["Bình thường", "Mưa", "Nắng"] as const).map((w) => (
-                <label key={w} className={`cursor-pointer rounded-full border px-4 py-1.5 font-medium transition-colors focus-within:ring-2 focus-within:ring-[#0047AB]/40 ${d.thoiTiet === w ? "border-[#0047AB] bg-[#0047AB] text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
-                  <input className="sr-only" type="radio" name="thoi-tiet" checked={d.thoiTiet === w} onChange={() => setD((c) => ({ ...c, thoiTiet: w }))} />{w}
-                </label>
-              ))}
-            </div>
+            <label className={lbl}>Thời tiết chung<input className={inp} value={d.thoiTiet} onChange={set("thoiTiet")} placeholder="Ví dụ: Mưa" /></label>
             <div className="grid gap-3 sm:grid-cols-4">
               <label className={lbl}>Nhiệt độ (°C)<input className={inp} inputMode="decimal" value={d.nhietDo} onChange={set("nhietDo")} /></label>
               {(["sang", "chieu", "toi"] as const).map((k) => (
-                <label key={k} className={lbl}>{{ sang: "Sáng", chieu: "Chiều", toi: "Tối" }[k]}<input className={inp} value={d[k]} onChange={set(k)} /></label>
+                <label key={k} className={lbl}>{{ sang: "Thời tiết sáng (07:00)", chieu: "Thời tiết chiều (13:00)", toi: "Thời tiết tối (19:00)" }[k]}<input className={inp} value={d[k]} onChange={set(k)} placeholder="Ví dụ: Mưa, 27°C" /></label>
               ))}
             </div>
+            <p className="text-xs text-slate-500">Tự điền theo tọa độ hoặc địa điểm dự án từ <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline">Open-Meteo</a>. Sáng, chiều, tối ghi thời tiết và nhiệt độ từng buổi; sai khác thực tế thì sửa trực tiếp.</p>
           </Card>
 
           <Card title="2. Nhân lực, thiết bị thi công">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid items-end gap-3 sm:grid-cols-3">
               <label className={lbl}>Ban chỉ huy (người)<input className={inp} inputMode="numeric" value={d.banChiHuy} onChange={set("banChiHuy")} /></label>
-              <label className={lbl}>Cán bộ kỹ thuật (người)<input className={inp} inputMode="numeric" value={d.canBoKyThuat} onChange={set("canBoKyThuat")} /></label>
+              <label className={lbl}>Cán bộ kỹ thuật / Kỹ sư (người)<input className={inp} inputMode="numeric" value={d.canBoKyThuat} onChange={set("canBoKyThuat")} /></label>
               <label className={lbl}>Công nhân (người)<input className={inp} inputMode="numeric" value={d.congNhan} onChange={set("congNhan")} /></label>
             </div>
+            <p className="text-xs text-slate-500">Ban chỉ huy = CHT. Cán bộ kỹ thuật = Kỹ sư. Công nhân = Lái máy + Thợ vận hành + Công nhân + Khác (bao gồm VNR).</p>
+            {d.nhanLucNguon && <p className="text-xs text-slate-500">{d.nhanLucNguon}</p>}
             <label className={lbl}>2.2 Thiết bị<textarea className={inp} rows={3} value={d.thietBi} onChange={set("thietBi")} /></label>
           </Card>
         </fieldset>
@@ -169,7 +179,7 @@ export default function ConstructionDiaryForm() {
         <p className="text-center">Dự án: {projectName}</p>
         <p className="text-center">Ngày {day} tháng {m} năm {y}</p>
         <p className="diary-heading">1. Thời tiết</p>
-        <p>{(["Bình thường", "Mưa", "Nắng"] as const).map((w) => `${d.thoiTiet === w ? "☑" : "☐"} ${w}`).join("     ")}     Nhiệt độ: {d.nhietDo || "……"}°C</p>
+        <p>Thời tiết: {d.thoiTiet || "……………"}     Nhiệt độ trung bình: {d.nhietDo || "……"}°C</p>
         <p>Sáng: {d.sang || "……………"}     Chiều: {d.chieu || "……………"}     Tối: {d.toi || "……………"}</p>
         <p className="diary-heading">2. Tình hình nhân lực, thiết bị thi công:</p>
         <p>2.1 Nhân lực: Ban chỉ huy: {d.banChiHuy || "……"} (người); Cán bộ kỹ thuật: {d.canBoKyThuat || "……"} (người); Công nhân: {d.congNhan || "……"} (người)</p>

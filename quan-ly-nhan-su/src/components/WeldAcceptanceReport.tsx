@@ -77,8 +77,8 @@ export default function WeldAcceptanceReport() {
   const [tab, setTab] = useState<"nghiem-thu" | "quy-trinh" | "nhat-ky" | "nhat-ky-ngay">("quy-trinh");
   return (
     <>
-      <div className="no-print flex gap-2 px-4 sm:px-6 pb-3">
-        {([["quy-trinh", "RFI & Nghiệm thu"], ["nghiem-thu", "Biên bản nghiệm thu"], ["nhat-ky", "Nhật ký thi công"], ["nhat-ky-ngay", "Nhật ký hàng ngày"]] as const).map(([id, label]) => (
+      <div className="no-print flex flex-wrap gap-2 px-4 sm:px-6 pb-3">
+        {([["quy-trinh", "RFI & Nghiệm thu"], ["nghiem-thu", "Biên bản nghiệm thu"], ["nhat-ky", "Báo cáo ngày"], ["nhat-ky-ngay", "Nhật ký dự án"]] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"

@@ -7,7 +7,7 @@ import ComboBoxInput from "@/components/ComboBoxInput";
 import DailyWorkReportPrint, { type DailyPrintDay } from "@/components/DailyWorkReportPrint";
 import { loadPhotoReport, type PhotoReport } from "@/lib/photoReportDb";
 import { photoReportHasContent } from "@/components/PhotoReportPrintSheet";
-import { loadAcceptedOnDate } from "@/lib/weldQualityClient";
+import { loadAcceptedOnDate, loadReportWeather } from "@/lib/weldQualityClient";
 import { CalendarBlank, Camera, CaretDown, Eye, PencilSimple, Plus, Printer, TrashSimple, X } from "@/components/icons";
 
 const PhotoReportForm = dynamic(() => import("@/components/PhotoReport"), { ssr: false });
@@ -141,16 +141,6 @@ const ROLE_EMPTY_LABEL: Record<ManpowerRole, string> = {
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25";
 const labelCls = "mb-1 block text-[11px] font-semibold text-slate-600";
-
-/** Mã thời tiết WMO → nhãn ngắn. */
-function weatherLabel(code: number): string {
-  if (code === 0) return "Nắng";
-  if (code <= 3) return "Nhiều mây";
-  if (code <= 48) return "Sương mù";
-  if (code <= 67 || (code >= 80 && code <= 82)) return "Mưa";
-  if (code >= 95) return "Dông";
-  return "Nhiều mây";
-}
 
 function displayDate(iso: string) {
   const [y, m, d] = iso.split("-");
@@ -689,11 +679,11 @@ function WorkFormModal({
     };
   }, [open, phan, form.hangMuc, reportDate, workTypes, projectId]);
 
-  // Gán sẵn máy + số lượng nhân lực từ lần báo cáo gần nhất có cùng hạng mục.
+  // Chỉ lấy lần báo cáo trước của cùng dự án và hạng mục.
   useEffect(() => {
     if (!open || phan !== "hom_nay" || !form.hangMuc.trim()) return;
     let cancelled = false;
-    void loadLastWorkDefaults(form.hangMuc, reportDate || todayIsoLocal()).then((last) => {
+    void loadLastWorkDefaults(form.hangMuc, reportDate || todayIsoLocal(), projectId).then((last) => {
       if (cancelled || !last) return;
       setForm((f) => ({
         ...f,
@@ -715,7 +705,7 @@ function WorkFormModal({
     return () => {
       cancelled = true;
     };
-  }, [open, phan, form.hangMuc, reportDate]);
+  }, [open, phan, form.hangMuc, reportDate, projectId]);
 
   if (!open) return null;
 
@@ -1094,7 +1084,7 @@ function WorkFormModal({
                   ["Lái máy", "laiMay", "laiMayTen"],
                   ["Thợ vận hành", "thoVanHanh", "thoVanHanhTen"],
                   ["Công nhân", "congNhan", "congNhanTen"],
-                  ["VNR", "vnr", "vnrTen"],
+                  ["Khác", "vnr", "vnrTen"],
                 ] as const).map(([label, key, tenKey]) => (
                   <ManpowerCount
                     key={key}
@@ -1105,7 +1095,7 @@ function WorkFormModal({
                 ))}
               </div>
               <p className="text-[11px] text-slate-500">
-                Chỉ nhập số lượng người mỗi vai trò (VNR = số người phía VNR, không tính trùng vào Công nhân) — hệ thống nhớ và điền sẵn từ lần báo cáo trước.
+                Chỉ nhập số lượng người mỗi vai trò. Khác gồm VNR và nhân lực khác, không tính trùng vào Công nhân. Hệ thống nhớ và điền sẵn từ lần báo cáo trước.
               </p>
               <Field label="Ghi chú" value={form.ghiChu} onChange={(v) => patch({ ghiChu: v })} />
             </>
@@ -1280,6 +1270,7 @@ export default function DailyWorkReport() {
   const [busyRowId, setBusyRowId] = useState("");
   const [weather, setWeather] = useState("");
   const [temperature, setTemperature] = useState("");
+  const [weatherStatus, setWeatherStatus] = useState("");
   const [reportList, setReportList] = useState<DailyReportSummary[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [header, setHeader] = useState<DailyReportHeader | null>(null);
@@ -1310,10 +1301,10 @@ export default function DailyWorkReport() {
         const bundle = await loadDailyReport(row.ngayBaoCao);
         const accepted = await loadAcceptedOnDate(row.ngayBaoCao, row.duAnId).then((r) => r.count).catch(() => null);
         const photo = await loadPhotoForPrint(row.duAnId, row.ngayBaoCao);
+        const conditions = await weatherForPrint(row.duAnId, row.ngayBaoCao);
         days.push({
           reportDate: row.ngayBaoCao,
-          weather: "",
-          temperature: "",
+          ...conditions,
           workToday: bundle.workToday,
           workNext: bundle.workNext,
           equipment: bundle.equipment,
@@ -1331,26 +1322,43 @@ export default function DailyWorkReport() {
   }
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
-  // Thời tiết + nhiệt độ tự lấy (Open-Meteo, Phú Quốc); sai khác thì sửa tay — sửa tay không bị ghi đè.
+  // Tự lấy đúng dự án/ngày; phản hồi đến muộn không ghi đè nội dung đã sửa.
   const weatherEdited = useRef(false);
   useEffect(() => {
     weatherEdited.current = false;
-    const controller = new AbortController();
-    const url =
-      "https://api.open-meteo.com/v1/forecast?latitude=10.2&longitude=103.96&daily=weather_code,temperature_2m_mean&timezone=Asia%2FBangkok" +
-      `&start_date=${reportDate}&end_date=${reportDate}`;
-    fetch(url, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : null))
+    let cancelled = false;
+    setWeather("");
+    setTemperature("");
+    if (!header?.duAnId) {
+      setWeatherStatus("Thời tiết tự điền khi phiếu được gắn dự án; có thể nhập tay.");
+      return;
+    }
+    setWeatherStatus("Đang lấy thời tiết theo địa điểm dự án…");
+    loadReportWeather(header.duAnId, reportDate)
       .then((data) => {
-        const code = data?.daily?.weather_code?.[0];
-        const temp = data?.daily?.temperature_2m_mean?.[0];
-        if (weatherEdited.current || code == null) return;
-        setWeather(weatherLabel(code));
-        if (temp != null) setTemperature(String(Math.round(temp)));
+        if (cancelled) return;
+        if (!weatherEdited.current) {
+          setWeather(data.thoiTiet);
+          setTemperature(data.nhietDo);
+        }
+        setWeatherStatus("Tự điền từ Open-Meteo theo địa điểm dự án. Khác thực tế thì sửa trực tiếp.");
       })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [reportDate]);
+      .catch((error) => {
+        if (!cancelled) setWeatherStatus(error instanceof Error ? error.message : "Chưa lấy được thời tiết; có thể nhập tay.");
+      });
+    return () => { cancelled = true; };
+  }, [reportDate, header?.duAnId]);
+
+  async function weatherForPrint(projectId: string | null, date: string) {
+    if (date === reportDate && projectId === header?.duAnId && (weather || temperature)) return { weather, temperature };
+    if (projectId) {
+      try {
+        const result = await loadReportWeather(projectId, date);
+        return { weather: result.thoiTiet, temperature: result.nhietDo };
+      } catch { /* Thời tiết thiếu vẫn cho phép in nội dung báo cáo. */ }
+    }
+    return { weather: "", temperature: "" };
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1545,10 +1553,10 @@ export default function DailyWorkReport() {
       const bundle = await reload(row.ngayBaoCao);
       const accepted = await loadAcceptedOnDate(row.ngayBaoCao, row.duAnId).then((r) => r.count).catch(() => null);
       const photo = await loadPhotoForPrint(row.duAnId, row.ngayBaoCao);
+      const conditions = await weatherForPrint(row.duAnId, row.ngayBaoCao);
       setBatchDays([{
         reportDate: row.ngayBaoCao,
-        weather: "",
-        temperature: "",
+        ...conditions,
         workToday: bundle.workToday,
         workNext: bundle.workNext,
         equipment: bundle.equipment,
@@ -1796,7 +1804,7 @@ export default function DailyWorkReport() {
                 weatherEdited.current = true;
                 setWeather(e.target.value);
               }}
-              placeholder="Nắng"
+              placeholder="Tự điền, có thể sửa"
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
             />
           </label>
@@ -1809,13 +1817,14 @@ export default function DailyWorkReport() {
                 weatherEdited.current = true;
                 setTemperature(e.target.value);
               }}
-              placeholder="31"
+              placeholder="°C"
               inputMode="decimal"
               className="h-10 w-full rounded-lg sm:w-16 border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25"
             />
             <span>°C</span>
             </span>
           </label>
+          <p role="status" className="col-span-2 max-w-md text-[11px] font-normal text-slate-500 sm:basis-full">{weatherStatus}</p>
           <Link
             href="/nhat-ky-han"
             className="col-span-2 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"

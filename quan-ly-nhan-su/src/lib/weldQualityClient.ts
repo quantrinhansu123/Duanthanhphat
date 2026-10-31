@@ -3,6 +3,10 @@ import { invalidateWeldReportCache, type WeldJournalPageQuery, type WeldJournalP
 import type { SavedWeldInspection, SavedWeldQualityRule, WeldQualitySelection } from "@/lib/weldQuality";
 import type { WeldQualitySummary } from "@/lib/server/weldQualityDb";
 import { invalidateOverviewAggregateCache } from "@/lib/overviewAggregates";
+import type { ReportWeather } from "@/lib/reportWeather";
+
+export const loadReportWeather = (du_an_id: string, date: string) =>
+  qualityRequest<ReportWeather>({ action: "report-weather", du_an_id, date });
 
 export function notifyWeldQualityChanged() {
   invalidateWeldReportCache();

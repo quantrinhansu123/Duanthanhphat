@@ -3,7 +3,7 @@ import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 
 /** Nội dung phần B "Tình hình thi công hàng ngày" (mẫu NKTC trang 6-7). */
 export type ConstructionDiary = {
-  thoiTiet: "Bình thường" | "Mưa" | "Nắng" | "";
+  thoiTiet: string;
   nhietDo: string;
   sang: string;
   chieu: string;
@@ -11,6 +11,7 @@ export type ConstructionDiary = {
   banChiHuy: string;
   canBoKyThuat: string;
   congNhan: string;
+  nhanLucNguon: string;
   thietBi: string;
   noiDungCongViec: string;
   nghiemThuHangNgay: string;
@@ -22,7 +23,7 @@ export type ConstructionDiary = {
 
 export const EMPTY_DIARY: ConstructionDiary = {
   thoiTiet: "", nhietDo: "", sang: "", chieu: "", toi: "", banChiHuy: "", canBoKyThuat: "", congNhan: "", thietBi: "",
-  noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
+  nhanLucNguon: "", noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
 };
 
 const localKey = (projectId: string, date: string) => `nhat-ky-thi-cong-ngay:${projectId}:${date}`;

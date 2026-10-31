@@ -41,7 +41,7 @@ export type DailyWorkManpower = {
   laiMay: DailyWorkPerson[];
   thoVanHanh: DailyWorkPerson[];
   congNhan: DailyWorkPerson[];
-  /** Số người VNR (công nhân phía VNR), lưu trong nhan_luc.vnr. */
+  /** Nhân lực khác (bao gồm VNR); giữ khóa vnr để đọc được dữ liệu cũ. */
   vnr: DailyWorkPerson[];
   /** Ngày tiếp theo — người được giao thực hiện. */
   thucHien: DailyWorkPerson[];
@@ -815,14 +815,15 @@ export async function loadDailyWorkFillFromJournal(
 export async function loadLastWorkDefaults(
   hangMuc: string,
   beforeDate: string,
+  projectId: string,
 ): Promise<DailyWorkItem | null> {
   const key = hangMuc.trim();
-  if (!key) return null;
+  if (!key || !projectId) return null;
   if (!isSupabaseConfigured()) {
     const store = readLocal();
-    const dateOf = new Map(store.headers.map((h) => [h.id, h.ngayBaoCao]));
+    const dateOf = new Map(store.headers.filter((h) => h.duAnId === projectId).map((h) => [h.id, h.ngayBaoCao]));
     const found = store.work
-      .filter((w) => w.phan === "hom_nay" && w.hangMuc.trim() === key && (dateOf.get(w.baoCaoId) ?? "") < beforeDate)
+      .filter((w) => w.phan === "hom_nay" && w.hangMuc.trim() === key && dateOf.has(w.baoCaoId) && dateOf.get(w.baoCaoId)! < beforeDate)
       .sort((a, b) => (dateOf.get(b.baoCaoId) ?? "").localeCompare(dateOf.get(a.baoCaoId) ?? ""));
     return found[0] ? normalizeLocalWork(found[0]) : null;
   }
@@ -831,6 +832,7 @@ export async function loadLastWorkDefaults(
     const { data: headers, error } = await supabase
       .from("bao_cao_ngay")
       .select("id,ngay_bao_cao")
+      .eq("du_an_id", projectId)
       .lt("ngay_bao_cao", beforeDate)
       .order("ngay_bao_cao", { ascending: false })
       .limit(60);

@@ -242,7 +242,7 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
             <td className="wrap">{item?.kySuTen ?? ""}</td>
             <td className="wrap">{item?.laiMayTen ?? ""}</td>
             <td className="wrap">{item?.thoVanHanhTen ?? ""}</td>
-            <td className="wrap">{item?.congNhanTen ?? ""}{item?.vnrTen ? ` (VNR: ${item.vnrTen})` : ""}</td>
+            <td className="wrap">{item?.congNhanTen ?? ""}{item?.vnrTen ? ` (Khác: ${item.vnrTen})` : ""}</td>
             <td>{manpowerRange(row, "gioBatDau")}</td>
             <td>{manpowerRange(row, "gioKetThuc")}</td>
             <td className="wrap note">{printNote(item)}</td>
