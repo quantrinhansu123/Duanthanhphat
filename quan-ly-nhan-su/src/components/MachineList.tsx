@@ -1552,6 +1552,7 @@ function MachineFormModal({
             {form.location && !form.specs?.warehouseId && <p className="text-xs text-slate-600">Vị trí đã nhập trước đây: {form.location}</p>}
             <p className="text-xs text-slate-600">Kho giữ số bộ còn lại sau khi trừ số bộ đã gán dự án. Chọn kho khác để chuyển phần thiết bị còn trong kho.</p>
             <div className="text-sm"><b>Dự án đang sử dụng:</b>{currentLocation?.projects.length ? <ul className="mt-1 list-inside list-disc">{currentLocation.projects.map((p) => <li key={p.id}>{p.name}: {p.quantity} bộ</li>)}</ul> : <p>Chưa gán dự án.</p>}</div>
+            {!!currentLocation?.excessQuantity && <p role="status" className="text-sm font-semibold text-amber-800">Đang gán vượt {currentLocation.excessQuantity} bộ. Kiểm tra lại dự án đang giữ thiết bị trước khi điều chuyển.</p>}
             <div className="flex flex-wrap gap-4 text-sm font-semibold text-[#0047AB]"><Link target="_blank" href="/quan-ly-kho">Thêm / sửa danh mục kho</Link><Link target="_blank" href="/quan-ly-du-an">Gán / chuyển thiết bị vào dự án</Link></div>
           </section>
           <div className="space-y-4">

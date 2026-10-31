@@ -30,6 +30,22 @@ assert.equal(rules.equipmentLocations([model], [warehouse], projects, metadata)[
 assert.equal(rules.equipmentLocations([model], [], projects, metadata)[0].warehouseName, "Chưa chọn kho");
 const moved = rules.equipmentLocations([{ ...model, specs: { ...model.specs, warehouseId: "hcm" } }], [warehouse, { id: "hcm", name: "Kho 2 HCM", address: "HCM" }], projects, metadata);
 assert.equal(moved[0].warehouseName, "Kho 2 HCM");
+const overallocated = rules.equipmentLocations([model], [warehouse], projects, {
+  p: { status: "Đang triển khai", machineTypes: ["G1"], machineQuantities: { G1: 15 } },
+  q: { status: "Đang triển khai", machineTypes: ["G1"], machineQuantities: { G1: 8 } },
+});
+assert.equal(overallocated[0].warehouseQuantity, 0);
+assert.equal(overallocated[0].excessQuantity, 3);
+assert.match(rules.equipmentLocationLabel(overallocated[0]), /Đang gán vượt 3 bộ/);
+const orphan = rules.equipmentLocations([model], [warehouse], projects, {
+  deleted: { status: "Đang triển khai", machineTypes: ["G1"], machineQuantities: { G1: 2 } },
+  completed: { status: "Hoàn thành", machineTypes: ["G1"], machineQuantities: { G1: 20 } },
+});
+assert.equal(orphan[0].projects.length, 1);
+assert.equal(orphan[0].projects[0].missing, true);
+assert.equal(orphan[0].warehouseQuantity, 18, "Unresolved allocations cannot silently become warehouse stock");
+assert.match(rules.equipmentLocationLabel(orphan[0]), /Dự án không còn tồn tại/);
+console.log("PASS allocation conflicts: excess quantities and deleted-project references remain visible without inventing warehouse stock");
 console.log("PASS warehouse quantities: 20 total - 8 on project = 12 in warehouse; multiple projects, returns, transfer and unknown warehouse");
 
 let stored = [], references = 0, denied = null, databaseError = null;
