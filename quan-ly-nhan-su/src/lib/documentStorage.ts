@@ -1,11 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import type { DriveDocumentItem } from "@/lib/googleDrive/types";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const DOCUMENT_BUCKET = "tai-lieu";
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const DOCUMENT_SETUP_MESSAGE =
   "Chưa có bảng tài liệu. Chạy supabase/tai_lieu.sql trên Supabase.";
+
+export class DocumentUploadError extends Error {}
 
 type TaiLieuRow = {
   id: string;
@@ -111,6 +114,19 @@ export async function uploadStoredDocument(input: {
     upsert: false,
   });
   if (uploaded.error) throw new Error(formatSupabaseError(uploaded.error));
+  return saveUploadedDocument({ ...input, id, path, size: input.bytes.byteLength });
+}
+
+async function saveUploadedDocument(input: {
+  id: string;
+  path: string;
+  size: number;
+  name: string;
+  description: string;
+  appProperties?: Record<string, string>;
+}) {
+  const supabase = createAdminClient();
+  const { id, path } = input;
   const fileUrl = supabase.storage.from(DOCUMENT_BUCKET).getPublicUrl(path).data.publicUrl;
   const payload = {
     id,
@@ -118,7 +134,7 @@ export async function uploadStoredDocument(input: {
     mo_ta: input.description.trim() || null,
     file_path: path,
     file_url: fileUrl,
-    file_size: input.bytes.byteLength,
+    file_size: input.size,
     thuoc_tinh: input.appProperties ?? {},
   };
   let inserted = await supabase.from("tai_lieu").insert(payload).select("id,ten,mo_ta,file_path,file_url,file_size,thuoc_tinh,created_at,updated_at").single();
@@ -132,6 +148,84 @@ export async function uploadStoredDocument(input: {
     throw new Error(inserted.error && missingTable(inserted.error) ? DOCUMENT_SETUP_MESSAGE : formatSupabaseError(inserted.error));
   }
   return toItem(inserted.data as TaiLieuRow);
+}
+
+type UploadTicket = {
+  id: string;
+  path: string;
+  size: number;
+  name: string;
+  description: string;
+  appProperties?: Record<string, string>;
+  replaceId?: string;
+  expires: number;
+};
+
+function signUploadTicket(payload: string) {
+  return createHmac("sha256", process.env.SUPABASE_SERVICE_ROLE_KEY!).update(payload).digest();
+}
+
+// Ký quyền tải lên; nội dung PDF đi thẳng vào kho để tránh giới hạn yêu cầu của Vercel.
+export async function prepareDocumentUpload(input: {
+  name: string;
+  description: string;
+  size: number;
+  appProperties?: Record<string, string>;
+  replaceId?: string;
+}) {
+  if (!Number.isSafeInteger(input.size) || input.size <= 0 || input.size > MAX_DOCUMENT_BYTES) {
+    throw new DocumentUploadError("Dung lượng PDF phải lớn hơn 0 và không vượt quá 50 MB.");
+  }
+  if (input.replaceId) await readRow(input.replaceId);
+  const supabase = await ensureBucket();
+  const id = crypto.randomUUID();
+  const ticket: UploadTicket = { ...input, id, path: `${id}.pdf`, expires: Date.now() + 30 * 60 * 1000 };
+  const signed = await supabase.storage.from(DOCUMENT_BUCKET).createSignedUploadUrl(ticket.path);
+  if (signed.error || !signed.data) throw new Error(formatSupabaseError(signed.error));
+  const payload = Buffer.from(JSON.stringify(ticket)).toString("base64url");
+  return { uploadUrl: signed.data.signedUrl, ticket: `${payload}.${signUploadTicket(payload).toString("base64url")}` };
+}
+
+export async function completeDocumentUpload(receipt: string) {
+  const [payload, signature, extra] = receipt.split(".");
+  if (!payload || !signature || extra) throw new DocumentUploadError("Phiên tải lên không hợp lệ.");
+  const expected = signUploadTicket(payload);
+  const actual = Buffer.from(signature, "base64url");
+  if (actual.length !== expected.length || !timingSafeEqual(expected, actual)) throw new DocumentUploadError("Phiên tải lên không hợp lệ.");
+  const ticket = JSON.parse(Buffer.from(payload, "base64url").toString()) as UploadTicket;
+  if (ticket.expires < Date.now()) throw new DocumentUploadError("Phiên tải lên đã hết hạn. Vui lòng tải lại tệp.");
+  const supabase = createAdminClient();
+  const bucket = supabase.storage.from(DOCUMENT_BUCKET);
+  const { data, error } = await bucket.info(ticket.path);
+  if (error || !data) throw new DocumentUploadError("Tệp chưa tải lên hoàn tất. Vui lòng thử lại.");
+  if (data.size !== ticket.size || data.contentType !== "application/pdf") {
+    await bucket.remove([ticket.path]);
+    throw new DocumentUploadError("Tệp tải lên không đúng định dạng PDF hoặc dung lượng đã khai báo.");
+  }
+  if (!ticket.replaceId) {
+    const existing = await supabase.from("tai_lieu").select("id,file_path").eq("id", ticket.id).maybeSingle();
+    if (existing.error) throw new Error(formatSupabaseError(existing.error));
+    if (existing.data?.file_path === ticket.path) return toItem(await readRow(ticket.id));
+    return saveUploadedDocument(ticket);
+  }
+  const previous = await readRow(ticket.replaceId);
+  const result = await supabase.from("tai_lieu").update({
+    ten: ticket.name.trim() || previous.ten,
+    mo_ta: ticket.description.trim() || null,
+    file_path: ticket.path,
+    file_url: bucket.getPublicUrl(ticket.path).data.publicUrl,
+    file_size: ticket.size,
+  }).eq("id", ticket.replaceId);
+  if (result.error) {
+    await bucket.remove([ticket.path]);
+    throw new Error(formatSupabaseError(result.error));
+  }
+  if (previous.file_path !== ticket.path) {
+    // shortcut: tệp cũ có thể còn trong kho nếu dọn thất bại; dọn định kỳ khi cần.
+    const cleanup = await bucket.remove([previous.file_path]);
+    if (cleanup.error) console.error("Không dọn được bản tài liệu cũ:", cleanup.error.message);
+  }
+  return toItem(await readRow(ticket.replaceId));
 }
 
 export async function updateStoredDocument(

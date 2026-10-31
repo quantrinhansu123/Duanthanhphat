@@ -16,6 +16,9 @@ import {
   type DriveDocumentItem,
 } from "@/lib/driveDocumentsClient";
 
+const ALL = "__all";
+const NONE = "__none";
+
 function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -45,7 +48,6 @@ export default function DocumentLibrary() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [configured, setConfigured] = useState(true);
-  const [configNotice, setConfigNotice] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [viewer, setViewer] = useState<DriveDocumentItem | null>(null);
   const { lang, t } = useLanguage();
@@ -55,8 +57,6 @@ export default function DocumentLibrary() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Thư mục tự tạo: ALL = tất cả, NONE = chưa phân loại, còn lại là tên thư mục.
-  const ALL = "__all";
-  const NONE = "__none";
   const [folders, setFolders] = useState<string[]>([]);
   const [activeFolder, setActiveFolder] = useState(ALL);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -65,6 +65,54 @@ export default function DocumentLibrary() {
   const [editFolder, setEditFolder] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [replacementFileName, setReplacementFileName] = useState("");
+  const [replacingDoc, setReplacingDoc] = useState<DriveDocumentItem | null>(null);
+  const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
+  const replaceFileRef = useRef<HTMLInputElement>(null);
+
+  const navigateFolder = useCallback((folder: string) => {
+    const url = new URL(window.location.href);
+    if ((url.searchParams.get("thu-muc") || ALL) === folder) return;
+    if (folder === ALL) url.searchParams.delete("thu-muc");
+    else url.searchParams.set("thu-muc", folder);
+    window.history.pushState({ documentLibraryFolder: true }, "", url);
+    setActiveFolder(folder);
+    setNewFolderOpen(false);
+    setRenameOpen(false);
+    setShowForm(false);
+    setSelectedFileName("");
+  }, []);
+
+  useEffect(() => {
+    const syncFolder = () => {
+      setActiveFolder(new URL(window.location.href).searchParams.get("thu-muc") || "__all");
+      setNewFolderOpen(false);
+      setRenameOpen(false);
+      setShowForm(false);
+      setViewer(null);
+      setEditing(null);
+      setReplacingDoc(null);
+    };
+    syncFolder();
+    window.addEventListener("popstate", syncFolder);
+    const onBackspace = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable]")) return;
+      const folder = new URL(window.location.href).searchParams.get("thu-muc");
+      if (folder) {
+        event.preventDefault();
+        if (window.history.state?.documentLibraryFolder) window.history.back();
+        else navigateFolder(folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : ALL);
+      }
+    };
+    window.addEventListener("keydown", onBackspace);
+    return () => {
+      window.removeEventListener("popstate", syncFolder);
+      window.removeEventListener("keydown", onBackspace);
+    };
+  }, [navigateFolder]);
 
   // Thư mục lưu dạng đường dẫn "Cha/Con"; hiển thị bằng " › ".
   const folderLabel = (path: string) => path.split("/").join(" › ");
@@ -75,17 +123,11 @@ export default function DocumentLibrary() {
     isRealFolder ? f.startsWith(`${activeFolder}/`) && !f.slice(activeFolder.length + 1).includes("/") : !f.includes("/"),
   );
 
-  // Thay thế nội dung file (Drive media patch)
-  const [replacingDoc, setReplacingDoc] = useState<DriveDocumentItem | null>(null);
-  const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
-  const replaceFileRef = useRef<HTMLInputElement>(null);
-
   const reload = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
     const res = await fetchDriveDocuments();
     setConfigured(res.configured);
-    if (res.message) setConfigNotice(res.message);
     setItems(res.items);
     if (res.error) setErrorMsg(res.error);
     setLoading(false);
@@ -113,10 +155,10 @@ export default function DocumentLibrary() {
       [...items]
         .filter((d) =>
           activeFolder === ALL
-            ? true
+            ? false
             : activeFolder === NONE
               ? folderOf(d) === ""
-              : inTree(folderOf(d), activeFolder),
+              : folderOf(d) === activeFolder,
         )
         .sort((a, b) => b.createdTime.localeCompare(a.createdTime)),
     [items, activeFolder, folderOf],
@@ -131,7 +173,6 @@ export default function DocumentLibrary() {
       return;
     }
     setFolders(res.folders);
-    if (res.created) setActiveFolder(res.created);
     setNewFolderName("");
     setNewFolderOpen(false);
     setErrorMsg(null);
@@ -149,7 +190,7 @@ export default function DocumentLibrary() {
       return;
     }
     setFolders(res.folders);
-    if (res.created) setActiveFolder(res.created);
+    if (res.created) navigateFolder(res.created);
     setRenameOpen(false);
     setErrorMsg(null);
     setStatusMsg(`Đã đổi tên thư mục: ${folderLabel(res.created ?? "")}`);
@@ -157,25 +198,30 @@ export default function DocumentLibrary() {
   }
 
   async function handleDeleteFolder(path: string) {
-    if (!confirm(`Xóa thư mục "${folderLabel(path)}" (cùng các thư mục con)?`)) return;
+    const count = items.filter((doc) => inTree(folderOf(doc), path)).length;
+    if (!confirm(`Xóa thư mục "${folderLabel(path)}", toàn bộ thư mục con và ${count} tài liệu bên trong? Không thể hoàn tác.`)) return;
+    setSaving(true);
     const res = await deleteDocumentFolder(path);
+    setSaving(false);
     if (res.error) {
+      await reload();
       setErrorMsg(res.error);
       setStatusMsg(null);
       return;
     }
     setFolders(res.folders);
     // Lùi về thư mục cha.
-    setActiveFolder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ALL);
+    navigateFolder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ALL);
     setErrorMsg(null);
     setStatusMsg(`Đã xóa thư mục: ${folderLabel(path)}`);
+    await reload();
   }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file) {
-      setErrorMsg("Vui lòng chọn file PDF để tải lên.");
+      setErrorMsg("Vui lòng chọn tệp PDF để tải lên.");
       return;
     }
 
@@ -203,8 +249,10 @@ export default function DocumentLibrary() {
     setTitle("");
     setDescription("");
     if (fileRef.current) fileRef.current.value = "";
+    setSelectedFileName("");
     setShowForm(false);
-    setStatusMsg(`Đã lưu vào bucket: ${title || file.name}`);
+    if (activeFolder === ALL) navigateFolder(uploadFolder || NONE);
+    setStatusMsg(`Đã tải lên: ${title || file.name}`);
     await reload();
   }
 
@@ -213,7 +261,7 @@ export default function DocumentLibrary() {
     if (!replacingDoc) return;
     const file = replaceFileRef.current?.files?.[0];
     if (!file) {
-      setErrorMsg("Vui lòng chọn file PDF mới để thay thế.");
+      setErrorMsg("Vui lòng chọn tệp PDF mới để thay thế.");
       return;
     }
 
@@ -234,14 +282,14 @@ export default function DocumentLibrary() {
     setReplaceProgress(null);
 
     if (!res.success) {
-      setErrorMsg(res.error || "Thay thế file thất bại.");
+      setErrorMsg(res.error || "Thay thế tệp thất bại.");
       return;
     }
 
     if (replaceFileRef.current) replaceFileRef.current.value = "";
     const docName = replacingDoc.name;
     setReplacingDoc(null);
-    setStatusMsg(`Đã thay thế nội dung file thành công cho: ${docName}`);
+    setStatusMsg(`Đã thay thế nội dung tệp thành công cho: ${docName}`);
     await reload();
   }
 
@@ -258,7 +306,7 @@ export default function DocumentLibrary() {
     if (viewer?.id === doc.id) setViewer(null);
     if (editing?.id === doc.id) setEditing(null);
     if (replacingDoc?.id === doc.id) setReplacingDoc(null);
-    setStatusMsg(`Đã chuyển vào thùng rác: ${doc.name}`);
+    setStatusMsg(`Đã xóa tài liệu: ${doc.name}`);
     await reload();
   }
 
@@ -282,6 +330,10 @@ export default function DocumentLibrary() {
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    if (!title.trim()) {
+      setErrorMsg("Vui lòng nhập tên tài liệu.");
+      return;
+    }
 
     setSaving(true);
     setErrorMsg(null);
@@ -311,13 +363,13 @@ export default function DocumentLibrary() {
     "w-full px-3 py-2 text-sm rounded-lg border border-slate-300/90 bg-white text-slate-900 placeholder:text-slate-400 shadow-xs transition-all duration-150 hover:border-slate-400 focus:outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-blue-100";
   const labelClass = "block text-xs font-semibold text-slate-700 mb-1.5";
   const fileInputClass =
-    "mt-1 block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-[11px] file:font-semibold file:text-[#0047AB] hover:file:bg-blue-100 file:transition-colors";
+    "sr-only";
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
       {!configured && (
         <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-[#0047AB] shadow-xs">
-          <strong>Lưu ý:</strong> {configNotice || "Cần cấu hình Supabase và chạy supabase/tai_lieu.sql để tạo bucket tài liệu."}
+          <strong>Lưu ý:</strong> Kho tài liệu chưa được thiết lập. Vui lòng liên hệ quản trị viên.
         </div>
       )}
 
@@ -334,11 +386,8 @@ export default function DocumentLibrary() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm text-slate-500">
         <div>
-          <strong className="font-mono tabular-nums text-slate-900">{filtered.length}</strong> tài liệu PDF
+          <strong className="font-mono tabular-nums text-slate-900">{activeFolder === ALL ? items.length : filtered.length}</strong> tài liệu PDF
           {loading ? " · đang tải…" : ""}
-        </div>
-        <div className="text-xs text-slate-400">
-          Lưu PDF trên bucket Supabase tai-lieu
         </div>
       </div>
 
@@ -347,7 +396,7 @@ export default function DocumentLibrary() {
         <nav aria-label="Đường dẫn thư mục" className="mb-3 flex flex-wrap items-center gap-1 text-xs sm:text-sm">
           <button
             type="button"
-            onClick={() => setActiveFolder(ALL)}
+            onClick={() => navigateFolder(ALL)}
             className={`rounded-md px-2 py-1 font-semibold cursor-pointer ${activeFolder === ALL ? "text-slate-900" : "text-[#0047AB] hover:bg-blue-50"}`}
           >
             Tất cả <span className="font-mono text-[11px] opacity-70">{items.length}</span>
@@ -363,7 +412,7 @@ export default function DocumentLibrary() {
                   <span className="px-1 text-slate-400">›</span>
                   <button
                     type="button"
-                    onClick={() => setActiveFolder(path)}
+                    onClick={() => navigateFolder(path)}
                     className={`rounded-md px-2 py-1 font-semibold cursor-pointer ${last ? "text-slate-900" : "text-[#0047AB] hover:bg-blue-50"}`}
                   >
                     {part}
@@ -374,27 +423,13 @@ export default function DocumentLibrary() {
         </nav>
 
         <div className="flex flex-wrap items-center gap-2">
-          {subfolders.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setActiveFolder(f)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
-            >
-              📁 {lastName(f)}{" "}
-              <span className="ml-1 font-mono text-[11px] opacity-70">
-                {items.filter((d) => inTree(folderOf(d), f)).length}
-              </span>
-            </button>
-          ))}
-          {!isRealFolder && activeFolder !== NONE && (
+          {activeFolder !== ALL && (
             <button
               type="button"
-              onClick={() => setActiveFolder(NONE)}
+              onClick={() => navigateFolder(isRealFolder && activeFolder.includes("/") ? activeFolder.slice(0, activeFolder.lastIndexOf("/")) : ALL)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
             >
-              Chưa phân loại{" "}
-              <span className="ml-1 font-mono text-[11px] opacity-70">{items.filter((d) => folderOf(d) === "").length}</span>
+              ← Thư mục cha
             </button>
           )}
 
@@ -466,6 +501,7 @@ export default function DocumentLibrary() {
             <button
               type="button"
               onClick={() => void handleDeleteFolder(activeFolder)}
+              disabled={saving}
               className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs sm:text-sm font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
             >
               Xóa thư mục này
@@ -480,6 +516,7 @@ export default function DocumentLibrary() {
           onClick={() => {
             setUploadFolder(isRealFolder ? activeFolder : "");
             setShowForm((v) => !v);
+            setSelectedFileName("");
             closeEdit();
             setReplacingDoc(null);
             setErrorMsg(null);
@@ -487,7 +524,7 @@ export default function DocumentLibrary() {
           }}
           className="rounded-lg bg-[#0047AB] hover:bg-[#00388A] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors cursor-pointer"
         >
-          {showForm ? "Đóng form" : "Tải PDF lên"}
+          {showForm ? "Đóng biểu mẫu" : "Tải PDF lên"}
         </button>
         <button
           type="button"
@@ -509,24 +546,28 @@ export default function DocumentLibrary() {
           </div>
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Tên tài liệu *</label>
+              <label className={labelClass}>Tên tài liệu (không bắt buộc)</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="VD: Quy trình hàn nhôm nhiệt 2026"
+                placeholder="Để trống để dùng tên tệp PDF"
                 className={inputClass}
-                required
               />
             </div>
             <div>
-              <label className={labelClass}>File PDF *</label>
+              <label htmlFor="document-pdf" className={labelClass}>Tệp PDF *</label>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-300 p-2 text-sm focus-within:ring-2 focus-within:ring-blue-100">
+                <span className="shrink-0 rounded bg-blue-50 px-3 py-1 font-semibold text-[#0047AB]">Chọn tệp</span>
+                <span className="truncate">{selectedFileName || "Chưa chọn tệp"}</span>
               <input
+                id="document-pdf"
                 ref={fileRef}
                 type="file"
                 accept="application/pdf,.pdf"
                 className={fileInputClass}
-                required
+                onChange={(event) => setSelectedFileName(event.target.files?.[0]?.name || "")}
               />
+              </label>
             </div>
             <div>
               <label className={labelClass}>Thư mục</label>
@@ -556,7 +597,7 @@ export default function DocumentLibrary() {
           {uploadProgress !== null && (
             <div className="mt-3">
               <div className="flex justify-between text-xs font-semibold text-[#0047AB] mb-1">
-                <span>Đang tải lên bucket...</span>
+                <span>Đang tải tài liệu lên...</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -611,7 +652,6 @@ export default function DocumentLibrary() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className={inputClass}
-                required
               />
             </div>
             <div>
@@ -697,23 +737,28 @@ export default function DocumentLibrary() {
               </div>
 
               <div className="mb-4">
-                <label className={labelClass}>Chọn file PDF mới để thay thế *</label>
+                <label htmlFor="replacement-pdf" className={labelClass}>Chọn tệp PDF mới để thay thế *</label>
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-300 p-2 text-sm focus-within:ring-2 focus-within:ring-blue-100">
+                  <span className="shrink-0 rounded bg-blue-50 px-3 py-1 font-semibold text-[#0047AB]">Chọn tệp</span>
+                  <span className="truncate">{replacementFileName || "Chưa chọn tệp"}</span>
                 <input
+                  id="replacement-pdf"
                   ref={replaceFileRef}
                   type="file"
                   accept="application/pdf,.pdf"
                   className={fileInputClass}
-                  required
+                  onChange={(event) => setReplacementFileName(event.target.files?.[0]?.name || "")}
                 />
+                </label>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Nội dung file mới ghi đè file hiện tại trong bucket, link xem tài liệu không đổi.
+                  Nội dung tệp mới thay thế tệp hiện tại, liên kết xem tài liệu không đổi.
                 </p>
               </div>
 
               {replaceProgress !== null && (
                 <div className="mb-4">
                   <div className="flex justify-between text-xs font-semibold text-amber-700 mb-1">
-                    <span>Đang cập nhật nội dung file...</span>
+                    <span>Đang cập nhật nội dung tệp...</span>
                     <span>{replaceProgress}%</span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -760,10 +805,32 @@ export default function DocumentLibrary() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {(activeFolder === NONE ? [] : subfolders).map((folder) => (
+                <tr key={folder} className="hover:bg-blue-50/50">
+                  <td className="px-4 py-3.5">
+                    <button type="button" onClick={() => navigateFolder(folder)} className="cursor-pointer font-semibold text-[#0047AB] hover:underline">
+                      📁 {lastName(folder)}
+                    </button>
+                  </td>
+                  <td colSpan={2} className="px-4 py-3.5 text-slate-500">
+                    {items.filter((doc) => inTree(folderOf(doc), folder)).length} tài liệu
+                  </td>
+                  <td className="px-4 py-3.5 text-right text-slate-500">Thư mục</td>
+                </tr>
+              ))}
+              {activeFolder === ALL && (
+                <tr className="hover:bg-blue-50/50">
+                  <td className="px-4 py-3.5">
+                    <button type="button" onClick={() => navigateFolder(NONE)} className="cursor-pointer font-semibold text-[#0047AB] hover:underline">📁 Chưa phân loại</button>
+                  </td>
+                  <td colSpan={2} className="px-4 py-3.5 text-slate-500">{items.filter((doc) => !folderOf(doc)).length} tài liệu</td>
+                  <td className="px-4 py-3.5 text-right text-slate-500">Thư mục</td>
+                </tr>
+              )}
+              {filtered.length === 0 && activeFolder !== ALL && (activeFolder === NONE || subfolders.length === 0) ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
-                    {loading ? "Đang tải tài liệu…" : "Chưa có tài liệu nào trong bucket"}
+                    {loading ? "Đang tải tài liệu…" : "Thư mục chưa có tài liệu"}
                   </td>
                 </tr>
               ) : (
@@ -816,6 +883,7 @@ export default function DocumentLibrary() {
                           type="button"
                           onClick={() => {
                             setReplacingDoc(doc);
+                            setReplacementFileName("");
                             setErrorMsg(null);
                             setStatusMsg(null);
                           }}

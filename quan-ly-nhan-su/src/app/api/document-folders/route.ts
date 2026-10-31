@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listStoredDocuments, updateStoredDocument } from "@/lib/documentStorage";
+import { deleteStoredDocument, listStoredDocuments, updateStoredDocument } from "@/lib/documentStorage";
 import { requireAccess } from "@/lib/server/requireAccess";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -91,19 +91,21 @@ export async function PATCH(request: Request) {
   }
 }
 
-/** Xóa thư mục cùng các thư mục con — chỉ khi không còn tài liệu nào bên trong. */
+/** Chỉ bỏ các thư mục sau khi xóa thành công tài liệu bên trong. */
 export async function DELETE(request: Request) {
   const denied = await requireAccess("tai-lieu", "delete");
   if (denied) return denied;
   try {
     const path = new URL(request.url).searchParams.get("path")?.trim();
     if (!path) return fail("Thiếu thư mục cần xóa.", 400);
-    const inUse = (await listStoredDocuments()).some((d) => {
+    const folders = await readFolders();
+    if (!folders.includes(path)) return fail("Thư mục không tồn tại.", 404);
+    const documents = (await listStoredDocuments()).filter((d) => {
       const folder = d.appProperties?.thu_muc;
       return folder ? inTree(folder, path) : false;
     });
-    if (inUse) return fail("Thư mục (hoặc thư mục con) còn tài liệu — chuyển hoặc xóa tài liệu trước.", 409);
-    const next = (await readFolders()).filter((f) => !inTree(f, path));
+    for (const document of documents) await deleteStoredDocument(document.id);
+    const next = folders.filter((f) => !inTree(f, path));
     await writePrivateJson(FILE_PATH, next);
     return NextResponse.json({ folders: next });
   } catch (e) {

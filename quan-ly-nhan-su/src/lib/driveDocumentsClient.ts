@@ -31,35 +31,46 @@ export async function fetchDriveDocuments(): Promise<{
   }
 }
 
-function postPdf(
-  url: string,
+async function postPdf(
   file: File,
   fields: Record<string, string>,
   onProgress?: (percent: number) => void,
 ) {
-  return new Promise<{ ok: boolean; status: number; data: Record<string, unknown> }>((resolve, reject) => {
-    const body = new FormData();
-    body.append("file", file);
-    for (const [key, value] of Object.entries(fields)) body.append(key, value);
+  const prepared = await fetch("/api/documents/upload-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "prepare", name: fields.name, description: fields.description,
+      size: file.size, mimeType: "application/pdf", replaceId: fields.fileId,
+      appProperties: JSON.parse(fields.appProperties || "{}"),
+    }),
+  });
+  const session = await prepared.json();
+  if (!prepared.ok) return { ok: false, status: prepared.status, data: session };
+  await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
+    xhr.open("PUT", session.uploadUrl);
+    xhr.setRequestHeader("Content-Type", "application/pdf");
     if (xhr.upload && onProgress) {
       xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 95));
       };
     }
     xhr.onload = () => {
-      let data: Record<string, unknown> = {};
-      try {
-        data = JSON.parse(xhr.responseText || "{}") as Record<string, unknown>;
-      } catch {
-        data = {};
-      }
-      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data });
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error("Không tải được tệp lên kho tài liệu. Vui lòng thử lại hoặc liên hệ quản trị viên."));
     };
-    xhr.onerror = () => reject(new Error("Không kết nối được máy chủ khi tải file."));
-    xhr.send(body);
+    xhr.onerror = () => reject(new Error("Không kết nối được kho tài liệu. Vui lòng kiểm tra kết nối mạng."));
+    xhr.send(file);
   });
+  const completed = await fetch("/api/documents/upload-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "complete", ticket: session.ticket }),
+  });
+  const data = await completed.json();
+  if (completed.ok) onProgress?.(100);
+  return { ok: completed.ok, status: completed.status, data };
 }
 
 function toDriveDocumentItem(
@@ -99,7 +110,6 @@ export async function uploadDocumentToDrive(
     }
 
     const result = await postPdf(
-      "/api/documents/upload",
       file,
       {
         name: title.trim() || file.name,
@@ -109,7 +119,7 @@ export async function uploadDocumentToDrive(
       onProgress,
     );
     if (!result.ok) {
-      return { success: false, error: String(result.data.error || "Không tải được tài liệu lên bucket.") };
+      return { success: false, error: String(result.data.error || "Không tải được tài liệu lên kho.") };
     }
     const item = toDriveDocumentItem(
       (result.data.item ?? {}) as Partial<DriveDocumentItem> & { size?: number | string },
@@ -117,7 +127,7 @@ export async function uploadDocumentToDrive(
     );
     return { success: true, item };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Lỗi không xác định khi upload";
+    const message = err instanceof Error && !(err instanceof TypeError) ? err.message : "Không tải được tài liệu. Vui lòng kiểm tra kết nối mạng.";
     return { success: false, error: message };
   }
 }
@@ -181,7 +191,6 @@ export async function replaceDocumentContentInDrive(
     }
 
     const result = await postPdf(
-      "/api/documents/replace",
       file,
       {
         fileId,
@@ -191,7 +200,7 @@ export async function replaceDocumentContentInDrive(
       onProgress,
     );
     if (!result.ok) {
-      return { success: false, error: String(result.data.error || "Không thay được file.") };
+      return { success: false, error: String(result.data.error || "Không thay được tệp.") };
     }
     return { success: true };
   } catch (err: unknown) {
