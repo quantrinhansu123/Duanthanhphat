@@ -953,7 +953,9 @@ function ProjectInfoFields({
               updateForm({ machineTypes: [...new Set([...otherCodes, ...selected])] });
             }} readOnly={readOnly} renderLabel={(code) => { const m = machineOptions.find((item) => item.code === code); return `${code} · ${m?.name ?? ""}`; }} />
           {machineOptions.filter((m) => form.machineTypes.includes(m.code) && (m.group ?? "welding") === group).map((m) => <label key={m.code} className="mt-2 flex items-center justify-between gap-3 text-xs">
-            <span>{m.code} · Số lượng (bộ), danh mục: {m.quantity ?? 1}</span>
+            <span>{m.code} · Số lượng gán (bộ), tổng danh mục: {m.quantity ?? 1}
+              {!readOnly && <a href={`/danh-sach-may?may=${encodeURIComponent(m.code)}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-[#0047AB] underline">Sửa số lượng danh mục</a>}
+            </span>
             <input aria-label={`Số lượng bộ ${m.code}`} type="number" min={1} max={m.quantity ?? 1} step={1} disabled={readOnly}
               className="w-20 rounded border border-slate-300 px-2 py-1" value={form.machineQuantities?.[m.code] ?? 1}
               onChange={(e) => updateForm({ machineQuantities: { ...form.machineQuantities, [m.code]: Number(e.target.value) } })} />
@@ -1830,7 +1832,7 @@ function ProjectModal({
                   const quantity = form.machineQuantities?.[code] ?? 1;
                   const available = machineOptions.find((m) => m.code === code)?.quantity ?? quantity;
                   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > available) {
-                    window.alert(`Số lượng ${code} phải là số nguyên từ 1 đến ${available} bộ.`);
+                    window.alert(`${code}: dự án đang nhập ${quantity} bộ, tổng số lượng trong danh mục là ${available} bộ. Nhập số nguyên từ 1 đến ${available}. Nếu thực tế có nhiều hơn, mở “Sửa số lượng danh mục”, cập nhật tổng số bộ rồi quay lại form này.`);
                     return;
                   }
                 }
@@ -1912,6 +1914,18 @@ export default function ProjectManagement() {
   const [modal, setModal] = useState<{ project: Project; mode: "view" | "edit" | "create" } | null>(null);
   const [personnelOptions, setPersonnelOptions] = useState<ProjectPersonnelOption[]>([]);
   const [machineOptions, setMachineOptions] = useState<ProjectMachineOption[]>([]);
+  useEffect(() => {
+    if (!modal) return;
+    let active = true;
+    const refresh = () => {
+      void loadMachinePickerOptions().then((machines) => {
+        if (active) setMachineOptions(machines);
+      }).catch(() => { /* Keep the loaded catalog; the server validates stock again on save. */ });
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => { active = false; window.removeEventListener("focus", refresh); };
+  }, [modal]);
   const [importingExcel, setImportingExcel] = useState(false);
   const [progressRows, setProgressRows] = useState<TheoreticalProgressViewRow[]>([]);
   const [progressLoading, setProgressLoading] = useState(true);
