@@ -129,7 +129,13 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
   if (body.kind !== "visual" && body.kind !== "ndt") throw new QualityApiError("Thao tác kiểm tra không hợp lệ.");
   const date = qualityDate(body.date);
   if (!date || !Array.isArray(body.entries) || !body.entries.length || body.entries.length > 100) throw new QualityApiError("Chọn 1–100 mối mỗi lượt và nhập ngày kiểm tra.");
-  const entries = body.entries.map((v) => { const e = object(v); return { id: qualityUuid(e.id), phien_ban: version(e.phien_ban) }; });
+  const entries = body.entries.map((v) => {
+    const e = object(v);
+    const ket_qua = e.ket_qua == null || e.ket_qua === "" ? "Đạt" : result(e.ket_qua);
+    if (ket_qua !== "Đạt" && ket_qua !== "Không đạt") throw new QualityApiError("Kết quả hàng loạt chỉ nhận Đạt hoặc Không đạt.");
+    const ghi_chu = e.ghi_chu == null || e.ghi_chu === "" ? undefined : text(e.ghi_chu, 4000);
+    return { id: qualityUuid(e.id), phien_ban: version(e.phien_ban), ket_qua, ghi_chu };
+  });
   if (new Set(entries.map((e) => e.id)).size !== entries.length) throw new QualityApiError("Danh sách mối bị trùng.");
   const results: { id: string; error?: string; phien_ban?: number }[] = [];
   // Giới hạn 5 mối đồng thời để một lượt 100 mối không giữ kết nối DB quá lâu.
@@ -139,8 +145,26 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
       const { inspection } = await loadWeldQuality(entry.id);
       const current = inspection ?? emptyWeldInspection(entry.id);
       if (current.phien_ban !== entry.phien_ban) throw new QualityApiError("Dữ liệu đã thay đổi; hãy tải lại.", 409);
-      const patch = body.kind === "visual" ? { ngay_mai: date, truc_quan: "Đạt" } : { ngay_ndt: date, ket_qua_ndt: "Đạt", phuong_phap_ndt: body.method ?? "Siêu âm" };
-      const saved = await saveWeldQualityInspection(parseQualityInspection({ ...current, ...patch }, actor));
+      const patch =
+        body.kind === "visual"
+          ? {
+              ngay_mai: date,
+              truc_quan: entry.ket_qua,
+              ...(entry.ket_qua === "Không đạt"
+                ? { xu_ly_truc_quan: current.xu_ly_truc_quan ?? "sua_chua" }
+                : { xu_ly_truc_quan: null }),
+            }
+          : {
+              ngay_ndt: date,
+              ket_qua_ndt: entry.ket_qua,
+              phuong_phap_ndt: body.method ?? "Siêu âm",
+            };
+      const next = {
+        ...current,
+        ...patch,
+        ...(entry.ghi_chu !== undefined ? { ghi_chu: entry.ghi_chu } : {}),
+      };
+      const saved = await saveWeldQualityInspection(parseQualityInspection(next, actor));
       results.push({ id: entry.id, phien_ban: saved.phien_ban });
     } catch (error) { results.push({ id: entry.id, error: error instanceof Error ? error.message : "Không lưu được kiểm tra." }); }
     }));

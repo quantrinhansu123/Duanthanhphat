@@ -3035,12 +3035,15 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
 
       {qualityError && <div role="status" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Kiểm tra chất lượng: {qualityError} {qualityStatusFilter === "Tất cả" && "Nhật ký và kết quả NDT hiện có vẫn được hiển thị."}<button type="button" className="ml-2 min-h-9 font-semibold underline" onClick={() => setReloadToken((n) => n + 1)}>Thử lại</button></div>}
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-sm">
-        <span className="mr-auto font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</span>
+        <div className="mr-auto min-w-0">
+          <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
+          <div className="text-xs text-slate-600">Chọn nhiều → Siêu âm đạt hàng loạt; chỉ chỉnh tay mối không đạt. Sai số nhập từng mối / Excel.</div>
+        </div>
         <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
         <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy danh sách…" : `Chọn toàn bộ ${total.toLocaleString("vi-VN")} kết quả lọc`}</button>
         <button type="button" disabled={!selectedQuality.size} className="min-h-11 rounded-lg px-3 text-slate-600 disabled:opacity-50" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
-        <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-11 rounded-lg bg-blue-700 px-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])}>Đạt tất trực quan / NDT</button>
-        <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập kiểm tra…" : "Nhập kiểm tra Excel"}</button>
+        <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-11 rounded-lg bg-blue-700 px-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
+        <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập kiểm tra…" : "Nhập sai số / Excel"}</button>
         <input ref={qualityExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" aria-label="File kiểm tra chất lượng" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void handleQualityExcel(file); }} />
       </div>
       {qualityImportReport && <div role="status" className="mb-3 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 p-3 text-sm">{qualityImportReport}</div>}

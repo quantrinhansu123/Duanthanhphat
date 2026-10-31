@@ -52,9 +52,28 @@ export async function saveQualityInspection(inspection: SavedWeldInspection) {
   return result.inspection;
 }
 
-export async function markQualityPass(entries: WeldQualitySelection[], kind: "visual" | "ndt", date: string, method: string) {
-  try { return await qualityRequest<{ results: { id: string; error?: string; phien_ban?: number }[] }>({ action: "mark-pass", entries, kind, date, method }); }
-  finally { notifyWeldQualityChanged(); }
+export type WeldQualityBulkEntry = WeldQualitySelection & {
+  ket_qua?: "Đạt" | "Không đạt";
+  ghi_chu?: string | null;
+};
+
+export async function markQualityPass(
+  entries: WeldQualityBulkEntry[],
+  kind: "visual" | "ndt",
+  date: string,
+  method: string,
+) {
+  try {
+    return await qualityRequest<{ results: { id: string; error?: string; phien_ban?: number }[] }>({
+      action: "mark-pass",
+      entries,
+      kind,
+      date,
+      method,
+    });
+  } finally {
+    notifyWeldQualityChanged();
+  }
 }
 
 // ---- Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ ----
