@@ -64,6 +64,7 @@ export type RfiSummary = { id: string; so_phieu: string; ngay_moi: string; trang
   thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number };
 export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean };
 export type RecordSummary = { id: string; ngay_nghiem_thu: string; nguoi_lap: string; created_at: string;
+  thong_tin?: Record<string, unknown> | null;
   phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string }; ho_so_nghiem_thu: { id: string; loai: string; tinh_trang_ky: string }[] };
 export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_thu: Record<string, unknown> & { du_an: Record<string, unknown> } };
   ho_so: { id: string; loai: string; tinh_trang_ky: string; du_lieu_chot: unknown }[];
@@ -87,6 +88,9 @@ export async function completeAcceptance(input: { id: string; phieu_id: string; 
 export const loadRecords = (du_an_id: string) => qualityRequest<{ records: RecordSummary[] }>({ action: "record-list", du_an_id });
 export const loadRecordSet = (id: string) => qualityRequest<RecordSet>({ action: "record-set", id });
 export const setRecordSign = (id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") => qualityRequest<{ ok: true }>({ action: "record-sign", id, tinh_trang_ky });
+/** Ký / bỏ ký đồng bộ cả bộ 3 biên bản của một đợt. */
+export const setRecordSetSign = (dot_id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") =>
+  qualityRequest<{ ok: true; count?: number }>({ action: "record-sign", dot_id, tinh_trang_ky });
 
 export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: string; dateTo?: string }) =>
   qualityRequest<{ accepted: WeldReportRow[]; waiting: WeldReportRow[] }>({ action: "dashboard-quality", filters });

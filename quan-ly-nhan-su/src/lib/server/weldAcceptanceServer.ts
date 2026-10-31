@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { filterRfiCandidates, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
@@ -102,7 +102,8 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(du_an_id)").eq("con_hieu_luc", true)
     .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("moi_han_id").range(a, b));
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
-  const isEligible = (q: QualityRow) => q.du_dieu_kien_rfi && q.tinh_trang !== "Đạt" && q.tinh_trang !== "Nghiệm thu đạt" && !inRfi.has(q.moi_han_id);
+  // Chỉ mối "Chờ siêu âm và nghiệm thu" — không lấy mối đã "Chờ ký biên bản".
+  const isEligible = (q: QualityRow) => q.du_dieu_kien_rfi && isRfiEligibleStatus(q.tinh_trang) && !inRfi.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
   const ids = eligible.map((q) => q.moi_han_id);
   const welds = await chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>
@@ -274,7 +275,7 @@ export async function acceptedOnDate(body: Record<string, unknown>) {
 
 export async function listRecords(projectId: string) {
   const { data, error } = await db().from("dot_nghiem_thu")
-    .select("id,ngay_nghiem_thu,nguoi_lap,created_at,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,du_an_id),ho_so_nghiem_thu(id,loai,tinh_trang_ky)")
+    .select("id,ngay_nghiem_thu,nguoi_lap,thong_tin,created_at,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,du_an_id),ho_so_nghiem_thu(id,loai,tinh_trang_ky)")
     .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
   return data;
@@ -309,6 +310,20 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
 
 export async function setSignStatus(body: Record<string, unknown>) {
   if (body.tinh_trang_ky !== "Chờ ký" && body.tinh_trang_ky !== "Đã ký") throw new QualityApiError("Tình trạng ký không hợp lệ.");
+  // Một nút cho cả bộ 3 biên bản: thiếu bất kỳ hồ sơ nào cũng coi như chưa đủ điều kiện.
+  if (body.dot_id) {
+    const dotId = qualityUuid(body.dot_id);
+    const { data: docs, error: listError } = await db().from("ho_so_nghiem_thu").select("id,loai").eq("dot_id", dotId);
+    if (listError) throw listError;
+    const required = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
+    const present = new Set((docs ?? []).map((d) => d.loai));
+    if (required.some((loai) => !present.has(loai))) {
+      throw new QualityApiError("Thiếu một trong ba biên bản — chưa đủ điều kiện ký bộ hồ sơ.");
+    }
+    const { error } = await db().from("ho_so_nghiem_thu").update({ tinh_trang_ky: body.tinh_trang_ky }).eq("dot_id", dotId);
+    if (error) throw error;
+    return { ok: true, count: docs?.length ?? 0 };
+  }
   const { error } = await db().from("ho_so_nghiem_thu").update({ tinh_trang_ky: body.tinh_trang_ky }).eq("id", qualityUuid(body.id));
   if (error) throw error;
   return { ok: true };

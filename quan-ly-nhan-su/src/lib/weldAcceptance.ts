@@ -72,6 +72,13 @@ export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter)
   return { rows: out, missingChainage };
 }
 
+/** Trạng thái được phép đưa vào phiếu RFI nghiệm thu. */
+export const RFI_ELIGIBLE_STATUSES = ["Chờ siêu âm và nghiệm thu", "Chờ thí nghiệm"] as const;
+
+export function isRfiEligibleStatus(tinhTrang: string): boolean {
+  return (RFI_ELIGIBLE_STATUSES as readonly string[]).includes(tinhTrang);
+}
+
 /** Lý do mối chưa được phát RFI, theo tình trạng chất lượng. */
 export function rfiBlockReason(tinhTrang: string): string {
   switch (tinhTrang) {
@@ -86,7 +93,7 @@ export function rfiBlockReason(tinhTrang: string): string {
     case "Chờ siêu âm và nghiệm thu":
     case "Chờ thí nghiệm": return "Chưa có siêu âm đạt";
     case "Chờ ký biên bản":
-    case "Chờ nghiệm thu": return "Chờ ký biên bản / hoàn thành nghiệm thu";
+    case "Chờ nghiệm thu": return "Đã siêu âm — đang chờ ký biên bản (không còn trong danh sách phát RFI)";
     default: return "Chưa đủ điều kiện (thiếu trực quan, hình học hoặc NDT theo tiêu chí)";
   }
 }

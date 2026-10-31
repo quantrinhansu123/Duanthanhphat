@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { completeAcceptance, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiNumber, loadRfis,
-  publishRfi, setRecordSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+  publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { defaultDecisions, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
-import WeldBbntDocument from "@/components/WeldBbntDocument";
+import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
 import { parseCoordinateCode } from "@/lib/weldCode";
 
@@ -94,9 +94,9 @@ export default function WeldAcceptanceWorkflow() {
   const [projectId, setProjectId] = useState("");
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
-  const [bbnt, setBbnt] = useState<RecordSet | null>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
   const [issuedList, setIssuedList] = useState<RfiSummary[] | null>(null);
+  const [printPack, setPrintPack] = useState<RecordSet | null>(null);
 
   useEffect(() => {
     const remembered = (() => {
@@ -123,10 +123,6 @@ export default function WeldAcceptanceWorkflow() {
   async function openRecord(id: string, kind: DocKind) {
     setView({ kind, record: await loadRecordSet(id) });
   }
-  async function openBbnt(id: string) {
-    setBbnt(await loadRecordSet(id));
-  }
-
   function startEditRfi(rfi: RfiSummary) {
     setView(null);
     setTab("rfi");
@@ -136,6 +132,26 @@ export default function WeldAcceptanceWorkflow() {
   async function afterAccepted(recordId: string) {
     setTab("records");
     setView({ kind: "giai-doan", record: await loadRecordSet(recordId) });
+  }
+
+  /** Sau phát RFI: hỏi in bộ 3 biên bản mang hiện trường. */
+  async function afterPublishedRfi(phieuId: string) {
+    const wantPrint = window.confirm("Bạn có muốn in biên bản nghiệm thu luôn không?\n\nBấm OK để in đủ hồ sơ (1)(2)(3) mang ra hiện trường.");
+    if (!wantPrint) return;
+    try {
+      const { records } = await loadRecords(projectId);
+      const match = records.find((r) => r.phieu_yeu_cau_nghiem_thu.id === phieuId);
+      if (!match) {
+        window.alert("Đã phát RFI nhưng chưa thấy bộ 3 biên bản.\n\nChạy migration tạo hồ sơ khi phát RFI, rồi mở tab Hồ sơ nghiệm thu để in.");
+        setTab("records");
+        return;
+      }
+      setPrintPack(await loadRecordSet(match.id));
+      setTab("records");
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không mở được bộ in biên bản.");
+      setTab("records");
+    }
   }
 
   return (
@@ -163,13 +179,14 @@ export default function WeldAcceptanceWorkflow() {
               onEditConsumed={() => setEditRfiId(null)}
               onOpen={openRfi}
               onOpenIssuedList={setIssuedList}
+              onPublished={afterPublishedRfi}
             />
           )}
           {tab === "accept" && (
             <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} />
           )}
           {tab === "records" && (
-            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onOpenBbnt={openBbnt} />
+            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} />
           )}
         </div>
       )}
@@ -181,9 +198,12 @@ export default function WeldAcceptanceWorkflow() {
         />,
         document.body,
       )}
-      {bbnt && createPortal(<WeldBbntDocument record={bbnt} onClose={() => setBbnt(null)} />, document.body)}
       {issuedList && createPortal(
         <RfiIssuedListDocument projectName={projectName} rfis={issuedList} onClose={() => setIssuedList(null)} />,
+        document.body,
+      )}
+      {printPack && createPortal(
+        <WeldAcceptancePrintPack record={printPack} onClose={() => setPrintPack(null)} />,
         document.body,
       )}
     </div>
@@ -196,12 +216,14 @@ function RfiPanel({
   onEditConsumed,
   onOpen,
   onOpenIssuedList,
+  onPublished,
 }: {
   projectId: string;
   editRfiId: string | null;
   onEditConsumed: () => void;
   onOpen: (r: RfiSummary) => unknown;
   onOpenIssuedList: (rfis: RfiSummary[]) => void;
+  onPublished?: (phieuId: string) => unknown;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi">("nghiem-thu");
   const monitoring = kind === "theo-doi";
@@ -221,6 +243,7 @@ function RfiPanel({
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const requestId = useRef(crypto.randomUUID());
+  const editFormRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async (keepSoPhieu = false) => {
     const [list, num] = await Promise.all([loadRfis(projectId), loadRfiNumber(projectId)]);
@@ -261,6 +284,7 @@ function RfiPanel({
         setKind(d.rfi.thong_tin?.loai_rfi === "theo-doi" ? "theo-doi" : "nghiem-thu");
         setOkMsg(`Đang sửa phiếu ${d.rfi.so_phieu}. Lưu sẽ cập nhật thông tin in (không đổi danh sách mối).`);
         onEditConsumed();
+        requestAnimationFrame(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       })
       .catch((e) => setError(message(e)))
       .finally(() => { if (live) setBusy(false); });
@@ -296,7 +320,7 @@ function RfiPanel({
         await refresh();
         return;
       }
-      await publishRfi({
+      const published = await publishRfi({
         id: requestId.current,
         du_an_id: projectId,
         so_phieu: soPhieu,
@@ -306,19 +330,27 @@ function RfiPanel({
         loai_rfi: kind,
         filters,
       });
+      const weldCount = selected.size;
       requestId.current = crypto.randomUUID();
       setSelected(new Set());
-      setOkMsg(monitoring ? "Đã phát phiếu theo dõi mới." : `Đã phát phiếu yêu cầu mới (${selected.size} mối).`);
+      setOkMsg(monitoring
+        ? "Đã phát phiếu theo dõi mới."
+        : `Đã phát phiếu yêu cầu mới (${weldCount} mối).`);
       await refresh();
-      if (!monitoring) await search();
+      if (!monitoring) {
+        await search();
+        await Promise.resolve(onPublished?.(published.id));
+      }
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
 
   function beginEdit(r: RfiSummary) {
     setBusy(true);
     setError("");
+    setOkMsg("");
     loadRfiDetail(r.id)
       .then((d) => {
+        setKind(d.rfi.thong_tin?.loai_rfi === "theo-doi" ? "theo-doi" : "nghiem-thu");
         setEditingId(d.rfi.id);
         setSoPhieu(d.rfi.so_phieu);
         setNgayMoi(d.rfi.ngay_moi);
@@ -329,7 +361,8 @@ function RfiPanel({
           tuyen_thuong: info.tuyen_thuong || inferred.upper,
           tuyen_ha: info.tuyen_ha || inferred.lower,
         });
-        setOkMsg(`Đang sửa phiếu ${d.rfi.so_phieu}. Lưu sẽ cập nhật thông tin in (không đổi danh sách mối).`);
+        setOkMsg(`Đang sửa phiếu ${d.rfi.so_phieu}. Đổi thông tin bên dưới rồi bấm «Lưu sửa phiếu».`);
+        requestAnimationFrame(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
       })
       .catch((e) => setError(message(e)))
       .finally(() => setBusy(false));
@@ -370,7 +403,8 @@ function RfiPanel({
 
       {!monitoring && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Bước 2 — Tìm và chọn mối đủ điều kiện</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Bước 2 — Tìm mối «Chờ siêu âm và nghiệm thu»</h3>
+          <p className="text-xs text-slate-600">Chỉ lấy mối đã mài / trực quan / sai số đạt, đang chờ siêu âm. Mối «Chờ ký biên bản» không còn trong danh sách này.</p>
           <div className="flex flex-wrap items-end gap-2">
             <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
             <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
@@ -424,10 +458,15 @@ function RfiPanel({
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {okMsg && <p className="text-sm text-emerald-700">{okMsg}</p>}
 
-      <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+      <div ref={editFormRef} className={`space-y-2 rounded-lg border p-3 ${editingId ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
-          {editingId ? "Sửa thông tin phiếu đã phát" : "Bước 3 — Thông tin phiếu & phát hành"}
+          {editingId ? `Sửa phiếu đã phát · ${soPhieu}` : "Bước 3 — Thông tin phiếu & phát hành"}
         </h3>
+        {editingId && (
+          <p className="text-xs text-amber-900">
+            Đang sửa phiếu đã phát. Có thể đổi số phiếu, ngày, giờ, địa điểm, bên mời/nhận, phạm vi và tuyến — <b>không đổi danh sách mối</b>.
+          </p>
+        )}
         <div className="flex flex-wrap items-end gap-2">
           <input className={input} value={soPhieu} onChange={(e) => setSoPhieu(e.target.value)} placeholder="Số phiếu" aria-label="Số phiếu" />
           <label className="flex flex-col gap-0.5 text-[10px] font-semibold text-slate-500">Ngày mời
@@ -609,7 +648,7 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
               })}</tbody>
             </table>
           </div>
-          <p className="text-sm">Tổng {sum.total} · chấp nhận <b>{sum.accepted}</b> · không đạt {sum.failed} · chưa nghiệm thu {sum.deferred}. Sẽ mở biên bản giai đoạn công việc và sinh đủ hồ sơ.</p>
+          <p className="text-sm">Tổng {sum.total} · chấp nhận <b>{sum.accepted}</b> · không đạt {sum.failed} · chưa nghiệm thu {sum.deferred}. Cập nhật kết quả vào bộ 3 biên bản đã tạo lúc phát RFI.</p>
           <div className="flex flex-wrap items-end gap-2">
             <input className={input} type="date" value={ngay} onChange={(e) => setNgay(e.target.value)} />
             <input className={input} placeholder="Địa điểm" value={thongTin.dia_diem} onChange={(e) => setThongTin({ ...thongTin, dia_diem: e.target.value })} />
@@ -624,45 +663,76 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   );
 }
 
-function RecordsPanel({ projectId, onOpen, onOpenBbnt }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onOpenBbnt: (id: string) => unknown }) {
+function RecordsPanel({ projectId, onOpen }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown }) {
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const refresh = useCallback(() => loadRecords(projectId).then((r) => setRecords(r.records)), [projectId]);
   useEffect(() => { refresh().catch((e) => setError(message(e))); }, [refresh]);
-  const kinds: [string, DocKind, string][] = [
-    ["Hoàn thành công việc", "hoan-thanh", "Hoàn thành công việc"],
-    ["Phụ lục công việc", "phu-luc", "Phụ lục công việc"],
-    ["Biên bản giai đoạn công việc", "giai-doan", "Giai đoạn xây dựng"],
+  // Chỉ đúng 3 biên bản theo trình tự hồ sơ — không có BBNT thứ 4.
+  const kinds: [string, DocKind][] = [
+    ["(1) Phụ lục Biên bản nghiệm thu mối hàn", "phu-luc"],
+    ["(2) Biên bản nghiệm thu công việc", "giai-doan"],
+    ["(3) Biên bản hoàn thành công việc", "hoan-thanh"],
   ];
+  const requiredLoai = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
+
+  async function toggleSignSet(r: RecordSummary) {
+    setBusy(true); setError("");
+    try {
+      const docs = r.ho_so_nghiem_thu ?? [];
+      if (requiredLoai.some((loai) => !docs.some((h) => h.loai === loai))) {
+        throw new Error("Thiếu một trong ba biên bản — chưa đủ điều kiện ký.");
+      }
+      const allSigned = docs.filter((h) => requiredLoai.includes(h.loai)).every((h) => h.tinh_trang_ky === "Đã ký");
+      await setRecordSetSign(r.id, allSigned ? "Chờ ký" : "Đã ký");
+      await refresh();
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  }
 
   return (
     <section className="space-y-3">
       <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-        Hồ sơ sau khi nghiệm thu: phiếu hoàn thành, phụ lục, <b>biên bản nghiệm thu giai đoạn công việc</b>, và BBNT mối hàn. Bấm từng nút để xem / in / thoát.
+        Chỉ <b>3 biên bản</b>: (1) Phụ lục BBNT mối hàn · (2) BB nghiệm thu công việc · (3) BB hoàn thành công việc.
+        Một nút ký chung cho cả bộ — thiếu bất kỳ cái nào thì chưa đủ điều kiện.
       </p>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {records.map((r) => (
-        <div key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
-          <p className="font-semibold">{r.phieu_yeu_cau_nghiem_thu.so_phieu} · nghiệm thu {r.ngay_nghiem_thu} · {r.nguoi_lap}</p>
-          <div className="flex flex-wrap gap-2">
-            {kinds.map(([label, kind, loaiDb]) => {
-              const signDoc = r.ho_so_nghiem_thu.find((h) => h.loai === loaiDb);
-              return (
-                <span key={kind} className="inline-flex items-center gap-1">
-                  <button type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r.id, kind)).catch((e) => setError(message(e)))}>{label}</button>
-                  {signDoc && (
-                    <button type="button" className="text-xs underline cursor-pointer" onClick={() =>
-                      setRecordSign(signDoc.id, signDoc.tinh_trang_ky === "Đã ký" ? "Chờ ký" : "Đã ký").then(refresh).catch((e) => setError(message(e)))}>
-                      {signDoc.tinh_trang_ky}
-                    </button>)}
-                </span>);
-            })}
-            <button type="button" className={secondary} onClick={() => Promise.resolve(onOpenBbnt(r.id)).catch((e) => setError(message(e)))}>BBNT mối hàn</button>
+      {records.map((r) => {
+        const requiredDocs = (r.ho_so_nghiem_thu ?? []).filter((h) => requiredLoai.includes(h.loai));
+        const complete = requiredDocs.length === 3;
+        const allSigned = complete && requiredDocs.every((h) => h.tinh_trang_ky === "Đã ký");
+        return (
+          <div key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
+            <p className="font-semibold">
+              {r.phieu_yeu_cau_nghiem_thu.so_phieu} · {r.ngay_nghiem_thu} · {r.nguoi_lap}
+              {!complete && <span className="ml-2 text-amber-700 font-medium">· Thiếu hồ sơ</span>}
+              {allSigned ? (
+                <span className="ml-2 text-emerald-700 font-medium">· Đã ký bộ hồ sơ</span>
+              ) : complete ? (
+                <span className="ml-2 text-slate-500 font-medium">· Chờ ký</span>
+              ) : null}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {kinds.map(([label, kind]) => (
+                <button key={kind} type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r.id, kind)).catch((e) => setError(message(e)))}>{label}</button>
+              ))}
+              <button
+                type="button"
+                className={allSigned ? secondary : primary}
+                disabled={busy || !complete}
+                title={!complete ? "Thiếu một trong ba biên bản" : undefined}
+                onClick={() => void toggleSignSet(r)}
+              >
+                {allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký"}
+              </button>
+            </div>
           </div>
-        </div>))}
+        );
+      })}
       {!records.length && (
         <p className="text-sm text-slate-600">
-          Chưa có hồ sơ nghiệm thu cho dự án này. Quy trình: <b>Phát RFI</b> → tab <b>Nghiệm thu</b> → hoàn thành → hồ sơ xuất hiện tại đây.
+          Chưa có hồ sơ. Phát RFI nghiệm thu xong là bộ 3 biên bản xuất hiện tại đây để in mang đi.
         </p>
       )}
     </section>

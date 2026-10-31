@@ -10,9 +10,9 @@ type View = { kind: DocKind; rfi?: { rfi: RfiSummary; welds: RfiWeld[]; projectN
 
 const TITLES: Record<DocKind, string> = {
   rfi: "PHIẾU YÊU CẦU NGHIỆM THU (RFI)",
-  "hoan-thanh": "PHIẾU NGHIỆM THU HOÀN THÀNH CÔNG VIỆC XÂY DỰNG",
-  "phu-luc": "PHỤ LỤC NGHIỆM THU CÔNG VIỆC XÂY DỰNG",
-  "giai-doan": "BIÊN BẢN NGHIỆM THU GIAI ĐOẠN CÔNG VIỆC",
+  "phu-luc": "PHỤ LỤC BIÊN BẢN NGHIỆM THU MỐI HÀN",
+  "giai-doan": "BIÊN BẢN NGHIỆM THU CÔNG VIỆC",
+  "hoan-thanh": "BIÊN BẢN HOÀN THÀNH CÔNG VIỆC",
 };
 const METHOD_TEXT = { FBW: "Hàn ray chảy giáp mép trên tuyến (FBW)", ATW: "Hàn nhiệt nhôm trên tuyến (ATW)" } as const;
 const TEMPLATE_VERSION = "Mẫu tạm v0 — chờ mẫu chính thức";

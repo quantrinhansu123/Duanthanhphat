@@ -1391,6 +1391,7 @@ function MachineFormModal({
   mode,
   modelSuggestions = [],
   techSuggestions = [],
+  existingCodes = [],
   warehouses,
   currentLocation,
   onClose,
@@ -1400,6 +1401,8 @@ function MachineFormModal({
   mode: "create" | "edit";
   modelSuggestions?: string[];
   techSuggestions?: string[];
+  /** Mã máy đang có trong danh sách — dùng để cảnh báo trùng trước khi gọi Supabase. */
+  existingCodes?: string[];
   warehouses: Warehouse[];
   currentLocation?: EquipmentLocation;
   onClose: () => void;
@@ -1479,6 +1482,23 @@ function MachineFormModal({
     }
     if (!form.code.trim()) {
       window.alert(tr("Vui lòng nhập mã máy.", "Please enter the machine code."));
+      return;
+    }
+    const codeNorm = form.code.trim().toLocaleLowerCase("vi");
+    const originalNorm = machine.code.trim().toLocaleLowerCase("vi");
+    const codeTaken = existingCodes.some((code) => {
+      const other = code.trim().toLocaleLowerCase("vi");
+      if (!other) return false;
+      if (!isCreate && other === originalNorm) return false;
+      return other === codeNorm;
+    });
+    if (codeTaken) {
+      window.alert(
+        tr(
+          `Mã máy "${form.code.trim()}" đã tồn tại. Vui lòng chọn mã khác.`,
+          `Machine code "${form.code.trim()}" already exists. Please choose another code.`,
+        ),
+      );
       return;
     }
     if (!Number.isSafeInteger(Number(form.specs?.quantity ?? 1)) || Number(form.specs?.quantity ?? 1) < 1) {
@@ -2310,6 +2330,7 @@ export default function MachineList() {
           warehouses={locationBundle.warehouses}
           currentLocation={locationBundle.locations.find((m) => m.id === formModal.machine.id)}
           mode={formModal.mode}
+          existingCodes={list.map((m) => m.code)}
           modelSuggestions={Array.from(
             new Set([
               ...modelOptions,

@@ -60,23 +60,34 @@ export type WeldingQualificationContext = {
 /**
  * Kiểm tra chứng chỉ theo công nghệ/máy thật.
  *
- * Dữ liệu R4 dùng chứng chỉ K922-1, UN5-150ZB, Thermit và Railtech thay vì
- * các nhãn hạng thợ mẫu cũ. Với FBW, khi đã chọn máy thì chứng chỉ vận hành
- * phải khớp họ máy; với ATW chấp nhận các chứng chỉ hàn nhôm nhiệt.
+ * Danh mục thực tế dùng tên dạng “Hàn ray chảy giáp mép - UN5/K922-1”,
+ * “Hàn ray nhiệt nhôm - Railtech/Goldschmidt”, không chỉ nhãn “vận hành máy hàn”
+ * hay Flash-Butt. Với FBW, khi đã chọn máy thì chứng chỉ phải khớp họ máy;
+ * với ATW chấp nhận các chứng chỉ hàn nhôm nhiệt.
  */
 export function isCertificateEligibleForWeld(
   certificate: string,
   context: WeldingQualificationContext,
 ): boolean {
   const normalized = normalizeCertificate(certificate);
-  const machine = normalizeCertificate(`${context.machineCode ?? ""} ${context.machineName ?? ""}`);
+  const certFamily = certificateEquipmentFamily(certificate);
+  const machineFamily = machineEquipmentFamily({
+    code: context.machineCode,
+    name: context.machineName,
+  });
   const rail = normalizeCertificate(context.railType);
 
   if (context.method === "ATW") {
+    if (certFamily === "atw") return true;
     if (
       normalized.includes("aluminothermic") ||
       normalized.includes("thermit") ||
-      normalized.includes("nhomnhiet")
+      normalized.includes("nhomnhiet") ||
+      normalized.includes("nhietnhom") ||
+      normalized.includes("railtech") ||
+      normalized.includes("goldschmidt") ||
+      normalized.includes("shangdong") ||
+      normalized.includes("shandong")
     ) {
       return true;
     }
@@ -87,16 +98,28 @@ export function isCertificateEligibleForWeld(
     return normalized === normalizeCertificate(WELDING_CERTIFICATES.railClass1Uic60);
   }
 
+  // FBW: chấp nhận chứng chỉ đã gắn họ máy KCM/UN5, hoặc nhãn FBW phổ biến.
   const isFlashButt =
+    certFamily === "kcm" ||
+    certFamily === "un5" ||
     normalized.includes("flashbutt") ||
     normalized.includes("vanhanhmayhan") ||
+    normalized.includes("chaygiapmep") ||
+    normalized.includes("doimau") ||
     normalized === normalizeCertificate(WELDING_CERTIFICATES.iso9606);
   if (!isFlashButt) return false;
 
-  if (machine.includes("kcm") || machine.includes("k922") || machine.includes("k920")) {
-    return normalized.includes("k922") || normalized.includes("k920") || normalized.includes("kcm");
+  if (machineFamily === "kcm") {
+    return (
+      certFamily === "kcm" ||
+      normalized.includes("k922") ||
+      normalized.includes("k920") ||
+      normalized.includes("kcm")
+    );
   }
-  if (machine.includes("un5")) return normalized.includes("un5");
+  if (machineFamily === "un5") {
+    return certFamily === "un5" || normalized.includes("un5");
+  }
   return true;
 }
 
@@ -120,7 +143,11 @@ function familyFromText(normalized: string): WeldEquipmentFamily | null {
     normalized.includes("aluminothermic") ||
     normalized.includes("thermit") ||
     normalized.includes("railtech") ||
-    normalized.includes("nhomnhiet")
+    normalized.includes("nhomnhiet") ||
+    normalized.includes("nhietnhom") ||
+    normalized.includes("goldschmidt") ||
+    normalized.includes("shangdong") ||
+    normalized.includes("shandong")
   ) {
     return "atw";
   }

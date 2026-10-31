@@ -356,6 +356,17 @@ function machineBasicPayload(machine: Machine) {
   };
 }
 
+function formatMachineSaveError(error: unknown) {
+  const message = formatSupabaseError(error);
+  if (
+    message.includes("thiet_bi_ma_may_unique") ||
+    (message.includes("duplicate key") && message.includes("ma_may"))
+  ) {
+    return "Mã máy đã tồn tại. Vui lòng chọn mã khác.";
+  }
+  return message;
+}
+
 function missingSplitMachineColumns(error: unknown) {
   const message = formatSupabaseError(error).toLowerCase();
   return message.includes("thong_so_may_han") || message.includes("phuong_tien_van_chuyen");
@@ -490,7 +501,7 @@ export async function createMachine(machine: Machine): Promise<Machine> {
   const { data, error } = insertResult;
 
   if (error) {
-    throw new Error(`Lỗi lưu máy lên Supabase: ${formatSupabaseError(error)}`);
+    throw new Error(`Lỗi lưu máy lên Supabase: ${formatMachineSaveError(error)}`);
   }
 
   const mapped = rowToMachine(data as MachineCatalogRow);
@@ -550,7 +561,7 @@ export async function updateMachine(machine: Machine): Promise<void> {
   const { error } = updateResult;
 
   if (error) {
-    throw new Error(`Lỗi cập nhật máy lên Supabase: ${formatSupabaseError(error)}`);
+    throw new Error(`Lỗi cập nhật máy lên Supabase: ${formatMachineSaveError(error)}`);
   }
 
   writeLocalOverride({
