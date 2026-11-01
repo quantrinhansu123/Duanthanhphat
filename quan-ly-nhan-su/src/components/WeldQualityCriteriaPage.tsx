@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { loadProjects } from "@/lib/projectsDb";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/data/projects";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { qualityRequest } from "@/lib/weldQualityClient";
 import WeldQualityRuleForm from "@/components/WeldQualityRuleForm";
