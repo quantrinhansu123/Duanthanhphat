@@ -40,6 +40,7 @@ const server = load("server/weldAcceptanceServer", {
   "@/lib/server/weldQualityDb":{publishWeldRfi:async()=>{acceptanceCalls++;return "acceptance";}},
   "@/lib/weldAcceptance":rules, "@/lib/constructionDiaryAuto":{}, "@/lib/server/projectEquipment":{},
   "@/lib/rfiTracking":{},
+  "@/lib/weldQuality":{},
   "@/lib/projectEquipment":{}, "@/lib/server/privateJsonStorage":{}, "@lwr/lib/track-editor":{},
 });
 const input = {id:"one",du_an_id:"project",so_phieu:"RFI-001",ngay_moi:"2026-10-31",loai_rfi:"theo-doi",filters:range,thong_tin:{pham_vi:"Hàn ray",loai_rfi:"nghiem-thu",tuyen_thuong:"1"}};

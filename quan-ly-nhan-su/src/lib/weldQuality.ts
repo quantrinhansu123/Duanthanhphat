@@ -98,6 +98,26 @@ export type SavedWeldQualityRule = WeldQualityRule & {
   dang_ap_dung: boolean;
 };
 
+export type QualityRuleSync = { cap_nhat: number; giu_nguyen_ho_so: number; dang_dung_tieu_chi: number };
+
+export function acceptanceIssues(inspection: WeldQualityInspection | null, rule: WeldQualityRule | null): string[] {
+  if (!rule) return ["Chưa có tiêu chí nghiệm thu cho nhóm mối này."];
+  if (!inspection) return ["Chưa có dữ liệu kiểm tra chất lượng."];
+  const issues: string[] = [];
+  if (!inspection.ngay_mai) issues.push("Thiếu ngày hoàn thành mài.");
+  if (inspection.truc_quan !== "Đạt") issues.push("Kiểm tra trực quan chưa đạt.");
+  for (const key of GEOMETRY_CRITERIA) {
+    const limit = rule.dung_sai[key];
+    if (!limit) continue;
+    const measurement = inspection.gia_tri_do[key];
+    if (measurement == null) issues.push(`Thiếu ${GEOMETRY_LABELS[key].toLocaleLowerCase("vi")} (mm).`);
+    else if (evaluateGeometryCriterion(measurement, limit) === "Không đạt") issues.push(`${GEOMETRY_LABELS[key]} ngoài dung sai.`);
+  }
+  if (rule.yeu_cau_ndt && (inspection.ket_qua_ndt !== "Đạt" || !inspection.ngay_ndt)) issues.push("NDT chưa đạt hoặc thiếu ngày thí nghiệm.");
+  if (inspection.ly_do_loai_nghiem_thu || inspection.xu_ly_truc_quan === "khong_dat") issues.push("Mối còn kết quả loại/không đạt chưa được xử lý.");
+  return issues;
+}
+
 export type WeldQualitySelection = { id: string; phien_ban: number; ma_lich_su: string };
 
 export function emptyWeldInspection(weldId: string): SavedWeldInspection {

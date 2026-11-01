@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "@/components/icons";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
+import WeldQualityRuleSelect from "@/components/WeldQualityRuleSelect";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, isOptionalUntilMeasured, parseWeldMeasurement,
   type GeometryCriterion, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { loadQualityInspection, saveQualityInspection } from "@/lib/weldQualityClient";
@@ -33,14 +34,10 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
       if (!active) return;
       const inspection = data.inspection ?? emptyWeldInspection(row.id);
       let next = inspection;
-      // Nhớ tiêu chí đã chọn lần trước trên cùng dự án khi mối chưa gắn tiêu chí.
+      // Mối chưa có tiêu chí tự chọn bản hiện hành trong đúng nhóm, không phụ thuộc máy người dùng.
       if (!inspection.tieu_chuan_id) {
-        try {
-          const remembered = window.localStorage.getItem(`weld-quality-last-rule:${row.du_an_id}`);
-          if (remembered && data.rules.some((r) => r.id === remembered && r.dang_ap_dung)) {
-            next = { ...inspection, tieu_chuan_id: remembered };
-          }
-        } catch { /* ignore */ }
+        const current = data.rules.find((r) => r.dang_ap_dung);
+        if (current) next = { ...inspection, tieu_chuan_id: current.id };
       }
       setDraft(next);
       setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
@@ -59,6 +56,12 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
   }));
   const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted, pendingSignature) : null;
   const blocked = accepted || row.so_luong_thuc_hien !== 1;
+  const currentRule = rules.find((r) => r.dang_ap_dung);
+  function configureRules() {
+    onClose();
+    try { sessionStorage.setItem("weld-quality-rule-target", JSON.stringify({ projectId: row.du_an_id, tech: row.cong_nghe_han, weldType: row.loai_moi_han })); } catch { /* storage optional */ }
+    window.dispatchEvent(new CustomEvent("app-navigate", { detail: { tab: "tieu-chi-nghiem-thu" } }));
+  }
   return <dialog ref={dialog} aria-labelledby="weld-quality-title" onClose={onClose} onCancel={(e) => { if (saving) e.preventDefault(); }}
     className="m-auto max-h-[92dvh] w-[calc(100%_-_1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/50">
     <header className="flex items-start justify-between gap-3 border-b border-slate-200 p-4 sm:p-5">
@@ -85,25 +88,19 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
           finally { setSaving(false); }
         }}>
           <fieldset disabled={saving || blocked} className="space-y-5">
-            <label className="block text-sm font-semibold">Tiêu chí áp dụng<select className={input} value={draft.tieu_chuan_id ?? ""} onChange={(e) => {
-              const id = e.target.value || null;
-              setDraft({ ...draft, tieu_chuan_id: id });
-              if (id) {
-                try { window.localStorage.setItem(`weld-quality-last-rule:${row.du_an_id}`, id); } catch { /* ignore */ }
-              }
-            }}>
-              <option value="">Chưa chọn tiêu chí</option>{rules.filter((r) => r.dang_ap_dung || r.id === draft.tieu_chuan_id).map((r) => <option key={r.id} value={r.id}>{r.ten} · v{r.phien_ban}{r.dang_ap_dung ? "" : " · Lưu theo bản cũ"}</option>)}
-            </select></label>
+            <WeldQualityRuleSelect value={draft.tieu_chuan_id} rules={rules} group={`${row.cong_nghe_han} · ${row.loai_moi_han}`} disabled={saving || blocked}
+              onChange={(id) => setDraft({ ...draft, tieu_chuan_id: id })} onConfigure={configureRules} />
+            {!blocked && currentRule && rule && currentRule.id !== rule.id && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+              Nhóm này đang áp dụng <b>{currentRule.ten} · v{currentRule.phien_ban}</b>. Mối đang lưu theo <b>{rule.ten} · v{rule.phien_ban}</b>.
+              <button type="button" onClick={() => setDraft({ ...draft, tieu_chuan_id: currentRule.id })} className="mt-2 block min-h-11 rounded-lg border border-blue-200 bg-white px-3 font-semibold text-blue-700">Dùng tiêu chí hiện hành</button>
+            </div>}
             {!rule && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 Chưa có tiêu chí áp dụng cho nhóm {row.cong_nghe_han} · {row.loai_moi_han}. Cài đặt tại{" "}
                 <button
                   type="button"
                   className="font-semibold underline"
-                  onClick={() => {
-                    onClose();
-                    window.dispatchEvent(new CustomEvent("app-navigate", { detail: { tab: "tieu-chi-nghiem-thu" } }));
-                  }}
+                  onClick={configureRules}
                 >
                   Quản lý chất lượng → Tiêu chí nghiệm thu
                 </button>

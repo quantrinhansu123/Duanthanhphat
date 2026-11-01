@@ -5,6 +5,7 @@ import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJourna
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
 import { acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
+import { acceptanceIssues, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
@@ -295,11 +296,13 @@ export async function loadRfiDetail(rfiId: string) {
   const quality = await chunked<{ moi_han_id: string; phien_ban: number | null; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean }>(
     links.map((l) => l.moi_han_id), (p) => db().from("chat_luong_moi_han").select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_nghiem_thu").in("moi_han_id", p));
   const q = new Map(quality.map((x) => [x.moi_han_id, x]));
-  const inspections = await chunked<{ moi_han_id: string; gia_tri_do: Record<string, number | null>; tieu_chuan_id: string | null }>(
+  const inspections = await chunked<SavedWeldInspection>(
     links.map((l) => l.moi_han_id), (p) => db().from("kiem_tra_moi_han")
-      .select("moi_han_id,gia_tri_do,tieu_chuan_id").in("moi_han_id", p));
-  const rules = await chunked<{ id: string; dung_sai: Record<string, unknown> }>([...new Set(inspections.flatMap((i) => i.tieu_chuan_id ? [i.tieu_chuan_id] : []))],
-    (p) => db().from("tieu_chuan_nghiem_thu_moi_han").select("id,dung_sai").in("id", p));
+      .select("*").in("moi_han_id", p));
+  const rules = await chunked<SavedWeldQualityRule>([...new Set(inspections.flatMap((i) => i.tieu_chuan_id ? [i.tieu_chuan_id] : []))],
+    (p) => db().from("tieu_chuan_nghiem_thu_moi_han").select("*").in("id", p));
+  const inspectionById = new Map(inspections.map((i) => [i.moi_han_id, i]));
+  const ruleById = new Map(rules.map((r) => [r.id, r]));
   const missingLength = new Set(inspections.filter((i) => rules.find((r) => r.id === i.tieu_chuan_id)?.dung_sai?.chieu_dai_mai
     && i.gia_tri_do?.chieu_dai_mai == null).map((i) => i.moi_han_id));
   // Vị trí hiện trường của từng mối (lý trình + toạ độ) để phiếu có link dẫn thẳng tới mối.
@@ -318,7 +321,12 @@ export async function loadRfiDetail(rfiId: string) {
     kinh_do: where.get(l.moi_han_id)?.kinh_do == null ? null : Number(where.get(l.moi_han_id)?.kinh_do), phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
     tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false,
     thieu_chieu_dai_mai: missingLength.has(l.moi_han_id),
-    ly_do_chua_du_dieu_kien: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ? "" : acceptanceBlockReason(q.get(l.moi_han_id)?.tinh_trang ?? "", missingLength.has(l.moi_han_id)) }));
+    chieu_dai_mai: inspectionById.get(l.moi_han_id)?.gia_tri_do.chieu_dai_mai ?? null,
+    ket_qua_ndt: inspectionById.get(l.moi_han_id)?.ket_qua_ndt ?? null,
+    ten_tieu_chuan: ruleById.get(inspectionById.get(l.moi_han_id)?.tieu_chuan_id ?? "")?.ten ?? null,
+    ly_do_chua_du_dieu_kien: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ? "" :
+      acceptanceIssues(inspectionById.get(l.moi_han_id) ?? null, ruleById.get(inspectionById.get(l.moi_han_id)?.tieu_chuan_id ?? "") ?? null).join(" ") ||
+      acceptanceBlockReason(q.get(l.moi_han_id)?.tinh_trang ?? "", missingLength.has(l.moi_han_id)) }));
   welds.sort((a, b) => a.ma_lich_su.localeCompare(b.ma_lich_su, "vi", { numeric: true }));
   return { rfi, welds };
 }

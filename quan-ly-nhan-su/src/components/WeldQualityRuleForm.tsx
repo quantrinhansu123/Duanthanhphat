@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type SavedWeldQualityRule } from "@/lib/weldQuality";
-import { qualityRequest } from "@/lib/weldQualityClient";
+import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type QualityRuleSync, type SavedWeldQualityRule } from "@/lib/weldQuality";
+import { notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 
 const input = "mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 sm:text-sm";
 const buttonBase = "min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50";
@@ -39,7 +39,7 @@ export default function WeldQualityRuleForm({
   target: RuleFormTarget;
   /** Prefill từ tiêu chí đang áp dụng khi tạo phiên bản mới. */
   seed?: SavedWeldQualityRule | null;
-  onCreated: (rule: SavedWeldQualityRule) => void;
+  onCreated: (rule: SavedWeldQualityRule, sync: QualityRuleSync) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(seed?.ten ?? "");
@@ -74,8 +74,9 @@ export default function WeldQualityRuleForm({
             payload.cong_nghe_han = target.cong_nghe_han;
             payload.loai_moi_han = target.loai_moi_han;
           }
-          const { rule } = await qualityRequest<{ rule: SavedWeldQualityRule }>(payload);
-          onCreated(rule);
+          const { rule, sync } = await qualityRequest<{ rule: SavedWeldQualityRule; sync: QualityRuleSync }>(payload);
+          notifyWeldQualityChanged();
+          onCreated(rule, sync);
         } catch (err) {
           setError(err instanceof Error ? err.message : "Không lưu được tiêu chí.");
         } finally {
@@ -88,7 +89,7 @@ export default function WeldQualityRuleForm({
       </h3>
       <p className="mt-1 text-sm text-slate-600">
         {target.du_an} · {target.cong_nghe_han} · {target.loai_moi_han}. Tiêu chí này áp dụng cho các mối cùng nhóm trong dự án.
-        {seed ? " Bản đang áp dụng sẽ được tắt sau khi lưu phiên bản mới." : ""}
+        {" "}Khi lưu, các mối chưa chốt trong nhóm tự cập nhật sang tiêu chí này; số đo và kết quả NDT giữ nguyên. Hồ sơ đã nghiệm thu giữ phiên bản cũ để truy vết.
       </p>
       <fieldset disabled={saving} className="mt-4 space-y-3">
         <label className="block text-sm font-semibold">

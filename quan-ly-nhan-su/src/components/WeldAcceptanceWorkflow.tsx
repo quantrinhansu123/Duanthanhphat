@@ -708,6 +708,9 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
                     <td className="p-2">{w.ma_lich_su}<p className="mt-1 text-slate-500">{w.ma_diem || "Chưa rõ tuyến"} · {w.ly_trinh || "Thiếu KM"}</p></td>
                     <td className={`p-2 min-w-64 ${bad ? "font-semibold text-rose-800" : ""}`}>
                       {w.tinh_trang}
+                      {w.ket_qua_ndt && <p className="mt-1 text-slate-600">NDT: {w.ket_qua_ndt} · Chiều dài mài: {w.chieu_dai_mai == null ? "Chưa nhập" : `${w.chieu_dai_mai} mm`}</p>}
+                      {w.ten_tieu_chuan && <p className="mt-1 text-slate-500">Tiêu chí: {w.ten_tieu_chuan}</p>}
+                      {w.du_dieu_kien_nghiem_thu && <p className="mt-1 font-semibold text-emerald-700">Đủ điều kiện nghiệm thu</p>}
                       {!w.du_dieu_kien_nghiem_thu && <p className="mt-1 text-amber-800">{w.ly_do_chua_du_dieu_kien || "Chưa đủ dữ liệu kiểm tra chất lượng."}</p>}
                       {(w.thieu_chieu_dai_mai || grindingLengths[w.moi_han_id] !== undefined) && <div className="mt-2 flex flex-wrap items-end gap-2">
                         <label className="text-xs">Chiều dài mài (mm)

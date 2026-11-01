@@ -69,6 +69,9 @@ assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "C
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", false, true).status, "Chờ ký biên bản");
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").acceptanceEligible, true);
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, gia_tri_do: withoutMai }, rule, "Sản xuất").acceptanceEligible, false);
+assert.match(rules.acceptanceIssues({ ...ndtPass, gia_tri_do: withoutMai }, rule).join(" "), /chiều dài mài/);
+assert.deepEqual([...rules.acceptanceIssues(ndtPass, rule)], [], "A complete NDT-pass weld has no missing acceptance conditions");
+assert.match(rules.acceptanceIssues({ ...ndtPass, gia_tri_do: { ...ndtPass.gia_tri_do, chieu_dai_mai: 900 } }, rule).join(" "), /ngoài dung sai/);
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", true).status, "Đạt");
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt" }, rule, "Sản xuất").status, "Sửa chữa/khắc phục");
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt", xu_ly_truc_quan: "khong_dat" }, rule, "Sản xuất").status, "Không đạt");

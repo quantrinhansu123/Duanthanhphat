@@ -60,6 +60,7 @@ const server = load("server/weldAcceptanceServer", {
   "server-only": {}, "@/lib/supabase/admin": { createAdminClient: () => db },
   "@/lib/server/weldQualityAuth": { QualityApiError: Error }, "@/lib/server/weldQualityJournal": {},
   "@/lib/server/weldQualityDb": {}, "@/lib/weldAcceptance": acceptance, "@/lib/rfiTracking": tracking,
+  "@/lib/weldQuality": {},
   "@/lib/constructionDiaryAuto": {}, "@/lib/server/projectEquipment": {}, "@/lib/projectEquipment": {},
   "@/lib/server/privateJsonStorage": {}, "@lwr/lib/track-editor": {},
 });

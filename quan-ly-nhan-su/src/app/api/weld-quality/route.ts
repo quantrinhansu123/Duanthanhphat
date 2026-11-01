@@ -6,6 +6,7 @@ import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRf
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
+import { applyQualityRule } from "@/lib/server/weldQualityRules";
 
 function failure(error: unknown) {
   const message = formatSupabaseError(error);
@@ -41,7 +42,8 @@ export async function POST(request: Request) {
     if (body.action === "save") return NextResponse.json({ inspection: await saveWeldQualityInspection(parseQualityInspection(body.inspection, actor)) });
     if (body.action === "mark-pass") return NextResponse.json({ results: await markQualityBatch(body, actor) });
     if (body.action === "import") return NextResponse.json({ results: await importQualityBatch(body, actor) });
-    if (body.action === "rule") return NextResponse.json({ rule: await createQualityRuleForWeld(body, actor) });
+    if (body.action === "rule") return NextResponse.json(await createQualityRuleForWeld(body, actor));
+    if (body.action === "rule-sync") return NextResponse.json({ sync: await applyQualityRule(qualityUuid(body.id), actor) });
     if (body.action === "rules-list") return NextResponse.json(await listQualityRules(String(body.du_an_id ?? "")));
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
