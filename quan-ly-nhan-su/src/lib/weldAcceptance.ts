@@ -100,6 +100,13 @@ export function rfiBlockReason(tinhTrang: string): string {
 
 export type AcceptanceDecision = { moi_han_id: string; phien_ban: number; ket_qua: "Đạt" | "Không đạt" | "Chưa nghiệm thu"; ly_do?: string };
 
+export function acceptanceBlockReason(status: string, missingGrindingLength: boolean): string {
+  if (missingGrindingLength) return "Thiếu chiều dài mài hoàn thiện (mm). Nhập số đo thực tế và lưu trước khi chọn Đạt.";
+  if (status === "Chờ siêu âm và nghiệm thu" || status === "Chờ thí nghiệm") return "Chưa có kết quả NDT đạt và ngày thí nghiệm; kiểm tra lại dữ liệu chất lượng.";
+  if (status === "Chờ ký biên bản") return "Chưa đủ dữ liệu chất lượng để hoàn thành. Mở Kiểm tra trong nhật ký hàn để bổ sung.";
+  return rfiBlockReason(status);
+}
+
 /** Trạng thái bất thường trên phiếu RFI đã phát — không nên còn «Chờ mài». */
 export function isAnomalousRfiWeldStatus(tinhTrang: string): boolean {
   return tinhTrang === "Chờ mài" || tinhTrang === "Hàn" || tinhTrang === "Chưa có dữ liệu chất lượng";
@@ -111,6 +118,7 @@ export function defaultDecisions(welds: {
   phien_ban: number;
   du_dieu_kien_nghiem_thu: boolean;
   tinh_trang?: string;
+  ly_do_chua_du_dieu_kien?: string;
 }[]): AcceptanceDecision[] {
   return welds.map((w) => {
     if (w.du_dieu_kien_nghiem_thu) {
@@ -119,7 +127,7 @@ export function defaultDecisions(welds: {
     const status = w.tinh_trang ?? "";
     const ly_do = isAnomalousRfiWeldStatus(status)
       ? `Bất thường trên RFI: đang «${status}» — cần Kiểm tra (mài/trực quan/số đo) trước khi nghiệm thu`
-      : (status ? rfiBlockReason(status) : "Chưa đủ điều kiện nghiệm thu");
+      : (w.ly_do_chua_du_dieu_kien || (status ? rfiBlockReason(status) : "Chưa đủ điều kiện nghiệm thu"));
     return { moi_han_id: w.moi_han_id, phien_ban: w.phien_ban, ket_qua: "Chưa nghiệm thu", ly_do };
   });
 }

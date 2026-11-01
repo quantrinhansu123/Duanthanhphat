@@ -65,7 +65,8 @@ assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất
 assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").rfiEligible, true);
 
 const ndtPass = { ...inspection, ket_qua_ndt: "Đạt", ngay_ndt: "2026-10-28" };
-assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "Chờ ký biên bản");
+assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "Chờ siêu âm và nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", false, true).status, "Chờ ký biên bản");
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").acceptanceEligible, true);
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, gia_tri_do: withoutMai }, rule, "Sản xuất").acceptanceEligible, false);
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", true).status, "Đạt");

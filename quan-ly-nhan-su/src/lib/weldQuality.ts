@@ -211,6 +211,7 @@ export function evaluateWeldQuality(
   rule: WeldQualityRule | null,
   _weldType: string,
   accepted = false,
+  pendingSignature = false,
 ) {
   const geometry = inspection ? evaluateGeometry(inspection.gia_tri_do, rule?.dung_sai ?? null) : null;
   const internalPass = Boolean(inspection?.ngay_mai && inspection.truc_quan === "Đạt" && geometry === "Đạt");
@@ -233,7 +234,7 @@ export function evaluateWeldQuality(
   else if (ndtFail || forceFail) status = "Không đạt";
   else if (repairPath) status = "Sửa chữa/khắc phục";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";
-  else if (internalPass && ndtPass) status = "Chờ ký biên bản";
+  else if (pendingSignature) status = "Chờ ký biên bản";
   else if (internalPass) status = "Chờ siêu âm và nghiệm thu";
   // Hàn xong → tự động Chờ mài (mọi loại mối hàn).
   else status = "Chờ mài";

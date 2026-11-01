@@ -12,6 +12,7 @@ const value = async (s, args = []) => Object.values((await sql(s, args))[0])[0];
 const migrate = (name) => db.exec(fs.readFileSync(new URL(`../../supabase/${name}.sql`, import.meta.url), "utf8"));
 const limits = Object.fromEntries(["doc_mat_lan", "ngang_nam_ray", "ngang_chan_ray", "phang_mat_lan", "chieu_dai_mai"].map((k) => [k, { min: k === "chieu_dai_mai" ? null : -1, max: k === "chieu_dai_mai" ? 800 : 1, minInclusive: true, maxInclusive: true }]));
 const measurements = Object.fromEntries(Object.keys(limits).map((k) => [k, 0]));
+const missingLength = { ...measurements }; delete missingLength.chieu_dai_mai;
 const status = () => value("select tinh_trang from chat_luong_moi_han where moi_han_id=$1", [weld]);
 const publish = (id = rfi, ids = [weld]) => value("select phat_hanh_rfi_moi_han($1,$2,$3,'2026-10-31',$4,'tester','{\"dia_diem\":\"Site\"}')", [id, project, `RFI-${id}`, ids]);
 const decisions = [{ moi_han_id: weld, phien_ban: 3, ket_qua: "Đạt" }];
@@ -27,7 +28,7 @@ try {
     create table toa_do(lich_su_moi_han_id uuid,ma_diem text,ly_trinh text);
     grant select,insert,update,delete on du_an,lich_su_moi_han,toa_do to service_role;
     grant select on bao_cao_moi_han_theo_du_an to service_role;`);
-  for (const name of ["migration_20261028_nghiem_thu_moi_han", "migration_20261028_nhat_ky_kiem_tra_chat_luong", "migration_20261029_chat_luong_trinh_tu_moi", "migration_20261031_rfi_ho_so_draft", "migration_20261031_rfi_quy_trinh"]) await migrate(name);
+  for (const name of ["migration_20261028_nghiem_thu_moi_han", "migration_20261028_nhat_ky_kiem_tra_chat_luong", "migration_20261029_chat_luong_trinh_tu_moi", "migration_20261031_rfi_ho_so_draft", "migration_20261031_rfi_quy_trinh", "migration_20261101_chieu_dai_mai", "migration_20261101_chieu_dai_mai_khong_ha_rfi", "migration_20261101_rfi_doi_soat_trang_thai"]) await migrate(name);
   await sql("insert into du_an values ($1)", [project]);
   await sql("insert into tieu_chuan_nghiem_thu_moi_han(id,du_an_id,cong_nghe_han,loai_moi_han,phien_ban,ten,dung_sai,yeu_cau_ndt,ndt_truoc_rfi,nguoi_xac_nhan,dang_ap_dung) values ($1,$2,'FBW','Sản xuất',1,'Fixture',$3,true,false,'tester',true)", [profile, project, limits]);
   for (const id of [weld, late]) {
@@ -36,7 +37,7 @@ try {
   }
   await sql("insert into toa_do values ($1,'TT0001','Km1+000')", [weld]);
   await sql("select luu_kiem_tra_moi_han($1,2,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [late, profile, measurements]);
-  await assert.rejects(() => publish(uuid(7), [late]), /Chờ siêu âm/, "Waiting-for-signature welds cannot enter a new RFI");
+  assert.equal(await value("select tinh_trang from chat_luong_moi_han where moi_han_id=$1", [late]), "Chờ siêu âm và nghiệm thu", "NDT pass without acceptance must not appear as waiting for signatures");
   await db.exec(`create function fail_document() returns trigger language plpgsql as $$ begin raise exception 'Injected failure'; end $$;
     create trigger fail_document before insert on ho_so_nghiem_thu for each row execute function fail_document();`);
   await assert.rejects(() => publish(), /Injected failure/);
@@ -50,7 +51,14 @@ try {
   assert.equal(await status(), "Chờ siêu âm và nghiệm thu");
   await assert.rejects(() => sign(draft), /Cần hoàn thành/);
   await assert.rejects(() => complete(), /Dữ liệu đã thay đổi/);
-  await sql("select luu_kiem_tra_moi_han($1,2,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [weld, profile, measurements]);
+  await sql("select luu_kiem_tra_moi_han($1,2,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [weld, profile, missingLength]);
+  assert.equal(await status(), "Chờ siêu âm và nghiệm thu");
+  await assert.rejects(() => complete(), /chưa đủ điều kiện/, "Missing grinding length must still block acceptance");
+  await sql("select luu_kiem_tra_moi_han($1,3,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [weld, profile, {...measurements,chieu_dai_mai:900}]);
+  decisions[0].phien_ban = 4;
+  await assert.rejects(() => complete(), /chưa đủ điều kiện/, "Out-of-tolerance grinding length must block acceptance");
+  await sql("select luu_kiem_tra_moi_han($1,4,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [weld, profile, {...measurements,chieu_dai_mai:500}]);
+  decisions[0].phien_ban = 5;
   assert.equal(await complete(), draft, "Finalize the existing draft without creating a fourth document");
   assert.equal(await complete(), draft, "Retry with the original request ID returns the same draft");
   assert.equal(await value("select count(*)::int from dot_nghiem_thu"), 1);
@@ -68,7 +76,11 @@ try {
   assert.equal(await status(), "Chờ ký biên bản");
   await db.exec("reset role");
   await migrate("migration_20261031_rfi_quy_trinh");
+  await migrate("migration_20261101_chieu_dai_mai_khong_ha_rfi");
+  await migrate("migration_20261101_rfi_doi_soat_trang_thai");
+  await migrate("migration_20261101_rfi_doi_soat_trang_thai");
   assert.equal(await value("select count(*)::int from ho_so_nghiem_thu"), 3, "Migration is rerunnable");
+  assert.equal(await publish(uuid(7), [late]), uuid(7), "Welds with NDT pass but no RFI can enter the acceptance workflow");
   for (const role of ["anon", "authenticated"]) {
     await db.exec(`set role ${role}`);
     await assert.rejects(() => sign(draft), /permission denied/);

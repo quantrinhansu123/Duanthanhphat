@@ -19,6 +19,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
   const [numbers, setNumbers] = useState<Partial<Record<GeometryCriterion, string>>>({});
   const [rules, setRules] = useState<SavedWeldQualityRule[]>([]);
   const [accepted, setAccepted] = useState(false);
+  const [pendingSignature, setPendingSignature] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +46,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
       setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
       setRules(data.rules);
       setAccepted(data.summary.tinh_trang === "Đạt");
+      setPendingSignature(data.summary.tinh_trang === "Chờ ký biên bản");
     }).catch((e) => { if (active) setError(e instanceof Error ? e.message : "Không tải được kiểm tra."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -55,7 +57,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
     try { return [k, parseWeldMeasurement(numbers[k])]; }
     catch { parseErrors[k] = "Nhập số đo mm hợp lệ, ví dụ -0,10 hoặc 0,20."; return [k, null]; }
   }));
-  const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted) : null;
+  const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted, pendingSignature) : null;
   const blocked = accepted || row.so_luong_thuc_hien !== 1;
   return <dialog ref={dialog} aria-labelledby="weld-quality-title" onClose={onClose} onCancel={(e) => { if (saving) e.preventDefault(); }}
     className="m-auto max-h-[92dvh] w-[calc(100%_-_1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/50">

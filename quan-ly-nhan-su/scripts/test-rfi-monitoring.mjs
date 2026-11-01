@@ -39,19 +39,25 @@ const server = load("server/weldAcceptanceServer", {
   "@/lib/server/weldQualityJournal":{object:v=>v,qualityUuid:v=>v,qualityDate:v=>v},
   "@/lib/server/weldQualityDb":{publishWeldRfi:async()=>{acceptanceCalls++;return "acceptance";}},
   "@/lib/weldAcceptance":rules, "@/lib/constructionDiaryAuto":{}, "@/lib/server/projectEquipment":{},
+  "@/lib/rfiTracking":{},
   "@/lib/projectEquipment":{}, "@/lib/server/privateJsonStorage":{}, "@lwr/lib/track-editor":{},
 });
-const input = {id:"one",du_an_id:"project",so_phieu:"RFI-001",ngay_moi:"2026-10-31",loai_rfi:"theo-doi",filters:range,thong_tin:{pham_vi:"Hàn ray",loai_rfi:"nghiem-thu"}};
+const input = {id:"one",du_an_id:"project",so_phieu:"RFI-001",ngay_moi:"2026-10-31",loai_rfi:"theo-doi",filters:range,thong_tin:{pham_vi:"Hàn ray",loai_rfi:"nghiem-thu",tuyen_thuong:"1"}};
 await server.publishRfi(input,"admin@example.com");
 assert.equal(records.get("one").thong_tin.loai_rfi,"theo-doi");
 assert.equal(records.get("one").thong_tin.nameTo,"W10");
+assert.equal(records.get("one").thong_tin.tuyen_thuong,"1");
 await server.publishRfi(input,"admin@example.com");
 assert.equal(records.size,1,"Retry must not create a duplicate RFI");
 await assert.rejects(()=>server.publishRfi({...input,so_phieu:"CHANGED"},"admin@example.com"));
 await assert.rejects(()=>server.publishRfi({...input,id:"two"},"admin@example.com"));
 const before = inserts;
+await assert.rejects(()=>server.publishRfi({...input,thong_tin:{tuyen_thuong:"",tuyen_ha:""}},"admin@example.com"), /Chọn ít nhất một tuyến/);
 await assert.rejects(()=>server.publishRfi({...input,filters:{...range,nameTo:""}},"admin@example.com"));
 assert.equal(inserts,before,"Invalid range must fail before writing");
+await server.publishRfi({...input,id:"lower",so_phieu:"LOWER",thong_tin:{tuyen_ha:true}},"admin@example.com");
+assert.equal(records.get("lower").thong_tin.tuyen_ha,"1");
+assert.equal(records.get("lower").thong_tin.tuyen_thuong,"");
 assert.equal(acceptanceCalls,0);
 await server.publishRfi({...input,id:"accept",loai_rfi:"nghiem-thu",moi_han_ids:["weld"]},"admin@example.com");
 assert.equal(acceptanceCalls,1,"Acceptance RFI retains its existing eligibility RPC");

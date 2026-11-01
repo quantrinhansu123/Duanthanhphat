@@ -65,6 +65,7 @@ function readProjectFilterFromUrl(projects: LookupOption[]) {
 }
 
 export default function MachineAssignmentList() {
+  const [fuelShortcut] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("fuel") === "1");
   const [list, setList] = useState<MachineRunSchedule[]>([]);
   const [machines, setMachines] = useState<MachineOption[]>([]);
   const [projects, setProjects] = useState<LookupOption[]>([]);
@@ -82,11 +83,11 @@ export default function MachineAssignmentList() {
   const [fuelRows, setFuelRows] = useState<DailyFuelRow[]>([]);
   const [fuelError, setFuelError] = useState("");
   const [fuelSaving, setFuelSaving] = useState(false);
-  const [fuelModal, setFuelModal] = useState<"add" | "edit" | null>(null);
+  const [fuelModal, setFuelModal] = useState<"add" | "edit" | null>(fuelShortcut ? "add" : null);
   const [fuelEditId, setFuelEditId] = useState<string | null>(null);
-  const [fuelForm, setFuelForm] = useState<DailyFuelFormValues>(emptyOilForm("", ""));
+  const [fuelForm, setFuelForm] = useState<DailyFuelFormValues>(emptyOilForm(fuelShortcut ? new Date().toLocaleDateString("sv-SE") : "", ""));
   const [fuelFormError, setFuelFormError] = useState("");
-  const [fuelDateEditable, setFuelDateEditable] = useState(false);
+  const [fuelDateEditable, setFuelDateEditable] = useState(fuelShortcut);
   const [oilHistoryMachine, setOilHistoryMachine] = useState<{
     id: string;
     code: string;
@@ -963,11 +964,14 @@ export default function MachineAssignmentList() {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-700">Máy</div>
-                  <div className="mt-1.5 flex h-10 items-center truncate rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-[#0047AB]">
+                  {fuelShortcut && fuelModal === "add" && !oilHistoryMachine ? <select aria-label="Máy cấp nhiên liệu" value={fuelForm.machineId} onChange={(e) => setFuelForm((f) => ({ ...f, machineId: e.target.value }))} className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm" disabled={loading || fuelSaving}>
+                    <option value="">Chọn máy</option>
+                    {machines.map((m) => <option key={m.id} value={m.id}>{m.code}</option>)}
+                  </select> : <div className="mt-1.5 flex h-10 items-center truncate rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-[#0047AB]">
                     {machines.find((m) => m.id === fuelForm.machineId)?.code ||
                       oilHistoryMachine?.code ||
                       "—"}
-                  </div>
+                  </div>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

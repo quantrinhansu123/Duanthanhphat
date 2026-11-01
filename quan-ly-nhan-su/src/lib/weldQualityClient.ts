@@ -78,11 +78,13 @@ export async function markQualityPass(
 
 // ---- Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ ----
 import type { AcceptanceDecision, RfiCandidate, RfiCandidateFilter } from "@/lib/weldAcceptance";
+import type { RfiTracking } from "@/lib/rfiTracking";
 
 export type RfiSummary = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string;
-  thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number };
-export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean };
+  thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number; tracking?: RfiTracking };
+export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean; thieu_chieu_dai_mai?: boolean; ly_do_chua_du_dieu_kien?: string };
 export type RecordSummary = { id: string; ngay_nghiem_thu: string; nguoi_lap: string; created_at: string;
+  tong_moi?: number; da_nghiem_thu?: number; khong_dat?: number; chua_nghiem_thu?: number;
   thong_tin?: Record<string, unknown> | null;
   phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string }; ho_so_nghiem_thu: { id: string; loai: string; tinh_trang_ky: string }[] };
 export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_thu: Record<string, unknown> & { du_an: Record<string, unknown> } };

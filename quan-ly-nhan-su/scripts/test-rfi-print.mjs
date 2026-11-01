@@ -38,8 +38,9 @@ assert.match(partial, /Từ Km0\+044.43 đến Km1\+284.33/);
 assert.doesNotMatch(partial, /Km Km/);
 assert.match(print([null]), /☐ Tuyến thượng.*☐ Tuyến hạ/);
 console.log("RFI print routes: upper/lower/mixed/missing and chainage OK");
-const monitoring = renderToStaticMarkup(React.createElement(Document,{onClose(){},view:{kind:"rfi",rfi:{projectName:"Phú Quốc",welds:[],rfi:{so_phieu:"RFI-002",ngay_moi:"2026-10-31",thong_tin:{loai_rfi:"theo-doi",nameFrom:"W2",nameTo:"W10",kmFrom:"Km0+020",kmTo:"Km1+500"}}}}}));
+const monitoring = renderToStaticMarkup(React.createElement(Document,{onClose(){},view:{kind:"rfi",rfi:{projectName:"Phú Quốc",welds:[],rfi:{so_phieu:"RFI-002",ngay_moi:"2026-10-31",thong_tin:{loai_rfi:"theo-doi",tuyen_ha:"1",nameFrom:"W2",nameTo:"W10",kmFrom:"Km0+020",kmTo:"Km1+500"}}}}}));
 assert.match(monitoring,/PHIẾU YÊU CẦU THEO DÕI CÔNG VIỆC HÀN/);
+assert.match(monitoring,/\u2610 Tuy\u1ebfn th\u01b0\u1ee3ng.*\u2611 Tuy\u1ebfn h\u1ea1/);
 assert.match(monitoring,/W2 – W10/);
 assert.match(monitoring,/Từ Km0\+020 đến Km1\+500/);
 assert.doesNotMatch(monitoring,/Nhà thầu cam kết.*đã đáp ứng yêu cầu chất lượng/);
@@ -58,7 +59,7 @@ const record = {
 };
 const pack = renderToStaticMarkup(React.createElement(pages.default, { record }));
 assert.equal(pages.ACCEPTANCE_DOCS.length, 3);
-assert.equal((pack.match(/class="acceptance-page"/g) ?? []).length, 5, "21 welds: two annex pages, one work record, two completion pages");
+assert.equal((pack.match(/class="acceptance-page(?: [^"]*)?"/g) ?? []).length, 5, "21 welds: two annex pages, one work record, two completion pages");
 assert.match(pack, /Địa điểm kiểm thử/);
 assert.match(pack, /Địa điểm đã sửa/);
 assert.match(pack, /08:00/);
@@ -72,7 +73,11 @@ assert.doesNotMatch(pack, /Chờ siêu âm \/ nghiệm thu tại hiện trườn
 for (const doc of pages.ACCEPTANCE_DOCS) {
   const single = renderToStaticMarkup(React.createElement(Document, { onClose() {}, view: { kind: doc.kind, record } }));
   assert.match(single, new RegExp(doc.title));
-  assert.match(single, /FBW-21/, "Draft records include all requested welds, even before acceptance");
+  if (doc.kind === "hoan-thanh") {
+    assert.match(single, /Km 1\+0.*Km 1\+20/, "Completion record includes the full requested chainage range");
+  } else {
+    assert.match(single, /FBW-21/, "Annex and work record include every requested weld before acceptance");
+  }
 }
 if (process.env.PRINT_QA_HTML) fs.writeFileSync(process.env.PRINT_QA_HTML, `<!doctype html><meta charset="utf-8"><style>${pages.acceptancePrintCss}</style><div class="acceptance-print-root">${pack}</div>`);
 console.log("PASS: same three templates for individual/batch print, 21-weld pagination, revisions and blank unverified results");

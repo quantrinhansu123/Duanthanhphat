@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
@@ -36,6 +37,14 @@ async function chunked<T>(ids: string[], load: (part: string[]) => PromiseLike<{
     const { data, error } = await load(ids.slice(i, i + 200));
     if (error) throw error;
     out.push(...(data ?? []));
+  }
+  return out;
+}
+
+async function chunkedPages<T>(ids: string[], build: (part: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    out.push(...await fetchAll((a, b) => build(ids.slice(i, i + 200), a, b)));
   }
   return out;
 }
@@ -140,6 +149,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
     const info = object(body.thong_tin ?? {});
     const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
+    if (!flag(info.tuyen_thuong) && !flag(info.tuyen_ha)) throw new QualityApiError("Chọn ít nhất một tuyến cho phiếu theo dõi.");
     const payload = { id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: number, ngay_moi: date, nguoi_lap: actor,
       thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
         tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha), gio_bat_dau: str(info.gio_bat_dau, 10),
@@ -180,11 +190,70 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
 }
 
 export async function listRfis(projectId: string) {
-  const { data, error } = await db().from("phieu_yeu_cau_nghiem_thu")
-    .select("id,so_phieu,ngay_moi,trang_thai,nguoi_lap,thong_tin,created_at,phieu_yeu_cau_nghiem_thu_moi(con_hieu_luc)")
-    .eq("du_an_id", projectId).order("created_at", { ascending: false }).limit(200);
-  if (error) throw error;
-  return data.map(({ phieu_yeu_cau_nghiem_thu_moi: m, ...r }) => ({ ...r, tong_moi: m.length, con_lai: m.filter((x) => x.con_hieu_luc).length }));
+  type Snapshot = { moi_han?: { ma_lich_su?: string; ma_diem?: string; ly_trinh?: string } };
+  type Rfi = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string; thong_tin: Record<string, string>; created_at: string };
+  type Link = { phieu_id: string; moi_han_id: string; con_hieu_luc: boolean; du_lieu_chot: Snapshot };
+  type Batch = { id: string; phieu_id: string; thong_tin: Record<string, unknown>; created_at: string };
+  const [rfis, links, batches] = await Promise.all([
+    fetchAll<Rfi>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
+      .select("id,so_phieu,ngay_moi,trang_thai,nguoi_lap,thong_tin,created_at").eq("du_an_id", projectId)
+      .order("created_at", { ascending: false }).order("id").range(a, b)),
+    fetchAll<Link>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
+      .select("phieu_id,moi_han_id,con_hieu_luc,du_lieu_chot,phieu_yeu_cau_nghiem_thu!inner(du_an_id)")
+      .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("phieu_id").order("moi_han_id").range(a, b)),
+    fetchAll<Batch>((a, b) => db().from("dot_nghiem_thu")
+      .select("id,phieu_id,thong_tin,created_at,phieu_yeu_cau_nghiem_thu!inner(du_an_id)")
+      .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at").order("id").range(a, b)),
+  ]);
+  const completed = batches.filter((d) => d.thong_tin?.draft !== true);
+  const [results, docs, points] = await Promise.all([
+    chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string; du_lieu_chot: Snapshot }>(completed.map((d) => d.id),
+      (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua,du_lieu_chot").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b)),
+    chunkedPages<{ dot_id: string; loai: string; tinh_trang_ky: string }>(completed.map((d) => d.id),
+      (ids, a, b) => db().from("ho_so_nghiem_thu").select("dot_id,loai,tinh_trang_ky").in("dot_id", ids).order("id").range(a, b)),
+    chunkedPages<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>([...new Set(links.map((l) => l.moi_han_id))],
+      (ids, a, b) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", ids).order("id").range(a, b)),
+  ]);
+  const required = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
+  const where = new Map(points.map((p) => [p.lich_su_moi_han_id, p]));
+  const linksByRfi = new Map<string, Link[]>();
+  for (const link of links) {
+    const rows = linksByRfi.get(link.phieu_id) ?? [];
+    rows.push(link); linksByRfi.set(link.phieu_id, rows);
+  }
+  const batchById = new Map(completed.map((d) => [d.id, d]));
+  const signedKinds = new Map<string, Set<string>>();
+  for (const doc of docs) {
+    if (doc.tinh_trang_ky !== "Đã ký") continue;
+    const kinds = signedKinds.get(doc.dot_id) ?? new Set<string>();
+    kinds.add(doc.loai); signedKinds.set(doc.dot_id, kinds);
+  }
+  const latestByRfi = new Map<string, Map<string, (typeof results)[number]>>();
+  // Respect batch order even when queries are split into chunks.
+  const batchOrder = new Map(completed.map((d, i) => [d.id, i]));
+  results.sort((a, b) => batchOrder.get(a.dot_id)! - batchOrder.get(b.dot_id)!);
+  for (const row of results) {
+    const batch = batchById.get(row.dot_id)!;
+    const latest = latestByRfi.get(batch.phieu_id) ?? new Map<string, (typeof results)[number]>();
+    if (row.ket_qua !== "Chưa nghiệm thu" || !latest.has(row.moi_han_id)) latest.set(row.moi_han_id, row);
+    latestByRfi.set(batch.phieu_id, latest);
+  }
+  return rfis.map((r) => {
+    const linked = linksByRfi.get(r.id) ?? [];
+    const latest = latestByRfi.get(r.id);
+    const tracking = summarizeRfiWelds(linked.map((l) => {
+      const result = latest?.get(l.moi_han_id);
+      const snap = result?.du_lieu_chot?.moi_han ?? l.du_lieu_chot?.moi_han;
+      return {
+        moi_han_id: l.moi_han_id, ma_lich_su: snap?.ma_lich_su ?? l.moi_han_id,
+        ma_diem: snap?.ma_diem ?? where.get(l.moi_han_id)?.ma_diem ?? null,
+        ly_trinh: snap?.ly_trinh ?? where.get(l.moi_han_id)?.ly_trinh ?? null,
+        ket_qua: result?.ket_qua ?? "Chưa nghiệm thu",
+        da_ky: Boolean(result && required.every((loai) => signedKinds.get(result.dot_id)?.has(loai))),
+      };
+    }));
+    return { ...r, tong_moi: linked.length, con_lai: linked.filter((l) => l.con_hieu_luc).length, tracking };
+  });
 }
 
 /** Sửa thông tin phiếu YCNT/RFI đã phát (không đổi danh sách mối đã chốt). */
@@ -209,6 +278,7 @@ export async function updateRfi(body: Record<string, unknown>) {
     tuyen_ha: flag(info.tuyen_ha ?? prev.tuyen_ha),
     gio_bat_dau: str(info.gio_bat_dau ?? prev.gio_bat_dau, 10),
   };
+  if (prev.loai_rfi === "theo-doi" && !thong_tin.tuyen_thuong && !thong_tin.tuyen_ha) throw new QualityApiError("Chọn ít nhất một tuyến cho phiếu theo dõi.");
   const { error: upd } = await db().from("phieu_yeu_cau_nghiem_thu")
     .update({ so_phieu: soPhieu, ngay_moi: ngay, thong_tin })
     .eq("id", id);
@@ -225,6 +295,13 @@ export async function loadRfiDetail(rfiId: string) {
   const quality = await chunked<{ moi_han_id: string; phien_ban: number | null; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean }>(
     links.map((l) => l.moi_han_id), (p) => db().from("chat_luong_moi_han").select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_nghiem_thu").in("moi_han_id", p));
   const q = new Map(quality.map((x) => [x.moi_han_id, x]));
+  const inspections = await chunked<{ moi_han_id: string; gia_tri_do: Record<string, number | null>; tieu_chuan_id: string | null }>(
+    links.map((l) => l.moi_han_id), (p) => db().from("kiem_tra_moi_han")
+      .select("moi_han_id,gia_tri_do,tieu_chuan_id").in("moi_han_id", p));
+  const rules = await chunked<{ id: string; dung_sai: Record<string, unknown> }>([...new Set(inspections.flatMap((i) => i.tieu_chuan_id ? [i.tieu_chuan_id] : []))],
+    (p) => db().from("tieu_chuan_nghiem_thu_moi_han").select("id,dung_sai").in("id", p));
+  const missingLength = new Set(inspections.filter((i) => rules.find((r) => r.id === i.tieu_chuan_id)?.dung_sai?.chieu_dai_mai
+    && i.gia_tri_do?.chieu_dai_mai == null).map((i) => i.moi_han_id));
   // Vị trí hiện trường của từng mối (lý trình + toạ độ) để phiếu có link dẫn thẳng tới mối.
   const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null; kinh_do: number | null; vi_do: number | null }>(
     links.map((l) => l.moi_han_id), (p) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh,kinh_do,vi_do").in("lich_su_moi_han_id", p));
@@ -239,7 +316,9 @@ export async function loadRfiDetail(rfiId: string) {
     ma_diem: where.get(l.moi_han_id)?.ma_diem ?? null,
     vi_do: where.get(l.moi_han_id)?.vi_do == null ? null : Number(where.get(l.moi_han_id)?.vi_do),
     kinh_do: where.get(l.moi_han_id)?.kinh_do == null ? null : Number(where.get(l.moi_han_id)?.kinh_do), phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
-    tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false }));
+    tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false,
+    thieu_chieu_dai_mai: missingLength.has(l.moi_han_id),
+    ly_do_chua_du_dieu_kien: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ? "" : acceptanceBlockReason(q.get(l.moi_han_id)?.tinh_trang ?? "", missingLength.has(l.moi_han_id)) }));
   welds.sort((a, b) => a.ma_lich_su.localeCompare(b.ma_lich_su, "vi", { numeric: true }));
   return { rfi, welds };
 }
@@ -270,11 +349,19 @@ export async function acceptedOnDate(body: Record<string, unknown>) {
 }
 
 export async function listRecords(projectId: string) {
-  const { data, error } = await db().from("dot_nghiem_thu")
+  const data = await fetchAll((a, b) => db().from("dot_nghiem_thu")
     .select("id,ngay_nghiem_thu,nguoi_lap,thong_tin,created_at,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,du_an_id),ho_so_nghiem_thu(id,loai,tinh_trang_ky)")
-    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at", { ascending: false }).limit(200);
-  if (error) throw error;
-  return data;
+    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at", { ascending: false }).order("id").range(a, b));
+  const results = await chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string }>(data.map((r) => r.id),
+    (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b));
+  return data.map((r) => {
+    const rows = results.filter((m) => m.dot_id === r.id);
+    const draft = r.thong_tin?.draft === true;
+    return { ...r, tong_moi: rows.length,
+      da_nghiem_thu: draft ? 0 : rows.filter((m) => m.ket_qua === "Đạt").length,
+      khong_dat: draft ? 0 : rows.filter((m) => m.ket_qua === "Không đạt").length,
+      chua_nghiem_thu: draft ? rows.length : rows.filter((m) => m.ket_qua === "Chưa nghiệm thu").length };
+  });
 }
 
 export async function loadRecordSet(dotId: string) {

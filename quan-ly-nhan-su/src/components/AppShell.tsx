@@ -232,9 +232,9 @@ export default function AppShell({ tab }: AppShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessReady, canView, firstAllowed, current]);
 
-  function go(id: string) {
+  function go(id: string, search = "") {
     const targetId = !id || id === HOME_TAB ? HOME_TAB : id === "bc-san-luong" ? "bc-tong-quan" : id;
-    const href = targetId === HOME_TAB ? "/" : `/${targetId}`;
+    const href = targetId === HOME_TAB ? "/" : `/${targetId}${search}`;
     if (!isHomeTab(targetId)) prefetchTabModule(targetId);
     setActiveTab(targetId);
     setMobileNavOpen(false);

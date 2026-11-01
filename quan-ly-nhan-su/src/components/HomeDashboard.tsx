@@ -4,30 +4,26 @@ import Image from "next/image";
 import { useState } from "react";
 import { findNavMeta, navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { CaretDown, Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
+import { CaretDown, GasPump, Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
 
 /** Mục nhập liệu hiện trường — ưu tiên trên mobile */
 const QUICK_DATA_ENTRY_IDS = [
+  "kiem-tra-may-truoc-ca",
+  "phan-cong-may",
   "nhat-ky-han",
   "bc-bao-cao-ngay",
-  "kiem-tra-may-truoc-ca",
   "bien-ban-moi-han",
-  "ban-do",
-  "ho-so-tho-han",
-  "phan-cong-may",
-  "lwr-track-map",
+  "lwr-giai-toa-ung-suat",
 ] as const;
 
 const quickEntryShortLabel: Record<(typeof QUICK_DATA_ENTRY_IDS)[number], { vi: string; en: string }> = {
   "nhat-ky-han": { vi: "Nhật ký hàn", en: "Weld log" },
   "bc-bao-cao-ngay": { vi: "Báo cáo ngày", en: "Daily report" },
-  "kiem-tra-may-truoc-ca": { vi: "Checklist máy", en: "Checklist" },
+  "kiem-tra-may-truoc-ca": { vi: "Check List", en: "Checklist" },
   "bien-ban-moi-han": { vi: "Biên bản hàn", en: "Acceptance" },
-  "ban-do": { vi: "Bản đồ GPS", en: "GPS map" },
-  "ho-so-tho-han": { vi: "Hồ sơ thợ", en: "Welders" },
-  "phan-cong-may": { vi: "Lịch máy", en: "Machine log" },
-  "lwr-track-map": { vi: "Track Map", en: "Track Map" },
+  "phan-cong-may": { vi: "Nhiên liệu", en: "Fuel" },
+  "lwr-giai-toa-ung-suat": { vi: "Giải toả ứng suất", en: "Stress release" },
 };
 
 /** Icon nền đặc + chữ trắng — tông chuyên nghiệp theo phân hệ */
@@ -96,7 +92,7 @@ const groupThemes: Record<
 const defaultTheme = groupThemes["nhan-su"];
 
 type HomeDashboardProps = {
-  onNavigate: (tabId: string) => void;
+  onNavigate: (tabId: string, search?: string) => void;
   canView?: (tabId: string) => boolean;
 };
 
@@ -107,18 +103,27 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
   const [openGroups, setOpenGroups] = useState<string[]>([]);
   const allowed = (id: string) => (canView ? canView(id) : true);
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-  const groups = navigation
+  const taskGroups = [
+    { id: "du-an", code: "02", label: "Nhóm 2 · Quản lý & tra cứu", labelEn: "Group 2 · Management & lookup",
+      children: navigation.filter((g) => !["bao-cao", "quan-tri"].includes(g.id)).flatMap((g) => g.children) },
+    { id: "bao-cao", code: "03", label: "Nhóm 3 · Báo cáo & quản trị", labelEn: "Group 3 · Reports & administration",
+      children: navigation.filter((g) => ["bao-cao", "quan-tri"].includes(g.id)).flatMap((g) => g.children) },
+  ];
+  const groups = taskGroups
     .map(group => ({
       ...group,
       children: group.children.filter(
         child =>
-          allowed(child.id) &&
+          allowed(child.id) && (child.id === "phan-cong-may" || !(QUICK_DATA_ENTRY_IDS as readonly string[]).includes(child.id)) &&
           normalize(`${group.label} ${group.labelEn} ${child.label} ${child.labelEn} ${child.description ?? ""} ${child.descriptionEn ?? ""}`).includes(normalize(query.trim())),
       ),
     }))
     .filter(group => group.children.length);
   const totalChildren = navigation.reduce((sum, g) => sum + g.children.filter(child => allowed(child.id)).length, 0);
-  const quickEntries = QUICK_DATA_ENTRY_IDS.filter(id => allowed(id));
+  const quickEntries = QUICK_DATA_ENTRY_IDS.filter(id => {
+    const item = navigation.flatMap((g) => g.children).find((c) => c.id === id);
+    return allowed(id) && normalize(`${quickEntryShortLabel[id].vi} ${quickEntryShortLabel[id].en} ${item?.label} ${item?.labelEn}`).includes(normalize(query.trim()));
+  });
   const searching = query.trim().length > 0;
 
   function toggleGroup(id: string) {
@@ -128,25 +133,24 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
   return (
     <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 pb-12 pt-3 sm:pt-6 animate-in fade-in duration-200">
       {/* Mobile: menu nhập liệu hiện ngay đầu trang */}
-      <section
+      {quickEntries.length > 0 && <section
         className="mb-4 sm:mb-6 rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs"
         aria-labelledby="quick-data-entry-heading"
       >
         <div className="mb-3 flex items-end justify-between gap-2">
           <div>
             <h2 id="quick-data-entry-heading" className="text-sm sm:text-base font-bold text-slate-900">
-              {lang === "en" ? "Quick data entry" : "Nhập liệu nhanh"}
+              {lang === "en" ? "Group 1 · Field operations" : "Nhóm 1 · Sử dụng hiện trường"}
             </h2>
             <p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">
               {lang === "en"
-                ? "Shortcuts for field logging and daily forms"
-                : "Chạm icon để mở nghiệp vụ nhập dữ liệu"}
+                ? "Frequently used on site"
+                : "Các chức năng dùng thường xuyên tại hiện trường"}
             </p>
           </div>
         </div>
-        <div
-          className="grid grid-cols-4 gap-2 sm:gap-3"
-          role="list"
+        <ul
+          className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3"
           aria-label={lang === "en" ? "Quick data entry menu" : "Menu nhập liệu nhanh"}
         >
           {quickEntries.map(id => {
@@ -154,20 +158,18 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
             if (!item) return null;
             const meta = findNavMeta(id);
             const theme = (meta?.parentId && groupThemes[meta.parentId]) || defaultTheme;
-            const Icon = childIcons[id] ?? Path;
+            const Icon = id === "phan-cong-may" ? GasPump : childIcons[id] ?? Path;
             const short = quickEntryShortLabel[id];
             const label = lang === "en" ? short.en : short.vi;
-            const fullTitle = lang === "en" ? item.labelEn : item.label;
+            const fullTitle = id === "phan-cong-may" ? label : lang === "en" ? item.labelEn : item.label;
 
             return (
-              <button
-                key={id}
+              <li key={id}><button
                 type="button"
-                role="listitem"
                 title={fullTitle}
-                aria-label={fullTitle}
-                onClick={() => onNavigate(id)}
-                className="group flex flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center transition-colors hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 active:bg-slate-100 cursor-pointer"
+                aria-label={label}
+                onClick={() => onNavigate(id, id === "phan-cong-may" ? "?fuel=1" : undefined)}
+                className="group flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center transition-colors hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 active:bg-slate-100 cursor-pointer"
               >
                 <span
                   className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-white transition-transform duration-150 group-active:scale-95 ${theme.iconBg} ${theme.iconShadow}`}
@@ -177,11 +179,11 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
                 <span className="line-clamp-2 max-w-[4.75rem] text-[10px] sm:text-[11px] font-semibold leading-tight text-slate-700">
                   {label}
                 </span>
-              </button>
+              </button></li>
             );
           })}
-        </div>
-      </section>
+        </ul>
+      </section>}
 
       {/* Hero chỉ hiện desktop — mobile ưu tiên menu nhập liệu */}
       <div className="relative mb-7 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs lg:block">
@@ -271,7 +273,7 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
         <MagnifyingGlass size={18} aria-hidden className="absolute left-3 top-3 text-slate-400" />
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} aria-label={lang === "en" ? "Search functions" : "Tìm chức năng"} placeholder={lang === "en" ? "Search functions…" : "Tìm chức năng, hồ sơ, báo cáo…"} className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm" />
       </div>
-      {groups.length === 0 && <div role="status" className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="text-sm text-slate-600">{lang === "en" ? "No matching functions. Try another keyword." : "Không tìm thấy chức năng phù hợp. Hãy thử từ khóa khác."}</p><button type="button" onClick={() => setQuery("")} className="mt-3 rounded-lg bg-[#0047ab] px-4 py-2 text-sm text-white">{lang === "en" ? "Clear search" : "Xóa tìm kiếm"}</button></div>}
+      {groups.length === 0 && quickEntries.length === 0 && <div role="status" className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="text-sm text-slate-600">{lang === "en" ? "No matching functions. Try another keyword." : "Không tìm thấy chức năng phù hợp. Hãy thử từ khóa khác."}</p><button type="button" onClick={() => setQuery("")} className="mt-3 rounded-lg bg-[#0047ab] px-4 py-2 text-sm text-white">{lang === "en" ? "Clear search" : "Xóa tìm kiếm"}</button></div>}
       <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
         {groups.map((group) => {
           const GroupIcon = groupIcons[group.id] ?? Path;
