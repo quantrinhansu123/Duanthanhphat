@@ -18,27 +18,35 @@ export type RuleFormTarget = {
   weldId?: string;
 };
 
+function seedBounds(seed?: SavedWeldQualityRule | null) {
+  return Object.fromEntries(GEOMETRY_CRITERIA.map((k) => {
+    const limit = seed?.dung_sai?.[k];
+    return [k, {
+      min: limit?.min == null ? "" : String(limit.min),
+      max: limit?.max == null ? (k === "chieu_dai_mai" ? "800" : "") : String(limit.max),
+      minInclusive: limit?.minInclusive ?? true,
+      maxInclusive: limit?.maxInclusive ?? true,
+    }];
+  }));
+}
+
 export default function WeldQualityRuleForm({
   target,
+  seed = null,
   onCreated,
   onCancel,
 }: {
   target: RuleFormTarget;
+  /** Prefill từ tiêu chí đang áp dụng khi tạo phiên bản mới. */
+  seed?: SavedWeldQualityRule | null;
   onCreated: (rule: SavedWeldQualityRule) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [bounds, setBounds] = useState(() =>
-    Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, {
-      min: "",
-      max: k === "chieu_dai_mai" ? "800" : "",
-      minInclusive: true,
-      maxInclusive: true,
-    }])),
-  );
-  const [ndt, setNdt] = useState(true);
-  const [ndtBeforeRfi, setNdtBeforeRfi] = useState(false);
-  const [exemption, setExemption] = useState("");
+  const [name, setName] = useState(seed?.ten ?? "");
+  const [bounds, setBounds] = useState(() => seedBounds(seed));
+  const [ndt, setNdt] = useState(seed?.yeu_cau_ndt ?? true);
+  const [ndtBeforeRfi, setNdtBeforeRfi] = useState(seed?.ndt_truoc_rfi ?? false);
+  const [exemption, setExemption] = useState(seed?.can_cu_mien_ndt ?? "");
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -75,9 +83,12 @@ export default function WeldQualityRuleForm({
         }
       }}
     >
-      <h3 className="text-base font-bold text-slate-900">Xác nhận tiêu chí áp dụng</h3>
+      <h3 className="text-base font-bold text-slate-900">
+        {seed ? `Tạo phiên bản mới (v${seed.phien_ban + 1})` : "Xác nhận tiêu chí áp dụng"}
+      </h3>
       <p className="mt-1 text-sm text-slate-600">
         {target.du_an} · {target.cong_nghe_han} · {target.loai_moi_han}. Tiêu chí này áp dụng cho các mối cùng nhóm trong dự án.
+        {seed ? " Bản đang áp dụng sẽ được tắt sau khi lưu phiên bản mới." : ""}
       </p>
       <fieldset disabled={saving} className="mt-4 space-y-3">
         <label className="block text-sm font-semibold">

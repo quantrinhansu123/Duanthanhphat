@@ -229,13 +229,28 @@ export async function createQualityRuleForWeld(body: Record<string, unknown>, ac
   if (typeof body.yeu_cau_ndt !== "boolean" || typeof body.ndt_truoc_rfi !== "boolean") throw new QualityApiError("Quy tắc thí nghiệm không hợp lệ.");
   const exemption = text(body.can_cu_mien_ndt ?? "", 2000);
   if (!body.yeu_cau_ndt && !exemption) throw new QualityApiError("Cần nêu căn cứ miễn NDT.");
-  const { data: previous, error } = await createAdminClient().from("tieu_chuan_nghiem_thu_moi_han").select("phien_ban,dang_ap_dung")
+  const db = createAdminClient();
+  const { data: previous, error } = await db.from("tieu_chuan_nghiem_thu_moi_han").select("id,phien_ban,dang_ap_dung")
     .eq("du_an_id", du_an_id).eq("cong_nghe_han", cong_nghe_han).eq("loai_moi_han", loai_moi_han).order("phien_ban", { ascending: false });
   if (error) throw error;
-  if (previous.some((r) => r.dang_ap_dung)) throw new QualityApiError("Đã có tiêu chí đang áp dụng; hãy tải lại và chọn tiêu chí đó.", 409);
-  return createWeldQualityRule({ du_an_id, cong_nghe_han, loai_moi_han,
-    phien_ban: (previous[0]?.phien_ban ?? 0) + 1, ten: text(body.ten, 300), dung_sai: dung_sai as GeometryLimits,
-    yeu_cau_ndt: body.yeu_cau_ndt, ndt_truoc_rfi: body.ndt_truoc_rfi, can_cu_mien_ndt: exemption || null, nguoi_xac_nhan: actor, dang_ap_dung: true });
+  // Tắt bản đang áp dụng trước khi tạo phiên bản mới (dung sai / chỉ tiêu bổ sung như chiều dài mài).
+  const activeIds = (previous ?? []).filter((r) => r.dang_ap_dung).map((r) => r.id);
+  if (activeIds.length) {
+    const { error: deactivateError } = await db.from("tieu_chuan_nghiem_thu_moi_han")
+      .update({ dang_ap_dung: false }).in("id", activeIds);
+    if (deactivateError) throw new QualityApiError(deactivateError.message || "Không tắt được tiêu chí cũ.");
+  }
+  try {
+    return await createWeldQualityRule({ du_an_id, cong_nghe_han, loai_moi_han,
+      phien_ban: (previous[0]?.phien_ban ?? 0) + 1, ten: text(body.ten, 300), dung_sai: dung_sai as GeometryLimits,
+      yeu_cau_ndt: body.yeu_cau_ndt, ndt_truoc_rfi: body.ndt_truoc_rfi, can_cu_mien_ndt: exemption || null, nguoi_xac_nhan: actor, dang_ap_dung: true });
+  } catch (err) {
+    // Khôi phục bản cũ nếu tạo phiên bản mới thất bại (vd. DB chưa chạy migration 5 chỉ tiêu).
+    if (activeIds.length) {
+      await db.from("tieu_chuan_nghiem_thu_moi_han").update({ dang_ap_dung: true }).in("id", activeIds);
+    }
+    throw err;
+  }
 }
 
 /** Danh sách tiêu chí theo dự án (cài đặt ngoài form kiểm tra từng mối). */

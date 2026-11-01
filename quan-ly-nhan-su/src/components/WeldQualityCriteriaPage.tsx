@@ -58,6 +58,7 @@ export default function WeldQualityCriteriaPage() {
     [rules, tech, weldType],
   );
   const active = groupRules.find((r) => r.dang_ap_dung) ?? null;
+  const missingMai = Boolean(active && !active.dung_sai?.chieu_dai_mai);
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-5">
@@ -105,26 +106,45 @@ export default function WeldQualityCriteriaPage() {
                   : "Chưa có tiêu chí đang áp dụng cho nhóm này."}
               </p>
             </div>
-            {!active && !setup && (
-              <button type="button" className={primary} onClick={() => { setMessage(""); setSetup(true); }}>
-                Thiết lập tiêu chí
-              </button>
-            )}
-            {active && (
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-                Đã cài đặt
-              </span>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {active && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                  Đã cài đặt
+                </span>
+              )}
+              {!setup && (
+                <button type="button" className={primary} onClick={() => { setMessage(""); setSetup(true); }}>
+                  {active ? "Tạo phiên bản mới" : "Thiết lập tiêu chí"}
+                </button>
+              )}
+            </div>
           </div>
+
+          {missingMai && !setup && (
+            <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              Tiêu chí đang thiếu <b>Chiều dài mài hoàn thiện</b>. Nguyên nhân thường gặp: chưa chạy migration
+              {" "}<code className="rounded bg-amber-100 px-1">migration_20261101_chieu_dai_mai.sql</code>
+              {" "}trên Supabase, nên dữ liệu cũ chỉ có 4 chỉ tiêu. Bấm <b>Tạo phiên bản mới</b> sau khi đã chạy SQL
+              (mặc định ≤ 800 mm).
+            </p>
+          )}
 
           {active && (
             <div className="mt-4 space-y-2">
-              {GEOMETRY_CRITERIA.map((k) => (
-                <div key={k} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                  <span className="font-medium text-slate-800">{GEOMETRY_LABELS[k]}</span>
-                  <span className="font-mono text-slate-600">{formatLimit(active, k)}</span>
-                </div>
-              ))}
+              {GEOMETRY_CRITERIA.map((k) => {
+                const missing = !active.dung_sai[k];
+                return (
+                  <div
+                    key={k}
+                    className={`flex flex-wrap items-baseline justify-between gap-2 rounded-lg px-3 py-2 text-sm ${missing ? "border border-amber-200 bg-amber-50" : "bg-slate-50"}`}
+                  >
+                    <span className="font-medium text-slate-800">{GEOMETRY_LABELS[k]}</span>
+                    <span className={`font-mono ${missing ? "font-semibold text-amber-800" : "text-slate-600"}`}>
+                      {missing ? "Chưa có trong tiêu chí" : formatLimit(active, k)}
+                    </span>
+                  </div>
+                );
+              })}
               <p className="pt-1 text-xs text-slate-500">
                 NDT: {active.yeu_cau_ndt ? "Bắt buộc" : `Miễn — ${active.can_cu_mien_ndt ?? ""}`}
                 {active.ndt_truoc_rfi ? " · NDT đạt trước RFI" : ""}
@@ -139,6 +159,7 @@ export default function WeldQualityCriteriaPage() {
                 {groupRules.map((r) => (
                   <li key={r.id}>
                     v{r.phien_ban} · {r.ten}{r.dang_ap_dung ? " · đang áp dụng" : ""}
+                    {!r.dung_sai?.chieu_dai_mai ? " · thiếu chiều dài mài" : ""}
                   </li>
                 ))}
               </ul>
@@ -154,11 +175,17 @@ export default function WeldQualityCriteriaPage() {
                   cong_nghe_han: tech,
                   loai_moi_han: weldType,
                 }}
+                seed={active}
                 onCancel={() => setSetup(false)}
                 onCreated={(rule) => {
-                  setRules((current) => [rule, ...current]);
+                  setRules((current) => [
+                    rule,
+                    ...current.map((r) => (r.dang_ap_dung ? { ...r, dang_ap_dung: false } : r)),
+                  ]);
                   setSetup(false);
-                  setMessage("Đã lưu tiêu chí. Các mối cùng nhóm có thể chọn tiêu chí này khi kiểm tra.");
+                  setMessage(active
+                    ? `Đã lưu phiên bản v${rule.phien_ban}. Bản cũ vẫn giữ để truy vết; mối mới chọn tiêu chí đang áp dụng.`
+                    : "Đã lưu tiêu chí. Các mối cùng nhóm có thể chọn tiêu chí này khi kiểm tra.");
                 }}
               />
             </div>
@@ -168,7 +195,7 @@ export default function WeldQualityCriteriaPage() {
 
       {!setup && active && (
         <p className="text-xs text-slate-500">
-          Mỗi nhóm chỉ một tiêu chí đang áp dụng. Đổi dung sai (phiên bản mới) sẽ bổ sung sau nếu cần.
+          Mỗi nhóm chỉ một tiêu chí đang áp dụng. Đổi dung sai bằng cách tạo phiên bản mới (bản cũ giữ để truy vết).
         </p>
       )}
     </div>

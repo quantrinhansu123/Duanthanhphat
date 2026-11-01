@@ -160,18 +160,27 @@ export default function WeldAcceptanceWorkflow() {
 
   return (
     <div className="px-4 sm:px-6 pb-8 no-print-root">
-      <div className="no-print flex flex-wrap items-center gap-2 mb-3">
+      <div className="no-print mb-3 space-y-2">
         <select
-          className={input}
+          className={`${input} w-full`}
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           aria-label="Dự án"
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} className={tab === id ? primary : secondary}>{label}</button>
-        ))}
+        <div className="grid grid-cols-3 gap-2">
+          {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`${tab === id ? primary : secondary} h-auto min-h-9 w-full px-1.5 py-2 text-center text-[11px] leading-tight sm:px-4 sm:text-sm`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (
         <div className="no-print">

@@ -108,6 +108,22 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
                 . Có thể lưu kết quả đo; chưa đủ căn cứ để kết luận hình học đạt hoặc phát RFI.
               </p>
             )}
+            {rule && !rule.dung_sai.chieu_dai_mai && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Tiêu chí đang chọn thiếu <b>Chiều dài mài hoàn thiện</b> (dữ liệu cũ / chưa backfill). Cập nhật tại{" "}
+                <button
+                  type="button"
+                  className="font-semibold underline"
+                  onClick={() => {
+                    onClose();
+                    window.dispatchEvent(new CustomEvent("app-navigate", { detail: { tab: "tieu-chi-nghiem-thu" } }));
+                  }}
+                >
+                  Tiêu chí nghiệm thu
+                </button>
+                {" "}(Tạo phiên bản mới sau khi chạy migration).
+              </p>
+            )}
             <section className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">1. Kiểm tra sau mài</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Ngày hoàn thành mài<input type="date" className={input} value={draft.ngay_mai ?? ""} onChange={(e) => setDraft({ ...draft, ngay_mai: e.target.value || null })} /></label>
                 <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => setDraft({ ...draft, truc_quan: (e.target.value as SavedWeldInspection["truc_quan"]) || null, xu_ly_truc_quan: e.target.value === "Không đạt" ? (draft.xu_ly_truc_quan ?? "sua_chua") : null })}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>

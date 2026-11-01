@@ -4,7 +4,7 @@ import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { List, CaretRight, ArrowLeft, House } from "@/components/icons";
+import { List, CaretRight, ArrowLeft, House, ArrowClockwise } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
@@ -468,11 +468,11 @@ export default function AppShell({ tab }: AppShellProps) {
             style={{ paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }}
             aria-label={lang === "en" ? "Page navigation" : "Điều hướng trang"}
           >
-            <div className="mx-auto grid max-w-lg grid-cols-2 gap-2">
+            <div className="mx-auto grid max-w-lg grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={goBack}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
               >
                 <ArrowLeft size={18} weight="bold" aria-hidden />
                 {lang === "en" ? "Back" : "Quay lại"}
@@ -480,10 +480,19 @@ export default function AppShell({ tab }: AppShellProps) {
               <button
                 type="button"
                 onClick={() => go(HOME_TAB)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0047AB] text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-[#003d94] active:bg-[#00327a] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/40 cursor-pointer"
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#0047AB] text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-[#003d94] active:bg-[#00327a] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/40 cursor-pointer"
               >
                 <House size={18} weight="bold" aria-hidden />
                 {lang === "en" ? "Home" : "Trang chủ"}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
+                title={lang === "en" ? "Reload app" : "Tải lại ứng dụng"}
+              >
+                <ArrowClockwise size={18} weight="bold" aria-hidden />
+                {lang === "en" ? "Reload" : "Load lại"}
               </button>
             </div>
           </nav>
