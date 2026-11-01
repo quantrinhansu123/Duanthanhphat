@@ -4,7 +4,7 @@ import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { List, CaretRight } from "@/components/icons";
+import { List, CaretRight, ArrowLeft, House } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
@@ -240,6 +240,15 @@ export default function AppShell({ tab }: AppShellProps) {
     router.push(href);
   }
 
+  function goBack() {
+    // Quay về view trước trong lịch sử; nếu không có thì về trang nhập liệu nhanh.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    go(HOME_TAB);
+  }
+
   return (
     <ReportFilterProvider>
     <QualityLoginDialog />
@@ -441,6 +450,33 @@ export default function AppShell({ tab }: AppShellProps) {
             </div>
           )}
         </main>
+
+        {!atHome && (
+          <nav
+            className="shrink-0 border-t border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur-md print:hidden lg:hidden"
+            style={{ paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }}
+            aria-label={lang === "en" ? "Page navigation" : "Điều hướng trang"}
+          >
+            <div className="mx-auto grid max-w-lg grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
+              >
+                <ArrowLeft size={18} weight="bold" aria-hidden />
+                {lang === "en" ? "Back" : "Quay lại"}
+              </button>
+              <button
+                type="button"
+                onClick={() => go(HOME_TAB)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0047AB] text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-[#003d94] active:bg-[#00327a] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/40 cursor-pointer"
+              >
+                <House size={18} weight="bold" aria-hidden />
+                {lang === "en" ? "Home" : "Trang chủ"}
+              </button>
+            </div>
+          </nav>
+        )}
       </div>
     </div>
     </ReportFilterProvider>
