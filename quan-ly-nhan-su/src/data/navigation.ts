@@ -179,6 +179,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Quality management requirements and verification evidence",
       },
       {
+        id: "tieu-chi-nghiem-thu",
+        label: "Tiêu chí nghiệm thu",
+        labelEn: "Acceptance Criteria",
+        description: "Cài đặt dung sai hình học và quy tắc NDT theo dự án / công nghệ / loại mối",
+        descriptionEn: "Configure geometry tolerances and NDT rules by project / technology / weld type",
+      },
+      {
         id: "nhat-ky-han",
         label: "Nhật ký hàn",
         labelEn: "Welding Log",

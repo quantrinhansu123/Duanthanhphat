@@ -27,7 +27,7 @@ function rowsOf(record: RecordSet): Row[] {
     const method = str(k.phuong_phap_ndt);
     return { code: str(w.ma_lich_su), rail: str(w.loai_ray), visual: str(k.truc_quan),
       ndt: k.ket_qua_ndt ? `${k.ket_qua_ndt}${method && method !== "Siêu âm" ? ` (${method})` : ""}` : "",
-      geo: [g.doc_mat_lan, g.ngang_nam_ray, g.ngang_chan_ray, g.phang_mat_lan],
+      geo: [g.doc_mat_lan, g.ngang_nam_ray, g.ngang_chan_ray, g.phang_mat_lan, g.chieu_dai_mai],
       result: m.ket_qua, note: m.ly_do ?? "" };
   }).sort((a, b) => a.code.localeCompare(b.code, "vi", { numeric: true }));
 }
@@ -92,7 +92,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
                       <td className={td}>{p * ROWS_PER_PAGE + i + 1}</td><td className={td}>{r?.code}</td><td className={td}>{r?.rail}</td><td className={td} />
                       <td className={td} /><td className={td} />
                       <td className={td}>{r?.visual}</td><td className={td}>{r?.ndt}</td>
-                      {[0, 1, 2, 3].map((n) => <td key={n} className={td}>{r?.geo[n] ?? ""}</td>)}<td className={td} />
+                      {[0, 1, 2, 3, 4].map((n) => <td key={n} className={td}>{r?.geo[n] ?? ""}</td>)}<td className={td} />
                       <td className={td}>{r?.result}</td><td className={td}>{r?.note}</td>
                     </tr>);
                 })}

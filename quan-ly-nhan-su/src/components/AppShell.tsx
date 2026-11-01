@@ -50,6 +50,8 @@ const SparePartsList = dynamic(
   () => import("@/components/SparePartsList"), { loading: TabLoading, ssr: false });
 const MachinePreShiftChecklist = dynamic(
   () => import("@/components/MachinePreShiftChecklist"), { loading: TabLoading, ssr: false });
+const WeldQualityCriteriaPage = dynamic(
+  () => import("@/components/WeldQualityCriteriaPage"), { loading: TabLoading, ssr: false });
 const HomeDashboard = dynamic(() => import("@/components/HomeDashboard"), { loading: TabLoading, ssr: false });
 const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
 const QualityReportDashboard = dynamic(
@@ -83,6 +85,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "chung-chi": () => <CertificateManagement />,
   "chung-chi-cong-ty": () => <CompanyCertificateManagement />,
   "tieu-chuan-tcvn": () => <ComplianceStandardsList />,
+  "tieu-chi-nghiem-thu": () => <WeldQualityCriteriaPage />,
   "tra-cuu-dao-tao": () => <TrainingHistoryLookup />,
   "danh-sach-may": () => <MachineList />,
   "quan-ly-kho": () => <WarehouseManagement />,
@@ -237,6 +240,16 @@ export default function AppShell({ tab }: AppShellProps) {
     setMobileNavOpen(false);
     router.push(href);
   }
+
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const tabId = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (typeof tabId === "string" && tabId) go(tabId);
+    };
+    window.addEventListener("app-navigate", onNavigate);
+    return () => window.removeEventListener("app-navigate", onNavigate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function goBack() {
     // Quay về view trước trong lịch sử; nếu không có thì về trang nhập liệu nhanh.

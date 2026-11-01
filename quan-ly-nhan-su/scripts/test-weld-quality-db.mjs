@@ -19,8 +19,8 @@ const a = uuid(101), b = uuid(102), c = uuid(103), d = uuid(104);
 const profile = uuid(200), otherProfile = uuid(201);
 const rfi = uuid(300), batch = uuid(400);
 const bounds = (min, max) => ({ min, max, minInclusive: true, maxInclusive: true });
-const limits = { doc_mat_lan: bounds(-0.1, 0.4), ngang_nam_ray: bounds(-0.4, 0.4), ngang_chan_ray: bounds(-2, 2), phang_mat_lan: bounds(0, 0.2) };
-const measurements = { doc_mat_lan: 0, ngang_nam_ray: 0, ngang_chan_ray: 0, phang_mat_lan: 0 };
+const limits = { doc_mat_lan: bounds(-0.1, 0.4), ngang_nam_ray: bounds(-0.4, 0.4), ngang_chan_ray: bounds(-2, 2), phang_mat_lan: bounds(0, 0.2), chieu_dai_mai: bounds(null, 800) };
+const measurements = { doc_mat_lan: 0, ngang_nam_ray: 0, ngang_chan_ray: 0, phang_mat_lan: 0, chieu_dai_mai: 500 };
 const rules = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/lib/weldQuality.ts", import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },

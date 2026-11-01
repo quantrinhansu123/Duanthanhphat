@@ -10,7 +10,7 @@ const [project, weld, late, profile, rfi, request] = [1, 2, 3, 4, 5, 6].map(uuid
 const sql = async (s, args = []) => (await db.query(s, args)).rows;
 const value = async (s, args = []) => Object.values((await sql(s, args))[0])[0];
 const migrate = (name) => db.exec(fs.readFileSync(new URL(`../../supabase/${name}.sql`, import.meta.url), "utf8"));
-const limits = Object.fromEntries(["doc_mat_lan", "ngang_nam_ray", "ngang_chan_ray", "phang_mat_lan"].map((k) => [k, { min: -1, max: 1, minInclusive: true, maxInclusive: true }]));
+const limits = Object.fromEntries(["doc_mat_lan", "ngang_nam_ray", "ngang_chan_ray", "phang_mat_lan", "chieu_dai_mai"].map((k) => [k, { min: k === "chieu_dai_mai" ? null : -1, max: k === "chieu_dai_mai" ? 800 : 1, minInclusive: true, maxInclusive: true }]));
 const measurements = Object.fromEntries(Object.keys(limits).map((k) => [k, 0]));
 const status = () => value("select tinh_trang from chat_luong_moi_han where moi_han_id=$1", [weld]);
 const publish = (id = rfi, ids = [weld]) => value("select phat_hanh_rfi_moi_han($1,$2,$3,'2026-10-31',$4,'tester','{\"dia_diem\":\"Site\"}')", [id, project, `RFI-${id}`, ids]);

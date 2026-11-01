@@ -65,6 +65,7 @@ export const childIcons: Record<string, Icon> = {
   "chung-chi": Certificate,
   "chung-chi-cong-ty": SealCheck,
   "tieu-chuan-tcvn": ClipboardText,
+  "tieu-chi-nghiem-thu": ClipboardText,
   "nhat-ky-han": FileText,
   "bien-ban-moi-han": ClipboardText,
   "bc-moi-han-theo-nam": ChartLineUp,

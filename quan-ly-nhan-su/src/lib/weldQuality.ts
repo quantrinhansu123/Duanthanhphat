@@ -1,4 +1,10 @@
-export const GEOMETRY_CRITERIA = ["doc_mat_lan", "ngang_nam_ray", "ngang_chan_ray", "phang_mat_lan"] as const;
+export const GEOMETRY_CRITERIA = [
+  "doc_mat_lan",
+  "ngang_nam_ray",
+  "ngang_chan_ray",
+  "phang_mat_lan",
+  "chieu_dai_mai",
+] as const;
 export type GeometryCriterion = (typeof GEOMETRY_CRITERIA)[number];
 export type QualityResult = "Đạt" | "Không đạt" | null;
 export type NdtMethod = "Siêu âm" | "Từ tính" | "Thẩm thấu";
@@ -69,6 +75,7 @@ export const GEOMETRY_LABELS: Record<GeometryCriterion, string> = {
   ngang_nam_ray: "Ngang trên nấm ray",
   ngang_chan_ray: "Ngang trên các đầu chân ray",
   phang_mat_lan: "Độ phẳng mặt lăn trong khu vực mài",
+  chieu_dai_mai: "Chiều dài mài hoàn thiện",
 };
 
 export type SavedWeldInspection = WeldQualityInspection & {
@@ -135,8 +142,8 @@ export function validateGeometryMeasurements(value: unknown): asserts value is G
 }
 
 export function validateGeometryLimits(value: unknown): asserts value is GeometryLimits {
-  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== 4) {
-    throw new Error("Cần đủ bốn dung sai hình học.");
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== GEOMETRY_CRITERIA.length) {
+    throw new Error("Cần đủ các dung sai hình học.");
   }
   for (const key of GEOMETRY_CRITERIA) {
     const limit = (value as Record<string, unknown>)[key];
@@ -155,12 +162,14 @@ export function validateGeometryLimits(value: unknown): asserts value is Geometr
 export function evaluateGeometry(measurements: GeometryMeasurements, limits: GeometryLimits | null): QualityResult {
   validateGeometryMeasurements(measurements);
   if (!limits) return null;
-  validateGeometryLimits(limits);
   let missing = false;
   for (const key of GEOMETRY_CRITERIA) {
+    const limit = limits[key];
+    // Tiêu chí cũ (thiếu khóa mới như chieu_dai_mai) bỏ qua đến khi chạy migration backfill.
+    if (!limit) continue;
     const number = measurements[key];
     if (number == null) { missing = true; continue; }
-    if (evaluateGeometryCriterion(number, limits[key]) === "Không đạt") return "Không đạt";
+    if (evaluateGeometryCriterion(number, limit) === "Không đạt") return "Không đạt";
   }
   return missing ? null : "Đạt";
 }

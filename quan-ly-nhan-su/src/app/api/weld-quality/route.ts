@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
-  loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld } from "@/lib/server/weldQualityJournal";
+  loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     if (body.action === "mark-pass") return NextResponse.json({ results: await markQualityBatch(body, actor) });
     if (body.action === "import") return NextResponse.json({ results: await importQualityBatch(body, actor) });
     if (body.action === "rule") return NextResponse.json({ rule: await createQualityRuleForWeld(body, actor) });
+    if (body.action === "rules-list") return NextResponse.json(await listQualityRules(String(body.du_an_id ?? "")));
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
       const [accepted, waiting] = await Promise.all(["Đạt", "Chờ mài"].map((qualityStatusFilter) =>

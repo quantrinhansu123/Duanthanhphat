@@ -7,6 +7,7 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "chung-chi": () => import("@/components/CertificateManagement"),
   "chung-chi-cong-ty": () => import("@/components/CompanyCertificateManagement"),
   "tieu-chuan-tcvn": () => import("@/components/ComplianceStandardsList"),
+  "tieu-chi-nghiem-thu": () => import("@/components/WeldQualityCriteriaPage"),
   "tra-cuu-dao-tao": () => import("@/components/TrainingHistoryLookup"),
   "danh-sach-may": () => import("@/components/MachineList"),
   "quan-ly-kho": () => import("@/components/WarehouseManagement"),

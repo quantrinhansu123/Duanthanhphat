@@ -10,8 +10,8 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/lib/weldQu
 
 const bound = (min, max) => ({ min, max, minInclusive: true, maxInclusive: true });
 // Fixture kiểm tra biên đóng; không phải cấu hình PQ đã được xác nhận cho dự án thật.
-const limits = { doc_mat_lan: bound(-0.1, 0.4), ngang_nam_ray: bound(-0.4, 0.4), ngang_chan_ray: bound(-2, 2), phang_mat_lan: bound(0, 0.2) };
-const measurements = { doc_mat_lan: 0, ngang_nam_ray: 0, ngang_chan_ray: 0, phang_mat_lan: 0 };
+const limits = { doc_mat_lan: bound(-0.1, 0.4), ngang_nam_ray: bound(-0.4, 0.4), ngang_chan_ray: bound(-2, 2), phang_mat_lan: bound(0, 0.2), chieu_dai_mai: bound(null, 800) };
+const measurements = { doc_mat_lan: 0, ngang_nam_ray: 0, ngang_chan_ray: 0, phang_mat_lan: 0, chieu_dai_mai: 500 };
 for (const value of [null, undefined, "", "  "]) assert.equal(rules.parseWeldMeasurement(value), null);
 for (const [input, expected] of [["0", 0], [0, 0], ["-0,10", -0.1], [" +0.40 ", 0.4], [".2", 0.2]]) {
   assert.equal(rules.parseWeldMeasurement(input), expected);
@@ -22,7 +22,10 @@ for (const value of [NaN, Infinity, -Infinity, true, [], {}, "1e3", "0,1.2", "0 
 assert.equal(rules.evaluateGeometry({}, limits), null);
 assert.equal(rules.evaluateGeometry(measurements, null), null);
 for (const [key, limit] of Object.entries(limits)) {
-  for (const [value, expected] of [[limit.min, "Đạt"], [limit.max, "Đạt"], [limit.min - 0.001, "Không đạt"], [limit.max + 0.001, "Không đạt"]]) {
+  const cases = [];
+  if (limit.min != null) cases.push([limit.min, "Đạt"], [limit.min - 0.001, "Không đạt"]);
+  if (limit.max != null) cases.push([limit.max, "Đạt"], [limit.max + 0.001, "Không đạt"]);
+  for (const [value, expected] of cases) {
     assert.equal(rules.evaluateGeometry({ ...measurements, [key]: value }, limits), expected);
   }
 }

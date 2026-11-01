@@ -5,53 +5,13 @@ import { X } from "@/components/icons";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, parseWeldMeasurement,
   type GeometryCriterion, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
-import { loadQualityInspection, qualityRequest, saveQualityInspection } from "@/lib/weldQualityClient";
+import { loadQualityInspection, saveQualityInspection } from "@/lib/weldQualityClient";
 import type { WeldReportRow } from "@/lib/weldReportData";
 
 const input = "mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 sm:text-sm";
 const buttonBase = "min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50";
 const button = `${buttonBase} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
 const primary = `${buttonBase} border-blue-700 bg-blue-700 text-white hover:bg-blue-800`;
-
-function RuleForm({ row, onCreated, onCancel }: { row: WeldReportRow; onCreated: (rule: SavedWeldQualityRule) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
-  const [bounds, setBounds] = useState(() => Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, { min: "", max: "", minInclusive: true, maxInclusive: true }])));
-  const [ndt, setNdt] = useState(true);
-  const [ndtBeforeRfi, setNdtBeforeRfi] = useState(false);
-  const [exemption, setExemption] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  return <form className="mt-5 rounded-xl border border-blue-200 bg-blue-50/40 p-4" onSubmit={async (e) => {
-    e.preventDefault(); setSaving(true); setError("");
-    try {
-      const { rule } = await qualityRequest<{ rule: SavedWeldQualityRule }>({ action: "rule", weldId: row.id, ten: name, dung_sai: bounds,
-        yeu_cau_ndt: ndt, ndt_truoc_rfi: ndtBeforeRfi, can_cu_mien_ndt: exemption, confirmed });
-      onCreated(rule);
-    } catch (err) { setError(err instanceof Error ? err.message : "Không lưu được tiêu chí."); }
-    finally { setSaving(false); }
-  }}>
-    <h3 className="text-base font-bold text-slate-900">Xác nhận tiêu chí áp dụng</h3>
-    <p className="mt-1 text-sm text-slate-600">{row.du_an} · {row.cong_nghe_han} · {row.loai_moi_han}. Tiêu chí này áp dụng cho các mối cùng nhóm trong dự án.</p>
-    <fieldset disabled={saving} className="mt-4 space-y-3">
-      <label className="block text-sm font-semibold">Tên tiêu chuẩn / căn cứ<input required maxLength={300} value={name} onChange={(e) => setName(e.target.value)} className={input} /></label>
-      <p className="text-sm text-slate-600">Nhập giới hạn đã được xác nhận, đơn vị mm. Để trống phía không giới hạn; mỗi chỉ tiêu phải có ít nhất một giới hạn. Không tự áp ví dụ PQ cho dự án.</p>
-      {GEOMETRY_CRITERIA.map((key) => <div key={key} className="rounded-lg border border-slate-200 bg-white p-3">
-        <div className="text-sm font-semibold text-slate-900">{GEOMETRY_LABELS[key]}</div>
-        <div className="mt-2 grid grid-cols-2 gap-3">{(["min", "max"] as const).map((edge) => <div key={edge}>
-          <label className="block text-sm">{edge === "min" ? "Giới hạn dưới" : "Giới hạn trên"}<input inputMode="decimal" className={input} value={bounds[key][edge]} onChange={(e) => setBounds({ ...bounds, [key]: { ...bounds[key], [edge]: e.target.value } })} /></label>
-          <label className="mt-2 flex min-h-9 items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={bounds[key][`${edge}Inclusive`]} onChange={(e) => setBounds({ ...bounds, [key]: { ...bounds[key], [`${edge}Inclusive`]: e.target.checked } })} />Nhận giá trị bằng giới hạn</label>
-        </div>)}</div>
-      </div>)}
-      <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={ndt} onChange={(e) => setNdt(e.target.checked)} />Yêu cầu thí nghiệm NDT</label>
-      {!ndt && <label className="block text-sm">Căn cứ miễn NDT<input required className={input} value={exemption} onChange={(e) => setExemption(e.target.value)} /></label>}
-      <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={ndtBeforeRfi} onChange={(e) => setNdtBeforeRfi(e.target.checked)} />Yêu cầu NDT đạt trước khi phát RFI</label>
-      <label className="flex min-h-11 items-start gap-2 text-sm font-semibold"><input required type="checkbox" className="mt-1" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />Tôi xác nhận giới hạn và quy tắc trên đã được chấp thuận cho nhóm mối này.</label>
-    </fieldset>
-    {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
-    <div className="mt-4 flex flex-wrap gap-2"><button className={primary} disabled={saving}>{saving ? "Đang lưu…" : "Lưu và áp dụng tiêu chí"}</button><button type="button" className={button} disabled={saving} onClick={onCancel}>Hủy thiết lập</button></div>
-  </form>;
-}
 
 export default function WeldQualityDialog({ row, onClose, onSaved }: { row: WeldReportRow; onClose: () => void; onSaved: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -64,7 +24,6 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);
-  const [setupRule, setSetupRule] = useState(false);
   useEffect(() => { dialog.current?.showModal(); }, []);
   useEffect(() => {
     let active = true;
@@ -123,7 +82,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
           } catch (err) { setError(err instanceof Error ? err.message : "Không lưu được kiểm tra."); }
           finally { setSaving(false); }
         }}>
-          <fieldset disabled={saving || blocked || setupRule} className="space-y-5">
+          <fieldset disabled={saving || blocked} className="space-y-5">
             <label className="block text-sm font-semibold">Tiêu chí áp dụng<select className={input} value={draft.tieu_chuan_id ?? ""} onChange={(e) => {
               const id = e.target.value || null;
               setDraft({ ...draft, tieu_chuan_id: id });
@@ -133,7 +92,22 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
             }}>
               <option value="">Chưa chọn tiêu chí</option>{rules.filter((r) => r.dang_ap_dung || r.id === draft.tieu_chuan_id).map((r) => <option key={r.id} value={r.id}>{r.ten} · v{r.phien_ban}{r.dang_ap_dung ? "" : " · Lưu theo bản cũ"}</option>)}
             </select></label>
-            {!rule && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Chưa có tiêu chí áp dụng. Có thể lưu kết quả đo; chưa đủ căn cứ để kết luận hình học đạt hoặc phát RFI.</p>}
+            {!rule && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Chưa có tiêu chí áp dụng cho nhóm {row.cong_nghe_han} · {row.loai_moi_han}. Cài đặt tại{" "}
+                <button
+                  type="button"
+                  className="font-semibold underline"
+                  onClick={() => {
+                    onClose();
+                    window.dispatchEvent(new CustomEvent("app-navigate", { detail: { tab: "tieu-chi-nghiem-thu" } }));
+                  }}
+                >
+                  Quản lý chất lượng → Tiêu chí nghiệm thu
+                </button>
+                . Có thể lưu kết quả đo; chưa đủ căn cứ để kết luận hình học đạt hoặc phát RFI.
+              </p>
+            )}
             <section className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">1. Kiểm tra sau mài</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Ngày hoàn thành mài<input type="date" className={input} value={draft.ngay_mai ?? ""} onChange={(e) => setDraft({ ...draft, ngay_mai: e.target.value || null })} /></label>
                 <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => setDraft({ ...draft, truc_quan: (e.target.value as SavedWeldInspection["truc_quan"]) || null, xu_ly_truc_quan: e.target.value === "Không đạt" ? (draft.xu_ly_truc_quan ?? "sua_chua") : null })}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>
@@ -167,10 +141,8 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
           </fieldset>
           <p className="mt-4 text-sm text-slate-600" role="status">{accepted ? "Mối đã nghiệm thu đạt; không lập yêu cầu nghiệm thu trùng." : assessment?.rfiEligible ? "Đủ điều kiện phát RFI theo tiêu chí đang chọn." : `Chưa đủ điều kiện phát RFI: ${!rule ? "chưa chọn tiêu chí" : assessment?.status === "Không đạt" ? "còn chỉ tiêu không đạt" : !draft.ngay_mai ? "chưa ghi ngày mài" : draft.truc_quan !== "Đạt" ? "trực quan chưa đạt" : assessment?.geometry !== "Đạt" ? "thiếu số đo hoặc hình học chưa đạt" : "chưa có NDT đạt theo yêu cầu"}.`}</p>
           {message && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
-          <div className="mt-5 flex flex-wrap gap-2"><button disabled={saving || blocked || setupRule} className={primary}>{saving ? "Đang lưu…" : "Lưu kiểm tra"}</button><button type="button" disabled={saving} className={button} onClick={onClose}>Đóng</button>
-            {!blocked && !rules.some((r) => r.dang_ap_dung) && <button type="button" className={button} disabled={saving} onClick={() => setSetupRule(!setupRule)}>Thiết lập dung sai dự án</button>}</div>
+          <div className="mt-5 flex flex-wrap gap-2"><button disabled={saving || blocked} className={primary}>{saving ? "Đang lưu…" : "Lưu kiểm tra"}</button><button type="button" disabled={saving} className={button} onClick={onClose}>Đóng</button></div>
         </form>
-        {setupRule && <RuleForm row={row} onCancel={() => setSetupRule(false)} onCreated={(newRule) => { setRules([newRule, ...rules]); setDraft({ ...draft, tieu_chuan_id: newRule.id }); setSetupRule(false); setMessage("Đã lưu tiêu chí. Bấm Lưu kiểm tra để gắn tiêu chí vào mối này."); }} />}
       </>}
     </div>
   </dialog>;

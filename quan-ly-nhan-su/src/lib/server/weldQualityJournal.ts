@@ -198,9 +198,28 @@ export async function importQualityBatch(body: Record<string, unknown>, actor: s
   return results;
 }
 
+const WELD_TECHS = ["FBW", "ATW"] as const;
+const WELD_TYPES = ["Đào tạo", "Thử nghiệm", "Chấp thuận", "Sản xuất", "Tần suất"] as const;
+
 export async function createQualityRuleForWeld(body: Record<string, unknown>, actor: string) {
-  const { weld } = await loadQualityDetail(qualityUuid(body.weldId));
   if (body.confirmed !== true) throw new QualityApiError("Cần xác nhận tiêu chí áp dụng cho dự án.");
+  let du_an_id: string;
+  let cong_nghe_han: (typeof WELD_TECHS)[number];
+  let loai_moi_han: (typeof WELD_TYPES)[number];
+  if (body.weldId) {
+    const { weld } = await loadQualityDetail(qualityUuid(body.weldId));
+    du_an_id = weld.du_an_id;
+    cong_nghe_han = weld.cong_nghe_han as (typeof WELD_TECHS)[number];
+    loai_moi_han = weld.loai_moi_han as (typeof WELD_TYPES)[number];
+  } else {
+    du_an_id = qualityUuid(body.du_an_id);
+    const tech = text(body.cong_nghe_han, 8);
+    const type = text(body.loai_moi_han, 40);
+    if (!(WELD_TECHS as readonly string[]).includes(tech)) throw new QualityApiError("Công nghệ hàn không hợp lệ.");
+    if (!(WELD_TYPES as readonly string[]).includes(type)) throw new QualityApiError("Loại mối hàn không hợp lệ.");
+    cong_nghe_han = tech as (typeof WELD_TECHS)[number];
+    loai_moi_han = type as (typeof WELD_TYPES)[number];
+  }
   const limitsInput = object(body.dung_sai);
   const dung_sai = Object.fromEntries(GEOMETRY_CRITERIA.map((k) => {
     const b = object(limitsInput[k]);
@@ -211,10 +230,18 @@ export async function createQualityRuleForWeld(body: Record<string, unknown>, ac
   const exemption = text(body.can_cu_mien_ndt ?? "", 2000);
   if (!body.yeu_cau_ndt && !exemption) throw new QualityApiError("Cần nêu căn cứ miễn NDT.");
   const { data: previous, error } = await createAdminClient().from("tieu_chuan_nghiem_thu_moi_han").select("phien_ban,dang_ap_dung")
-    .eq("du_an_id", weld.du_an_id).eq("cong_nghe_han", weld.cong_nghe_han).eq("loai_moi_han", weld.loai_moi_han).order("phien_ban", { ascending: false });
+    .eq("du_an_id", du_an_id).eq("cong_nghe_han", cong_nghe_han).eq("loai_moi_han", loai_moi_han).order("phien_ban", { ascending: false });
   if (error) throw error;
   if (previous.some((r) => r.dang_ap_dung)) throw new QualityApiError("Đã có tiêu chí đang áp dụng; hãy tải lại và chọn tiêu chí đó.", 409);
-  return createWeldQualityRule({ du_an_id: weld.du_an_id, cong_nghe_han: weld.cong_nghe_han, loai_moi_han: weld.loai_moi_han,
+  return createWeldQualityRule({ du_an_id, cong_nghe_han, loai_moi_han,
     phien_ban: (previous[0]?.phien_ban ?? 0) + 1, ten: text(body.ten, 300), dung_sai: dung_sai as GeometryLimits,
     yeu_cau_ndt: body.yeu_cau_ndt, ndt_truoc_rfi: body.ndt_truoc_rfi, can_cu_mien_ndt: exemption || null, nguoi_xac_nhan: actor, dang_ap_dung: true });
+}
+
+/** Danh sách tiêu chí theo dự án (cài đặt ngoài form kiểm tra từng mối). */
+export async function listQualityRules(duAnId: string) {
+  const { data, error } = await createAdminClient().from("tieu_chuan_nghiem_thu_moi_han")
+    .select("*").eq("du_an_id", qualityUuid(duAnId)).order("cong_nghe_han").order("loai_moi_han").order("phien_ban", { ascending: false });
+  if (error) throw error;
+  return { rules: (data ?? []) as SavedWeldQualityRule[] };
 }
