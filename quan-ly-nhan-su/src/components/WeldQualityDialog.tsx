@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "@/components/icons";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
-import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, parseWeldMeasurement,
+import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, isOptionalUntilMeasured, parseWeldMeasurement,
   type GeometryCriterion, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { loadQualityInspection, saveQualityInspection } from "@/lib/weldQualityClient";
 import type { WeldReportRow } from "@/lib/weldReportData";
@@ -142,7 +142,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
                 return <div key={k} className="rounded-lg bg-slate-50 p-3"><label htmlFor={`measure-${k}`} className="block text-sm font-semibold">{GEOMETRY_LABELS[k]} (mm)</label>
                   <div className="mt-1 flex flex-wrap items-center gap-3"><input id={`measure-${k}`} inputMode="decimal" className={`${input} sm:max-w-40`} value={numbers[k] ?? ""} aria-invalid={Boolean(parseErrors[k])} aria-describedby={`measure-help-${k}`} onChange={(e) => setNumbers({ ...numbers, [k]: e.target.value })} />
                     <span className={`text-sm font-semibold ${outcome === "Không đạt" ? "text-rose-700" : outcome === "Đạt" ? "text-emerald-800" : "text-slate-600"}`}>{parseErrors[k] ? "Số đo không hợp lệ" : outcome ?? "Chưa đủ căn cứ"}</span></div>
-                  <p id={`measure-help-${k}`} className={`mt-1 text-xs ${parseErrors[k] ? "text-rose-700" : "text-slate-600"}`}>{parseErrors[k] ?? (limit ? `Giới hạn: ${limit.min === null ? "không giới hạn dưới" : `${limit.minInclusive ? "≥" : ">"} ${limit.min}`} ; ${limit.max === null ? "không giới hạn trên" : `${limit.maxInclusive ? "≤" : "<"} ${limit.max}`} mm` : "Chưa chọn giới hạn. Ô trống khác với số 0.")}</p>
+                  <p id={`measure-help-${k}`} className={`mt-1 text-xs ${parseErrors[k] ? "text-rose-700" : "text-slate-600"}`}>{parseErrors[k] ?? (limit ? `Giới hạn: ${limit.min === null ? "không giới hạn dưới" : `${limit.minInclusive ? "≥" : ">"} ${limit.min}`} ; ${limit.max === null ? "không giới hạn trên" : `${limit.maxInclusive ? "≤" : "<"} ${limit.max}`} mm${isOptionalUntilMeasured(k) && measurements[k] == null ? ". Chưa nhập: chưa chặn RFI; bắt buộc trước khi nghiệm thu Đạt." : ""}` : "Chưa chọn giới hạn. Ô trống khác với số 0.")}</p>
                 </div>;
               })}</div>
             </section>

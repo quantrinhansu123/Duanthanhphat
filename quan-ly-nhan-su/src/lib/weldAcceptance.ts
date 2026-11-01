@@ -100,11 +100,28 @@ export function rfiBlockReason(tinhTrang: string): string {
 
 export type AcceptanceDecision = { moi_han_id: string; phien_ban: number; ket_qua: "Đạt" | "Không đạt" | "Chưa nghiệm thu"; ly_do?: string };
 
-/** Mặc định "Hoàn thành" cho mối đủ điều kiện nghiệm thu; mối chưa đủ mặc định "Chưa nghiệm thu". */
-export function defaultDecisions(welds: { moi_han_id: string; phien_ban: number; du_dieu_kien_nghiem_thu: boolean }[]): AcceptanceDecision[] {
-  return welds.map((w) => w.du_dieu_kien_nghiem_thu
-    ? { moi_han_id: w.moi_han_id, phien_ban: w.phien_ban, ket_qua: "Đạt" }
-    : { moi_han_id: w.moi_han_id, phien_ban: w.phien_ban, ket_qua: "Chưa nghiệm thu", ly_do: "Chưa đủ điều kiện nghiệm thu" });
+/** Trạng thái bất thường trên phiếu RFI đã phát — không nên còn «Chờ mài». */
+export function isAnomalousRfiWeldStatus(tinhTrang: string): boolean {
+  return tinhTrang === "Chờ mài" || tinhTrang === "Hàn" || tinhTrang === "Chưa có dữ liệu chất lượng";
+}
+
+/** Mặc định "Đạt" chỉ khi đủ điều kiện nghiệm thu; còn lại "Chưa nghiệm thu" kèm lý do theo tình trạng. */
+export function defaultDecisions(welds: {
+  moi_han_id: string;
+  phien_ban: number;
+  du_dieu_kien_nghiem_thu: boolean;
+  tinh_trang?: string;
+}[]): AcceptanceDecision[] {
+  return welds.map((w) => {
+    if (w.du_dieu_kien_nghiem_thu) {
+      return { moi_han_id: w.moi_han_id, phien_ban: w.phien_ban, ket_qua: "Đạt" };
+    }
+    const status = w.tinh_trang ?? "";
+    const ly_do = isAnomalousRfiWeldStatus(status)
+      ? `Bất thường trên RFI: đang «${status}» — cần Kiểm tra (mài/trực quan/số đo) trước khi nghiệm thu`
+      : (status ? rfiBlockReason(status) : "Chưa đủ điều kiện nghiệm thu");
+    return { moi_han_id: w.moi_han_id, phien_ban: w.phien_ban, ket_qua: "Chưa nghiệm thu", ly_do };
+  });
 }
 
 export function summarizeDecisions(d: AcceptanceDecision[]) {

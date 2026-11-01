@@ -159,6 +159,14 @@ export function validateGeometryLimits(value: unknown): asserts value is Geometr
   }
 }
 
+/**
+ * Chiều dài mài: chưa nhập thì bỏ qua khi xét hình học nội bộ / RFI
+ * (tránh hạ mối đã đủ 4 chỉ tiêu cũ về «Chờ mài»). Khi đã nhập thì bắt buộc đạt.
+ */
+export function isOptionalUntilMeasured(key: GeometryCriterion): boolean {
+  return key === "chieu_dai_mai";
+}
+
 export function evaluateGeometry(measurements: GeometryMeasurements, limits: GeometryLimits | null): QualityResult {
   validateGeometryMeasurements(measurements);
   if (!limits) return null;
@@ -168,10 +176,23 @@ export function evaluateGeometry(measurements: GeometryMeasurements, limits: Geo
     // Tiêu chí cũ (thiếu khóa mới như chieu_dai_mai) bỏ qua đến khi chạy migration backfill.
     if (!limit) continue;
     const number = measurements[key];
-    if (number == null) { missing = true; continue; }
+    if (number == null) {
+      if (isOptionalUntilMeasured(key)) continue;
+      missing = true;
+      continue;
+    }
     if (evaluateGeometryCriterion(number, limit) === "Không đạt") return "Không đạt";
   }
   return missing ? null : "Đạt";
+}
+
+/** Đủ chiều dài mài khi tiêu chí có khóa này (bắt buộc trước nghiệm thu Đạt). */
+export function hasRequiredGrindingLength(
+  measurements: GeometryMeasurements,
+  limits: GeometryLimits | null,
+): boolean {
+  if (!limits?.chieu_dai_mai) return true;
+  return measurements.chieu_dai_mai != null;
 }
 
 export function evaluateGeometryCriterion(value: number | null, limit: GeometryLimit | null): QualityResult {
@@ -200,8 +221,11 @@ export function evaluateWeldQuality(
   const forceFail = fieldReject || inspection?.xu_ly_truc_quan === "khong_dat";
   const repairPath = Boolean(visualGeoFail && !ndtFail && !forceFail);
   const failed = ndtFail || forceFail || (visualGeoFail && inspection?.xu_ly_truc_quan === "khong_dat");
+  const grindingLengthOk = !inspection || hasRequiredGrindingLength(inspection.gia_tri_do, rule?.dung_sai ?? null);
   const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath && (!rule.ndt_truoc_rfi || ndtPass));
-  const acceptanceEligible = Boolean(rule && internalPass && ndtPass && !ndtFail && !forceFail && !repairPath);
+  const acceptanceEligible = Boolean(
+    rule && internalPass && ndtPass && grindingLengthOk && !ndtFail && !forceFail && !repairPath,
+  );
 
   let status: WeldQualityStatus;
   if (accepted) status = "Đạt";

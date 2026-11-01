@@ -21,6 +21,11 @@ for (const value of [NaN, Infinity, -Infinity, true, [], {}, "1e3", "0,1.2", "0 
 }
 assert.equal(rules.evaluateGeometry({}, limits), null);
 assert.equal(rules.evaluateGeometry(measurements, null), null);
+// Chiều dài mài chưa nhập không hạ mối đã đủ 4 chỉ tiêu cũ.
+const withoutMai = { doc_mat_lan: 0, ngang_nam_ray: 0, ngang_chan_ray: 0, phang_mat_lan: 0 };
+assert.equal(rules.evaluateGeometry(withoutMai, limits), "Đạt");
+assert.equal(rules.hasRequiredGrindingLength(withoutMai, limits), false);
+assert.equal(rules.hasRequiredGrindingLength(measurements, limits), true);
 for (const [key, limit] of Object.entries(limits)) {
   const cases = [];
   if (limit.min != null) cases.push([limit.min, "Đạt"], [limit.min - 0.001, "Không đạt"]);
@@ -55,9 +60,14 @@ assert.equal(rules.evaluateWeldQuality(inspection, null, "Sản xuất").rfiElig
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").rfiEligible, true);
 assert.equal(rules.evaluateWeldQuality(inspection, { ...rule, ndt_truoc_rfi: true }, "Sản xuất").rfiEligible, false);
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").acceptanceEligible, false);
+const withoutMaiInspection = { ...inspection, gia_tri_do: withoutMai };
+assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").status, "Chờ siêu âm và nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").rfiEligible, true);
 
 const ndtPass = { ...inspection, ket_qua_ndt: "Đạt", ngay_ndt: "2026-10-28" };
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").status, "Chờ ký biên bản");
+assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất").acceptanceEligible, true);
+assert.equal(rules.evaluateWeldQuality({ ...ndtPass, gia_tri_do: withoutMai }, rule, "Sản xuất").acceptanceEligible, false);
 assert.equal(rules.evaluateWeldQuality(ndtPass, rule, "Sản xuất", true).status, "Đạt");
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt" }, rule, "Sản xuất").status, "Sửa chữa/khắc phục");
 assert.equal(rules.evaluateWeldQuality({ ...ndtPass, truc_quan: "Không đạt", xu_ly_truc_quan: "khong_dat" }, rule, "Sản xuất").status, "Không đạt");

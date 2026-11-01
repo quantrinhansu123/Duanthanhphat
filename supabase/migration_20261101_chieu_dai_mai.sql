@@ -42,7 +42,11 @@ begin
   if not public.qlcl_dung_sai_hop_le(p_dung_sai) then raise exception 'Dung sai không hợp lệ'; end if;
   foreach k in array array['doc_mat_lan','ngang_nam_ray','ngang_chan_ray','phang_mat_lan','chieu_dai_mai'] loop
     v := (p_do->>k)::numeric;
-    if v is null then missing := true; continue; end if;
+    -- chieu_dai_mai chưa nhập: bỏ qua (không hạ RFI/trạng thái mối đã đủ 4 chỉ tiêu cũ).
+    if v is null then
+      if k = 'chieu_dai_mai' then continue; end if;
+      missing := true; continue;
+    end if;
     b := p_dung_sai->k; lo := (b->>'min')::numeric; hi := (b->>'max')::numeric;
     if v < lo or v > hi or (v = lo and not (b->>'minInclusive')::boolean)
       or (v = hi and not (b->>'maxInclusive')::boolean) then return 'Không đạt'; end if;

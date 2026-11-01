@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { completeAcceptance, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiNumber, loadRfis,
   publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import { defaultDecisions, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
+import { defaultDecisions, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
@@ -638,18 +638,36 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
           )}
         </ul>
       )}
-      {active && (
+      {active && (() => {
+        const anomalous = active.welds.filter((w) => isAnomalousRfiWeldStatus(w.tinh_trang));
+        const ready = active.welds.filter((w) => w.du_dieu_kien_nghiem_thu).length;
+        return (
         <>
-          <p className="text-sm font-semibold">{active.rfi.so_phieu} — mặc định “Đạt” cho mối đủ điều kiện; mối chưa đủ điều kiện được đặt “Chưa nghiệm thu”.</p>
+          <p className="text-sm font-semibold">
+            {active.rfi.so_phieu}
+            {ready > 0
+              ? ` — ${ready} mối đủ điều kiện được mặc định “Đạt”; mối chưa đủ đặt “Chưa nghiệm thu”.`
+              : " — chưa có mối đủ điều kiện nghiệm thu (không mặc định “Đạt”)."}
+          </p>
+          {anomalous.length > 0 && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+              <b>Không đúng quy trình:</b> {anomalous.length} mối trên phiếu đang «Chờ mài» (hoặc chưa kiểm tra)
+              — RFI chỉ dành cho mối đã «Chờ siêu âm và nghiệm thu». Có thể phiếu phát khi mối còn đủ điều kiện rồi tình trạng tụt lại
+              (thiếu số đo / chiều dài mài), hoặc dữ liệu lệch. Vào <b>Nhật ký hàn → Kiểm tra</b> hoàn tất mài/trực quan/số đo rồi quay lại;
+              hệ thống tạm đặt “Chưa nghiệm thu” chứ <b>không phải</b> cho phép nghiệm thu mối chờ mài.
+            </p>
+          )}
           <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-slate-50"><tr><th className="p-2 text-left">Mã mối</th><th className="p-2 text-left">Tình trạng</th><th className="p-2 text-left">Kết quả</th><th className="p-2 text-left">Lý do (nếu loại)</th></tr></thead>
               <tbody>{active.welds.map((w) => {
                 const d = decisions.find((x) => x.moi_han_id === w.moi_han_id);
                 if (!d) return null;
+                const bad = isAnomalousRfiWeldStatus(w.tinh_trang);
                 return (
-                  <tr key={w.moi_han_id} className="border-t border-slate-100">
-                    <td className="p-2">{w.ma_lich_su}</td><td className="p-2">{w.tinh_trang}</td>
+                  <tr key={w.moi_han_id} className={`border-t border-slate-100 ${bad ? "bg-rose-50" : ""}`}>
+                    <td className="p-2">{w.ma_lich_su}</td>
+                    <td className={`p-2 ${bad ? "font-semibold text-rose-800" : ""}`}>{w.tinh_trang}</td>
                     <td className="p-2">
                       <select className={input} value={d.ket_qua} onChange={(e) => patch(w.moi_han_id, { ket_qua: e.target.value as AcceptanceDecision["ket_qua"] })}>
                         <option value="Đạt" disabled={!w.du_dieu_kien_nghiem_thu}>Hoàn thành (Đạt)</option>
@@ -671,8 +689,12 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
             <button type="button" className={secondary} onClick={() => setActive(null)}>Quay lại</button>
           </div>
           {missingReason && <p className="text-xs text-amber-700">Nhập lý do cho mọi mối không được chấp nhận.</p>}
+          {anomalous.length > 0 && !sum.accepted && (
+            <p className="text-xs text-rose-800">Nút hoàn thành đang khóa vì chưa có mối “Đạt” — xử lý Kiểm tra cho các mối chờ mài trước.</p>
+          )}
         </>
-      )}
+        );
+      })()}
     </section>
   );
 }
