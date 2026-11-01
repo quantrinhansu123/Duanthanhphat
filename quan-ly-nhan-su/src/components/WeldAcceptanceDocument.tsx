@@ -11,9 +11,9 @@ type View = { kind: DocKind; rfi?: { rfi: RfiSummary; welds: RfiWeld[]; projectN
 
 const TITLES: Record<DocKind, string> = {
   rfi: "PHIẾU YÊU CẦU NGHIỆM THU (RFI)",
-  "phu-luc": "PHỤ LỤC BIÊN BẢN NGHIỆM THU MỐI HÀN",
-  "giai-doan": "BIÊN BẢN NGHIỆM THU CÔNG VIỆC",
-  "hoan-thanh": "BIÊN BẢN HOÀN THÀNH CÔNG VIỆC",
+  "phu-luc": "BIÊN BẢN NGHIỆM THU MỐI HÀN CHẢY GIÁP MÉP",
+  "giai-doan": "BIÊN BẢN NGHIỆM THU CÔNG VIỆC XÂY DỰNG",
+  "hoan-thanh": "BIÊN BẢN NGHIỆM THU HOÀN THÀNH GIAI ĐOẠN THI CÔNG",
 };
 const css = `@media print {
   body * { visibility: hidden !important; }
