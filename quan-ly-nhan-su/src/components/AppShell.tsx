@@ -51,6 +51,7 @@ const SparePartsList = dynamic(
 const FuelHistoryList = dynamic(() => import("@/components/FuelHistoryList"), { loading: TabLoading, ssr: false });
 const MachinePreShiftChecklist = dynamic(
   () => import("@/components/MachinePreShiftChecklist"), { loading: TabLoading, ssr: false });
+const HomeDashboard = dynamic(() => import("@/components/HomeDashboard"), { loading: TabLoading, ssr: false });
 const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), { loading: TabLoading, ssr: false });
 const QualityReportDashboard = dynamic(
   () => import("@/components/QualityReportDashboard"), { loading: TabLoading, ssr: false });
@@ -71,6 +72,9 @@ const DeploymentHandoverList = dynamic(
 const SystemConfiguration = dynamic(
   () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
 const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { loading: TabLoading, ssr: false });
+
+/** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
+const HOME_TAB = "home";
 
 const viewRenderers: Record<string, () => React.ReactNode> = {
   "ho-so-tho-han": () => <WelderManagement />,
@@ -116,11 +120,13 @@ type AppShellProps = {
   tab?: string;
 };
 
-/** Trang chủ `/` mở thẳng báo cáo tổng quan. */
-const HOME_TAB = "bc-tong-quan";
+function isHomeTab(id: string | undefined | null) {
+  return !id || id === HOME_TAB;
+}
 
 function tabFromPath(pathname: string) {
   const path = pathname.replace(/^\//, "").split("/")[0] ?? "";
+  if (!path || path === HOME_TAB) return HOME_TAB;
   return isValidTab(path) ? path : HOME_TAB;
 }
 
@@ -171,9 +177,9 @@ export default function AppShell({ tab }: AppShellProps) {
   useEffect(() => {
     const fromPath = tabFromPath(pathname);
     const currentId = fromPath || (tab && isValidTab(tab) ? tab : HOME_TAB);
-    if (currentId) prefetchTabModule(currentId);
+    if (currentId && !isHomeTab(currentId)) prefetchTabModule(currentId);
 
-    const group = currentId
+    const group = currentId && !isHomeTab(currentId)
       ? navigation.find((g) => g.children.some((c) => c.id === currentId))
       : null;
     const siblings = group
@@ -198,20 +204,26 @@ export default function AppShell({ tab }: AppShellProps) {
     };
   }, [pathname, tab]);
 
-  const current = activeTab && isValidTab(activeTab) ? activeTab : HOME_TAB;
-  const crumb = current ? findNavMeta(current) : null;
-  const reportTab = Boolean(current && isReportTab(current));
-  const lwrTab = Boolean(current?.startsWith("lwr-"));
+  const current = isHomeTab(activeTab) ? HOME_TAB : (activeTab && isValidTab(activeTab) ? activeTab : HOME_TAB);
+  const atHome = isHomeTab(current);
+  const crumb = atHome ? null : findNavMeta(current);
+  const reportTab = Boolean(!atHome && current && isReportTab(current));
+  const lwrTab = Boolean(!atHome && current?.startsWith("lwr-"));
   const { lang } = useLanguage();
   const clock = useClientClock(lang);
 
-  const group = current ? navigation.find((g) => g.children.some((c) => c.id === current)) : null;
+  const group = atHome ? null : navigation.find((g) => g.children.some((c) => c.id === current)) ?? null;
   const { ready: accessReady, can, userName, email, birthDate } = useAccess();
-  const canView = can(current, "view");
-  const canEdit = can(current, "edit");
-  const canDelete = can(current, "delete");
+  // Trang chủ luôn xem được; các mục trong menu nhanh tự lọc theo quyền.
+  const canView = atHome || can(current, "view");
+  const canEdit = atHome ? false : can(current, "edit");
+  const canDelete = atHome ? false : can(current, "delete");
   const firstAllowed = navigation.flatMap((g) => g.children).find((c) => can(c.id, "view"))?.id;
-  const content = current && canView ? viewRenderers[current]?.() ?? null : null;
+  const content = !canView
+    ? null
+    : atHome
+      ? <HomeDashboard onNavigate={go} canView={(id) => can(id, "view")} />
+      : viewRenderers[current]?.() ?? null;
 
   // Không có quyền xem tab hiện tại → chuyển sang chức năng đầu tiên được phép.
   useEffect(() => {
@@ -220,9 +232,9 @@ export default function AppShell({ tab }: AppShellProps) {
   }, [accessReady, canView, firstAllowed, current]);
 
   function go(id: string) {
-    const targetId = !id || id === "bc-san-luong" ? HOME_TAB : id;
+    const targetId = !id || id === HOME_TAB ? HOME_TAB : id === "bc-san-luong" ? "bc-tong-quan" : id;
     const href = targetId === HOME_TAB ? "/" : `/${targetId}`;
-    prefetchTabModule(targetId);
+    if (!isHomeTab(targetId)) prefetchTabModule(targetId);
     setActiveTab(targetId);
     setMobileNavOpen(false);
     router.push(href);
@@ -375,8 +387,8 @@ export default function AppShell({ tab }: AppShellProps) {
               Bạn không có quyền xem chức năng này.
             </div>
           ) : content ? (
-            canEdit ? (
-              <DeleteGuard active={!canDelete}>{content}</DeleteGuard>
+            atHome || canEdit ? (
+              <DeleteGuard active={!atHome && !canDelete}>{content}</DeleteGuard>
             ) : (
               <>
                 <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">

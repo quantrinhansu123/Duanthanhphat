@@ -2,10 +2,33 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { navigation } from "@/data/navigation";
+import { findNavMeta, navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import { Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
+
+/** Mục nhập liệu hiện trường — ưu tiên trên mobile */
+const QUICK_DATA_ENTRY_IDS = [
+  "nhat-ky-han",
+  "bc-bao-cao-ngay",
+  "kiem-tra-may-truoc-ca",
+  "bien-ban-moi-han",
+  "lich-su-cap-nhien-lieu",
+  "ban-do",
+  "ho-so-tho-han",
+  "phan-cong-may",
+] as const;
+
+const quickEntryShortLabel: Record<(typeof QUICK_DATA_ENTRY_IDS)[number], { vi: string; en: string }> = {
+  "nhat-ky-han": { vi: "Nhật ký hàn", en: "Weld log" },
+  "bc-bao-cao-ngay": { vi: "Báo cáo ngày", en: "Daily report" },
+  "kiem-tra-may-truoc-ca": { vi: "Checklist máy", en: "Checklist" },
+  "bien-ban-moi-han": { vi: "Biên bản hàn", en: "Acceptance" },
+  "lich-su-cap-nhien-lieu": { vi: "Nhiên liệu", en: "Fuel log" },
+  "ban-do": { vi: "Bản đồ GPS", en: "GPS map" },
+  "ho-so-tho-han": { vi: "Hồ sơ thợ", en: "Welders" },
+  "phan-cong-may": { vi: "Lịch máy", en: "Machine log" },
+};
 
 /** Icon nền đặc + chữ trắng — tông chuyên nghiệp theo phân hệ */
 const groupThemes: Record<
@@ -74,18 +97,87 @@ const defaultTheme = groupThemes["nhan-su"];
 
 type HomeDashboardProps = {
   onNavigate: (tabId: string) => void;
+  canView?: (tabId: string) => boolean;
 };
 
-export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
+export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProps) {
   const { lang } = useLanguage();
   const [query, setQuery] = useState("");
+  const allowed = (id: string) => (canView ? canView(id) : true);
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
-  const groups = navigation.map(group => ({ ...group, children: group.children.filter(child => normalize(`${group.label} ${group.labelEn} ${child.label} ${child.labelEn} ${child.description ?? ""} ${child.descriptionEn ?? ""}`).includes(normalize(query.trim()))) })).filter(group => group.children.length);
-  const totalChildren = navigation.reduce((sum, g) => sum + g.children.length, 0);
+  const groups = navigation
+    .map(group => ({
+      ...group,
+      children: group.children.filter(
+        child =>
+          allowed(child.id) &&
+          normalize(`${group.label} ${group.labelEn} ${child.label} ${child.labelEn} ${child.description ?? ""} ${child.descriptionEn ?? ""}`).includes(normalize(query.trim())),
+      ),
+    }))
+    .filter(group => group.children.length);
+  const totalChildren = navigation.reduce((sum, g) => sum + g.children.filter(child => allowed(child.id)).length, 0);
+  const quickEntries = QUICK_DATA_ENTRY_IDS.filter(id => allowed(id));
 
   return (
-    <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 pb-12 pt-6 animate-in fade-in duration-200">
-      <div className="relative mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs">
+    <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 pb-12 pt-3 sm:pt-6 animate-in fade-in duration-200">
+      {/* Mobile: menu nhập liệu hiện ngay đầu trang */}
+      <section
+        className="mb-4 sm:mb-6 rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-xs"
+        aria-labelledby="quick-data-entry-heading"
+      >
+        <div className="mb-3 flex items-end justify-between gap-2">
+          <div>
+            <h2 id="quick-data-entry-heading" className="text-sm sm:text-base font-bold text-slate-900">
+              {lang === "en" ? "Quick data entry" : "Nhập liệu nhanh"}
+            </h2>
+            <p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">
+              {lang === "en"
+                ? "Shortcuts for field logging and daily forms"
+                : "Chạm icon để mở nghiệp vụ nhập dữ liệu"}
+            </p>
+          </div>
+        </div>
+        <div
+          className="grid grid-cols-4 gap-2 sm:gap-3"
+          role="list"
+          aria-label={lang === "en" ? "Quick data entry menu" : "Menu nhập liệu nhanh"}
+        >
+          {quickEntries.map(id => {
+            const item = navigation.flatMap(group => group.children).find(child => child.id === id);
+            if (!item) return null;
+            const meta = findNavMeta(id);
+            const theme = (meta?.parentId && groupThemes[meta.parentId]) || defaultTheme;
+            const Icon = childIcons[id] ?? Path;
+            const short = quickEntryShortLabel[id];
+            const label = lang === "en" ? short.en : short.vi;
+            const fullTitle = lang === "en" ? item.labelEn : item.label;
+
+            return (
+              <button
+                key={id}
+                type="button"
+                role="listitem"
+                title={fullTitle}
+                aria-label={fullTitle}
+                onClick={() => onNavigate(id)}
+                className="group flex flex-col items-center gap-1.5 rounded-xl px-1 py-2 text-center transition-colors hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 active:bg-slate-100 cursor-pointer"
+              >
+                <span
+                  className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-white transition-transform duration-150 group-active:scale-95 ${theme.iconBg} ${theme.iconShadow}`}
+                >
+                  <Icon size={22} weight="bold" aria-hidden />
+                </span>
+                <span className="line-clamp-2 max-w-[4.75rem] text-[10px] sm:text-[11px] font-semibold leading-tight text-slate-700">
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Hero chỉ hiện desktop — mobile ưu tiên menu nhập liệu */}
+      <div className="relative mb-7 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs lg:block">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#0047AB]/5 blur-3xl pointer-events-none" />
         <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
@@ -151,13 +243,6 @@ export default function HomeDashboard({ onNavigate }: HomeDashboardProps) {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-2" aria-label={lang === "en" ? "Common tasks" : "Công việc thường dùng"}>
-        {["nhat-ky-han", "ho-so-tho-han", "bc-tong-quan", "quan-ly-du-an"].map(id => {
-          const item = navigation.flatMap(group => group.children).find(child => child.id === id);
-          return item ? <button key={id} type="button" onClick={() => onNavigate(id)} className="min-h-10 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-[#0047ab] transition-colors hover:bg-blue-100">{lang === "en" ? item.labelEn : item.label}</button> : null;
-        })}
       </div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
