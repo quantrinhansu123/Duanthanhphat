@@ -706,7 +706,13 @@ function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpe
       {records.map((r) => {
         const requiredDocs = (r.ho_so_nghiem_thu ?? []).filter((h) => requiredLoai.includes(h.loai));
         const complete = requiredDocs.length === 3;
-        const allSigned = complete && requiredDocs.every((h) => h.tinh_trang_ky === "Đã ký");
+        const isDraft = r.thong_tin?.draft === true;
+        const allSigned = complete && !isDraft && requiredDocs.every((h) => h.tinh_trang_ky === "Đã ký");
+        const signBlockedReason = !complete
+          ? "Thiếu một trong ba biên bản"
+          : isDraft
+            ? "Cần vào tab Nghiệm thu → Hoàn thành nghiệm thu trước khi xác nhận ký"
+            : undefined;
         return (
           <div key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
             <p className="font-semibold">
@@ -714,10 +720,17 @@ function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpe
               {!complete && <span className="ml-2 text-amber-700 font-medium">· Thiếu hồ sơ</span>}
               {allSigned ? (
                 <span className="ml-2 text-emerald-700 font-medium">· Đã ký bộ hồ sơ</span>
+              ) : isDraft && complete ? (
+                <span className="ml-2 text-amber-700 font-medium">· Chờ nghiệm thu</span>
               ) : complete ? (
                 <span className="ml-2 text-slate-500 font-medium">· Chờ ký</span>
               ) : null}
             </p>
+            {isDraft && complete && (
+              <p className="text-xs text-amber-800">
+                Bộ 3 biên bản chỉ để in mang đi. Mở tab <b>Nghiệm thu</b>, chọn {r.phieu_yeu_cau_nghiem_thu.so_phieu}, bấm <b>Hoàn thành nghiệm thu</b> — sau đó mới bật được nút Đã ký.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {kinds.map(([label, kind]) => (
                 <button key={kind} type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r.id, kind)).catch((e) => setError(message(e)))}>{label}</button>
@@ -725,8 +738,8 @@ function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpe
               <button
                 type="button"
                 className={allSigned ? secondary : primary}
-                disabled={busy || !complete || r.thong_tin?.draft === true}
-                title={!complete ? "Thiếu một trong ba biên bản" : r.thong_tin?.draft === true ? "Hoàn thành kiểm tra và nghiệm thu trước khi xác nhận ký" : undefined}
+                disabled={busy || !complete || isDraft}
+                title={signBlockedReason}
                 onClick={() => void toggleSignSet(r)}
               >
                 {allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký"}

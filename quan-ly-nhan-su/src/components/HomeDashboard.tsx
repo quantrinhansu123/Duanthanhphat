@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { findNavMeta, navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
+import { CaretDown, Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
 
 /** Mục nhập liệu hiện trường — ưu tiên trên mobile */
@@ -17,6 +17,7 @@ const QUICK_DATA_ENTRY_IDS = [
   "ban-do",
   "ho-so-tho-han",
   "phan-cong-may",
+  "lwr-track-map",
 ] as const;
 
 const quickEntryShortLabel: Record<(typeof QUICK_DATA_ENTRY_IDS)[number], { vi: string; en: string }> = {
@@ -28,6 +29,7 @@ const quickEntryShortLabel: Record<(typeof QUICK_DATA_ENTRY_IDS)[number], { vi: 
   "ban-do": { vi: "Bản đồ GPS", en: "GPS map" },
   "ho-so-tho-han": { vi: "Hồ sơ thợ", en: "Welders" },
   "phan-cong-may": { vi: "Lịch máy", en: "Machine log" },
+  "lwr-track-map": { vi: "Track Map", en: "Track Map" },
 };
 
 /** Icon nền đặc + chữ trắng — tông chuyên nghiệp theo phân hệ */
@@ -103,6 +105,8 @@ type HomeDashboardProps = {
 export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProps) {
   const { lang } = useLanguage();
   const [query, setQuery] = useState("");
+  /** Nhóm đang mở; mặc định thu gọn hết cho gọn mobile */
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
   const allowed = (id: string) => (canView ? canView(id) : true);
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
   const groups = navigation
@@ -117,6 +121,11 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
     .filter(group => group.children.length);
   const totalChildren = navigation.reduce((sum, g) => sum + g.children.filter(child => allowed(child.id)).length, 0);
   const quickEntries = QUICK_DATA_ENTRY_IDS.filter(id => allowed(id));
+  const searching = query.trim().length > 0;
+
+  function toggleGroup(id: string) {
+    setOpenGroups(prev => (prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]));
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] w-full px-4 sm:px-6 lg:px-8 pb-12 pt-3 sm:pt-6 animate-in fade-in duration-200">
@@ -265,14 +274,22 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} aria-label={lang === "en" ? "Search functions" : "Tìm chức năng"} placeholder={lang === "en" ? "Search functions…" : "Tìm chức năng, hồ sơ, báo cáo…"} className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm" />
       </div>
       {groups.length === 0 && <div role="status" className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="text-sm text-slate-600">{lang === "en" ? "No matching functions. Try another keyword." : "Không tìm thấy chức năng phù hợp. Hãy thử từ khóa khác."}</p><button type="button" onClick={() => setQuery("")} className="mt-3 rounded-lg bg-[#0047ab] px-4 py-2 text-sm text-white">{lang === "en" ? "Clear search" : "Xóa tìm kiếm"}</button></div>}
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
         {groups.map((group) => {
           const GroupIcon = groupIcons[group.id] ?? Path;
           const theme = groupThemes[group.id] ?? defaultTheme;
+          const expanded = searching || openGroups.includes(group.id);
+          const panelId = `home-group-panel-${group.id}`;
 
           return (
-            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs" key={group.id} aria-labelledby={`home-group-${group.id}`}>
-              <div className="mb-3.5 flex items-center gap-3">
+            <section className="rounded-xl border border-slate-200 bg-white shadow-xs" key={group.id} aria-labelledby={`home-group-${group.id}`}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                className="flex w-full items-center gap-3 p-3.5 sm:p-4 text-left cursor-pointer rounded-xl hover:bg-slate-50/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 transition-colors"
+              >
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white ${theme.iconBg} ${theme.iconShadow}`}
                 >
@@ -291,48 +308,56 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
                     {group.children.length} {lang === "en" ? "items" : "hạng mục"}
                   </p>
                 </div>
-              </div>
+                <CaretDown
+                  size={16}
+                  weight="bold"
+                  aria-hidden
+                  className={`shrink-0 text-slate-400 transition-transform duration-200 ${expanded ? "rotate-0" : "-rotate-90"}`}
+                />
+              </button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {group.children.map((child) => {
-                  const ChildIcon = childIcons[child.id] ?? GroupIcon;
-                  const title = lang === "en" ? child.labelEn : child.label;
-                  const desc =
-                    lang === "en"
-                      ? child.descriptionEn || child.description
-                      : child.description;
+              {expanded && (
+                <div id={panelId} className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-3.5 sm:px-4 pb-3.5 sm:pb-4">
+                  {group.children.map((child) => {
+                    const ChildIcon = childIcons[child.id] ?? GroupIcon;
+                    const title = lang === "en" ? child.labelEn : child.label;
+                    const desc =
+                      lang === "en"
+                        ? child.descriptionEn || child.description
+                        : child.description;
 
-                  return (
-                    <div
-                      key={child.id}
-                      title={desc || title}
-                      className={`group/card flex flex-col items-start gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors duration-150 hover:bg-slate-50 ${theme.ring}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(child.id)}
-                        className="flex w-full items-start gap-3 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 rounded-xl"
+                    return (
+                      <div
+                        key={child.id}
+                        title={desc || title}
+                        className={`group/card flex flex-col items-start gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors duration-150 hover:bg-slate-50 ${theme.ring}`}
                       >
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg}`}
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(child.id)}
+                          className="flex w-full items-start gap-3 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 rounded-xl"
                         >
-                          <ChildIcon size={19} weight="bold" aria-hidden />
-                        </span>
-                        <span className="flex w-full flex-col items-start gap-1">
-                          <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
-                            {title}
+                          <span
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-transform duration-200 group-hover/card:scale-105 ${theme.iconBg}`}
+                          >
+                            <ChildIcon size={19} weight="bold" aria-hidden />
                           </span>
-                          {desc && (
-                            <span className="line-clamp-2 text-xs leading-relaxed text-slate-500 font-medium">
-                              {desc}
+                          <span className="flex w-full flex-col items-start gap-1">
+                            <span className="line-clamp-2 text-xs sm:text-sm font-bold leading-snug text-slate-900">
+                              {title}
                             </span>
-                          )}
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                            {desc && (
+                              <span className="line-clamp-2 text-xs leading-relaxed text-slate-500 font-medium">
+                                {desc}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           );
         })}
