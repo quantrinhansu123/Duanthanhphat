@@ -48,7 +48,7 @@ export const permissionRoles = [
 
 const perm = (view: boolean, edit: boolean, del = false): Permission => ({ view, edit, delete: del });
 const NONE = perm(false, false);
-const WELDER_TABS = ["kiem-tra-may-truoc-ca", "lich-su-cap-nhien-lieu"];
+const WELDER_TABS = ["kiem-tra-may-truoc-ca"];
 
 /** Mặc định theo phạm vi áp dụng trong file Word. */
 export function defaultPermission(role: string, groupId: string, tabId: string): Permission {
