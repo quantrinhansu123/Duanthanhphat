@@ -2,40 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { Icon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { navigation } from "@/data/navigation";
+import { groupIcons, childIcons } from "@/data/navigationIcons";
 import { initials, useAccess } from "@/lib/useAccess";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import {
   SignOut,
-  Users,
-  GraduationCap,
-  Wrench,
-  Buildings,
-  Path,
-  ChartBar,
-  GearSix,
-  Train,
   X,
   CaretDown,
   CaretLeft,
   CaretRight,
 } from "@/components/icons";
-
-const icons: Record<string, Icon> = {
-  "nhan-su": Users,
-  "dao-tao": GraduationCap,
-  "may-moc": Wrench,
-  "du-an": Buildings,
-  "lwr-han-ray": Train,
-  "ky-thuat": Path,
-  "bao-cao": ChartBar,
-  "quan-tri": GearSix,
-};
 
 type SidebarProps = {
   activeId?: string;
@@ -125,7 +106,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            className="flex lg:hidden h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors duration-150 cursor-pointer"
+            className="flex lg:hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors duration-150 cursor-pointer"
             aria-label="Đóng menu"
           >
             <X size={18} weight="bold" aria-hidden />
@@ -142,7 +123,7 @@ export default function Sidebar({
           {visibleGroups.map((item) => {
             const isOpen = openGroups.includes(item.id);
             const isChildActive = item.children.some((c) => c.id === activeId);
-            const GroupIcon = icons[item.id];
+            const GroupIcon = groupIcons[item.id];
 
             return (
               <div key={item.id}>
@@ -160,6 +141,7 @@ export default function Sidebar({
                       ? "bg-white/[0.12] font-semibold text-white shadow-xs"
                       : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                   } ${collapsed ? "justify-center px-0" : ""}`}
+                  aria-expanded={collapsed ? undefined : isOpen}
                   title={lang === "en" ? (item.labelEn || item.label) : item.label}
                 >
                   <span
@@ -190,6 +172,7 @@ export default function Sidebar({
                   <div className="mt-1 mb-2 ml-4 space-y-0.5 pl-3 border-l border-white/10">
                     {item.children.map((child) => {
                       const childActive = activeId === child.id;
+                      const ChildIcon = childIcons[child.id] ?? GroupIcon;
                       const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
                       return (
                         <button
@@ -198,13 +181,15 @@ export default function Sidebar({
                           onMouseEnter={() => warmTab(child.id)}
                           onFocus={() => warmTab(child.id)}
                           onClick={() => handleNavigate(child.id)}
-                          className={`block w-full rounded-lg px-3 py-2 text-left transition-all duration-150 cursor-pointer ${
+                          aria-current={childActive ? "page" : undefined}
+                          className={`flex min-h-11 lg:min-h-0 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-all duration-150 cursor-pointer ${
                             childActive
                               ? "bg-[#0047AB] text-white font-semibold shadow-xs"
                               : "text-slate-300 font-medium hover:bg-white/[0.08] hover:text-white"
                           }`}
                         >
-                          <span className="block text-xs sm:text-[13px] leading-snug">{childTitle}</span>
+                          <ChildIcon size={18} weight="regular" aria-hidden className="shrink-0" />
+                          <span className="min-w-0 text-[13px] leading-snug">{childTitle}</span>
                         </button>
                       );
                     })}

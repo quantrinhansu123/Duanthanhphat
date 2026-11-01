@@ -2,90 +2,10 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import type { Icon } from "@phosphor-icons/react";
 import { navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import {
-  Users,
-  GraduationCap,
-  Wrench,
-  Buildings,
-  Path,
-  ChartBar,
-  ClockCounterClockwise,
-  GearSix,
-  ShieldCheck,
-  IdentificationCard,
-  MagnifyingGlass,
-  CalendarBlank,
-  CalendarCheck,
-  Bug,
-  ListChecks,
-  Certificate,
-  SealCheck,
-  ClipboardText,
-  FileText,
-  ChartLineUp,
-  MapTrifold,
-  Files,
-  Gauge,
-  ChartPieSlice,
-  ChartLine,
-  Flag,
-  Cube,
-  Package,
-  GasPump,
-  WarningCircle,
-  Train,
-  Calculator,
-  Shapes,
-} from "@/components/icons";
-
-const groupIcons: Record<string, Icon> = {
-  "nhan-su": Users,
-  "dao-tao": GraduationCap,
-  "may-moc": Wrench,
-  "du-an": Buildings,
-  "lwr-han-ray": Train,
-  "ky-thuat": Path,
-  "bao-cao": ChartBar,
-  "quan-tri": GearSix,
-};
-
-const childIcons: Record<string, Icon> = {
-  "ho-so-tho-han": IdentificationCard,
-  "lich-su-han": ClockCounterClockwise,
-  "lich-su-moi-han-loi": WarningCircle,
-  "khoa-dao-tao": GraduationCap,
-  "tra-cuu-dao-tao": MagnifyingGlass,
-  "danh-sach-may": Cube,
-  "kiem-tra-may-truoc-ca": ClipboardText,
-  "lich-bao-tri": CalendarCheck,
-  "thu-vien-loi": Bug,
-  "phan-cong-may": ListChecks,
-  "phu-tung-thay-the": Package,
-  "lich-su-cap-nhien-lieu": GasPump,
-  "thu-vien-loi-moi-han": Bug,
-  "quan-ly-du-an": Buildings,
-  "lwr-giai-toa-ung-suat": Calculator,
-  "lwr-track-map": Train,
-  "lwr-cong-trinh": Shapes,
-  "chung-chi": Certificate,
-  "chung-chi-cong-ty": SealCheck,
-  "tieu-chuan-tcvn": ClipboardText,
-  "nhat-ky-han": FileText,
-  "bien-ban-moi-han": ClipboardText,
-  "bc-moi-han-theo-nam": ChartLineUp,
-  "ban-do": MapTrifold,
-  "tai-lieu": Files,
-  "bc-tong-quan": Gauge,
-  "bc-chat-luong": ChartPieSlice,
-  "bc-may-moc": ChartLine,
-  "bc-nhan-su": Users,
-  "bc-bao-cao-ngay": CalendarBlank,
-  "cau-hinh": GearSix,
-  "trien-khai": Flag,
-};
+import { Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
+import { groupIcons, childIcons } from "@/data/navigationIcons";
 
 /** Icon nền đặc + chữ trắng — tông chuyên nghiệp theo phân hệ */
 const groupThemes: Record<
