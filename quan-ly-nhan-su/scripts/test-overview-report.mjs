@@ -48,7 +48,21 @@ const statusContext = {
   ],
 };
 assert.equal(evaluate("actualToDate", statusContext), 0, "PQ has no production due to date; history and training do not count");
+const remainingPlanContext = { isAllDates: true, statusScope: [{ id: "pq", plannedWeldCount: 3010 }], plannedInPeriod: 46 };
+const remainingContext = { remainingTarget: evaluate("remainingTarget", remainingPlanContext) };
+const remainingFor = (context) => evaluate("remainingWelds", {
+  ...remainingContext, actualToDate: evaluate("actualToDate", context),
+});
+assert.equal(remainingFor(statusContext), 3010, "PQ without production still has all 3010 joints remaining");
 const pqProduction = { du_an_id: "pq", loai_moi_han: "Sản xuất", ngay_thuc_hien: "2026-11-02" };
+assert.equal(remainingFor({ ...statusContext, selectedRows: [...statusContext.selectedRows, pqProduction] }), 3009);
+assert.equal(remainingFor({ ...statusContext, progressTo: "2026-11-03",
+  selectedRows: [...statusContext.selectedRows, pqProduction, { ...pqProduction, ngay_thuc_hien: "2026-11-03" }],
+}), 3008, "New production on the next day automatically reduces the balance");
+assert.equal(evaluate("remainingWelds", { ...remainingContext, actualToDate: 3011 }), 0, "Remaining cannot be negative");
+assert.equal(evaluate("remainingWelds", {
+  remainingTarget: evaluate("remainingTarget", { ...remainingPlanContext, isAllDates: false }), actualToDate: 5,
+}), 41, "Date filters use the period plan");
 assert.equal(evaluate("actualToDate", { ...statusContext, selectedRows: [...statusContext.selectedRows, pqProduction] }), 1);
 assert.equal(evaluate("actualToDate", { ...statusContext, selectedRows: [{ ...pqProduction, du_an_id: null, du_an: "PQ" }] }), 1, "Legacy rows match by project name");
 assert.equal(evaluate("actualToDate", { ...statusContext, hasProgressRange: false }), 0);
@@ -56,6 +70,10 @@ const fastStatusContext = { ...statusContext, showFastCharts: true,
   fastRollupRows: statusContext.selectedRows.map((row) => ({ ...row, so_moi: 100 })),
 };
 assert.equal(evaluate("actualToDate", fastStatusContext), 0, "Rollup applies the same project, production and date limits");
+assert.equal(remainingFor(fastStatusContext), 3010, "Rollup preserves the full PQ balance without production");
+assert.equal(remainingFor({ ...fastStatusContext,
+  fastRollupRows: [...fastStatusContext.fastRollupRows, { ...pqProduction, so_moi: 2 }, { ...pqProduction, so_luong_thuc_hien: 3 }],
+}), 3005, "New rollup production automatically reduces the balance in both schemas");
 assert.equal(evaluate("actualToDate", { ...fastStatusContext,
   fastRollupRows: [...fastStatusContext.fastRollupRows, { ...pqProduction, so_moi: 2 }, { ...pqProduction, so_luong_thuc_hien: 3 }],
 }), 5, "Both rollup schemas count production quantities");

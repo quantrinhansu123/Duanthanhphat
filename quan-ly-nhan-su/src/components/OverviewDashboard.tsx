@@ -996,6 +996,10 @@ export default function OverviewDashboard() {
       return inRange ? sum + 1 : sum;
     }, 0);
   }, [fastRollupRows, hasProgressRange, progressFrom, progressTo, selectedRows, showFastCharts, statusScope]);
+  const remainingTarget = isAllDates
+    ? statusScope.reduce((sum, project) => sum + Math.max(0, project.plannedWeldCount || 0), 0)
+    : plannedInPeriod;
+  const remainingWelds = Math.max(0, remainingTarget - actualToDate);
   const behindReasons = [
     ...(upcomingProjects.length > 0 ? ["Chưa triển khai"] : []),
     ...(yearPendingEvaluation > 0 ? ["Chưa đánh giá"] : []),
@@ -1785,7 +1789,7 @@ export default function OverviewDashboard() {
                 <div className="text-xs text-slate-500">Còn lại</div>
                 <div className="flex items-baseline gap-1 whitespace-nowrap">
                   <span className="text-base sm:text-lg font-bold font-mono text-slate-900">
-                    {fmt(Math.max(0, target - progressActual))}
+                    {fmt(remainingWelds)}
                   </span>
                   <span className="text-xs text-slate-400">mối</span>
                 </div>
