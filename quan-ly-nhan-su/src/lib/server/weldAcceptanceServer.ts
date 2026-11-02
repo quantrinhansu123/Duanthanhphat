@@ -381,7 +381,30 @@ export async function loadRecordSet(dotId: string) {
     db().from("ho_so_nghiem_thu_sua_doi").select("*,ho_so_nghiem_thu!inner(dot_id)").eq("ho_so_nghiem_thu.dot_id", dotId).order("phien_ban"),
   ]);
   for (const r of [dot, docs, welds, revisions]) if (r.error) throw r.error;
-  return { dot: dot.data, ho_so: docs.data, moi: welds.data, sua_doi: revisions.data };
+  // Bản chốt có thể được lập trước khi mối hàn gắn điểm GPS → bổ sung mã điểm / lý trình còn trống từ toa_do.
+  type Snap = { moi_han?: Record<string, unknown> };
+  const weldRows = (welds.data ?? []) as { moi_han_id: string; du_lieu_chot: Snap | null }[];
+  const needsPoint = weldRows.filter((w) => !w.du_lieu_chot?.moi_han?.ma_diem || !w.du_lieu_chot?.moi_han?.ly_trinh).map((w) => w.moi_han_id);
+  if (needsPoint.length) {
+    const points = await chunkedPages<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(
+      [...new Set(needsPoint)],
+      (ids, a, b) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", ids).order("id").range(a, b));
+    const live = new Map<string, { ma_diem: string | null; ly_trinh: string | null }>();
+    for (const p of points) {
+      const cur = live.get(p.lich_su_moi_han_id);
+      live.set(p.lich_su_moi_han_id, { ma_diem: cur?.ma_diem || p.ma_diem, ly_trinh: cur?.ly_trinh || p.ly_trinh });
+    }
+    for (const w of weldRows) {
+      const p = live.get(w.moi_han_id);
+      if (!p) continue;
+      const snap = w.du_lieu_chot ?? {};
+      const mh = { ...(snap.moi_han ?? {}) };
+      if (!mh.ma_diem && p.ma_diem) mh.ma_diem = p.ma_diem;
+      if (!mh.ly_trinh && p.ly_trinh) mh.ly_trinh = p.ly_trinh;
+      w.du_lieu_chot = { ...snap, moi_han: mh };
+    }
+  }
+  return { dot: dot.data, ho_so: docs.data, moi: weldRows, sua_doi: revisions.data };
 }
 
 /** Thêm bản sửa đổi thông tin in (địa điểm, thành phần…); không đụng tới dữ liệu chốt. */

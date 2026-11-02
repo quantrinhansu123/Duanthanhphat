@@ -9,11 +9,11 @@ export const ACCEPTANCE_DOCS: { kind: RecordKind; loai: string; title: string }[
 ];
 
 const BOX = "❐";
-const ROWS_PER_PAGE = 20;
+const ROWS_PER_PAGE = 40;
 
 export const acceptancePrintCss = `
 .acceptance-page { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto 16px; padding: 12mm 17mm; background: white; color: black; font: 13px/1.35 'Times New Roman', serif; }
-.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 6mm 7mm; font: 9px/1.2 'Times New Roman', serif; }
+.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 12mm 12mm 6mm 7mm; font: 9px/1.2 'Times New Roman', serif; }
 .acceptance-page h2 { font-size: 15px; font-weight: bold; text-align: center; margin: 12px 0 2px; }
 .acceptance-page.annex-page h2 { font-size: 12px; margin: 0; padding: 4px 2px; text-transform: uppercase; }
 .acceptance-page h3 { font-weight: bold; margin-top: 8px; }
@@ -27,7 +27,7 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sheet .head-right { width: 28%; font-size: 9px; }
 .acceptance-page .annex { font-size: 7.2px; table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
-.acceptance-page .annex td { height: 15px; text-align: center; padding: 0 1px; vertical-align: middle; }
+.acceptance-page .annex td { height: 12.5px; text-align: center; padding: 0 1px; vertical-align: middle; }
 .acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5px; }
 .acceptance-page .annex-meta-grid td { border: 1px solid black; padding: 2px 4px; vertical-align: middle; }
 .acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8px; }
@@ -37,7 +37,7 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
 .acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 9px; }
-.acceptance-page .annex-sign td { height: 70px; font-size: 9px; text-align: left; font-weight: normal; }
+.acceptance-page .annex-sign td { height: 105px; font-size: 9px; text-align: left; font-weight: normal; }
 .acceptance-page .signature { text-align: center; font-weight: bold; margin-top: 10px; min-height: 95px; }
 .acceptance-page .signature small { display: block; font-weight: normal; font-style: italic; }
 .acceptance-page .dots { border-bottom: 1px dotted black; min-height: 21px; }
@@ -56,13 +56,14 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 22px; text-align: center; font-weight: bold; text-transform: uppercase; }
 .acceptance-page .work-sign div { min-height: 96px; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 88px; margin-top: 10px; }
+.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 120px; margin-top: 10px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
 .acceptance-page .conclude-table { margin: 8px 0 14px; }
 .acceptance-page .conclude-table td { padding: 6px 8px; vertical-align: middle; }
 .acceptance-page .sign-roster { margin-top: 14px; }
-.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 28px; padding: 4px 6px; }
+.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 52px; padding: 4px 6px; vertical-align: middle; }
+.acceptance-page .sign-roster th { height: 28px; }
 @media print {
   body > *:not(.acceptance-print-root) { display: none !important; }
   .acceptance-print-root { position: static !important; overflow: visible !important; padding: 0 !important; background: white !important; }
@@ -77,7 +78,7 @@ export const acceptancePrintCss = `
   .acceptance-page:first-of-type {
     break-before: auto !important; page-break-before: auto !important;
   }
-  .acceptance-page.annex-page { padding: 0; }
+  .acceptance-page.annex-page { padding: 5mm 4mm 0 0; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
   @page { size: A4 portrait; margin: 10mm 12mm; }
@@ -102,6 +103,12 @@ const kmText = (v: unknown) => {
   if (!raw) return "…………";
   return raw.replace(/^\s*km\s*/i, "");
 };
+
+/** "Km5+407.01" → mét; null nếu không đọc được. */
+function chainageMetres(v: string) {
+  const m = /(\d+)\s*\+\s*(\d+(?:[.,]\d+)?)/.exec(v);
+  return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : null;
+}
 
 function mark(on: boolean) {
   return on ? "☑" : BOX;
@@ -136,6 +143,13 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const codes = rows.map((r) => String(r.du_lieu_chot.moi_han?.ma_lich_su ?? "")).filter(Boolean);
     const pointRows = rows.map((r) => r.du_lieu_chot.moi_han ?? {});
     const chainage = pointRows.map((w) => w.ly_trinh).filter(Boolean).map(String);
+    const sortedChainage = chainage
+      .map((c) => ({ c, m: chainageMetres(c) }))
+      .filter((x): x is { c: string; m: number } => x.m !== null)
+      .sort((a, b) => a.m - b.m)
+      .map((x) => x.c);
+    const kmFrom = kmText(t.kmFrom || sortedChainage[0] || chainage[0]);
+    const kmTo = kmText(t.kmTo || sortedChainage.at(-1) || chainage.at(-1));
     if (doc.kind === "phu-luc") {
       const pages = Array.from({ length: Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE)) }, (_, i) => rows.slice(i * ROWS_PER_PAGE, i * ROWS_PER_PAGE + ROWS_PER_PAGE));
       const shifts = unique(pointRows.map((w) => w.ca_han));
@@ -186,11 +200,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td colSpan={2}>
                           <b>TÊN THỢ HÀN:</b> {welders.join(", ") || "………………"} &nbsp;
                           <b>ID:</b> {welderIds.join(", ") || "…………"} &nbsp;
-                          <b>LÝ TRÌNH:</b> TỪ: {kmText(t.kmFrom || chainage[0])} &nbsp; ĐẾN: {kmText(t.kmTo || chainage.at(-1))}
+                          <b>LÝ TRÌNH:</b> TỪ: {kmFrom} &nbsp; ĐẾN: {kmTo}
                         </td>
                       </tr>
                       <tr>
-                        <td><b>VỊ TRÍ:</b> {show(t.pham_vi || "………………")}</td>
+                        <td><b>VỊ TRÍ:</b> {sortedChainage.length || t.kmFrom || t.kmTo ? `Km${kmFrom} – Km${kmTo}` : show(t.pham_vi)}</td>
                         <td><b>TUYẾN:</b><br />{mark(upper)} Tuyến thượng<br />{mark(lower)} Tuyến hạ</td>
                         <td>
                           <b>TÊN MÁY HÀN CHẢY GIÁP MÉP</b><br />
@@ -247,7 +261,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         const code = str(w.ma_diem);
                         const left = /^(TT|HT)/i.test(code) ? "✓" : "";
                         const right = /^(TP|HP)/i.test(code) ? "✓" : "";
-                        const note = str(kt.ghi_chu ?? (row?.ket_qua === "Chưa nghiệm thu" ? "" : row?.ly_do));
+                        const note = str(kt.ghi_chu ?? (row?.ket_qua === "Không đạt" ? row.ly_do : ""));
                         const inLimit =
                           geometry ?? (row?.ket_qua === "Đạt" || row?.ket_qua === "Không đạt" ? row.ket_qua : "");
                         return (
@@ -436,6 +450,14 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
         <small>(Ký đóng dấu và ghi rõ họ tên)</small>
       </div>
     );
+    // Các thành phần tham gia: dùng chung cho mục 4, chữ ký và bảng chức vụ để luôn khớp nhau.
+    const parties = [
+      { no: "4.1", label: "Chủ đầu tư", stamp: "CHỦ ĐẦU TƯ", org: cdt, role: "Trưởng ban Ban QLDA" },
+      { no: "4.2", label: "Tư vấn Giám sát", stamp: "TƯ VẤN GIÁM SÁT", org: tvgsHt, role: "Giám sát trưởng" },
+      { no: "4.3", label: "Tư vấn thiết kế", stamp: "TƯ VẤN THIẾT KẾ", org: "", role: "Chủ trì thiết kế" },
+      { no: "4.4", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng nhà thầu chính" },
+      { no: "4.5", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng nhà thầu phụ" },
+    ];
     const personBlock = () => (
       <>
         <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
@@ -473,26 +495,12 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p>Lý trình : Từ: Km {kmText(t.kmFrom || chainage[0])} đến Km {kmText(t.kmTo || chainage.at(-1))}</p>
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
-          <div className="party">
-            <p><b>3.1. Chủ đầu tư:</b> {cdt}</p>
-            {personBlock()}
-          </div>
-          <div className="party">
-            <p><b>3.2. Tư vấn Giám sát:</b> {tvgsHt}</p>
-            {personBlock()}
-          </div>
-          <div className="party">
-            <p><b>3.3. Tư vấn thiết kế:</b></p>
-            {personBlock()}
-          </div>
-          <div className="party">
-            <p><b>3.4. Nhà thầu chính:</b> {ntcHt}</p>
-            {personBlock()}
-          </div>
-          <div className="party">
-            <p><b>3.5. Nhà thầu phụ:</b> {ntpHt}</p>
-            {personBlock()}
-          </div>
+          {parties.map((pt) => (
+            <div className="party" key={pt.no}>
+              <p><b>{pt.no}. {pt.label}:</b> {pt.org}</p>
+              {personBlock()}
+            </div>
+          ))}
 
           <h3>5. Đánh giá công việc đã thực hiện:</h3>
           <p><b>a) Các tài liệu căn cứ nghiệm thu:</b></p>
@@ -514,7 +522,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p><b>g) Các ý kiến khác nếu có:</b></p>
           <div className="dots" /><div className="dots" />
 
-          <h3>5. Kết luận :</h3>
+          <h3>6. Kết luận :</h3>
           <table className="conclude-table">
             <tbody>
               <tr>
@@ -530,29 +538,31 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             </tbody>
           </table>
 
-          <h3>6. Chữ ký các thành phần trực tiếp tham gia nghiệm thu:</h3>
-          <div style={{ display: "grid", justifyItems: "center" }}>{stamp("CHỦ ĐẦU TƯ")}</div>
+          <h3>7. Chữ ký các thành phần trực tiếp tham gia nghiệm thu:</h3>
+          <div style={{ display: "grid", justifyItems: "center" }}>{stamp(parties[0].stamp)}</div>
           <div className="complete-sign-row">
-            {stamp("TƯ VẤN THIẾT KẾ")}
-            {stamp("TƯ VẤN GIÁM SÁT")}
+            {stamp(parties[1].stamp)}
+            {stamp(parties[2].stamp)}
           </div>
           <div className="complete-sign-row">
-            {stamp("NHÀ THẦU CHÍNH")}
-            {stamp("NHÀ THẦU PHỤ")}
+            {stamp(parties[3].stamp)}
+            {stamp(parties[4].stamp)}
           </div>
 
           <table className="sign-roster">
             <thead>
               <tr>
-                <th>Chức vụ</th>
-                <th>Họ và tên</th>
-                <th>Chữ ký</th>
+                <th style={{ width: "26%" }}>Thành phần</th>
+                <th style={{ width: "22%" }}>Chức vụ</th>
+                <th style={{ width: "26%" }}>Họ và tên</th>
+                <th style={{ width: "26%" }}>Chữ ký</th>
               </tr>
             </thead>
             <tbody>
-              {["Trưởng ban Ban QLDA", "Giám sát trưởng", "Chủ trì thiết kế", "Chỉ huy trưởng nhà thầu chính", "Chỉ huy trưởng nhà thầu phụ"].map((role) => (
-                <tr key={role}>
-                  <td>{role}</td>
+              {parties.map((pt) => (
+                <tr key={pt.no}>
+                  <td>{pt.label}{pt.org ? <><br /><small>{pt.org}</small></> : null}</td>
+                  <td>{pt.role}</td>
                   <td />
                   <td />
                 </tr>
