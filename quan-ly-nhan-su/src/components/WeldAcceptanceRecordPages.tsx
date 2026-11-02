@@ -1,5 +1,5 @@
 import type { RecordSet } from "@/lib/weldQualityClient";
-import { GEOMETRY_CRITERIA, evaluateGeometry, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
+import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
 export type RecordKind = "phu-luc" | "giai-doan" | "hoan-thanh";
 export const ACCEPTANCE_DOCS: { kind: RecordKind; loai: string; title: string }[] = [
@@ -209,7 +209,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td>
                           <b>TÊN MÁY HÀN CHẢY GIÁP MÉP</b><br />
                           Máy hàn: {machines.join(", ") || "………………"}<br />
-                          Goòng phẳng: {show(t.goong || t.goong_phang)}
+                          Goòng phẳng: {show(t.goong || t.goong_phang || "KPS25-L8")}
                         </td>
                       </tr>
                     </tbody>
@@ -252,12 +252,16 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         const w = row?.du_lieu_chot.moi_han ?? {};
                         const kt = row?.du_lieu_chot.kiem_tra ?? {};
                         const measurements = (kt.gia_tri_do ?? {}) as Record<string, number | null>;
+                        const limits = (row?.du_lieu_chot.tieu_chuan?.dung_sai ?? null) as GeometryLimits | null;
                         const geometry = row
-                          ? evaluateGeometry(
-                              measurements as GeometryMeasurements,
-                              row.du_lieu_chot.tieu_chuan?.dung_sai as GeometryLimits | null,
-                            )
+                          ? evaluateGeometry(measurements as GeometryMeasurements, limits)
                           : null;
+                        // Số đo nhập từng tiêu chí; trên biên bản chỉ ghi "Đạt" nếu tiêu chí đó đạt, không đạt thì giữ số đo.
+                        const cellOf = (k: (typeof GEOMETRY_CRITERIA)[number]) => {
+                          const v = measurements[k];
+                          if (v == null) return "";
+                          return evaluateGeometryCriterion(v, limits?.[k] ?? null) === "Đạt" ? "Đạt" : v;
+                        };
                         const code = str(w.ma_diem);
                         const left = /^(TT|HT)/i.test(code) ? "✓" : "";
                         const right = /^(TP|HP)/i.test(code) ? "✓" : "";
@@ -275,7 +279,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                             <td>{str(kt.truc_quan)}</td>
                             <td>{str(kt.ket_qua_ndt)}</td>
                             {GEOMETRY_CRITERIA.map((k) => (
-                              <td key={k}>{measurements[k] ?? ""}</td>
+                              <td key={k}>{cellOf(k)}</td>
                             ))}
                             <td />
                             <td>{inLimit}</td>

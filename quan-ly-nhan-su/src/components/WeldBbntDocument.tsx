@@ -1,6 +1,7 @@
 "use client";
 
 import type { RecordSet } from "@/lib/weldQualityClient";
+import { GEOMETRY_CRITERIA, evaluateGeometryCriterion, type GeometryLimits } from "@/lib/weldQuality";
 
 const ROWS_PER_PAGE = 20;
 const css = `@media print {
@@ -15,7 +16,7 @@ const th = "border border-slate-700 p-1 text-center font-bold";
 const td = "border border-slate-700 p-1 text-center";
 const BOX = "❐";
 
-type Row = { code: string; rail: string; visual: string; ndt: string; geo: (number | null | undefined)[]; result: string; note: string };
+type Row = { code: string; rail: string; visual: string; ndt: string; geo: (number | string | null | undefined)[]; result: string; note: string };
 
 const str = (v: unknown) => (v == null ? "" : String(v));
 
@@ -24,10 +25,15 @@ function rowsOf(record: RecordSet): Row[] {
   return record.moi.filter((m) => m.ket_qua !== "Chưa nghiệm thu").map((m) => {
     const w = m.du_lieu_chot.moi_han ?? {}, k = m.du_lieu_chot.kiem_tra ?? {};
     const g = (k.gia_tri_do ?? {}) as Record<string, number | null>;
+    const limits = (m.du_lieu_chot.tieu_chuan?.dung_sai ?? null) as GeometryLimits | null;
     const method = str(k.phuong_phap_ndt);
     return { code: str(w.ma_lich_su), rail: str(w.loai_ray), visual: str(k.truc_quan),
       ndt: k.ket_qua_ndt ? `${k.ket_qua_ndt}${method && method !== "Siêu âm" ? ` (${method})` : ""}` : "",
-      geo: [g.doc_mat_lan, g.ngang_nam_ray, g.ngang_chan_ray, g.phang_mat_lan, g.chieu_dai_mai],
+      geo: GEOMETRY_CRITERIA.map((key) => {
+        const v = g[key];
+        if (v == null) return "";
+        return evaluateGeometryCriterion(v, limits?.[key] ?? null) === "Đạt" ? "Đạt" : v;
+      }),
       result: m.ket_qua, note: m.ly_do ?? "" };
   }).sort((a, b) => a.code.localeCompare(b.code, "vi", { numeric: true }));
 }
