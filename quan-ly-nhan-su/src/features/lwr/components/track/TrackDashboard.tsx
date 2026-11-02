@@ -32,7 +32,7 @@ import {
   type TrackLayout,
   type TrackPlacement,
 } from "@lwr/lib/track-editor";
-import type { StressInput } from "@lwr/lib/stress-release";
+import { DEFAULT_STRESS_INPUT, type StressInput } from "@lwr/lib/stress-release";
 import {
   deleteLongRailRemote,
   duplicateLongRailCodes,
@@ -621,9 +621,8 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     });
     const leftTemp = Number.isFinite(params.leftTemp) ? params.leftTemp : (cell.leftTemp ?? cell.temp);
     const rightTemp = Number.isFinite(params.rightTemp) ? params.rightTemp : (cell.rightTemp ?? cell.temp);
-    const temp = Number.isFinite(params.neutralTemp)
-      ? params.neutralTemp
-      : railCellLockTemp({ temp: cell.temp, leftTemp, rightTemp });
+    // T khóa đường thiết kế (35 ± 5): không lấy từ nhiệt độ đo của ray.
+    const temp = Number.isFinite(params.neutralTemp) ? params.neutralTemp : DEFAULT_STRESS_INPUT.neutralTemp;
     let target: LongRail;
     let created = false;
     if (covering.length === 0) {

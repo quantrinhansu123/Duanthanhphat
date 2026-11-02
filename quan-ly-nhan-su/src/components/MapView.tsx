@@ -69,6 +69,9 @@ export default function MapView() {
   const [baseLayer, setBaseLayer] = useState<MapBaseLayer>("roadmap");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusSelected, setFocusSelected] = useState(false);
+  const [listQuery, setListQuery] = useState("");
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(POINT_LIST_RENDER_LIMIT);
   const [points, setPoints] = useState<MapPoint[]>(seedMapPoints);
   const [dataSource, setDataSource] = useState<"supabase" | "seed">("seed");
   const [loading, setLoading] = useState(true);
@@ -168,20 +171,28 @@ export default function MapView() {
     setMapFullscreen((v) => !v);
   }
 
-  const filtered = points;
+  const filtered = useMemo(() => {
+    const q = listQuery.trim().toLowerCase();
+    if (!q) return points;
+    return points.filter((p) =>
+      [p.code, p.weldCode, p.welderName, p.chainage, p.projectName]
+        .some((v) => (v ?? "").toLowerCase().includes(q)),
+    );
+  }, [points, listQuery]);
 
   const selected = filtered.find((p) => p.id === selectedId) ?? null;
-  const visibleListPoints = useMemo(() => {
-    const newestFirst = [...filtered].sort(
+  const sortedListPoints = useMemo(
+    () => [...filtered].sort(
       (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || b.id.localeCompare(a.id),
-    );
-    if (newestFirst.length <= POINT_LIST_RENDER_LIMIT) return newestFirst;
-    const visible = newestFirst.slice(0, POINT_LIST_RENDER_LIMIT);
-    if (selected && !visible.some((point) => point.id === selected.id)) {
-      return [selected, ...visible.slice(0, POINT_LIST_RENDER_LIMIT - 1)];
-    }
-    return visible;
-  }, [filtered, selected]);
+    ),
+    [filtered],
+  );
+  const pageCount = Math.max(1, Math.ceil(sortedListPoints.length / listPageSize));
+  const currentPage = Math.min(listPage, pageCount);
+  const visibleListPoints = useMemo(
+    () => sortedListPoints.slice((currentPage - 1) * listPageSize, currentPage * listPageSize),
+    [sortedListPoints, currentPage, listPageSize],
+  );
   const googleRouteUrl = useMemo(() => {
     const source = filtered.length ? filtered : points;
     if (source.length <= 20) return googleOpenRoute(source);
@@ -707,8 +718,15 @@ export default function MapView() {
 
         {!mapFullscreen && (
         <div className="overflow-hidden rounded-xl border border-[#d9e2f1] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <div className="border-b border-[#e8eef8] bg-[#f8fafc] px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
-            Danh sách điểm ({visibleListPoints.length}/{filtered.length})
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8eef8] bg-[#f8fafc] px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.04em] text-[#64748b]">
+            <span>Danh sách điểm ({filtered.length}{filtered.length !== points.length ? `/${points.length}` : ""})</span>
+            <input
+              type="search"
+              value={listQuery}
+              onChange={(e) => { setListQuery(e.target.value); setListPage(1); }}
+              placeholder="Lọc mã điểm, mối hàn, thợ, lý trình..."
+              className="w-full max-w-[260px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-normal normal-case tracking-normal text-slate-800"
+            />
           </div>
           <div className="max-h-[min(62vh,560px)] overflow-auto">
             <table className="w-full border-collapse text-left text-sm">
@@ -753,7 +771,7 @@ export default function MapView() {
                           <span className="text-slate-400 italic">Chưa liên kết</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">{p.chainage}</td>
+                      <td className="px-3 py-2.5 text-slate-700">{p.chainage?.trim() ? p.chainage : <span className="text-slate-400 italic">Chưa có lý trình</span>}</td>
                       <td className="px-3 py-2.5 text-xs text-slate-500">
                         {p.longitude}
                         <br />
@@ -777,16 +795,35 @@ export default function MapView() {
                     </tr>
                   );
                 })}
-                {filtered.length > visibleListPoints.length && (
+                {filtered.length === 0 && points.length > 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-center text-xs text-[#64748b]">
-                      Đang giới hạn {POINT_LIST_RENDER_LIMIT} dòng để tải nhanh. Dùng ô tìm kiếm để mở điểm khác.
-                    </td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">Không có điểm nào khớp bộ lọc.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          {filtered.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e8eef8] bg-[#f8fafc] px-4 py-2 text-xs text-[#64748b]">
+              <span>
+                {(currentPage - 1) * listPageSize + 1}–{Math.min(currentPage * listPageSize, filtered.length)} / {filtered.length} điểm
+              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={listPageSize}
+                  onChange={(e) => { setListPageSize(Number(e.target.value)); setListPage(1); }}
+                  className="rounded border border-slate-200 bg-white px-1 py-0.5"
+                >
+                  {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}/trang</option>)}
+                </select>
+                <button type="button" disabled={currentPage <= 1} onClick={() => setListPage(currentPage - 1)}
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 font-semibold disabled:opacity-40">‹ Trước</button>
+                <span>Trang {currentPage}/{pageCount}</span>
+                <button type="button" disabled={currentPage >= pageCount} onClick={() => setListPage(currentPage + 1)}
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 font-semibold disabled:opacity-40">Sau ›</button>
+              </div>
+            </div>
+          )}
         </div>
         )}
       </div>

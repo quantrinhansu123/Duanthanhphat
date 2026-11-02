@@ -336,9 +336,9 @@ export function StressReleaseCalculator({
   return <div className="mx-auto max-w-7xl space-y-4 text-slate-800">
     {compact && statusSlot ? (
       <div className="space-y-3">
+        {title}
         {actions}
         {statusSlot}
-        {title}
       </div>
     ) : (
       <header className={`flex gap-3 ${compact ? "flex-col" : "flex-wrap items-start justify-between"}`}>

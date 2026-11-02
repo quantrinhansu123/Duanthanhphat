@@ -120,16 +120,26 @@ async function loadErrorReasons(
   const columns = ["ma_khuyet_tat,nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem", "nguyen_nhan_loi,so_luong_loi,tinh_trang_thi_nghiem", "nguyen_nhan_loi,so_luong_loi"];
   let lastError: { message?: string } | null = null;
   for (const columnList of columns) {
-    let query = supabase
-      .from("bao_cao_moi_han_theo_du_an")
-      .select(columnList)
-      .or(columnList.includes("tinh_trang_thi_nghiem") ? "tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0" : "so_luong_loi.gt.0")
-      .limit(1000);
-    query = applyFilters(query, filters);
-    const result = await query;
-    if (!result.error) {
-      return groupJournalDefectStats((result.data ?? []) as DefectStatSource[]);
+    // Phân trang để không bị cắt ở 1000 dòng.
+    const pageSize = 1000;
+    const collected: DefectStatSource[] = [];
+    let pageError: { message?: string } | null = null;
+    for (let from = 0; ; from += pageSize) {
+      let query = supabase
+        .from("bao_cao_moi_han_theo_du_an")
+        .select(columnList)
+        .or(columnList.includes("tinh_trang_thi_nghiem") ? "tinh_trang_thi_nghiem.eq.Không đạt,so_luong_loi.gt.0" : "so_luong_loi.gt.0")
+        .order("id", { ascending: true })
+        .range(from, from + pageSize - 1);
+      query = applyFilters(query, filters);
+      const result = await query;
+      if (result.error) { pageError = result.error; break; }
+      const page = (result.data ?? []) as unknown as DefectStatSource[];
+      collected.push(...page);
+      if (page.length < pageSize) break;
     }
+    if (!pageError) return groupJournalDefectStats(collected);
+    const result = { error: pageError };
     lastError = result.error;
     const message = result.error.message ?? "";
     const missingDefect = columnList.includes("ma_khuyet_tat") && /ma_khuyet_tat/.test(message);

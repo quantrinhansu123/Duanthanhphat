@@ -124,7 +124,6 @@ export function defaultLongRailParams(
     ...base,
     leftLength: placement.endMetres - placement.startMetres,
     rightLength: 0,
-    neutralTemp: placement.startCell.temp,
   };
 }
 
@@ -864,7 +863,6 @@ export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailC
       || patch.leftTemp !== undefined
       || patch.rightTemp !== undefined;
     if (tempChanged && span.startCell.id === cellId) {
-      nextParams.neutralTemp = railCellLockTemp(span.startCell);
       if (Number.isFinite(span.startCell.leftTemp)) nextParams.leftTemp = span.startCell.leftTemp as number;
       if (Number.isFinite(span.startCell.rightTemp)) nextParams.rightTemp = span.startCell.rightTemp as number;
     }

@@ -205,8 +205,8 @@ export function calculateStressRelease(input: StressInput) {
   if (errors.length) throw new Error(errors.join(" "));
   const i = input;
   const length = i.leftLength + i.rightLength;
-  const pullTemp = (i.leftTemp + i.rightTemp) / 2;
-  const averageTemp = (i.leftTemp + i.rightTemp + pullTemp) / 3;
+  // Chỉ đo nhiệt độ đầu trái và đầu phải; không có điểm đo riêng ở vị trí kéo.
+  const averageTemp = (i.leftTemp + i.rightTemp) / 2;
   const deltaTemp = i.neutralTemp - averageTemp;
   const ea = i.area * i.modulus;
   const forceRaw = excelRound(ea * i.alpha * deltaTemp, 2);
@@ -259,7 +259,7 @@ export function calculateStressRelease(input: StressInput) {
     );
   }
   return {
-    length, pullTemp, averageTemp, deltaTemp,
+    length, averageTemp, deltaTemp,
     forceRaw, force: ceilAbs(forceRaw),
     appliedPullForce, anchorLength, actualAnchorLength,
     jackPressureRaw, jackPressure, lockTempUpper, lockTempLower, skipPull, skipThreshold, releaseMethod,

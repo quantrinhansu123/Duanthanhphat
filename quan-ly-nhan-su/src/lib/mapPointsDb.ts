@@ -156,14 +156,22 @@ async function fetchMapPoints(limit?: number): Promise<MapPointFetchResult> {
 export async function fetchUnlinkedGpsPoints(): Promise<MapPoint[]> {
   if (!hasSupabaseEnv()) return [];
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("toa_do")
-    .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id, created_at")
-    .is("lich_su_moi_han_id", null)
-    .order("thu_tu", { ascending: true });
-
-  if (error || !data) return [];
-  return data.map((r) => rowToMapPoint(r as ToaDoRow));
+  // Phân trang để không bị chặn ở max-rows 1000 của PostgREST.
+  const pageSize = 1000;
+  const rows: ToaDoRow[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("toa_do")
+      .select("id, ma_diem, kinh_do, vi_do, ly_trinh, ghi_chu, thu_tu, du_an_id, lich_su_moi_han_id, created_at")
+      .is("lich_su_moi_han_id", null)
+      .order("thu_tu", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error || !data) return [];
+    rows.push(...(data as ToaDoRow[]));
+    if (data.length < pageSize) break;
+  }
+  return rows.map(rowToMapPoint);
 }
 
 /** Thêm một điểm toạ độ mới */

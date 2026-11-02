@@ -242,6 +242,25 @@ export function RailDetailPanel({
           </div>
         </header>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
+          <StressReleaseCalculator
+            compact
+            key={`${cell.id}-${lockTemp}`}
+            segmentId={cell.id}
+            statusSlot={
+              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
+            }
+            initialInput={{
+              ...DEFAULT_STRESS_INPUT,
+              trackSide,
+              leftLength: length,
+              rightLength: 0,
+              startChainage: cell.from,
+              endChainage: cell.to,
+              leftTemp: sideTempOf(cell, "left"),
+              rightTemp: sideTempOf(cell, "right"),
+            }}
+            onSave={onSaveParams}
+          />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
@@ -329,26 +348,6 @@ export function RailDetailPanel({
           {fieldError ? (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">{fieldError}</p>
           ) : null}
-          <StressReleaseCalculator
-            compact
-            key={`${cell.id}-${lockTemp}`}
-            segmentId={cell.id}
-            statusSlot={
-              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
-            }
-            initialInput={{
-              ...DEFAULT_STRESS_INPUT,
-              trackSide,
-              leftLength: length,
-              rightLength: 0,
-              startChainage: cell.from,
-              endChainage: cell.to,
-              neutralTemp: lockTemp,
-              leftTemp: sideTempOf(cell, "left"),
-              rightTemp: sideTempOf(cell, "right"),
-            }}
-            onSave={onSaveParams}
-          />
         </div>
       </div>
     </aside>
