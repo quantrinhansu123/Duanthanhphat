@@ -58,6 +58,8 @@ import {
   resolveWeldShift,
 } from "@/lib/weldReportData";
 import { compareNewestDate } from "@/lib/dateOrder";
+import QrScanDialog from "@/components/QrScanDialog";
+import { parseWeldQr } from "@/lib/weldQr";
 import {
   buildWeldCodePrefix,
   COORDINATE_RAIL_LABELS,
@@ -67,6 +69,7 @@ import {
   hasOwnWeldSitePrefix,
   machineWeldCodeHint,
   machineWeldCodePlaceholder,
+  normalizeCoordinateCode,
   normalizeWeldSitePrefix,
   parseCoordinateCode,
   suggestCoordinateCode,
@@ -490,8 +493,8 @@ function JournalFormModal({
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
-      setSiteCodeEdited(mode === "edit" && Boolean(next.ma_hien_truong));
-      setMachineCodeEdited(mode === "edit" && Boolean(next.ten_moi_han_theo_may));
+      setSiteCodeEdited((mode === "edit" || Boolean(initial)) && Boolean(next.ma_hien_truong));
+      setMachineCodeEdited((mode === "edit" || Boolean(initial)) && Boolean(next.ten_moi_han_theo_may));
       const today = defaultPerformedAt().slice(0, 10);
       setEntryMode("manual");
       setBulkDateFrom(today);
@@ -1810,6 +1813,7 @@ export default function WeldingJournalList({
   const [reloadToken, setReloadToken] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [autolispBulkOpen, setAutolispBulkOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
@@ -2075,6 +2079,55 @@ export default function WeldingJournalList({
     setReloadToken((token) => token + 1);
     void refetchGpsPoints();
   }, [refetchGpsPoints]);
+
+  /** Quét QR → mã Lisp → mở form Thêm nhật ký đã điền sẵn điểm, lý trình, GPS, dự án, mã hiện trường/mã máy in trên QR. */
+  function handleQrResult(raw: string) {
+    const payload = parseWeldQr(raw);
+    if (!payload) {
+      showToast("QR không có mã vị trí HT/HP/TT/TP. Thử quét lại hoặc nhập mã tay.");
+      return;
+    }
+    const matches = gpsPoints.filter((point) => normalizeCoordinateCode(point.code) === payload.lispCode);
+    if (matches.length === 0) {
+      showToast(`Không tìm thấy điểm ${payload.lispCode} trong danh sách Autolisp. Import/thêm điểm ở Bản đồ trước.`);
+      return;
+    }
+    const free = matches.filter((point) => !point.isLinked && !point.weldId);
+    if (free.length === 0) {
+      const linked = matches.find((point) => point.weldCode);
+      showToast(`Điểm ${payload.lispCode} đã gắn mối hàn${linked?.weldCode ? ` ${linked.weldCode}` : ""}.`);
+      setQrOpen(false);
+      return;
+    }
+    if (free.length > 1) {
+      showToast(`Có ${free.length} điểm trùng mã ${payload.lispCode} ở các dự án. Chọn điểm thủ công trong form Thêm nhật ký.`);
+      setQrOpen(false);
+      return;
+    }
+    const point = free[0];
+    const base = applyJournalSuggestion(
+      emptyJournalForm(projectOptions, welderOptions, machineOptions),
+      readRememberedJournalEntry(),
+      projectOptions,
+      welderOptions,
+      machineOptions,
+    );
+    const projectId = point.projectId && projectOptions.some((project) => project.id === point.projectId) ? point.projectId : base.du_an_id;
+    setEditingRow(null);
+    setEditingForm({
+      ...base,
+      du_an_id: projectId,
+      toa_do_id: point.id,
+      ly_trinh: point.chainage || base.ly_trinh,
+      kinh_do: String(point.longitude),
+      vi_do: String(point.latitude),
+      ma_hien_truong: payload.siteCode || base.ma_hien_truong,
+      ten_moi_han_theo_may: payload.machineCode || base.ten_moi_han_theo_may,
+    });
+    setQrOpen(false);
+    setFormOpen(true);
+    showToast(`Đã quét ${payload.lispCode}. Kiểm tra thợ hàn, máy, kết quả rồi bấm Lưu.`);
+  }
 
   function showToast(message: string) {
     setToast(message);
@@ -3020,6 +3073,15 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             </button>
             <button
               type="button"
+              onClick={() => setQrOpen(true)}
+              disabled={saving || bulkFillSaving || importing}
+              title="Quét mã QR trên ray (mã Lisp HT/HP/TT/TP) để tạo nhật ký và tự điền thông số"
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-xs font-semibold text-emerald-900 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+            >
+              Quét QR
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setEditingRow(null);
                 setEditingForm(null);
@@ -3539,6 +3601,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         onSubmit={editingRow ? handleEdit : handleCreate}
         onBulkSubmit={handleBulkFill}
       />
+
+      <QrScanDialog open={qrOpen} onClose={() => setQrOpen(false)} onResult={handleQrResult} />
 
       <BulkAutolispWeldDialog
         open={autolispBulkOpen}
