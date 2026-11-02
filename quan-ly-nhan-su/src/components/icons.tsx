@@ -108,6 +108,7 @@ export {
   SignOut,
   SignIn,
   Envelope,
+  Phone,
   Printer,
   Link,
   DotOutline,

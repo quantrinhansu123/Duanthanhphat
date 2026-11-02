@@ -27,6 +27,18 @@ const css = `@media print {
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
+/** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
+const FREE_TEXT_FIELDS: [string, string][] = [
+  ["tai_lieu_can_cu", "a) Các tài liệu căn cứ nghiệm thu"],
+  ["danh_gia_chat_luong", "b) Đánh giá chất lượng công trình so với thiết kế được phê duyệt"],
+  ["dieu_chinh", "c) Những điều chỉnh, thay đổi bổ sung trong quá trình thi công"],
+  ["so_voi_thiet_ke", "d) Chất lượng hạng mục — so với thiết kế, chỉ dẫn kỹ thuật"],
+  ["so_voi_hop_dong", "d) Chất lượng hạng mục — so với hợp đồng"],
+  ["ket_qua_thi_nghiem", "e) Kết quả thí nghiệm, kiểm tra, kiểm định, chạy thử"],
+  ["tuan_thu_phccc", "f) Tuân thủ quy định phòng cháy chữa cháy, bảo vệ môi trường"],
+  ["y_kien_khac", "g) Các ý kiến khác (nếu có)"],
+];
+
 const flagOn = (v: unknown) => v === true || v === "1" || v === "true";
 
 export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
@@ -38,7 +50,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const { kind } = view;
   const [record, setRecord] = useState(view.record);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ dia_diem: "", thanh_phan: "", ly_do: "" });
+  const [form, setForm] = useState<Record<string, string>>({ dia_diem: "", thanh_phan: "", ly_do: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const hoSo = record?.ho_so.find((h) => h.loai === LOAI[kind]);
@@ -57,7 +69,8 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     if (!hoSo || !record) return;
     setBusy(true); setError("");
     try {
-      await reviseRecord(hoSo.id, { dia_diem: form.dia_diem, thanh_phan: form.thanh_phan }, form.ly_do);
+      const { ly_do, ...thongTin } = form;
+      await reviseRecord(hoSo.id, thongTin, ly_do.trim() || "Cập nhật nội dung nhập tay");
       setRecord(await loadRecordSet(String(record.dot.id)));
       setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được bản sửa đổi."); } finally { setBusy(false); }
@@ -73,7 +86,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           </button>
         ) : null}
         {hoSo && (
-          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ly_do: "" }); setEditing((v) => !v); }}
+          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
             className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
         <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
@@ -81,12 +94,17 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       </div>
       {editing && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
-          <p className="text-xs text-slate-600">Chỉ sửa địa điểm và thành phần tham dự. Số đo và danh sách mối đã chốt không thay đổi; bản sửa đổi được lưu kèm lý do và người sửa.</p>
+          <p className="text-xs text-slate-600">Sửa địa điểm, thành phần tham dự và các mục nhập tay (BB hoàn thành). Số đo và danh sách mối đã chốt không thay đổi; bản sửa đổi được lưu kèm lý do và người sửa.</p>
           <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Địa điểm" value={form.dia_diem} onChange={(e) => setForm({ ...form, dia_diem: e.target.value })} />
           <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Thành phần tham dự" value={form.thanh_phan} onChange={(e) => setForm({ ...form, thanh_phan: e.target.value })} />
-          <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Lý do sửa đổi (bắt buộc)" value={form.ly_do} onChange={(e) => setForm({ ...form, ly_do: e.target.value })} />
+          {kind === "hoan-thanh" && FREE_TEXT_FIELDS.map(([key, label]) => (
+            <label key={key} className="block text-xs font-semibold text-slate-700">{label}
+              <textarea rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal" value={form[key] ?? ""} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+            </label>
+          ))}
+          <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Lý do sửa đổi (không bắt buộc)" value={form.ly_do} onChange={(e) => setForm({ ...form, ly_do: e.target.value })} />
           {error && <p role="alert" className="text-red-600">{error}</p>}
-          <button type="button" disabled={busy || !form.ly_do.trim()} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
+          <button type="button" disabled={busy} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
         </div>
       )}
       {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} /> : (

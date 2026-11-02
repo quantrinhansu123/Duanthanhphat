@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  displayRailCode,
   formatChainage,
   getPlacementSpan,
   isLongRailReleased,
@@ -13,9 +14,10 @@ import {
   trackExtent,
   TRACK_PIXELS_PER_METRE,
   visibleLongRailSpan,
+  type LongRail,
   type TrackLayout,
 } from "@lwr/lib/track-editor";
-import { calculateStressRelease, ceilAbs, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
+import { calculateStressRelease, ceilAbs, DEFAULT_STRESS_INPUT, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 import { RailGrid } from "./RailGrid";
@@ -142,23 +144,62 @@ export function TrackPrint({
 
   const lwrRows = useMemo(() => {
     if (!sliced) return [];
-    return sliced.longRails.flatMap((rail) => {
+    const fromLongRails = sliced.longRails.flatMap((rail) => {
       const span = getPlacementSpan(sliced.rows, rail) ?? visibleLongRailSpan(sliced.rows, rail);
       if (!span) return [];
       const row = sliced.rows.find((item) => railRowKey(item) === rail.rowKey);
-      // Mối hàn nhật ký nằm trong đoạn LWR (cùng dải ray, trong khoảng lý trình).
-      const welds = joints
-        .filter((joint) => joint.rowKey === rail.rowKey && joint.metres >= span.startMetres && joint.metres <= span.endMetres)
-        .flatMap((joint) => joint.welds);
       return [{
-        rail,
-        span,
+        code: displayRailCode(rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code),
         railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
-        welds,
+        railType: rail.params.railType || "—",
+        span,
         summary: lwrPrintSummary(rail.params),
+        neutralTemp: formatStressNumber(rail.params.neutralTemp),
+        completed: isLongRailReleased(sliced.rows, rail) ? "Có" : "Chưa",
       }];
     });
-  }, [sliced, joints]);
+    if (fromLongRails.length) return fromLongRails;
+
+    // Dự án chỉ tô thanh ngắn (chưa tạo đoạn LWR): gom từng thanh đã rải thành dòng tổng hợp.
+    return sliced.rows.flatMap((row) => row.cells.flatMap((cell) => {
+      if (!cell.placed) return [];
+      const startMetres = parseChainage(cell.from);
+      const endMetres = parseChainage(cell.to);
+      if (startMetres === null || endMetres === null || endMetres <= startMetres) return [];
+      const leftTemp = Number.isFinite(cell.leftTemp) ? Number(cell.leftTemp) : cell.temp;
+      const rightTemp = Number.isFinite(cell.rightTemp) ? Number(cell.rightTemp) : cell.temp;
+      const params: StressInput = {
+        ...DEFAULT_STRESS_INPUT,
+        leftLength: endMetres - startMetres,
+        rightLength: 0,
+        leftTemp,
+        rightTemp,
+        startChainage: cell.from,
+        endChainage: cell.to,
+      };
+      const stub: LongRail = {
+        id: cell.id,
+        code: cell.id,
+        label: cell.id,
+        rowKey: railRowKey(row),
+        startCellId: cell.id,
+        endCellId: cell.id,
+        startMetres,
+        endMetres,
+        params,
+        updatedAt: "",
+      };
+      return [{
+        code: displayRailCode(cell.id),
+        railLabel: railDisplayLabel(row.line, row.rail),
+        railType: params.railType || "—",
+        span: { startMetres, endMetres },
+        summary: lwrPrintSummary(params),
+        neutralTemp: formatStressNumber(params.neutralTemp),
+        completed: cell.released || isLongRailReleased(sliced.rows, stub) ? "Có" : "Chưa",
+      }];
+    }));
+  }, [sliced]);
 
   function applyPresetKm(km: number) {
     const start = parseChainage(fromDraft) ?? extent.startMetres;
@@ -198,11 +239,15 @@ export function TrackPrint({
       #lwr-track-print .toolbar { position:sticky; top:0; z-index:1; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px; background:white; border-bottom:1px solid #aaa; }
       #lwr-track-print .toolbar button, #lwr-track-print select, #lwr-track-print .toolbar input { border:1px solid #aaa; border-radius:4px; padding:6px 10px; }
       #lwr-track-print article { width:${config.width}; box-sizing:border-box; margin:16px auto; padding:10mm; background:white; font:10pt 'Times New Roman',serif; }
-      #lwr-track-print h1 { font-size:15pt; text-align:center; font-weight:bold; margin:4px; }
-      #lwr-track-print h2 { font-size:11pt; margin:10px 0 4px; }
+      #lwr-track-print .print-header { text-align:center; margin:0 0 8px; }
+      #lwr-track-print .print-header .company { margin:0; font-size:11pt; font-weight:bold; letter-spacing:0.02em; }
+      #lwr-track-print h1 { font-size:16pt; text-align:center; font-weight:bold; margin:6px 0 4px; text-transform:uppercase; }
+      #lwr-track-print .print-header .meta { margin:2px 0; font-size:10pt; }
+      #lwr-track-print h2.section-title { font-size:12pt; font-weight:bold; margin:12px 0 6px; text-align:left; border-bottom:1px solid #333; padding-bottom:2px; }
       #lwr-track-print p { margin:3px 0; }
-      #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:6px; font-size:9pt; }
-      #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:4px 6px; text-align:left; }
+      #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:6px; font-size:8.5pt; }
+      #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:3px 4px; text-align:center; vertical-align:middle; }
+      #lwr-track-print th { font-size:8pt; background:#f3f4f6; }
       #lwr-track-print tr { break-inside:avoid; }
       @media print {
         @page { size:${config.size}; margin:8mm; }
@@ -276,18 +321,21 @@ export function TrackPrint({
         </article>
       ) : (
         <article>
-          <p>CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
-          <h1>SƠ ĐỒ GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
-          <p>Dự án: {projectName ?? "Chưa gán dự án"}</p>
-          <p>
-            Đoạn in: Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
-            {" · "}
-            {(printRange.end - printRange.start) / 1000} km
-            {" · "}
-            {stamp}
-          </p>
+          <header className="print-header">
+            <p className="company">CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
+            <h1>SƠ ĐỒ GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
+            <p className="meta">Dự án: {projectName ?? "Chưa gán dự án"}</p>
+            <p className="meta">
+              Đoạn in: Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
+              {" · "}
+              {(printRange.end - printRange.start) / 1000} km
+              {" · "}
+              {stamp}
+            </p>
+          </header>
 
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: config.split ? "120mm" : undefined }}>
+          <h2 className="section-title">1. Sơ đồ theo dõi giải toả ứng suất</h2>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: config.split ? "110mm" : undefined }}>
           <div style={{ zoom: fit, fontFamily: "system-ui, sans-serif", ["--fit" as string]: fit }}>
             <RailGrid
               rows={sliced.rows}
@@ -309,7 +357,7 @@ export function TrackPrint({
           </div>
           {config.split ? <div style={{ breakAfter: "page" }} /> : null}
 
-          <h2>2. Tổng hợp thông tin giải toả ứng suất</h2>
+          <h2 className="section-title">2. Tổng hợp thông tin giải toả ứng suất</h2>
           <table>
             <thead>
               <tr>
@@ -321,7 +369,6 @@ export function TrackPrint({
                 <th>Dài (m)</th>
                 <th>Nhiệt độ giải toả (TB) (°C)</th>
                 <th>Nhiệt độ khoá ray thiết kế (35±5) (°C)</th>
-                <th>Số hiệu</th>
                 <th>Phương pháp giải toả</th>
                 <th>Chiều dài kéo thiết kế (mm)</th>
                 <th>Chiều dài kéo thực tế (mm)</th>
@@ -331,27 +378,26 @@ export function TrackPrint({
               </tr>
             </thead>
             <tbody>
-              {lwrRows.map(({ rail, span, railLabel, welds, summary }) => (
-                <tr key={rail.id}>
-                  <td>{rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code}</td>
-                  <td>{railLabel}</td>
-                  <td>{rail.params.railType || "—"}</td>
-                  <td>Km{formatChainage(span.startMetres)}</td>
-                  <td>Km{formatChainage(span.endMetres)}</td>
-                  <td>{span.endMetres - span.startMetres}</td>
-                  <td>{summary.tempLabel}</td>
-                  <td>{formatStressNumber(rail.params.neutralTemp)}</td>
-                  <td>{welds.length > 0 ? welds.map((weld) => weld.code).join(", ") : "—"}</td>
-                  <td>{summary.methodLabel}</td>
-                  <td>{summary.designPullMm}</td>
-                  <td>{summary.actualPullMm}</td>
-                  <td>{summary.startTimeLabel}</td>
-                  <td>{summary.endTimeLabel}</td>
-                  <td>{isLongRailReleased(sliced.rows, rail) ? "Có" : "Chưa"}</td>
+              {lwrRows.map((row) => (
+                <tr key={`${row.code}-${row.span.startMetres}-${row.span.endMetres}`}>
+                  <td>{row.code}</td>
+                  <td>{row.railLabel}</td>
+                  <td>{row.railType}</td>
+                  <td>Km{formatChainage(row.span.startMetres)}</td>
+                  <td>Km{formatChainage(row.span.endMetres)}</td>
+                  <td>{row.span.endMetres - row.span.startMetres}</td>
+                  <td>{row.summary.tempLabel}</td>
+                  <td>{row.neutralTemp}</td>
+                  <td>{row.summary.methodLabel}</td>
+                  <td>{row.summary.designPullMm}</td>
+                  <td>{row.summary.actualPullMm}</td>
+                  <td>{row.summary.startTimeLabel}</td>
+                  <td>{row.summary.endTimeLabel}</td>
+                  <td>{row.completed}</td>
                 </tr>
               ))}
               {lwrRows.length === 0 ? (
-                <tr><td colSpan={14}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={14}>Chưa có đoạn LWR / thanh đã rải trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>

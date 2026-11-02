@@ -413,7 +413,11 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   const lyDo = str(body.ly_do, 1000);
   if (!lyDo) throw new QualityApiError("Cần nêu lý do sửa đổi.");
   const t = object(body.thong_tin);
-  const thong_tin = { dia_diem: str(t.dia_diem, 300), thanh_phan: str(t.thanh_phan, 1000) };
+  const thong_tin: Record<string, string> = { dia_diem: str(t.dia_diem, 300), thanh_phan: str(t.thanh_phan, 1000) };
+  // Nội dung tự nhập của BB nghiệm thu hoàn thành (mục 5 a–g).
+  for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac"]) {
+    if (key in t) thong_tin[key] = str(t[key], 3000);
+  }
   const { data: last, error: lastError } = await db().from("ho_so_nghiem_thu_sua_doi").select("phien_ban")
     .eq("ho_so_id", hoSoId).order("phien_ban", { ascending: false }).limit(1);
   if (lastError) throw lastError;

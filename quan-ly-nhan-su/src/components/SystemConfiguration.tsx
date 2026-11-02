@@ -13,6 +13,7 @@ import {
   type PermissionAction,
   type RolePermissions,
   initialAccounts as seedAccounts,
+  normalizePhone,
   sharedCatalogs as seedCatalogs,
   type CatalogGroup,
   type CatalogItem,
@@ -545,6 +546,7 @@ function AccountModal({
   const rows: [string, string][] = [
     ["Họ tên", account.fullName],
     ["Ngày sinh", account.birthDate ? new Date(account.birthDate + "T00:00:00").toLocaleDateString("vi-VN") : "—"],
+    ["Số điện thoại", account.phone || "— (chưa có, không đăng nhập được)"],
     ["Email", account.email || "—"],
     ["Vai trò", account.role],
     ["Trạng thái", account.status],
@@ -564,6 +566,10 @@ function AccountModal({
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Họ tên
               <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputCls} />
+            </label>
+            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+              Số điện thoại (dùng để đăng nhập)
+              <input type="tel" inputMode="numeric" value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: normalizePhone(e.target.value) })} className={inputCls} />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Email
@@ -685,7 +691,7 @@ function AccountsPanel({
     const nextAccounts = accounts.map((a) => (a.id === selectedId ? account : a));
     setAccounts(nextAccounts);
     setSelectedId(null);
-    setCredentials({ email: account.email, password });
+    setCredentials({ email: account.phone || account.email, password });
     if (onPersist) void onPersist(nextAccounts);
   }
 
@@ -719,6 +725,7 @@ function AccountsPanel({
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Họ tên</th>
+                <th className="px-3.5 py-3">Số điện thoại</th>
                 <th className="px-3.5 py-3">Email</th>
                 <th className="px-3.5 py-3">Vai trò</th>
                 <th className="px-3.5 py-3">Trạng thái</th>
@@ -735,6 +742,7 @@ function AccountsPanel({
                   className="cursor-pointer hover:bg-slate-50/80 transition-colors duration-150"
                 >
                   <td className="px-4 py-3 font-semibold text-slate-900">{a.fullName}</td>
+                  <td className="px-3.5 py-3 font-mono text-slate-700">{a.phone || "—"}</td>
                   <td className="px-3.5 py-3 text-slate-700">{a.email || "—"}</td>
                   <td className="px-3.5 py-3">
                     <span

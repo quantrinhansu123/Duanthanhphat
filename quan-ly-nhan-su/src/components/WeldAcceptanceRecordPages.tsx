@@ -408,7 +408,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
-          <p>Lý trình: Từ : Km {kmText(t.kmFrom || chainage[0])} đến Km {kmText(t.kmTo || chainage.at(-1))}.</p>
+          <p>Lý trình: Từ : Km {kmFrom} đến Km {kmTo}.</p>
           <p>Tên mối hàn: {weldNames}</p>
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
@@ -425,7 +425,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           ))}
 
           <h3>5. Kết luận:</h3>
-          <p className="conclude-line">{BOX} Chấp thuận nghiệm thu, đồng ý cho triển khai các công việc xây dựng tiếp theo.</p>
+          <p className="conclude-line">{mark(true)} Chấp thuận nghiệm thu, đồng ý cho triển khai các công việc xây dựng tiếp theo.</p>
           <p className="conclude-line">{BOX} Không đồng ý nghiệm thu.</p>
           <div className="dots" />
           <div className="dots" />
@@ -462,6 +462,13 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       { no: "4.4", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng nhà thầu chính" },
       { no: "4.5", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng nhà thầu phụ" },
     ];
+    // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
+    const field = (key: string, lines: number) => {
+      const text = str((t as Record<string, unknown>)[key]).trim();
+      return text
+        ? <p style={{ whiteSpace: "pre-wrap", margin: "2px 0 4px" }}>{text}</p>
+        : <>{Array.from({ length: lines }, (_, i) => <div className="dots" key={i} />)}</>;
+    };
     const personBlock = () => (
       <>
         <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
@@ -496,7 +503,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
-          <p>Lý trình : Từ: Km {kmText(t.kmFrom || chainage[0])} đến Km {kmText(t.kmTo || chainage.at(-1))}</p>
+          <p>Lý trình : Từ: Km {kmFrom} đến Km {kmTo}</p>
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
           {parties.map((pt) => (
@@ -508,23 +515,23 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
           <h3>5. Đánh giá công việc đã thực hiện:</h3>
           <p><b>a) Các tài liệu căn cứ nghiệm thu:</b></p>
-          <div className="dots" /><div className="dots" />
+          {field("tai_lieu_can_cu", 2)}
           <p><b>b) Đánh giá về chất lượng về chất lượng công trình xây dựng so với thiết kế được phê duyệt:</b></p>
-          <div className="dots" /><div className="dots" />
+          {field("danh_gia_chat_luong", 2)}
         </article>
 
         <article key={`${doc.kind}-2`} className="acceptance-page work-page">
           <p><b>c) Những điều chỉnh và thay đổi bổ sung trong quá trình thi công so với thiết kế được phê duyệt ( có phụ lục đính kèm):</b></p>
-          <div className="dots" /><div className="dots" />
+          {field("dieu_chinh", 2)}
           <p><b>d) Đánh giá chất lượng hạng mục công trình:</b></p>
-          <p>- So với thiết kế, chỉ dẫn kỹ thuật: {blank}</p>
-          <p>- So với hợp đồng: {blank}</p>
+          <p>- So với thiết kế, chỉ dẫn kỹ thuật: {show(t.so_voi_thiet_ke)}</p>
+          <p>- So với hợp đồng: {show(t.so_voi_hop_dong)}</p>
           <p><b>e) Kết quả thí nghiệm, kiểm tra, kiểm định, thử nghiệm, chạy thử theo các yêu cầu kỹ thuật theo quy định của thiết kế xây dựng:</b></p>
-          <div className="dots" /><div className="dots" />
+          {field("ket_qua_thi_nghiem", 2)}
           <p><b>f) Tuân thủ các quy định của pháp luật về phòng cháy và chữa cháy, bảo vệ môi trường trong thi công xây dựng công trình và quy định của pháp luật chuyên ngành khác có liên quan</b></p>
-          <div className="dots" />
+          {field("tuan_thu_phccc", 1)}
           <p><b>g) Các ý kiến khác nếu có:</b></p>
-          <div className="dots" /><div className="dots" />
+          {field("y_kien_khac", 2)}
 
           <h3>6. Kết luận :</h3>
           <table className="conclude-table">
@@ -533,7 +540,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                 <td>
                   - Chấp thuận nghiệm thu hoàn thành hạng mục công trình hoặc công trình xây dựng để chuyển giai đoạn thi công
                 </td>
-                <td style={{ width: 40, textAlign: "center" }}>{BOX}</td>
+                <td style={{ width: 40, textAlign: "center" }}>{mark(true)}</td>
               </tr>
               <tr>
                 <td>- Không đồng ý nghiệm thu</td>

@@ -122,5 +122,5 @@ export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: 
 export const loadAcceptedOnDate = (date: string, du_an_id?: string | null) =>
   qualityRequest<{ count: number }>({ action: "accepted-on-date", date, du_an_id: du_an_id || undefined });
 
-export const reviseRecord = (ho_so_id: string, thong_tin: { dia_diem: string; thanh_phan: string }, ly_do: string) =>
+export const reviseRecord = (ho_so_id: string, thong_tin: Record<string, string>, ly_do: string) =>
   qualityRequest<{ ok: true }>({ action: "record-revise", ho_so_id, thong_tin, ly_do });

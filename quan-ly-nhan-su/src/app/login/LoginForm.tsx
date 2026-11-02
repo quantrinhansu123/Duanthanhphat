@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Envelope, Eye, EyeSlash, LockKey, SignIn, CircleNotch, WarningCircle } from "@/components/icons";
+import { Phone, Eye, EyeSlash, LockKey, SignIn, CircleNotch, WarningCircle } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
 
 const field =
   "h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-hidden transition-colors placeholder:text-slate-400 focus:border-[#1e3a7a] focus:ring-4 focus:ring-[#1e3a7a]/15";
-const REMEMBER_KEY = "tp-remember-email";
+const REMEMBER_KEY = "tp-remember-phone";
 const icon = "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400";
 
 /** Xóa phiên Supabase hỏng (refresh_token 400) trước khi đăng nhập lại. */
@@ -33,19 +33,19 @@ function clearStaleAuthSession() {
 }
 
 export default function LoginForm() {
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(false);
 
-  // Điền sẵn email đã ghi nhớ; mật khẩu do trình duyệt tự điền (không lưu mật khẩu trong app).
+  // Điền sẵn số điện thoại đã ghi nhớ; mật khẩu do trình duyệt tự điền (không lưu mật khẩu trong app).
   useEffect(() => {
     clearStaleAuthSession();
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
-      if (saved) { setEmail(saved); setRemember(true); }
+      if (saved) { setPhone(saved); setRemember(true); }
     } catch { /* localStorage bị chặn */ }
   }, []);
 
@@ -61,18 +61,18 @@ export default function LoginForm() {
       clearStaleAuthSession();
       const supabase = createClient();
       try { await supabase.auth.signOut({ scope: "local" }); } catch { /* bỏ phiên local nếu còn */ }
-      const { error: failure } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (failure) {
-        const detail = failure.message?.trim();
-        setError(
-          /invalid login|invalid credentials|email|password/i.test(detail || "")
-            ? "Email hoặc mật khẩu không đúng."
-            : `Không đăng nhập được: ${detail || failure.name || "lỗi không rõ"}`,
-        );
+      const res = await fetch("/api/auth/phone-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), password }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(payload.error || "Không đăng nhập được.");
         return;
       }
       try {
-        if (remember) localStorage.setItem(REMEMBER_KEY, email.trim());
+        if (remember) localStorage.setItem(REMEMBER_KEY, phone.trim());
         else localStorage.removeItem(REMEMBER_KEY);
       } catch { /* không ghi nhớ được thì vẫn đăng nhập bình thường */ }
       // Chỉ quay về đường dẫn nội bộ để tránh chuyển hướng sang website khác.
@@ -93,10 +93,10 @@ export default function LoginForm() {
   return (
     <form onSubmit={submit} className="mt-8 space-y-5">
       <div>
-        <label htmlFor="login-email" className="text-sm font-medium text-slate-800">Email đăng nhập</label>
+        <label htmlFor="login-phone" className="text-sm font-medium text-slate-800">Số điện thoại đăng nhập</label>
         <div className="relative mt-2">
-          <Envelope size={20} className={icon} aria-hidden />
-          <input id="login-email" type="email" required autoComplete="username" placeholder="Nhập email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} />
+          <Phone size={20} className={icon} aria-hidden />
+          <input id="login-phone" type="text" inputMode="tel" required autoComplete="username" placeholder="Nhập số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} className={field} />
         </div>
       </div>
       <div>
@@ -119,7 +119,7 @@ export default function LoginForm() {
           <WarningCircle size={18} weight="fill" aria-hidden /> {error}
         </p>
       )}
-      <button type="submit" disabled={busy || !email || !password}
+      <button type="submit" disabled={busy || !phone || !password}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1e3a7a] text-sm font-bold text-white shadow-md shadow-[#1e3a7a]/25 transition-colors hover:bg-[#162d62] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a7a] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer">
         {busy ? <CircleNotch size={20} className="animate-spin" aria-hidden /> : <SignIn size={20} weight="bold" aria-hidden />}
         {busy ? "Đang đăng nhập…" : "Đăng nhập"}

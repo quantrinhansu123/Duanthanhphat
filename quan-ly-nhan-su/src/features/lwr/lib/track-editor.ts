@@ -143,6 +143,14 @@ export function longRailsOverlap(
 /** Khóa dải ray của sơ đồ → mã Autolisp: Thượng trái TT · Thượng phải TP · Hạ trái HT · Hạ phải HP. */
 const LONG_RAIL_CODE_PREFIX: Record<string, string> = { UT: "TT", UP: "TP", DT: "HT", DP: "HP" };
 
+/**
+ * Hiển thị mã thanh/LWR theo quy ước Autolisp (nội bộ vẫn UT/UP/DT/DP để khớp dữ liệu cũ).
+ * VD UT-40 → TT-40, UP0001 → TP0001, DT-01 → HT-01, DP-01 → HP-01.
+ */
+export function displayRailCode(code: string): string {
+  return code.replace(/^(UT|UP|DT|DP)(?=[-_]|\d|$)/i, (prefix) => LONG_RAIL_CODE_PREFIX[prefix.toUpperCase()] ?? prefix);
+}
+
 /** Nhãn dải ray cho báo cáo/sơ đồ: mã Autolisp + tên, VD "TT · Thượng trái". */
 export function railDisplayLabel(line: string, rail: string): string {
   const code = LONG_RAIL_CODE_PREFIX[railPrefixFromLabels(line, rail)];

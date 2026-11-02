@@ -6,6 +6,7 @@ import {
   type RolePermissions,
   defaultSystemSettings,
   initialAccounts,
+  normalizePhone,
   sharedCatalogs,
   type CatalogItem,
   type InitialAccount,
@@ -93,6 +94,7 @@ function validate(body: unknown): StoredSystemConfiguration {
       id: cleanText(account.id, 120) || `account-${Date.now()}-${index}`,
       fullName: cleanText(account.fullName, 200),
       email: cleanText(account.email, 300),
+      phone: normalizePhone(account.phone).slice(0, 11),
       birthDate: cleanText(account.birthDate, 10),
       role: (permissionRoles as readonly string[]).includes(account.role) ? account.role : "Nhân viên",
       status: account.status === "Khóa" ? "Khóa" : "Hoạt động",
@@ -100,6 +102,9 @@ function validate(body: unknown): StoredSystemConfiguration {
       note: cleanText(account.note, 1000),
     } satisfies InitialAccount;
   });
+
+  const dupPhone = accounts.find((a, i) => a.phone && accounts.findIndex((o) => o.phone === a.phone) !== i);
+  if (dupPhone) throw new Error(`Số điện thoại ${dupPhone.phone} đang bị trùng giữa các tài khoản.`);
 
   const rawPerms = (input.permissions ?? {}) as Record<string, Record<string, Partial<Record<string, unknown>>> | undefined>;
   const permissions: RolePermissions = {};

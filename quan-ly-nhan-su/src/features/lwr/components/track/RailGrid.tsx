@@ -6,7 +6,7 @@ import type { StructureSymbol } from "@lwr/types/structure";
 import { latestMachinePositions, type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, displayRailCode, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -37,13 +37,16 @@ function releaseTone(released: boolean, tempC: number) {
 
 function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number) {
   const done = Boolean(rail.completedAt) || Boolean(cellReleased);
-  const tempC = cellTemp ?? rail.params.neutralTemp ?? rail.params.airTemp ?? STRESS_PASS_TEMP_C;
+  // Nhiệt độ giải toả = trung bình ray trái/phải (neutralTemp là T khóa thiết kế 35, không dùng để tô màu).
+  const sides = [rail.params.leftTemp, rail.params.rightTemp];
+  const sideAvg = sides.every(Number.isFinite) ? (sides[0] + sides[1]) / 2 : undefined;
+  const tempC = cellTemp ?? sideAvg ?? rail.params.airTemp ?? STRESS_PASS_TEMP_C;
   return releaseTone(done, tempC);
 }
 
-/** Mã trên thanh ngắn: LWR01-500m-35oC (500 = chiều dài đoạn). */
+/** Mã trên thanh ngắn: TT-40-500m-35oC (500 = chiều dài đoạn; UT/UP/DT/DP → TT/TP/HT/HP). */
 function shortRailChipLabel(code: string, lengthMetres: number, tempC: number) {
-  return `${code}-${lengthMetres}m-${tempC}oC`;
+  return `${displayRailCode(code)}-${lengthMetres}m-${tempC}oC`;
 }
 
 /** Nền phân biệt 2 tuyến trên sơ đồ. */
@@ -264,7 +267,8 @@ export const RailGrid = memo(function RailGrid({
   const width = lineWidth + ADD_GUTTER;
   const visibleMachines = showMachineImages ? filteredMachineMarkers : [];
 
-  return <div className="border-t border-slate-200 bg-white">
+  return <div className={`bg-white ${embedded ? "" : "border-t border-slate-200"}`}>
+    {!embedded && (
     <div className="space-y-1 border-b px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold">
@@ -341,6 +345,7 @@ export const RailGrid = memo(function RailGrid({
         </div>
       ) : null}
     </div>
+    )}
     <div className={embedded ? "" : "overflow-x-auto"}>
       <div className={`px-4 py-3 space-y-3 ${showMachineImages ? "overflow-visible" : ""}`} style={{ width: 150 + width }}>
         {groupRowsByLine(rows).map((group) => {

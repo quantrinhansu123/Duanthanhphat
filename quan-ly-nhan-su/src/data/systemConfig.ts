@@ -21,6 +21,8 @@ export type InitialAccount = {
   id: string;
   fullName: string;
   email: string;
+  /** Số điện thoại dùng để đăng nhập (chỉ chữ số, dạng 0xxxxxxxxx). */
+  phone?: string;
   birthDate?: string;
   /** Một trong permissionRoles (hoặc "Nhân viên" của dữ liệu cũ). */
   role: string;
@@ -28,6 +30,15 @@ export type InitialAccount = {
   createdAt: string;
   note: string;
 };
+
+/** "+84 912 345 678" / "84912345678" / "0912.345.678" → "0912345678". Rỗng nếu không có chữ số. */
+export function normalizePhone(value: unknown): string {
+  let digits = typeof value === "string" ? value.replace(/\D/g, "") : "";
+  if (digits.startsWith("84") && digits.length >= 11) digits = "0" + digits.slice(2);
+  return digits;
+}
+/** SĐT hợp lệ: 9–11 chữ số, bắt đầu bằng 0. */
+export const isValidPhone = (value: unknown) => /^0\d{8,10}$/.test(normalizePhone(value));
 
 export const permissionActions = ["view", "edit", "delete"] as const;
 export type PermissionAction = (typeof permissionActions)[number];

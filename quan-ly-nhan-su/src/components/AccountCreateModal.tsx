@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Eye, EyeSlash } from "@/components/icons";
-import { permissionRoles, type InitialAccount } from "@/data/systemConfig";
+import { isValidPhone, normalizePhone, permissionRoles, type InitialAccount } from "@/data/systemConfig";
 
 export const roleOptions = (current: string): string[] =>
   (permissionRoles as readonly string[]).includes(current) ? [...permissionRoles] : [...permissionRoles, current];
@@ -83,7 +83,7 @@ export function CredentialsModal({ email, password, onClose }: { email: string; 
         <h3 className="text-base sm:text-lg font-bold text-slate-900">Tài khoản nhân sự vừa tạo</h3>
         <p className="mt-3 text-xs sm:text-sm text-slate-600">Lưu thông tin để bàn giao cho nhân viên. Mật khẩu chỉ hiển thị ở lần cấp này.</p>
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className={labelCls}>Tài khoản<input readOnly value={email} className={`${inputCls} font-mono`} /></label>
+          <label className={labelCls}>Tài khoản đăng nhập<input readOnly value={email} className={`${inputCls} font-mono`} /></label>
           <label className={labelCls}>Mật khẩu đã sinh<input readOnly value={password} className={`${inputCls} font-mono`} /></label>
         </div>
         <div className="mt-6 flex justify-end gap-2.5">
@@ -107,6 +107,7 @@ export default function AccountCreateModal({
     id: "",
     fullName: "",
     email: "",
+    phone: "",
     birthDate: "",
     role: "Bộ phận khác",
     status: "Hoạt động",
@@ -121,7 +122,11 @@ export default function AccountCreateModal({
       setError("Nhập họ tên và ngày sinh hợp lệ.");
       return;
     }
-    onCreate({ ...form, id: String(Date.now()) });
+    if (!isValidPhone(form.phone)) {
+      setError("Nhập số điện thoại hợp lệ (9–11 chữ số, bắt đầu bằng 0). Số này dùng để đăng nhập.");
+      return;
+    }
+    onCreate({ ...form, phone: normalizePhone(form.phone), id: String(Date.now()) });
   }
 
   return (
@@ -133,6 +138,10 @@ export default function AccountCreateModal({
           <label className={labelCls}>
             Họ tên
             <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputCls} />
+          </label>
+          <label className={labelCls}>
+            Số điện thoại (dùng để đăng nhập)
+            <input type="tel" inputMode="numeric" autoComplete="off" placeholder="0912345678" value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} />
           </label>
           <label className={labelCls}>
             Ngày sinh
