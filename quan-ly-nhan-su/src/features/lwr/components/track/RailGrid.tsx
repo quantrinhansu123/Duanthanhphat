@@ -268,7 +268,7 @@ export const RailGrid = memo(function RailGrid({
     <div className="space-y-1 border-b px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold">
-          Sơ đồ 4 dải ray · đường tim giữa 2 ray · lý trình thi công
+          1. Sơ đồ theo dõi giải toả ứng suất
         </h2>
         <button
           type="button"
@@ -358,7 +358,7 @@ export const RailGrid = memo(function RailGrid({
             <p className="px-1 text-[10px] font-semibold text-slate-600">
               {group.line}
               {groupHasSpan
-                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${(groupExtent.endMetres - groupExtent.startMetres) / 1000} km (độc lập)`
+                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${(groupExtent.endMetres - groupExtent.startMetres) / 1000} km`
                 : " · chưa rải"}
             </p>
             {group.rows.map((row, indexInGroup) => {

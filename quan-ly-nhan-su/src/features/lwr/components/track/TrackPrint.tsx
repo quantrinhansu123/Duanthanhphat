@@ -93,10 +93,10 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
   }
 }
 
+/** A4 ngang chia 2 trang (sơ đồ / tổng hợp) hoặc A3 đứng gọn một trang. */
 const FORMATS = {
-  A4: { label: "A4 ngang", size: "297mm 210mm", width: "297mm", px: 1000 },
-  A3: { label: "A3 ngang", size: "420mm 297mm", width: "420mm", px: 1500 },
-  LONG: { label: "A3 kéo dài (841 × 297 mm)", size: "841mm 297mm", width: "841mm", px: 3100 },
+  A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1000, split: true },
+  A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1000, split: false },
 };
 
 const RANGE_PRESETS_KM = [1, 2, 3, 5] as const;
@@ -277,7 +277,7 @@ export function TrackPrint({
       ) : (
         <article>
           <p>CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
-          <h1>SƠ ĐỒ TUYẾN VÀ GIẢI TOẢ ỨNG SUẤT LWR</h1>
+          <h1>SƠ ĐỒ GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
           <p>Dự án: {projectName ?? "Chưa gán dự án"}</p>
           <p>
             Đoạn in: Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
@@ -286,11 +286,8 @@ export function TrackPrint({
             {" · "}
             {stamp}
           </p>
-          <p style={{ fontSize: "8pt", color: "#555" }}>
-            Tuyến đầy đủ: Km{formatChainage(extent.startMetres)} – Km{formatChainage(extent.endMetres)}.
-            Chọn đoạn ngắn hơn nếu sơ đồ không vừa một trang.
-          </p>
 
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: config.split ? "120mm" : undefined }}>
           <div style={{ zoom: fit, fontFamily: "system-ui, sans-serif", ["--fit" as string]: fit }}>
             <RailGrid
               rows={sliced.rows}
@@ -309,25 +306,22 @@ export function TrackPrint({
               }}
             />
           </div>
+          </div>
+          {config.split ? <div style={{ breakAfter: "page" }} /> : null}
 
-          <h2>Tổng hợp thông tin LWR</h2>
-          <p style={{ fontSize: "8pt", color: "#555" }}>
-            T&lt;ngưỡng → Có lực căng: kéo thiết kế = tính toán, kéo thực tế = thiết kế + chuyển vị mốc.
-            {" "}
-            T≥ngưỡng → Tự nhiên: kéo thiết kế = kéo thực tế = 0.
-          </p>
+          <h2>2. Tổng hợp thông tin giải toả ứng suất</h2>
           <table>
             <thead>
               <tr>
                 <th>Mã LWR</th>
                 <th>Tuyến · Ray</th>
                 <th>Loại ray</th>
-                <th>Lý trình</th>
+                <th>Lý trình đầu</th>
+                <th>Lý trình cuối</th>
                 <th>Dài (m)</th>
-                <th>T ray trái / phải (°C)</th>
-                <th>T khóa ray (°C)</th>
-                <th>Số mối hàn giải toả</th>
-                <th>T giải toả (°C)</th>
+                <th>Nhiệt độ giải toả (TB) (°C)</th>
+                <th>Nhiệt độ khoá ray thiết kế (35±5) (°C)</th>
+                <th>Số hiệu</th>
                 <th>Phương pháp giải toả</th>
                 <th>Chiều dài kéo thiết kế (mm)</th>
                 <th>Chiều dài kéo thực tế (mm)</th>
@@ -342,12 +336,12 @@ export function TrackPrint({
                   <td>{rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code}</td>
                   <td>{railLabel}</td>
                   <td>{rail.params.railType || "—"}</td>
-                  <td>Km{formatChainage(span.startMetres)} – {formatChainage(span.endMetres)}</td>
+                  <td>Km{formatChainage(span.startMetres)}</td>
+                  <td>Km{formatChainage(span.endMetres)}</td>
                   <td>{span.endMetres - span.startMetres}</td>
-                  <td>{formatStressNumber(rail.params.leftTemp)} / {formatStressNumber(rail.params.rightTemp)}</td>
-                  <td>{formatStressNumber(rail.params.neutralTemp)}</td>
-                  <td>{welds.length}{welds.length > 0 ? ` (${welds.map((weld) => weld.code).join(", ")})` : ""}</td>
                   <td>{summary.tempLabel}</td>
+                  <td>{formatStressNumber(rail.params.neutralTemp)}</td>
+                  <td>{welds.length > 0 ? welds.map((weld) => weld.code).join(", ") : "—"}</td>
                   <td>{summary.methodLabel}</td>
                   <td>{summary.designPullMm}</td>
                   <td>{summary.actualPullMm}</td>
@@ -357,13 +351,13 @@ export function TrackPrint({
                 </tr>
               ))}
               {lwrRows.length === 0 ? (
-                <tr><td colSpan={15}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={14}>Chưa có đoạn LWR trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>
 
           {/* Legend xuống dưới các bảng tổng hợp — tránh chen giữa sơ đồ và bảng. */}
-          <StructureLegend layout={sliced} symbols={symbols} />
+          <StructureLegend layout={sliced} symbols={symbols} compact />
 
           <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}>
             <b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b>

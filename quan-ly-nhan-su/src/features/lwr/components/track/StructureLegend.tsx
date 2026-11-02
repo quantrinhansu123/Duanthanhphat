@@ -14,14 +14,51 @@ function SymbolThumb({ symbol }: { symbol: StructureSymbol | undefined }) {
 }
 
 /** Chú thích ký hiệu công trình — tách khỏi sơ đồ cho đỡ rối. */
+const LEGEND_ORDER = ["Ga", "Cầu", "Hầm", "Ghi"] as const;
+function legendCategory(name: string) {
+  const v = name.toLocaleLowerCase("vi");
+  if (/\bga\b|nhà ga/.test(v)) return 0;
+  if (/cầu/.test(v)) return 1;
+  if (/hầm/.test(v)) return 2;
+  if (/ghi/.test(v)) return 3;
+  return 4;
+}
+
 export function StructureLegend({
   layout,
   symbols,
+  compact = false,
 }: {
   layout: TrackLayout;
   symbols: StructureSymbol[];
+  /** Dạng in: một hàng ngang cuối trang — Ga · Cầu · Hầm · Ghi, mỗi loại ký hiệu một lần. */
+  compact?: boolean;
 }) {
   if (layout.placements.length === 0) return null;
+
+  if (compact) {
+    const used = new Map<string, StructureSymbol>();
+    for (const placement of layout.placements) {
+      const symbol = symbols.find((item) => item.id === placement.symbolId);
+      if (symbol) used.set(symbol.id, symbol);
+    }
+    const items = [...used.values()].sort(
+      (a, b) => legendCategory(a.name) - legendCategory(b.name) || a.name.localeCompare(b.name, "vi"),
+    );
+    if (items.length === 0) return null;
+    return (
+      <section aria-label="Chú thích ký hiệu công trình" data-testid="structure-legend" style={{ marginTop: "4mm" }}>
+        <b style={{ fontSize: "9pt" }}>Chú thích / Legend: </b>
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "4mm 8mm", alignItems: "center", verticalAlign: "middle" }}>
+          {items.map((symbol) => (
+            <span key={symbol.id} style={{ display: "inline-flex", alignItems: "center", gap: "2mm", fontSize: "9pt" }}>
+              <SymbolThumb symbol={symbol} />{symbol.name}
+            </span>
+          ))}
+        </span>
+      </section>
+    );
+  }
 
   const rows = layout.placements.map((placement) => {
     const symbol = symbols.find((item) => item.id === placement.symbolId);
@@ -40,9 +77,6 @@ export function StructureLegend({
         Chú thích / Legend
         <span className="mt-0.5 block text-xs font-semibold text-slate-600">Ký hiệu công trình</span>
       </h3>
-      <p className="mt-1 text-xs text-slate-500">
-        Trên sơ đồ chỉ hiện biểu tượng trên đường tim. Tên và mã tra cứu tại đây.
-      </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[480px] text-left text-sm">
           <thead>
