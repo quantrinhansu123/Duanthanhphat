@@ -110,6 +110,11 @@ function chainageMetres(v: string) {
   return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : null;
 }
 
+/** Tên máy trên biên bản: thay mô tả "Máy hàn tiếp xúc…" bằng "Máy hàn chảy giáp mép", giữ nguyên mã máy. */
+function machinePrintName(name: string) {
+  return name.replace(/máy hàn tiếp xúc[\p{L}\s]*?(?=\s*[A-Z]{1,4}\d)/iu, "Máy hàn chảy giáp mép ").replace(/\s+/g, " ").trim();
+}
+
 function mark(on: boolean) {
   return on ? "☑" : BOX;
 }
@@ -199,8 +204,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>NGÀY NGHIỆM THU:</b> {day}</td>
                         <td colSpan={2}>
                           <b>TÊN THỢ HÀN:</b> {welders.join(", ") || "………………"} &nbsp;
-                          <b>ID:</b> {welderIds.join(", ") || "…………"} &nbsp;
-                          <b>LÝ TRÌNH:</b> TỪ: {kmFrom} &nbsp; ĐẾN: {kmTo}
+                          <b>ID:</b> {welderIds.join(", ") || "…………"}
                         </td>
                       </tr>
                       <tr>
@@ -208,7 +212,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>TUYẾN:</b><br />{mark(upper)} Tuyến thượng<br />{mark(lower)} Tuyến hạ</td>
                         <td>
                           <b>TÊN MÁY HÀN CHẢY GIÁP MÉP</b><br />
-                          Máy hàn: {machines.join(", ") || "………………"}<br />
+                          Máy hàn: {machines.map(machinePrintName).join(", ") || "………………"}<br />
                           Goòng phẳng: {show(t.goong || t.goong_phang || "KPS25-L8")}
                         </td>
                       </tr>
@@ -231,7 +235,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <th rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th>
                         <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>
                         <th colSpan={2} rowSpan={2}>RAY</th>
-                        <th colSpan={8}>NGHIỆM THU KÍCH THƯỚC HÌNH HỌC<br />(ĐẠT/KHÔNG ĐẠT)</th>
+                        <th colSpan={8}>NGHIỆM THU<br />(ĐẠT/KHÔNG ĐẠT)</th>
                         <th rowSpan={3}>GHI CHÚ</th>
                       </tr>
                       <tr>

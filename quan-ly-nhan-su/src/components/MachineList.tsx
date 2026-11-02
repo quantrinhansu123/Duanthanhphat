@@ -2057,17 +2057,17 @@ export default function MachineList() {
         </button>
       </div>
 
-      {equipmentTab !== "welding" && <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50"><tr>{["Mã thiết bị", "Tên thiết bị", "Model", "Số lượng (bộ)", "Vị trí: Kho / Dự án", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="p-3">{label}</th>)}</tr></thead>
-          <tbody>{filtered.map((m) => <tr key={m.id} className="border-t border-slate-200"><td className="p-3">{m.code}</td><td className="p-3">{m.name}</td><td className="p-3">{m.model}</td><td className="p-3 text-right font-semibold">{equipmentQuantity(m)}</td><td className="max-w-sm p-3 text-xs">{locationLabel(m)}</td><td className="p-3">{m.status}</td><td className="p-3"><button type="button" onClick={() => openEdit(m)} className="mr-3 text-[#0047AB]">Sửa</button><button type="button" onClick={() => void handleDelete(m)} className="text-rose-700">Xóa</button></td></tr>)}
-            {!filtered.length && <tr><td colSpan={7} className="p-5 text-center text-slate-500">{equipmentTab === "materials" ? "Chưa có vật tư." : "Chưa có máy / thiết bị khác."}</td></tr>}
-          </tbody></table>
-      </div>}
-      <div className={`${equipmentTab !== "welding" ? "hidden" : ""} overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs`}>
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+        {!filtered.length ? (
+          <p className="p-8 text-center text-sm text-slate-500">
+            {equipmentTab === "materials" ? "Chưa có vật tư." : equipmentTab === "other" ? "Chưa có máy / thiết bị khác." : "Chưa có máy hàn."}
+          </p>
+        ) : null}
         <ul className="divide-y divide-slate-100">
           {filtered.map((m) => {
             const selected = activeId === m.id;
             const expanded = expandedId === m.id;
+            const coverSrc = m.image || m.weldingUnit?.coverImage || imageForModel(m.model) || defaultMachineImage;
             return (
               <li
                 key={m.id}
@@ -2093,7 +2093,7 @@ export default function MachineList() {
                   )}
 
                   <div className="relative h-[88px] w-[140px] sm:h-[100px] sm:w-[160px] flex-none overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-100 to-slate-200 shadow-xs ring-1 ring-black/5">
-                    <Image src={m.image} alt="" fill className="object-cover" sizes="160px" />
+                    <Image src={coverSrc} alt="" fill className="object-cover" sizes="160px" />
                   </div>
 
                   <div className="min-w-0 flex-1 pt-0.5">
@@ -2109,6 +2109,8 @@ export default function MachineList() {
                       <span>{EQUIPMENT_GROUP_LABELS[equipmentGroup(m)] || getMachineCategory(m)}</span>
                       <span className="font-semibold">Số lượng: {equipmentQuantity(m)} bộ</span>
                       <span className="basis-full text-xs text-slate-600">Vị trí: {locationLabel(m)}</span>
+                      {equipmentTab === "welding" ? (
+                      <>
                       <span className="text-slate-300" aria-hidden>·</span>
                       <span>
                         <span className="font-mono tabular-nums font-semibold text-slate-700">
@@ -2116,6 +2118,8 @@ export default function MachineList() {
                         </span>{" "}
                         mối hàn
                       </span>
+                      </>
+                      ) : null}
                       {Number(m.specs?.oilQuota) > 0 && (
                         <>
                           <span className="text-slate-300" aria-hidden>·</span>
