@@ -104,7 +104,7 @@ const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
-type JournalStage = "all" | "han-xong" | "mai-xong" | "sua-chua" | "ky-bb" | "dat";
+type JournalStage = "all" | "han-xong" | "mai-xong" | "cho-nt" | "sua-chua" | "ky-bb" | "dat";
 /** Giai đoạn theo trình tự chất lượng mới (một cột tình trạng; bỏ cột Kết quả NDT trên UI). */
 const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
