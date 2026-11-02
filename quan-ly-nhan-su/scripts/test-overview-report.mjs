@@ -36,6 +36,34 @@ for (const [actualToDate, plannedToDate, expected] of [[10, 10, "ĐÚNG TIẾN �
 }
 const selectedRows = [{ ngay_thuc_hien: "2026-01-01", nam_thuc_hien: 2026 }, { ngay_thuc_hien: "2026-09-08", nam_thuc_hien: 2026 }, { nam_thuc_hien: 2020 }];
 const getJournalRowDateIso = (row) => row.ngay_thuc_hien || "";
+const statusContext = {
+  hasProgressRange: true, progressFrom: "2026-01-01", progressTo: "2026-11-02",
+  statusScope: [{ id: "pq", name: "PQ" }], showFastCharts: false, fastRollupRows: [],
+  getJournalRowDateIso,
+  selectedRows: [
+    { du_an_id: "pq", loai_moi_han: "Sản xuất", nam_thuc_hien: 2025 },
+    { du_an_id: "old", loai_moi_han: "Sản xuất", ngay_thuc_hien: "2026-10-01" },
+    { du_an_id: "pq", loai_moi_han: "Đào tạo", ngay_thuc_hien: "2026-10-01" },
+    { du_an_id: "pq", loai_moi_han: "Sản xuất", ngay_thuc_hien: "2026-12-01" },
+  ],
+};
+assert.equal(evaluate("actualToDate", statusContext), 0, "PQ has no production due to date; history and training do not count");
+const pqProduction = { du_an_id: "pq", loai_moi_han: "Sản xuất", ngay_thuc_hien: "2026-11-02" };
+assert.equal(evaluate("actualToDate", { ...statusContext, selectedRows: [...statusContext.selectedRows, pqProduction] }), 1);
+assert.equal(evaluate("actualToDate", { ...statusContext, selectedRows: [{ ...pqProduction, du_an_id: null, du_an: "PQ" }] }), 1, "Legacy rows match by project name");
+assert.equal(evaluate("actualToDate", { ...statusContext, hasProgressRange: false }), 0);
+const fastStatusContext = { ...statusContext, showFastCharts: true,
+  fastRollupRows: statusContext.selectedRows.map((row) => ({ ...row, so_moi: 100 })),
+};
+assert.equal(evaluate("actualToDate", fastStatusContext), 0, "Rollup applies the same project, production and date limits");
+assert.equal(evaluate("actualToDate", { ...fastStatusContext,
+  fastRollupRows: [...fastStatusContext.fastRollupRows, { ...pqProduction, so_moi: 2 }, { ...pqProduction, so_luong_thuc_hien: 3 }],
+}), 5, "Both rollup schemas count production quantities");
+assert.equal(evaluate("progressStatus", {
+  selectedProjects: [{}], isUnfilteredOverview: false, behindReasons: [], liveProjects: [], statusScope: [{}],
+  statusPlannedToDate: 46, actualToDate: evaluate("actualToDate", statusContext), isAllDates: true,
+  plannedInPeriod: 0, upcomingProjects: [], upcomingDailyPlan: 0,
+}).label, "CHẬM TIẾN ĐỘ", "Zero current production cannot be ahead of a 46-weld plan");
 const period = evaluate("chartPeriod", { chartViewMode: "monthly", selectedRows, selectedProjects: [project], isAllDates: true,
   getJournalRowDateIso, filterFrom: "", filterTo: "",
   dailySeries: [], dailyTargets: [], dailyValues: [], yearlySeries: [], planRows, canSkipJournal: false, fastRollupRows: [] });

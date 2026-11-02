@@ -974,7 +974,28 @@ export default function OverviewDashboard() {
     (sum, project) => sum + (hasProgressRange ? scheduledWeldsInRange(project, progressFrom, progressTo) : 0),
     0,
   );
-  const actualToDate = progressActual;
+  // Trạng thái so cùng kỳ và dự án với kế hoạch, không cộng sản lượng lịch sử.
+  const actualToDate = useMemo(() => {
+    if (!hasProgressRange) return 0;
+    const projectIds = new Set(statusScope.map((project) => project.id));
+    const projectNames = new Set(statusScope.map((project) => project.name));
+    if (showFastCharts) {
+      return fastRollupRows.reduce((sum, row) =>
+        row.loai_moi_han === "Sản xuất" && projectIds.has(row.du_an_id) &&
+        row.ngay_thuc_hien >= progressFrom && row.ngay_thuc_hien <= progressTo
+          ? sum + (row.so_moi ?? row.so_luong_thuc_hien ?? 0) : sum, 0);
+    }
+    return selectedRows.reduce((sum, row, index) => {
+      if (row.loai_moi_han !== "Sản xuất") return sum;
+      if (row.du_an_id ? !projectIds.has(row.du_an_id) : !projectNames.has(row.du_an)) return sum;
+      const date = getJournalRowDateIso(row, index);
+      const inRange = date
+        ? date >= progressFrom && date <= progressTo
+        : Number(row.nam_thuc_hien) >= Number(progressFrom.slice(0, 4)) &&
+          Number(row.nam_thuc_hien) <= Number(progressTo.slice(0, 4));
+      return inRange ? sum + 1 : sum;
+    }, 0);
+  }, [fastRollupRows, hasProgressRange, progressFrom, progressTo, selectedRows, showFastCharts, statusScope]);
   const behindReasons = [
     ...(upcomingProjects.length > 0 ? ["Chưa triển khai"] : []),
     ...(yearPendingEvaluation > 0 ? ["Chưa đánh giá"] : []),
