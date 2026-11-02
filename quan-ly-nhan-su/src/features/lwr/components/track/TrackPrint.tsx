@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   displayRailCode,
@@ -98,8 +98,8 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
 /** A4 ngang chia 2 trang (sơ đồ / tổng hợp) hoặc A3 đứng gọn một trang.
  *  `px` ≈ bề rộng in hữu ích (A4 ngang trừ lề) — dùng để phóng to/thu nhỏ sơ đồ cho đầy giấy. */
 const FORMATS = {
-  A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1080, split: true },
-  A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1080, split: false },
+  A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1000, split: true },
+  A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1000, split: false },
 };
 
 const RANGE_PRESETS_KM = [1, 2, 3, 5] as const;
@@ -152,11 +152,10 @@ export function TrackPrint({
       return [{
         code: displayRailCode(rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code),
         railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
-        railType: rail.params.railType || "—",
         span,
         summary: lwrPrintSummary(rail.params),
         neutralTemp: formatStressNumber(rail.params.neutralTemp),
-        completed: isLongRailReleased(sliced.rows, rail) ? "Có" : "Chưa",
+        completed: isLongRailReleased(sliced.rows, rail) ? "Đạt" : "Chưa",
       }];
     });
     if (fromLongRails.length) return fromLongRails;
@@ -193,11 +192,10 @@ export function TrackPrint({
       return [{
         code: displayRailCode(cell.id),
         railLabel: railDisplayLabel(row.line, row.rail),
-        railType: params.railType || "—",
         span: { startMetres, endMetres },
         summary: lwrPrintSummary(params),
         neutralTemp: formatStressNumber(params.neutralTemp),
-        completed: cell.released || isLongRailReleased(sliced.rows, stub) ? "Có" : "Chưa",
+        completed: cell.released || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
       }];
     }));
   }, [sliced]);
@@ -224,10 +222,31 @@ export function TrackPrint({
   }
 
   // Chiều rộng nội dung sơ đồ (nhãn dải + ray). Phóng to/thu nhỏ để bề ngang đầy khổ giấy.
+  // Bề rộng thật của sơ đồ = nhãn dải (150) + đường ray + lề thêm ray (56) + đệm hai bên.
+  // Tính theo phạm vi các ray ĐÃ CẮT (có thể dài hơn đoạn in, ví dụ ray kết thúc ở Km2+100 khi in tới Km2+000).
+  const slicedExtent = sliced ? trackExtent(sliced.rows) : null;
+  const diagramMetres = slicedExtent ? Math.max(slicedExtent.endMetres - slicedExtent.startMetres, printRange ? printRange.end - printRange.start : 0) : 0;
   const contentPx = sliced
-    ? 150 + 24 + Math.max(200, (printRange!.end - printRange!.start) * TRACK_PIXELS_PER_METRE)
+    ? 150 + 56 + 48 + Math.max(200, diagramMetres * TRACK_PIXELS_PER_METRE)
     : 400;
-  const fit = Math.min(3, Math.max(0.35, config.px / contentPx));
+  const fitByWidth = Math.min(3, Math.max(0.35, config.px / contentPx));
+  // Sơ đồ phải nằm gọn trong MỘT trang: thu nhỏ thêm theo chiều cao còn lại (trừ lề, tiêu đề, legend).
+  const diagramRef = useRef<HTMLDivElement>(null);
+  const [naturalH, setNaturalH] = useState(0);
+  const pageHeightMm = format === "A4" ? 210 : 420;
+  const reservedMm = config.split ? 92 : 150; // lề trên+dưới 32 + đầu trang, tiêu đề mục, legend (và bảng tổng hợp nếu in 1 trang)
+  const availHeightPx = Math.max(150, (pageHeightMm - reservedMm) * 3.7795);
+  const fit = naturalH > 0 ? Math.min(fitByWidth, Math.max(0.3, availHeightPx / naturalH)) : fitByWidth;
+  useLayoutEffect(() => {
+    const el = diagramRef.current;
+    if (!el) return;
+    // Đo chiều cao tự nhiên (zoom = 1) để tính tỉ lệ; khôi phục zoom ngay trong cùng frame.
+    const previous = el.style.zoom;
+    el.style.zoom = "1";
+    const height = el.getBoundingClientRect().height;
+    el.style.zoom = previous;
+    if (height > 0) setNaturalH(height);
+  }, [sliced, format, printRange]);
 
   const filteredJoints = useMemo(() => {
     if (!printRange) return [];
@@ -240,7 +259,7 @@ export function TrackPrint({
       #lwr-track-print { position:fixed; inset:0; z-index:2100; background:#e2e8f0; overflow:auto; color:#111; }
       #lwr-track-print .toolbar { position:sticky; top:0; z-index:1; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px; background:white; border-bottom:1px solid #aaa; }
       #lwr-track-print .toolbar button, #lwr-track-print select, #lwr-track-print .toolbar input { border:1px solid #aaa; border-radius:4px; padding:6px 10px; }
-      #lwr-track-print article { width:${config.width}; box-sizing:border-box; margin:16px auto; padding:10mm; background:white; font:10pt 'Times New Roman',serif; }
+      #lwr-track-print article { width:${config.width}; box-sizing:border-box; margin:16px auto; padding:20mm 12mm 12mm 20mm; background:white; font:10pt 'Times New Roman',serif; }
       #lwr-track-print .print-header { text-align:center; margin:0 0 8px; }
       #lwr-track-print .print-header .company { margin:0; font-size:11pt; font-weight:bold; letter-spacing:0.02em; }
       #lwr-track-print h1 { font-size:16pt; text-align:center; font-weight:bold; margin:6px 0 4px; text-transform:uppercase; }
@@ -249,12 +268,23 @@ export function TrackPrint({
       #lwr-track-print .diagram-frame { width:100%; overflow:hidden; }
       #lwr-track-print .diagram-scale { transform-origin:top left; width:max-content; max-width:none; }
       #lwr-track-print p { margin:3px 0; }
-      #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:6px; font-size:8.5pt; }
-      #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:3px 4px; text-align:center; vertical-align:middle; }
-      #lwr-track-print th { font-size:8pt; background:#f3f4f6; }
+      #lwr-track-print table.lwr-summary { border-collapse:collapse; width:100%; table-layout:fixed; margin-top:6px; font-size:8pt; }
+      #lwr-track-print table.lwr-summary th,#lwr-track-print table.lwr-summary td { border:1px solid #888; padding:2px 3px; text-align:center; vertical-align:middle; overflow:hidden; }
+      #lwr-track-print table.lwr-summary th { font-size:7.5pt; background:#f3f4f6; line-height:1.2; }
+      #lwr-track-print table.lwr-summary td { white-space:nowrap; }
+      #lwr-track-print table.lwr-summary col.c-code { width:11%; }
+      #lwr-track-print table.lwr-summary col.c-line { width:4%; }
+      #lwr-track-print table.lwr-summary col.c-km { width:9%; }
+      #lwr-track-print table.lwr-summary col.c-len { width:4%; }
+      #lwr-track-print table.lwr-summary col.c-temp { width:5.5%; }
+      #lwr-track-print table.lwr-summary col.c-method { width:7%; }
+      #lwr-track-print table.lwr-summary col.c-pull { width:5%; }
+      #lwr-track-print table.lwr-summary col.c-time { width:10%; }
+      #lwr-track-print table.lwr-summary col.c-done { width:5%; }
+      #lwr-track-print table.lwr-summary td.c-code { text-align:left; font-weight:600; }
       #lwr-track-print tr { break-inside:avoid; }
       @media print {
-        @page { size:${config.size}; margin:8mm; }
+        @page { size:${config.size}; margin:20mm 12mm 12mm 20mm; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
         #lwr-track-print, #lwr-track-print * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
         #lwr-track-print { position:static; overflow:visible; background:white; }
@@ -263,8 +293,7 @@ export function TrackPrint({
         #lwr-track-print article { width:auto; margin:0; padding:0; break-after:page; }
         #lwr-track-print article:last-child { break-after:auto; }
         #lwr-track-print thead { display:table-header-group; }
-        #lwr-track-print .diagram-frame { min-height:${config.split ? "145mm" : "auto"}; }
-      }
+            }
     `}</style>
       <div className="toolbar">
         <select aria-label="Khổ giấy" value={format} onChange={(e) => setFormat(e.target.value as keyof typeof FORMATS)}>
@@ -340,8 +369,9 @@ export function TrackPrint({
           </header>
 
           <h2 className="section-title">1. Sơ đồ theo dõi giải toả ứng suất</h2>
-          <div className="diagram-frame" style={{ minHeight: config.split ? "130mm" : undefined }}>
+          <div className="diagram-frame">
             <div
+              ref={diagramRef}
               className="diagram-scale"
               style={{
                 zoom: fit,
@@ -357,6 +387,7 @@ export function TrackPrint({
                 selectedId=""
                 onSelect={noop}
                 embedded
+                compact
                 structures={{
                   placements: sliced.placements,
                   symbols,
@@ -367,34 +398,48 @@ export function TrackPrint({
               />
             </div>
           </div>
+          <StructureLegend layout={sliced} symbols={symbols} compact />
           {config.split ? <div style={{ breakAfter: "page" }} /> : null}
 
           <h2 className="section-title">2. Tổng hợp thông tin giải toả ứng suất</h2>
-          <table>
+          <table className="lwr-summary">
+            <colgroup>
+              <col className="c-code" />
+              <col className="c-line" />
+              <col className="c-km" />
+              <col className="c-km" />
+              <col className="c-len" />
+              <col className="c-temp" />
+              <col className="c-temp" />
+              <col className="c-method" />
+              <col className="c-pull" />
+              <col className="c-pull" />
+              <col className="c-time" />
+              <col className="c-time" />
+              <col className="c-done" />
+            </colgroup>
             <thead>
               <tr>
                 <th>Mã LWR</th>
                 <th>Tuyến · Ray</th>
-                <th>Loại ray</th>
                 <th>Lý trình đầu</th>
                 <th>Lý trình cuối</th>
                 <th>Dài (m)</th>
-                <th>Nhiệt độ giải toả (TB) (°C)</th>
-                <th>Nhiệt độ khoá ray thiết kế (35±5) (°C)</th>
-                <th>Phương pháp giải toả</th>
-                <th>Chiều dài kéo thiết kế (mm)</th>
-                <th>Chiều dài kéo thực tế (mm)</th>
-                <th>Ngày/giờ bắt đầu</th>
-                <th>Ngày/giờ kết thúc</th>
+                <th>Nhiệt độ giải toả TB (°C)</th>
+                <th>Nhiệt độ khoá thiết kế 35±5 (°C)</th>
+                <th>Phương pháp</th>
+                <th>Kéo TK (mm)</th>
+                <th>Kéo TT (mm)</th>
+                <th>Bắt đầu</th>
+                <th>Kết thúc</th>
                 <th>Hoàn thành</th>
               </tr>
             </thead>
             <tbody>
               {lwrRows.map((row) => (
                 <tr key={`${row.code}-${row.span.startMetres}-${row.span.endMetres}`}>
-                  <td>{row.code}</td>
-                  <td>{row.railLabel}</td>
-                  <td>{row.railType}</td>
+                  <td className="c-code">{row.code}</td>
+                  <td>{row.railLabel.split(" ")[0]}</td>
                   <td>Km{formatChainage(row.span.startMetres)}</td>
                   <td>Km{formatChainage(row.span.endMetres)}</td>
                   <td>{row.span.endMetres - row.span.startMetres}</td>
@@ -409,13 +454,10 @@ export function TrackPrint({
                 </tr>
               ))}
               {lwrRows.length === 0 ? (
-                <tr><td colSpan={14}>Chưa có đoạn LWR / thanh đã rải trong đoạn đã chọn.</td></tr>
+                <tr><td colSpan={13}>Chưa có đoạn LWR / thanh đã rải trong đoạn đã chọn.</td></tr>
               ) : null}
             </tbody>
           </table>
-
-          {/* Legend xuống dưới các bảng tổng hợp — tránh chen giữa sơ đồ và bảng. */}
-          <StructureLegend layout={sliced} symbols={symbols} compact />
 
           <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}>
             <b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b>

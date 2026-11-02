@@ -44,9 +44,9 @@ function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number)
   return releaseTone(done, tempC);
 }
 
-/** Mã trên thanh ngắn: TT-40-500m-35oC (500 = chiều dài đoạn; UT/UP/DT/DP → TT/TP/HT/HP). */
-function shortRailChipLabel(code: string, lengthMetres: number, tempC: number) {
-  return `${displayRailCode(code)}-${lengthMetres}m-${tempC}oC`;
+/** Mã trên thanh ngắn: TT-40-500m (500 = chiều dài đoạn; UT/UP/DT/DP → TT/TP/HT/HP). Nhiệt độ giải toả hiện ở dòng dưới. */
+function shortRailChipLabel(code: string, lengthMetres: number) {
+  return `${displayRailCode(code)}-${lengthMetres}m`;
 }
 
 /** Nền phân biệt 2 tuyến trên sơ đồ. */
@@ -105,6 +105,8 @@ interface RailGridProps {
   onSelect: (id: string) => void;
   alertIds?: string[];
   embedded?: boolean;
+  /** Bản in: giảm khoảng cách giữa các dải để sơ đồ gọn, vừa một trang. */
+  compact?: boolean;
   joints?: RailJoint[];
   selectedJointId?: string | null;
   onSelectJoint?: (joint: RailJoint) => void;
@@ -139,6 +141,7 @@ export const RailGrid = memo(function RailGrid({
   selectedId,
   onSelect,
   embedded = false,
+  compact = false,
   joints = [],
   selectedJointId,
   onSelectJoint,
@@ -347,7 +350,7 @@ export const RailGrid = memo(function RailGrid({
     </div>
     )}
     <div className={embedded ? "" : "overflow-x-auto"}>
-      <div className={`px-4 py-3 space-y-3 ${showMachineImages ? "overflow-visible" : ""}`} style={{ width: 150 + width }}>
+      <div className={`${compact ? "px-0" : "px-4"} ${compact ? "py-1 space-y-1.5" : "py-3 space-y-3"} ${showMachineImages ? "overflow-visible" : ""}`} style={{ width: 150 + width }}>
         {groupRowsByLine(rows).map((group) => {
           const groupExtent = lineTrackExtent(rows, group.line);
           const groupHasSpan = groupExtent.endMetres > groupExtent.startMetres;
@@ -357,7 +360,7 @@ export const RailGrid = memo(function RailGrid({
           return (
           <div
             key={group.line}
-            className={`relative z-0 space-y-1 overflow-visible p-2 ${lineZoneClass(group.line)}`}
+            className={`relative z-0 overflow-visible ${compact ? "space-y-0 p-1" : "space-y-1 p-2"} ${lineZoneClass(group.line)}`}
             data-line={group.line}
           >
             <p className="px-1 text-[10px] font-semibold text-slate-600">
@@ -451,7 +454,7 @@ export const RailGrid = memo(function RailGrid({
                 const done = Boolean(cover.rail.completedAt) || Boolean(cell.released);
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
                 const lengthM = Math.max(0, to - from);
-                const label = shortRailChipLabel(cover.rail.code, lengthM, tempC);
+                const label = shortRailChipLabel(cover.rail.code, lengthM);
                 const statusNote = done ? "Giải toả" : "Chưa giải toả";
                 return (
                   <span key={cell.id}>
@@ -465,7 +468,7 @@ export const RailGrid = memo(function RailGrid({
                       style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : done ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
                     >
                       <span className="block truncate">{label}</span>
-                      {done ? <span className="block truncate text-[9px] font-medium opacity-90">{statusNote}</span> : null}
+                      {done ? <span className="block truncate text-[9px] font-medium opacity-90">{tempC} độ</span> : null}
                     </button>
                     {chipDeleteButton(cell.id, box, onRemove)}
                   </span>
@@ -473,7 +476,7 @@ export const RailGrid = memo(function RailGrid({
               }
               const lengthM = Math.max(0, to - from);
               const tempC = railCellLockTemp(cell);
-              const bareLabel = shortRailChipLabel(cell.id, lengthM, tempC);
+              const bareLabel = shortRailChipLabel(cell.id, lengthM);
               const done = Boolean(cell.released);
               const tone = releaseTone(done, tempC);
               const statusNote = done ? "Giải toả" : "Chưa giải toả";
@@ -493,7 +496,7 @@ export const RailGrid = memo(function RailGrid({
                   }}
                 >
                   <span className="block truncate">{bareLabel}</span>
-                  {done ? <span className="block truncate text-[9px] font-medium opacity-90">{statusNote}</span> : null}
+                  {done ? <span className="block truncate text-[9px] font-medium opacity-90">{tempC} độ</span> : null}
                 </button>
                 {chipDeleteButton(cell.id, box, onRemove)}
               </span>;

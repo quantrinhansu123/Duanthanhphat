@@ -281,7 +281,6 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                             {GEOMETRY_CRITERIA.map((k) => (
                               <td key={k}>{cellOf(k)}</td>
                             ))}
-                            <td />
                             <td>{inLimit}</td>
                             <td>{note}</td>
                           </tr>
