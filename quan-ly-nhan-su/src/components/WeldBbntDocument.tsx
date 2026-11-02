@@ -32,7 +32,7 @@ function rowsOf(record: RecordSet): Row[] {
       geo: GEOMETRY_CRITERIA.map((key) => {
         const v = g[key];
         if (v == null) return "";
-        return evaluateGeometryCriterion(v, limits?.[key] ?? null) === "Đạt" ? "Đạt" : v;
+        return evaluateGeometryCriterion(v, limits?.[key] ?? null) === "Không đạt" ? "Không đạt" : "Đạt";
       }),
       result: m.ket_qua, note: m.ly_do ?? "" };
   }).sort((a, b) => a.code.localeCompare(b.code, "vi", { numeric: true }));

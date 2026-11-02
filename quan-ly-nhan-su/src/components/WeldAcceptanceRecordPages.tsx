@@ -256,11 +256,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         const geometry = row
                           ? evaluateGeometry(measurements as GeometryMeasurements, limits)
                           : null;
-                        // Số đo nhập từng tiêu chí; trên biên bản chỉ ghi "Đạt" nếu tiêu chí đó đạt, không đạt thì giữ số đo.
+                        // Số đo chỉ nhập bên trong hệ thống; biên bản không in số đo, chỉ ghi kết quả từng tiêu chí.
                         const cellOf = (k: (typeof GEOMETRY_CRITERIA)[number]) => {
                           const v = measurements[k];
                           if (v == null) return "";
-                          return evaluateGeometryCriterion(v, limits?.[k] ?? null) === "Đạt" ? "Đạt" : v;
+                          return evaluateGeometryCriterion(v, limits?.[k] ?? null) === "Không đạt" ? "Không đạt" : "Đạt";
                         };
                         const code = str(w.ma_diem);
                         const left = /^(TT|HT)/i.test(code) ? "✓" : "";
