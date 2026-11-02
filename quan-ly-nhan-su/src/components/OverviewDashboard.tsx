@@ -866,7 +866,7 @@ export default function OverviewDashboard() {
     () => showFastAggregate
       ? overviewDoneBeforePlanYear
       : selectedRows.reduce(
-          (sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR ? sum + 1 : sum),
+          (sum, row) => (Number(row.nam_thuc_hien) < PLAN_YEAR && row.loai_moi_han === "Sản xuất" ? sum + 1 : sum),
           0,
         ),
     [PLAN_YEAR, overviewDoneBeforePlanYear, selectedRows, showFastAggregate],

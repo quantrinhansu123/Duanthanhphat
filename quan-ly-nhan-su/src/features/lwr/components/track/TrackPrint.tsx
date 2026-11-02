@@ -95,10 +95,11 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
   }
 }
 
-/** A4 ngang chia 2 trang (sơ đồ / tổng hợp) hoặc A3 đứng gọn một trang. */
+/** A4 ngang chia 2 trang (sơ đồ / tổng hợp) hoặc A3 đứng gọn một trang.
+ *  `px` ≈ bề rộng in hữu ích (A4 ngang trừ lề) — dùng để phóng to/thu nhỏ sơ đồ cho đầy giấy. */
 const FORMATS = {
-  A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1000, split: true },
-  A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1000, split: false },
+  A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1080, split: true },
+  A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1080, split: false },
 };
 
 const RANGE_PRESETS_KM = [1, 2, 3, 5] as const;
@@ -222,10 +223,11 @@ export function TrackPrint({
     return true;
   }
 
+  // Chiều rộng nội dung sơ đồ (nhãn dải + ray). Phóng to/thu nhỏ để bề ngang đầy khổ giấy.
   const contentPx = sliced
-    ? 150 + 56 + 32 + Math.max(240, (printRange!.end - printRange!.start) * TRACK_PIXELS_PER_METRE)
+    ? 150 + 24 + Math.max(200, (printRange!.end - printRange!.start) * TRACK_PIXELS_PER_METRE)
     : 400;
-  const fit = Math.min(1, config.px / contentPx);
+  const fit = Math.min(3, Math.max(0.35, config.px / contentPx));
 
   const filteredJoints = useMemo(() => {
     if (!printRange) return [];
@@ -243,7 +245,9 @@ export function TrackPrint({
       #lwr-track-print .print-header .company { margin:0; font-size:11pt; font-weight:bold; letter-spacing:0.02em; }
       #lwr-track-print h1 { font-size:16pt; text-align:center; font-weight:bold; margin:6px 0 4px; text-transform:uppercase; }
       #lwr-track-print .print-header .meta { margin:2px 0; font-size:10pt; }
-      #lwr-track-print h2.section-title { font-size:12pt; font-weight:bold; margin:12px 0 6px; text-align:left; border-bottom:1px solid #333; padding-bottom:2px; }
+      #lwr-track-print h2.section-title { font-size:12pt; font-weight:bold; margin:10px 0 6px; text-align:left; border-bottom:1px solid #333; padding-bottom:2px; }
+      #lwr-track-print .diagram-frame { width:100%; overflow:hidden; }
+      #lwr-track-print .diagram-scale { transform-origin:top left; width:max-content; max-width:none; }
       #lwr-track-print p { margin:3px 0; }
       #lwr-track-print table { border-collapse:collapse; width:100%; margin-top:6px; font-size:8.5pt; }
       #lwr-track-print th,#lwr-track-print td { border:1px solid #888; padding:3px 4px; text-align:center; vertical-align:middle; }
@@ -259,6 +263,7 @@ export function TrackPrint({
         #lwr-track-print article { width:auto; margin:0; padding:0; break-after:page; }
         #lwr-track-print article:last-child { break-after:auto; }
         #lwr-track-print thead { display:table-header-group; }
+        #lwr-track-print .diagram-frame { min-height:${config.split ? "145mm" : "auto"}; }
       }
     `}</style>
       <div className="toolbar">
@@ -335,25 +340,32 @@ export function TrackPrint({
           </header>
 
           <h2 className="section-title">1. Sơ đồ theo dõi giải toả ứng suất</h2>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: config.split ? "110mm" : undefined }}>
-          <div style={{ zoom: fit, fontFamily: "system-ui, sans-serif", ["--fit" as string]: fit }}>
-            <RailGrid
-              rows={sliced.rows}
-              longRails={sliced.longRails}
-              joints={filteredJoints}
-              installed={sliced.installed}
-              selectedId=""
-              onSelect={noop}
-              embedded
-              structures={{
-                placements: sliced.placements,
-                symbols,
-                editingPlacementId: null,
-                onEditPlacement: noop,
-                onRemovePlacement: noop,
+          <div className="diagram-frame" style={{ minHeight: config.split ? "130mm" : undefined }}>
+            <div
+              className="diagram-scale"
+              style={{
+                zoom: fit,
+                fontFamily: "system-ui, sans-serif",
+                ["--fit" as string]: fit,
               }}
-            />
-          </div>
+            >
+              <RailGrid
+                rows={sliced.rows}
+                longRails={sliced.longRails}
+                joints={filteredJoints}
+                installed={sliced.installed}
+                selectedId=""
+                onSelect={noop}
+                embedded
+                structures={{
+                  placements: sliced.placements,
+                  symbols,
+                  editingPlacementId: null,
+                  onEditPlacement: noop,
+                  onRemovePlacement: noop,
+                }}
+              />
+            </div>
           </div>
           {config.split ? <div style={{ breakAfter: "page" }} /> : null}
 

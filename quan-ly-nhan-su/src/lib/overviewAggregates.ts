@@ -346,7 +346,8 @@ async function loadOverviewAggregatesUncached(
     const doneBeforePlanYear = yearRows.error
       ? 0
       : yearlySummaries.reduce(
-          (sum, row) => (Number(row.nam) < currentYear ? sum + Number(row.tong_moi_han ?? 0) : sum),
+          // Chỉ mối hàn Sản xuất mới tính tiến độ (không cộng thử nghiệm, đào tạo, chấp thuận, tần suất).
+          (sum, row) => (Number(row.nam) < currentYear ? sum + Number(row.san_xuat ?? 0) : sum),
           0,
         );
     const productionThisPlanYear = yearRows.error
