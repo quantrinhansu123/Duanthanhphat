@@ -33,12 +33,13 @@ export type WeldQualityInspection = {
 
 /**
  * Trình tự thống nhất mọi loại mối hàn (bỏ cột Kết quả NDT trên UI).
- * Chờ mài (ngay khi tạo nhật ký hàn) → Chờ siêu âm và nghiệm thu → (Sửa chữa/khắc phục) → Chờ ký biên bản → Đạt
- * + Không đạt / Không thí nghiệm.
+ * Chờ mài → Chờ siêu âm và nghiệm thu → (sau NDT Đạt) Chờ nghiệm thu → Chờ ký biên bản → Đạt
+ * + Sửa chữa/khắc phục / Không đạt / Không thí nghiệm.
  */
 export type WeldQualityStatus =
   | "Chờ mài"
   | "Chờ siêu âm và nghiệm thu"
+  | "Chờ nghiệm thu"
   | "Sửa chữa/khắc phục"
   | "Chờ ký biên bản"
   | "Đạt"
@@ -48,6 +49,7 @@ export type WeldQualityStatus =
 export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
   "Chờ mài",
   "Chờ siêu âm và nghiệm thu",
+  "Chờ nghiệm thu",
   "Sửa chữa/khắc phục",
   "Chờ ký biên bản",
   "Đạt",
@@ -60,7 +62,6 @@ export const WELD_QUALITY_STATUS_ALIASES: Record<string, WeldQualityStatus> = {
   "Hàn": "Chờ mài",
   "Chưa có dữ liệu chất lượng": "Chờ mài",
   "Chờ thí nghiệm": "Chờ siêu âm và nghiệm thu",
-  "Chờ nghiệm thu": "Chờ ký biên bản",
   "Nghiệm thu đạt": "Đạt",
 };
 
@@ -235,7 +236,8 @@ export function evaluateWeldQuality(
 ) {
   const geometry = inspection ? evaluateGeometry(inspection.gia_tri_do, rule?.dung_sai ?? null) : null;
   const internalPass = Boolean(inspection?.ngay_mai && inspection.truc_quan === "Đạt" && geometry === "Đạt");
-  const ndtPass = Boolean(rule && (!rule.yeu_cau_ndt || (inspection?.ket_qua_ndt === "Đạt" && inspection.ngay_ndt)));
+  // Siêu âm/NDT Đạt là đủ để thoát «Chờ siêu âm…» (ngày NDT vẫn bắt buộc khi lưu form mới).
+  const ndtPass = Boolean(rule && (!rule.yeu_cau_ndt || inspection?.ket_qua_ndt === "Đạt"));
   const ndtFail = inspection?.ket_qua_ndt === "Không đạt";
   const visualGeoFail = inspection?.truc_quan === "Không đạt" || geometry === "Không đạt";
   const fieldReject = Boolean(inspection?.ly_do_loai_nghiem_thu);
@@ -243,9 +245,10 @@ export function evaluateWeldQuality(
   const repairPath = Boolean(visualGeoFail && !ndtFail && !forceFail);
   const failed = ndtFail || forceFail || (visualGeoFail && inspection?.xu_ly_truc_quan === "khong_dat");
   const grindingLengthOk = !inspection || hasRequiredGrindingLength(inspection.gia_tri_do, rule?.dung_sai ?? null);
+  const ndtDated = Boolean(!rule?.yeu_cau_ndt || (inspection?.ket_qua_ndt === "Đạt" && inspection.ngay_ndt));
   const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath && (!rule.ndt_truoc_rfi || ndtPass));
   const acceptanceEligible = Boolean(
-    rule && internalPass && ndtPass && grindingLengthOk && !ndtFail && !forceFail && !repairPath,
+    rule && internalPass && ndtDated && grindingLengthOk && !ndtFail && !forceFail && !repairPath,
   );
 
   let status: WeldQualityStatus;
@@ -254,7 +257,10 @@ export function evaluateWeldQuality(
   else if (ndtFail || forceFail) status = "Không đạt";
   else if (repairPath) status = "Sửa chữa/khắc phục";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";
+  // Đã hoàn thành nghiệm thu (đợt không nháp) → chờ ký bộ hồ sơ.
   else if (pendingSignature) status = "Chờ ký biên bản";
+  // Đã siêu âm/NDT đạt → không còn «Chờ siêu âm…»; chờ hoàn thành nghiệm thu.
+  else if (internalPass && ndtPass) status = "Chờ nghiệm thu";
   else if (internalPass) status = "Chờ siêu âm và nghiệm thu";
   // Hàn xong → tự động Chờ mài (mọi loại mối hàn).
   else status = "Chờ mài";

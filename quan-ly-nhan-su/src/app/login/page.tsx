@@ -18,12 +18,12 @@ export default function LoginPage() {
       <LoginHero />
       <section className="relative z-10 flex flex-col justify-center px-6 py-12 sm:px-16 lg:bg-white">
         <div className="mx-auto w-full max-w-md rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-slate-200/80 backdrop-blur-sm sm:p-8 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none lg:ring-0 lg:backdrop-blur-none">
-          <div className="mb-8 flex items-center justify-center gap-4">
+          <div className="mb-8 flex items-center justify-center gap-3 sm:gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="TCW" className="h-24 w-24 shrink-0 rounded-full object-contain shadow-md ring-1 ring-slate-200 sm:h-28 sm:w-28" />
-            <div className="text-left">
-              <div className="text-3xl font-extrabold leading-none text-[#1e3a7a]">Thành Phát</div>
-              <div className="pl-[2px] text-lg font-medium leading-tight text-slate-600">Quản lý hàn ray</div>
+            <img src="/logo.png" alt="TCW" className="h-16 w-16 shrink-0 rounded-full object-contain shadow-md ring-1 ring-slate-200 sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
+            <div className="min-w-0 text-left">
+              <div className="whitespace-nowrap text-2xl font-extrabold leading-none text-[#1e3a7a] sm:text-3xl">Thành Phát</div>
+              <div className="mt-1 pl-[2px] text-base font-medium leading-tight text-slate-600 sm:text-lg">Quản lý hàn ray</div>
             </div>
           </div>
           <h2 className="text-center text-3xl font-bold text-[#1e3a7a]">Đăng nhập</h2>
