@@ -195,12 +195,12 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
                   </select>
                 </label>
               </div>
-              <p className="mt-3 text-xs text-slate-600">NDT đạt chưa phải nghiệm thu đạt. {rule && !rule.yeu_cau_ndt ? `Miễn NDT theo: ${rule.can_cu_mien_ndt}` : "Chỉ kết luận nghiệm thu khi đủ tiêu chí và hoàn thành đợt nghiệm thu."}</p>
+              <p className="mt-3 text-xs text-slate-600">NDT/siêu âm thực hiện tại hiện trường khi nghiệm thu, có TVGS chứng kiến — sau khi phát RFI, không cần có trước. NDT đạt chưa phải nghiệm thu đạt. {rule && !rule.yeu_cau_ndt ? `Miễn NDT theo: ${rule.can_cu_mien_ndt}` : "Chỉ kết luận nghiệm thu khi đủ tiêu chí và hoàn thành đợt nghiệm thu."}</p>
             </section>
             {draft.ly_do_loai_nghiem_thu && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><p>Lỗi tại nghiệm thu: {draft.ly_do_loai_nghiem_thu}</p><label className="mt-2 flex min-h-11 items-center gap-2"><input type="checkbox" onChange={(e) => { if (e.target.checked) setDraft({ ...draft, ly_do_loai_nghiem_thu: null }); }} />Đã khắc phục và kiểm tra lại; xóa cờ lỗi hiện tại khi lưu</label></div>}
             <label className="block text-sm font-semibold">Ghi chú kiểm tra<textarea className={input} rows={2} maxLength={4000} value={draft.ghi_chu ?? ""} onChange={(e) => setDraft({ ...draft, ghi_chu: e.target.value })} /></label>
           </fieldset>
-          <p className="mt-4 text-sm text-slate-600" role="status">{accepted ? "Mối đã nghiệm thu đạt; không lập yêu cầu nghiệm thu trùng." : assessment?.rfiEligible ? "Đủ điều kiện phát RFI theo tiêu chí đang chọn." : `Chưa đủ điều kiện phát RFI: ${!rule ? "chưa chọn tiêu chí" : assessment?.status === "Không đạt" ? "còn chỉ tiêu không đạt" : !draft.ngay_mai ? "chưa ghi ngày mài" : draft.truc_quan !== "Đạt" ? "trực quan chưa đạt" : assessment?.geometry !== "Đạt" ? "thiếu số đo hoặc hình học chưa đạt" : "chưa có NDT đạt theo yêu cầu"}.`}</p>
+          <p className="mt-4 text-sm text-slate-600" role="status">{accepted ? "Mối đã nghiệm thu đạt; không lập yêu cầu nghiệm thu trùng." : assessment?.rfiEligible ? "Đủ điều kiện phát RFI theo tiêu chí đang chọn." : `Chưa đủ điều kiện phát RFI: ${!rule ? "chưa chọn tiêu chí" : assessment?.status === "Không đạt" ? "còn chỉ tiêu không đạt" : !draft.ngay_mai ? "chưa ghi ngày mài" : draft.truc_quan !== "Đạt" ? "trực quan chưa đạt" : assessment?.geometry !== "Đạt" ? "thiếu số đo hoặc hình học chưa đạt" : "chưa đủ tiêu chí kiểm tra"}.`}</p>
           {message && <p role="status" className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
           <div className="mt-5 flex flex-wrap gap-2"><button disabled={saving || blocked} className={primary}>{saving ? "Đang lưu…" : "Lưu kiểm tra"}</button><button type="button" disabled={saving} className={button} onClick={onClose}>Đóng</button></div>
         </form>

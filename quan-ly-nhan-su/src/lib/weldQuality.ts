@@ -246,7 +246,7 @@ export function evaluateWeldQuality(
   const failed = ndtFail || forceFail || (visualGeoFail && inspection?.xu_ly_truc_quan === "khong_dat");
   const grindingLengthOk = !inspection || hasRequiredGrindingLength(inspection.gia_tri_do, rule?.dung_sai ?? null);
   const ndtDated = Boolean(!rule?.yeu_cau_ndt || (inspection?.ket_qua_ndt === "Đạt" && inspection.ngay_ndt));
-  const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath && (!rule.ndt_truoc_rfi || ndtPass));
+  const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath);
   const acceptanceEligible = Boolean(
     rule && internalPass && ndtDated && grindingLengthOk && !ndtFail && !forceFail && !repairPath,
   );
