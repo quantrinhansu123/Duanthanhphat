@@ -18,14 +18,14 @@ export default function LoginPage() {
 
       <LoginHero />
       <section className="relative z-10 flex flex-col justify-center px-6 py-12 sm:px-16 lg:bg-white">
-        <div className="mx-auto w-full max-w-md rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-slate-200/80 backdrop-blur-sm sm:p-8 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none lg:ring-0 lg:backdrop-blur-none">
-          <div className="mb-8 flex items-center justify-center gap-3 sm:gap-4">
+        <div className="mx-auto w-full max-w-sm rounded-2xl bg-white/95 p-5 shadow-xl ring-1 ring-slate-200/80 backdrop-blur-sm sm:max-w-md sm:p-7 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none lg:ring-0 lg:backdrop-blur-none">
+          <div className="mb-6 flex items-center justify-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="TCW" className="h-16 w-16 shrink-0 rounded-full object-contain shadow-md ring-1 ring-slate-200 sm:h-24 sm:w-24 lg:h-28 lg:w-28" />
-            <BrandLockup size="lg" className="min-w-0 text-left" />
+            <img src="/logo.png" alt="TCW" className="h-12 w-12 shrink-0 rounded-full object-contain shadow-md ring-1 ring-slate-200 sm:h-14 sm:w-14" />
+            <BrandLockup size="md" className="min-w-0 max-w-[15rem] text-left sm:max-w-[18rem]" />
           </div>
-          <h2 className="text-center text-3xl font-bold text-[#1e3a7a]">Đăng nhập</h2>
-          <p className="mt-2 text-center text-base text-slate-600">Chào mừng bạn quay trở lại hệ thống Quản lý hàn ray</p>
+          <h2 className="text-center text-2xl font-bold text-[#1e3a7a] sm:text-[1.65rem]">Đăng nhập</h2>
+          <p className="mt-1.5 text-center text-sm text-slate-600">Chào mừng bạn quay trở lại hệ thống Quản lý hàn ray</p>
           <LoginForm />
           <p className="mt-10 border-t border-slate-200 pt-4 text-center text-xs text-slate-500">© 2026 Công ty cổ phần công trình Thành Phát · CONSTRUCTION WORK JOINT STOCK COMPANY</p>
         </div>
