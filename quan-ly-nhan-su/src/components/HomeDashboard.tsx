@@ -1,11 +1,18 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { findNavMeta, navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import { CaretDown, GasPump, Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
+
+// Dashboard tổng quan nằm ngay dưới trang chủ — chỉ tải khi trang chủ mở (không chặn menu phía trên).
+const OverviewDashboard = dynamic(() => import("@/components/OverviewDashboard"), {
+  ssr: false,
+  loading: () => <div role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">Đang tải dashboard…</div>,
+});
 
 /** Mục nhập liệu hiện trường — ưu tiên trên mobile */
 const QUICK_DATA_ENTRY_IDS = [
@@ -362,6 +369,31 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
           );
         })}
       </div>
+
+      {allowed("bc-tong-quan") && (
+        <section className="mt-8" aria-labelledby="home-overview-title">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 id="home-overview-title" className="text-lg font-bold text-slate-900 sm:text-xl">
+                {lang === "en" ? "Overview dashboard" : "Dashboard tổng quan"}
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                {lang === "en" ? "Production progress, quality and equipment at a glance" : "Tiến độ sản xuất, chất lượng và máy móc trong một màn hình."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate("bc-tong-quan")}
+              className="shrink-0 cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-[#0047AB] shadow-2xs hover:bg-slate-50"
+            >
+              {lang === "en" ? "Open full page" : "Mở toàn trang"}
+            </button>
+          </div>
+          <div className="-mx-4 sm:-mx-6 lg:-mx-8">
+            <OverviewDashboard />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
