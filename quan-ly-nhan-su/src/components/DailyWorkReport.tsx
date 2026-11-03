@@ -1661,7 +1661,7 @@ export default function DailyWorkReport() {
         setIncidents([]);
         setEditorOpen(false);
       }
-      await reloadList();
+      setReportList((rows) => rows.filter((r) => r.id !== row.id)); // chỉ bỏ đúng dòng đó
       showToast("Đã xóa phiếu");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Không thể xóa phiếu");

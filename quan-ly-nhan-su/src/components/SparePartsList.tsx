@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check } from "@/components/icons";
 import {
   deriveSparePartStatus,
@@ -12,6 +12,7 @@ import { MACHINE_MODELS } from "@/data/machines";
 import { deleteSpareParts, insertSparePart, loadSpareParts, updateSparePart } from "@/lib/sparePartsDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Pager, { usePaged } from "@/components/Pager";
+import { useResource } from "@/lib/useResource";
 
 type ModalState =
   | { mode: "add" }
@@ -47,10 +48,16 @@ function formatVnd(value: number) {
   return value.toLocaleString("vi-VN");
 }
 
+const NO_PARTS: SparePart[] = [];
+
 export default function SparePartsList() {
-  const [list, setList] = useState<SparePart[]>([]);
-  const [persisted, setPersisted] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  // Cache dùng chung: mở lại tab thấy dữ liệu ngay, làm mới ngầm; lưu/xóa chỉ sửa đúng dòng trong cache.
+  const resource = useResource("spare-parts", loadSpareParts);
+  const list = resource.data?.parts ?? NO_PARTS;
+  const persisted = resource.data?.persisted ?? true;
+  const loadError = resource.data?.error ?? "";
+  const setList = (update: (current: SparePart[]) => SparePart[]) =>
+    resource.mutate((cur) => ({ ...cur, parts: update(cur.parts) }));
   const [saving, setSaving] = useState(false);
   const [manufacturerFilter, setManufacturerFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
@@ -63,19 +70,6 @@ export default function SparePartsList() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteText, setBulkDeleteText] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    loadSpareParts().then((result) => {
-      if (!active) return;
-      setList(result.parts);
-      setPersisted(result.persisted);
-      setLoadError(result.error ?? "");
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const manufacturers = useMemo(() => {
     const set = new Set(list.map((item) => item.manufacturer).filter(Boolean));

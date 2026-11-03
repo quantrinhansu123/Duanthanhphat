@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, parseWeldMeasurement, type SavedWeldInspection } from "@/lib/weldQuality";
 import type { WeldReportRow } from "@/lib/weldReportData";
 import { PHRASES } from "@/i18n/phrases";
@@ -22,6 +21,7 @@ export function qualityExcelColumns(row: WeldReportRow) {
 type QualityExcelPatch = { moi_han_id: string; phien_ban: number; patch: Partial<SavedWeldInspection> };
 
 export async function parseWeldQualityExcel(file: File): Promise<QualityExcelPatch[]> {
+  const XLSX = await import("xlsx"); // nạp khi cần, không đưa vào bundle ban đầu
   const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new Error("File không có trang dữ liệu.");

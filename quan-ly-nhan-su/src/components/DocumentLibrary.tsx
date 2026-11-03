@@ -124,13 +124,17 @@ export default function DocumentLibrary() {
     isRealFolder ? f.startsWith(`${activeFolder}/`) && !f.slice(activeFolder.length + 1).includes("/") : !f.includes("/"),
   );
 
+  // Lần đầu hiện "đang tải"; các lần sau làm mới ngầm, giữ nguyên danh sách đang xem (không nháy trắng).
+  const loadedOnce = useRef(false);
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     setErrorMsg(null);
     const res = await fetchDriveDocuments();
     setConfigured(res.configured);
-    setItems(res.items);
+    // Lỗi khi làm mới ngầm thì giữ dữ liệu cũ thay vì xóa trắng.
+    if (!res.error || !loadedOnce.current) setItems(res.items);
     if (res.error) setErrorMsg(res.error);
+    loadedOnce.current = true;
     setLoading(false);
   }, []);
 
@@ -309,7 +313,7 @@ export default function DocumentLibrary() {
     if (editing?.id === doc.id) setEditing(null);
     if (replacingDoc?.id === doc.id) setReplacingDoc(null);
     setStatusMsg(`Đã xóa tài liệu: ${doc.name}`);
-    await reload();
+    setItems((current) => current.filter((item) => item.id !== doc.id)); // chỉ bỏ đúng dòng đó
   }
 
   function openEdit(doc: DriveDocumentItem) {
@@ -358,7 +362,9 @@ export default function DocumentLibrary() {
     closeEdit();
     setStatusMsg(`Đã cập nhật: ${res.item?.name ?? title}`);
     if (viewer?.id === editing.id && res.item) setViewer(res.item);
-    await reload();
+    const updated = res.item;
+    if (updated) setItems((current) => current.map((item) => (item.id === updated.id ? updated : item))); // chỉ thay đúng dòng đó
+    else await reload();
   }
 
   const inputClass =

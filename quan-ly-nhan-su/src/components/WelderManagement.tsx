@@ -788,7 +788,7 @@ export default function WelderManagement() {
         });
       }
       await reloadLiveCerts(selectedWelder.id);
-      await reloadWelders();
+      void reloadWelders(); // làm mới ngầm số liệu tổng, không chặn giao diện
       setShowAddCert(false);
       setSelectedCertGroupIds([]);
       showToast(
@@ -882,7 +882,7 @@ export default function WelderManagement() {
         certificateNumber: editCertForm.number.trim(),
       });
       await reloadLiveCerts(selectedWelder.id);
-      await reloadWelders();
+      void reloadWelders(); // làm mới ngầm số liệu tổng, không chặn giao diện
       setEditingLiveCert(null);
       showToast(isEn ? "Certificate updated." : "Đã cập nhật chứng chỉ.");
     } catch (error) {
@@ -914,7 +914,7 @@ export default function WelderManagement() {
         setDriveDocs((prev) => prev.filter((d) => d.id !== driveFile.id));
       }
       await reloadLiveCerts(selectedWelder.id);
-      await reloadWelders();
+      void reloadWelders(); // làm mới ngầm số liệu tổng, không chặn giao diện
       if (editingLiveCert?.id === cert.id) setEditingLiveCert(null);
       showToast(isEn ? "Certificate deleted." : "Đã xóa chứng chỉ.");
     } catch (error) {

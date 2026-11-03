@@ -689,9 +689,11 @@ export async function exportAllFilteredWeldingHistory(
     const searchTokens = removeVietnameseTones(params.query).split(/\s+/).filter(Boolean);
 
     for (let offset = 0; ; offset += pageSize) {
+      // Trang đầu xin kèm tổng số dòng để các trang còn lại tải song song (thay vì từng trang một).
+      const buildViewQuery = (withCount: boolean) => {
       let viewQuery = supabase
         .from("v_lich_su_moi_han_chi_tiet")
-        .select("*")
+        .select("*", withCount ? { count: "exact" } : undefined)
         .order("ngay_thuc_hien", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
         .order("id", { ascending: false });
       if (params.dateFrom) viewQuery = viewQuery.gte("ngay_thuc_hien", params.dateFrom);
@@ -712,7 +714,9 @@ export async function exportAllFilteredWeldingHistory(
         });
       }
 
-      const { data, error } = await viewQuery.range(offset, offset + pageSize - 1);
+      return viewQuery;
+      };
+      const { data, error, count } = await buildViewQuery(offset === 0).range(offset, offset + pageSize - 1);
       if (error) {
         if (error.message?.includes("tim_kiem_khong_dau") || error.message?.includes("created_at")) {
           // Fallback nếu view cũ
@@ -747,6 +751,19 @@ export async function exportAllFilteredWeldingHistory(
       const page = (data ?? []) as unknown as ViewWeldHistoryRow[];
       rows.push(...page);
       if (page.length < pageSize) break;
+      if (offset === 0 && typeof count === "number" && count > pageSize) {
+        const offsets: number[] = [];
+        for (let next = pageSize; next < count; next += pageSize) offsets.push(next);
+        const rest = await Promise.all(
+          offsets.map(async (from) => {
+            const res = await buildViewQuery(false).range(from, from + pageSize - 1);
+            if (res.error) throw res.error;
+            return (res.data ?? []) as unknown as ViewWeldHistoryRow[];
+          }),
+        );
+        for (const part of rest) rows.push(...part);
+        break;
+      }
     }
 
     return rows.map(mapViewRow);

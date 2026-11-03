@@ -103,7 +103,8 @@ export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error
   };
 }
 
-export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string) {
+/** Ghi một báo cáo dầu và trả về id dòng đã lưu (để cập nhật danh sách tại chỗ, không tải lại). */
+export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string): Promise<string> {
   if (!isSupabaseConfigured()) {
     throw new Error("Chưa cấu hình Supabase");
   }
@@ -119,16 +120,17 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string) 
   };
 
   const write = async (body: Record<string, unknown>) => {
-    if (id) return supabase.from("cap_dau_hang_ngay").update(body).eq("id", id);
-    return supabase.from("cap_dau_hang_ngay").upsert(body, { onConflict: "may,ngay" });
+    if (id) return supabase.from("cap_dau_hang_ngay").update(body).eq("id", id).select("id").single();
+    return supabase.from("cap_dau_hang_ngay").upsert(body, { onConflict: "may,ngay" }).select("id").single();
   };
 
-  let { error } = await write(payload);
+  let { data, error } = await write(payload);
   if (error && isMissingUnitColumn(formatSupabaseError(error))) {
     const { don_vi: _unit, ...withoutUnit } = payload;
-    ({ error } = await write(withoutUnit));
+    ({ data, error } = await write(withoutUnit));
   }
-  if (error) throw new Error(formatSupabaseError(error));
+  if (error || !data) throw new Error(error ? formatSupabaseError(error) : "Không lưu được báo cáo mức dầu");
+  return String(data.id);
 }
 
 export async function deleteDailyFuel(id: string) {

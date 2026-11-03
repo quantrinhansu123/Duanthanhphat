@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import * as XLSX from "xlsx";
 import { Camera, CaretRight, DownloadSimple, MapPin, PencilSimple, TrashSimple, UploadSimple, Warning, X } from "@/components/icons";
 import DateField from "@/components/DateField";
 import SelectMenu from "@/components/SelectMenu";
@@ -58,7 +57,7 @@ import {
   resolveWeldShift,
 } from "@/lib/weldReportData";
 import { compareNewestDate } from "@/lib/dateOrder";
-import QrScanDialog from "@/components/QrScanDialog";
+const QrScanDialog = dynamic(() => import("@/components/QrScanDialog"), { ssr: false });
 import { parseWeldQr } from "@/lib/weldQr";
 import {
   buildWeldCodePrefix,
@@ -2351,6 +2350,7 @@ export default function WeldingJournalList({
       const exportData = lang === "en"
         ? data.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [t(key), typeof value === "string" ? t(value) : value])))
         : data;
+      const XLSX = await import("xlsx"); // nạp khi bấm xuất, không đưa vào bundle ban đầu
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       worksheet["!cols"] = [
         { wch: 7 }, { wch: 17 }, { wch: 10 }, { wch: 38 }, { wch: 25 },

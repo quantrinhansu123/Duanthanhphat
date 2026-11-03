@@ -323,10 +323,27 @@ export default function MachineAssignmentList() {
     setFuelSaving(true);
     setFuelFormError("");
     try {
-      await upsertDailyFuel(fuelForm, fuelEditId ?? undefined);
+      const savedId = await upsertDailyFuel(fuelForm, fuelEditId ?? undefined);
       setFuelModal(null);
-      await reloadFuel();
       const machine = machines.find((item) => item.id === fuelForm.machineId);
+      // Chỉ thay đúng dòng vừa lưu (cùng máy+ngày bị upsert đè thì bỏ dòng cũ), không tải lại cả danh sách.
+      const savedRow: DailyFuelRow = {
+        id: savedId,
+        date: fuelForm.date,
+        machineId: fuelForm.machineId,
+        machineCode: machine?.code || "—",
+        machineName: machine?.name || "",
+        liters: Number(fuelForm.liters) || 0,
+        unit: fuelForm.unit.trim() || "lít",
+        personId: fuelForm.personId.trim(),
+        personName: personnel.find((p) => p.id === fuelForm.personId)?.label || "—",
+        note: fuelForm.note.trim(),
+      };
+      setFuelRows((rows) =>
+        [savedRow, ...rows.filter((r) => r.id !== savedId && !(r.machineId === savedRow.machineId && r.date === savedRow.date))].sort(
+          (x, y) => compareNewestDate(x.date, y.date) || y.id.localeCompare(x.id),
+        ),
+      );
       const quota = machine?.oilQuota ?? null;
       const belowQuota =
         quota != null && isLiterUnit(fuelForm.unit) && fuelForm.liters < quota;
@@ -361,7 +378,7 @@ export default function MachineAssignmentList() {
     try {
       await deleteDailyFuel(fuelEditId);
       setFuelModal(null);
-      await reloadFuel();
+      setFuelRows((rows) => rows.filter((r) => r.id !== fuelEditId));
       showToast("Đã xóa báo cáo mức dầu");
     } catch (error) {
       setFuelFormError(error instanceof Error ? error.message : "Không xóa được báo cáo mức dầu");
