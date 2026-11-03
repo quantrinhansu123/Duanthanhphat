@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell } from "@/components/icons";
 import { useAccess } from "@/lib/useAccess";
 import {
@@ -9,19 +9,69 @@ import {
   type AppNotification,
 } from "@/lib/notificationsDb";
 
+let audioContext: AudioContext | null = null;
+
+/** Hai tiếng "ding-dong" ngắn; trình duyệt chỉ cho phát sau khi người dùng đã bấm/chạm vào trang. */
+function playChime() {
+  try {
+    // Rung điện thoại (Android); iPhone/máy tính không hỗ trợ thì bỏ qua.
+    navigator.vibrate?.([250, 120, 250, 120, 400]);
+  } catch {
+    // bỏ qua
+  }
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    audioContext ??= new Ctx();
+    const ctx = audioContext;
+    void ctx.resume();
+    [[880, 0], [660, 0.22]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.55);
+    });
+  } catch {
+    // Không phát được âm thanh → chỉ hiện đèn nhấp nháy.
+  }
+}
+
+const POLL_MS = 20000;
+
 export default function NotificationBell({ label }: { label: string }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[]>([]);
   const { ready, userName } = useAccess();
+  const knownIds = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    void loadNotifications(userName).then((rows) => {
-      if (active) setItems(rows);
-    });
+    const refresh = () => {
+      void loadNotifications(userName).then((rows) => {
+        if (!active) return;
+        // Chuông kêu khi có thông báo chưa đọc mới xuất hiện sau lần tải đầu tiên.
+        const known = knownIds.current;
+        if (known && rows.some((row) => !row.read && !known.has(row.id))) playChime();
+        knownIds.current = new Set(rows.map((row) => row.id));
+        setItems(rows);
+      });
+    };
+    refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) refresh(); }, POLL_MS);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [open, ready, userName]);
 
@@ -50,8 +100,11 @@ export default function NotificationBell({ label }: { label: string }) {
       >
         <Bell size={18} weight="regular" aria-hidden />
         {unread > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white ring-2 ring-white">
-            {unread > 9 ? "9+" : unread}
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center">
+            <span aria-hidden className="absolute inset-0 rounded-full bg-rose-500 opacity-75 motion-safe:animate-ping" />
+            <span className="relative flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white ring-2 ring-white motion-safe:animate-pulse">
+              {unread > 9 ? "9+" : unread}
+            </span>
           </span>
         )}
       </button>
