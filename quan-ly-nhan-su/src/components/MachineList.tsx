@@ -56,6 +56,7 @@ import Link from "next/link";
 import { EQUIPMENT_GROUP_LABELS, equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 import { loadEquipmentLocations } from "@/lib/warehousesDb";
 import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type Warehouse } from "@/lib/warehouses";
+import Pager, { usePaged } from "@/components/Pager";
 
 
 // window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
@@ -1881,6 +1882,7 @@ export default function MachineList() {
     () => list.filter((m) => equipmentGroup(m) === equipmentTab && (status === "Tất cả trạng thái" || m.status === status)),
     [list, status, equipmentTab],
   );
+  const paged = usePaged(filtered);
 
   const total = list.reduce((sum, m) => sum + equipmentQuantity(m), 0);
   const running = list.filter((m) => m.status === "Đang làm việc").reduce((sum, m) => sum + equipmentQuantity(m), 0);
@@ -2064,7 +2066,7 @@ export default function MachineList() {
           </p>
         ) : null}
         <ul className="divide-y divide-slate-100">
-          {filtered.map((m) => {
+          {paged.rows.map((m) => {
             const selected = activeId === m.id;
             const expanded = expandedId === m.id;
             const coverSrc = m.image || m.weldingUnit?.coverImage || imageForModel(m.model) || defaultMachineImage;
@@ -2318,6 +2320,7 @@ export default function MachineList() {
           )}
         </ul>
       </div>
+      <Pager {...paged.pagerProps} />
 
       {detail && (
         <MachineDetailModal

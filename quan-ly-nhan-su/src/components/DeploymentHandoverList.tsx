@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { deploymentItems, type DeploymentItem } from "@/data/deploymentItems";
 import { CaretRight } from "@/components/icons";
+import Pager, { usePaged } from "@/components/Pager";
 
 const statusStyle: Record<DeploymentItem["status"], string> = {
   "Đã bàn giao": "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs",
@@ -16,6 +17,7 @@ export default function DeploymentHandoverList() {
     () => deploymentItems.filter((row) => status === "Tất cả trạng thái" || row.status === status),
     [status],
   );
+  const paged = usePaged(filtered);
 
   const handedOver = deploymentItems.filter((r) => r.status === "Đã bàn giao").length;
 
@@ -56,7 +58,7 @@ export default function DeploymentHandoverList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {paged.rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3.5 font-semibold text-slate-900">{row.category}</td>
                   <td className="px-3.5 py-3.5 text-slate-700 leading-relaxed">{row.content}</td>
@@ -95,6 +97,7 @@ export default function DeploymentHandoverList() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
     </main>
   );
 }

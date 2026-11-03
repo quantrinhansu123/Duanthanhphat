@@ -28,6 +28,7 @@ import {
   type DailyFuelRow,
 } from "@/lib/dailyFuelDb";
 import { notifyCommanderOilLow } from "@/lib/notificationsDb";
+import Pager, { usePaged } from "@/components/Pager";
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"] as const;
 
@@ -152,6 +153,7 @@ export default function MachineAssignmentList() {
       (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
     );
   }, [list, dateFrom, dateTo, machineId, projectId, personId, weldMethod, weldType]);
+  const paged = usePaged(filtered);
 
   const fuelByScheduleKey = useMemo(() => {
     const map = new Map<string, DailyFuelRow>();
@@ -582,7 +584,7 @@ export default function MachineAssignmentList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => {
+              {paged.rows.map((row) => {
                 const oil = fuelByScheduleKey.get(fuelKey(row.date, row.machineId));
                 const quota = machines.find((item) => item.id === row.machineId)?.oilQuota ?? null;
                 const oilLow =
@@ -732,6 +734,7 @@ export default function MachineAssignmentList() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
 
       {detailSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">

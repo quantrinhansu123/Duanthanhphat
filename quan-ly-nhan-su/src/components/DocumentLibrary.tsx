@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "@/components/icons";
 import { useLanguage } from "@/i18n/LanguageProvider";
+import Pager, { usePaged } from "@/components/Pager";
 import {
   createDocumentFolder,
   deleteDocumentFolder,
@@ -163,6 +164,7 @@ export default function DocumentLibrary() {
         .sort((a, b) => b.createdTime.localeCompare(a.createdTime)),
     [items, activeFolder, folderOf],
   );
+  const paged = usePaged(filtered);
 
   async function handleCreateFolder(e: React.FormEvent) {
     e.preventDefault();
@@ -834,7 +836,7 @@ export default function DocumentLibrary() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((doc) => (
+                paged.rows.map((doc) => (
                   <tr key={doc.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="px-4 py-3.5">
                       <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
@@ -920,6 +922,7 @@ export default function DocumentLibrary() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
 
       {/* Modal viewer — full màn hình */}
       {viewer && (

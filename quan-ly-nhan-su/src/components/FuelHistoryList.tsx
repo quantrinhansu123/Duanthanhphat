@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { compareNewestDate } from "@/lib/dateOrder";
 import { formatFuelDate, loadDailyFuelRows, type DailyFuelRow } from "@/lib/dailyFuelDb";
+import Pager, { usePaged } from "@/components/Pager";
 
 const filterClass =
   "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 sm:text-sm";
@@ -72,6 +73,7 @@ export default function FuelHistoryList() {
       }).sort((a, b) => compareNewestDate(a.date, b.date) || b.id.localeCompare(a.id)),
     [rows, machineId, personId, dateFrom, dateTo],
   );
+  const paged = usePaged(filtered);
 
   const totals = useMemo(() => {
     let liters = 0;
@@ -181,7 +183,7 @@ export default function FuelHistoryList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {paged.rows.map((row) => (
                 <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-slate-700">{formatFuelDate(row.date)}</td>
                   <td className="px-3.5 py-3">
@@ -215,6 +217,7 @@ export default function FuelHistoryList() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
     </main>
   );
 }

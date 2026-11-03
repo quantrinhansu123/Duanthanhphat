@@ -37,6 +37,7 @@ import { parseCertificateList } from "@/lib/weldingCertificates";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import MachineSelect, { type MachineSelectOption } from "@/components/MachineSelect";
 import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClient";
+import Pager, { usePaged } from "@/components/Pager";
 
 const WELD_SCOPE_OPTIONS = ["FBW", "ATW"] as const;
 
@@ -843,6 +844,7 @@ export default function CertificateManagement() {
       ),
     [certificateTypes, methodFilter, machineFilter],
   );
+  const paged = usePaged(filtered);
 
   const filteredWeldersForForm = useMemo(() => {
     const q = holderQuery.trim().toLocaleLowerCase("vi");
@@ -1473,6 +1475,7 @@ export default function CertificateManagement() {
           </button>
         </div>
       ) : (
+        <>
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
           <div className="table-scroll overflow-x-auto">
             <table className="w-full min-w-[960px] border-collapse text-left text-xs sm:text-sm">
@@ -1489,7 +1492,7 @@ export default function CertificateManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((row, index) => {
+                {paged.rows.map((row, index) => {
                   const open = Boolean(expanded[row.key]);
                   const preview = row.holders.slice(0, 3);
                   const more = Math.max(0, row.holders.length - preview.length);
@@ -1498,7 +1501,7 @@ export default function CertificateManagement() {
                   return (
                     <Fragment key={row.key}>
                       <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-3.5 py-3 font-mono font-bold text-slate-600">{index + 1}</td>
+                        <td className="px-3.5 py-3 font-mono font-bold text-slate-600">{(paged.pagerProps.page - 1) * paged.pagerProps.pageSize + index + 1}</td>
                         <td className="px-3.5 py-3">
                           <button
                             type="button"
@@ -1657,6 +1660,8 @@ export default function CertificateManagement() {
             </table>
           </div>
         </div>
+        <Pager {...paged.pagerProps} />
+        </>
       )}
 
       {(addOpen || editTarget) && (

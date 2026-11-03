@@ -26,6 +26,7 @@ import {
 } from "@/lib/trainingDb";
 import { deleteCloudinaryAsset, uploadCloudinaryAsset } from "@/lib/cloudinaryClient";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import Pager, { usePaged } from "@/components/Pager";
 
 /** Native confirm() dialogs bypass the DOM translator, so pick the language here. */
 const isEnglish = () => document.documentElement.lang === "en";
@@ -1255,6 +1256,7 @@ export default function TrainingList() {
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
   }, [courses, resultFilter, railFilter, methodFilter]);
+  const paged = usePaged(filtered, 12);
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -1449,7 +1451,7 @@ export default function TrainingList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((c) => {
+          {paged.rows.map((c) => {
             const courseVideos = parseTrainingVideoUrls(c.videoUrl);
             return (
             <div
@@ -1553,6 +1555,7 @@ export default function TrainingList() {
             </div>
             );
           })}
+          <div className="col-span-full"><Pager {...paged.pagerProps} /></div>
         </div>
       )}
 

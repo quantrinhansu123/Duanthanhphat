@@ -11,6 +11,7 @@ import {
 import { MACHINE_MODELS } from "@/data/machines";
 import { deleteSpareParts, insertSparePart, loadSpareParts, updateSparePart } from "@/lib/sparePartsDb";
 import { canViewUnitPrice } from "@/lib/viewerAccess";
+import Pager, { usePaged } from "@/components/Pager";
 
 type ModalState =
   | { mode: "add" }
@@ -96,6 +97,7 @@ export default function SparePartsList() {
       return true;
     });
   }, [list, manufacturerFilter, modelFilter, categoryFilter, statusFilter]);
+  const paged = usePaged(filtered);
 
   const lowStockCount = filtered.filter((row) => row.status === "Sắp hết" || row.status === "Hết hàng").length;
   const hasFilter = Boolean(manufacturerFilter || modelFilter || categoryFilter || statusFilter);
@@ -375,7 +377,7 @@ export default function SparePartsList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {paged.rows.map((row) => (
                 <tr key={row.id} className={`transition-colors hover:bg-slate-50/80 ${selectedIds.includes(row.id) ? "bg-blue-50/50" : ""}`}>
                   <td className="py-3 pl-4">
                     <input
@@ -434,6 +436,7 @@ export default function SparePartsList() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onClick={() => setModal(null)}>

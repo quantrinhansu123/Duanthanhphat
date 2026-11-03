@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBulkImportData, type ProjectWeldRow, type WelderSummaryRow, type YearSummaryRow, type WeldData } from "@/lib/bulkImportDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
+import Pager, { usePaged } from "@/components/Pager";
 
 type ImportTab = "projects" | "welders" | "years";
 
@@ -81,6 +82,7 @@ function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
       return matchesProject && matchesYear;
     });
   }, [project, rows, year]);
+  const paged = usePaged(filtered);
 
   const total = filtered.reduce((sum, row) => sum + row.so_luong_thuc_hien, 0);
   const errors = filtered.reduce((sum, row) => sum + row.so_luong_loi, 0);
@@ -121,7 +123,7 @@ function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {paged.rows.map((row) => (
                 <tr key={row.id} className="transition-colors hover:bg-blue-50/50">
                   <td className="px-3 py-3 font-mono font-semibold text-[#0047AB]">{row.ma_lich_su}</td>
                   <td className="max-w-[320px] px-3 py-3 font-medium text-slate-900">{row.du_an}</td>
@@ -142,6 +144,7 @@ function ProjectTable({ rows }: { rows: ProjectWeldRow[] }) {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
     </>
   );
 }

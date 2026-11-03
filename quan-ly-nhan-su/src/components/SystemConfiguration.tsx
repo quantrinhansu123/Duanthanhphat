@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import AccountCreateModal, { CredentialsModal, PasswordField, accountEmail, generatePassword, roleOptions } from "@/components/AccountCreateModal";
 import { navigation } from "@/data/navigation";
 import { Check, DotsThree } from "@/components/icons";
+import Pager, { usePaged } from "@/components/Pager";
 import {
   catalogGroups,
   defaultPermissions,
@@ -239,6 +240,7 @@ function CatalogsPanel({
   const [modal, setModal] = useState<{ item: CatalogItem; mode: "create" | "edit" } | null>(null);
 
   const filtered = useMemo(() => catalogs.filter((c) => c.group === group), [catalogs, group]);
+  const pagedCat = usePaged(filtered);
 
   function handleSave(item: CatalogItem) {
     let next: CatalogItem[];
@@ -306,7 +308,7 @@ function CatalogsPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((c) => (
+              {pagedCat.rows.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-mono font-bold text-[#0047AB] text-xs sm:text-sm">{c.code}</td>
                   <td className="px-3.5 py-3 font-semibold text-slate-900">{c.name}</td>
@@ -363,6 +365,7 @@ function CatalogsPanel({
           </table>
         </div>
       </div>
+      <Pager {...pagedCat.pagerProps} />
 
       {modal && (
         <CatalogModal
@@ -701,6 +704,7 @@ function AccountsPanel({
       ),
     [accounts],
   );
+  const pagedAcc = usePaged(filtered);
 
   function toggleStatus(account: InitialAccount) {
     const next: InitialAccount["status"] = account.status === "Hoạt động" ? "Khóa" : "Hoạt động";
@@ -766,7 +770,7 @@ function AccountsPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((a) => (
+              {pagedAcc.rows.map((a) => (
                 <tr
                   key={a.id}
                   onClick={() => setSelectedId(a.id)}
@@ -838,6 +842,7 @@ function AccountsPanel({
           </table>
         </div>
       </div>
+      <Pager {...pagedAcc.pagerProps} />
       {creating && <AccountCreateModal onClose={() => setCreating(false)} onCreate={handleCreated} />}
       {selected && (
         <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} onGrant={handleGranted} onPassword={(login, password) => { setSelectedId(null); setCredentials({ email: login, password }); }} />

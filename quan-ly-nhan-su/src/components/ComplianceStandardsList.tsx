@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useLanguage } from "@/i18n/LanguageProvider";
+import Pager, { usePaged } from "@/components/Pager";
 import {
   INITIAL_COMPLIANCE_STANDARDS,
   type ComplianceStandardItem,
@@ -73,6 +74,7 @@ export default function ComplianceStandardsList() {
       return true;
     });
   }, [items, scopeFilter, statusFilter]);
+  const paged = usePaged(filteredItems);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -313,7 +315,7 @@ export default function ComplianceStandardsList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredItems.map((item) => (
+              {paged.rows.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="p-3 align-top">
                     <div className="font-bold text-slate-900 font-mono text-xs">
@@ -408,6 +410,7 @@ export default function ComplianceStandardsList() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
 
       {editingStandard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">

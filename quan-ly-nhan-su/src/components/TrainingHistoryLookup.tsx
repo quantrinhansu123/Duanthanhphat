@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useCatalogOptions } from "@/hooks/useSystemCatalogs";
+import Pager, { usePaged } from "@/components/Pager";
 import {
   fetchWelderTrainingHistory,
   type DbTrainingHistoryRecord,
@@ -92,6 +93,7 @@ export default function TrainingHistoryLookup() {
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
   }, [records, personType, course, result, status, methodFilter, railFilter]);
+  const paged = usePaged(filtered);
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
@@ -179,7 +181,7 @@ export default function TrainingHistoryLookup() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((row) => (
+              {paged.rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/80 transition-colors duration-150">
                   <td className="px-4 py-3 font-semibold text-slate-900">{row.personName}</td>
                   <td className="px-3.5 py-3">
@@ -246,6 +248,7 @@ export default function TrainingHistoryLookup() {
           </table>
         </div>
       </div>
+      <Pager {...paged.pagerProps} />
     </main>
   );
 }
