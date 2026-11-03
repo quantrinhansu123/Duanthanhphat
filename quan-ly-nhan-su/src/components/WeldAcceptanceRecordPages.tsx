@@ -110,9 +110,19 @@ function chainageMetres(v: string) {
   return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : null;
 }
 
-/** Tên máy trên biên bản: thay mô tả "Máy hàn tiếp xúc…" bằng "Máy hàn chảy giáp mép", giữ nguyên mã máy. */
+/**
+ * Tên máy trên biên bản: luôn ghi "Máy hàn chảy giáp mép" + mã model (UN5-…, KCM-…).
+ * VD "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6" → "Máy hàn chảy giáp mép UN5-150ZC2-C6".
+ */
 function machinePrintName(name: string) {
-  return name.replace(/máy hàn tiếp xúc[\p{L}\s]*?(?=\s*[A-Z]{1,4}\d)/iu, "Máy hàn chảy giáp mép ").replace(/\s+/g, " ").trim();
+  const cleaned = name.replace(/\s+/g, " ").trim();
+  if (!cleaned) return cleaned;
+  const model = /\b((?:UN5|KCM|K922)[A-Z0-9./()-]*)\b/i.exec(cleaned)?.[1];
+  if (model) return `Máy hàn chảy giáp mép ${model}`;
+  if (/máy hàn tiếp xúc|flash\s*butt|đối đầu/i.test(cleaned)) {
+    return "Máy hàn chảy giáp mép";
+  }
+  return cleaned;
 }
 
 function mark(on: boolean) {
