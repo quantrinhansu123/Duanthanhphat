@@ -117,7 +117,7 @@ export async function setRecordSetSign(dot_id: string, tinh_trang_ky: "Chờ ký
 }
 
 export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: string; dateTo?: string }) =>
-  qualityRequest<{ accepted: WeldReportRow[]; waiting: WeldReportRow[] }>({ action: "dashboard-quality", filters });
+  qualityRequest<{ accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[] }>({ action: "dashboard-quality", filters });
 
 export const loadAcceptedOnDate = (date: string, du_an_id?: string | null) =>
   qualityRequest<{ count: number }>({ action: "accepted-on-date", date, du_an_id: du_an_id || undefined });

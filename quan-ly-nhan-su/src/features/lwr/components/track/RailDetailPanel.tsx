@@ -111,7 +111,7 @@ export function RailDetailPanel({
     setFieldError(null);
   }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp]);
 
-  function apply(patch: RailCellPatch) {
+  function apply(patch: RailCellPatch): boolean {
     const ok = onChange(patch);
     if (!ok) {
       setFromDraft(cell.from);
@@ -119,9 +119,10 @@ export function RailDetailPanel({
       setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
       setLeftTempDraft(String(sideTempOf(cell, "left")));
       setRightTempDraft(String(sideTempOf(cell, "right")));
-      return;
+      return false;
     }
     setFieldError(null);
+    return true;
   }
 
   function commitFrom() {
@@ -260,6 +261,7 @@ export function RailDetailPanel({
               rightTemp: sideTempOf(cell, "right"),
             }}
             onSave={onSaveParams}
+            onChainageCommit={(patch) => apply(patch)}
           />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">

@@ -3,7 +3,7 @@ import { formatChainage, getPlacementSpan, type TrackLayout } from "@lwr/lib/tra
 
 export type DiaryWork = {
   id: string; ma_lich_su: string; cong_nghe_han: string; so_luong_thuc_hien: number;
-  ma_diem?: string | null; ly_trinh?: string | null; tho_han_id?: string | null;
+  ma_diem?: string | null; ly_trinh?: string | null; tho_han_id?: string | null; ma_hien_truong?: string | null;
 };
 
 /** Mỗi dòng tách theo công tác và tuyến; một mối chỉ tính một lần. */
@@ -26,8 +26,8 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const range = km.length ? `${format(km[0])} – ${format(km[km.length - 1])}` : "Km… – Km…";
     const missing = km.length < group.length ? " (cần bổ sung lý trình)" : "";
     const quantity = group.reduce((sum, r) => sum + r.so_luong_thuc_hien, 0);
-    const codes = ` Mối số: ${group.map((r) => r.ma_diem || r.ma_lich_su).sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ")}.`;
-    return `${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
+    const codes = ` Mối số: ${group.map((r) => r.ma_hien_truong?.trim() || r.ma_lich_su).sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ")}.`;
+    return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
   }).join("\n");
 }
 
@@ -39,7 +39,7 @@ export function diaryStressReleaseText(layout: TrackLayout | null, projectId: st
     if (completedDate !== date) return [];
     const span = getPlacementSpan(layout.rows, rail);
     if (!span) return [];
-    return [`Giải tỏa ứng suất đoạn Km${formatChainage(span.startMetres)} – Km${formatChainage(span.endMetres)}, ${span.row.line}, ${span.row.rail}. Đoạn LWR: ${rail.code}. Khối lượng: ${Number((span.endMetres - span.startMetres).toFixed(3))} m ray.`];
+    return [`- Giải tỏa ứng suất đoạn Km${formatChainage(span.startMetres)} – Km${formatChainage(span.endMetres)}, ${span.row.line}, ${span.row.rail}. Đoạn LWR: ${rail.code}. Khối lượng: ${Number((span.endMetres - span.startMetres).toFixed(3))} m ray.`];
   }).join("\n");
 }
 

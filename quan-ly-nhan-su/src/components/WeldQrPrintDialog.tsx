@@ -223,9 +223,11 @@ export default function WeldQrPrintDialog({
       #weld-qr-print h1 { margin:0 0 2mm; text-align:center; font-size:14pt; text-transform:uppercase; }
       #weld-qr-print .meta { text-align:center; font-size:9.5pt; margin:0 0 4mm; }
       #weld-qr-print h2 { margin:5mm 0 2mm; font-size:10.5pt; border-bottom:1px solid #333; padding-bottom:1mm; }
-      #weld-qr-print .strip { margin:0 0 7mm; break-inside:avoid; border-top:0.3mm solid #333; }
-      #weld-qr-print .srow { display:grid; grid-template-columns:22mm 15mm repeat(var(--cols), 1fr); align-items:center; border-bottom:0.2mm solid #bbb; }
-      #weld-qr-print .srow > div { min-width:0; text-align:center; }
+      #weld-qr-print .strip { width:100%; margin:0 0 7mm; border-collapse:collapse; table-layout:fixed; break-inside:avoid; border-top:0.3mm solid #333; }
+      #weld-qr-print .strip td { min-width:0; padding:0; text-align:center; vertical-align:middle; border-bottom:0.2mm solid #bbb; }
+      #weld-qr-print .strip col.c-route { width:22mm; }
+      #weld-qr-print .strip col.c-rail { width:15mm; }
+      #weld-qr-print .strip tr.gaprow td { height:3mm; border-bottom:0; }
       #weld-qr-print .route { font-size:9.5pt; font-weight:bold; text-align:left!important; padding-left:1mm; }
       #weld-qr-print .rail-name { font-size:8.5pt; font-weight:bold; text-align:left!important; }
       #weld-qr-print .lab { font-size:7pt; line-height:1.3; padding:1.2mm 0; }
@@ -312,7 +314,6 @@ export default function WeldQrPrintDialog({
           <p className="hint">Chọn dự án, ngày, đoạn Km rồi bấm “Tạo danh sách tem”. Chỉ liệt kê điểm Autolisp chưa có nhật ký.</p>
         ) : strips.map((strip) => {
           const cols = strip.columns;
-          const style = { "--cols": cols.length } as React.CSSProperties;
           const label = (tag?: Tag) => (
             <div className="lab">
               {tag ? (
@@ -331,19 +332,26 @@ export default function WeldQrPrintDialog({
             </div>
           );
           return (
-            <section className="strip" key={strip.key}>
-              {/* Dải 1: sơ đồ ray với các điểm theo lý trình */}
-              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.left)}</div>)}</div>
-              <div className="srow" style={style}><div className="route">{strip.route}</div><div className="rail-name">RAY TRÁI</div>{cols.map((c, i) => <div key={i} className="rail">{c.left ? <span className="dot" /> : null}</div>)}</div>
-              <div className="srow" style={style}><div /><div className="rail-name">RAY PHẢI</div>{cols.map((c, i) => <div key={i} className="rail">{c.right ? <span className="dot" /> : null}</div>)}</div>
-              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.right)}</div>)}</div>
-              <div className="srow gap" style={style} />
-              {/* Dải 2: tem QR dán lên ray */}
-              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.left)}</div>)}</div>
-              <div className="srow" style={style}><div className="route">{strip.route}</div><div className="rail-name">RAY TRÁI</div>{cols.map((c, i) => <div key={i}>{qr(c.left)}</div>)}</div>
-              <div className="srow" style={style}><div /><div className="rail-name">RAY PHẢI</div>{cols.map((c, i) => <div key={i}>{qr(c.right)}</div>)}</div>
-              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.right)}</div>)}</div>
-            </section>
+            <table className="strip" key={strip.key}>
+              <colgroup>
+                <col className="c-route" />
+                <col className="c-rail" />
+                {cols.map((_, i) => <col key={i} />)}
+              </colgroup>
+              <tbody>
+                {/* Dải 1: sơ đồ ray với các điểm theo lý trình */}
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.left)}</td>)}</tr>
+                <tr><td className="route">{strip.route}</td><td className="rail-name">RAY TRÁI</td>{cols.map((c, i) => <td key={i} className="rail">{c.left ? <span className="dot" /> : null}</td>)}</tr>
+                <tr><td /><td className="rail-name">RAY PHẢI</td>{cols.map((c, i) => <td key={i} className="rail">{c.right ? <span className="dot" /> : null}</td>)}</tr>
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.right)}</td>)}</tr>
+                <tr className="gaprow"><td /><td />{cols.map((_, i) => <td key={i} />)}</tr>
+                {/* Dải 2: tem QR dán lên ray */}
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.left)}</td>)}</tr>
+                <tr><td className="route">{strip.route}</td><td className="rail-name">RAY TRÁI</td>{cols.map((c, i) => <td key={i}>{qr(c.left)}</td>)}</tr>
+                <tr><td /><td className="rail-name">RAY PHẢI</td>{cols.map((c, i) => <td key={i}>{qr(c.right)}</td>)}</tr>
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.right)}</td>)}</tr>
+              </tbody>
+            </table>
           );
         })}
         {strips.length > 0 && (

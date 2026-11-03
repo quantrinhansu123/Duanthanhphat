@@ -25,7 +25,6 @@ export default function LoginPage() {
             <BrandLockup size="md" className="min-w-0 max-w-[15rem] text-left sm:max-w-[18rem]" />
           </div>
           <h2 className="text-center text-2xl font-bold text-[#1e3a7a] sm:text-[1.65rem]">Đăng nhập</h2>
-          <p className="mt-1.5 text-center text-sm text-slate-600">Chào mừng bạn quay trở lại hệ thống Quản lý hàn ray</p>
           <LoginForm />
           <p className="mt-10 border-t border-slate-200 pt-4 text-center text-xs text-slate-500">© 2026 Công ty cổ phần công trình Thành Phát · CONSTRUCTION WORK JOINT STOCK COMPANY</p>
         </div>

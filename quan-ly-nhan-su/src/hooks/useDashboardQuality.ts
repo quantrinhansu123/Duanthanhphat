@@ -6,7 +6,7 @@ import { loadDashboardQuality } from "@/lib/weldQualityClient";
 
 /** Mối "Đạt" / "Chờ mài" cho Dashboard. Một nguồn duy nhất → số thẻ luôn bằng danh sách mở ra. */
 export function useDashboardQuality(filters: WeldReportFilters) {
-  const [data, setData] = useState<{ accepted: WeldReportRow[]; waiting: WeldReportRow[] } | null>(null);
+  const [data, setData] = useState<{ accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[] } | null>(null);
   const key = JSON.stringify([filters.projects ?? [], filters.dateFrom ?? "", filters.dateTo ?? ""]);
   const [tick, setTick] = useState(0);
 
@@ -29,8 +29,10 @@ export function useDashboardQuality(filters: WeldReportFilters) {
     if (!data) return null;
     const accepted = filterWeldReportRows(data.accepted, filters);
     const waiting = filterWeldReportRows(data.waiting, filters);
+    const acceptance = filterWeldReportRows(data.acceptance ?? [], filters);
+    const signing = filterWeldReportRows(data.signing ?? [], filters);
     const sum = (rows: WeldReportRow[]) => rows.reduce((n, r) => n + r.so_luong_thuc_hien, 0);
-    return { accepted, waiting, acceptedCount: sum(accepted), waitingCount: sum(waiting) };
+    return { accepted, waiting, acceptance, signing, acceptedCount: sum(accepted), waitingCount: sum(waiting), acceptanceCount: sum(acceptance), signingCount: sum(signing) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, key, filters.personnel, filters.machines, filters.methods, filters.weldTypes]);
 }

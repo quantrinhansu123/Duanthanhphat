@@ -47,9 +47,9 @@ export async function POST(request: Request) {
     if (body.action === "rules-list") return NextResponse.json(await listQualityRules(String(body.du_an_id ?? "")));
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
-      const [accepted, waiting] = await Promise.all(["Đạt", "Chờ mài"].map((qualityStatusFilter) =>
+      const [accepted, waiting, acceptance, signing] = await Promise.all(["Đạt", "Chờ mài", "Chờ siêu âm và nghiệm thu", "Chờ ký biên bản"].map((qualityStatusFilter) =>
         loadQualityJournalRows(parseQualityFilters({ ...base, qualityStatusFilter, page: 1, pageSize: 1000 }))));
-      return NextResponse.json({ accepted, waiting });
+      return NextResponse.json({ accepted, waiting, acceptance, signing });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (body.action === "rfi-candidates") return NextResponse.json(await loadRfiCandidates(body));

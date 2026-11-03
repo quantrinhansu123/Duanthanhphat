@@ -66,7 +66,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id)])];
   const [all, points] = await Promise.all([
-    chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh").eq("du_an_id", projectId).in("id", p)),
+    chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh,ma_hien_truong").eq("du_an_id", projectId).in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
       .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
   ]);
@@ -110,7 +110,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     noiDungCongViec: [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
     nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {
       const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
-      return text ? `${text} Kết quả: ${result}.` : "";
+      return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
     }).filter(Boolean).join("\n") || "Không có công tác nghiệm thu",
   };
 }

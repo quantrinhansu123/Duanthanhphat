@@ -74,7 +74,7 @@ const PROJECT_COLORS = [
 const CHART_ZOOM_MAX = 8;
 const LOOKUP_PAGE_SIZE = 80;
 
-type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind";
+type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind" | "acceptance" | "signing";
 
 const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   projects: "Dự án",
@@ -86,6 +86,8 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   rework: "Mối hàn lại",
   pending: "Chờ siêu âm và nghiệm thu",
   grind: "Chờ mài",
+  acceptance: "Chờ nghiệm thu",
+  signing: "Chờ ký biên bản",
 };
 
 function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
@@ -1566,8 +1568,7 @@ export default function OverviewDashboard() {
       </div>
 
       {/* Top KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card: Dự án */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <button type="button" onClick={() => setLookup("projects")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-violet-700 uppercase">
@@ -1582,7 +1583,7 @@ export default function OverviewDashboard() {
             {isAllDates ? (
               <div className="mt-2.5 space-y-1 text-xs">
                 <div className="text-slate-500">
-                  Đã thực hiện:{" "}
+                  Mối hàn sản xuất:{" "}
                   <span className="font-mono font-semibold text-slate-700">{fmt(doneBeforePlanYear)}</span> mối
                 </div>
                 <div className="text-slate-500">
@@ -1606,7 +1607,6 @@ export default function OverviewDashboard() {
           </div>
         </button>
 
-        {/* Card 1: Tổng mối hàn */}
         <button type="button" onClick={() => setLookup("all")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-[#0047AB] uppercase">
@@ -1619,7 +1619,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              Toàn bộ bản ghi
+              Toàn bộ các loại mối hàn
             </div>
           </div>
           <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
@@ -1627,7 +1627,26 @@ export default function OverviewDashboard() {
           </div>
         </button>
 
-        {/* Card 2: Hôm nay */}
+        <button type="button" onClick={() => setLookup("passed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
+              ĐẠT
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
+                {quality ? fmt(quality.acceptedCount) : "—"}
+              </div>
+              <div className="text-xs font-medium text-slate-400">mối</div>
+            </div>
+            <div className="mt-2.5 text-xs text-slate-500">
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && productionWelds.total > 0 ? pctComma(quality.acceptedCount, productionWelds.total) : "—"}</span> đạt / tổng sản xuất toàn bộ
+            </div>
+          </div>
+          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle size={24} weight="fill" aria-hidden />
+          </div>
+        </button>
+
         <button type="button" onClick={() => setLookup("today")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
@@ -1648,7 +1667,6 @@ export default function OverviewDashboard() {
           </div>
         </button>
 
-        {/* Card 3: Ngày gần nhất trong kỳ lọc */}
         <button type="button" onClick={() => setLookup("latest")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-indigo-700 uppercase">
@@ -1676,28 +1694,42 @@ export default function OverviewDashboard() {
           </div>
         </button>
 
-        {/* Card 4: Nghiệm thu đạt (theo đợt nghiệm thu hoàn thành, không phải NDT đạt) */}
-        <button type="button" onClick={() => setLookup("passed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
-              NGHIỆM THU ĐẠT
-            </div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-              <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {quality ? fmt(quality.acceptedCount) : "—"}
-              </div>
-              <div className="text-xs font-medium text-slate-400">mối</div>
-            </div>
-            <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && total > 0 ? pctComma(quality.acceptedCount, total) : "—"}</span> tổng mối hàn thực hiện
-            </div>
+        <button type="button" onClick={() => setLookup("grind")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-slate-600">CHỜ MÀI</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.waitingCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
           </div>
-          <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle size={24} weight="fill" aria-hidden />
-          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Chưa mài hoặc chưa đủ trực quan/số đo</div>
         </button>
 
-        {/* Card 5: Không đạt */}
+        <button type="button" onClick={() => setLookup("pending")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ THÍ NGHIỆM</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(visibleSummary.pending)}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("acceptance")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-sky-700">CHỜ NGHIỆM THU</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.acceptanceCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã phát / chờ phát RFI, chờ siêu âm và nghiệm thu</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("signing")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-violet-700">CHỜ KÝ BIÊN BẢN</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.signingCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu, chờ các bên ký biên bản</div>
+        </button>
+
         <button type="button" onClick={() => setLookup("failed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-rose-700 uppercase">
@@ -1717,26 +1749,11 @@ export default function OverviewDashboard() {
             <XCircle size={24} weight="fill" aria-hidden />
           </div>
         </button>
+
         <button type="button" onClick={() => setLookup("rework")} className="w-full cursor-pointer rounded-xl border border-amber-200 bg-white p-4 text-left shadow-xs transition-all hover:border-amber-300 hover:shadow-sm">
           <div className="text-xs font-bold text-amber-700">MỐI HÀN LẠI</div>
           <div className="mt-2 text-3xl font-bold font-mono">{fmt(rework)} <span className="text-xs text-slate-400">mối</span></div>
           <div className="mt-2 text-xs text-slate-500">Có mối hàn liên kết</div>
-        </button>
-        <button type="button" onClick={() => setLookup("pending")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ THÍ NGHIỆM</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(visibleSummary.pending)}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
-        </button>
-        <button type="button" onClick={() => setLookup("grind")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-slate-600">CHỜ MÀI</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.waitingCount) : "—"}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Chưa mài hoặc chưa đủ trực quan/số đo</div>
         </button>
       </div>
 
@@ -2742,7 +2759,7 @@ export default function OverviewDashboard() {
         <ReportLookupDialog
           kind={lookup}
           loading={lookup !== "projects" && loading && selectedRows.length === 0}
-          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
           projects={selectedProjects.map((project) => ({
             id: project.id,
             name: project.name,

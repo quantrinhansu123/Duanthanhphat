@@ -29,6 +29,6 @@ export function assignedEquipment(machines: Pick<Machine, "id" | "code" | "name"
 export function projectEquipmentText(equipment: ProjectEquipment[]): string {
   return ([ ["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"], ["materials", "3. Vật tư"] ] as const).map(([group, title]) => {
     const rows = equipment.filter((m) => m.group === group);
-    return `${title}:\n${rows.map((m) => m.missing ? `- ${m.name}; cần gán lại trong dự án` : `- ${m.name}${m.model ? ` (${m.model})` : ""}: ${m.quantity} bộ`).join("\n") || "Chưa gán thiết bị"}`;
+    return `${title}:\n${rows.map((m) => m.missing ? `- ${m.name}; cần gán lại trong dự án` : `- ${m.name}${m.model ? ` (${m.model})` : ""}: ${m.quantity} bộ`).join("\n")}`;
   }).join("\n");
 }

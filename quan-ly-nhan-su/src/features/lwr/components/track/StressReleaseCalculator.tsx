@@ -114,6 +114,7 @@ export function StressReleaseCalculator({
   onSave,
   onModeChange,
   chainageLocked = false,
+  onChainageCommit,
   statusSlot,
 }: {
   initialInput?: StressInput;
@@ -123,6 +124,8 @@ export function StressReleaseCalculator({
   onModeChange?: (mode: Mode) => void;
   /** Khóa lý trình đầu/cuối khi thanh LWR đã giải toả xong. */
   chainageLocked?: boolean;
+  /** Trong ô ray: sửa lý trình đầu/cuối ở đây thì cập nhật luôn sơ đồ (trả false nếu không hợp lệ → trả về giá trị cũ). */
+  onChainageCommit?: (patch: { from?: string; to?: string }) => boolean | void;
   /** Nút Đạt / Không đạt — đặt ngay dưới Lưu thông số / In A4. */
   statusSlot?: ReactNode;
 }) {
@@ -137,6 +140,19 @@ export function StressReleaseCalculator({
   const [startTime, setStartTime] = useState(initialInput.startTime ?? "");
   const [endTime, setEndTime] = useState(initialInput.endTime ?? "");
   const [rollers, setRollers] = useState(initialInput.sideRollers);
+  const commitChainage = (key: "from" | "to") => {
+    if (!onChainageCommit) return;
+    const value = key === "from" ? startChainage : endChainage;
+    const original = (key === "from" ? initialInput.startChainage : initialInput.endChainage) ?? "";
+    if (value.trim() === original.trim()) return;
+    if (onChainageCommit({ [key]: value }) === false) {
+      setStartChainage(initialInput.startChainage ?? "");
+      setEndChainage(initialInput.endChainage ?? "");
+    }
+  };
+  const commitOnEnter = (key: "from" | "to") => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); commitChainage(key); }
+  };
   useEffect(() => {
     setStartChainage(initialInput.startChainage ?? "");
     setEndChainage(initialInput.endChainage ?? "");
@@ -376,8 +392,8 @@ export function StressReleaseCalculator({
             </select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-amber-800">Lý trình đầu<input className={siteClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} placeholder="Km0+000" disabled={chainageLocked} readOnly={chainageLocked} /></label>
-            <label className="text-xs text-amber-800">Lý trình cuối<input className={siteClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} placeholder="Km0+800" disabled={chainageLocked} readOnly={chainageLocked} /></label>
+            <label className="text-xs text-amber-800">Lý trình đầu<input className={siteClass} value={startChainage} onChange={e => setStartChainage(e.target.value)} onBlur={() => commitChainage("from")} onKeyDown={commitOnEnter("from")} placeholder="Km0+000" disabled={chainageLocked} readOnly={chainageLocked} /></label>
+            <label className="text-xs text-amber-800">Lý trình cuối<input className={siteClass} value={endChainage} onChange={e => setEndChainage(e.target.value)} onBlur={() => commitChainage("to")} onKeyDown={commitOnEnter("to")} placeholder="Km0+800" disabled={chainageLocked} readOnly={chainageLocked} /></label>
             <label className="text-xs text-amber-800 sm:col-span-2">Lý trình vị trí kéo / mối hàn<input className={siteClass} value={jointChainage} onChange={e => setJointChainage(e.target.value)} placeholder="Để trống: kéo ở cuối đoạn" /></label>
           </div>
           {chainageLocked
