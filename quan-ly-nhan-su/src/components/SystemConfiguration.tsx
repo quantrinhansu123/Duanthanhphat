@@ -488,11 +488,13 @@ function AccountModal({
   onClose,
   onSave,
   onGrant,
+  onPassword,
 }: {
   account: InitialAccount;
   onClose: () => void;
   onSave: (account: InitialAccount) => void;
   onGrant: (account: InitialAccount, password: string) => void;
+  onPassword: (login: string, password: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(account);
@@ -540,6 +542,25 @@ function AccountModal({
       onGrant({ ...account, email, id: payload.id ?? account.id }, pw);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không cấp được tài khoản");
+      setBusy(false);
+    }
+  }
+  async function resetPassword() {
+    if (!confirm("Cấp mật khẩu mới? Mật khẩu cũ sẽ không dùng được nữa.")) return;
+    const pw = generatePassword();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/system-configuration/accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: account.email, password: pw }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
+      onPassword(account.phone || account.email, pw);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không cấp được mật khẩu");
       setBusy(false);
     }
   }
@@ -625,6 +646,16 @@ function AccountModal({
               className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0047AB] bg-white px-4 text-xs sm:text-sm font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-60 cursor-pointer"
             >
               {busy ? "Đang cấp…" : "Cấp tài khoản"}
+            </button>
+          )}
+          {!editing && account.email && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void resetPassword()}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0047AB] bg-white px-4 text-xs sm:text-sm font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-60 cursor-pointer"
+            >
+              {busy ? "Đang cấp…" : "Cấp mật khẩu"}
             </button>
           )}
           <button
@@ -809,7 +840,7 @@ function AccountsPanel({
       </div>
       {creating && <AccountCreateModal onClose={() => setCreating(false)} onCreate={handleCreated} />}
       {selected && (
-        <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} onGrant={handleGranted} />
+        <AccountModal key={selected.id} account={selected} onClose={() => setSelectedId(null)} onSave={handleSaveAccount} onGrant={handleGranted} onPassword={(login, password) => { setSelectedId(null); setCredentials({ email: login, password }); }} />
       )}
       {credentials && <CredentialsModal {...credentials} onClose={() => setCredentials(null)} />}
     </>
