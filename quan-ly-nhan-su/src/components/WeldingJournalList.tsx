@@ -58,6 +58,7 @@ import {
 } from "@/lib/weldReportData";
 import { compareNewestDate } from "@/lib/dateOrder";
 const QrScanDialog = dynamic(() => import("@/components/QrScanDialog"), { ssr: false });
+const WeldQrPrintDialog = dynamic(() => import("@/components/WeldQrPrintDialog"), { ssr: false });
 import { parseWeldQr } from "@/lib/weldQr";
 import {
   buildWeldCodePrefix,
@@ -417,6 +418,7 @@ function JournalFormModal({
   const [prefixCodes, setPrefixCodes] = useState<string[]>([]);
   const [machineFieldCodes, setMachineFieldCodes] = useState<string[]>([]);
   const [siteCodeEdited, setSiteCodeEdited] = useState(false);
+  const [codeFromQr, setCodeFromQr] = useState(false);
   const [gpsRailFilter, setGpsRailFilter] = useState("");
   const [machineCodeEdited, setMachineCodeEdited] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -492,6 +494,7 @@ function JournalFormModal({
       const range = defaultLinkDateRange();
       setLinkDateFrom(range.from);
       setLinkDateTo(range.to);
+      setCodeFromQr(mode === "create" && Boolean(initial?.ma_lich_su));
       setSiteCodeEdited((mode === "edit" || Boolean(initial)) && Boolean(next.ma_hien_truong));
       setMachineCodeEdited((mode === "edit" || Boolean(initial)) && Boolean(next.ten_moi_han_theo_may));
       const today = defaultPerformedAt().slice(0, 10);
@@ -564,10 +567,10 @@ function JournalFormModal({
   }, [mode, form.ma_lich_su, existingCodes, prefixCodes, form.cong_nghe_han, form.performedAt, sitePrefix, form.loai_moi_han]);
 
   useEffect(() => {
-    if (!open || mode === "edit") return;
+    if (!open || mode === "edit" || codeFromQr) return;
     if (!suggestedCode || form.ma_lich_su === suggestedCode) return;
     setForm((prev) => ({ ...prev, ma_lich_su: suggestedCode }));
-  }, [open, mode, suggestedCode, form.ma_lich_su]);
+  }, [open, mode, suggestedCode, form.ma_lich_su, codeFromQr]);
 
   useEffect(() => {
     if (!open || mode === "edit") return;
@@ -1813,6 +1816,7 @@ export default function WeldingJournalList({
   const [formOpen, setFormOpen] = useState(false);
   const [autolispBulkOpen, setAutolispBulkOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [qrPrintOpen, setQrPrintOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
@@ -2120,6 +2124,7 @@ export default function WeldingJournalList({
       ly_trinh: point.chainage || base.ly_trinh,
       kinh_do: String(point.longitude),
       vi_do: String(point.latitude),
+      ma_lich_su: payload.systemCode || base.ma_lich_su,
       ma_hien_truong: payload.siteCode || base.ma_hien_truong,
       ten_moi_han_theo_may: payload.machineCode || base.ten_moi_han_theo_may,
     });
@@ -3082,6 +3087,14 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             </button>
             <button
               type="button"
+              onClick={() => setQrPrintOpen(true)}
+              title="In tem QR cho các vị trí sẽ hàn trong ngày — dán lên ray rồi quét QR để tạo nhật ký"
+              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
+            >
+              In tem QR
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setEditingRow(null);
                 setEditingForm(null);
@@ -3603,6 +3616,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       />
 
       <QrScanDialog open={qrOpen} onClose={() => setQrOpen(false)} onResult={handleQrResult} />
+      <WeldQrPrintDialog open={qrPrintOpen} onClose={() => setQrPrintOpen(false)} projects={projectOptions} machines={machineOptions} />
 
       <BulkAutolispWeldDialog
         open={autolispBulkOpen}

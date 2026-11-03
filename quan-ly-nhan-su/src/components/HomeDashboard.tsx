@@ -195,7 +195,7 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
             <div className="relative h-full w-full overflow-hidden rounded-xl">
               <Image
                 src="/logo.png"
-                alt="Logo Công ty CP Công trình Thành Phát"
+                alt="Logo Công ty cổ phần công trình Thành Phát"
                 fill
                 priority
                 className="object-contain"
@@ -208,7 +208,7 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
             <ShieldCheck size={16} weight="fill" className="text-[#0047AB]" />
             <span>
               {lang === "en"
-                ? "THANH PHAT ENGINEERING JOINT STOCK COMPANY"
+                ? "THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY"
                 : "CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT"}
             </span>
           </div>

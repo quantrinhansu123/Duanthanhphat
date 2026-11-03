@@ -127,7 +127,7 @@ export const sharedCatalogs: CatalogItem[] = [
 ];
 
 export const defaultSystemSettings: SystemSettings = {
-  companyName: "Công ty CP Thành Phát",
+  companyName: "Công ty cổ phần công trình Thành Phát",
   systemEmail: "hethong@thanhphat.vn",
   certWarningDays: 30,
   defaultProductionTarget: 22500,

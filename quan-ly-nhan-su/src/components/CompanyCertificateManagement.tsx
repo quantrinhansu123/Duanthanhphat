@@ -312,10 +312,10 @@ export default function CompanyCertificateManagement() {
                   </div>
                   <div>
                     <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200">
-                      CÔNG TY CP THÀNH PHÁT
+                      CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT
                     </div>
                     <div className="text-[10px] text-blue-100/80 font-mono">
-                      THANH PHAT JSC
+                      THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY
                     </div>
                   </div>
                 </div>
@@ -444,7 +444,7 @@ export default function CompanyCertificateManagement() {
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">
-                  CÔNG TY CỔ PHẦN THÀNH PHÁT
+                  CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 mt-0.5">
                   {detailCert.title}

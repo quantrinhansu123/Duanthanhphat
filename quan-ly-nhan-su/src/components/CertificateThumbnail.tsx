@@ -100,7 +100,7 @@ function UploadedCertificate({ cert, className }: CertificateThumbnailProps) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="" className="h-[clamp(14px,3.3vw,30px)] w-[clamp(14px,3.3vw,30px)] object-contain" />
         <span className="truncate text-[clamp(7px,1.25vw,12px)] font-extrabold uppercase tracking-wide text-[#173f77]">
-          Công ty CP Thành Phát
+          Công ty cổ phần công trình Thành Phát
         </span>
       </div>
       <div className="absolute inset-x-[3%] bottom-[4%] rounded-md border border-white/20 bg-slate-950/80 px-[clamp(5px,1.2vw,11px)] py-[clamp(3px,0.7vw,7px)] text-white shadow-md backdrop-blur-sm">
@@ -162,11 +162,11 @@ function GeneratedCertificate({ cert, className }: CertificateThumbnailProps) {
         <image href={BORDER_ASSET} x="0" y="0" width="800" height="500" preserveAspectRatio="none" />
 
         <image href="/logo.png" x="75" y="56" width="61" height="61" preserveAspectRatio="xMidYMid meet" />
-        <text x="149" y="77" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="800" fill="#173f77">
-          CÔNG TY CỔ PHẦN THÀNH PHÁT
+        <text x="149" y="77" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="800" fill="#173f77">
+          CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT
         </text>
         <text x="149" y="98" fontFamily="Arial, sans-serif" fontSize="9.5" fontWeight="600" fill="#64748b" letterSpacing="1.7">
-          THANH PHAT JOINT STOCK COMPANY
+          THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY
         </text>
 
         <rect x="541" y="65" width="187" height="34" rx="17" fill={theme.soft} stroke={theme.accent} strokeWidth="1" />
@@ -213,8 +213,8 @@ function GeneratedCertificate({ cert, className }: CertificateThumbnailProps) {
             ĐẠI DIỆN ĐƠN VỊ
           </text>
           <path d="M12 31c35-12 83-12 128 0" fill="none" stroke="#94a3b8" strokeWidth="1" />
-          <text x="76" y="48" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="9.5" fontWeight="700" fill="#334155">
-            CÔNG TY CP THÀNH PHÁT
+          <text x="76" y="48" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="9.5" fontWeight="700" fill="#334155" textLength="146" lengthAdjust="spacingAndGlyphs">
+            CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT
           </text>
         </g>
 

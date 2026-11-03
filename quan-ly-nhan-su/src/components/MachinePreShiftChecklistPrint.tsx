@@ -99,6 +99,7 @@ export default function MachinePreShiftChecklistPrint({
               <div>
                 <div className="brand-kicker">CÔNG TY CỔ PHẦN CÔNG TRÌNH</div>
                 <div className="brand-name">THÀNH PHÁT</div>
+                <div className="brand-kicker">CONSTRUCTION WORK JOINT STOCK COMPANY</div>
               </div>
             </div>
             <div className="head-meta">

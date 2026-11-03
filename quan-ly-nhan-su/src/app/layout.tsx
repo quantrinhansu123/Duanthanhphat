@@ -27,6 +27,9 @@ const roboto = Roboto({
 export const metadata: Metadata = {
   title: "Hệ thống Quản lý hàn ray · Thành Phát",
   description: "Hệ thống Quản lý hàn ray — Rail Welding Management System",
+  applicationName: "Thành Phát",
+  // Lưu vào màn hình chính (iPhone/iPad): tên ngắn dưới biểu tượng.
+  appleWebApp: { capable: true, title: "Thành Phát", statusBarStyle: "default" },
 };
 
 export default function RootLayout({

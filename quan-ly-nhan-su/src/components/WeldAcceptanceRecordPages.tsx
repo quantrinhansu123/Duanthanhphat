@@ -380,7 +380,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     if (doc.kind === "giai-doan") {
       const tvgs = t.ben_nhan || (pq ? "Công ty cổ phần Tư vấn thiết kế xây dựng công trình giao thông Miền Bắc (TEDI - NORTH)" : blank);
       const ntc = t.ben_moi || (pq ? "Tập đoàn đường sắt quốc gia Việt Nam" : blank);
-      const ntp = "Công ty Cổ phần Công trình Thành Phát";
+      const ntp = "Công ty cổ phần công trình Thành Phát";
       const weldNames = codes.length ? `${codes.join(", ")}${codes.length > 3 ? ", ………." : ""}` : "……………………";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
@@ -450,7 +450,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const cdt = pq ? "Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc" : blank;
     const tvgsHt = t.ben_nhan || (pq ? "Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North)" : blank);
     const ntcHt = t.ben_moi || (pq ? "Tập đoàn Đường sắt Quốc gia Việt Nam" : blank);
-    const ntpHt = "Công ty Cổ phần Công trình Thành Phát";
+    const ntpHt = "Công ty cổ phần công trình Thành Phát";
     const stamp = (title: string) => (
       <div className="complete-sign" key={title}>
         {title}

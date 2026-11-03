@@ -168,8 +168,8 @@ export const navigation: NavItem[] = [
         id: "chung-chi-cong-ty",
         label: "Chứng chỉ quản lý chất lượng (ISO)",
         labelEn: "Quality Management Certificates (ISO)",
-        description: "Chứng chỉ quản lý chất lượng (ISO) và hồ sơ của Công ty Thành Phát.",
-        descriptionEn: "ISO quality management certificates and records of Thanh Phat Company.",
+        description: "Chứng chỉ quản lý chất lượng (ISO) và hồ sơ của Công ty cổ phần công trình Thành Phát.",
+        descriptionEn: "ISO quality management certificates and records of Thanh Phat Construction Work Joint Stock Company.",
       },
       {
         id: "tieu-chuan-tcvn",
