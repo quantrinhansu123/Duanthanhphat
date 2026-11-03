@@ -27,7 +27,7 @@ import {
   type DailyFuelFormValues,
   type DailyFuelRow,
 } from "@/lib/dailyFuelDb";
-import { notifyCommanderOilLow } from "@/lib/notificationsDb";
+import { notifyOilReport } from "@/lib/notificationsDb";
 import Pager, { usePaged } from "@/components/Pager";
 import MachineRunReportPrint, {
   buildMachineRunReportRows,
@@ -397,10 +397,13 @@ export default function MachineAssignmentList() {
       const quota = machine?.oilQuota ?? null;
       const belowQuota =
         quota != null && isLiterUnit(fuelForm.unit) && fuelForm.liters < quota;
-      if (belowQuota && machine) {
-        const message = `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu ${fuelForm.liters.toLocaleString("vi-VN")} ${fuelForm.unit} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`;
-        await notifyCommanderOilLow(message);
-        showToast(`Cấp dầu — đã báo Chỉ huy trưởng và Quản trị viên · ${machine.code}`);
+      if (machine && !fuelEditId) {
+        const level = `${fuelForm.liters.toLocaleString("vi-VN")} ${fuelForm.unit}`;
+        const message = belowQuota && quota != null
+          ? `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu ${level} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`
+          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: báo mức dầu / đổ dầu ${level}.`;
+        await notifyOilReport(message);
+        showToast(`Đã ghi báo cáo mức dầu — đã báo Tiến · ${machine.code}`);
       } else {
         showToast(fuelEditId ? "Đã cập nhật báo cáo mức dầu" : "Đã ghi báo cáo mức dầu");
       }

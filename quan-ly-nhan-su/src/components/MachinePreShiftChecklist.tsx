@@ -1,5 +1,6 @@
 "use client";
 
+import { notifyPreShiftChecklist } from "@/lib/notificationsDb";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import MachinePreShiftChecklistPrint from "@/components/MachinePreShiftChecklistPrint";
 import SelectMenu from "@/components/SelectMenu";
@@ -328,6 +329,10 @@ export default function MachinePreShiftChecklist() {
     try {
       const conclusion = form.conclusion || suggestChecklistConclusion(form.results) || "du_dieu_kien";
       const saved = await upsertPreShiftChecklist({ ...form, conclusion }, editingId);
+      if (!editingId) {
+        const failText = progress.fail > 0 ? ` Có ${progress.fail} mục không đạt (${form.failItemCode || "—"}).` : " Đạt toàn bộ.";
+        void notifyPreShiftChecklist(`${form.machineCode || "Máy"} · ${form.shift} · ${formatChecklistDate(form.date)}: đã lập checklist trước ca.${failText}`);
+      }
       setRows((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
       setDate(saved.date);
       setShift(saved.shift);

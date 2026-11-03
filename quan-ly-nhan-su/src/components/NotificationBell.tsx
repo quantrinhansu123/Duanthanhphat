@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Bell } from "@/components/icons";
+import { useAccess } from "@/lib/useAccess";
 import {
   loadNotifications,
   markNotificationsRead,
@@ -11,16 +12,18 @@ import {
 export default function NotificationBell({ label }: { label: string }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[]>([]);
+  const { ready, userName } = useAccess();
 
   useEffect(() => {
+    if (!ready) return;
     let active = true;
-    void loadNotifications().then((rows) => {
+    void loadNotifications(userName).then((rows) => {
       if (active) setItems(rows);
     });
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, ready, userName]);
 
   const unread = items.filter((item) => !item.read).length;
 
@@ -55,7 +58,7 @@ export default function NotificationBell({ label }: { label: string }) {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-[320px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            Thông báo Chỉ huy trưởng và Quản trị viên
+            Thông báo
           </div>
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 && (
