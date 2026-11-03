@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import type { MachineOption } from "@/data/machineAssignments";
 import {
-  autolispPrefixLabel,
   buildAutolispBulkPreview,
   filterAutolispPointsForBulk,
   parseAutolispChainageMetres,
@@ -37,6 +36,7 @@ type Tag = {
 };
 
 const MAX_TAGS = 120;
+const STRIP_COLUMNS = 10;
 const inputClass =
   "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
 
@@ -187,12 +187,30 @@ export default function WeldQrPrintDialog({
     return () => { active = false; };
   }, [tags]);
 
-  const groups = useMemo(
-    () => COORDINATE_RAIL_PREFIXES
-      .map((prefix) => ({ prefix, items: tags.filter((tag) => tag.prefix === prefix) }))
-      .filter((group) => group.items.length > 0),
-    [tags],
-  );
+  // Bố cục như mẫu: mỗi tuyến một dải, mỗi cột là một vị trí (ray trái + ray phải cùng số thứ tự), 10 vị trí/hàng.
+  const strips = useMemo(() => {
+    const routes = [
+      { id: "ha", label: "TUYẾN HẠ", left: "HT", right: "HP" },
+      { id: "thuong", label: "TUYẾN THƯỢNG", left: "TT", right: "TP" },
+    ] as const;
+    const seqOf = (tag: Tag) => parseCoordinateCode(normalizeCoordinateCode(tag.lispCode) || tag.lispCode)?.seq ?? 0;
+    const out: { key: string; route: string; left: string; right: string; columns: { left?: Tag; right?: Tag }[] }[] = [];
+    for (const route of routes) {
+      const cols = new Map<number, { left?: Tag; right?: Tag }>();
+      for (const tag of tags) {
+        if (tag.prefix !== route.left && tag.prefix !== route.right) continue;
+        const seq = seqOf(tag);
+        const col = cols.get(seq) ?? {};
+        if (tag.prefix === route.left) col.left = tag; else col.right = tag;
+        cols.set(seq, col);
+      }
+      const ordered = [...cols.entries()].sort((a, b) => a[0] - b[0]).map(([, col]) => col);
+      for (let i = 0; i < ordered.length; i += STRIP_COLUMNS) {
+        out.push({ key: `${route.id}-${i}`, route: route.label, left: route.left, right: route.right, columns: ordered.slice(i, i + STRIP_COLUMNS) });
+      }
+    }
+    return out;
+  }, [tags]);
 
   if (!open) return null;
 
@@ -205,10 +223,19 @@ export default function WeldQrPrintDialog({
       #weld-qr-print h1 { margin:0 0 2mm; text-align:center; font-size:14pt; text-transform:uppercase; }
       #weld-qr-print .meta { text-align:center; font-size:9.5pt; margin:0 0 4mm; }
       #weld-qr-print h2 { margin:5mm 0 2mm; font-size:10.5pt; border-bottom:1px solid #333; padding-bottom:1mm; }
-      #weld-qr-print .tags { display:grid; grid-template-columns:repeat(8, 1fr); gap:2mm; }
-      #weld-qr-print .tag { border:1px dashed #666; padding:1.5mm; text-align:center; break-inside:avoid; font-size:6.8pt; line-height:1.25; }
-      #weld-qr-print .tag .lisp { font-size:10pt; font-weight:bold; }
-      #weld-qr-print .tag img { display:block; width:22mm; height:22mm; margin:1mm auto 0; image-rendering:pixelated; }
+      #weld-qr-print .strip { margin:0 0 7mm; break-inside:avoid; border-top:0.3mm solid #333; }
+      #weld-qr-print .srow { display:grid; grid-template-columns:22mm 15mm repeat(var(--cols), 1fr); align-items:center; border-bottom:0.2mm solid #bbb; }
+      #weld-qr-print .srow > div { min-width:0; text-align:center; }
+      #weld-qr-print .route { font-size:9.5pt; font-weight:bold; text-align:left!important; padding-left:1mm; }
+      #weld-qr-print .rail-name { font-size:8.5pt; font-weight:bold; text-align:left!important; }
+      #weld-qr-print .lab { font-size:7pt; line-height:1.3; padding:1.2mm 0; }
+      #weld-qr-print .lab .lisp { font-size:8.5pt; }
+      #weld-qr-print .lab .km { color:#444; }
+      #weld-qr-print .rail { position:relative; height:9mm; }
+      #weld-qr-print .rail::before { content:""; position:absolute; left:0; right:0; top:50%; height:1.1mm; margin-top:-0.55mm; background:#2f5fb3; }
+      #weld-qr-print .rail .dot { position:absolute; left:50%; top:50%; width:2.2mm; height:2.2mm; margin:-1.1mm 0 0 -1.1mm; border-radius:50%; background:#111; }
+      #weld-qr-print .qr img { display:block; width:17mm; height:17mm; margin:1.5mm auto; image-rendering:pixelated; }
+      #weld-qr-print .gap { height:3mm; border-bottom:0; }
       #weld-qr-print .hint { margin-top:4mm; font-size:8.5pt; color:#444; }
       @media print {
         @page { size:A4 landscape; margin: 15mm 15mm 15mm 20mm; }
@@ -281,25 +308,45 @@ export default function WeldQrPrintDialog({
         <p className="meta">
           Dự án: {project?.label ?? "—"} · Ngày hàn: {performedAt.split("-").reverse().join("/")} · Máy: {machine?.code ?? "—"} · {congNghe} · {tags.length} vị trí
         </p>
-        {groups.length === 0 ? (
+        {strips.length === 0 ? (
           <p className="hint">Chọn dự án, ngày, đoạn Km rồi bấm “Tạo danh sách tem”. Chỉ liệt kê điểm Autolisp chưa có nhật ký.</p>
-        ) : groups.map((group) => (
-          <section key={group.prefix}>
-            <h2>{autolispPrefixLabel(group.prefix)} ({group.prefix}) — {group.items.length} vị trí</h2>
-            <div className="tags">
-              {group.items.map((tag) => (
-                <div className="tag" key={tag.pointId}>
+        ) : strips.map((strip) => {
+          const cols = strip.columns;
+          const style = { "--cols": cols.length } as React.CSSProperties;
+          const label = (tag?: Tag) => (
+            <div className="lab">
+              {tag ? (
+                <>
                   <div className="lisp">{tag.lispCode}</div>
-                  {tag.chainage ? <div>Km{tag.chainage.replace(/^km\s*/i, "")}</div> : null}
-                  <div>{tag.siteCode}</div>
+                  <div>{tag.systemCode}</div>
                   <div>{tag.machineCode}</div>
-                  {qrImages[tag.pointId] ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={qrImages[tag.pointId]} alt={`QR ${tag.lispCode}`} /> : null}
-                </div>
-              ))}
+                  {tag.chainage ? <div className="km">Km{tag.chainage.replace(/^km\s*/i, "")}</div> : null}
+                </>
+              ) : null}
             </div>
-          </section>
-        ))}
-        {groups.length > 0 && (
+          );
+          const qr = (tag?: Tag) => (
+            <div className="qr">
+              {tag && qrImages[tag.pointId] ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={qrImages[tag.pointId]} alt={`QR ${tag.lispCode}`} /> : null}
+            </div>
+          );
+          return (
+            <section className="strip" key={strip.key}>
+              {/* Dải 1: sơ đồ ray với các điểm theo lý trình */}
+              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.left)}</div>)}</div>
+              <div className="srow" style={style}><div className="route">{strip.route}</div><div className="rail-name">RAY TRÁI</div>{cols.map((c, i) => <div key={i} className="rail">{c.left ? <span className="dot" /> : null}</div>)}</div>
+              <div className="srow" style={style}><div /><div className="rail-name">RAY PHẢI</div>{cols.map((c, i) => <div key={i} className="rail">{c.right ? <span className="dot" /> : null}</div>)}</div>
+              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.right)}</div>)}</div>
+              <div className="srow gap" style={style} />
+              {/* Dải 2: tem QR dán lên ray */}
+              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.left)}</div>)}</div>
+              <div className="srow" style={style}><div className="route">{strip.route}</div><div className="rail-name">RAY TRÁI</div>{cols.map((c, i) => <div key={i}>{qr(c.left)}</div>)}</div>
+              <div className="srow" style={style}><div /><div className="rail-name">RAY PHẢI</div>{cols.map((c, i) => <div key={i}>{qr(c.right)}</div>)}</div>
+              <div className="srow" style={style}><div /><div />{cols.map((c, i) => <div key={i}>{label(c.right)}</div>)}</div>
+            </section>
+          );
+        })}
+        {strips.length > 0 && (
           <p className="hint">Dán tem lên ray theo đúng vị trí. Ngoài hiện trường: Nhật ký hàn → Quét QR → kiểm tra thợ hàn, máy, kết quả rồi Lưu. Mã hệ thống, mã hiện trường và mã máy trên tem là mã dự kiến, được giữ khi lưu.</p>
         )}
       </article>

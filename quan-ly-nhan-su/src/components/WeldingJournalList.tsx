@@ -387,6 +387,7 @@ function JournalFormModal({
   onClose,
   onSubmit,
   onBulkSubmit,
+  onScanQr,
 }: {
   open: boolean;
   mode?: "create" | "edit";
@@ -406,6 +407,8 @@ function JournalFormModal({
   onClose: () => void;
   onSubmit: (values: JournalFormValues) => void | Promise<void>;
   onBulkSubmit?: (values: BulkFillValues) => void | Promise<boolean | void>;
+  /** Mở camera quét QR trên tem ray — kết quả tự điền vào form này. */
+  onScanQr?: () => void;
 }) {
   const shouldCheckCertificate = mode === "edit";
   const { lang } = useLanguage();
@@ -928,6 +931,18 @@ function JournalFormModal({
               {mode === "edit" ? form.ma_lich_su || "Bản ghi nhật ký" : "Bản ghi mới"}
             </h2>
           </div>
+          {mode === "create" && onScanQr && (
+            <button
+              type="button"
+              onClick={onScanQr}
+              disabled={uploadingImages || saving}
+              title="Quét mã QR trên tem ray (mã Lisp HT/HP/TT/TP) để tự điền vị trí, lý trình và mã"
+              className="ml-auto inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10" /></svg>
+              Quét QR
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void closeAndCleanUp()}
@@ -3093,15 +3108,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             </button>
             <button
               type="button"
-              onClick={() => setQrOpen(true)}
-              disabled={saving || bulkFillSaving || importing}
-              title="Quét mã QR trên ray (mã Lisp HT/HP/TT/TP) để tạo nhật ký và tự điền thông số"
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-xs font-semibold text-emerald-900 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-            >
-              Quét QR
-            </button>
-            <button
-              type="button"
               onClick={() => setQrPrintOpen(true)}
               title="In tem QR cho các vị trí sẽ hàn trong ngày — dán lên ray rồi quét QR để tạo nhật ký"
               className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
@@ -3628,6 +3634,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         }}
         onSubmit={editingRow ? handleEdit : handleCreate}
         onBulkSubmit={handleBulkFill}
+        onScanQr={() => setQrOpen(true)}
       />
 
       <QrScanDialog open={qrOpen} onClose={() => setQrOpen(false)} onResult={handleQrResult} />
