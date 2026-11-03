@@ -44,9 +44,9 @@ const css = `@media screen { #diary-print { display: none; } }
   aside, header, .no-print { display: none !important; }
   #diary-print {
     position: absolute; left: 0; top: 0; width: 100%;
-    font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 18pt; color: black;
+    font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 20pt; color: black;
   }
-  #diary-print h2 { margin: 0 0 4pt; font-size: 13pt; line-height: 20pt; text-align: center; font-weight: bold; }
+  #diary-print h2 { margin: 0 0 4pt; font-size: 13.5pt; line-height: 22pt; text-align: center; font-weight: bold; }
   #diary-print .diary-date { text-align: center; margin: 0 0 8pt; }
   #diary-print p { margin: 0; }
   #diary-print .whitespace-pre-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -59,7 +59,7 @@ const css = `@media screen { #diary-print { display: none; } }
   #diary-print .diary-sig-sub { text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
   #diary-print .diary-page { text-align: right; margin-top: 18pt; font-size: 10pt; }
-  @page { size: A4 portrait; margin: 15mm 18mm 18mm 18mm; }
+  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
 }`;
 
 const TEXT_SECTIONS = [

@@ -211,7 +211,7 @@ export default function WeldQrPrintDialog({
       #weld-qr-print .tag img { display:block; width:22mm; height:22mm; margin:1mm auto 0; image-rendering:pixelated; }
       #weld-qr-print .hint { margin-top:4mm; font-size:8.5pt; color:#444; }
       @media print {
-        @page { size:A4 landscape; margin:10mm; }
+        @page { size:A4 landscape; margin: 15mm 15mm 15mm 20mm; }
         body:has(#weld-qr-print) > :not(#weld-qr-print) { display:none!important; }
         #weld-qr-print { position:static; overflow:visible; background:#fff; }
         #weld-qr-print .toolbar { display:none; }

@@ -284,7 +284,7 @@ export function TrackPrint({
       #lwr-track-print table.lwr-summary td.c-code { text-align:left; font-weight:600; }
       #lwr-track-print tr { break-inside:avoid; }
       @media print {
-        @page { size:${config.size}; margin:20mm 12mm 12mm 20mm; }
+        @page { size:${config.size}; margin:15mm 15mm 15mm 20mm; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
         #lwr-track-print, #lwr-track-print * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
         #lwr-track-print { position:static; overflow:visible; background:white; }

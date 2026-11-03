@@ -10,7 +10,7 @@ const css = `@media print {
   #weld-bbnt-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; }
   #weld-bbnt-print section { break-after: page; } #weld-bbnt-print section:last-child { break-after: auto; }
   .weld-doc-actions { display: none !important; }
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
 }`;
 const th = "border border-slate-700 p-1 text-center font-bold";
 const td = "border border-slate-700 p-1 text-center";

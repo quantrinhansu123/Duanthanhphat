@@ -81,7 +81,7 @@ export const acceptancePrintCss = `
   .acceptance-page.annex-page { padding: 5mm 4mm 0 0; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
-  @page { size: A4 portrait; margin: 10mm 12mm; }
+  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
 }`;
 
 const blank = "………………";

@@ -19,7 +19,7 @@ const css = `@media print {
   #rfi-issued-list-print .rfi-table-scroll { overflow: visible; }
   #rfi-issued-list-print table { min-width: 0; font-size: 9pt; }
   #rfi-issued-list-print .rfi-control-detail { display: block !important; }
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
 }`;
 
 function formatDate(iso: string) {

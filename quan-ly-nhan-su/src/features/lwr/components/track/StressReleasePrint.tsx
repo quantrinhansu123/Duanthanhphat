@@ -583,7 +583,7 @@ const PRINT_CSS = `
   text-align: center;
 }
 @media print {
-  @page { size: A4 portrait; margin: 8mm 9mm; }
+  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;

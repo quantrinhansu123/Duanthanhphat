@@ -282,7 +282,7 @@ const PRINT_CSS = `
 #machine-run-report-print .machine-name { font-size: 10px; color: #475569; }
 #machine-run-report-print .empty { text-align: center; color: #64748b; padding: 18px 8px; }
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
   body * { visibility: hidden !important; }
   #machine-run-report-print, #machine-run-report-print * { visibility: visible !important; }
   #machine-run-report-print { position: static !important; background: #fff !important; overflow: visible !important; }

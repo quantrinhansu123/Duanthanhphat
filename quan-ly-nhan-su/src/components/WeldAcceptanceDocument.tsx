@@ -22,7 +22,7 @@ const css = `@media print {
   .weld-doc-actions { display: none !important; }
   #weld-doc-print table { page-break-inside: auto; } #weld-doc-print tr { page-break-inside: avoid; }
   #weld-doc-print thead { display: table-header-group; }
-  @page { size: A4; margin: 15mm; }
+  @page { size: A4; margin: 15mm 15mm 15mm 20mm; }
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };

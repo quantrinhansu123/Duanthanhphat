@@ -772,9 +772,9 @@ const PRINT_CSS = `
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
 }
 @media print {
-  @page { size: A4 landscape; margin: 6mm; }
-  @page daily-page { size: A4 landscape; margin: 6mm; }
-  @page photo-page { size: A4 portrait; margin: 12mm; }
+  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+  @page daily-page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+  @page photo-page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;
