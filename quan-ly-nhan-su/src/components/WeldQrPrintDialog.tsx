@@ -10,7 +10,7 @@ import {
   parseAutolispChainageMetres,
   type AutolispBulkContext,
 } from "@/lib/bulkCreateWeldsFromAutolisp";
-import { fetchUnlinkedGpsPoints } from "@/lib/mapPointsDb";
+import { fetchMapPointsFromDb } from "@/lib/mapPointsDb";
 import { loadMachineFieldCodesForSuggestion, loadWeldCodesWithPrefix } from "@/lib/weldReportData";
 import {
   COORDINATE_RAIL_PREFIXES,
@@ -33,6 +33,8 @@ type Tag = {
   siteCode: string;
   machineCode: string;
   qrText: string;
+  /** true = điểm đã có nhật ký (đã hàn) — vẫn vẽ để sơ đồ liền mạch, không in QR. */
+  linked: boolean;
 };
 
 const MAX_TAGS = 120;
@@ -96,17 +98,18 @@ export default function WeldQrPrintDialog({
     const count = Math.min(MAX_TAGS, Math.max(1, Math.round(limit) || 1));
     setBusy(true);
     try {
-      const unlinked = await fetchUnlinkedGpsPoints();
-      const filtered = filterAutolispPointsForBulk(unlinked, {
+      const allPoints = (await fetchMapPointsFromDb({ force: true })).points;
+      // Lấy toàn bộ điểm trong khoảng Km (kể cả đã hàn) để sơ đồ liền mạch.
+      const filtered = filterAutolispPointsForBulk(allPoints, {
         prefixes,
         chainageFromM: fromM,
         chainageToM: toM,
         projectId: duAnId,
-        onlyUnlinked: true,
+        onlyUnlinked: false,
       });
       if (!filtered.length) {
         setTags([]);
-        setError("Không có điểm Autolisp chưa gắn nhật ký khớp bộ lọc. Kiểm tra dự án, dải và đoạn Km.");
+        setError("Không có điểm Autolisp khớp bộ lọc. Kiểm tra dự án, dải và đoạn Km.");
         return;
       }
       // Thứ tự hàn thực tế: theo lý trình, hai ray cùng vị trí đi liền nhau (HT001, HP001, HT002, …).
@@ -118,12 +121,12 @@ export default function WeldQrPrintDialog({
           seq: parsed?.seq ?? 0,
         };
       };
+      // Sơ đồ luôn đủ mọi điểm trong đoạn Km; chỉ giới hạn số TEM QR mới được cấp.
       const picked = [...filtered]
         .sort((a, b) => {
           const x = order(a), y = order(b);
           return x.metres - y.metres || x.seq - y.seq || x.rail - y.rail;
-        })
-        .slice(0, count);
+        });
 
       const context: AutolispBulkContext = {
         performedAt,
@@ -145,12 +148,31 @@ export default function WeldQrPrintDialog({
       // Cấp mã lần lượt từng điểm theo đúng thứ tự trên (mỗi lần cộng dồn mã đã dùng).
       const usedSystem = [...systemCodes];
       const usedMachine = [...machineCodes];
+      let newTagsBudget = count;
       const next: Tag[] = [];
       for (const point of picked) {
+        const linked = Boolean(point.isLinked || point.weldId);
+        if (linked) {
+          // Điểm đã hàn: giữ mã hiện có, chỉ vẽ vị trí, không in QR.
+          next.push({
+            pointId: point.id,
+            prefix: parseCoordinateCode(normalizeCoordinateCode(point.code) || point.code)?.prefix ?? "TT",
+            lispCode: normalizeCoordinateCode(point.code) || point.code.toUpperCase(),
+            chainage: point.chainage || "",
+            systemCode: point.weldCode || "",
+            siteCode: "",
+            machineCode: "",
+            qrText: "",
+            linked: true,
+          });
+          continue;
+        }
+        if (newTagsBudget <= 0) continue;
         const row = buildAutolispBulkPreview([point], context, usedSystem, usedMachine)[0];
         if (!row || row.skipReason) continue;
         if (row.ma_lich_su) usedSystem.push(row.ma_lich_su);
         if (row.ten_moi_han_theo_may) usedMachine.push(row.ten_moi_han_theo_may);
+        newTagsBudget -= 1;
         next.push({
           pointId: row.pointId,
           prefix: row.prefix,
@@ -165,6 +187,7 @@ export default function WeldQrPrintDialog({
             siteCode: row.ma_hien_truong,
             machineCode: row.ten_moi_han_theo_may,
           }),
+          linked: false,
         });
       }
       setTags(next);
@@ -275,7 +298,7 @@ export default function WeldQrPrintDialog({
           <label className="text-xs font-semibold text-slate-700">Km đến
             <input className={inputClass} value={kmTo} onChange={(e) => setKmTo(e.target.value)} placeholder="0+500" />
           </label>
-          <label className="text-xs font-semibold text-slate-700">Số tem tối đa
+          <label className="text-xs font-semibold text-slate-700">Số tem mới tối đa
             <input type="number" min={1} max={MAX_TAGS} className={inputClass} value={limit} onChange={(e) => setLimit(Number(e.target.value))} />
           </label>
           <div className="col-span-2 text-xs font-semibold text-slate-700">Dải ray
@@ -298,7 +321,7 @@ export default function WeldQrPrintDialog({
             {busy ? "Đang tạo…" : "Tạo danh sách tem"}
           </button>
           <button type="button" disabled={tags.length === 0} onClick={() => window.print()} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-            In ({tags.length} tem)
+            In ({tags.filter((t) => !t.linked).length} tem mới)
           </button>
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-medium text-slate-800 hover:bg-slate-200">Đóng</button>
           {error && <span role="alert" className="text-sm font-medium text-rose-700">{error}</span>}
@@ -308,10 +331,10 @@ export default function WeldQrPrintDialog({
       <article className="sheet">
         <h1>Tem QR vị trí hàn ray</h1>
         <p className="meta">
-          Dự án: {project?.label ?? "—"} · Ngày hàn: {performedAt.split("-").reverse().join("/")} · Máy: {machine?.code ?? "—"} · {congNghe} · {tags.length} vị trí
+          Dự án: {project?.label ?? "—"} · Ngày hàn: {performedAt.split("-").reverse().join("/")} · Máy: {machine?.code ?? "—"} · {congNghe} · {tags.filter((t) => !t.linked).length} tem mới
         </p>
         {strips.length === 0 ? (
-          <p className="hint">Chọn dự án, ngày, đoạn Km rồi bấm “Tạo danh sách tem”. Chỉ liệt kê điểm Autolisp chưa có nhật ký.</p>
+          <p className="hint">Chọn dự án, ngày, đoạn Km rồi bấm “Tạo danh sách tem”. Sơ đồ hiển thị đủ mọi điểm trong đoạn Km; điểm đã hàn ghi “Đã hàn” và không in QR.</p>
         ) : strips.map((strip) => {
           const cols = strip.columns;
           const label = (tag?: Tag) => (
@@ -319,8 +342,14 @@ export default function WeldQrPrintDialog({
               {tag ? (
                 <>
                   <div className="lisp">{tag.lispCode}</div>
-                  <div>{tag.systemCode}</div>
-                  <div>{tag.machineCode}</div>
+                  {tag.linked ? (
+                    <div className="km" style={{ color: "#0a7d3d", fontWeight: 700 }}>Đã hàn</div>
+                  ) : (
+                    <>
+                      <div>{tag.systemCode}</div>
+                      <div>{tag.machineCode}</div>
+                    </>
+                  )}
                   {tag.chainage ? <div className="km">Km{tag.chainage.replace(/^km\s*/i, "")}</div> : null}
                 </>
               ) : null}
@@ -328,7 +357,7 @@ export default function WeldQrPrintDialog({
           );
           const qr = (tag?: Tag) => (
             <div className="qr">
-              {tag && qrImages[tag.pointId] ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={qrImages[tag.pointId]} alt={`QR ${tag.lispCode}`} /> : null}
+              {tag && !tag.linked && qrImages[tag.pointId] ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={qrImages[tag.pointId]} alt={`QR ${tag.lispCode}`} /> : null}
             </div>
           );
           return (
