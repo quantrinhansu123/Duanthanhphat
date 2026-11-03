@@ -8,7 +8,15 @@ async function result<T>(response: Response): Promise<T> {
 export async function loadWarehouses() {
   return (await result<{ warehouses: Warehouse[] }>(await fetch("/api/warehouses", { cache: "no-store" }))).warehouses;
 }
-export async function saveWarehouse(warehouse: { id?: string; name: string; address: string }) {
+export async function saveWarehouse(warehouse: {
+  id?: string;
+  name: string;
+  address: string;
+  managerName?: string;
+  managerPhone?: string;
+  guardName?: string;
+  guardPhone?: string;
+}) {
   return result<{ warehouse: Warehouse }>(await fetch("/api/warehouses", { method: warehouse.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(warehouse) }));
 }
 export async function deleteWarehouse(id: string) {

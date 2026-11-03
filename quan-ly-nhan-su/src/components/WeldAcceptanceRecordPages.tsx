@@ -221,8 +221,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>VỊ TRÍ:</b> {sortedChainage.length || t.kmFrom || t.kmTo ? `Km${kmFrom} – Km${kmTo}` : show(t.pham_vi)}</td>
                         <td><b>TUYẾN:</b><br />{mark(upper)} Tuyến thượng<br />{mark(lower)} Tuyến hạ</td>
                         <td>
-                          <b>TÊN MÁY HÀN CHẢY GIÁP MÉP</b><br />
-                          Máy hàn: {machines.map(machinePrintName).join(", ") || "………………"}<br />
+                          {machines.map(machinePrintName).join(", ") || "Máy hàn chảy giáp mép UN5-150ZC2-C6"}
+                          <br />
                           Goòng phẳng: {show(t.goong || t.goong_phang || "KPS25-L8")}
                         </td>
                       </tr>

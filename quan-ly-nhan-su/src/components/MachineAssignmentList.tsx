@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Warning, X } from "@/components/icons";
+import { Check, Eye, Printer, Warning, X } from "@/components/icons";
 import {
   formatScheduleDate,
   type LookupOption,
@@ -29,6 +29,10 @@ import {
 } from "@/lib/dailyFuelDb";
 import { notifyCommanderOilLow } from "@/lib/notificationsDb";
 import Pager, { usePaged } from "@/components/Pager";
+import MachineRunReportPrint, {
+  buildMachineRunReportRows,
+  type MachineRunReportRow,
+} from "@/components/MachineRunReportPrint";
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"] as const;
 
@@ -102,6 +106,12 @@ export default function MachineAssignmentList() {
   const [reportTo, setReportTo] = useState("");
   const [reportSaving, setReportSaving] = useState(false);
   const [reportError, setReportError] = useState("");
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printAuto, setPrintAuto] = useState(false);
+  const [printRows, setPrintRows] = useState<MachineRunReportRow[]>([]);
+  const [printFrom, setPrintFrom] = useState("");
+  const [printTo, setPrintTo] = useState("");
+  const [printProjectLabel, setPrintProjectLabel] = useState("");
   const [detailSchedule, setDetailSchedule] = useState<MachineRunSchedule | null>(null);
   const [detailRows, setDetailRows] = useState<WeldReportRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -196,6 +206,34 @@ export default function MachineAssignmentList() {
     setReportOpen(true);
   }
 
+  function openReportPage(
+    schedules: MachineRunSchedule[],
+    from: string,
+    to: string,
+    autoPrint = false,
+    machineOptions: MachineOption[] = machines,
+    projectOptions: LookupOption[] = projects,
+  ) {
+    const quotaMap = new Map(machineOptions.map((item) => [item.id, item.oilQuota]));
+    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap).sort(
+      (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
+    );
+    setPrintRows(rows);
+    setPrintFrom(from);
+    setPrintTo(to);
+    setPrintProjectLabel(projectOptions.find((item) => item.id === projectId)?.label || "");
+    setPrintAuto(autoPrint);
+    setPrintOpen(true);
+  }
+
+  function viewFilteredReport() {
+    openReportPage(filtered, dateFrom, dateTo, false);
+  }
+
+  function printFilteredReport() {
+    openReportPage(filtered, dateFrom, dateTo, true);
+  }
+
   async function handleImportReport() {
     if (!reportFrom || !reportTo) {
       setReportError("Chọn từ ngày và đến ngày.");
@@ -212,8 +250,20 @@ export default function MachineAssignmentList() {
       setReportOpen(false);
       setDateFrom(reportFrom);
       setDateTo(reportTo);
-      await reload();
+      const bundle = await loadMachineRunScheduleBundle();
+      setList(bundle.schedules);
+      setMachines(bundle.machines);
+      setProjects(bundle.projects);
+      setPersonnel(bundle.personnel);
+      setLoadError(bundle.error ?? "");
+      setLoading(false);
+      const nextRows = bundle.schedules.filter((row) => {
+        if (row.date < reportFrom || row.date > reportTo) return false;
+        if (projectId && row.projectId !== projectId) return false;
+        return true;
+      });
       showToast(`Đã lưu ${count.toLocaleString("vi-VN")} dòng báo cáo`);
+      openReportPage(nextRows, reportFrom, reportTo, false, bundle.machines, bundle.projects);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Không lấy được báo cáo");
     } finally {
@@ -392,13 +442,31 @@ export default function MachineAssignmentList() {
       <section className="mb-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-slate-900">Lịch chạy máy</h2>
-          <button
-            type="button"
-            onClick={openReport}
-            className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm"
-          >
-            Lấy báo cáo
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={viewFilteredReport}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
+            >
+              <Eye size={15} weight="bold" aria-hidden />
+              Xem báo cáo
+            </button>
+            <button
+              type="button"
+              onClick={printFilteredReport}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
+            >
+              <Printer size={15} weight="bold" aria-hidden />
+              In
+            </button>
+            <button
+              type="button"
+              onClick={openReport}
+              className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs font-semibold text-white hover:bg-[#00388A] sm:text-sm"
+            >
+              Tổng hợp
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
           <label className="col-span-2 flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500 lg:col-span-3 xl:col-span-4">
@@ -528,7 +596,8 @@ export default function MachineAssignmentList() {
 
       <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs text-slate-600">
         Tự động cập nhật khi <span className="font-semibold text-[#0047AB]">Nhật ký hàn</span> thay đổi.
-        Dùng <span className="font-semibold text-[#0047AB]">Lấy báo cáo</span> để đồng bộ lại theo khoảng ngày nếu cần.
+        Bấm <span className="font-semibold text-[#0047AB]">Tổng hợp</span> theo khoảng ngày để đồng bộ rồi mở trang báo cáo;
+        dùng <span className="font-semibold text-[#0047AB]">Xem báo cáo</span> / <span className="font-semibold text-[#0047AB]">In</span> với bộ lọc hiện tại.
       </div>
 
       {loadError && (
@@ -736,7 +805,7 @@ export default function MachineAssignmentList() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
-                    Chưa có báo cáo đã lưu. Bấm Lấy báo cáo, chọn từ ngày đến ngày.
+                    Chưa có báo cáo đã lưu. Bấm Tổng hợp, chọn từ ngày đến ngày.
                   </td>
                 </tr>
               )}
@@ -862,9 +931,10 @@ export default function MachineAssignmentList() {
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Lấy báo cáo</h3>
+                <h3 className="text-base font-bold text-slate-900">Tổng hợp báo cáo thiết bị</h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Tổng hợp nhật ký hàn trong khoảng ngày và ghi vào Supabase. Lấy lại cùng khoảng sẽ thay dữ liệu cũ.
+                  Tổng hợp nhật ký hàn trong khoảng ngày, ghi vào Supabase rồi mở trang báo cáo để xem / in.
+                  Lấy lại cùng khoảng sẽ thay dữ liệu cũ.
                 </p>
               </div>
               <button
@@ -1199,6 +1269,20 @@ export default function MachineAssignmentList() {
           {toast}
         </div>
       )}
+
+      <MachineRunReportPrint
+        open={printOpen}
+        rows={printRows}
+        dateFrom={printFrom}
+        dateTo={printTo}
+        projectLabel={printProjectLabel}
+        autoPrint={printAuto}
+        onClose={() => {
+          setPrintOpen(false);
+          setPrintAuto(false);
+        }}
+        onPrint={() => window.print()}
+      />
     </main>
   );
 }

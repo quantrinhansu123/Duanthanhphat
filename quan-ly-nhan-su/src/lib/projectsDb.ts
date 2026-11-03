@@ -329,6 +329,7 @@ export function duAnRowToProject(
     startDate,
     endDate,
     location: row.vi_tri?.trim() || "here",
+    contractPartner: metadata?.contractPartner?.trim() || "",
     plannedWeldCount,
     personnelIds,
     machineTypes: metadata?.machineTypes ?? [],
@@ -463,6 +464,7 @@ export async function insertDuAn(payload: {
   manager: string;
   managerId?: string;
   location: string;
+  contractPartner?: string;
   startDate: string;
   endDate: string;
   plannedWeldCount: number;
@@ -524,6 +526,7 @@ export async function insertDuAn(payload: {
     weldTypes: payload.weldTypes ?? [],
     railTypes: payload.railTypes ?? [],
     offDays,
+    contractPartner: (payload.contractPartner ?? "").trim(),
   };
   try {
     await saveProjectMetadata(String(data.id), metadata);
@@ -544,6 +547,7 @@ export async function updateDuAn(
     manager?: string;
     managerId?: string;
     location?: string;
+    contractPartner?: string;
     startDate?: string;
     endDate?: string;
     plannedWeldCount?: number;
@@ -636,6 +640,7 @@ export async function updateDuAn(
     weldTypes: patch.weldTypes ?? [],
     railTypes: patch.railTypes ?? [],
     offDays,
+    contractPartner: (patch.contractPartner ?? "").trim(),
   };
   try {
     await saveProjectMetadata(projectId, metadata);

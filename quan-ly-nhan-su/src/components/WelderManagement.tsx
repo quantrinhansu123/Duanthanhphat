@@ -372,6 +372,8 @@ export default function WelderManagement() {
   const [certUploadProgress, setCertUploadProgress] = useState<number | null>(null);
   const certFileInputRef = useRef<HTMLInputElement>(null);
   const certUploadTargetRef = useRef<LiveCertRow | null>(null);  // Preview Modal state
+  const listRef = useRef(list);
+  listRef.current = list;
   const [pdfPreviewItem, setPdfPreviewItem] = useState<DriveDocumentItem | null>(null);
   const [certThumbnailItem, setCertThumbnailItem] = useState<Certificate | null>(null);
 
@@ -440,6 +442,34 @@ export default function WelderManagement() {
     setProfileOpen(true);
   }, [list]);
 
+  // Đồng bộ hồ sơ với URL/history — nút Quay lại đóng drawer về danh sách, không thoát trang.
+  useEffect(() => {
+    function onPopState() {
+      const employeeId = new URLSearchParams(window.location.search).get("employeeId");
+      if (!employeeId) {
+        setProfileOpen(false);
+        setEditingPhoto(false);
+        setPhotoDraftUrl("");
+        setPhotoError("");
+        setShowUploadForm(false);
+        setShowAddCert(false);
+        setSelectedCertGroupIds([]);
+        setEditingLiveCert(null);
+        setUploadingCertId(null);
+        setCertUploadProgress(null);
+        certUploadTargetRef.current = null;
+        setPdfPreviewItem(null);
+        return;
+      }
+      const found = listRef.current.find((item) => item.id === employeeId);
+      if (!found) return;
+      setSelectedWelder(found);
+      setProfileOpen(true);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
 
   useEffect(() => {
@@ -478,7 +508,7 @@ export default function WelderManagement() {
         cancelEditPhoto();
         return;
       }
-      setProfileOpen(false);
+      closeWelderProfile();
     }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -489,15 +519,48 @@ export default function WelderManagement() {
     };
   }, [profileOpen, editingPhoto]);
 
+  // Nút Quay lại (AppShell): đóng lớp UI trong cùng trước, rồi mới đổi trang.
+  useEffect(() => {
+    function onAppBack(event: Event) {
+      if (pdfPreviewItem) {
+        event.preventDefault();
+        setPdfPreviewItem(null);
+        return;
+      }
+      if (editingPhoto) {
+        event.preventDefault();
+        cancelEditPhoto();
+        return;
+      }
+      if (formOpen) {
+        event.preventDefault();
+        setFormOpen(false);
+        setEditingWelder(null);
+        return;
+      }
+      if (profileOpen) {
+        event.preventDefault();
+        closeWelderProfile();
+      }
+    }
+    window.addEventListener("app-back", onAppBack);
+    return () => window.removeEventListener("app-back", onAppBack);
+  }, [pdfPreviewItem, editingPhoto, formOpen, profileOpen]);
+
   function openWelderProfile(welder: Welder) {
     setSelectedWelder(welder);
     setEditingPhoto(false);
     setPhotoDraftUrl("");
     setPhotoError("");
     setProfileOpen(true);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("employeeId") !== welder.id) {
+      url.searchParams.set("employeeId", welder.id);
+      window.history.pushState({ welderProfile: welder.id }, "", url.pathname + url.search + url.hash);
+    }
   }
 
-  function closeWelderProfile() {
+  function clearProfileUi() {
     setProfileOpen(false);
     setEditingPhoto(false);
     setPhotoDraftUrl("");
@@ -509,6 +572,20 @@ export default function WelderManagement() {
     setUploadingCertId(null);
     setCertUploadProgress(null);
     certUploadTargetRef.current = null;
+    setPdfPreviewItem(null);
+  }
+
+  function closeWelderProfile() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("employeeId")) {
+      if (window.history.state && typeof window.history.state === "object" && "welderProfile" in window.history.state) {
+        window.history.back();
+        return;
+      }
+      url.searchParams.delete("employeeId");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+    clearProfileUi();
   }
 
   function openCreateWelder() {
@@ -642,7 +719,7 @@ export default function WelderManagement() {
       setSelected((prev) => prev.filter((id) => id !== welder.id));
       if (selectedWelder?.id === welder.id) {
         setSelectedWelder(null);
-        setProfileOpen(false);
+        closeWelderProfile();
       }
       showToast(isEn ? "Welder deleted." : "Đã xóa thợ hàn.");
     } catch (error) {

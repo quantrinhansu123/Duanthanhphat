@@ -56,7 +56,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   if (!date) throw new QualityApiError("Nhập ngày nhật ký.");
   const [welds, ground, accepted] = await Promise.all([
     fetchAll<DiaryWork>((a, b) => db().from("lich_su_moi_han")
-      .select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien").eq("du_an_id", projectId).eq("ngay_thuc_hien", date).order("id").range(a, b)),
+      .select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,tho_han_id").eq("du_an_id", projectId).eq("ngay_thuc_hien", date).order("id").range(a, b)),
     fetchAll<{ moi_han_id: string }>((a, b) => db().from("kiem_tra_moi_han")
       .select("moi_han_id,lich_su_moi_han!inner(du_an_id)").eq("lich_su_moi_han.du_an_id", projectId).eq("ngay_mai", date).order("moi_han_id").range(a, b)),
     fetchAll<{ moi_han_id: string; ket_qua: string }>((a, b) => db().from("dot_nghiem_thu_moi")
@@ -66,13 +66,23 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id)])];
   const [all, points] = await Promise.all([
-    chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien").eq("du_an_id", projectId).in("id", p)),
+    chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh").eq("du_an_id", projectId).in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
       .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
   ]);
-  const located = new Map(all.map((w) => [w.id, { ...w, ...points.find((p) => p.lich_su_moi_han_id === w.id) }]));
+  const located = new Map(all.map((w) => {
+    const point = points.find((p) => p.lich_su_moi_han_id === w.id);
+    // Lý trình ưu tiên điểm GPS; dự án không có tọa độ thì lấy lý trình ghi trong nhật ký hàn.
+    return [w.id, { ...w, ...point, ly_trinh: point?.ly_trinh || w.ly_trinh || null }];
+  }));
   const select = (keys: string[]) => keys.flatMap((id) => located.has(id) ? [located.get(id)!] : []);
-  const [equipment, metadata, project, reports, lwr] = await Promise.all([
+  // Máy hàn thực tế dùng trong ngày (nhật ký hàn) — ưu tiên hơn mã máy gán dự án chưa khớp danh mục.
+  const dayWeldIds = welds.map((w) => w.id);
+  const usedMachineIds = [...new Set((await chunked<{ may_id: string | null }>(dayWeldIds, (p) =>
+    db().from("lich_su_moi_han").select("may_id").in("id", p))).map((r) => r.may_id).filter((id): id is string => Boolean(id)))];
+  const usedMachines = await chunked<{ id: string; ma_may: string; ten_may: string; model: string | null; loai_may: string | null; cong_nghe_han: string | null; thong_so: unknown }>(
+    usedMachineIds, (p) => db().from("thiet_bi").select("id,ma_may,ten_may,model,loai_may,cong_nghe_han,thong_so").in("id", p));
+  const [projectEquipment, metadata, project, reports, lwr] = await Promise.all([
     loadProjectEquipment(projectId),
     readPrivateJson<ProjectMetadataStore>("project-metadata.json"),
     db().from("du_an").select("nguoi_phu_trach").eq("id", projectId).single(),
@@ -83,13 +93,19 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   if (project.error) throw project.error;
   if (lwr.error) throw lwr.error;
+  const known = new Set(projectEquipment.filter((m) => !m.missing).map((m) => m.code));
+  const fromJournal = usedMachines.filter((m) => !known.has(m.ma_may)).map((m) => ({
+    id: m.id, code: m.ma_may, name: m.ten_may, model: m.model ?? "", group: "welding" as const, quantity: 1,
+  }));
+  // Mã gán dự án không khớp danh mục chỉ giữ khi nhật ký không cho biết máy nào.
+  const equipment = [...projectEquipment.filter((m) => !m.missing || usedMachines.length === 0), ...fromJournal];
   const layout = lwr.data ? validateTrackLayout(lwr.data.layout) : null;
   if (lwr.data && !layout) throw new Error("Sơ đồ LWR của dự án không hợp lệ; chưa thể tự điền công tác giải tỏa ứng suất.");
   const personnelIds = [...new Set([...(metadata?.[projectId]?.personnelIds ?? []), project.data.nguoi_phu_trach].filter((id): id is string => Boolean(id)))];
   const personnel = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(personnelIds,
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
   return {
-    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach),
+    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, new Set(welds.map((w) => w.tho_han_id).filter(Boolean)).size),
     thietBi: projectEquipmentText(equipment),
     noiDungCongViec: [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
     nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {

@@ -3,7 +3,7 @@ import { formatChainage, getPlacementSpan, type TrackLayout } from "@lwr/lib/tra
 
 export type DiaryWork = {
   id: string; ma_lich_su: string; cong_nghe_han: string; so_luong_thuc_hien: number;
-  ma_diem?: string | null; ly_trinh?: string | null;
+  ma_diem?: string | null; ly_trinh?: string | null; tho_han_id?: string | null;
 };
 
 /** Mỗi dòng tách theo công tác và tuyến; một mối chỉ tính một lần. */
@@ -46,7 +46,7 @@ export function diaryStressReleaseText(layout: TrackLayout | null, projectId: st
 /** Báo cáo ngày ghi số lượng; nếu chưa nhập thì dùng nhân sự đã gán dự án. */
 export function diaryManpowerDefaults(reports: Record<string, unknown>[], personnel: {
   employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null;
-}[], managerId: string | null) {
+}[], managerId: string | null, journalWelders = 0) {
   const roster = { cht: [] as string[], ky_su: [] as string[], workers: [] as string[] };
   for (const person of new Map(personnel.map((p) => [p.employee_id, p])).values()) {
     if (person.trang_thai === "Khóa") continue;
@@ -81,8 +81,10 @@ export function diaryManpowerDefaults(reports: Record<string, unknown>[], person
   return {
     banChiHuy: String(cht ?? roster.cht.length),
     canBoKyThuat: String(engineer ?? roster.ky_su.length),
-    congNhan: String(workers.some((n) => n != null) ? workers.reduce<number>((sum, n) => sum + (n ?? 0), 0) : roster.workers.length),
-    nhanLucNguon: fromReports
+    congNhan: String(Math.max(journalWelders, workers.some((n) => n != null) ? workers.reduce<number>((sum, n) => sum + (n ?? 0), 0) : roster.workers.length)),
+    nhanLucNguon: journalWelders > 0
+      ? `Công nhân tính từ nhật ký hàn trong ngày (${journalWelders} thợ hàn); lấy số lớn hơn giữa nhật ký và báo cáo ngày.`
+      : fromReports
       ? "Theo báo cáo ngày của dự án; vai trò chưa nhập dùng nhân sự được gán. Số lượng lặp giữa hạng mục lấy mức cao nhất từng vai trò."
       : `Theo nhân sự được gán dự án. Ban chỉ huy: ${roster.cht.join(", ") || "chưa gán"}. Kỹ sư: ${roster.ky_su.join(", ") || "chưa gán"}. Mỗi người chỉ tính một nhóm.`,
   };

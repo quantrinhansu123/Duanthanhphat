@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   formatMaintenanceDate,
   getMachineMaintenanceHistory,
@@ -55,7 +55,7 @@ import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Link from "next/link";
 import { EQUIPMENT_GROUP_LABELS, equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 import { loadEquipmentLocations } from "@/lib/warehousesDb";
-import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type Warehouse } from "@/lib/warehouses";
+import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type LocationProject, type Warehouse } from "@/lib/warehouses";
 import Pager, { usePaged } from "@/components/Pager";
 
 
@@ -667,11 +667,43 @@ function MachineDetailModal({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (addOpen) {
+          setAddOpen(false);
+          setSelectedEmployeeId("");
+          setPersonSearch("");
+          setPersonSuggestOpen(false);
+          return;
+        }
+        onClose();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, addOpen]);
+
+  // Nút Quay lại: đóng form thêm NS → về tab trước → đóng modal.
+  useEffect(() => {
+    function onAppBack(event: Event) {
+      if (addOpen) {
+        event.preventDefault();
+        setAddOpen(false);
+        setSelectedEmployeeId("");
+        setPersonSearch("");
+        setPersonSuggestOpen(false);
+        return;
+      }
+      if (tab === "personnel" || tab === "history" || tab === "spares" || tab === "transport") {
+        event.preventDefault();
+        setTab("welding");
+        return;
+      }
+      event.preventDefault();
+      onClose();
+    }
+    window.addEventListener("app-back", onAppBack);
+    return () => window.removeEventListener("app-back", onAppBack);
+  }, [addOpen, tab, onClose]);
 
   useEffect(() => {
     if (tab !== "personnel") return;
@@ -1394,6 +1426,7 @@ function MachineFormModal({
   techSuggestions = [],
   existingCodes = [],
   warehouses,
+  projects,
   currentLocation,
   onClose,
   onSave,
@@ -1405,6 +1438,7 @@ function MachineFormModal({
   /** Mã máy đang có trong danh sách — dùng để cảnh báo trùng trước khi gọi Supabase. */
   existingCodes?: string[];
   warehouses: Warehouse[];
+  projects: LocationProject[];
   currentLocation?: EquipmentLocation;
   onClose: () => void;
   onSave: (updated: Machine) => void;
@@ -1511,9 +1545,13 @@ function MachineFormModal({
     const syncImage = form.weldingUnit?.coverImage || form.image;
     const syncGallery = form.weldingUnit?.gallery?.length ? form.weldingUnit.gallery : form.gallery;
 
+    const warehouseId = String(form.specs?.warehouseId ?? "");
+    const locationProjectId = String(form.specs?.locationProjectId ?? "");
+    const warehouse = warehouses.find((w) => w.id === warehouseId);
+    const project = projects.find((p) => p.id === locationProjectId);
     onSave({
       ...form,
-      location: warehouses.find((w) => w.id === form.specs?.warehouseId)?.address || form.location,
+      location: warehouse?.address || (project ? `Dự án ${project.name}` : form.location),
       manufacturer: form.manufacturer.trim(),
       image: syncImage,
       gallery: syncGallery,
@@ -1522,6 +1560,31 @@ function MachineFormModal({
         : form.weldingUnit,
     });
   }
+
+  const locationChoice =
+    form.specs?.warehouseId
+      ? `w:${String(form.specs.warehouseId)}`
+      : form.specs?.locationProjectId
+        ? `p:${String(form.specs.locationProjectId)}`
+        : "";
+  const locationOptions = [
+    { value: "", label: "Chưa chọn vị trí" },
+    ...warehouses.map((w) => ({
+      value: `w:${w.id}`,
+      label: `Kho · ${w.name}`,
+      hint: w.address || undefined,
+    })),
+    ...projects.map((p) => ({
+      value: `p:${p.id}`,
+      label: `Dự án · ${p.name}`,
+    })),
+    ...(form.specs?.warehouseId && !warehouses.some((w) => w.id === form.specs?.warehouseId)
+      ? [{ value: `w:${String(form.specs.warehouseId)}`, label: "Kho chưa tải được / không còn tồn tại" }]
+      : []),
+    ...(form.specs?.locationProjectId && !projects.some((p) => p.id === form.specs?.locationProjectId)
+      ? [{ value: `p:${String(form.specs.locationProjectId)}`, label: "Dự án chưa tải được / không còn tồn tại" }]
+      : []),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -1562,19 +1625,74 @@ function MachineFormModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
           <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
             <h3 className="font-bold text-slate-900">Vị trí máy / thiết bị: Kho hoặc Dự án</h3>
-            <label className="block text-sm font-semibold">Kho lưu thiết bị chưa gán dự án
-              <select value={String(form.specs?.warehouseId ?? "")} onChange={(e) => setForm({ ...form, location: "", specs: { ...form.specs, warehouseId: e.target.value } })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 font-normal">
-                <option value="">Chưa chọn kho</option>
-                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name} · {w.address}</option>)}
-                {form.specs?.warehouseId && !warehouses.some((w) => w.id === form.specs?.warehouseId) ? <option value={String(form.specs.warehouseId)}>Kho chưa tải được / không còn tồn tại</option> : null}
-              </select>
+            <label className="block text-sm font-semibold">Chọn kho hoặc dự án
+              <div className="mt-1 font-normal">
+                <SelectMenu
+                  searchable
+                  searchPlaceholder="Tìm kho hoặc dự án…"
+                  value={locationChoice}
+                  options={locationOptions}
+                  placeholder="Chọn kho hoặc dự án"
+                  emptyLabel="Không có kho/dự án khớp"
+                  onChange={(next) => {
+                    if (!next) {
+                      setForm({
+                        ...form,
+                        location: "",
+                        specs: { ...form.specs, warehouseId: "", locationProjectId: "" },
+                      });
+                      return;
+                    }
+                    if (next.startsWith("w:")) {
+                      const id = next.slice(2);
+                      const warehouse = warehouses.find((w) => w.id === id);
+                      setForm({
+                        ...form,
+                        location: warehouse?.address || "",
+                        specs: { ...form.specs, warehouseId: id, locationProjectId: "" },
+                      });
+                      return;
+                    }
+                    if (next.startsWith("p:")) {
+                      const id = next.slice(2);
+                      const project = projects.find((p) => p.id === id);
+                      setForm({
+                        ...form,
+                        location: project ? `Dự án ${project.name}` : "",
+                        specs: { ...form.specs, warehouseId: "", locationProjectId: id },
+                      });
+                    }
+                  }}
+                />
+              </div>
             </label>
-            {form.location && !form.specs?.warehouseId && <p className="text-xs text-slate-600">Vị trí đã nhập trước đây: {form.location}</p>}
-            <p className="text-xs text-slate-600">Kho giữ số bộ còn lại sau khi trừ số bộ đã gán dự án. Chọn kho khác để chuyển phần thiết bị còn trong kho.</p>
-            <div className="text-sm"><b>Dự án đang sử dụng:</b>{currentLocation?.projects.length ? <ul className="mt-1 list-inside list-disc">{currentLocation.projects.map((p) => <li key={p.id}>{p.name}: {p.quantity} bộ</li>)}</ul> : <p>Chưa gán dự án.</p>}</div>
-            {!!currentLocation?.excessQuantity && <p role="status" className="text-sm font-semibold text-amber-800">Đang gán vượt {currentLocation.excessQuantity} bộ. Kiểm tra lại dự án đang giữ thiết bị trước khi điều chuyển.</p>}
-            <div className="flex flex-wrap gap-4 text-sm font-semibold text-[#0047AB]"><Link target="_blank" href="/quan-ly-kho">Thêm / sửa danh mục kho</Link><Link target="_blank" href="/quan-ly-du-an">Gán / chuyển thiết bị vào dự án</Link></div>
+            {form.location && !form.specs?.warehouseId && !form.specs?.locationProjectId ? (
+              <p className="text-xs text-slate-600">Vị trí đã nhập trước đây: {form.location}</p>
+            ) : null}
+            <p className="text-xs text-slate-600">
+              Danh sách gồm toàn bộ kho và dự án. Chọn kho để giữ thiết bị trong kho; chọn dự án để ghi vị trí đang dùng trên công trường.
+            </p>
+            <div className="text-sm">
+              <b>Dự án đang sử dụng (theo phân công):</b>
+              {currentLocation?.projects.length ? (
+                <ul className="mt-1 list-inside list-disc">
+                  {currentLocation.projects.map((p) => (
+                    <li key={p.id}>{p.name}: {p.quantity} bộ</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Chưa gán dự án.</p>
+              )}
+            </div>
+            {!!currentLocation?.excessQuantity && (
+              <p role="status" className="text-sm font-semibold text-amber-800">
+                Đang gán vượt {currentLocation.excessQuantity} bộ. Kiểm tra lại dự án đang giữ thiết bị trước khi điều chuyển.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-4 text-sm font-semibold text-[#0047AB]">
+              <Link target="_blank" href="/quan-ly-kho">Thêm / sửa danh mục kho</Link>
+              <Link target="_blank" href="/quan-ly-du-an">Gán / chuyển thiết bị vào dự án</Link>
+            </div>
           </section>
           <div className="space-y-4">
               <ImageUploader
@@ -1815,7 +1933,7 @@ export default function MachineList() {
   const [formModal, setFormModal] = useState<{ machine: Machine; mode: "create" | "edit" } | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [equipmentTab, setEquipmentTab] = useState<EquipmentGroup>("welding");
-  const [locationBundle, setLocationBundle] = useState<LocationBundle>({ warehouses: [], locations: [] });
+  const [locationBundle, setLocationBundle] = useState<LocationBundle>({ warehouses: [], projects: [], locations: [] });
   const [locationError, setLocationError] = useState("");
   useEffect(() => {
     let live = true;
@@ -1827,6 +1945,18 @@ export default function MachineList() {
     const location = locationBundle.locations.find((r) => r.id === m.id);
     return location ? equipmentLocationLabel(location) : m.location || "Đang tải vị trí…";
   };
+
+  const listRef = useRef(list);
+  listRef.current = list;
+
+  function detailTabFromSearch(raw: string | null): DetailTab {
+    const tabRaw = raw?.trim().toLowerCase();
+    if (tabRaw === "personnel" || tabRaw === "nhan-su") return "personnel";
+    if (tabRaw === "history") return "history";
+    if (tabRaw === "transport") return "transport";
+    if (tabRaw === "spares" || tabRaw === "phu-tung") return "spares";
+    return "welding";
+  }
 
   useEffect(() => {
     let active = true;
@@ -1846,17 +1976,7 @@ export default function MachineList() {
 
       const params = new URLSearchParams(window.location.search);
       const mayCode = params.get("may")?.trim();
-      const tabRaw = params.get("tab")?.trim().toLowerCase();
-      const openTab: DetailTab =
-        tabRaw === "personnel" || tabRaw === "nhan-su"
-          ? "personnel"
-          : tabRaw === "history"
-            ? "history"
-            : tabRaw === "transport"
-              ? "transport"
-              : tabRaw === "spares" || tabRaw === "phu-tung"
-                ? "spares"
-                : "welding";
+      const openTab = detailTabFromSearch(params.get("tab"));
       if (mayCode) {
         const pool = result.machines.length > 0 ? result.machines : seedMachines;
         const match = pool.find(
@@ -1878,6 +1998,27 @@ export default function MachineList() {
     };
   }, []);
 
+  useEffect(() => {
+    function onPopState() {
+      const params = new URLSearchParams(window.location.search);
+      const mayCode = params.get("may")?.trim();
+      if (!mayCode) {
+        setDetail(null);
+        setActiveId(null);
+        return;
+      }
+      const match = listRef.current.find(
+        (m) => m.code.toLowerCase() === mayCode.toLowerCase() || m.id === mayCode,
+      );
+      if (!match) return;
+      setActiveId(match.id);
+      setDetail(match);
+      setDetailTab(detailTabFromSearch(params.get("tab")));
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const filtered = useMemo(
     () => list.filter((m) => equipmentGroup(m) === equipmentTab && (status === "Tất cả trạng thái" || m.status === status)),
     [list, status, equipmentTab],
@@ -1896,7 +2037,14 @@ export default function MachineList() {
     return { category, total: count(), working: count("Đang làm việc"), ready: count("Sẵn sàng"), maint: count("Bảo trì"), broken: count("Hỏng") };
   }), [list]);
   function openEdit(machine: Machine) {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("may")) {
+      url.searchParams.delete("may");
+      url.searchParams.delete("tab");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
     setDetail(null);
+    setActiveId(null);
     setFormModal({ machine, mode: "edit" });
   }
 
@@ -1904,6 +2052,30 @@ export default function MachineList() {
     setActiveId(m.id);
     setDetailTab(tab);
     setDetail(m);
+    const url = new URL(window.location.href);
+    const sameMachine = (url.searchParams.get("may") || "").toLowerCase() === m.code.toLowerCase();
+    const sameTab = (url.searchParams.get("tab") || "welding") === tab;
+    if (!sameMachine || !sameTab) {
+      url.searchParams.set("may", m.code);
+      if (tab === "welding") url.searchParams.delete("tab");
+      else url.searchParams.set("tab", tab);
+      window.history.pushState({ machineDetail: m.code, machineTab: tab }, "", url.pathname + url.search + url.hash);
+    }
+  }
+
+  function closeDetail() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("may")) {
+      if (window.history.state && typeof window.history.state === "object" && "machineDetail" in window.history.state) {
+        window.history.back();
+        return;
+      }
+      url.searchParams.delete("may");
+      url.searchParams.delete("tab");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+    setDetail(null);
+    setActiveId(null);
   }
 
   async function handleDelete(machine: Machine) {
@@ -2326,7 +2498,7 @@ export default function MachineList() {
         <MachineDetailModal
           machine={detail}
           initialTab={detailTab}
-          onClose={() => { setDetail(null); setActiveId(null); }}
+          onClose={closeDetail}
           onEdit={() => openEdit(detail)}
         />
       )}
@@ -2335,6 +2507,7 @@ export default function MachineList() {
         <MachineFormModal
           machine={formModal.machine}
           warehouses={locationBundle.warehouses}
+          projects={locationBundle.projects}
           currentLocation={locationBundle.locations.find((m) => m.id === formModal.machine.id)}
           mode={formModal.mode}
           existingCodes={list.map((m) => m.code)}

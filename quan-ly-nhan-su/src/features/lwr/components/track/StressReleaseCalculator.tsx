@@ -157,6 +157,15 @@ export function StressReleaseCalculator({
       return { ...current, leftLength, rightLength, neutralTemp };
     });
   }, [initialInput.leftLength, initialInput.rightLength, initialInput.neutralTemp]);
+  useEffect(() => {
+    if (!compact) return;
+    setFields((current) => {
+      const left = String(initialInput.leftTemp);
+      const right = String(initialInput.rightTemp);
+      if (current.leftTemp === left && current.rightTemp === right) return current;
+      return { ...current, leftTemp: left, rightTemp: right };
+    });
+  }, [compact, initialInput.leftTemp, initialInput.rightTemp]);
   const [printOpen, setPrintOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -421,8 +430,10 @@ export function StressReleaseCalculator({
           {group.title === "Thông số ray" && <p className="mb-2 text-xs text-slate-500">Lực cản dọc nhập theo từng dự án; dùng để tính lực kéo và lượng co/giãn theo biên độ nhiệt độ.</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{group.fields.map(([key, label, unit]) => {
             const chainLength = !buffer && Boolean(startChainage || endChainage) && (key === "leftLength" || key === "rightLength");
-            const locked = chainLength || (!customRail && RAIL_LOCKED_KEYS.includes(key));
-            return <label key={key} className={`text-xs ${SITE_KEYS.includes(key) ? "font-medium text-amber-800" : "text-slate-600"}`}>{label} ({unit})<input inputMode="decimal" readOnly={locked} value={chainLength ? String(input[key]) : fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : SITE_KEYS.includes(key) ? siteClass : fieldClass} /></label>;
+            // compact = nằm trong ô ray: nhiệt độ hai đầu nhập ở "Nhiệt độ ray trái/phải" bên dưới, không nhập lại ở đây.
+            const mirrored = compact && (key === "leftTemp" || key === "rightTemp");
+            const locked = chainLength || mirrored || (!customRail && RAIL_LOCKED_KEYS.includes(key));
+            return <label key={key} className={`text-xs ${SITE_KEYS.includes(key) ? "font-medium text-amber-800" : "text-slate-600"}`}>{label} ({unit}){mirrored ? <span className="ml-1 font-normal text-slate-500">· nhập ở “Nhiệt độ ray trái/phải” bên dưới</span> : null}<input inputMode="decimal" readOnly={locked} value={chainLength ? String(input[key]) : fields[key]} onChange={e => { if (!locked) setFields({ ...fields, [key]: e.target.value }); }} className={locked ? lockedClass : SITE_KEYS.includes(key) ? siteClass : fieldClass} /></label>;
           })}</div>
           {group.title === "Chiều dài và nhiệt độ" && result && (
             <p className="mt-2 text-xs text-slate-600">Giới hạn trên khóa ray thiết kế: <b>{formatStressNumber(result.lockTempUpper)} °C</b> · Giới hạn dưới: <b>{formatStressNumber(result.lockTempLower)} °C</b> · Ngưỡng Rail Tensor: nhiệt độ môi trường &lt; <b>{formatStressNumber(result.skipThreshold)} °C</b>.</p>

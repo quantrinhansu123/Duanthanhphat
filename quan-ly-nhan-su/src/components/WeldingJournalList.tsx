@@ -1265,7 +1265,7 @@ function JournalFormModal({
                         <input
                           value={form.kinh_do}
                           onChange={(e) => setForm({ ...form, kinh_do: e.target.value })}
-                          placeholder="105.8427"
+                          placeholder="105.8427 · có thể để trống"
                           className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-mono text-slate-900 outline-hidden focus:border-[#0047AB]"
                         />
                       </label>
@@ -1377,7 +1377,7 @@ function JournalFormModal({
                 <input
                   value={form.vi_do}
                   onChange={(event) => setForm({ ...form, vi_do: event.target.value })}
-                  placeholder="21.0160"
+                  placeholder="21.0160 · có thể để trống"
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden font-mono focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
                 />
               </label>
@@ -2661,14 +2661,19 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
     }
   }
 
-  /** Mã tọa độ gõ tay: cần HT/HP/TT/TP + số và kinh/vĩ độ hợp lệ. */
+  /** Có nhập kinh/vĩ độ cho mã tọa độ gõ tay (dự án không có tọa độ thì để trống cả hai → không tạo điểm GPS). */
+  function hasManualCoordinates(values: JournalFormValues) {
+    return Boolean(values.kinh_do.trim() || values.vi_do.trim());
+  }
+
+  /** Tọa độ là tùy chọn. Chỉ khi đã nhập kinh/vĩ độ thì mới kiểm tra mã HT/HP/TT/TP + số và cả hai giá trị hợp lệ. */
   function manualCoordinateError(values: JournalFormValues) {
-    if (values.toa_do_id || !values.ma_toa_do.trim()) return "";
-    if (!parseCoordinateCode(values.ma_toa_do)) return "Mã tọa độ phải là HT/HP/TT/TP + số (vd HT0001).";
+    if (values.toa_do_id || !hasManualCoordinates(values)) return "";
+    if (values.ma_toa_do.trim() && !parseCoordinateCode(values.ma_toa_do)) return "Mã tọa độ phải là HT/HP/TT/TP + số (vd HT0001).";
     const lon = Number(values.kinh_do.replace(",", "."));
     const lat = Number(values.vi_do.replace(",", "."));
     if (!values.kinh_do.trim() || !values.vi_do.trim() || !Number.isFinite(lon) || !Number.isFinite(lat)) {
-      return "Nhập kinh độ và vĩ độ cho mã tọa độ.";
+      return "Nhập đủ kinh độ và vĩ độ (hoặc để trống cả hai nếu dự án không có tọa độ).";
     }
     return "";
   }
@@ -2684,6 +2689,13 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       projectId: values.du_an_id || null,
     });
     if (res.error) throw new Error(res.error);
+  }
+
+  /** Lưu lý trình ngay trên nhật ký hàn (dự án không có tọa độ vẫn có lý trình cho biên bản). Bỏ qua nếu chưa chạy migration cột ly_trinh. */
+  async function saveJournalChainage(weldCode: string, chainage: string) {
+    try {
+      await createClient().from("lich_su_moi_han").update({ ly_trinh: chainage.trim() || null }).eq("ma_lich_su", weldCode.trim());
+    } catch { /* cột chưa có */ }
   }
 
   async function handleCreate(values: JournalFormValues) {
@@ -2734,6 +2746,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         gio_ket_thuc: values.gio_ket_thuc,
         gio_nghi_trua: parseLunchHours(values.gio_nghi_trua),
       });
+      await saveJournalChainage(values.ma_lich_su, values.ly_trinh);
       // RPC thường đã gắn toa_do; gọi lại để chắc mã vị trí hiện trên bảng.
       if (values.toa_do_id) {
         const supabase = createClient();
@@ -2745,7 +2758,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         if (created?.id) {
           await linkGpsPointToWeld(values.toa_do_id, created.id);
         }
-      } else if (values.ma_toa_do.trim()) {
+      } else if (values.ma_toa_do.trim() && hasManualCoordinates(values)) {
         const supabase = createClient();
         const { data: created } = await supabase
           .from("lich_su_moi_han")
@@ -2815,9 +2828,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         gio_nghi_trua: parseLunchHours(values.gio_nghi_trua),
       });
 
+      await saveJournalChainage(values.ma_lich_su, values.ly_trinh);
       if (values.toa_do_id) {
         await linkGpsPointToWeld(values.toa_do_id, editingRow.id);
-      } else if (values.ma_toa_do.trim()) {
+      } else if (values.ma_toa_do.trim() && hasManualCoordinates(values)) {
         if (currentPoint) {
           await deleteMapPoint(currentPoint.id);
         }
@@ -2938,6 +2952,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             onChange={setProjectFilter}
             options={projects.map((p) => ({ value: p, label: p }))}
             allLabel="Tất cả dự án"
+            closeOnSelect
             searchPlaceholder="Gõ tên dự án…"
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"

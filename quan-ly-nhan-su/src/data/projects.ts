@@ -18,6 +18,8 @@ export type Project = {
   startDate: string;
   endDate: string;
   location: string;
+  /** Đối tác hợp đồng của dự án */
+  contractPartner?: string;
   plannedWeldCount: number;
   personnelIds: string[];
   machineTypes: string[];

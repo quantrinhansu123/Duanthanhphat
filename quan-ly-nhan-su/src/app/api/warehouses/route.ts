@@ -20,11 +20,23 @@ async function save(request: Request, editing: boolean) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return NextResponse.json({ error: "Thông tin kho không hợp lệ." }, { status: 400 });
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
     const address = typeof raw.address === "string" ? raw.address.trim() : "";
+    const managerName = typeof raw.managerName === "string" ? raw.managerName.trim().slice(0, 200) : "";
+    const managerPhone = typeof raw.managerPhone === "string" ? raw.managerPhone.trim().slice(0, 40) : "";
+    const guardName = typeof raw.guardName === "string" ? raw.guardName.trim().slice(0, 200) : "";
+    const guardPhone = typeof raw.guardPhone === "string" ? raw.guardPhone.trim().slice(0, 40) : "";
     if (!name || !address || name.length > 200 || address.length > 500) return NextResponse.json({ error: "Nhập tên kho (tối đa 200 ký tự) và địa chỉ/vị trí kho (tối đa 500 ký tự)." }, { status: 400 });
     const warehouses = await readPrivateJson<Warehouse[]>(file) ?? [];
     if (editing && !warehouses.some((w) => w.id === raw.id)) return NextResponse.json({ error: "Kho không còn tồn tại." }, { status: 404 });
     if (warehouses.some((w) => (!editing || w.id !== raw.id) && w.name.toLocaleLowerCase("vi") === name.toLocaleLowerCase("vi"))) return NextResponse.json({ error: "Tên kho đã tồn tại." }, { status: 409 });
-    const warehouse = { id: editing ? raw.id as string : crypto.randomUUID(), name, address };
+    const warehouse: Warehouse = {
+      id: editing ? raw.id as string : crypto.randomUUID(),
+      name,
+      address,
+      managerName,
+      managerPhone,
+      guardName,
+      guardPhone,
+    };
     await writePrivateJson(file, editing ? warehouses.map((w) => w.id === warehouse.id ? warehouse : w) : [...warehouses, warehouse]);
     return NextResponse.json({ warehouse });
   } catch (e) { return NextResponse.json({ error: formatSupabaseError(e) }, { status: e instanceof SyntaxError ? 400 : 500 }); }

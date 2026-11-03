@@ -9,6 +9,8 @@ export type ProjectMetadata = {
   railTypes: string[];
   /** Ngày nghỉ ISO yyyy-mm-dd */
   offDays?: string[];
+  /** Đối tác hợp đồng */
+  contractPartner?: string;
 };
 
 export type ProjectMetadataStore = Record<string, ProjectMetadata>;

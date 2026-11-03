@@ -16,8 +16,8 @@ const EMPTY_LINE = 240;
 const ADD_GUTTER = 56;
 const DAT_GREEN = "#059669";
 const UNRATED_GRAY = "#94a3b8";
-/** Giải toả xong mà T < 30°C */
-const STRESS_LOW_ORANGE = "#ea580c";
+/** Giải toả có lực căng (nhiệt độ dưới ngưỡng) — vàng. Giải toả tự nhiên — xanh. */
+const STRESS_LOW_ORANGE = "#f59e0b";
 const STRESS_PASS_TEMP_C = 30;
 
 function contrastText(hex: string) {
@@ -29,19 +29,23 @@ function contrastText(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 155 ? "#0f172a" : "#fff";
 }
 
-/** Xám khi tạo; xanh nếu giải toả T≥30; cam nếu T<30. */
-function releaseTone(released: boolean, tempC: number) {
+/** Xám khi chưa giải toả; xanh nếu giải toả tự nhiên (T ≥ ngưỡng); vàng nếu có lực căng (T < ngưỡng). */
+function releaseTone(released: boolean, tempC: number, threshold = STRESS_PASS_TEMP_C) {
   if (!released) return UNRATED_GRAY;
-  return tempC >= STRESS_PASS_TEMP_C ? DAT_GREEN : STRESS_LOW_ORANGE;
+  return tempC >= threshold ? DAT_GREEN : STRESS_LOW_ORANGE;
 }
 
 function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number) {
   const done = Boolean(rail.completedAt) || Boolean(cellReleased);
   // Nhiệt độ giải toả = trung bình ray trái/phải (neutralTemp là T khóa thiết kế 35, không dùng để tô màu).
+  // Ưu tiên nhiệt độ và ngưỡng của chính đoạn LWR (đúng phương pháp bảng tính chọn: có lực căng / tự nhiên),
+  // nhiệt độ ô chỉ dùng khi đoạn chưa nhập nhiệt độ hai đầu.
   const sides = [rail.params.leftTemp, rail.params.rightTemp];
   const sideAvg = sides.every(Number.isFinite) ? (sides[0] + sides[1]) / 2 : undefined;
-  const tempC = cellTemp ?? sideAvg ?? rail.params.airTemp ?? STRESS_PASS_TEMP_C;
-  return releaseTone(done, tempC);
+  const tempC = sideAvg ?? cellTemp ?? rail.params.airTemp ?? STRESS_PASS_TEMP_C;
+  const { neutralTemp, lockTempOffset } = rail.params;
+  const threshold = Number.isFinite(neutralTemp) && Number.isFinite(lockTempOffset) ? neutralTemp - lockTempOffset : STRESS_PASS_TEMP_C;
+  return releaseTone(done, tempC, threshold);
 }
 
 /** Mã trên thanh ngắn: TT-40-500m (500 = chiều dài đoạn; UT/UP/DT/DP → TT/TP/HT/HP). Nhiệt độ giải toả hiện ở dòng dưới. */

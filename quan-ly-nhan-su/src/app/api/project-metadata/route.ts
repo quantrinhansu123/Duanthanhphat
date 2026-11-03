@@ -36,6 +36,9 @@ function validate(value: unknown): ProjectMetadata {
     if (!Number.isSafeInteger(quantity) || quantity < 1) throw new RangeError(`Số lượng bộ của ${code} phải là số nguyên dương.`);
     machineQuantities[code] = quantity;
   }
+  const contractPartner = typeof input.contractPartner === "string"
+    ? input.contractPartner.trim().slice(0, 300)
+    : "";
   return {
     status: statuses.has(input.status || "") ? input.status as ProjectMetadata["status"] : "Đang triển khai",
     personnelIds: cleanArray(input.personnelIds),
@@ -44,6 +47,7 @@ function validate(value: unknown): ProjectMetadata {
     weldTypes: cleanArray(input.weldTypes),
     railTypes: cleanArray(input.railTypes),
     offDays: cleanDateArray(input.offDays),
+    contractPartner,
   };
 }
 

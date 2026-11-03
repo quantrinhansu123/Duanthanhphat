@@ -6,10 +6,20 @@ import type { LocationBundle } from "@/lib/warehouses";
 import ProjectEquipmentTable from "@/components/ProjectEquipmentTable";
 import { useAccess } from "@/lib/useAccess";
 
-const empty = { id: "", name: "", address: "" };
+const empty = { id: "", name: "", address: "", managerName: "", managerPhone: "", guardName: "", guardPhone: "" };
+
+function contactLine(name?: string, phone?: string) {
+  const n = (name ?? "").trim();
+  const p = (phone ?? "").trim();
+  if (n && p) return `${n} · ${p}`;
+  if (n) return n;
+  if (p) return p;
+  return "—";
+}
+
 export default function WarehouseManagement() {
   const { can } = useAccess();
-  const [bundle, setBundle] = useState<LocationBundle>({ warehouses: [], locations: [] });
+  const [bundle, setBundle] = useState<LocationBundle>({ warehouses: [], projects: [], locations: [] });
   const [form, setForm] = useState(empty);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,6 +54,10 @@ export default function WarehouseManagement() {
       <h2 className="font-bold sm:col-span-2">{form.id ? "Sửa kho" : "Thêm kho"}</h2>
       <label className="text-sm font-semibold">Tên kho<input required maxLength={200} disabled={busy} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ví dụ: Kho 1 Hà Nội" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
       <label className="text-sm font-semibold">Địa chỉ / vị trí kho<input required maxLength={500} disabled={busy} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Địa chỉ cụ thể của kho" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
+      <label className="text-sm font-semibold">Người quản lý<input maxLength={200} disabled={busy} value={form.managerName} onChange={(e) => setForm({ ...form, managerName: e.target.value })} placeholder="Họ tên người quản lý kho" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
+      <label className="text-sm font-semibold">SĐT người quản lý<input type="tel" maxLength={40} disabled={busy} value={form.managerPhone} onChange={(e) => setForm({ ...form, managerPhone: e.target.value })} placeholder="Số điện thoại" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
+      <label className="text-sm font-semibold">Người bảo vệ<input maxLength={200} disabled={busy} value={form.guardName} onChange={(e) => setForm({ ...form, guardName: e.target.value })} placeholder="Họ tên người bảo vệ kho" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
+      <label className="text-sm font-semibold">SĐT người bảo vệ<input type="tel" maxLength={40} disabled={busy} value={form.guardPhone} onChange={(e) => setForm({ ...form, guardPhone: e.target.value })} placeholder="Số điện thoại" className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-normal" /></label>
       <div className="flex gap-2 sm:col-span-2"><button disabled={busy || loading} className="rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white disabled:opacity-50">{busy ? "Đang lưu…" : "Lưu kho"}</button>{form.id && <button type="button" disabled={busy} onClick={() => setForm(empty)} className="rounded-lg border px-4 py-2">Hủy sửa</button>}</div>
     </form>}
     {status && <p role="status" className="rounded-lg border border-slate-200 bg-white p-3 text-sm">{status}</p>}
@@ -68,13 +82,27 @@ export default function WarehouseManagement() {
           </section>}
         </div>
       )}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[650px] text-left text-sm">
-        <thead className="bg-slate-50"><tr>{["Tên kho", "Địa chỉ / vị trí", "Số bộ trong kho", "Thao tác"].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead>
-        <tbody>{bundle.warehouses.map((w) => <tr key={w.id} className="border-t border-slate-200"><td className="p-3 font-semibold">{w.name}</td><td className="p-3">{w.address}</td><td className="p-3">{bundle.locations.filter((m) => m.warehouseId === w.id).reduce((sum, m) => sum + m.warehouseQuantity, 0)}</td><td className="p-3"><div className="flex flex-wrap gap-3">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full min-w-[980px] text-left text-sm">
+        <thead className="bg-slate-50"><tr>{["Tên kho", "Địa chỉ / vị trí", "Người quản lý", "Người bảo vệ", "Số bộ trong kho", "Thao tác"].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead>
+        <tbody>{bundle.warehouses.map((w) => <tr key={w.id} className="border-t border-slate-200">
+          <td className="p-3 font-semibold">{w.name}</td>
+          <td className="p-3">{w.address}</td>
+          <td className="p-3">{contactLine(w.managerName, w.managerPhone)}</td>
+          <td className="p-3">{contactLine(w.guardName, w.guardPhone)}</td>
+          <td className="p-3">{bundle.locations.filter((m) => m.warehouseId === w.id).reduce((sum, m) => sum + m.warehouseQuantity, 0)}</td>
+          <td className="p-3"><div className="flex flex-wrap gap-3">
           <button type="button" disabled={busy} onClick={() => setExpanded(expanded === w.id ? "" : w.id)} className="text-[#0047AB]">Xem thiết bị</button>
-          {can("quan-ly-kho", "edit") && <button type="button" disabled={busy} onClick={() => setForm(w)} className="text-[#0047AB]">Sửa</button>}
+          {can("quan-ly-kho", "edit") && <button type="button" disabled={busy} onClick={() => setForm({
+            id: w.id,
+            name: w.name,
+            address: w.address,
+            managerName: w.managerName ?? "",
+            managerPhone: w.managerPhone ?? "",
+            guardName: w.guardName ?? "",
+            guardPhone: w.guardPhone ?? "",
+          })} className="text-[#0047AB]">Sửa</button>}
           {can("quan-ly-kho", "delete") && (removing === w.id ? <><button type="button" disabled={busy} onClick={() => void remove(w.id)} className="text-rose-700">Xác nhận xóa</button><button type="button" disabled={busy} onClick={() => setRemoving("")}>Hủy</button></> : <button type="button" disabled={busy} onClick={() => setRemoving(w.id)} className="text-rose-700">Xóa</button>)}
-        </div></td></tr>)}{!bundle.warehouses.length && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Chưa có kho. Thêm tên và địa chỉ kho ở trên.</td></tr>}</tbody>
+        </div></td></tr>)}{!bundle.warehouses.length && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Chưa có kho. Thêm tên và địa chỉ kho ở trên.</td></tr>}</tbody>
       </table></div>
       {bundle.warehouses.filter((w) => w.id === expanded).map((w) => <section key={w.id} className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="mb-3 font-bold">Thiết bị tại {w.name} · {w.address}</h2><ProjectEquipmentTable rows={bundle.locations.filter((m) => m.warehouseId === w.id && m.warehouseQuantity > 0).map((m) => ({ ...m, quantity: m.warehouseQuantity }))} /></section>)}
     </>}

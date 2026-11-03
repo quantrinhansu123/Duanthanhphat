@@ -154,6 +154,7 @@ function emptyProject(): Project {
     startDate: firstDayOfCurrentMonth,
     endDate: today,
     location: "",
+    contractPartner: "",
     plannedWeldCount: 0,
     personnelIds: [],
     machineTypes: [],
@@ -852,6 +853,16 @@ function ProjectInfoFields({
           value={form.location}
           onChange={(e) => updateForm({ location: e.target.value })}
           placeholder="VD: Hà Nội · Km 12+450"
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
+        />
+      </label>
+      <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+        Đối tác hợp đồng
+        <input
+          readOnly={readOnly}
+          value={form.contractPartner ?? ""}
+          onChange={(e) => updateForm({ contractPartner: e.target.value })}
+          placeholder="VD: Tổng công ty Đường sắt Việt Nam"
           className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden read-only:bg-slate-50 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20 hover:border-slate-400 transition-all duration-150"
         />
       </label>
@@ -1659,6 +1670,7 @@ function ProjectModal({
       ...project,
       maDuAn: project.maDuAn ?? "",
       location: project.location?.trim() || "",
+      contractPartner: project.contractPartner ?? "",
       personnelIds: project.personnelIds ?? [],
       machineTypes: project.machineTypes ?? [],
       weldTypes: project.weldTypes ?? [],
@@ -1859,6 +1871,7 @@ function ProjectModal({
                   ...form,
                   maDuAn: (form.maDuAn ?? "").trim(),
                   location: form.location.trim(),
+                  contractPartner: (form.contractPartner ?? "").trim(),
                   plant: "",
                   staffCount: form.personnelIds.length,
                   machineCount: form.machineTypes.reduce((sum, code) => sum + (form.machineQuantities?.[code] ?? 1), 0),
@@ -2123,6 +2136,7 @@ export default function ProjectManagement() {
           manager: updated.manager,
           managerId: updated.managerId,
           location: updated.location,
+          contractPartner: updated.contractPartner ?? "",
           startDate: updated.startDate,
           endDate: updated.endDate,
           plannedWeldCount: updated.plannedWeldCount,
@@ -2147,6 +2161,7 @@ export default function ProjectManagement() {
                     ...updated,
                     ...saved,
                     maDuAn: saved.maDuAn ?? updated.maDuAn,
+                    contractPartner: saved.contractPartner ?? updated.contractPartner ?? "",
                     plant: "",
                     status: updated.status,
                     personnelIds: updated.personnelIds,
@@ -2177,6 +2192,7 @@ export default function ProjectManagement() {
           manager: project.manager,
           managerId: project.managerId,
           location: project.location,
+          contractPartner: project.contractPartner ?? "",
           startDate: project.startDate,
           endDate: project.endDate,
           plannedWeldCount: project.plannedWeldCount,
@@ -2561,11 +2577,12 @@ export default function ProjectManagement() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="table-scroll overflow-x-auto">
-          <table className="w-full min-w-[1320px] border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1480px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="min-w-[220px] px-4 py-3">Tên dự án</th>
                 <th className="min-w-[120px] px-3.5 py-3">Vị trí</th>
+                <th className="min-w-[160px] px-3.5 py-3">Đối tác hợp đồng</th>
                 <th className="whitespace-nowrap px-3.5 py-3">Người phụ trách</th>
                 <th className="px-3.5 py-3">Nhân sự</th>
                 <th className="px-3.5 py-3">Máy</th>
@@ -2583,6 +2600,9 @@ export default function ProjectManagement() {
                   <td className="max-w-[280px] px-4 py-3 font-semibold text-slate-900">{p.name}</td>
                   <td className="max-w-[160px] px-3.5 py-3 text-xs text-slate-700">
                     {p.location}
+                  </td>
+                  <td className="max-w-[200px] px-3.5 py-3 text-xs text-slate-700">
+                    {p.contractPartner?.trim() || "—"}
                   </td>
                   <td className="whitespace-nowrap px-3.5 py-3 text-slate-700">{p.manager}</td>
                   <td className="px-3.5 py-3 font-medium font-mono tabular-nums text-slate-900">{p.staffCount}</td>
@@ -2649,7 +2669,7 @@ export default function ProjectManagement() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={12} className="px-4 py-12 text-center text-slate-500">
                     <div className="text-sm font-semibold text-slate-800">Không tìm thấy dự án phù hợp</div>
                   </td>
                 </tr>

@@ -27,6 +27,10 @@ export async function GET() {
       projects.push(...(data ?? []).map((p) => ({ id: p.id, name: p.du_an })));
       if (!data || data.length < 1000) break;
     }
-    return NextResponse.json({ warehouses: warehouses ?? [], locations: equipmentLocations(machines, warehouses ?? [], projects, metadata ?? {}) });
+    return NextResponse.json({
+      warehouses: warehouses ?? [],
+      projects,
+      locations: equipmentLocations(machines, warehouses ?? [], projects, metadata ?? {}),
+    });
   } catch (e) { return NextResponse.json({ error: formatSupabaseError(e) }, { status: 500 }); }
 }

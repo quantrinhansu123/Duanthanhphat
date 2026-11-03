@@ -17,6 +17,8 @@ type Props = {
   className?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  /** Chọn một mục xong là đóng danh sách ngay (mặc định: giữ mở để chọn tiếp). */
+  closeOnSelect?: boolean;
 };
 
 /** Chọn nhiều giá trị + gõ để lọc. Menu render qua portal nên không bị modal cắt. */
@@ -29,6 +31,7 @@ export default function MultiSelectMenu({
   className = "",
   buttonClassName = "",
   disabled = false,
+  closeOnSelect = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -84,6 +87,7 @@ export default function MultiSelectMenu({
 
   function toggle(value: string) {
     onChange(selectedSet.has(value) ? values.filter((v) => v !== value) : [...values, value]);
+    if (closeOnSelect) close();
   }
 
   const fieldBorder = open

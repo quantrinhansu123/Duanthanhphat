@@ -252,10 +252,14 @@ export default function AppShell({ tab }: AppShellProps) {
   }, []);
 
   function goBack() {
-    // Quay về view trước trong lịch sử; nếu không có thì về trang nhập liệu nhanh.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
+    // Overlay/drawer nội bộ (hồ sơ NS, chi tiết máy…) được ưu tiên đóng trước.
+    if (typeof window !== "undefined") {
+      const nested = new CustomEvent("app-back", { cancelable: true });
+      if (!window.dispatchEvent(nested)) return;
+      if (window.history.length > 1) {
+        router.back();
+        return;
+      }
     }
     go(HOME_TAB);
   }
