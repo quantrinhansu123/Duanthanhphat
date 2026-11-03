@@ -2876,31 +2876,21 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-600">
-        <span>
-          <strong className="font-semibold text-slate-900 font-mono tabular-nums">{total.toLocaleString("vi-VN")}</strong> bản ghi
-        </span>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 sm:mb-4 sm:text-sm">
+        <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-slate-900">{total.toLocaleString("vi-VN")}</strong> bản ghi</span>
         {!failedWeldMode ? (
           <>
-            <span className="text-slate-300">|</span>
-            <span>
-              <strong className="font-semibold text-emerald-700 font-mono tabular-nums">{passCount.toLocaleString("vi-VN")}</strong> đạt ·{" "}
-              <strong className="font-semibold text-rose-700 font-mono tabular-nums">{failCount.toLocaleString("vi-VN")}</strong> không đạt
-            </span>
-            <span className="text-slate-300">|</span>
-            <span><strong className="font-semibold text-amber-700 font-mono tabular-nums">{pendingCount.toLocaleString("vi-VN")}</strong> chờ thí nghiệm</span>
-            <span><strong className="font-semibold text-slate-700 font-mono tabular-nums">{untestedCount.toLocaleString("vi-VN")}</strong> không thí nghiệm</span>
-            <span className="text-slate-300">|</span>
-            <span>
-              {testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm
-              {" · "}Tỷ lệ lỗi: <strong className="text-rose-700 font-mono tabular-nums">{errorRate}</strong>
-            </span>
+            <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-emerald-700">{passCount.toLocaleString("vi-VN")}</strong> đạt</span>
+            <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-rose-700">{failCount.toLocaleString("vi-VN")}</strong> không đạt</span>
+            <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-amber-700">{pendingCount.toLocaleString("vi-VN")}</strong> chờ TN</span>
+            <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-slate-700">{untestedCount.toLocaleString("vi-VN")}</strong> không TN</span>
+            <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1" title={`${testedCount.toLocaleString("vi-VN")} mối đã thí nghiệm`}>Tỷ lệ lỗi <strong className="font-mono font-semibold tabular-nums text-rose-700">{errorRate}</strong></span>
           </>
         ) : null}
       </div>
 
       {!failedWeldMode && (
-        <div role="tablist" aria-label="Nhật ký theo giai đoạn" className="mb-3 flex flex-wrap gap-1.5">
+        <div role="tablist" aria-label="Nhật ký theo giai đoạn" className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {JOURNAL_STAGES.map((s) => (
             <button
               key={s.id}
@@ -2909,7 +2899,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               aria-selected={stage === s.id}
               title={s.hint}
               onClick={() => { setStage(s.id); setPage(1); }}
-              className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors cursor-pointer ${
+              className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition-colors cursor-pointer sm:min-h-10 sm:rounded-lg sm:px-4 sm:text-sm ${
                 stage === s.id ? "bg-[#0047AB] text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
@@ -2921,7 +2911,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
 
       <div className="mb-4 space-y-2.5">
        <form
-         className="flex flex-col gap-2 sm:flex-row sm:items-end"
+         className="flex items-end gap-2"
          onSubmit={(event) => {
            event.preventDefault();
            setAppliedQuery(searchDraft.trim());
@@ -2929,11 +2919,11 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
          }}
        >
          <label className="min-w-0 flex-1 text-xs font-semibold text-slate-700">
-           Tìm theo mã (hệ thống / hiện trường / trong máy)
+           Tìm theo mã<span className="hidden sm:inline"> (hệ thống / hiện trường / trong máy)</span>
            <input
              value={searchDraft}
              onChange={(event) => setSearchDraft(event.target.value)}
-             placeholder="VD: PQ-FBW-… · FBW-25-10-26-0001 · 25-10-26-0001"
+             placeholder="PQ-FBW-… · FBW-25-10-26-0001"
              className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
            />
          </label>
@@ -3051,13 +3041,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
        </div>
 
        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
-        <button
-          type="button"
-          onClick={() => downloadWeldJournalExcelTemplate()}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-400 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-        >
-          Tải mẫu Excel
-        </button>
         <input
           ref={excelInputRef}
           type="file"
@@ -3068,24 +3051,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             e.target.value = "";
           }}
         />
-        <button
-          type="button"
-          onClick={() => excelInputRef.current?.click()}
-          disabled={importing || saving || loading}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-[#0047AB] bg-white px-4 text-xs font-semibold text-[#0047AB] shadow-2xs hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-        >
-          {importing ? "Đang nhập…" : "Tải Excel lên"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleExportExcel()}
-          disabled={exporting || loading}
-          title="Xuất toàn bộ nhật ký theo bộ lọc hiện tại"
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-xs font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-        >
-          <DownloadSimple size={16} weight="bold" aria-hidden />
-          {exporting ? "Đang tạo Excel…" : "Xuất Excel"}
-        </button>
         <button
           type="button"
           onClick={() => void handleExportAppendix5()}
@@ -3131,16 +3096,18 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       </div>
 
       {qualityError && <div role="status" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Kiểm tra chất lượng: {qualityError} {qualityStatusFilter === "Tất cả" && "Nhật ký và kết quả NDT hiện có vẫn được hiển thị."}<button type="button" className="ml-2 min-h-9 font-semibold underline" onClick={() => setReloadToken((n) => n + 1)}>Thử lại</button></div>}
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-sm">
-        <div className="mr-auto min-w-0">
+      <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50/40 p-2.5 text-sm sm:p-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
-          <div className="text-xs text-slate-600">Chọn nhiều → Siêu âm đạt hàng loạt; chỉ chỉnh tay mối không đạt. Sai số nhập từng mối / Excel.</div>
+          <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
         </div>
-        <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
-        <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy danh sách…" : `Chọn toàn bộ ${total.toLocaleString("vi-VN")} kết quả lọc`}</button>
-        <button type="button" disabled={!selectedQuality.size} className="min-h-11 rounded-lg px-3 text-slate-600 disabled:opacity-50" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
-        <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-11 rounded-lg bg-blue-700 px-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
-        <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập kiểm tra…" : "Nhập sai số / Excel"}</button>
+        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Chọn nhiều → Siêu âm đạt hàng loạt; chỉ chỉnh tay mối không đạt. Sai số nhập từng mối / Excel.</div>
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+          <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
+          <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy…" : `Chọn toàn bộ (${total.toLocaleString("vi-VN")})`}</button>
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
+          <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập…" : "Nhập sai số / Excel"}</button>
+        </div>
         <input ref={qualityExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" aria-label="File kiểm tra chất lượng" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void handleQualityExcel(file); }} />
       </div>
       {qualityImportReport && <div role="status" className="mb-3 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 p-3 text-sm">{qualityImportReport}</div>}
@@ -3157,35 +3124,36 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         {/* Danh sách dạng thẻ — mobile & tablet */}
         <div className="mt-3.5 space-y-2.5 lg:hidden">
           {pageRows.map((w) => (
-            <div key={w.id} className="flex items-start gap-1">
-            <label className="flex h-11 w-11 shrink-0 items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label>
+            <div key={w.id} className={`flex min-w-0 items-stretch overflow-hidden rounded-xl border bg-white shadow-2xs transition-colors hover:border-[#0047AB]/40 hover:bg-blue-50/40 ${selectedQuality.has(w.id) ? "border-[#0047AB]/60 bg-blue-50/50" : "border-slate-200"}`}>
+            <label className="flex w-10 shrink-0 cursor-pointer items-start justify-center pt-3.5"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label>
             <button
               type="button"
               onClick={() => setDetailId(w.id)}
-              className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xs transition-colors hover:border-[#0047AB]/40 hover:bg-blue-50/40 cursor-pointer"
+              className="flex min-w-0 flex-1 items-center gap-2 py-3 pr-3 text-left cursor-pointer"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="block min-w-0 font-mono text-sm font-bold text-[#0047AB] truncate">{w.weldName}</span>
-                  <WeldQualityBadge status={w.qualityStatus} />
+                  <span className="block min-w-0 truncate font-mono text-[13px] font-bold text-[#0047AB]">{w.weldName}</span>
+                  <span className="shrink-0"><WeldQualityBadge status={w.qualityStatus} /></span>
                 </div>
-                <div className="mt-1 text-sm font-semibold text-slate-900 truncate">{w.operator}</div>
-                <div className="mt-0.5 text-xs text-slate-500 font-mono">{w.performedDate} · {w.shift}</div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] font-mono text-slate-600">
-                  <span className="truncate" title="Mã vị trí">VT · {w.lispCode}</span>
-                  <span className="truncate" title="Mã hiện trường">HT · {w.siteCode}</span>
-                  <span className="truncate" title="Mã trong máy">Máy · {w.machineCode}</span>
+                <div className="mt-1 truncate text-sm font-semibold text-slate-900">
+                  {w.operator} <span className="font-normal text-slate-400">·</span> <span className="font-mono text-xs font-normal text-slate-500">{w.performedDate} · {w.shift}</span>
                 </div>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                  <span className="truncate">🏗️ {w.project}</span>
-                  <span className="whitespace-nowrap">{w.weldType}</span>
-                  <span className={`truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
+                <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-lg bg-slate-50 px-2 py-1.5 font-mono text-[11px] text-slate-600">
+                  <dt className="text-slate-400" title="Mã vị trí">VT</dt><dd className="truncate">{w.lispCode}</dd>
+                  <dt className="text-slate-400" title="Mã hiện trường">HT</dt><dd className="truncate">{w.siteCode}</dd>
+                  <dt className="text-slate-400" title="Mã trong máy">TM</dt><dd className="truncate">{w.machineCode}</dd>
+                </dl>
+                <div className="mt-1.5 truncate text-[11px] text-slate-500">🏗️ {w.project}</div>
+                <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px]">
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">{w.weldType}</span>
+                  <span className={`min-w-0 truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
                 </div>
                 {w.resultType === "fail" && (
                   <div className="mt-1 line-clamp-2 text-[11px] font-medium text-rose-700">⚠ {w.failureReason}</div>
                 )}
               </div>
-              <span className="shrink-0 self-center text-slate-300">
+              <span className="shrink-0 text-slate-300">
                 <CaretRight size={16} weight="bold" aria-hidden />
               </span>
             </button>
