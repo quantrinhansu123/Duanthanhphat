@@ -51,10 +51,15 @@ export async function DELETE(request: Request) {
     if (!id) return NextResponse.json({ error: "Thiếu mã kho." }, { status: 400 });
     const warehouses = await readPrivateJson<Warehouse[]>(file) ?? [];
     if (!warehouses.some((w) => w.id === id)) return NextResponse.json({ error: "Kho không còn tồn tại." }, { status: 404 });
-    const { count, error } = await createAdminClient().from("thiet_bi").select("id", { count: "exact", head: true }).contains("thong_so", { warehouseId: id });
-    if (error) throw error;
-    if (count == null) throw new Error("Chưa xác minh được thiết bị đang gán kho. Vui lòng thử lại.");
-    if (count) return NextResponse.json({ error: "Kho đang được gán cho thiết bị. Chuyển thiết bị sang kho khác hoặc bỏ gán kho trước khi xóa." }, { status: 409 });
+    const db = createAdminClient();
+    const [legacy, split] = await Promise.all([
+      db.from("thiet_bi").select("id", { count: "exact", head: true }).contains("thong_so", { warehouseId: id }),
+      db.from("thiet_bi").select("id", { count: "exact", head: true }).contains("thong_so", { stockLocations: [{ kind: "warehouse", id }] }),
+    ]);
+    if (legacy.error) throw legacy.error;
+    if (split.error) throw split.error;
+    if (legacy.count == null || split.count == null) throw new Error("Chưa xác minh được thiết bị đang gán kho. Vui lòng thử lại.");
+    if (legacy.count + split.count) return NextResponse.json({ error: "Kho đang được gán cho thiết bị. Chuyển thiết bị sang kho khác hoặc bỏ gán kho trước khi xóa." }, { status: 409 });
     await writePrivateJson(file, warehouses.filter((w) => w.id !== id));
     return NextResponse.json({ ok: true });
   } catch (e) { return NextResponse.json({ error: formatSupabaseError(e) }, { status: 500 }); }

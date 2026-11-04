@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { parseStockSplits } from "@/lib/stockSplits";
 import { spareParts as seedParts, type SparePart, type SparePartStatus } from "@/data/spareParts";
 
 const TABLE = "phu_tung_thay_the";
@@ -16,6 +17,7 @@ type Row = {
   don_gia_vnd: number | null;
   trang_thai: string | null;
   ghi_chu: string | null;
+  vi_tri_ton_kho?: unknown;
 };
 
 function fromRow(row: Row): SparePart {
@@ -32,6 +34,8 @@ function fromRow(row: Row): SparePart {
     unitPriceVnd: Number(row.don_gia_vnd ?? 0),
     status: (row.trang_thai ?? "Còn hàng") as SparePartStatus,
     note: row.ghi_chu ?? "",
+    // undefined = DB chưa có cột (chưa chạy migration).
+    locations: row.vi_tri_ton_kho === undefined ? undefined : parseStockSplits(row.vi_tri_ton_kho),
   };
 }
 
@@ -48,11 +52,14 @@ function toRow(part: SparePart) {
     don_gia_vnd: part.unitPriceVnd,
     trang_thai: part.status,
     ghi_chu: part.note,
+    // Chỉ gửi cột khi có dữ liệu để DB chưa chạy migration vẫn lưu được phụ tùng thường.
+    ...(part.locations !== undefined ? { vi_tri_ton_kho: part.locations } : {}),
   };
 }
 
 function formatError(error: { code?: string; message: string }) {
   if (error.code === "23505") return "Mã phụ tùng đã tồn tại.";
+  if (/vi_tri_ton_kho/.test(error.message)) return "Chưa có cột vi_tri_ton_kho — chạy migration_20261104_phu_tung_vi_tri.sql.";
   if (error.code === "42P01" || /schema cache|does not exist/i.test(error.message)) {
     return "Chưa có bảng phu_tung_thay_the trong database — chạy migration_20261027_phu_tung_thay_the.sql.";
   }

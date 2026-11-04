@@ -98,7 +98,11 @@ function loggedInInspector(people: PersonOption[]): PersonOption | undefined {
 function weldingMachines(machines: Machine[]) {
   return machines
     .filter((machine) => getMachineCategory(machine) !== "Phương tiện")
-    .sort((a, b) => a.code.localeCompare(b.code, "vi"));
+    .sort((a, b) => {
+      // Máy hàn lên đầu, các thiết bị/phụ kiện khác phía sau.
+      const rank = (m: Machine) => (/máy hàn/i.test(`${m.name} ${m.type ?? ""}`) ? 0 : 1);
+      return rank(a) - rank(b) || a.code.localeCompare(b.code, "vi");
+    });
 }
 
 function progressTone(filled: number, total: number, fail: number) {

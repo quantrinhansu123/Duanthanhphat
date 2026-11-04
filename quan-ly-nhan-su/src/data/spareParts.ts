@@ -1,3 +1,5 @@
+import type { StockSplit } from "@/lib/stockSplits";
+
 export type SparePartStatus = "Còn hàng" | "Sắp hết" | "Hết hàng" | "Đặt hàng";
 
 export type SparePart = {
@@ -13,6 +15,8 @@ export type SparePart = {
   unitPriceVnd: number;
   status: SparePartStatus;
   note: string;
+  /** Tồn kho chia theo vị trí (kho / dự án). Có dữ liệu thì stockQty = tổng. */
+  locations?: StockSplit[];
 };
 
 export const sparePartCategories = [

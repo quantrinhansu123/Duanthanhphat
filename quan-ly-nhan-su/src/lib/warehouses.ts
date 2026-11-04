@@ -1,5 +1,6 @@
 import type { Machine } from "@/data/machines";
 import { equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
+import { parseStockSplits } from "@/lib/stockSplits";
 
 export type Warehouse = {
   id: string;
@@ -19,6 +20,8 @@ export type EquipmentLocation = {
   locationProjectId: string;
   projects: { id: string; name: string; quantity: number; missing?: boolean }[];
   excessQuantity: number;
+  /** Số lượng theo từng kho khi một mã nằm ở nhiều nơi (specs.stockLocations). Rỗng = dùng warehouseId cũ. */
+  stock: { warehouseId: string; warehouseName: string; warehouseAddress: string; quantity: number }[];
 };
 export type LocationBundle = { warehouses: Warehouse[]; projects: LocationProject[]; locations: EquipmentLocation[] };
 
@@ -29,6 +32,22 @@ export function equipmentLocations(
   metadata: Record<string, { status?: string; machineTypes: string[]; machineQuantities?: Record<string, number> }>,
 ): EquipmentLocation[] {
   return machines.map((machine) => {
+    const splits = parseStockSplits(machine.specs?.stockLocations).filter((s) => s.quantity > 0);
+    if (splits.length) {
+      const stock = splits.filter((s) => s.kind === "warehouse").map((s) => {
+        const w = warehouses.find((item) => item.id === s.id);
+        return { warehouseId: s.id, warehouseName: w?.name ?? "Kho không còn tồn tại", warehouseAddress: w?.address ?? "", quantity: s.quantity };
+      });
+      const projectsView = splits.filter((s) => s.kind === "project").map((s) => {
+        const p = projects.find((item) => item.id === s.id);
+        return { id: s.id, name: p?.name ?? `Dự án không còn tồn tại (${s.id})`, quantity: s.quantity, missing: !p };
+      });
+      return {
+        id: machine.id, code: machine.code, name: machine.name, model: machine.model, group: equipmentGroup(machine),
+        warehouseId: "", warehouseName: "Nhiều vị trí", warehouseAddress: "", locationProjectId: "",
+        warehouseQuantity: 0, projects: projectsView, excessQuantity: 0, stock,
+      };
+    }
     const assigned = Object.entries(metadata).filter(([, p]) => p.status !== "Hoàn thành" && p.machineTypes.includes(machine.code))
       .map(([id, p]) => {
         const project = projects.find((project) => project.id === id);
@@ -49,12 +68,14 @@ export function equipmentLocations(
       warehouseName: warehouse?.name ?? (locationProject ? `Dự án ${locationProject.name}` : "Chưa chọn kho"),
       warehouseAddress: warehouse?.address ?? "",
       locationProjectId,
-      warehouseQuantity: Math.max(0, remaining), projects: projectsView, excessQuantity: Math.max(0, -remaining),
+      warehouseQuantity: Math.max(0, remaining), projects: projectsView, excessQuantity: Math.max(0, -remaining), stock: [],
     };
   });
 }
 export function equipmentLocationLabel(location: EquipmentLocation): string {
   const parts = location.projects.map((p) => `${p.missing ? p.name : `Dự án ${p.name}`}: ${p.quantity} bộ`);
+  for (const s of location.stock) parts.push(`${s.warehouseName}${s.warehouseAddress ? ` (${s.warehouseAddress})` : ""}: ${s.quantity} bộ`);
+  if (location.stock.length) return parts.join("; ");
   if (location.warehouseId && location.warehouseQuantity) {
     parts.push(`${location.warehouseName}${location.warehouseAddress ? ` (${location.warehouseAddress})` : ""}: ${location.warehouseQuantity} bộ`);
   } else if (!location.projects.length && location.locationProjectId) {

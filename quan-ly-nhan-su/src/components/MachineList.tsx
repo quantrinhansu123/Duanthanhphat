@@ -55,6 +55,8 @@ import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Link from "next/link";
 import { EQUIPMENT_GROUP_LABELS, equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 import { loadEquipmentLocations } from "@/lib/warehousesDb";
+import StockSplitsEditor from "@/components/StockSplitsEditor";
+import { parseStockSplits, sumStockSplits } from "@/lib/stockSplits";
 import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type LocationProject, type Warehouse } from "@/lib/warehouses";
 import Pager, { usePaged } from "@/components/Pager";
 
@@ -1483,6 +1485,8 @@ function MachineFormModal({
   const railOptions = useCatalogOptions("Loại ray");
   const category = getMachineCategory(form);
   const fields = machineCategoryFieldMatrix(category);
+  const isMaterial = equipmentGroup(form) === "materials";
+  const stockSplits = parseStockSplits(form.specs?.stockLocations);
   const selectedRails = form.supportedRails
     .split(/[,;|/]+/)
     .map((value) => value.trim())
@@ -1536,7 +1540,8 @@ function MachineFormModal({
       );
       return;
     }
-    if (!Number.isSafeInteger(Number(form.specs?.quantity ?? 1)) || Number(form.specs?.quantity ?? 1) < 1) {
+    const effectiveQty = isMaterial && stockSplits.length > 0 ? sumStockSplits(stockSplits) : Number(form.specs?.quantity ?? 1);
+    if (!Number.isSafeInteger(effectiveQty) || effectiveQty < 1) {
       window.alert("Số lượng bộ phải là số nguyên dương.");
       return;
     }
@@ -1549,9 +1554,17 @@ function MachineFormModal({
     const locationProjectId = String(form.specs?.locationProjectId ?? "");
     const warehouse = warehouses.find((w) => w.id === warehouseId);
     const project = projects.find((p) => p.id === locationProjectId);
+    const splitMode = isMaterial && stockSplits.length > 0;
+    const splitText = stockSplits
+      .filter((s) => s.quantity > 0)
+      .map((s) => `${(s.kind === "warehouse" ? warehouses : projects).find((o) => o.id === s.id)?.name ?? "?"}: ${s.quantity}`)
+      .join("; ");
     onSave({
       ...form,
-      location: warehouse?.address || (project ? `Dự án ${project.name}` : form.location),
+      specs: splitMode
+        ? { ...form.specs, quantity: sumStockSplits(stockSplits), stockLocations: stockSplits, warehouseId: "", locationProjectId: "" }
+        : form.specs,
+      location: splitMode ? splitText : warehouse?.address || (project ? `Dự án ${project.name}` : form.location),
       manufacturer: form.manufacturer.trim(),
       image: syncImage,
       gallery: syncGallery,
@@ -1625,7 +1638,19 @@ function MachineFormModal({
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
           <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
             <h3 className="font-bold text-slate-900">Vị trí máy / thiết bị: Kho hoặc Dự án</h3>
-            <label className="block text-sm font-semibold">Chọn kho hoặc dự án
+            {isMaterial && (
+              <div className="space-y-2 rounded-lg border border-blue-200 bg-white p-3">
+                <div className="text-sm font-semibold">Số lượng theo vị trí (cùng 1 mã)</div>
+                <p className="text-xs text-slate-600">VD: Kít hàn ray P50 — Kho Lương Sơn 100, Phú Quốc 400. Tổng tự cộng thành số lượng của mã.</p>
+                <StockSplitsEditor
+                  splits={stockSplits}
+                  warehouses={warehouses}
+                  projects={projects}
+                  onChange={(next) => setForm({ ...form, specs: { ...form.specs, stockLocations: next, quantity: Math.max(1, sumStockSplits(next)) } })}
+                />
+              </div>
+            )}
+            <label className={`block text-sm font-semibold ${isMaterial && stockSplits.length > 0 ? "hidden" : ""}`}>{isMaterial ? "Hoặc chọn 1 kho / dự án duy nhất" : "Chọn kho hoặc dự án"}
               <div className="mt-1 font-normal">
                 <SelectMenu
                   searchable
@@ -1733,7 +1758,8 @@ function MachineFormModal({
                   </select>
                 </label>
                 <label className="text-sm font-semibold">Số lượng (bộ cùng model)
-                  <input type="number" min={1} step={1} className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                  <input type="number" min={1} step={1} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100"
+                    disabled={isMaterial && stockSplits.length > 0}
                     value={Number(form.specs?.quantity ?? 1)} onChange={(e) => setForm({ ...form, specs: { ...form.specs, quantity: Number(e.target.value) } })} />
                 </label>
                 <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">

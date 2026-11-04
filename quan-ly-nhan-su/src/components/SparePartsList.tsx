@@ -13,6 +13,9 @@ import { deleteSpareParts, insertSparePart, loadSpareParts, updateSparePart } fr
 import { canViewUnitPrice } from "@/lib/viewerAccess";
 import Pager, { usePaged } from "@/components/Pager";
 import { useResource } from "@/lib/useResource";
+import StockSplitsEditor from "@/components/StockSplitsEditor";
+import { loadEquipmentLocations } from "@/lib/warehousesDb";
+import { sumStockSplits, type StockSplit } from "@/lib/stockSplits";
 
 type ModalState =
   | { mode: "add" }
@@ -56,6 +59,11 @@ export default function SparePartsList() {
   const list = resource.data?.parts ?? NO_PARTS;
   const persisted = resource.data?.persisted ?? true;
   const loadError = resource.data?.error ?? "";
+  const places = useResource("equipment-locations-bundle", loadEquipmentLocations).data;
+  const placeWarehouses = places?.warehouses ?? [];
+  const placeProjects = places?.projects ?? [];
+  const placeName = (s: StockSplit) =>
+    (s.kind === "warehouse" ? placeWarehouses : placeProjects).find((o) => o.id === s.id)?.name ?? "Vị trí không còn tồn tại";
   const setList = (update: (current: SparePart[]) => SparePart[]) =>
     resource.mutate((cur) => ({ ...cur, parts: update(cur.parts) }));
   const [saving, setSaving] = useState(false);
@@ -171,7 +179,7 @@ export default function SparePartsList() {
       setError("Chọn ít nhất một model máy tương thích.");
       return;
     }
-    const stockQty = Math.max(0, Number(form.stockQty) || 0);
+    const stockQty = form.locations?.length ? sumStockSplits(form.locations) : Math.max(0, Number(form.stockQty) || 0);
     const minStock = Math.max(0, Number(form.minStock) || 0);
     const unitPriceVnd = Math.max(0, Number(form.unitPriceVnd) || 0);
     const status = deriveSparePartStatus(stockQty, minStock, form.status);
@@ -399,6 +407,13 @@ export default function SparePartsList() {
                   <td className="px-3.5 py-3 text-slate-700">{row.category}</td>
                   <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-900">
                     {row.stockQty.toLocaleString("vi-VN")} {row.unit}
+                    {row.locations?.length ? (
+                      <ul className="mt-1 space-y-0.5 text-left font-sans text-[11px] font-normal text-slate-600">
+                        {row.locations.map((s) => (
+                          <li key={`${s.kind}:${s.id}`}>+ {placeName(s)}: {s.quantity.toLocaleString("vi-VN")}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </td>
                   {showUnitPrice ? (
                     <td className="px-3.5 py-3 text-right font-mono tabular-nums text-slate-700">
@@ -529,8 +544,8 @@ export default function SparePartsList() {
                   <input
                     type="number"
                     min={0}
-                    value={form.stockQty}
-                    disabled={readOnly}
+                    value={form.locations?.length ? sumStockSplits(form.locations) : form.stockQty}
+                    disabled={readOnly || Boolean(form.locations?.length)}
                     onChange={(event) => setForm((current) => ({ ...current, stockQty: Number(event.target.value) }))}
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-xs outline-hidden focus:border-[#0047AB] disabled:bg-slate-100 sm:text-sm"
                   />
@@ -559,6 +574,20 @@ export default function SparePartsList() {
                     />
                   </label>
                 ) : null}
+              </div>
+              <div className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
+                Tồn kho theo vị trí (cùng 1 mã)
+                <p className="mt-0.5 text-xs font-normal text-slate-500">VD: Phú Quốc 400, Kho Lương Sơn 100. Có chia vị trí thì Tồn kho tự bằng tổng.</p>
+                <div className="mt-1.5 font-normal">
+                  <StockSplitsEditor
+                    splits={form.locations ?? []}
+                    warehouses={placeWarehouses}
+                    projects={placeProjects}
+                    unit={form.unit || "cái"}
+                    readOnly={readOnly}
+                    onChange={(next) => setForm((current) => ({ ...current, locations: next, stockQty: next.length ? sumStockSplits(next) : current.stockQty }))}
+                  />
+                </div>
               </div>
               <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
                 Trạng thái

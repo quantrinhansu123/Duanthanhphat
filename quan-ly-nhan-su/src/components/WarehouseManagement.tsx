@@ -2,7 +2,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { loadEquipmentLocations, saveWarehouse, deleteWarehouse } from "@/lib/warehousesDb";
-import type { LocationBundle } from "@/lib/warehouses";
+import type { EquipmentLocation, LocationBundle } from "@/lib/warehouses";
+
+/** Số bộ của một mã đang nằm trong kho (kể cả khi mã chia ở nhiều kho). */
+function qtyInWarehouse(m: EquipmentLocation, warehouseId: string) {
+  if (m.stock.length) return m.stock.filter((s) => s.warehouseId === warehouseId).reduce((sum, s) => sum + s.quantity, 0);
+  return m.warehouseId === warehouseId ? m.warehouseQuantity : 0;
+}
 import ProjectEquipmentTable from "@/components/ProjectEquipmentTable";
 import { useAccess } from "@/lib/useAccess";
 
@@ -89,7 +95,7 @@ export default function WarehouseManagement() {
           <td className="p-3">{w.address}</td>
           <td className="p-3">{contactLine(w.managerName, w.managerPhone)}</td>
           <td className="p-3">{contactLine(w.guardName, w.guardPhone)}</td>
-          <td className="p-3">{bundle.locations.filter((m) => m.warehouseId === w.id).reduce((sum, m) => sum + m.warehouseQuantity, 0)}</td>
+          <td className="p-3">{bundle.locations.reduce((sum, m) => sum + qtyInWarehouse(m, w.id), 0)}</td>
           <td className="p-3"><div className="flex flex-wrap gap-3">
           <button type="button" disabled={busy} onClick={() => setExpanded(expanded === w.id ? "" : w.id)} className="text-[#0047AB]">Xem thiết bị</button>
           {can("quan-ly-kho", "edit") && <button type="button" disabled={busy} onClick={() => setForm({
@@ -104,7 +110,7 @@ export default function WarehouseManagement() {
           {can("quan-ly-kho", "delete") && (removing === w.id ? <><button type="button" disabled={busy} onClick={() => void remove(w.id)} className="text-rose-700">Xác nhận xóa</button><button type="button" disabled={busy} onClick={() => setRemoving("")}>Hủy</button></> : <button type="button" disabled={busy} onClick={() => setRemoving(w.id)} className="text-rose-700">Xóa</button>)}
         </div></td></tr>)}{!bundle.warehouses.length && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Chưa có kho. Thêm tên và địa chỉ kho ở trên.</td></tr>}</tbody>
       </table></div>
-      {bundle.warehouses.filter((w) => w.id === expanded).map((w) => <section key={w.id} className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="mb-3 font-bold">Thiết bị tại {w.name} · {w.address}</h2><ProjectEquipmentTable rows={bundle.locations.filter((m) => m.warehouseId === w.id && m.warehouseQuantity > 0).map((m) => ({ ...m, quantity: m.warehouseQuantity }))} /></section>)}
+      {bundle.warehouses.filter((w) => w.id === expanded).map((w) => <section key={w.id} className="rounded-xl border border-slate-200 bg-white p-4"><h2 className="mb-3 font-bold">Thiết bị tại {w.name} · {w.address}</h2><ProjectEquipmentTable rows={bundle.locations.filter((m) => qtyInWarehouse(m, w.id) > 0).map((m) => ({ ...m, quantity: qtyInWarehouse(m, w.id) }))} /></section>)}
     </>}
   </div>;
 }

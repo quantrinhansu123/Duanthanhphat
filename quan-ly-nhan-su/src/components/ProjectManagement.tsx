@@ -963,14 +963,20 @@ function ProjectInfoFields({
               const otherCodes = form.machineTypes.filter((code) => (machineOptions.find((m) => m.code === code)?.group ?? "welding") !== group);
               updateForm({ machineTypes: [...new Set([...otherCodes, ...selected])] });
             }} readOnly={readOnly} renderLabel={(code) => { const m = machineOptions.find((item) => item.code === code); return `${code} · ${m?.name ?? ""}`; }} />
-          {machineOptions.filter((m) => form.machineTypes.includes(m.code) && (m.group ?? "welding") === group).map((m) => <label key={m.code} className="mt-2 flex items-center justify-between gap-3 text-xs">
-            <span>{m.code} · Số lượng gán (bộ), tổng danh mục: {m.quantity ?? 1}
-              {!readOnly && <a href={`/danh-sach-may?may=${encodeURIComponent(m.code)}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-[#0047AB] underline">Sửa số lượng danh mục</a>}
-            </span>
-            <input aria-label={`Số lượng bộ ${m.code}`} type="number" min={1} max={m.quantity ?? 1} step={1} disabled={readOnly}
-              className="w-20 rounded border border-slate-300 px-2 py-1" value={form.machineQuantities?.[m.code] ?? 1}
-              onChange={(e) => updateForm({ machineQuantities: { ...form.machineQuantities, [m.code]: Number(e.target.value) } })} />
-          </label>)}
+          {machineOptions.some((m) => form.machineTypes.includes(m.code) && (m.group ?? "welding") === group) && (
+            <div className="mt-2 max-h-72 overflow-y-auto overscroll-contain rounded-lg border border-slate-200 divide-y divide-slate-100">
+              {machineOptions.filter((m) => form.machineTypes.includes(m.code) && (m.group ?? "welding") === group).map((m) => <label key={m.code} className="flex items-center justify-between gap-3 px-2 py-1.5 text-xs">
+                <span className="min-w-0 flex-1 break-words">
+                  <span className="font-semibold">{m.code}</span> · Gán (bộ) / tổng: {m.quantity ?? 1}
+                  {!readOnly && <a href={`/danh-sach-may?may=${encodeURIComponent(m.code)}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-[#0047AB] underline">Sửa DM</a>}
+                </span>
+                <input aria-label={`Số lượng bộ ${m.code}`} type="number" inputMode="numeric" min={1} max={m.quantity ?? 1} step={1} disabled={readOnly}
+                  className="w-16 shrink-0 rounded border border-slate-300 px-2 py-1.5 text-sm" value={form.machineQuantities?.[m.code] ?? 1}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onChange={(e) => updateForm({ machineQuantities: { ...form.machineQuantities, [m.code]: Number(e.target.value) } })} />
+              </label>)}
+            </div>
+          )}
         </div>)}
       </div>
 
