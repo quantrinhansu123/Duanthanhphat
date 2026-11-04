@@ -1485,7 +1485,7 @@ function MachineFormModal({
   const railOptions = useCatalogOptions("Loại ray");
   const category = getMachineCategory(form);
   const fields = machineCategoryFieldMatrix(category);
-  const isMaterial = equipmentGroup(form) === "materials";
+  const isMaterial = equipmentGroup(form) !== "welding"; // vật tư + máy/thiết bị khác: 1 mã chia nhiều vị trí
   const stockSplits = parseStockSplits(form.specs?.stockLocations);
   const selectedRails = form.supportedRails
     .split(/[,;|/]+/)
