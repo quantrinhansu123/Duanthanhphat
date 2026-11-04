@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 export class QualityApiError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -32,10 +33,17 @@ function guardWrite(request: Request) {
 
 /** Đăng nhập Supabase Auth (token trong header riêng) + danh sách email được phép; không có token thì dùng Basic Auth nếu đã cấu hình. */
 export async function authenticateWeldQuality(request: Request): Promise<string> {
-  const token = request.headers.get("x-supabase-token");
+  let token = request.headers.get("x-supabase-token");
+  if (!token) {
+    // Dùng luôn phiên đăng nhập của ứng dụng (cookie), không bắt đăng nhập lần nữa.
+    try {
+      const { data } = await (await createServerClient()).auth.getSession();
+      token = data.session?.access_token ?? null;
+    } catch { /* không có phiên cookie */ }
+  }
   if (!token) {
     if (process.env.APP_BASIC_AUTH_USER?.trim() && process.env.APP_BASIC_AUTH_PASSWORD) return requireWeldQualityAuth(request);
-    throw new QualityApiError("Cần đăng nhập để kiểm tra chất lượng.", 401);
+    throw new QualityApiError("Phiên đăng nhập hết hạn; hãy tải lại trang và đăng nhập lại.", 401);
   }
   guardWrite(request);
   const db = createAdminClient();

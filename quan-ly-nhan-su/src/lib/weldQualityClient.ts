@@ -28,7 +28,6 @@ async function authHeaders(): Promise<Record<string, string>> {
 
 async function response<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event("weld-quality-login-required"));
   if (!res.ok) throw new WeldQualityRequestError(data.error ?? "Không kết nối được dữ liệu kiểm tra chất lượng.", res.status);
   return data as T;
 }
