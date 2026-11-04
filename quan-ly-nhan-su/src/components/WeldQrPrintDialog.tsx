@@ -39,6 +39,9 @@ type Tag = {
 
 const MAX_TAGS = 120;
 const STRIP_COLUMNS = 10;
+/** Hai điểm ở hai ray coi là cùng một vị trí khi lệch lý trình không quá ngần này (mét). */
+const PAIR_TOLERANCE_M = 1;
+type StripColumn = { metres: number; left?: Tag; right?: Tag; gap?: string };
 const inputClass =
   "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20";
 
@@ -210,24 +213,38 @@ export default function WeldQrPrintDialog({
     return () => { active = false; };
   }, [tags]);
 
-  // Bố cục như mẫu: mỗi tuyến một dải, mỗi cột là một vị trí (ray trái + ray phải cùng số thứ tự), 10 vị trí/hàng.
+  // Bố cục: mỗi tuyến một dải, các cột chạy theo LÝ TRÌNH tăng dần. Hai ray chung một cột khi lệch nhau ≤ PAIR_TOLERANCE_M;
+  // đoạn không có mối (bước nhảy lớn hơn 1,5 lần bước thường gặp) được chèn cột "trống" để khỏi nhầm.
   const strips = useMemo(() => {
     const routes = [
       { id: "ha", label: "TUYẾN HẠ", left: "HT", right: "HP" },
       { id: "thuong", label: "TUYẾN THƯỢNG", left: "TT", right: "TP" },
     ] as const;
     const seqOf = (tag: Tag) => parseCoordinateCode(normalizeCoordinateCode(tag.lispCode) || tag.lispCode)?.seq ?? 0;
-    const out: { key: string; route: string; left: string; right: string; columns: { left?: Tag; right?: Tag }[] }[] = [];
+    const out: { key: string; route: string; left: string; right: string; columns: StripColumn[] }[] = [];
     for (const route of routes) {
-      const cols = new Map<number, { left?: Tag; right?: Tag }>();
-      for (const tag of tags) {
-        if (tag.prefix !== route.left && tag.prefix !== route.right) continue;
-        const seq = seqOf(tag);
-        const col = cols.get(seq) ?? {};
-        if (tag.prefix === route.left) col.left = tag; else col.right = tag;
-        cols.set(seq, col);
+      const items = tags
+        .filter((tag) => tag.prefix === route.left || tag.prefix === route.right)
+        .map((tag) => ({ tag, metres: parseAutolispChainageMetres(tag.chainage) ?? Number.MAX_SAFE_INTEGER }))
+        .sort((a, b) => a.metres - b.metres || seqOf(a.tag) - seqOf(b.tag));
+      const cols: StripColumn[] = [];
+      for (const { tag, metres } of items) {
+        const side = tag.prefix === route.left ? "left" : "right";
+        const last = cols[cols.length - 1];
+        if (last && !last[side] && Math.abs(last.metres - metres) <= PAIR_TOLERANCE_M) last[side] = tag;
+        else cols.push({ metres, [side]: tag });
       }
-      const ordered = [...cols.entries()].sort((a, b) => a[0] - b[0]).map(([, col]) => col);
+      const steps = cols.slice(1).map((c, i) => c.metres - cols[i].metres).filter((d) => d > 0 && d < 1e9).sort((a, b) => a - b);
+      const typical = steps[Math.floor(steps.length / 2)] ?? 0;
+      const ordered: StripColumn[] = [];
+      cols.forEach((col, i) => {
+        const prev = cols[i - 1];
+        const jump = prev ? col.metres - prev.metres : 0;
+        if (typical > 0 && jump > typical * 1.5 && col.metres < 1e9) {
+          ordered.push({ metres: prev.metres, gap: `Trống ${Math.round(jump)} m` });
+        }
+        ordered.push(col);
+      });
       for (let i = 0; i < ordered.length; i += STRIP_COLUMNS) {
         out.push({ key: `${route.id}-${i}`, route: route.label, left: route.left, right: route.right, columns: ordered.slice(i, i + STRIP_COLUMNS) });
       }
@@ -369,13 +386,13 @@ export default function WeldQrPrintDialog({
               </colgroup>
               <tbody>
                 {/* Dải 1: sơ đồ ray với các điểm theo lý trình */}
-                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.left)}</td>)}</tr>
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{c.gap ? <div className="lab" style={{ color: "#b45309", fontWeight: 700 }}>{c.gap}</div> : label(c.left)}</td>)}</tr>
                 <tr><td className="route">{strip.route}</td><td className="rail-name">RAY TRÁI</td>{cols.map((c, i) => <td key={i} className="rail">{c.left ? <span className="dot" /> : null}</td>)}</tr>
                 <tr><td /><td className="rail-name">RAY PHẢI</td>{cols.map((c, i) => <td key={i} className="rail">{c.right ? <span className="dot" /> : null}</td>)}</tr>
                 <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.right)}</td>)}</tr>
                 <tr className="gaprow"><td /><td />{cols.map((_, i) => <td key={i} />)}</tr>
                 {/* Dải 2: tem QR dán lên ray */}
-                <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.left)}</td>)}</tr>
+                <tr><td /><td />{cols.map((c, i) => <td key={i}>{c.gap ? <div className="lab" style={{ color: "#b45309", fontWeight: 700 }}>{c.gap}</div> : label(c.left)}</td>)}</tr>
                 <tr><td className="route">{strip.route}</td><td className="rail-name">RAY TRÁI</td>{cols.map((c, i) => <td key={i}>{qr(c.left)}</td>)}</tr>
                 <tr><td /><td className="rail-name">RAY PHẢI</td>{cols.map((c, i) => <td key={i}>{qr(c.right)}</td>)}</tr>
                 <tr><td /><td />{cols.map((c, i) => <td key={i}>{label(c.right)}</td>)}</tr>
