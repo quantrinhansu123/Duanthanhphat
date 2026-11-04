@@ -633,7 +633,7 @@ function WorkFormModal({
     let cancelled = false;
     setFilling(true);
     setError("");
-    void loadDailyWorkFillFromJournal(date, method, projectId || undefined)
+    void loadDailyWorkFillFromJournal(date, method, projectId || undefined, type)
       .then((filled) => {
         if (cancelled) return;
         setForm((current) =>
@@ -744,7 +744,7 @@ function WorkFormModal({
     setFillNote("");
     try {
       if (reportDate !== date) onReportDateChange(date);
-      const filled = await loadDailyWorkFillFromJournal(date, weldMethod, projectId || undefined);
+      const filled = await loadDailyWorkFillFromJournal(date, weldMethod, projectId || undefined, matchWorkType(workTypes, form.hangMuc));
       setForm((f) => applyJournalFill(f, filled));
       setFillNote(
         filled.entryCount > 0
@@ -1486,7 +1486,7 @@ export default function DailyWorkReport() {
       const fills = await Promise.all(
         jobs.map(async ({ type, method }) => {
           try {
-            const filled = await loadDailyWorkFillFromJournal(reportDate, method, header?.duAnId || undefined);
+            const filled = await loadDailyWorkFillFromJournal(reportDate, method, header?.duAnId || undefined, type);
             return filled.entryCount > 0 ? { type, filled } : null;
           } catch {
             return null;

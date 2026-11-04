@@ -654,11 +654,51 @@ async function sumWeldsBefore(date: string, method: "ATW" | "FBW"): Promise<stri
   }
 }
 
+/** «Đến hôm qua» = nguyên giá trị «Tích lũy» của báo cáo ngày liền trước (cùng công nghệ). Không có → null. */
+async function cumulativeFromPreviousReport(
+  date: string,
+  method: "ATW" | "FBW",
+  projectId?: string,
+  workType?: DailyWorkType | null,
+): Promise<string | null> {
+  try {
+    const prev = new Date(`${date}T00:00:00`);
+    prev.setDate(prev.getDate() - 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const prevIso = `${prev.getFullYear()}-${pad(prev.getMonth() + 1)}-${pad(prev.getDate())}`;
+    const supabase = createClient();
+    let query = supabase.from("bao_cao_ngay").select("id").eq("ngay_bao_cao", prevIso);
+    if (projectId) query = query.eq("du_an_id", projectId);
+    const { data: headers, error } = await query;
+    if (error || !headers?.length) return null;
+    const { types } = await loadWorkTypes();
+    // Tách theo Loại công việc (vd. trên tuyến / tại bãi hàn); không có loại cụ thể thì theo công nghệ.
+    const matched = workType ? [workType] : types.filter((t) => workTypeWeldMethod(t) === method);
+    const ids = new Set(matched.map((t) => t.id));
+    const names = new Set(matched.map((t) => t.ten.trim().toLocaleLowerCase("vi")));
+    for (const h of headers as { id: string }[]) {
+      const { data: rows } = await supabase
+        .from("bao_cao_ngay_cong_viec")
+        .select("cong_viec_id,hang_muc,tich_luy")
+        .eq("bao_cao_id", h.id)
+        .eq("phan", "hom_nay");
+      const row = ((rows ?? []) as { cong_viec_id: string | null; hang_muc: string | null; tich_luy: number | string | null }[]).find(
+        (r) => r.tich_luy !== null && ((r.cong_viec_id && ids.has(r.cong_viec_id)) || names.has((r.hang_muc ?? "").trim().toLocaleLowerCase("vi"))),
+      );
+      if (row) return String(row.tich_luy);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Gom nhật ký hàn theo ngày + công nghệ để điền form báo cáo ngày (phần Hôm nay). */
 export async function loadDailyWorkFillFromJournal(
   date: string,
   method: "ATW" | "FBW",
   projectId?: string,
+  workType?: DailyWorkType | null,
 ): Promise<DailyWorkJournalFill> {
   if (!date.trim()) throw new Error("Thiếu ngày để lấy nhật ký hàn");
   if (!isSupabaseConfigured()) {
@@ -739,7 +779,7 @@ export async function loadDailyWorkFillFromJournal(
     }
   }
 
-  const denHomQua = await sumWeldsBefore(date, method);
+  const denHomQua = (await cumulativeFromPreviousReport(date, method, projectId, workType)) ?? "";
   const rail = await railCountsForWelds(rows);
 
   let weldTotal = 0;

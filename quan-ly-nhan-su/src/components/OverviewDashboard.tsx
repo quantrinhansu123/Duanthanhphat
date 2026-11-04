@@ -423,11 +423,13 @@ export default function OverviewDashboard() {
   const chartDateRange = useMemo(() => {
     return resolveChartDateRange(
       isAllDates ? REPORT_PERIOD_START : filterFrom,
-      isAllDates ? "" : filterTo,
-      31,
+      // Không chọn "đến ngày" thì kết thúc ở ngày có dữ liệu mới nhất (không vẽ ngày tương lai).
+      isAllDates || !appliedFilters.dateTo ? "" : filterTo,
+      // Không lọc ngày: cửa sổ 31 ngày gần nhất. Có lọc ngày: vẽ đủ khoảng đã chọn (cuộn / thu phóng ngang).
+      isAllDates ? 31 : 400,
       showFastCharts ? fastLatestDataDate : latestDataDate,
     );
-  }, [fastLatestDataDate, filterFrom, filterTo, isAllDates, latestDataDate, showFastCharts]);
+  }, [appliedFilters.dateTo, fastLatestDataDate, filterFrom, filterTo, isAllDates, latestDataDate, showFastCharts]);
   const dailySeries = useMemo(
     () =>
       showFastCharts
