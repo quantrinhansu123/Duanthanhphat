@@ -6,7 +6,7 @@
  * Dùng thay cho mọi chỗ ghi tên thương hiệu rời ("Thành Phát") để đồng nhất một dạng.
  */
 const SIZES = {
-  sm: { kicker: "text-[7px] tracking-[0.04em]", name: "text-[15px] tracking-[0.08em]", sub: "text-[5.5px] tracking-[0.02em]", gap: "gap-[2px]" },
+  sm: { kicker: "text-[9px] sm:text-[9.5px] tracking-[0.05em]", name: "text-[18px] sm:text-[19px] tracking-[0.06em]", sub: "text-[6.5px] sm:text-[7px] tracking-[0.03em]", gap: "gap-[2.5px]" },
   md: { kicker: "text-[9px] sm:text-[10px] tracking-[0.04em]", name: "text-[20px] sm:text-[22px] tracking-[0.08em]", sub: "text-[6.5px] sm:text-[7.5px] tracking-[0.02em]", gap: "gap-[2px]" },
   lg: { kicker: "text-[11px] sm:text-[13px] tracking-[0.04em]", name: "text-[24px] sm:text-[28px] tracking-[0.08em]", sub: "text-[8px] sm:text-[9px] tracking-[0.02em]", gap: "gap-[3px]" },
 } as const;

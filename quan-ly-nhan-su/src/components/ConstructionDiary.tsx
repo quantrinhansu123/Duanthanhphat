@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { loadProjects } from "@/lib/projectsDb";
-import { EMPTY_DIARY, loadDiary, saveDiary, type ConstructionDiary } from "@/lib/constructionDiaryDb";
+import { EMPTY_DIARY, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
-import { loadRfiSignatures, type SignatureStore } from "@/lib/rfiSignatures";
 
 type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi" | "banChiHuy" | "canBoKyThuat" | "congNhan" | "nhanLucNguon">;
 async function loadDefaults(projectId: string, date: string) {
@@ -88,12 +87,9 @@ export default function ConstructionDiaryForm() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  // Chữ ký nhà thầu chính / phụ lấy từ kho chữ ký (cài ở Phiếu YCNT → nút Chữ ký).
-  const [signatures, setSignatures] = useState<SignatureStore>({});
-  useEffect(() => {
-    void loadRfiSignatures().then(setSignatures).catch(() => setSignatures({}));
-  }, []);
-
+  const [saved, setSaved] = useState<DiarySummary[]>([]);
+  const reloadSaved = () => { void listDiaries().then((r) => setSaved(r.rows)); };
+  useEffect(reloadSaved, []);
   useEffect(() => {
     loadProjects({ includeProgress: false }).then((r) => {
       setProjects(r.projects.map((p) => ({ id: p.id, name: p.name })));
@@ -150,6 +146,7 @@ export default function ConstructionDiaryForm() {
     setBusy(true);
     try {
       const r = await saveDiary(projectId, date, d);
+      reloadSaved();
       setStatus(r.source === "supabase" ? "Đã lưu." : `Đã lưu trên máy này — chưa lên Supabase${r.error ? `: ${r.error}` : ""}.`);
     } catch { setStatus("Không lưu được nhật ký. Nội dung đang nhập được giữ nguyên; vui lòng thử lại."); }
     finally { setBusy(false); }
@@ -162,6 +159,37 @@ export default function ConstructionDiaryForm() {
     const restore = () => { document.title = previous; };
     window.addEventListener("afterprint", restore, { once: true });
     window.print();
+  }
+
+  /** Mở một nhật ký đã lưu vào form (dùng cho nút Xem / Sửa). */
+  function openSaved(row: DiarySummary) {
+    setProjectId(row.projectId);
+    setDate(row.date);
+    setD(row.diary);
+    setStatus(`Đang mở nhật ký ngày ${row.date.split("-").reverse().join("/")}.`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
+  function printSaved(row: DiarySummary) {
+    setProjectId(row.projectId);
+    setDate(row.date);
+    setD(row.diary);
+    // Chờ React render xong nội dung #diary-print rồi mới in.
+    window.setTimeout(printDiary, 120);
+  }
+
+  async function removeSaved(row: DiarySummary) {
+    const label = `${row.date.split("-").reverse().join("/")} · ${projects.find((p) => p.id === row.projectId)?.name ?? "dự án"}`;
+    if (!window.confirm(`Xoá nhật ký ngày ${label}? Thao tác này không hoàn tác được.`)) return;
+    setBusy(true);
+    try {
+      const r = await deleteDiary(row.projectId, row.date);
+      reloadSaved();
+      setStatus(r.source === "supabase" ? "Đã xoá nhật ký." : `Đã xoá bản trên máy này — chưa xoá được trên Supabase${r.error ? `: ${r.error}` : ""}.`);
+      if (row.projectId === projectId && row.date === date) setD(EMPTY_DIARY);
+    } catch { setStatus("Không xoá được nhật ký. Vui lòng thử lại."); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -237,6 +265,81 @@ export default function ConstructionDiaryForm() {
             </Card>
           ))}
         </fieldset>
+
+        <section className="pt-5">
+          <h2 className="mb-2 text-sm font-bold text-slate-800">Nhật ký đã lưu <span className="font-mono text-xs font-semibold text-slate-500">{saved.length}</span></h2>
+          {saved.length === 0 ? (
+            <p className="rounded-lg border border-slate-200 px-4 py-6 text-center text-xs text-slate-500">Chưa có nhật ký nào được lưu.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[40rem] text-left text-xs">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                  <tr><th className="px-3 py-2">Ngày</th><th className="px-3 py-2">Dự án</th><th className="px-3 py-2 text-right">BCH</th><th className="px-3 py-2 text-right">KT</th><th className="px-3 py-2 text-right">CN</th><th className="px-3 py-2">Công việc</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {saved.map((row) => {
+                    const active = row.projectId === projectId && row.date === date;
+                    return (
+                      <tr key={`${row.projectId}:${row.date}`} className={active ? "bg-blue-50/60" : "hover:bg-slate-50"}>
+                        <td className="whitespace-nowrap px-3 py-2 font-mono font-semibold text-[#0047AB]">{row.date.split("-").reverse().join("/")}</td>
+                        <td className="max-w-[16rem] truncate px-3 py-2">{projects.find((p) => p.id === row.projectId)?.name ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono">{row.diary.banChiHuy || "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono">{row.diary.canBoKyThuat || "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono">{row.diary.congNhan || "—"}</td>
+                        <td className="max-w-[22rem] truncate px-3 py-2 text-slate-600">{row.diary.noiDungCongViec.split("\n")[0] || "—"}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => openSaved(row)}
+                              title="Mở nhật ký này để xem"
+                              className="h-8 rounded-md border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              Xem
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => openSaved(row)}
+                              title="Mở nhật ký này để sửa nội dung"
+                              className="h-8 rounded-md border border-[#0047AB]/40 bg-[#0047AB]/5 px-2.5 font-semibold text-[#0047AB] hover:bg-[#0047AB]/10 disabled:opacity-50"
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => printSaved(row)}
+                              title="In nhật ký này"
+                              className="h-8 rounded-md border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              In
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void removeSaved(row)}
+                              title="Xoá nhật ký này"
+                              className="h-8 rounded-md border border-rose-200 bg-rose-50 px-2.5 font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                            >
+                              Xoá
+                            </button>
+                            {active ? (
+                              <span className="ml-0.5 rounded-md bg-[#0047AB] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                Đang mở
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
 
       <article id="diary-print">
@@ -276,14 +379,13 @@ export default function ConstructionDiaryForm() {
         <div className="diary-sig-row">
           <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
           <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div>
-            <div className="diary-sig-box">{signatures["chi-huy-truong"] && /* eslint-disable-next-line @next/next/no-img-element */ <img src={signatures["chi-huy-truong"]} alt="" />}</div></div>
+            <div className="diary-sig-box" /></div>
           <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div>
-            <div className="diary-sig-box">{signatures["nha-thau-phu"] && /* eslint-disable-next-line @next/next/no-img-element */ <img src={signatures["nha-thau-phu"]} alt="" />}</div></div>
+            <div className="diary-sig-box" /></div>
         </div>
         </td></tr></tbody>
-        {/* tfoot lặp ở đáy MỌI trang: số trang + lề dưới */}
+        {/* tfoot lặp ở đáy MỌI trang: lề dưới */}
         <tfoot><tr><td>
-          <p className="diary-page">Trang ……</p>
           <div className="diary-frame-space" />
         </td></tr></tfoot>
         </table>

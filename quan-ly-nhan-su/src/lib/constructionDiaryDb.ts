@@ -59,3 +59,47 @@ export async function saveDiary(projectId: string, date: string, diary: Construc
   window.localStorage.setItem(localKey(projectId, date), JSON.stringify(diary));
   return { source: "local", error };
 }
+
+export type DiarySummary = { projectId: string; date: string; diary: ConstructionDiary };
+
+/** Xoá nhật ký của một dự án + ngày (cả bản Supabase và bản lưu trên máy này). */
+export async function deleteDiary(projectId: string, date: string): Promise<{ source: "supabase" | "local"; error?: string }> {
+  let error: string | undefined;
+  let source: "supabase" | "local" = "local";
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await createClient().from("nhat_ky_thi_cong_ngay")
+        .delete().eq("du_an_id", projectId).eq("ngay", date);
+      if (!res.error) source = "supabase";
+      else error = formatSupabaseError(res.error);
+    } catch (cause) { error = formatSupabaseError(cause); }
+  }
+  try { window.localStorage.removeItem(localKey(projectId, date)); } catch { /* bỏ qua */ }
+  return { source, error };
+}
+
+/** Danh sách nhật ký đã lưu (mới nhất trước). Gộp thêm bản lưu trên máy này nếu chưa có trên Supabase. */
+export async function listDiaries(): Promise<{ rows: DiarySummary[]; error?: string }> {
+  const rows = new Map<string, DiarySummary>();
+  let error: string | undefined;
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await createClient().from("nhat_ky_thi_cong_ngay").select("du_an_id,ngay,du_lieu").order("ngay", { ascending: false }).limit(500);
+      if (res.error) error = formatSupabaseError(res.error);
+      else for (const r of (res.data ?? []) as { du_an_id: string; ngay: string; du_lieu: Partial<ConstructionDiary> | null }[]) {
+        rows.set(`${r.du_an_id}:${r.ngay}`, { projectId: r.du_an_id, date: r.ngay, diary: { ...EMPTY_DIARY, ...(r.du_lieu ?? {}) } });
+      }
+    } catch (cause) { error = formatSupabaseError(cause); }
+  }
+  try {
+    const prefix = "nhat-ky-thi-cong-ngay:";
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const [projectId, date] = key.slice(prefix.length).split(":");
+      if (!projectId || !date || rows.has(`${projectId}:${date}`)) continue;
+      rows.set(`${projectId}:${date}`, { projectId, date, diary: { ...EMPTY_DIARY, ...(JSON.parse(window.localStorage.getItem(key) ?? "{}") as Partial<ConstructionDiary>) } });
+    }
+  } catch { /* bỏ qua bản lưu máy lỗi */ }
+  return { rows: [...rows.values()].sort((a, b) => b.date.localeCompare(a.date)), error };
+}

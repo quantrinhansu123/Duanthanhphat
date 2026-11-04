@@ -6,7 +6,7 @@ import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQuality
 import { acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { acceptanceIssues, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
-import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, type DiaryWork } from "@/lib/constructionDiaryAuto";
+import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
 import { readPrivateJson } from "@/lib/server/privateJsonStorage";
@@ -82,15 +82,21 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     db().from("lich_su_moi_han").select("may_id").in("id", p))).map((r) => r.may_id).filter((id): id is string => Boolean(id)))];
   const usedMachines = await chunked<{ id: string; ma_may: string; ten_may: string; model: string | null; loai_may: string | null; cong_nghe_han: string | null; thong_so: unknown }>(
     usedMachineIds, (p) => db().from("thiet_bi").select("id,ma_may,ten_may,model,loai_may,cong_nghe_han,thong_so").in("id", p));
-  const [projectEquipment, metadata, project, reports, lwr] = await Promise.all([
+  const [projectEquipment, metadata, project, reportsOnDate, lwr] = await Promise.all([
     loadProjectEquipment(projectId),
     readPrivateJson<ProjectMetadataStore>("project-metadata.json"),
     db().from("du_an").select("nguoi_phu_trach").eq("id", projectId).single(),
+    // Báo cáo ngày của ngày này: đúng dự án, hoặc phiếu chưa gắn dự án (du_an_id trống).
     fetchAll<Record<string, unknown>>((a, b) => db().from("bao_cao_ngay_cong_viec")
       .select("*,bao_cao_ngay!inner(du_an_id,ngay_bao_cao)").eq("phan", "hom_nay")
-      .eq("bao_cao_ngay.du_an_id", projectId).eq("bao_cao_ngay.ngay_bao_cao", date).order("id").range(a, b)),
+      .eq("bao_cao_ngay.ngay_bao_cao", date).order("id").range(a, b)),
     db().from("lwr_track_layouts").select("layout").eq("project_id", projectId).maybeSingle(),
   ]);
+  const headerProject = (r: Record<string, unknown>) => { const h = r.bao_cao_ngay as { du_an_id?: string | null } | { du_an_id?: string | null }[] | null; return (Array.isArray(h) ? h[0] : h)?.du_an_id ?? null; };
+  const exactReports = reportsOnDate.filter((r) => headerProject(r) === projectId);
+  const reports = exactReports.length > 0 ? exactReports : reportsOnDate.filter((r) => headerProject(r) === null);
+  const reportEquipment = await chunked<{ ten_thiet_bi: string | null; so_luong: number | string | null; bo_phan: string | null }>(
+    [...new Set(reports.map((r) => String(r.bao_cao_id)))], (p) => db().from("bao_cao_ngay_thiet_bi").select("ten_thiet_bi,so_luong,bo_phan").in("bao_cao_id", p));
   if (project.error) throw project.error;
   if (lwr.error) throw lwr.error;
   const known = new Set(projectEquipment.filter((m) => !m.missing).map((m) => m.code));
@@ -104,10 +110,13 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   const personnelIds = [...new Set([...(metadata?.[projectId]?.personnelIds ?? []), project.data.nguoi_phu_trach].filter((id): id is string => Boolean(id)))];
   const personnel = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(personnelIds,
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
+  const welderIds = [...new Set(welds.map((w) => w.tho_han_id).filter((id): id is string => Boolean(id)))];
+  const journalPeople = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(welderIds,
+    (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
   return {
-    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, new Set(welds.map((w) => w.tho_han_id).filter(Boolean)).size),
-    thietBi: projectEquipmentText(equipment),
-    noiDungCongViec: [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
+    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
+    thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment),
+    noiDungCongViec: diaryReportWorkText(reports) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
     nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {
       const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
       return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";

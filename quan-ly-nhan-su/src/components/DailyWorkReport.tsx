@@ -29,6 +29,7 @@ import {
   loadDailyReportList,
   loadDailyWorkFillFromJournal,
   welderIdsOnDate,
+  singleProjectOnDate,
   loadLastWorkDefaults,
   loadHangMucSuggestions,
   matchWorkType,
@@ -49,6 +50,7 @@ import {
   type WorkSection,
 } from "@/lib/dailyReportDb";
 import SelectMenu from "@/components/SelectMenu";
+import { currentViewer } from "@/lib/viewerAccess";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions, type JournalMachineOption } from "@/lib/machineRunSchedulesDb";
 import { loadProjects } from "@/lib/projectsDb";
@@ -125,6 +127,7 @@ type PersonnelOption = {
   name: string;
   chucVu: string;
   maNhanSu: string;
+  donVi: string;
 };
 
 type ManpowerRole = "cht" | "ky_su" | "lai_may" | "tho_van_hanh" | "cong_nhan";
@@ -1249,14 +1252,18 @@ function EquipmentFormModal({
   );
 }
 
+const INCIDENT_STATUS_OPTIONS = ["Chưa xử lý", "Đang xử lý", "Chờ phương án / vật tư", "Đã xử lý xong"].map((v) => ({ value: v, label: v }));
+
 function IncidentFormModal({
   open,
   saving,
+  personnel,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   saving: boolean;
+  personnel: PersonnelOption[];
   onClose: () => void;
   onSubmit: (values: IncidentItemInput) => Promise<void>;
 }) {
@@ -1270,6 +1277,21 @@ function IncidentFormModal({
       setError("");
     }
   }, [open]);
+
+  // Người báo cáo = tài khoản đăng nhập; bộ phận lấy theo hồ sơ nhân sự cùng tên.
+  const viewerName = currentViewer.fullName.trim();
+  const viewerUnit = useMemo(
+    () => personnel.find((p) => p.name.trim().toLocaleLowerCase("vi") === viewerName.toLocaleLowerCase("vi"))?.donVi ?? "",
+    [personnel, viewerName],
+  );
+  useEffect(() => {
+    if (!open) return;
+    setForm((f) => ({ ...f, nguoiBaoCao: f.nguoiBaoCao || viewerName, boPhanBaoCao: f.boPhanBaoCao || viewerUnit }));
+  }, [open, viewerName, viewerUnit]);
+  const unitOptions = useMemo(
+    () => [...new Set(personnel.map((p) => p.donVi).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")).map((v) => ({ value: v, label: v })),
+    [personnel],
+  );
 
   if (!open) return null;
 
@@ -1299,9 +1321,29 @@ function IncidentFormModal({
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
           <Field label="Nội dung *" value={form.noiDung} onChange={(v) => setForm((f) => ({ ...f, noiDung: v }))} />
           <Field label="Người báo cáo" value={form.nguoiBaoCao} onChange={(v) => setForm((f) => ({ ...f, nguoiBaoCao: v }))} />
-          <Field label="Bộ phận báo cáo" value={form.boPhanBaoCao} onChange={(v) => setForm((f) => ({ ...f, boPhanBaoCao: v }))} />
+          <div>
+            <span className={labelCls}>Bộ phận báo cáo</span>
+            <SelectMenu
+              value={form.boPhanBaoCao}
+              onChange={(v) => setForm((f) => ({ ...f, boPhanBaoCao: v }))}
+              options={unitOptions}
+              placeholder="Chọn bộ phận (theo Nhân sự)"
+              searchable
+              emptyLabel="Chưa có bộ phận trong Nhân sự"
+              buttonClassName="h-10"
+            />
+          </div>
           <Field label="Phương án xử lý" value={form.phuongAnXuLy} onChange={(v) => setForm((f) => ({ ...f, phuongAnXuLy: v }))} />
-          <Field label="Tình trạng xử lý" value={form.tinhTrangXuLy} onChange={(v) => setForm((f) => ({ ...f, tinhTrangXuLy: v }))} />
+          <div>
+            <span className={labelCls}>Tình trạng xử lý</span>
+            <SelectMenu
+              value={form.tinhTrangXuLy}
+              onChange={(v) => setForm((f) => ({ ...f, tinhTrangXuLy: v }))}
+              options={INCIDENT_STATUS_OPTIONS}
+              placeholder="Chọn tình trạng"
+              buttonClassName="h-10"
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">Hủy</button>
             <button type="submit" disabled={saving} className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-60 cursor-pointer">
@@ -1469,6 +1511,7 @@ export default function DailyWorkReport() {
               name: row.ho_ten?.trim() || "—",
               chucVu: row.chuc_vu?.trim() || "",
               maNhanSu: row.ma_nhan_su?.trim() || "",
+              donVi: row.don_vi?.trim() || "",
             })),
         );
       })
@@ -1535,57 +1578,39 @@ export default function DailyWorkReport() {
     void reloadList();
   }, [reloadList]);
 
-  const autoFilledDates = useRef(new Set<string>());
-
+  // Phiếu chưa gắn dự án: nếu Nhật ký hàn của ngày đó chỉ có 1 dự án thì tự gắn dự án đó.
+  const projectInferred = useRef(new Set<string>());
   useEffect(() => {
-    if (loading || loadError) return;
-    if (workToday.length > 0) return;
-    if (autoFilledDates.current.has(reportDate)) return;
-    const types = workTypes.filter((type) => workTypeWeldMethod(type));
-    if (types.length === 0) return;
-    autoFilledDates.current.add(reportDate);
+    if (loading || !header || header.duAnId || workToday.length === 0) return;
+    if (projectInferred.current.has(header.id)) return;
+    projectInferred.current.add(header.id);
     let cancelled = false;
     void (async () => {
-      const seen = new Set<string>();
-      const jobs = types.flatMap((type) => {
-        const method = workTypeWeldMethod(type);
-        if (!method || seen.has(method)) return [];
-        seen.add(method);
-        return [{ type, method }];
-      });
-      const fills = await Promise.all(
-        jobs.map(async ({ type, method }) => {
-          try {
-            const filled = await loadDailyWorkFillFromJournal(reportDate, method, header?.duAnId || undefined, type);
-            return filled.entryCount > 0 ? { type, filled } : null;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      if (cancelled) return;
-      const rows = fills.filter((row): row is NonNullable<typeof row> => Boolean(row));
-      const save = (row: (typeof rows)[number], index: number) =>
-        insertWorkItem(reportDate, "hom_nay", { ...applyJournalFill(emptyWorkInput(row.type), row.filled) }, undefined, undefined, index)
-          .catch(() => null); // bỏ qua loại không điền được
-      const created: DailyWorkItem[] = [];
-      if (rows.length > 0) {
-        // Mục đầu tạo phiếu (header); các mục còn lại lưu song song để khỏi chờ nối tiếp.
-        const first = await save(rows[0], 0);
-        const rest = await Promise.all(rows.slice(1).map((row, i) => save(row, i + 1)));
-        for (const item of [first, ...rest]) if (item) created.push(item);
+      const ids = new Set<string>();
+      for (const method of ["ATW", "FBW"] as const) {
+        const id = await singleProjectOnDate(reportDate, method);
+        if (id) ids.add(id);
       }
-      if (!cancelled && created.length > 0) {
-        setWorkToday(created);
+      if (cancelled || ids.size !== 1) return;
+      try {
+        const next = await ensureDailyReportProject(reportDate, [...ids][0]);
+        if (cancelled) return;
+        setHeader(next);
         void reloadList();
-        setToast(`Đã điền ${created.length} hạng mục từ Nhật ký hàn`);
-        window.setTimeout(() => setToast(""), 2200);
-      }
+      } catch { /* không gắn được thì để chọn tay */ }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, loadError, reportDate, workToday.length, workTypes, reloadList, header?.duAnId]);
+    return () => { cancelled = true; };
+  }, [loading, header, workToday.length, reportDate, reloadList]);
+
+  const autoFilledDates = useRef(new Set<string>());
+
+  /**
+   * Đã tắt tự động điền hạng mục từ Nhật ký hàn: trước đây mở báo cáo ngày là tự thêm dòng
+   * (vd. "Hàn cháy giáp mép tại bãi hàn") khiến danh sách bị đội lên ngoài ý muốn.
+   * Người dùng chủ động thêm bằng nút "+ Thêm công việc"; mức độ hoàn thành vẫn được gợi ý từ nhật ký.
+   */
+  void autoFilledDates;
+  void loadDailyWorkFillFromJournal;
 
   function showToast(message: string) {
     setToast(message);
@@ -2150,6 +2175,7 @@ export default function DailyWorkReport() {
       <IncidentFormModal
         open={modal?.kind === "incident"}
         saving={saving}
+        personnel={personnel}
         onClose={() => setModal(null)}
         onSubmit={async (values) => {
           setSaving(true);

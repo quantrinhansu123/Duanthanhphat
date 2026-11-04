@@ -561,6 +561,8 @@ export type DailyWorkJournalFill = {
   entryCount: number;
   /** Thợ hàn (employee_id) có mối hàn trong Nhật ký hàn đúng ngày + dự án. */
   welderIds: string[];
+  /** Dự án suy ra từ Nhật ký hàn (chỉ khi ngày đó chỉ có đúng 1 dự án). */
+  duAnId: string | null;
 };
 
 type JournalFillRow = {
@@ -670,6 +672,19 @@ async function cumulativeFromPreviousReport(
 }
 
 /** Thợ hàn có mối hàn trong ngày (theo dự án nếu có). Lỗi/thiếu cột → [] (không chặn điền form). */
+/** Dự án duy nhất có mối hàn trong ngày (theo công nghệ); nhiều dự án / lỗi → null. */
+export async function singleProjectOnDate(date: string, method: "ATW" | "FBW"): Promise<string | null> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.from("lich_su_moi_han").select("du_an_id").eq("ngay_thuc_hien", date).eq("cong_nghe_han", method).not("du_an_id", "is", null).limit(1000);
+    if (error) return null;
+    const ids = new Set(((data ?? []) as { du_an_id: string | null }[]).map((r) => r.du_an_id).filter((id): id is string => Boolean(id)));
+    return ids.size === 1 ? [...ids][0] : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function welderIdsOnDate(date: string, projectId?: string): Promise<string[]> {
   try {
     const supabase = createClient();
@@ -772,6 +787,7 @@ export async function loadDailyWorkFillFromJournal(
   const denHomQua = (await cumulativeFromPreviousReport(date, method, projectId, workType)) ?? "";
   const rail = await railCountsForWelds(rows);
   const welderIds = await welderIdsOnDate(date, projectId);
+  const duAnId = projectId || (await singleProjectOnDate(date, method));
 
   let weldTotal = 0;
   const codes: string[] = [];
@@ -840,6 +856,7 @@ export async function loadDailyWorkFillFromJournal(
         : `Không có bản ghi Nhật ký hàn ${method} ngày ${date}`,
     entryCount: rows.length,
     welderIds,
+    duAnId,
   };
 }
 

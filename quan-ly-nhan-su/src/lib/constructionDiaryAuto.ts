@@ -46,9 +46,12 @@ export function diaryStressReleaseText(layout: TrackLayout | null, projectId: st
 /** Báo cáo ngày ghi số lượng; nếu chưa nhập thì dùng nhân sự đã gán dự án. */
 export function diaryManpowerDefaults(reports: Record<string, unknown>[], personnel: {
   employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null;
-}[], managerId: string | null, journalWelders = 0) {
+}[], managerId: string | null, journalWelders = 0, journalPeople: typeof personnel = []) {
   const roster = { cht: [] as string[], ky_su: [] as string[], workers: [] as string[] };
-  for (const person of new Map(personnel.map((p) => [p.employee_id, p])).values()) {
+  // Báo cáo ngày chưa ghi nhân lực mà Nhật ký hàn có thợ hàn → chỉ tính những người làm việc trong ngày, không lấy cả danh sách dự án.
+  const hasReportPeople = reports.some((row) => { const bag = row.nhan_luc as Record<string, unknown> | null; return bag && Object.values(bag).some((v) => Array.isArray(v) && v.length > 0); });
+  const useJournalPeople = !hasReportPeople && journalPeople.length > 0;
+  for (const person of new Map((useJournalPeople ? journalPeople : personnel).map((p) => [p.employee_id, p])).values()) {
     if (person.trang_thai === "Khóa") continue;
     const role = (person.chuc_vu ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     if (person.employee_id === managerId || /\bcht\b|chi huy/.test(role)) roster.cht.push(person.ho_ten);
@@ -81,11 +84,38 @@ export function diaryManpowerDefaults(reports: Record<string, unknown>[], person
   return {
     banChiHuy: String(cht ?? roster.cht.length),
     canBoKyThuat: String(engineer ?? roster.ky_su.length),
-    congNhan: String(Math.max(journalWelders, workers.some((n) => n != null) ? workers.reduce<number>((sum, n) => sum + (n ?? 0), 0) : roster.workers.length)),
-    nhanLucNguon: journalWelders > 0
+    congNhan: String(Math.max(useJournalPeople ? 0 : journalWelders, workers.some((n) => n != null) ? workers.reduce<number>((sum, n) => sum + (n ?? 0), 0) : roster.workers.length)),
+    nhanLucNguon: useJournalPeople
+      ? `Theo những người làm việc trong ngày từ nhật ký hàn (${journalPeople.map((p) => p.ho_ten).join(", ")}); xếp nhóm theo chức vụ.`
+      : journalWelders > 0
       ? `Công nhân tính từ nhật ký hàn trong ngày (${journalWelders} thợ hàn); lấy số lớn hơn giữa nhật ký và báo cáo ngày.`
       : fromReports
       ? "Theo báo cáo ngày của dự án; vai trò chưa nhập dùng nhân sự được gán. Số lượng lặp giữa hạng mục lấy mức cao nhất từng vai trò."
       : `Theo nhân sự được gán dự án. Ban chỉ huy: ${roster.cht.join(", ") || "chưa gán"}. Kỹ sư: ${roster.ky_su.join(", ") || "chưa gán"}. Mỗi người chỉ tính một nhóm.`,
   };
+}
+
+/** Mục 3 theo Báo cáo ngày (phần «Hôm nay»): mỗi hạng mục một dòng. Không có → "". */
+export function diaryReportWorkText(reports: Record<string, unknown>[]): string {
+  return reports.flatMap((row) => {
+    const qty = Number(row.hom_nay);
+    const codes = String(row.ten_moi_han ?? "").trim();
+    const name = String(row.hang_muc ?? "").trim()
+      || (/FBW/i.test(codes) ? "Hàn chảy giáp mép" : /ATW/i.test(codes) ? "Hàn nhiệt nhôm" : "Công tác thi công");
+    if (!name && !(qty > 0)) return [];
+    const unit = String(row.don_vi ?? "").trim() || "mối";
+    const route = [row.tuyen_thuong ? "tuyến thượng" : "", row.tuyen_ha ? "tuyến hạ" : ""].filter(Boolean).join(", ");
+    return [`- ${name}${route ? `, ${route}` : ""}.${qty > 0 ? ` Khối lượng: ${qty} ${unit}.` : ""}${codes ? ` Mối số: ${codes}.` : ""}`];
+  }).join("\n");
+}
+
+/** Mục 2.2 theo thiết bị đã ghi trong Báo cáo ngày (bo_phan "1. Máy hàn" / "2. …" / "3. Vật tư"). Không có → "". */
+export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so_luong: number | string | null; bo_phan: string | null }[]): string {
+  if (rows.length === 0) return "";
+  const group = (r: { bo_phan: string | null }) => { const p = (r.bo_phan ?? "").trim(); return p.startsWith("1") ? 0 : p.startsWith("3") ? 2 : 1; };
+  return ["1. Máy hàn", "2. Máy và thiết bị khác", "3. Vật tư"].map((title, i) => {
+    const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
+      .map((r) => `- ${(r.ten_thiet_bi ?? "").trim()}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
+    return `${title}:\n${lines.join("\n")}`;
+  }).join("\n");
 }

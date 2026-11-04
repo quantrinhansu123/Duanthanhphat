@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
@@ -9,7 +9,7 @@ import {
   type MaintenanceEvent,
   type MaintenanceResult,
 } from "@/data/maintenance";
-import { Check } from "@/components/icons";
+import { Bell, CaretDown, Check } from "@/components/icons";
 import { deleteMaintenanceEvent, loadMaintenanceEvents, saveMaintenanceEvent } from "@/lib/maintenanceDb";
 
 const weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -88,6 +88,8 @@ export default function MaintenanceCalendar() {
   const [openAdd, setOpenAdd] = useState(false);
   const [editingEvent, setEditingEvent] = useState<MaintenanceEvent | null>(null);
   const [quickEditId, setQuickEditId] = useState<string | null>(null);
+  /** Dòng đang mở chi tiết trong danh sách công việc của ngày (mặc định thu gọn). */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [quickResult, setQuickResult] = useState<MaintenanceResult>("Chưa có");
   const [quickNote, setQuickNote] = useState("");
   const [quickSaving, setQuickSaving] = useState(false);
@@ -402,182 +404,222 @@ export default function MaintenanceCalendar() {
             <strong className="font-semibold text-slate-900 font-mono tabular-nums">{dayEvents.length}</strong> công việc · sắp xếp theo giờ
           </div>
 
-          <div className="mt-4">
-            {dayEvents.map((e, index) => (
-              <div key={e.id} className="relative flex gap-3 pb-4 last:pb-0">
-                {index < dayEvents.length - 1 && (
-                  <span className="absolute bottom-0 left-[15px] top-8 w-px bg-slate-200" />
-                )}
-                <div className="relative z-[1] flex w-[52px] flex-none flex-col items-center pt-0.5">
-                  <div className="text-xs sm:text-sm font-bold font-mono tabular-nums text-[#0047AB]">{e.time}</div>
-                  <div className="mt-0.5 text-[11px] font-mono tabular-nums text-slate-400">
-                    {endTime(e.time, e.durationMin)}
-                  </div>
-                </div>
-                <div className={`mt-1 h-2.5 w-2.5 flex-none rounded-full ${typeColor[e.type]}`} />
+          <div className="mt-3 space-y-2">
+            {dayEvents.map((e) => {
+              const open = expandedId === e.id;
+              const names = e.assignees.map((a) => a.name).join(", ");
+              const resultLabel = e.result ?? "Chưa có";
+              const hasResult = Boolean(e.result && e.result !== "Chưa có");
+              return (
                 <div
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs"
+                  key={e.id}
+                  className={`overflow-hidden rounded-xl border bg-white transition-colors ${
+                    open ? "border-[#0047AB]/40 shadow-xs" : "border-slate-200/80"
+                  }`}
                   style={{ fontFamily: "var(--font-roboto), Roboto, sans-serif" }}
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="text-sm font-bold leading-snug text-slate-900 sm:text-base">{e.title}</div>
-                    <div className="text-xs leading-relaxed text-slate-500 sm:text-sm">
-                      <span className="font-mono font-medium text-slate-700">{e.machine}</span>
-                      <span className="mx-1.5 text-slate-300">·</span>
-                      {e.type}
-                      <span className="mx-1.5 text-slate-300">·</span>
-                      <span className="font-mono tabular-nums">{e.durationMin}</span> phút
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <span
-                      className={`inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-xs font-semibold sm:text-sm ${statusStyle[e.status]}`}
-                    >
-                      {e.status}
+                  {/* Dòng gọn: nhấn để mở/đóng chi tiết */}
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setExpandedId(open ? null : e.id)}
+                    className="flex w-full cursor-pointer items-start gap-2.5 p-3 text-left hover:bg-slate-50/70"
+                  >
+                    <span className={`mt-1.5 h-2 w-2 flex-none rounded-full ${typeColor[e.type]}`} />
+                    <span className="flex w-[38px] flex-none flex-col pt-0.5 text-center sm:w-[44px]">
+                      <span className="text-xs font-bold font-mono tabular-nums text-[#0047AB] sm:text-sm">{e.time}</span>
+                      <span className="text-[10px] font-mono tabular-nums text-slate-400 sm:text-[11px]">
+                        {endTime(e.time, e.durationMin)}
+                      </span>
                     </span>
-                    <span
-                      className={`inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-center text-xs font-semibold sm:text-sm ${resultStyle[e.result ?? "Chưa có"]}`}
-                    >
-                      Kết quả: {e.result ?? "Chưa có"}
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 sm:text-[15px]">
+                        {e.title}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">
+                        {e.machine}
+                        {names ? <> · {names}</> : null}
+                      </span>
+                      {/* Hàng nhãn: luôn 1 dòng — badge co giãn, nhắc nhở rút thành icon */}
+                      <span className="mt-1.5 flex flex-nowrap items-center gap-1.5 overflow-hidden">
+                        <span className={`inline-flex min-h-6 min-w-0 items-center truncate rounded-md px-1.5 text-[11px] font-semibold leading-tight ${statusStyle[e.status]}`}>
+                          {e.status}
+                        </span>
+                        <span className={`inline-flex min-h-6 min-w-0 items-center truncate rounded-md px-1.5 text-[11px] font-semibold leading-tight ${resultStyle[resultLabel]}`}>
+                          {hasResult ? resultLabel : "Chưa có KQ"}
+                        </span>
+                        {e.reminder ? (
+                          <span className="flex-none" title={`Nhắc nhở: ${e.reminder}`}>
+                            <Bell size={14} weight="fill" aria-hidden className="text-amber-500" />
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
-                  </div>
+                    <CaretDown
+                      size={18}
+                      aria-hidden
+                      className={`mt-1 flex-none text-slate-400 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+                    />
+                  </button>
 
-                  <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3">
-                    <AssigneeAvatars assignees={e.assignees} size={32} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                        Người được giao
+                  {open ? (
+                    <div className="border-t border-slate-100 p-3 pt-2.5">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                        <span className="font-mono font-medium text-slate-700">{e.machine}</span>
+                        <span className="text-slate-300">·</span>
+                        <span>{e.type}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="whitespace-nowrap">
+                          <span className="font-mono tabular-nums">{e.durationMin}</span> phút
+                        </span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs font-medium text-slate-700 sm:text-sm">
-                        {e.assignees.map((a) => a.name).join(", ")}
+
+                      <div className="mt-2.5 grid grid-cols-2 gap-2">
+                        <span
+                          className={`inline-flex min-h-8 items-center justify-center rounded-lg px-2 py-1 text-center text-[11px] font-semibold leading-tight sm:text-sm ${statusStyle[e.status]}`}
+                        >
+                          {e.status}
+                        </span>
+                        <span
+                          className={`inline-flex min-h-8 items-center justify-center rounded-lg px-2 py-1 text-center text-[11px] font-semibold leading-tight sm:text-sm ${resultStyle[resultLabel]}`}
+                        >
+                          Kết quả: {resultLabel}
+                        </span>
                       </div>
-                    </div>
-                  </div>
 
-                  {e.reminder ? (
-                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800 sm:text-sm">
-                      <span className="font-semibold">Nhắc nhớ:</span> {e.reminder}
-                    </div>
-                  ) : null}
-                  {e.note && quickEditId !== e.id ? (
-                    <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                      <span className="font-semibold text-slate-700">Ghi chú:</span> {e.note}
-                    </div>
-                  ) : null}
-                  {e.images?.length ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {e.images.map((imageUrl, imageIndex) => (
-                        <a
-                          key={`${e.id}-image-${imageIndex}`}
-                          href={imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="relative h-14 w-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                        >
-                          <Image src={imageUrl} alt={`Ảnh bảo trì ${imageIndex + 1}`} fill className="object-cover" sizes="80px" />
-                        </a>
-                      ))}
-                    </div>
-                  ) : null}
+                      <div className="mt-2.5 flex items-center gap-2.5 border-t border-slate-100 pt-2.5">
+                        <AssigneeAvatars assignees={e.assignees} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[11px]">
+                            Người được giao
+                          </div>
+                          <div className="mt-0.5 truncate text-xs font-medium text-slate-700 sm:text-sm">
+                            {names || "—"}
+                          </div>
+                        </div>
+                      </div>
 
-                  {quickEditId === e.id ? (
-                    <div className="mt-3 space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3.5">
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Kết quả
-                        <select
-                          value={quickResult}
-                          onChange={(event) => setQuickResult(event.target.value as MaintenanceResult)}
-                          disabled={quickSaving}
-                          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-                        >
-                          {RESULT_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Ghi chú
-                        <textarea
-                          value={quickNote}
-                          onChange={(event) => setQuickNote(event.target.value)}
-                          disabled={quickSaving}
-                          rows={3}
-                          placeholder="Nhập ghi chú bảo trì…"
-                          className="mt-1.5 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
-                        />
-                      </label>
-                      {quickError ? (
-                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-                          {quickError}
+                      {e.reminder ? (
+                        <div className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-800 sm:text-xs">
+                          <span className="font-semibold">Nhắc nhở:</span> {e.reminder}
                         </div>
                       ) : null}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          disabled={quickSaving}
-                          onClick={closeQuickEdit}
-                          className="h-10 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          Hủy
-                        </button>
-                        <button
-                          type="button"
-                          disabled={quickSaving}
-                          onClick={() => void handleQuickSave(e)}
-                          className="h-10 rounded-lg bg-[#0047AB] text-sm font-bold text-white hover:bg-[#00388A] disabled:opacity-50"
-                        >
-                          {quickSaving ? "Đang lưu…" : "Lưu"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 ${
-                        e.persisted ? "grid-cols-2" : "grid-cols-3"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => openQuickEdit(e)}
-                        className="inline-flex h-10 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 sm:text-sm"
-                      >
-                        {e.result && e.result !== "Chưa có" ? "Sửa kết quả" : "Thêm kết quả"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openQuickEdit(e)}
-                        className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
-                      >
-                        {e.note ? "Sửa ghi chú" : "Thêm ghi chú"}
-                      </button>
-                      {e.persisted ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingEvent(e);
-                            setOpenAdd(true);
-                          }}
-                          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
-                        >
-                          Sửa đầy đủ
-                        </button>
+                      {e.note && quickEditId !== e.id ? (
+                        <div className="mt-2.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 sm:text-xs">
+                          <span className="font-semibold text-slate-700">Ghi chú:</span> {e.note}
+                        </div>
                       ) : null}
-                      <button
-                        type="button"
-                        disabled={deletingId === e.id}
-                        onClick={() => void handleDelete(e)}
-                        className="inline-flex h-10 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:text-sm"
-                      >
-                        {deletingId === e.id ? "Đang xóa…" : "Xóa"}
-                      </button>
+                      {e.images?.length ? (
+                        <div className="mt-2.5 flex flex-wrap gap-2">
+                          {e.images.map((imageUrl, imageIndex) => (
+                            <a
+                              key={`${e.id}-image-${imageIndex}`}
+                              href={imageUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="relative h-14 w-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                            >
+                              <Image src={imageUrl} alt={`Ảnh bảo trì ${imageIndex + 1}`} fill className="object-cover" sizes="80px" />
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {quickEditId === e.id ? (
+                        <div className="mt-2.5 space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+                          <label className="block text-xs font-semibold text-slate-600">
+                            Kết quả
+                            <select
+                              value={quickResult}
+                              onChange={(event) => setQuickResult(event.target.value as MaintenanceResult)}
+                              disabled={quickSaving}
+                              className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                            >
+                              {RESULT_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-xs font-semibold text-slate-600">
+                            Ghi chú
+                            <textarea
+                              value={quickNote}
+                              onChange={(event) => setQuickNote(event.target.value)}
+                              disabled={quickSaving}
+                              rows={3}
+                              placeholder="Nhập ghi chú bảo trì…"
+                              className="mt-1.5 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                            />
+                          </label>
+                          {quickError ? (
+                            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                              {quickError}
+                            </div>
+                          ) : null}
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              disabled={quickSaving}
+                              onClick={closeQuickEdit}
+                              className="h-10 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="button"
+                              disabled={quickSaving}
+                              onClick={() => void handleQuickSave(e)}
+                              className="h-10 rounded-lg bg-[#0047AB] text-sm font-bold text-white hover:bg-[#00388A] disabled:opacity-50"
+                            >
+                              {quickSaving ? "Đang lưu…" : "Lưu"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5 sm:grid-cols-3">
+                          <button
+                            type="button"
+                            onClick={() => openQuickEdit(e)}
+                            className="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold leading-tight text-emerald-700 hover:bg-emerald-100"
+                          >
+                            {hasResult ? "Sửa kết quả" : "Thêm kết quả"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openQuickEdit(e)}
+                            className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-[11px] font-semibold leading-tight text-slate-700 hover:bg-slate-50"
+                          >
+                            {e.note ? "Sửa ghi chú" : "Thêm ghi chú"}
+                          </button>
+                          {e.persisted ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingEvent(e);
+                                setOpenAdd(true);
+                              }}
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-[11px] font-semibold leading-tight text-slate-700 hover:bg-slate-50"
+                            >
+                              Sửa đầy đủ
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={deletingId === e.id}
+                            onClick={() => void handleDelete(e)}
+                            className="inline-flex h-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2 text-[11px] font-semibold leading-tight text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                          >
+                            {deletingId === e.id ? "Đang xóa…" : "Xóa"}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {dayEvents.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-300 px-3 py-10 text-center text-xs sm:text-sm text-slate-500">
                 Không có lịch bảo trì trong ngày này.

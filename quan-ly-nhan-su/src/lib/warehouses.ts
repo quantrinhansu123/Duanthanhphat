@@ -53,7 +53,8 @@ export function equipmentLocations(
         const project = projects.find((project) => project.id === id);
         return { id, name: project?.name ?? `Dự án không còn tồn tại (${id})`, quantity: p.machineQuantities?.[machine.code] ?? 1, missing: !project };
       });
-    const remaining = equipmentQuantity(machine) - assigned.reduce((sum, p) => sum + p.quantity, 0);
+    // Phân công trỏ tới dự án đã bị xóa không tính vào tồn kho (chỉ cảnh báo riêng) để không báo "vượt" sai.
+    const remaining = equipmentQuantity(machine) - assigned.filter((p) => !p.missing).reduce((sum, p) => sum + p.quantity, 0);
     const warehouseId = String(machine.specs?.warehouseId ?? "");
     const locationProjectId = String(machine.specs?.locationProjectId ?? "");
     const warehouse = warehouses.find((w) => w.id === warehouseId);
@@ -68,7 +69,7 @@ export function equipmentLocations(
       warehouseName: warehouse?.name ?? (locationProject ? `Dự án ${locationProject.name}` : "Chưa chọn kho"),
       warehouseAddress: warehouse?.address ?? "",
       locationProjectId,
-      warehouseQuantity: Math.max(0, remaining), projects: projectsView, excessQuantity: Math.max(0, -remaining), stock: [],
+      warehouseQuantity: !assigned.length && locationProject ? 0 : Math.max(0, remaining), projects: projectsView, excessQuantity: Math.max(0, -remaining), stock: [],
     };
   });
 }

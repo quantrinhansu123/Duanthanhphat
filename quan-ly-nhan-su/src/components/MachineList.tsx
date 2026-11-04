@@ -51,12 +51,12 @@ import {
   updatePersonnelTrainedMachines,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
-import { canViewUnitPrice } from "@/lib/viewerAccess";
+import { canViewUnitPrice, currentViewer } from "@/lib/viewerAccess";
 import Link from "next/link";
 import { EQUIPMENT_GROUP_LABELS, equipmentGroup, equipmentQuantity, type EquipmentGroup } from "@/lib/projectEquipment";
 import { loadEquipmentLocations } from "@/lib/warehousesDb";
 import StockSplitsEditor from "@/components/StockSplitsEditor";
-import { parseStockSplits, sumStockSplits } from "@/lib/stockSplits";
+import { describeStockLocation, formatStockMoment, parseStockHistory, parseStockSplits, sumStockSplits } from "@/lib/stockSplits";
 import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type LocationProject, type Warehouse } from "@/lib/warehouses";
 import Pager, { usePaged } from "@/components/Pager";
 
@@ -64,7 +64,7 @@ import Pager, { usePaged } from "@/components/Pager";
 // window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
 const tr = (vi: string, en: string) => (document.documentElement.lang === "en" ? en : vi);
 
-type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares";
+type DetailTab = "welding" | "transport" | "history" | "personnel" | "spares" | "stock";
 
 type MachineTrainedPerson = {
   employee_id: string;
@@ -518,13 +518,16 @@ function MachineDetailModal({
   onClose,
   onEdit,
   initialTab = "welding",
+  currentLocation,
 }: {
   machine: Machine;
   onClose: () => void;
   onEdit: () => void;
   initialTab?: DetailTab;
+  currentLocation?: EquipmentLocation;
 }) {
   const [tab, setTab] = useState<DetailTab>(initialTab);
+  const stockHistory = useMemo(() => parseStockHistory(machine.specs?.stockHistory).slice().reverse(), [machine.specs?.stockHistory]);
 
   useEffect(() => {
     setTab(initialTab);
@@ -695,7 +698,7 @@ function MachineDetailModal({
         setPersonSuggestOpen(false);
         return;
       }
-      if (tab === "personnel" || tab === "history" || tab === "spares" || tab === "transport") {
+      if (tab === "personnel" || tab === "history" || tab === "spares" || tab === "transport" || tab === "stock") {
         event.preventDefault();
         setTab("welding");
         return;
@@ -879,6 +882,22 @@ function MachineDetailModal({
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("stock")}
+            className={`shrink-0 border-b-2 px-3.5 py-3 text-base sm:text-lg font-medium transition-colors duration-150 cursor-pointer ${
+              tab === "stock"
+                ? "border-[#0047AB] text-[#0047AB] bg-white"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Luân chuyển vị trí
+            {stockHistory.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-sm font-bold font-mono text-slate-700">
+                {stockHistory.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Nội dung các Tab */}
@@ -1054,6 +1073,65 @@ function MachineDetailModal({
             </div>
           )}
 
+          {tab === "stock" && (
+            <div>
+              <div className="mb-3.5 text-xs sm:text-sm text-slate-500">
+                <strong className="font-semibold text-slate-900 font-mono tabular-nums">{stockHistory.length}</strong> lần luân chuyển vị trí (kho, dự án, địa điểm) · mới nhất trước. Mỗi lần đổi vị trí hoặc số lượng theo vị trí khi lưu thiết bị sẽ được ghi lại.
+              </div>
+              <div className="mb-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-emerald-800">
+                  <span className="inline-block size-2 rounded-full bg-emerald-600" aria-hidden />
+                  Vị trí hiện tại
+                  {stockHistory[0] ? (
+                    <span className="font-mono font-normal text-emerald-700">
+                      · từ {formatStockMoment(stockHistory[0].at)}
+                    </span>
+                  ) : (
+                    <span className="font-normal text-emerald-700">· chưa có mốc luân chuyển</span>
+                  )}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {currentLocation ? equipmentLocationLabel(currentLocation) : "Đang tải vị trí…"}
+                </div>
+                {!stockHistory[0] && (
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    Vị trí lấy theo hồ sơ thiết bị hiện tại. Mốc thời gian chi tiết sẽ có từ lần đổi vị trí kế tiếp.
+                  </div>
+                )}
+              </div>
+              {stockHistory.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                  Chưa có lần luân chuyển vị trí nào được ghi lại cho thiết bị này.
+                </div>
+              ) : (
+                <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[860px] border-collapse text-left text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
+                        <th className="px-3.5 py-2.5">Ngày</th>
+                        <th className="px-3.5 py-2.5">Giờ</th>
+                        <th className="px-3.5 py-2.5">Từ vị trí</th>
+                        <th className="px-3.5 py-2.5">Đến vị trí</th>
+                        <th className="px-3.5 py-2.5">Người thực hiện</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stockHistory.map((entry, index) => (
+                        <tr key={`${entry.at}-${index}`}>
+                          <td className="whitespace-nowrap px-3.5 py-2.5 font-mono font-semibold text-slate-800">{new Date(entry.at).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
+                          <td className="whitespace-nowrap px-3.5 py-2.5 font-mono text-slate-700">{new Date(entry.at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+                          <td className="min-w-[200px] px-3.5 py-2.5 text-slate-600">{entry.from || "—"}</td>
+                          <td className="min-w-[200px] px-3.5 py-2.5 font-medium text-slate-900">{entry.to}</td>
+                          <td className="px-3.5 py-2.5">{entry.by || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {tab === "history" && (
             <div>
               <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
@@ -1074,15 +1152,15 @@ function MachineDetailModal({
 
               {history.length > 0 ? (
                 <div className="table-scroll overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[1280px] border-collapse text-left text-xs sm:text-sm">
+                  <table className="w-full min-w-[1420px] border-collapse text-left text-xs sm:text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                         <th className="px-3.5 py-2.5">Ngày</th>
                         <th className="px-3.5 py-2.5">Giờ</th>
                         <th className="min-w-[200px] px-3.5 py-2.5">Công việc</th>
-                        <th className="px-3.5 py-2.5">Loại</th>
-                        <th className="px-3.5 py-2.5">Trạng thái</th>
-                        <th className="px-3.5 py-2.5">Kết quả</th>
+                        <th className="min-w-[112px] px-3.5 py-2.5">Loại</th>
+                        <th className="min-w-[120px] px-3.5 py-2.5">Trạng thái</th>
+                        <th className="min-w-[96px] px-3.5 py-2.5">Kết quả</th>
                         <th className="px-3.5 py-2.5">Thời lượng</th>
                         <th className="min-w-[180px] px-3.5 py-2.5">Nhân sự sửa chữa</th>
                         <th className="min-w-[180px] px-3.5 py-2.5">Nhắc nhớ</th>
@@ -1101,16 +1179,16 @@ function MachineDetailModal({
                             <div className="font-semibold text-slate-900">{row.title}</div>
                           </td>
                           <td className="px-3.5 py-3">
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintTypeStyle[row.type]}`}>
+                            <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintTypeStyle[row.type]}`}>
                               {row.type}
                             </span>
                           </td>
                           <td className="px-3.5 py-3">
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintStatusStyle[row.status]}`}>
+                            <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintStatusStyle[row.status]}`}>
                               {row.status}
                             </span>
                           </td>
-                          <td className="px-3.5 py-3 text-xs font-semibold text-slate-700">
+                          <td className="px-3.5 py-3 text-xs font-semibold text-slate-700 whitespace-nowrap">
                             {row.result || "Chưa có"}
                           </td>
                           <td className="whitespace-nowrap px-3.5 py-3 font-mono text-slate-700 tabular-nums">{row.durationMin} phút</td>
@@ -1559,11 +1637,19 @@ function MachineFormModal({
       .filter((s) => s.quantity > 0)
       .map((s) => `${(s.kind === "warehouse" ? warehouses : projects).find((o) => o.id === s.id)?.name ?? "?"}: ${s.quantity}`)
       .join("; ");
+    const nextSpecs = splitMode
+      ? { ...form.specs, quantity: sumStockSplits(stockSplits), stockLocations: stockSplits, warehouseId: "", locationProjectId: "" }
+      : form.specs;
+    // Ghi lịch sử luân chuyển kho khi vị trí / số lượng theo vị trí thay đổi (chỉ khi sửa thiết bị đã có).
+    const fromText = describeStockLocation(machine.specs, warehouses, projects);
+    const toText = describeStockLocation(nextSpecs, warehouses, projects);
+    const history = parseStockHistory(machine.specs?.stockHistory);
+    const specsWithHistory = !isCreate && fromText !== toText
+      ? { ...nextSpecs, stockHistory: [...history, { at: new Date().toISOString(), by: currentViewer.fullName.trim(), from: fromText, to: toText }].slice(-200) }
+      : { ...nextSpecs, ...(history.length ? { stockHistory: history } : {}) };
     onSave({
       ...form,
-      specs: splitMode
-        ? { ...form.specs, quantity: sumStockSplits(stockSplits), stockLocations: stockSplits, warehouseId: "", locationProjectId: "" }
-        : form.specs,
+      specs: specsWithHistory,
       location: splitMode ? splitText : warehouse?.address || (project ? `Dự án ${project.name}` : form.location),
       manufacturer: form.manufacturer.trim(),
       image: syncImage,
@@ -2526,6 +2612,7 @@ export default function MachineList() {
           initialTab={detailTab}
           onClose={closeDetail}
           onEdit={() => openEdit(detail)}
+          currentLocation={locationBundle.locations.find((m) => m.id === detail.id)}
         />
       )}
 
