@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { findNavMeta, navigation } from "@/data/navigation";
 import { useLanguage } from "@/i18n/LanguageProvider";
-import { CaretDown, GasPump, Path, ShieldCheck, Users, Wrench, MagnifyingGlass } from "@/components/icons";
+import { CaretDown, GasPump, Path, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
 
 // Dashboard tổng quan nằm ngay dưới trang chủ — chỉ tải khi trang chủ mở (không chặn menu phía trên).
@@ -192,74 +191,6 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
         </ul>
       </section>}
 
-      {/* Hero chỉ hiện desktop — mobile ưu tiên menu nhập liệu */}
-      <div className="relative mb-7 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs lg:block">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#0047AB]/5 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
-
-        <div className="relative flex flex-col items-start text-left">
-          <div className="relative mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-4 ring-[#0047AB]/10 transition-transform duration-300 hover:scale-105">
-            <div className="relative h-full w-full overflow-hidden rounded-xl">
-              <Image
-                src="/logo.png"
-                alt="Logo Công ty cổ phần công trình Thành Phát"
-                fill
-                priority
-                className="object-contain"
-                sizes="128px"
-              />
-            </div>
-          </div>
-
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/90 px-3.5 py-1 text-xs font-semibold text-[#0047AB] shadow-2xs">
-            <ShieldCheck size={16} weight="fill" className="text-[#0047AB]" />
-            <span>
-              {lang === "en"
-                ? "THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY"
-                : "CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT"}
-            </span>
-          </div>
-
-          <h1 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">
-            {lang === "en" ? (
-              <>
-                <span className="text-[#0047AB]">Rail Welding</span> Management System
-              </>
-            ) : (
-              <>
-                Hệ thống Quản lý <span className="text-[#0047AB]">hàn ray</span>
-              </>
-            )}
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
-            {lang === "en"
-              ? "Comprehensive Platform for Welder Personnel, Certification Training, GPS Logs & Railway Welding Operations"
-              : "Quản lý nhân sự, thiết bị và hồ sơ công trình tại một nơi. Chọn nghiệp vụ bên dưới để bắt đầu công việc."}
-          </p>
-
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-slate-600">
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#0047AB] text-white shadow-sm">
-                <Users size={12} weight="bold" />
-              </span>
-              <span>{lang === "en" ? "Welder Management & Certificates" : "Quản lý Thợ hàn & Chứng chỉ"}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm">
-                <Wrench size={12} weight="bold" />
-              </span>
-              <span>{lang === "en" ? "FBW/ATW Rail Welding Monitoring" : "Giám sát Máy hàn Ray FBW/ATW"}</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-3 py-1.5 shadow-2xs">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-500 text-white shadow-sm">
-                <Path size={12} weight="bold" />
-              </span>
-              <span>{lang === "en" ? "GPS Coordinates & Chainage Sync" : "Đồng bộ Tọa độ GPS & Lý trình"}</span>
-            </div>
-          </div>
-        </div>
-      </div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">
