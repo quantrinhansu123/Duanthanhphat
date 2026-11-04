@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { parseCoordinateCode } from "@/lib/weldCode";
+import { fileToSignatureDataUrl, loadRfiSignatures, saveRfiSignature, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
 
 export type DocKind = "rfi" | "hoan-thanh" | "phu-luc" | "giai-doan";
 
@@ -22,10 +23,9 @@ const css = `@media print {
   .weld-doc-actions { display: none !important; }
   #weld-doc-print table { page-break-inside: auto; } #weld-doc-print tr { page-break-inside: avoid; }
   #weld-doc-print thead { display: table-header-group; }
-  @page { size: A4; margin: 15mm 15mm 15mm 20mm; }
-  /* Phiếu YCNT 1 trang: lề trang = 0 để trình duyệt không in ngày giờ / tiêu đề đầu-cuối trang; lề thật đặt bằng padding. */
-  @page rfi { size: A4; margin: 0; }
-  #weld-doc-print.weld-rfi { page: rfi; padding: 15mm 15mm 15mm 20mm !important; max-width: none !important; }
+  /* Phiếu YCNT 1 trang: lề trang = 0 để trình duyệt tự bỏ đầu trang / cuối trang (ngày giờ, tiêu đề); lề thật đặt bằng padding. */
+  @page { size: A4; margin: 0; }
+  #weld-doc-print { box-sizing: border-box; padding: 15mm 15mm 15mm 20mm !important; max-width: none !important; }
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
@@ -56,9 +56,23 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const [form, setForm] = useState<Record<string, string>>({ dia_diem: "", thanh_phan: "", ly_do: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [signatures, setSignatures] = useState<SignatureStore>({});
+  const [sigOpen, setSigOpen] = useState(false);
+  const [sigError, setSigError] = useState("");
   const hoSo = record?.ho_so.find((h) => h.loai === LOAI[kind]);
   const revisions = (record?.sua_doi ?? []).filter((r) => r.ho_so_id === hoSo?.id);
   const latest = revisions[revisions.length - 1];
+
+  useEffect(() => {
+    if (kind === "rfi") void loadRfiSignatures().then(setSignatures);
+  }, [kind]);
+
+  async function changeSignature(key: SignatureKey, file: File | null) {
+    setSigError(""); setBusy(true);
+    try {
+      setSignatures(await saveRfiSignature(key, file ? await fileToSignatureDataUrl(file) : null));
+    } catch (e) { setSigError(e instanceof Error ? e.message : "Không lưu được chữ ký."); } finally { setBusy(false); }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,6 +102,9 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
             Sửa phiếu
           </button>
         ) : null}
+        {kind === "rfi" ? (
+          <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
+        ) : null}
         {hoSo && (
           <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
             className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
@@ -95,6 +112,24 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
         <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
+      {kind === "rfi" && sigOpen && (
+        <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
+          <p className="text-xs text-slate-600">Chữ ký hiện trên phiếu của dự án Phú Quốc. Chọn ảnh PNG/JPG (nền trắng); ảnh được lưu trong hệ thống, không cần chép file vào máy chủ.</p>
+          {(["chi-huy-truong", "nha-thau-phu", "gach-trang-tri"] as SignatureKey[]).map((key) => (
+            <div key={key} className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+              <span className="w-44 font-semibold">{SIG_LABELS[key]}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {signatures[key] ? <img src={signatures[key]} alt="" className="h-10 max-w-[8rem] object-contain" /> : <span className="text-xs text-slate-500">Chưa có</span>}
+              <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
+                {signatures[key] ? "Đổi ảnh" : "Tải ảnh lên"}
+                <input type="file" accept="image/png,image/jpeg" disabled={busy} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void changeSignature(key, f); }} />
+              </label>
+              {signatures[key] && <button type="button" disabled={busy} onClick={() => void changeSignature(key, null)} className="text-xs font-semibold text-rose-600 cursor-pointer">Xóa</button>}
+            </div>
+          ))}
+          {sigError && <p role="alert" className="text-red-600">{sigError}</p>}
+        </div>
+      )}
       {editing && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
           <p className="text-xs text-slate-600">Sửa địa điểm, thành phần tham dự và các mục nhập tay (BB hoàn thành). Số đo và danh sách mối đã chốt không thay đổi; bản sửa đổi được lưu kèm lý do và người sửa.</p>
@@ -110,7 +145,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" disabled={busy} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
         </div>
       )}
-      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} /> : (
+      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} signatures={signatures} /> : (
       record ? <WeldAcceptanceRecordPages record={record} kind={kind as RecordKind} /> : null)}
     </div>
   );
@@ -119,27 +154,28 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
 const PQ = {
   duAn: "Tuyến tàu điện đô thị đoạn 1", goiThau: "Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray", diaDiem: "Đặc khu Phú Quốc, Tỉnh An Giang", noiLap: "Phú Quốc",
   kinhGui: ["Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc;", "Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North)."],
-  chinh: { ten: "Nguyễn Tất Đạt", chucVu: "Chỉ huy trưởng", chuKy: "/chu-ky/chi-huy-truong.jpg" },
-  phu: { ten: "Nguyễn Văn Trinh", chucVu: "PBĐH", chuKy: "/chu-ky/nha-thau-phu.jpg" },
+  chinh: { ten: "Nguyễn Tất Đạt", chucVu: "Chỉ huy trưởng", chuKy: "/chu-ky/chi-huy-truong.jpg", key: "chi-huy-truong" as SignatureKey },
+  phu: { ten: "Nguyễn Văn Trinh", chucVu: "PBĐH", chuKy: "/chu-ky/nha-thau-phu.jpg", key: "nha-thau-phu" as SignatureKey },
 };
 const DOTS = "……………";
+const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Chỉ huy trưởng", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
 
 /** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
-function Signer({ title, org, who }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string } }) {
+function Signer({ title, org, who, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; signatures: SignatureStore }) {
   return (
     <div className="text-center">
       <p className="font-bold">{title}</p>
       <p className="italic">({org})</p>
       <div className="flex h-16 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {who && <img src={who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+        {who && <img src={signatures[who.key] ?? who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
       </div>
       <p className="italic">Tên: {who?.ten ?? DOTS} <b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
     </div>
   );
 }
 
-function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string }) {
+function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
   const monitoring = t.loai_rfi === "theo-doi";
   const [y, m, d] = rfi.ngay_moi.split("-");
@@ -170,7 +206,7 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
     <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[14px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/chu-ky/gach-trang-tri.jpg" alt="" className="mx-auto h-2 w-36 mix-blend-multiply" />
+      <img src={signatures["gach-trang-tri"] ?? "/chu-ky/gach-trang-tri.jpg"} alt="" className="mx-auto h-2 w-36 mix-blend-multiply" />
       <p className="mt-3 text-right italic">{pq?.noiLap ?? DOTS}, ngày {ngay}</p>
       <h2 className="mt-3 text-center text-base font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
       <p className="text-center">Số: {rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR</p>
@@ -179,7 +215,7 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
         <dt>Hạng mục</dt><dd className="font-normal">: {pq?.goiThau ?? DOTS}</dd>
         <dt>Địa điểm</dt><dd className="font-normal">: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
       </dl>
-      <div className="mt-2 flex gap-2 pl-12"><b className="italic">Kính gửi:</b><div className="font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
+      <div className="mt-2 flex gap-2 pl-12"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
       <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
@@ -190,8 +226,8 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
         <p className="mt-2 text-justify">- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu các công việc đề nghị nêu trên để nhà thầu triển khai các công việc tiếp theo.</p>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} />
-        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} />
+        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} signatures={signatures} />
+        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} signatures={signatures} />
       </div>
       <table className="mt-3 w-full border-collapse border border-black">
         <tbody>
