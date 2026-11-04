@@ -116,7 +116,8 @@ export default function ConstructionDiaryForm() {
   const mark = weatherMark(d.thoiTiet);
 
   /** Nội dung mục 3 khi in: gộp công việc + nghiệm thu hàng ngày (biểu mẫu không có mục 3.2 riêng). */
-  const section3Print = [d.noiDungCongViec.trim(), d.nghiemThuHangNgay.trim() ? `Nghiệm thu công việc xây dựng hàng ngày:\n${d.nghiemThuHangNgay.trim()}` : ""]
+  const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
+  const section3Print = [noAcceptance(d.noiDungCongViec) ? "" : d.noiDungCongViec.trim(), noAcceptance(d.nghiemThuHangNgay) ? "" : `Nghiệm thu công việc xây dựng hàng ngày:\n${d.nghiemThuHangNgay.trim()}`]
     .filter(Boolean).join("\n\n");
 
   async function autofill() {
