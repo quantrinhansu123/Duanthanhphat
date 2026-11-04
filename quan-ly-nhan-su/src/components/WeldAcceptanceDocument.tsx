@@ -166,9 +166,10 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
     <div className="text-center">
       <p className="font-bold">{title}</p>
       <p className="italic">({org})</p>
-      <div className="flex h-16 items-center justify-center">
+      <div className="flex h-20 items-center justify-center overflow-hidden">
+        {/* Kích thước cố định (không dùng % chiều cao) để ảnh luôn hiện khi in; không hiệu ứng blend. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {who && <img src={signatures[who.key] ?? who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+        {who && <img src={signatures[who.key] ?? who.chuKy} alt="" className="block h-20 w-auto max-w-full object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
       </div>
       <p className="italic"><b>Tên:</b> {who?.ten ?? DOTS} &nbsp;<b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
     </div>
