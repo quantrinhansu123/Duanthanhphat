@@ -55,11 +55,16 @@ const css = `@media screen { #diary-print { display: none; } }
   #diary-print .diary-section { break-inside: avoid; }
   #diary-print .diary-dots { height: 18pt; border-bottom: 1px dotted black; }
   #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
-  #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr; text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
+  #diary-print .diary-frame { width: 100%; border-collapse: collapse; border: 0; }
+  #diary-print .diary-frame > thead, #diary-print .diary-frame > tbody, #diary-print .diary-frame > tfoot { border: 0; }
+  #diary-print .diary-frame td { padding: 0; border: 0; }
+  #diary-print .diary-frame-space { height: 15mm; }
+  #diary-print .diary-frame-body { padding: 0 15mm 0 20mm; }
+  #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-sub { text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
   #diary-print .diary-page { text-align: right; margin-top: 18pt; font-size: 10pt; }
-  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 portrait; margin: 0; }
 }`;
 
 const TEXT_SECTIONS = [
@@ -224,6 +229,10 @@ export default function ConstructionDiaryForm() {
       </div>
 
       <article id="diary-print">
+        {/* Khung bảng: thead/tfoot lặp mỗi trang để làm lề trên/dưới, nhờ vậy đặt @page margin 0 mà trình duyệt không in đầu/cuối trang. */}
+        <table className="diary-frame">
+        <thead><tr><td><div className="diary-frame-space" /></td></tr></thead>
+        <tbody><tr><td className="diary-frame-body">
         <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
         <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "……"}</p>
 
@@ -256,12 +265,12 @@ export default function ConstructionDiaryForm() {
         <div className="diary-sig-row">
           <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div></div>
           <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div></div>
-        </div>
-        <div className="diary-sig-sub">
-          NHÀ THẦU PHỤ
-          <div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div>
+          <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div></div>
         </div>
         <p className="diary-page">Trang ……</p>
+        </td></tr></tbody>
+        <tfoot><tr><td><div className="diary-frame-space" /></td></tr></tfoot>
+        </table>
       </article>
     </div>
   );

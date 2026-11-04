@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
 import { Printer, X } from "@/components/icons";
 import {
@@ -114,6 +115,7 @@ export function StressReleasePrint({
 
       <div className="print-stage">
         <article className="print-sheet">
+<PrintFrame>
           <header className="doc-head">
             <div className="brand">
               <img src="/logo.png" alt="" className="logo-img" />
@@ -265,6 +267,7 @@ export function StressReleasePrint({
           <p className="foot">
             Mẫu tính theo Bảng tính toán giải tỏa ứng suất {railLabel} · Dùng cho mục đích kỹ thuật nội bộ · In lúc {stamp}
           </p>
+</PrintFrame>
         </article>
       </div>
     </div>,
@@ -583,7 +586,7 @@ const PRINT_CSS = `
   text-align: center;
 }
 @media print {
-  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 portrait; margin: 0; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;

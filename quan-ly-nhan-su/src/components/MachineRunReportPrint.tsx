@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Eye, Printer, X } from "@/components/icons";
 import { formatScheduleDate, type MachineRunSchedule } from "@/data/machineAssignments";
 import type { DailyFuelRow } from "@/lib/dailyFuelDb";
+import PrintFrame from "@/components/PrintFrame";
 
 export type MachineRunReportRow = MachineRunSchedule & {
   oilLiters?: number | null;
@@ -127,6 +128,7 @@ export default function MachineRunReportPrint({
 
       <div className="print-stage">
         <article className="print-sheet">
+<PrintFrame>
           <header className="doc-head">
             <div className="brand-kicker">CÔNG TY CP THÀNH PHÁT</div>
             <h1>BÁO CÁO THIẾT BỊ / LỊCH CHẠY MÁY</h1>
@@ -213,6 +215,7 @@ export default function MachineRunReportPrint({
               )}
             </tbody>
           </table>
+</PrintFrame>
         </article>
       </div>
     </div>,
@@ -282,7 +285,7 @@ const PRINT_CSS = `
 #machine-run-report-print .machine-name { font-size: 10px; color: #475569; }
 #machine-run-report-print .empty { text-align: center; color: #64748b; padding: 18px 8px; }
 @media print {
-  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 landscape; margin: 0; }
   body * { visibility: hidden !important; }
   #machine-run-report-print, #machine-run-report-print * { visibility: visible !important; }
   #machine-run-report-print { position: static !important; background: #fff !important; overflow: visible !important; }

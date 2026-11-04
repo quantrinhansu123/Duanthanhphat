@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
 import {
   displayRailCode,
@@ -284,7 +285,7 @@ export function TrackPrint({
       #lwr-track-print table.lwr-summary td.c-code { text-align:left; font-weight:600; }
       #lwr-track-print tr { break-inside:avoid; }
       @media print {
-        @page { size:${config.size}; margin:15mm 15mm 15mm 20mm; }
+        @page { size:${config.size}; margin:0; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
         #lwr-track-print, #lwr-track-print * { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
         #lwr-track-print { position:static; overflow:visible; background:white; }
@@ -355,6 +356,7 @@ export function TrackPrint({
         </article>
       ) : (
         <article>
+<PrintFrame>
           <header className="print-header">
             <p className="company">CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
             <h1>SƠ ĐỒ GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
@@ -462,6 +464,7 @@ export function TrackPrint({
           <div style={{ display: "flex", justifyContent: "space-around", marginTop: "6mm", marginBottom: "6mm" }}>
             <b>Người lập</b><b>Người kiểm tra</b><b>Đại diện bên A</b>
           </div>
+</PrintFrame>
         </article>
       )}
     </div>,

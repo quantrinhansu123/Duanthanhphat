@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
 import { Printer, X } from "@/components/icons";
 import {
@@ -93,6 +94,7 @@ export default function MachinePreShiftChecklistPrint({
 
       <div className="print-stage">
         <article className="print-sheet">
+<PrintFrame>
           <header className="doc-head">
             <div className="brand">
               <img src="/logo.png" alt="" className="logo-img" />
@@ -231,6 +233,7 @@ export default function MachinePreShiftChecklistPrint({
               ))}
             </div>
           </div>
+</PrintFrame>
         </article>
       </div>
     </div>,
@@ -521,7 +524,7 @@ const PRINT_CSS = `
   font-weight: 700;
 }
 @media print {
-  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 portrait; margin: 0; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;

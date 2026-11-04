@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import type { MachineOption } from "@/data/machineAssignments";
@@ -280,7 +281,7 @@ export default function WeldQrPrintDialog({
       #weld-qr-print .gap { height:3mm; border-bottom:0; }
       #weld-qr-print .hint { margin-top:4mm; font-size:8.5pt; color:#444; }
       @media print {
-        @page { size:A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+        @page { size:A4 landscape; margin: 0; }
         body:has(#weld-qr-print) > :not(#weld-qr-print) { display:none!important; }
         #weld-qr-print { position:static; overflow:visible; background:#fff; }
         #weld-qr-print .toolbar { display:none; }
@@ -346,6 +347,7 @@ export default function WeldQrPrintDialog({
       </div>
 
       <article className="sheet">
+<PrintFrame>
         <h1>Tem QR vị trí hàn ray</h1>
         <p className="meta">
           Dự án: {project?.label ?? "—"} · Ngày hàn: {performedAt.split("-").reverse().join("/")} · Máy: {machine?.code ?? "—"} · {congNghe} · {tags.filter((t) => !t.linked).length} tem mới
@@ -403,6 +405,7 @@ export default function WeldQrPrintDialog({
         {strips.length > 0 && (
           <p className="hint">Dán tem lên ray theo đúng vị trí. Ngoài hiện trường: Nhật ký hàn → Quét QR → kiểm tra thợ hàn, máy, kết quả rồi Lưu. Mã hệ thống, mã hiện trường và mã máy trên tem là mã dự kiến, được giữ khi lưu.</p>
         )}
+</PrintFrame>
       </article>
     </div>,
     document.body,

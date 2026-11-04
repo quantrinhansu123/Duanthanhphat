@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { RfiSummary } from "@/lib/weldQualityClient";
 import type { RfiCandidate } from "@/lib/weldAcceptance";
 import { weldRoute } from "@/lib/rfiTracking";
+import PrintFrame from "@/components/PrintFrame";
 
 const css = `@media print {
   body * { visibility: hidden !important; }
@@ -19,7 +20,8 @@ const css = `@media print {
   #rfi-issued-list-print .rfi-table-scroll { overflow: visible; }
   #rfi-issued-list-print table { min-width: 0; font-size: 9pt; }
   #rfi-issued-list-print .rfi-control-detail { display: block !important; }
-  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 landscape; margin: 0; }
+  #rfi-issued-list-print > .print-frame { width: 100%; }
 }`;
 
 function formatDate(iso: string) {
@@ -72,6 +74,7 @@ export default function RfiIssuedListDocument({
         <button type="button" onClick={onClose} className="h-9 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Đóng</button>
       </div>
       <article id="rfi-issued-list-print" className="mx-auto max-w-7xl rounded-lg bg-white p-3 text-sm text-black shadow-lg sm:p-6">
+<PrintFrame>
         <h1 className="text-center text-base font-bold uppercase">Danh sách phiếu yêu cầu nghiệm thu đã phát</h1>
         <p className="mt-2 text-center">Dự án: {projectName || "………………"}</p>
         <p className="mt-1 text-center text-xs">Ngày lập danh sách: {new Date().toLocaleDateString("vi-VN")}</p>
@@ -160,6 +163,7 @@ export default function RfiIssuedListDocument({
             <p className="mt-1 text-xs font-normal">(Ký, ghi rõ họ tên)</p>
           </div>
         </div>
+</PrintFrame>
       </article>
     </div>
   );

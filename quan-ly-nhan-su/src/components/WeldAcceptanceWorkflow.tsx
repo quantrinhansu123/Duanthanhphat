@@ -572,10 +572,10 @@ function RfiPanel({
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
                 <td className="p-2 min-w-48">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
                 <td className="p-2">{r.trang_thai}</td>
-                <td className="p-2 text-right">
-                  <span className="inline-flex flex-wrap justify-end gap-1">
-                    <button type="button" className={secondary} onClick={() => beginEdit(r)}>Sửa</button>
-                    <button type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r)).catch((e) => setError(message(e)))}>Xem / In</button>
+                <td className="whitespace-nowrap p-2 text-right">
+                  <span className="inline-flex flex-nowrap justify-end gap-1">
+                    <button type="button" className={`${secondary} whitespace-nowrap`} onClick={() => beginEdit(r)}>Sửa</button>
+                    <button type="button" className={`${secondary} whitespace-nowrap`} onClick={() => Promise.resolve(onOpen(r)).catch((e) => setError(message(e)))}>Xem / In</button>
                   </span>
                 </td>
               </tr>

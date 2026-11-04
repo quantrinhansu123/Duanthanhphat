@@ -1,4 +1,5 @@
 import type { RecordSet } from "@/lib/weldQualityClient";
+import PrintFrame from "@/components/PrintFrame";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
 export type RecordKind = "phu-luc" | "giai-doan" | "hoan-thanh";
@@ -78,10 +79,10 @@ export const acceptancePrintCss = `
   .acceptance-page:first-of-type {
     break-before: auto !important; page-break-before: auto !important;
   }
-  .acceptance-page.annex-page { padding: 5mm 4mm 0 0; }
+  .acceptance-page.annex-page { padding: 0; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
-  @page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 portrait; margin: 0; }
 }`;
 
 const blank = "………………";
@@ -180,6 +181,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
       return pages.map((page, pageIndex) => (
         <article className="acceptance-page annex-page" key={`${doc.kind}-${pageIndex}`}>
+<PrintFrame top="20mm" right="19mm">
           <table className="annex-sheet">
             <tbody>
               <tr>
@@ -384,7 +386,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
             </tbody>
           </table>
-        </article>
+        </PrintFrame>
+</article>
       ));
     }
     if (doc.kind === "giai-doan") {
@@ -397,6 +400,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
       return (
         <article className="acceptance-page work-page" key={doc.kind}>
+<PrintFrame>
           <div className="nation">
             CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />
             <span className="motto">Độc lập - Tự do - Hạnh phúc</span>
@@ -452,7 +456,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </div>
             ))}
           </div>
-        </article>
+        </PrintFrame>
+</article>
       );
     }
 
@@ -492,6 +497,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     return (
       <>
         <article key={`${doc.kind}-1`} className="acceptance-page work-page">
+<PrintFrame>
           <div className="nation">
             CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />
             <span className="motto">Độc lập - Tự do - Hạnh phúc</span>
@@ -531,9 +537,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           {field("tai_lieu_can_cu", 2)}
           <p><b>b) Đánh giá về chất lượng về chất lượng công trình xây dựng so với thiết kế được phê duyệt:</b></p>
           {field("danh_gia_chat_luong", 2)}
-        </article>
+        </PrintFrame>
+</article>
 
         <article key={`${doc.kind}-2`} className="acceptance-page work-page">
+<PrintFrame>
           <p><b>c) Những điều chỉnh và thay đổi bổ sung trong quá trình thi công so với thiết kế được phê duyệt ( có phụ lục đính kèm):</b></p>
           {field("dieu_chinh", 2)}
           <p><b>d) Đánh giá chất lượng hạng mục công trình:</b></p>
@@ -593,7 +601,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               ))}
             </tbody>
           </table>
-        </article>
+        </PrintFrame>
+</article>
       </>
     );
   })}</>;

@@ -1,6 +1,7 @@
 "use client";
 
 import type { RecordSet } from "@/lib/weldQualityClient";
+import PrintFrame from "@/components/PrintFrame";
 import { GEOMETRY_CRITERIA, evaluateGeometryCriterion, type GeometryLimits } from "@/lib/weldQuality";
 
 const ROWS_PER_PAGE = 20;
@@ -10,7 +11,7 @@ const css = `@media print {
   #weld-bbnt-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; }
   #weld-bbnt-print section { break-after: page; } #weld-bbnt-print section:last-child { break-after: auto; }
   .weld-doc-actions { display: none !important; }
-  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 landscape; margin: 0; }
 }`;
 const th = "border border-slate-700 p-1 text-center font-bold";
 const td = "border border-slate-700 p-1 text-center";
@@ -53,6 +54,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
         <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
       <div id="weld-bbnt-print" className="mx-auto max-w-[1100px] text-[11px] text-slate-900">
+<PrintFrame>
         {pages.map((page, p) => (
           <section key={p} className="mb-4 bg-white p-6">
             <div className="flex justify-between font-bold uppercase">
@@ -125,6 +127,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
             </div>
             <p className="mt-1 text-right text-[9px] text-slate-500">Trang {p + 1}/{pages.length}</p>
           </section>))}
+</PrintFrame>
       </div>
     </div>
   );

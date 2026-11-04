@@ -231,14 +231,20 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
       </div>
       <table className="mt-3 w-full border-collapse border border-black">
         <tbody>
-          <tr>
-            <td rowSpan={2} className="w-1/4 border border-black text-center font-bold">TƯ VẤN<br />GIÁM SÁT</td>
-            <td className="h-14 border border-black px-1 align-top">Người nhận: {pq ? "Trần Văn Thanh" : DOTS}</td>
-            <td className="h-14 border border-black px-1 align-top">Chức vụ: Tư vấn giám sát trưởng</td>
-          </tr>
-          <tr>
-            <td className="h-28 border border-black px-1 align-top pt-2">Ngày nhận: {ngay}</td>
-            <td className="h-28 border border-black px-1 align-top pt-2">Chữ ký:..........................................</td>
+          <tr className="h-28">
+            <td className="w-1/4 border border-black text-center font-bold">TƯ VẤN<br />GIÁM SÁT</td>
+            <td className="w-[40%] border border-black p-1 align-top">
+              <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
+                <span>Người nhận: {pq ? "Trần Văn Thanh" : DOTS}</span>
+                <span>Ngày nhận: {ngay}</span>
+              </div>
+            </td>
+            <td className="border border-black p-1 align-top">
+              <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
+                <span>Chức vụ: Tư vấn giám sát trưởng</span>
+                <span>Chữ ký:..........................................</span>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>

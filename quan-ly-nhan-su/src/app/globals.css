@@ -574,3 +574,16 @@ select:not([multiple]):focus {
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.3) transparent;
 }
+
+/* Khung in: bảng 1 ô có thead/tfoot lặp mỗi trang làm lề, để @page margin 0 (trình duyệt không in đầu/cuối trang). */
+.print-frame { width: 100%; border-collapse: collapse; border: 0 !important; table-layout: auto; }
+.print-frame > thead > tr > td, .print-frame > tfoot > tr > td, .print-frame > tbody > tr > td { padding: 0 !important; border: 0 !important; }
+.print-frame > thead > tr, .print-frame > tfoot > tr, .print-frame > tbody > tr { break-inside: auto !important; page-break-inside: auto !important; }
+.print-frame-space { height: 0; }
+@media print {
+  .print-frame > thead { display: table-header-group; }
+  .print-frame > tfoot { display: table-footer-group; }
+  .print-frame-space.top { height: var(--pf-top, 15mm); }
+  .print-frame-space.bottom { height: var(--pf-bottom, 15mm); }
+  .print-frame > tbody > tr > td.print-frame-body { padding: 0 var(--pf-right, 15mm) 0 var(--pf-left, 20mm) !important; }
+}

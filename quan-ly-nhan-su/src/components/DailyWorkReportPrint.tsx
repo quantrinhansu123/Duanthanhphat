@@ -13,6 +13,7 @@ import {
 } from "@/lib/dailyReportDb";
 import { emptyPhotoReport, type PhotoReport } from "@/lib/photoReportDb";
 import PhotoReportPrintSheet from "@/components/PhotoReportPrintSheet";
+import PrintFrame from "@/components/PrintFrame";
 
 const TICK = "✓";
 const MIN_WORK_ROWS = 5;
@@ -341,6 +342,7 @@ export default function DailyWorkReportPrint({
         return (
         <div key={reportDate} className="print-day-block">
         <article className="print-sheet">
+<PrintFrame>
           <header className="doc-head">
             <div className="doc-title-block">
               <div>DỰ ÁN: TUYẾN TÀU ĐIỆN ĐÔ THỊ LOẠI 1 TẠI ĐẶC KHU PHÚ QUỐC</div>
@@ -514,6 +516,7 @@ export default function DailyWorkReportPrint({
               </tbody>
             </table>
           </div>
+</PrintFrame>
         </article>
         <PhotoReportPrintSheet projectName={dayProject} date={reportDate} report={photoSheet} />
         </div>
@@ -772,9 +775,9 @@ const PRINT_CSS = `
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
 }
 @media print {
-  @page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
-  @page daily-page { size: A4 landscape; margin: 15mm 15mm 15mm 20mm; }
-  @page photo-page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }
+  @page { size: A4 landscape; margin: 0; }
+  @page daily-page { size: A4 landscape; margin: 0; }
+  @page photo-page { size: A4 portrait; margin: 0; }
   html, body {
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;

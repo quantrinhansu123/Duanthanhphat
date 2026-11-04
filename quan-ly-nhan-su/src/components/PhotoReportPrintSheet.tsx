@@ -1,6 +1,7 @@
 "use client";
 
 import type { PhotoReport } from "@/lib/photoReportDb";
+import PrintFrame from "@/components/PrintFrame";
 
 /** Có nội dung đáng in (ảnh / ghi chú / tiêu đề). */
 export function photoReportHasContent(report: PhotoReport | null | undefined): boolean {
@@ -84,6 +85,7 @@ export default function PhotoReportPrintSheet({
   return (
     <article className={`photo-report-sheet print-sheet photo-sheet ${className}`.trim()}>
       <style>{SHEET_CSS}</style>
+<PrintFrame>
       <div className="photo-head">
         <div>Dự án: {projectName}</div>
         <div>{report.goiThau}</div>
@@ -114,6 +116,7 @@ export default function PhotoReportPrintSheet({
           ])}
         </tbody>
       </table>
+</PrintFrame>
     </article>
   );
 }
