@@ -2,6 +2,9 @@
 
 import { useLanguage } from "@/i18n/LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
+import type { MachineOption } from "@/data/machineAssignments";
+import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
+import { loadJournalProjectOptions } from "@/lib/weldReportData";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowsIn, ArrowsOut } from "@/components/icons";
@@ -33,6 +36,8 @@ import {
   type CoordinateRailPrefix,
   suggestCoordinateCode,
 } from "@/lib/weldCode";
+
+const WeldQrPrintDialog = dynamic(() => import("@/components/WeldQrPrintDialog"), { ssr: false });
 
 const GoogleCoordinateMap = dynamic(() => import("@/components/GoogleCoordinateMap"), {
   ssr: false,
@@ -82,6 +87,9 @@ export default function MapView() {
   const [projectId, setProjectId] = useState("");
   const [projects, setProjects] = useState<{ id: string; du_an: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [qrPrintOpen, setQrPrintOpen] = useState(false);
+  const [qrProjects, setQrProjects] = useState<Awaited<ReturnType<typeof loadJournalProjectOptions>>>([]);
+  const [qrMachines, setQrMachines] = useState<MachineOption[]>([]);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const useGoogle = Boolean(googleApiKey);
@@ -461,6 +469,18 @@ export default function MapView() {
         >
           {showForm ? "Đóng form" : "+ Thêm Autolisp"}
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setQrPrintOpen(true);
+            if (!qrProjects.length) void loadJournalProjectOptions().then(setQrProjects).catch(() => setQrProjects([]));
+            if (!qrMachines.length) void loadMachineOptions().then(setQrMachines).catch(() => setQrMachines([]));
+          }}
+          title="In tem QR cho các điểm Autolisp sẽ hàn — dán lên ray rồi quét QR ở Nhật ký hàn để tạo nhật ký"
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 sm:w-auto sm:px-4 sm:text-sm"
+        >
+          In tem QR
+        </button>
         <input
           ref={fileInputRef}
           type="file"
@@ -827,6 +847,7 @@ export default function MapView() {
         </div>
         )}
       </div>
+      <WeldQrPrintDialog open={qrPrintOpen} onClose={() => setQrPrintOpen(false)} projects={qrProjects} machines={qrMachines} />
     </main>
   );
 }

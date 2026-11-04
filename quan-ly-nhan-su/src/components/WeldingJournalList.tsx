@@ -58,7 +58,6 @@ import {
 } from "@/lib/weldReportData";
 import { compareNewestDate } from "@/lib/dateOrder";
 const QrScanDialog = dynamic(() => import("@/components/QrScanDialog"), { ssr: false });
-const WeldQrPrintDialog = dynamic(() => import("@/components/WeldQrPrintDialog"), { ssr: false });
 import { parseWeldQr } from "@/lib/weldQr";
 import {
   buildWeldCodePrefix,
@@ -1831,7 +1830,6 @@ export default function WeldingJournalList({
   const [formOpen, setFormOpen] = useState(false);
   const [autolispBulkOpen, setAutolispBulkOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const [qrPrintOpen, setQrPrintOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkFillSaving, setBulkFillSaving] = useState(false);
   const [bulkFillProgress, setBulkFillProgress] = useState("");
@@ -3073,14 +3071,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             </button>
             <button
               type="button"
-              onClick={() => setQrPrintOpen(true)}
-              title="In tem QR cho các vị trí sẽ hàn trong ngày — dán lên ray rồi quét QR để tạo nhật ký"
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition-all duration-150 cursor-pointer sm:w-auto sm:shrink-0 sm:text-sm"
-            >
-              In tem QR
-            </button>
-            <button
-              type="button"
               onClick={() => {
                 setEditingRow(null);
                 setEditingForm(null);
@@ -3606,7 +3596,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       />
 
       <QrScanDialog open={qrOpen} onClose={() => setQrOpen(false)} onResult={handleQrResult} />
-      <WeldQrPrintDialog open={qrPrintOpen} onClose={() => setQrPrintOpen(false)} projects={projectOptions} machines={machineOptions} />
 
       <BulkAutolispWeldDialog
         open={autolispBulkOpen}
