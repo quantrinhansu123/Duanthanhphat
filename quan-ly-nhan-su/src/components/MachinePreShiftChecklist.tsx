@@ -3,6 +3,7 @@
 import { notifyPreShiftChecklist } from "@/lib/notificationsDb";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import MachinePreShiftChecklistPrint from "@/components/MachinePreShiftChecklistPrint";
+import { deaccent } from "@/i18n/deaccent";
 import SelectMenu from "@/components/SelectMenu";
 import {
   CaretRight,
@@ -11,6 +12,7 @@ import {
   ClipboardText,
   Drop,
   GearSix,
+  MagnifyingGlass,
   IdentificationCard,
   Lightning,
   ListChecks,
@@ -95,12 +97,17 @@ function loggedInInspector(people: PersonOption[]): PersonOption | undefined {
   );
 }
 
+function isWeldingMachine(m: Machine) {
+  // Tab «Máy hàn» chỉ gồm thiết bị có chữ "Máy hàn" trong tên.
+  return /máy\s+hàn/i.test(m.name ?? "");
+}
+
 function weldingMachines(machines: Machine[]) {
   return machines
     .filter((machine) => getMachineCategory(machine) !== "Phương tiện")
     .sort((a, b) => {
       // Máy hàn lên đầu, các thiết bị/phụ kiện khác phía sau.
-      const rank = (m: Machine) => (/máy hàn/i.test(`${m.name} ${m.type ?? ""}`) ? 0 : 1);
+      const rank = (m: Machine) => (isWeldingMachine(m) ? 0 : 1);
       return rank(a) - rank(b) || a.code.localeCompare(b.code, "vi");
     });
 }
@@ -193,6 +200,8 @@ export default function MachinePreShiftChecklist() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [query, setQuery] = useState("");
+  const [machineTab, setMachineTab] = useState<"weld" | "other">("weld");
   const [pageTab, setPageTab] = useState<"machines" | "list">("machines");
 
   useEffect(() => {
@@ -236,9 +245,19 @@ export default function MachinePreShiftChecklist() {
   );
   const listedRows = useMemo(
     () =>
-      [...rows].sort((left, right) => (right.updatedAt || right.date).localeCompare(left.updatedAt || left.date)),
+      [...rows].sort((left, right) => {
+        // Máy hàn lên đầu danh sách phiếu, trong mỗi nhóm phiếu mới nhất trước.
+        const rank = (r: PreShiftChecklistRecord) => (/máy hàn/i.test(r.machineName || "") ? 0 : 1);
+        return rank(left) - rank(right) || (right.updatedAt || right.date).localeCompare(left.updatedAt || left.date);
+      }),
     [rows],
   );
+  const q = deaccent(query).trim().toLowerCase();
+  const matchQuery = (...parts: (string | null | undefined)[]) => !q || deaccent(parts.filter(Boolean).join(" ")).toLowerCase().includes(q);
+  const weldCount = useMemo(() => machines.filter(isWeldingMachine).length, [machines]);
+  // Chỉ dựng thẻ của tab đang mở (mặc định Máy hàn) nên danh sách lên nhanh hơn.
+  const visibleMachines = useMemo(() => machines.filter((m) => (machineTab === "weld") === isWeldingMachine(m) && matchQuery(m.code, m.name)), [machines, machineTab, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleListedRows = useMemo(() => listedRows.filter((r) => matchQuery(r.machineCode, r.machineName)), [listedRows, q]); // eslint-disable-line react-hooks/exhaustive-deps
   const byMachine = useMemo(() => new Map(todayRows.map((row) => [row.machineId, row])), [todayRows]);
   const stats = useMemo(() => {
     const fail = todayRows.filter((row) => row.conclusion === "dung_van_hanh" || row.conclusion === "cho_khac_phuc").length;
@@ -433,6 +452,17 @@ export default function MachinePreShiftChecklist() {
           <span className="font-mono text-[11px] tabular-nums">{listedRows.length}</span>
         </button>
       </div>
+      <label className="relative mb-3 block">
+        <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Tìm máy theo mã hoặc tên..."
+          aria-label="Tìm máy theo mã hoặc tên"
+          className={`${inputCls} pl-9`}
+        />
+      </label>
       <p className="mb-3 text-xs text-slate-500">
         Máy cần kiểm tra: các máy phải kiểm tra trong ca đang chọn. Mỗi máy có một phiếu cho mỗi ngày và ca; đã lập phiếu thì nút đổi thành Sửa phiếu. Phiếu đã lưu được lưu trong hệ thống (Supabase) và xem ở Phiếu đã lưu.
       </p>
@@ -454,13 +484,13 @@ export default function MachinePreShiftChecklist() {
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
               Đang tải...
             </div>
-          ) : listedRows.length === 0 ? (
+          ) : visibleListedRows.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-              Chưa có phiếu checklist.
+              {listedRows.length === 0 ? "Chưa có phiếu checklist." : "Không có phiếu khớp từ khóa."}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-              {listedRows.map((row) => {
+              {visibleListedRows.map((row) => {
                 const progress = countChecklistProgress(row.results);
                 return (
                   <article key={row.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
@@ -510,7 +540,19 @@ export default function MachinePreShiftChecklist() {
       ) : (
       <section className="mb-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-slate-800">Máy cần kiểm tra</h2>
+          <div className="inline-flex gap-1 rounded-xl bg-slate-100 p-1">
+            {([["weld", "Máy hàn", weldCount], ["other", "Thiết bị khác", machines.length - weldCount]] as const).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMachineTab(key)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-bold ${machineTab === key ? "bg-white text-[#0047AB] shadow-xs" : "text-slate-500"}`}
+              >
+                {label}
+                <span className="font-mono text-[11px] tabular-nums">{count}</span>
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => openNew()}
@@ -528,9 +570,13 @@ export default function MachinePreShiftChecklist() {
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
             Chưa có máy hàn trong danh mục.
           </div>
+        ) : visibleMachines.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
+            Không có máy khớp từ khóa.
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {machines.map((machine) => {
+            {visibleMachines.map((machine) => {
               const row = byMachine.get(machine.id);
               const progress = row ? countChecklistProgress(row.results) : null;
               return (
