@@ -227,7 +227,7 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
       <div className="text-center font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
       {signatures["gach-trang-tri"] ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={signatures["gach-trang-tri"]} alt="" className="mx-auto my-0.5 block h-[6mm] w-[80mm] max-w-full object-cover contrast-125" />
+        <img src={signatures["gach-trang-tri"]} alt="" className="mx-auto my-0.5 block h-[5.3mm] w-[55mm] max-w-full object-cover contrast-125" />
       ) : (
         <p className="text-center font-bold leading-none" style={{ fontFamily: "'Segoe UI Symbol', 'Noto Sans Symbols2', 'Times New Roman', serif" }} aria-hidden="true">
           ----------- ☙★❧ -----------
