@@ -559,6 +559,8 @@ export type DailyWorkJournalFill = {
   mayChay: DailyWorkMachine[];
   ghiChu: string;
   entryCount: number;
+  /** Thợ hàn (employee_id) có mối hàn trong Nhật ký hàn đúng ngày + dự án. */
+  welderIds: string[];
 };
 
 type JournalFillRow = {
@@ -628,32 +630,6 @@ export async function railCountsForWelds(rows: JournalFillRow[]) {
   return counts;
 }
 
-/** Cộng số mối hàn (nhật ký hàn) của một công nghệ từ trước ngày `date`. Lỗi đọc → "" (không chặn điền form). */
-async function sumWeldsBefore(date: string, method: "ATW" | "FBW"): Promise<string> {
-  try {
-    const supabase = createClient();
-    let total = 0;
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase
-        .from("lich_su_moi_han")
-        .select("so_luong_thuc_hien")
-        .lt("ngay_thuc_hien", date)
-        .eq("cong_nghe_han", method)
-        .order("id", { ascending: true })
-        .range(from, from + 999);
-      if (error) return "";
-      for (const row of data ?? []) {
-        const qty = Number((row as { so_luong_thuc_hien?: number | string | null }).so_luong_thuc_hien);
-        total += Number.isFinite(qty) && qty > 0 ? qty : 1;
-      }
-      if (!data || data.length < 1000) break;
-    }
-    return total > 0 ? String(total) : "";
-  } catch {
-    return "";
-  }
-}
-
 /** «Đến hôm qua» = nguyên giá trị «Tích lũy» của báo cáo ngày liền trước (cùng công nghệ). Không có → null. */
 async function cumulativeFromPreviousReport(
   date: string,
@@ -690,6 +666,20 @@ async function cumulativeFromPreviousReport(
     return null;
   } catch {
     return null;
+  }
+}
+
+/** Thợ hàn có mối hàn trong ngày (theo dự án nếu có). Lỗi/thiếu cột → [] (không chặn điền form). */
+export async function welderIdsOnDate(date: string, projectId?: string): Promise<string[]> {
+  try {
+    const supabase = createClient();
+    let query = supabase.from("lich_su_moi_han").select("tho_han_id").eq("ngay_thuc_hien", date).not("tho_han_id", "is", null).limit(2000);
+    if (projectId) query = query.eq("du_an_id", projectId);
+    const { data, error } = await query;
+    if (error) return [];
+    return [...new Set(((data ?? []) as { tho_han_id: string | null }[]).map((r) => r.tho_han_id).filter((id): id is string => Boolean(id)))];
+  } catch {
+    return [];
   }
 }
 
@@ -781,6 +771,7 @@ export async function loadDailyWorkFillFromJournal(
 
   const denHomQua = (await cumulativeFromPreviousReport(date, method, projectId, workType)) ?? "";
   const rail = await railCountsForWelds(rows);
+  const welderIds = await welderIdsOnDate(date, projectId);
 
   let weldTotal = 0;
   const codes: string[] = [];
@@ -848,6 +839,7 @@ export async function loadDailyWorkFillFromJournal(
         ? `Điền từ Nhật ký hàn · ${method} · ${date} · ${rows.length} bản ghi`
         : `Không có bản ghi Nhật ký hàn ${method} ngày ${date}`,
     entryCount: rows.length,
+    welderIds,
   };
 }
 

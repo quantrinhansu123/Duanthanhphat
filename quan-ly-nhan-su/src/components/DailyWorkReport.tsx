@@ -28,6 +28,7 @@ import {
   loadDailyReport,
   loadDailyReportList,
   loadDailyWorkFillFromJournal,
+  welderIdsOnDate,
   loadLastWorkDefaults,
   loadHangMucSuggestions,
   matchWorkType,
@@ -81,12 +82,19 @@ function applyJournalFill(
     chuaPhanLoai?: number;
     mayChay: DailyWorkMachine[];
     ghiChu: string;
+    welderIds?: string[];
   },
+  personnel: PersonnelOption[] = [],
 ): WorkItemInput {
   const homNay = filled.homNay || form.homNay;
   const denHomQua = filled.denHomQua || form.denHomQua;
+  // Thợ hàn có mối trong ngày + dự án → tự xếp đúng vai trò theo chức vụ (giữ người đã chọn).
+  const people = filled.welderIds?.length && personnel.length
+    ? autoAssignManpower(personnel, filled.welderIds, { cht: [], kySu: [], laiMay: [], thoVanHanh: [], congNhan: [], vnr: [] })
+    : {};
   return {
     ...form,
+    ...people,
     tenMoiHan: filled.tenMoiHan || form.tenMoiHan,
     homNay,
     denHomQua,
@@ -126,7 +134,7 @@ const ROLE_KEYWORDS: Record<ManpowerRole, string[]> = {
   cht: ["cht", "chi huy truong", "chi huy", "site manager", "construction manager"],
   ky_su: ["ky su", "ki su", "engineer"],
   lai_may: ["lai may"],
-  tho_van_hanh: ["tho van hanh", "van hanh", "operator"],
+  tho_van_hanh: ["tho van hanh", "van hanh", "operator", "tho han", "welder"],
   cong_nhan: ["cong nhan", "worker"],
 };
 
@@ -434,6 +442,47 @@ function otherRoleOptions(personnel: PersonnelOption[], selectedIds: string[]): 
     }));
 }
 
+const ROLE_FIELDS = [
+  ["cht", "chtTen", "cht"],
+  ["kySu", "kySuTen", "ky_su"],
+  ["laiMay", "laiMayTen", "lai_may"],
+  ["thoVanHanh", "thoVanHanhTen", "tho_van_hanh"],
+  ["congNhan", "congNhanTen", "cong_nhan"],
+] as const;
+
+/** Chọn tên 1 lần → tự tra chức vụ và xếp vào đúng ô (không khớp vai trò nào → Khác). */
+function autoAssignManpower(
+  personnel: PersonnelOption[],
+  ids: string[],
+  current: Pick<WorkItemInput, "cht" | "kySu" | "laiMay" | "thoVanHanh" | "congNhan" | "vnr">,
+): Partial<WorkItemInput> {
+  const keys = [...ROLE_FIELDS.map(([k]) => k), "vnr"] as const;
+  const wanted = new Set(ids);
+  const result: Record<string, DailyWorkPerson[]> = {};
+  const placed = new Set<string>();
+  // Giữ người đã nằm sẵn trong ô nào (kể cả do chọn tay), bỏ người vừa bị gỡ.
+  for (const key of keys) {
+    result[key] = (current[key] ?? []).filter((p) => p.id && wanted.has(p.id) && !placed.has(p.id));
+    for (const p of result[key]) placed.add(p.id);
+  }
+  for (const id of ids) {
+    if (placed.has(id)) continue;
+    const person = personnel.find((p) => p.id === id);
+    if (!person) continue;
+    const target = ROLE_FIELDS.find(([, , role]) => matchesRole(person.chucVu, role))?.[0] ?? "vnr";
+    result[target].push({ id, ten: person.name });
+    placed.add(id);
+  }
+  return {
+    cht: result.cht, chtTen: formatPeopleNames(result.cht),
+    kySu: result.kySu, kySuTen: formatPeopleNames(result.kySu),
+    laiMay: result.laiMay, laiMayTen: formatPeopleNames(result.laiMay),
+    thoVanHanh: result.thoVanHanh, thoVanHanhTen: formatPeopleNames(result.thoVanHanh),
+    congNhan: result.congNhan, congNhanTen: formatPeopleNames(result.congNhan),
+    vnr: result.vnr, vnrTen: formatPeopleNames(result.vnr),
+  };
+}
+
 function allPersonnelOptions(personnel: PersonnelOption[]): MultiSelectOption[] {
   return personnel.map((p) => ({
     value: p.id,
@@ -650,6 +699,7 @@ function WorkFormModal({
               mayChay: current.mayChay,
             },
             filled,
+            personnel,
           ),
         );
         setFillNote(
@@ -668,35 +718,45 @@ function WorkFormModal({
     return () => {
       cancelled = true;
     };
-  }, [open, phan, form.hangMuc, reportDate, workTypes, projectId]);
+  }, [open, phan, form.hangMuc, reportDate, workTypes, projectId, personnel]);
 
-  // Chỉ lấy lần báo cáo trước của cùng dự án và hạng mục.
+  // Nhân lực tự điền theo Ngày + Dự án: ưu tiên báo cáo gần nhất trước ngày này (cùng dự án, hạng mục);
+  // chưa có thì lấy nhân sự đã gán cho dự án, mỗi người tự xếp đúng vai trò theo chức vụ.
   useEffect(() => {
-    if (!open || phan !== "hom_nay" || !form.hangMuc.trim()) return;
+    if (!open || phan !== "hom_nay" || !projectId) return;
     let cancelled = false;
-    void loadLastWorkDefaults(form.hangMuc, reportDate || todayIsoLocal(), projectId).then((last) => {
-      if (cancelled || !last) return;
-      setForm((f) => ({
-        ...f,
-        mayChay: f.mayChay.length ? f.mayChay : last.mayChay,
-        cht: f.cht.length ? f.cht : last.cht,
-        kySu: f.kySu.length ? f.kySu : last.kySu,
-        laiMay: f.laiMay.length ? f.laiMay : last.laiMay,
-        thoVanHanh: f.thoVanHanh.length ? f.thoVanHanh : last.thoVanHanh,
-        congNhan: f.congNhan.length ? f.congNhan : last.congNhan,
-        vnr: f.vnr.length ? f.vnr : last.vnr,
-        chtTen: f.cht.length ? f.chtTen : last.chtTen,
-        kySuTen: f.kySu.length ? f.kySuTen : last.kySuTen,
-        laiMayTen: f.laiMay.length ? f.laiMayTen : last.laiMayTen,
-        thoVanHanhTen: f.thoVanHanh.length ? f.thoVanHanhTen : last.thoVanHanhTen,
-        congNhanTen: f.congNhan.length ? f.congNhanTen : last.congNhanTen,
-        vnrTen: f.vnr.length ? f.vnrTen : last.vnrTen,
-      }));
-    });
+    const hasPeople = (list: DailyWorkPerson[]) => list.some((p) => p.id);
+    void (async () => {
+      // Ngày này đã có thợ hàn trong Nhật ký hàn → nhân lực lấy theo nhật ký, không dùng nguồn dự phòng.
+      if ((await welderIdsOnDate(reportDate || todayIsoLocal(), projectId)).length > 0) return;
+      if (cancelled) return;
+      const last = form.hangMuc.trim() ? await loadLastWorkDefaults(form.hangMuc, reportDate || todayIsoLocal(), projectId) : null;
+      if (cancelled) return;
+      const lastPeople = last ? [last.cht, last.kySu, last.laiMay, last.thoVanHanh, last.congNhan, last.vnr].flat().filter((p) => p.id) : [];
+      if (last) {
+        setForm((f) => ({
+          ...f,
+          mayChay: f.mayChay.length ? f.mayChay : last.mayChay,
+        }));
+      }
+      const empty = (f: WorkItemInput) => ![f.cht, f.kySu, f.laiMay, f.thoVanHanh, f.congNhan, f.vnr].some(hasPeople);
+      if (lastPeople.length > 0) {
+        setForm((f) => (empty(f) ? { ...f, ...autoAssignManpower(personnel, lastPeople.map((p) => p.id), f) } : f));
+        return;
+      }
+      if (personnel.length === 0) return;
+      try {
+        const { projects: all } = await loadProjects({ includeProgress: false });
+        if (cancelled) return;
+        const ids = all.find((p) => p.id === projectId)?.personnelIds ?? [];
+        if (ids.length === 0) return;
+        setForm((f) => (empty(f) ? { ...f, ...autoAssignManpower(personnel, ids, f) } : f));
+      } catch { /* không lấy được nhân sự dự án thì để trống, chọn tay */ }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [open, phan, form.hangMuc, reportDate, projectId]);
+  }, [open, phan, form.hangMuc, reportDate, projectId, personnel]);
 
   if (!open) return null;
 
@@ -736,7 +796,7 @@ function WorkFormModal({
     try {
       if (reportDate !== date) onReportDateChange(date);
       const filled = await loadDailyWorkFillFromJournal(date, weldMethod, projectId || undefined, matchWorkType(workTypes, form.hangMuc));
-      setForm((f) => applyJournalFill(f, filled));
+      setForm((f) => applyJournalFill(f, filled, personnel));
       setFillNote(
         filled.entryCount > 0
           ? `Đã điền ${filled.homNay || 0} mối · ${filled.entryCount} bản ghi Nhật ký hàn (${weldMethod}) ngày ${displayDate(date)}.`
@@ -1067,6 +1127,17 @@ function WorkFormModal({
                     ))}
                   </div>
                 )}
+              </div>
+              <div>
+                <span className={labelCls}>Chọn nhân sự (tự xếp đúng vai trò theo chức vụ)</span>
+                <MultiSelectMenu
+                  values={[...form.cht, ...form.kySu, ...form.laiMay, ...form.thoVanHanh, ...form.congNhan, ...form.vnr].map((p) => p.id).filter(Boolean)}
+                  onChange={(ids) => patch(autoAssignManpower(personnel, ids, form))}
+                  options={allPersonnelOptions(personnel)}
+                  allLabel={personnel.length ? "Gõ tên để chọn nhân sự (nhiều người)..." : "Chưa có nhân sự"}
+                  searchPlaceholder="Tìm theo tên / mã / vị trí..."
+                  buttonClassName="h-9"
+                />
               </div>
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                 {([
