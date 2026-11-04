@@ -23,6 +23,9 @@ const css = `@media print {
   #weld-doc-print table { page-break-inside: auto; } #weld-doc-print tr { page-break-inside: avoid; }
   #weld-doc-print thead { display: table-header-group; }
   @page { size: A4; margin: 15mm 15mm 15mm 20mm; }
+  /* Phiếu YCNT 1 trang: lề trang = 0 để trình duyệt không in ngày giờ / tiêu đề đầu-cuối trang; lề thật đặt bằng padding. */
+  @page rfi { size: A4; margin: 0; }
+  #weld-doc-print.weld-rfi { page: rfi; padding: 15mm 15mm 15mm 20mm !important; max-width: none !important; }
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
@@ -129,7 +132,7 @@ function Signer({ title, org, who }: { title: string; org: string; who?: { ten: 
       <p className="italic">({org})</p>
       <div className="flex h-16 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {who && <img src={who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" />}
+        {who && <img src={who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
       </div>
       <p className="italic">Tên: {who?.ten ?? DOTS} <b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
     </div>
@@ -156,9 +159,15 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
   const gio = (t.gio_bat_dau || "").trim();
   const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
   const ngay = `${d ?? "……"} tháng ${m ?? "……"} năm ${y ?? "……"}`;
+  // Ngày nghiệm thu (mục 2) = ngày phát phiếu + 1.
+  const ngayNghiemThu = (() => {
+    const next = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d) + 1));
+    if (!y || !m || !d || Number.isNaN(next.getTime())) return ngay;
+    return `${String(next.getUTCDate()).padStart(2, "0")} tháng ${String(next.getUTCMonth() + 1).padStart(2, "0")} năm ${next.getUTCFullYear()}`;
+  })();
   const heading = "mt-3 font-bold";
   return (
-    <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[14px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
+    <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[14px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/chu-ky/gach-trang-tri.jpg" alt="" className="mx-auto h-2 w-36 mix-blend-multiply" />
@@ -174,7 +183,7 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
       <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
-      <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngay}</p>
+      <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
       <p className="pl-3">{hh || "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)} - {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
