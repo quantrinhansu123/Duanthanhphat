@@ -62,6 +62,23 @@ import { useLanguage } from "@/i18n/LanguageProvider";
 
 const LINE_TICK = "✓";
 
+/** Tuyến đã chọn và ray nào: giá trị lưu dạng "trái/phải" (1 = có) hoặc ✓ cũ. */
+type RailSide = "left" | "right";
+function railChecked(value: string | undefined, side: RailSide): boolean {
+  const raw = (value ?? "").trim();
+  if (!raw) return false;
+  const m = /^([01])\/([01])$/.exec(raw);
+  if (m) return (side === "left" ? m[1] : m[2]) === "1";
+  return true; // dấu ✓ cũ: tính cả hai ray
+}
+/** Bật/tắt một ray; bỏ tick cả hai thì trả chuỗi rỗng (tuyến không chọn). */
+function toggleRail(value: string | undefined, side: RailSide): string {
+  const left = side === "left" ? !railChecked(value, "left") : railChecked(value, "left");
+  const right = side === "right" ? !railChecked(value, "right") : railChecked(value, "right");
+  if (!left && !right) return "";
+  return `${left ? "1" : "0"}/${right ? "1" : "0"}`;
+}
+
 function isRailWeldingMachineType(loaiMay: string) {
   return loaiMay.trim().toLocaleLowerCase("vi").includes("hàn ray");
 }
@@ -538,7 +555,14 @@ function PersonnelMultiSelect({
         values={selectedIds}
         onChange={(ids) => onChange(peopleFromIds(personnel, ids))}
         options={options}
-        allLabel={options.length ? `Chọn ${label} (nhiều người)...` : ROLE_EMPTY_LABEL[role]}
+        allLabel={
+          selectedIds.length
+            ? `${selectedIds.length} người`
+            : options.length
+              ? `Chọn ${label}...`
+              : ROLE_EMPTY_LABEL[role]
+        }
+        countLabel="người"
         searchPlaceholder="Tìm theo tên / mã / vị trí..."
         buttonClassName="h-9"
       />
@@ -568,7 +592,14 @@ function PerformerMultiSelect({
         values={selectedIds}
         onChange={(ids) => onChange(peopleFromIds(personnel, ids))}
         options={options}
-        allLabel={options.length ? (label === "Người thực hiện" ? "Chọn người thực hiện (nhiều người)..." : `Chọn ${label} (nhiều người)...`) : "Chưa có nhân sự"}
+        allLabel={
+          selectedIds.length
+            ? `${selectedIds.length} người`
+            : options.length
+              ? `Chọn ${label}...`
+              : "Chưa có nhân sự"
+        }
+        countLabel="người"
         searchPlaceholder="Tìm theo tên / mã / vị trí..."
         buttonClassName="h-9"
       />
@@ -951,18 +982,38 @@ function WorkFormModal({
                 />
               </label>
               <div>
-                <span className={labelCls}>Tuyến</span>
-                <div className="flex flex-wrap gap-2">
-                  <LineCheckbox
-                    label="Tuyến hạ"
-                    checked={Boolean(form.tuyenHa)}
-                    onChange={(checked) => patch({ tuyenHa: checked ? LINE_TICK : "" })}
-                  />
-                  <LineCheckbox
-                    label="Tuyến thượng"
-                    checked={Boolean(form.tuyenThuong)}
-                    onChange={(checked) => patch({ tuyenThuong: checked ? LINE_TICK : "" })}
-                  />
+                <span className={labelCls}>Tuyến · ray</span>
+                <div className="space-y-1.5">
+                  {([
+                    ["Tuyến hạ", "tuyenHa"],
+                    ["Tuyến thượng", "tuyenThuong"],
+                  ] as const).map(([label, key]) => (
+                    <div key={key} className="flex flex-wrap items-center gap-2">
+                      <LineCheckbox
+                        label={label}
+                        checked={Boolean(form[key])}
+                        onChange={(checked) => patch({ [key]: checked ? "1/1" : "" })}
+                      />
+                      <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={railChecked(form[key], "left")}
+                          onChange={() => patch({ [key]: toggleRail(form[key], "left") })}
+                          className="h-3.5 w-3.5 accent-[#0047AB]"
+                        />
+                        Trái
+                      </label>
+                      <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={railChecked(form[key], "right")}
+                          onChange={() => patch({ [key]: toggleRail(form[key], "right") })}
+                          className="h-3.5 w-3.5 accent-[#0047AB]"
+                        />
+                        Phải
+                      </label>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1031,18 +1082,38 @@ function WorkFormModal({
                 <Field label="Tên mối hàn" value={form.tenMoiHan} onChange={(v) => patch({ tenMoiHan: v })} />
               </div>
               <div>
-                <span className={labelCls}>Tuyến</span>
-                <div className="flex flex-wrap gap-2">
-                  <LineCheckbox
-                    label="Tuyến hạ"
-                    checked={Boolean(form.tuyenHa)}
-                    onChange={(checked) => patch({ tuyenHa: checked ? LINE_TICK : "" })}
-                  />
-                  <LineCheckbox
-                    label="Tuyến thượng"
-                    checked={Boolean(form.tuyenThuong)}
-                    onChange={(checked) => patch({ tuyenThuong: checked ? LINE_TICK : "" })}
-                  />
+                <span className={labelCls}>Tuyến · ray</span>
+                <div className="space-y-1.5">
+                  {([
+                    ["Tuyến hạ", "tuyenHa"],
+                    ["Tuyến thượng", "tuyenThuong"],
+                  ] as const).map(([label, key]) => (
+                    <div key={key} className="flex flex-wrap items-center gap-2">
+                      <LineCheckbox
+                        label={label}
+                        checked={Boolean(form[key])}
+                        onChange={(checked) => patch({ [key]: checked ? "1/1" : "" })}
+                      />
+                      <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={railChecked(form[key], "left")}
+                          onChange={() => patch({ [key]: toggleRail(form[key], "left") })}
+                          className="h-3.5 w-3.5 accent-[#0047AB]"
+                        />
+                        Trái
+                      </label>
+                      <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={railChecked(form[key], "right")}
+                          onChange={() => patch({ [key]: toggleRail(form[key], "right") })}
+                          className="h-3.5 w-3.5 accent-[#0047AB]"
+                        />
+                        Phải
+                      </label>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
@@ -1142,7 +1213,8 @@ function WorkFormModal({
                   buttonClassName="h-9"
                 />
               </div>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+              {/* 6 vai trò trên cùng một hàng khi đủ chỗ; hẹp thì tự xuống 3/2 cột */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
                 {([
                   ["CHT", "cht", "chtTen", "cht"],
                   ["Kỹ sư", "kySu", "kySuTen", "ky_su"],

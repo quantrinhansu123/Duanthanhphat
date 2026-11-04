@@ -19,6 +19,8 @@ type Props = {
   disabled?: boolean;
   /** Chọn một mục xong là đóng danh sách ngay (mặc định: giữ mở để chọn tiếp). */
   closeOnSelect?: boolean;
+  /** Luôn hiển thị số lượng đã chọn thay vì tên (vd "2 người") — dùng cho ô nhân sự. */
+  countLabel?: string;
 };
 
 /** Chọn nhiều giá trị + gõ để lọc. Menu render qua portal nên không bị modal cắt. */
@@ -32,6 +34,7 @@ export default function MultiSelectMenu({
   buttonClassName = "",
   disabled = false,
   closeOnSelect = false,
+  countLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -105,9 +108,11 @@ export default function MultiSelectMenu({
         <span className="min-w-0 flex-1 truncate">
           {values.length === 0
             ? allLabel
-            : values.length === 1
-              ? selectedOptions[0]?.label ?? `${values.length} mục`
-              : `Đã chọn ${values.length} mục`}
+            : countLabel
+              ? `${values.length} ${countLabel}`
+              : values.length === 1
+                ? selectedOptions[0]?.label ?? `${values.length} mục`
+                : `Đã chọn ${values.length} mục`}
         </span>
         <CaretDown
           size={13}
