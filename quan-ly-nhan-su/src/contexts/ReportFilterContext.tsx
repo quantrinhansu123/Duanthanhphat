@@ -63,6 +63,11 @@ const EMPTY_DRAFT: DraftFilters = {
   weldTypes: [],
 };
 
+const DEFAULT_DRAFT: DraftFilters = {
+  ...EMPTY_DRAFT,
+  projects: ["Tuyến tàu điện đô thị đoạn 1 – đặc khu Phú Quốc, tỉnh An Giang"],
+};
+
 function yearStart(year: string | number) {
   return `${year}-01-01`;
 }
@@ -124,8 +129,8 @@ function sameFilters(a: AppliedReportFilters, b: AppliedReportFilters) {
 const ReportFilterContext = createContext<ReportFilterContextValue | null>(null);
 
 export function ReportFilterProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<DraftFilters>(EMPTY_DRAFT);
-  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(EMPTY_DRAFT));
+  const [draft, setDraft] = useState<DraftFilters>(DEFAULT_DRAFT);
+  const [appliedFilters, setAppliedFilters] = useState<AppliedReportFilters>(() => toApplied(DEFAULT_DRAFT));
   const [appliedPeriodMode, setAppliedPeriodMode] = useState<ReportPeriodMode>("day");
 
   const setPeriodMode = useCallback((mode: ReportPeriodMode) => {
