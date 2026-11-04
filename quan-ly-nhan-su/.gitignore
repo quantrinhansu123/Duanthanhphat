@@ -43,3 +43,6 @@ next-env.d.ts
 
 .pnpm-lock.yaml
 .pnpm-workspace.yaml
+
+# chu ky nha thau (khong dua len GitHub)
+/public/chu-ky/

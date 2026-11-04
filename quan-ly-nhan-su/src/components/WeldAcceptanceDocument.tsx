@@ -114,10 +114,27 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
 }
 
 const PQ = {
-  goiThau: "Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray", diaDiem: "Đặc khu Phú Quốc, Tỉnh An Giang", noiLap: "Phú Quốc",
+  duAn: "Tuyến tàu điện đô thị đoạn 1", goiThau: "Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray", diaDiem: "Đặc khu Phú Quốc, Tỉnh An Giang", noiLap: "Phú Quốc",
   kinhGui: ["Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc;", "Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North)."],
+  chinh: { ten: "Nguyễn Tất Đạt", chucVu: "Chỉ huy trưởng", chuKy: "/chu-ky/chi-huy-truong.jpg" },
+  phu: { ten: "Nguyễn Văn Trinh", chucVu: "PBĐH", chuKy: "/chu-ky/nha-thau-phu.jpg" },
 };
 const DOTS = "……………";
+
+/** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
+function Signer({ title, org, who }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string } }) {
+  return (
+    <div className="text-center">
+      <p className="font-bold">{title}</p>
+      <p className="italic">({org})</p>
+      <div className="flex h-16 items-center justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {who && <img src={who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" />}
+      </div>
+      <p className="italic">Tên: {who?.ten ?? DOTS} <b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
+    </div>
+  );
+}
 
 function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
@@ -134,48 +151,52 @@ function RfiForm({ rfi, welds, projectName }: { rfi: RfiSummary; welds: RfiWeld[
   const upper = hasRouteOverride ? flagOn(t.tuyen_thuong) : autoUpper;
   const lower = hasRouteOverride ? flagOn(t.tuyen_ha) : autoLower;
   const missingRoutes = welds.filter((_, i) => !routes[i]);
+  const tuyen = upper && lower ? "tuyến thượng và tuyến hạ" : upper ? "tuyến thượng" : lower ? "tuyến hạ" : `tuyến ${DOTS}`;
   const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
   const gio = (t.gio_bat_dau || "").trim();
   const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
+  const ngay = `${d ?? "……"} tháng ${m ?? "……"} năm ${y ?? "……"}`;
+  const heading = "mt-3 font-bold";
   return (
-    <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[13px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
-      <div className="text-center font-bold">CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
-      <p className="mt-2 text-right italic">{pq?.noiLap ?? DOTS}, ngày {d ?? DOTS} tháng {m ?? DOTS} năm {y ?? DOTS}</p>
-      <h2 className="mt-3 text-center text-lg font-bold">{monitoring ? "PHIẾU YÊU CẦU THEO DÕI CÔNG VIỆC HÀN (RFI)" : "PHIẾU YÊU CẦU NGHIỆM THU"}</h2>
-      <p className="text-center">Số: {rfi.so_phieu}/{monitoring ? "RFI" : "YCNT"}</p>
-      <dl className="mt-3 grid grid-cols-[6rem_1fr]">
-        <dt>Dự án</dt><dd>: {projectName || DOTS}</dd>
-        <dt>Gói thầu</dt><dd>: {pq?.goiThau ?? DOTS}</dd>
-        <dt>Hạng mục</dt><dd>: Thi công hàn ray</dd>
-        <dt>Địa điểm</dt><dd>: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
+    <article id="weld-doc-print" className="mx-auto max-w-3xl bg-white p-10 text-[14px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
+      <div className="text-center font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/chu-ky/gach-trang-tri.jpg" alt="" className="mx-auto h-2 w-36 mix-blend-multiply" />
+      <p className="mt-3 text-right italic">{pq?.noiLap ?? DOTS}, ngày {ngay}</p>
+      <h2 className="mt-3 text-center text-base font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
+      <p className="text-center">Số: {rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR</p>
+      <dl className="mt-3 grid grid-cols-[5rem_1fr] font-bold">
+        <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
+        <dt>Hạng mục</dt><dd className="font-normal">: {pq?.goiThau ?? DOTS}</dd>
+        <dt>Địa điểm</dt><dd className="font-normal">: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
       </dl>
-      <div className="mt-2 flex gap-2"><b>Kính gửi:</b><div>{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
-      <p className="mt-3 font-bold">1. {monitoring ? "Công việc đề nghị theo dõi" : "Đối tượng nghiệm thu"}:</p>
-      <p className="pl-4">- {monitoring ? "Theo dõi công việc thi công hàn ray" : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến"}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
-      <p className="mt-2 font-bold">2. {monitoring ? "Phạm vi theo dõi" : "Vị trí nghiệm thu"}:</p>
-      <p className="pl-4">- Tuyến: {upper ? "☑" : "☐"} Tuyến thượng &nbsp; {lower ? "☑" : "☐"} Tuyến hạ</p>
-      {missingRoutes.length > 0 && !hasRouteOverride && <p className="pl-4">- Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
-      <p className="pl-4">- Lý trình: Từ {chainage(monitoring ? t.kmFrom : km[0]?.v)} đến {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
-      <p className="pl-4">- Tên mối hàn: {monitoring ? [t.nameFrom, t.nameTo].filter(Boolean).join(" – ") || DOTS : welds.map((w) => w.ma_lich_su).join(", ") || DOTS}</p>
-      <p className="mt-2 font-bold">3. Thời gian {monitoring ? "theo dõi" : "nghiệm thu"}:</p>
-      <p className="pl-4">Bắt đầu: {hh || "…. "}h{mm || "…"} ngày {d || "……"} tháng {m || "……"} năm {y || "……"}</p>
-      {monitoring ? <>
-        <p className="mt-2 font-bold">4. Nội dung đề nghị:</p>
-        <p>Đề nghị Tư vấn giám sát đến công trường theo dõi công việc hàn trong phạm vi nêu trên vào ngày {d}/{m}/{y}.</p>
-        <p>Phiếu theo dõi công việc hàn; kết quả kiểm tra và nghiệm thu được ghi nhận theo hồ sơ riêng.</p>
-      </> : <>
-      <p className="mt-2 font-bold">4. Đánh giá công việc:</p>
-      <p>- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác.</p>
-      <p>- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra, nghiệm thu.</p>
-      <p>- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu để Nhà thầu triển khai các công việc tiếp theo.</p>
-      </>}
-      <div className="mt-4 grid grid-cols-2 gap-4 text-center">
-        <div><b>NHÀ THẦU CHÍNH</b><div className="mt-12">Tên: {pq ? "Nguyễn Tất Đạt" : DOTS}<br />Chức vụ: Chỉ huy trưởng</div></div>
-        <div><b>NHÀ THẦU PHỤ</b><div className="mt-12">Tên: {pq ? "Trần Công Tiến" : DOTS}<br />Chức vụ: Chỉ huy trưởng</div></div>
+      <div className="mt-2 flex gap-2 pl-12"><b className="italic">Kính gửi:</b><div className="font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
+      <p className={heading}>1. Đối tượng nghiệm thu:</p>
+      <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
+      {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
+      <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngay}</p>
+      <p className="pl-3">{hh || "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)} - {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
+      <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
+        <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
+        <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
+        <p className="mt-2 text-justify">- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu các công việc đề nghị nêu trên để nhà thầu triển khai các công việc tiếp theo.</p>
+      <div className="mt-6 grid grid-cols-2 gap-4">
+        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} />
+        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} />
       </div>
-      <div className="mt-6"><b>TƯ VẤN GIÁM SÁT</b>
-        <p>Người nhận: {pq ? "Trần Văn Thanh" : DOTS} &nbsp; Chức vụ: Tư vấn giám sát trưởng</p>
-        <p>Ngày nhận: ……/……../{y ?? "2026"} &nbsp; Chữ ký: ……………………………</p></div>
+      <table className="mt-3 w-full border-collapse border border-black">
+        <tbody>
+          <tr>
+            <td rowSpan={2} className="w-1/4 border border-black text-center font-bold">TƯ VẤN<br />GIÁM SÁT</td>
+            <td className="border border-black px-1 align-top">Người nhận: {pq ? "Trần Văn Thanh" : DOTS}<br /><br /></td>
+            <td className="border border-black px-1 align-top">Chức vụ: Tư vấn giám sát trưởng</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-1 pt-6">Ngày nhận: {ngay}</td>
+            <td className="border border-black px-1 pt-6">Chữ ký:..........................................</td>
+          </tr>
+        </tbody>
+      </table>
     </article>
   );
 }
