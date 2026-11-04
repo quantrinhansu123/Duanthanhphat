@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { parseCoordinateCode } from "@/lib/weldCode";
-import { fileToSignatureDataUrl, loadRfiSignatures, saveRfiSignature, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
+import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
 
 export type DocKind = "rfi" | "hoan-thanh" | "phu-luc" | "giai-doan";
 
@@ -70,7 +70,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   async function changeSignature(key: SignatureKey, file: File | null) {
     setSigError(""); setBusy(true);
     try {
-      setSignatures(await saveRfiSignature(key, file ? await fileToSignatureDataUrl(file) : null));
+      setSignatures(await saveRfiSignature(key, file ? await uploadSignatureImage(file) : null));
     } catch (e) { setSigError(e instanceof Error ? e.message : "Không lưu được chữ ký."); } finally { setBusy(false); }
   }
 
@@ -114,7 +114,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       </div>
       {kind === "rfi" && sigOpen && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
-          <p className="text-xs text-slate-600">Chữ ký hiện trên phiếu của dự án Phú Quốc. Chọn ảnh PNG/JPG (nền trắng); ảnh được lưu trong hệ thống, không cần chép file vào máy chủ.</p>
+          <p className="text-xs text-slate-600">Chữ ký hiện trên phiếu của dự án Phú Quốc. Chọn ảnh PNG/JPG (nền trắng); ảnh được tải lên Cloudinary một lần và lưu lại để mọi máy dùng chung, không cần tải lại.</p>
           {(["chi-huy-truong", "nha-thau-phu", "gach-trang-tri"] as SignatureKey[]).map((key) => (
             <div key={key} className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
               <span className="w-44 font-semibold">{SIG_LABELS[key]}</span>
@@ -170,7 +170,7 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {who && <img src={signatures[who.key] ?? who.chuKy} alt={`Chữ ký ${who.ten}`} className="max-h-full max-w-full object-contain mix-blend-multiply" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
       </div>
-      <p className="italic">Tên: {who?.ten ?? DOTS} <b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
+      <p className="italic"><b>Tên:</b> {who?.ten ?? DOTS} &nbsp;<b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
     </div>
   );
 }
@@ -203,24 +203,30 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
   })();
   const heading = "mt-3 font-bold";
   return (
-    <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[14px] leading-6 text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
+    <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[11pt] leading-[1.55] text-black" style={{ fontFamily: "'Times New Roman', serif" }}>
       <div className="text-center font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br />Độc lập - Tự do - Hạnh phúc</div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={signatures["gach-trang-tri"] ?? "/chu-ky/gach-trang-tri.jpg"} alt="" className="mx-auto h-2 w-36 mix-blend-multiply" />
+      {signatures["gach-trang-tri"] ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={signatures["gach-trang-tri"]} alt="" className="mx-auto my-1 block h-auto max-h-8 w-auto max-w-[14rem] object-contain mix-blend-multiply" />
+      ) : (
+        <p className="text-center font-bold leading-none" style={{ fontFamily: "'Segoe UI Symbol', 'Noto Sans Symbols2', 'Times New Roman', serif" }} aria-hidden="true">
+          ----------- ☙★❧ -----------
+        </p>
+      )}
       <p className="mt-3 text-right italic">{pq?.noiLap ?? DOTS}, ngày {ngay}</p>
-      <h2 className="mt-3 text-center text-base font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
+      <h2 className="mt-3 text-center font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
       <p className="text-center">Số: {rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR</p>
-      <dl className="mt-3 grid grid-cols-[5rem_1fr] font-bold">
+      <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
         <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
         <dt>Hạng mục</dt><dd className="font-normal">: {pq?.goiThau ?? DOTS}</dd>
         <dt>Địa điểm</dt><dd className="font-normal">: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
       </dl>
-      <div className="mt-2 flex gap-2 pl-12"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
+      <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
       <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
-      <p className="pl-3">{hh || "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)} - {chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
+      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)}-{chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>

@@ -5,7 +5,6 @@ import { formatSupabaseError } from "@/lib/supabase/env";
 
 const FILE = "rfi-signatures.json";
 const KEYS = new Set(["chi-huy-truong", "nha-thau-phu", "gach-trang-tri"]);
-const MAX_DATA_URL = 300_000; // ~220KB ảnh; client đã thu nhỏ trước khi gửi
 
 type Store = Record<string, string>;
 
@@ -28,10 +27,10 @@ export async function PUT(request: Request) {
     const store = (await readPrivateJson<Store>(FILE)) ?? {};
     if (body?.dataUrl === null) delete store[key];
     else {
-      const dataUrl = typeof body?.dataUrl === "string" ? body.dataUrl : "";
-      if (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) return NextResponse.json({ error: "Chỉ nhận ảnh PNG hoặc JPEG." }, { status: 400 });
-      if (dataUrl.length > MAX_DATA_URL) return NextResponse.json({ error: "Ảnh quá lớn, hãy chọn ảnh nhỏ hơn." }, { status: 413 });
-      store[key] = dataUrl;
+      // Ảnh đã được tải lên Cloudinary từ trình duyệt; ở đây chỉ lưu đường dẫn để dùng lại.
+      const url = typeof body?.dataUrl === "string" ? body.dataUrl : "";
+      if (!/^https:\/\/res\.cloudinary\.com\/[^\s"<>]+$/.test(url) || url.length > 1000) return NextResponse.json({ error: "Đường dẫn ảnh không hợp lệ." }, { status: 400 });
+      store[key] = url;
     }
     await writePrivateJson(FILE, store);
     return NextResponse.json({ signatures: store });

@@ -58,12 +58,15 @@ const css = `@media screen { #diary-print { display: none; } }
   #diary-print .diary-frame { width: 100%; border-collapse: collapse; border: 0; }
   #diary-print .diary-frame > thead, #diary-print .diary-frame > tbody, #diary-print .diary-frame > tfoot { border: 0; }
   #diary-print .diary-frame td { padding: 0; border: 0; }
+  #diary-print .diary-frame-foot { padding: 0 15mm 0 20mm; }
   #diary-print .diary-frame-space { height: 15mm; }
   #diary-print .diary-frame-body { padding: 0 15mm 0 20mm; }
   #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-sub { text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
-  #diary-print .diary-page { text-align: right; margin-top: 18pt; font-size: 10pt; }
+  #diary-print .diary-page { text-align: right; margin: 0 15mm 0 20mm; padding-top: 4pt; font-size: 10pt; }
+  #diary-print .diary-frame > thead { display: table-header-group; }
+  #diary-print .diary-frame > tfoot { display: table-footer-group; }
   @page { size: A4 portrait; margin: 0; }
 }`;
 
@@ -267,9 +270,12 @@ export default function ConstructionDiaryForm() {
           <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div></div>
           <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div></div>
         </div>
-        <p className="diary-page">Trang ……</p>
         </td></tr></tbody>
-        <tfoot><tr><td><div className="diary-frame-space" /></td></tr></tfoot>
+        {/* tfoot lặp ở đáy MỌI trang: số trang + lề dưới */}
+        <tfoot><tr><td>
+          <p className="diary-page">Trang ……</p>
+          <div className="diary-frame-space" />
+        </td></tr></tfoot>
         </table>
       </article>
     </div>

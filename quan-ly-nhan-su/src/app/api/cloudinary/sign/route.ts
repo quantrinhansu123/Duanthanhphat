@@ -11,6 +11,7 @@ const ALLOWED_FOLDERS = new Set([
   "thanhphat/maintenance",
   "thanhphat/machine-operation-logs",
   "thanhphat/weld-journal/linked",
+  "thanhphat/signatures",
 ]);
 
 export async function POST(req: NextRequest) {
