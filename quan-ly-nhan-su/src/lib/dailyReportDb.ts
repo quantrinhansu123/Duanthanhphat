@@ -1192,13 +1192,16 @@ export async function ensureDailyReportProject(
 }
 
 export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBundle> {
-  const workTypesBundle = await loadWorkTypes();
+  // Tải danh mục loại công việc song song với truy vấn phiếu (trước đây chạy nối tiếp).
+  const workTypesPromise = loadWorkTypes();
+  let equipmentPrefetch: ReturnType<typeof loadProjectEquipment> | null = null;
   const withTypes = async (bundle: Omit<DailyReportBundle, "workTypes">): Promise<DailyReportBundle> => {
+    const workTypesBundle = await workTypesPromise;
     let equipment = bundle.equipment;
     let equipmentError = "";
     if (bundle.header?.duAnId) {
       try {
-        const assigned = await loadProjectEquipment(bundle.header.duAnId);
+        const assigned = await (equipmentPrefetch ?? loadProjectEquipment(bundle.header.duAnId));
         const linked: DailyEquipmentItem[] = assigned.map((m, i) => ({ id: `project:${m.id}`, baoCaoId: bundle.header!.id, thuTu: i,
           tenThietBi: `${m.name}${m.model ? ` (${m.model})` : ""}`, soLuong: m.missing ? "" : String(m.quantity), boPhan: m.group === "welding" ? "1. Máy hàn" : m.group === "materials" ? "3. Vật tư" : "2. Máy và thiết bị khác", nguoiSuDung: "", ghiChu: m.missing ? "Cần gán lại đúng mã thiết bị trong dự án" : `Gán từ dự án · ${m.code}` }));
         equipment = [...linked, ...equipment.filter((e) => !e.id.startsWith("project:") && !linked.some((r) => r.tenThietBi === e.tenThietBi))];
@@ -1261,6 +1264,10 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
     }
 
     const header = mapHeader(headerRow);
+    if (header.duAnId) {
+      equipmentPrefetch = loadProjectEquipment(header.duAnId);
+      equipmentPrefetch.catch(() => undefined);
+    }
     const [workRes, eqRes, incRes] = await Promise.all([
       supabase
         .from("bao_cao_ngay_cong_viec")
@@ -1330,16 +1337,18 @@ export async function loadDailyReportList(): Promise<{ rows: DailyReportSummary[
       .from("bao_cao_ngay")
       .select("id,ngay_bao_cao,ngay_tiep_theo,du_an_id,nguoi_lap,ghi_chu,trang_thai,created_at")
       .order("ngay_bao_cao", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(400);
     if (headerRes.error) throw headerRes.error;
     const headers = (headerRes.data ?? []) as (HeaderRowDb & { created_at?: string })[];
     if (headers.length === 0) return { rows: [] };
 
     const ids = headers.map((row) => row.id);
+    // Một lượt truy vấn cho mỗi bảng, ids gọn (≤400) nên không vượt giới hạn độ dài URL.
     const [workRes, eqRes, incRes] = await Promise.all([
-      supabase.from("bao_cao_ngay_cong_viec").select("bao_cao_id,phan").in("bao_cao_id", ids),
-      supabase.from("bao_cao_ngay_thiet_bi").select("bao_cao_id").in("bao_cao_id", ids),
-      supabase.from("bao_cao_ngay_su_co").select("bao_cao_id").in("bao_cao_id", ids),
+      supabase.from("bao_cao_ngay_cong_viec").select("bao_cao_id,phan").in("bao_cao_id", ids).limit(20000),
+      supabase.from("bao_cao_ngay_thiet_bi").select("bao_cao_id").in("bao_cao_id", ids).limit(20000),
+      supabase.from("bao_cao_ngay_su_co").select("bao_cao_id").in("bao_cao_id", ids).limit(20000),
     ]);
     if (workRes.error) throw workRes.error;
     if (eqRes.error) throw eqRes.error;
@@ -1382,6 +1391,8 @@ export async function insertWorkItem(
   input: WorkItemInput,
   ngayTiepTheo?: string | null,
   duAnId?: string | null,
+  /** Số mục hiện có trong phần này — truyền vào để bỏ 1 lượt truy vấn đếm khi lưu. */
+  existingCount?: number,
 ): Promise<DailyWorkItem> {
   if (!isSupabaseConfigured()) {
     const header = ensureHeaderLocal(ngayBaoCao, ngayTiepTheo, duAnId);
@@ -1408,19 +1419,23 @@ export async function insertWorkItem(
 
   const header = await ensureHeaderSupabase(ngayBaoCao, ngayTiepTheo, duAnId);
   const supabase = createClient();
-  const countRes = await supabase
-    .from("bao_cao_ngay_cong_viec")
-    .select("id", { count: "exact", head: true })
-    .eq("bao_cao_id", header.id)
-    .eq("phan", phan);
-  if (countRes.error) throw countRes.error;
+  let existing = existingCount;
+  if (existing === undefined) {
+    const countRes = await supabase
+      .from("bao_cao_ngay_cong_viec")
+      .select("id", { count: "exact", head: true })
+      .eq("bao_cao_id", header.id)
+      .eq("phan", phan);
+    if (countRes.error) throw countRes.error;
+    existing = countRes.count ?? 0;
+  }
 
   const machines = input.mayChay;
   const firstMachine = machines[0];
   const payload: Record<string, unknown> = {
     bao_cao_id: header.id,
     phan,
-    thu_tu: (countRes.count ?? 0) + 1,
+    thu_tu: existing + 1,
     cong_viec_id: input.congViecId || null,
     hang_muc: input.hangMuc,
     ten_moi_han: input.tenMoiHan.trim() || null,

@@ -404,9 +404,8 @@ function optionsForRole(
   const matched = personnel.filter((p) => matchesRole(p.chucVu, role));
   const matchedIds = new Set(matched.map((p) => p.id));
   const extras = personnel.filter((p) => selectedSet.has(p.id) && !matchedIds.has(p.id));
-  // Ưu tiên đúng vị trí; vẫn hiện toàn bộ nhân sự để tick thêm khi cần.
-  const rest = personnel.filter((p) => !matchedIds.has(p.id) && !selectedSet.has(p.id));
-  const rows = [...matched, ...extras, ...rest];
+  // Chỉ hiện người đúng vị trí trong Nhân sự (giữ thêm người đã chọn từ trước để không mất dữ liệu).
+  const rows = [...matched, ...extras];
   return rows.map((p) => ({
     value: p.id,
     label: p.name,
@@ -419,6 +418,20 @@ function peopleFromIds(personnel: PersonnelOption[], ids: string[]): DailyWorkPe
     const person = personnel.find((p) => p.id === id);
     return { id, ten: person?.name ?? "" };
   });
+}
+
+const MAIN_ROLES: ManpowerRole[] = ["cht", "ky_su", "lai_may", "tho_van_hanh", "cong_nhan"];
+
+/** «Khác»: nhân sự có vị trí VNR hoặc không thuộc 5 vai trò chính. */
+function otherRoleOptions(personnel: PersonnelOption[], selectedIds: string[]): MultiSelectOption[] {
+  const selectedSet = new Set(selectedIds);
+  return personnel
+    .filter((p) => selectedSet.has(p.id) || /(^|[^a-z0-9])vnr([^a-z0-9]|$)/.test(normalizeRoleText(p.chucVu)) || !MAIN_ROLES.some((role) => matchesRole(p.chucVu, role)))
+    .map((p) => ({
+      value: p.id,
+      label: p.name,
+      hint: [p.maNhanSu, p.chucVu].filter(Boolean).join(" · "),
+    }));
 }
 
 function allPersonnelOptions(personnel: PersonnelOption[]): MultiSelectOption[] {
@@ -481,51 +494,29 @@ function PersonnelMultiSelect({
   );
 }
 
-/** Nhân lực chỉ ghi số lượng: lưu thành 1 mục {id:"", ten:"3"} nên DB/in ấn giữ nguyên. */
-function ManpowerCount({
-  label,
-  values,
-  onChange,
-}: {
-  label: string;
-  values: DailyWorkPerson[];
-  onChange: (people: DailyWorkPerson[]) => void;
-}) {
-  const shown = values.length === 1 && !values[0].id ? values[0].ten : values.length ? String(values.length) : "";
-  return (
-    <label>
-      <span className={labelCls}>{label}</span>
-      <input
-        type="number"
-        min={0}
-        inputMode="numeric"
-        value={shown}
-        onChange={(e) => onChange(e.target.value.trim() ? [{ id: "", ten: e.target.value.trim() }] : [])}
-        className={inputCls}
-      />
-    </label>
-  );
-}
-
 function PerformerMultiSelect({
+  label = "Người thực hiện",
+  otherRole = false,
   personnel,
   values,
   onChange,
 }: {
+  label?: string;
+  otherRole?: boolean;
   personnel: PersonnelOption[];
   values: DailyWorkPerson[];
   onChange: (people: DailyWorkPerson[]) => void;
 }) {
   const selectedIds = useMemo(() => values.map((p) => p.id).filter(Boolean), [values]);
-  const options = useMemo(() => allPersonnelOptions(personnel), [personnel]);
+  const options = useMemo(() => (otherRole ? otherRoleOptions(personnel, selectedIds) : allPersonnelOptions(personnel)), [personnel, otherRole, selectedIds]);
   return (
     <div>
-      <span className={labelCls}>Người thực hiện</span>
+      <span className={labelCls}>{label}</span>
       <MultiSelectMenu
         values={selectedIds}
         onChange={(ids) => onChange(peopleFromIds(personnel, ids))}
         options={options}
-        allLabel={options.length ? "Chọn người thực hiện (nhiều người)..." : "Chưa có nhân sự"}
+        allLabel={options.length ? (label === "Người thực hiện" ? "Chọn người thực hiện (nhiều người)..." : `Chọn ${label} (nhiều người)...`) : "Chưa có nhân sự"}
         searchPlaceholder="Tìm theo tên / mã / vị trí..."
         buttonClassName="h-9"
       />
@@ -1077,25 +1068,33 @@ function WorkFormModal({
                   </div>
                 )}
               </div>
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-6">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                 {([
-                  ["CHT", "cht", "chtTen"],
-                  ["Kỹ sư", "kySu", "kySuTen"],
-                  ["Lái máy", "laiMay", "laiMayTen"],
-                  ["Thợ vận hành", "thoVanHanh", "thoVanHanhTen"],
-                  ["Công nhân", "congNhan", "congNhanTen"],
-                  ["Khác", "vnr", "vnrTen"],
-                ] as const).map(([label, key, tenKey]) => (
-                  <ManpowerCount
+                  ["CHT", "cht", "chtTen", "cht"],
+                  ["Kỹ sư", "kySu", "kySuTen", "ky_su"],
+                  ["Lái máy", "laiMay", "laiMayTen", "lai_may"],
+                  ["Thợ vận hành", "thoVanHanh", "thoVanHanhTen", "tho_van_hanh"],
+                  ["Công nhân", "congNhan", "congNhanTen", "cong_nhan"],
+                ] as const).map(([label, key, tenKey, role]) => (
+                  <PersonnelMultiSelect
                     key={key}
                     label={label}
+                    role={role}
+                    personnel={personnel}
                     values={form[key]}
                     onChange={(people) => patch({ [key]: people, [tenKey]: formatPeopleNames(people) })}
                   />
                 ))}
+                <PerformerMultiSelect
+                  label="Khác (VNR…)"
+                  otherRole
+                  personnel={personnel}
+                  values={form.vnr}
+                  onChange={(people) => patch({ vnr: people, vnrTen: formatPeopleNames(people) })}
+                />
               </div>
               <p className="text-[11px] text-slate-500">
-                Chỉ nhập số lượng người mỗi vai trò. Khác gồm VNR và nhân lực khác, không tính trùng vào Công nhân. Hệ thống nhớ và điền sẵn từ lần báo cáo trước.
+                Chọn tên từ danh sách nhân sự (gõ để tìm). Khác gồm VNR và nhân lực khác, không tính trùng vào Công nhân.
               </p>
               <Field label="Ghi chú" value={form.ghiChu} onChange={(v) => patch({ ghiChu: v })} />
             </>
@@ -1494,18 +1493,16 @@ export default function DailyWorkReport() {
         }),
       );
       if (cancelled) return;
+      const rows = fills.filter((row): row is NonNullable<typeof row> => Boolean(row));
+      const save = (row: (typeof rows)[number], index: number) =>
+        insertWorkItem(reportDate, "hom_nay", { ...applyJournalFill(emptyWorkInput(row.type), row.filled) }, undefined, undefined, index)
+          .catch(() => null); // bỏ qua loại không điền được
       const created: DailyWorkItem[] = [];
-      for (const row of fills) {
-        if (!row) continue;
-        try {
-          created.push(
-            await insertWorkItem(reportDate, "hom_nay", {
-              ...applyJournalFill(emptyWorkInput(row.type), row.filled),
-            }),
-          );
-        } catch {
-          /* bỏ qua loại không điền được */
-        }
+      if (rows.length > 0) {
+        // Mục đầu tạo phiếu (header); các mục còn lại lưu song song để khỏi chờ nối tiếp.
+        const first = await save(rows[0], 0);
+        const rest = await Promise.all(rows.slice(1).map((row, i) => save(row, i + 1)));
+        for (const item of [first, ...rest]) if (item) created.push(item);
       }
       if (!cancelled && created.length > 0) {
         setWorkToday(created);
@@ -2028,7 +2025,7 @@ export default function DailyWorkReport() {
           if (!modal || modal.kind !== "work") return;
           setSaving(true);
           try {
-            const item = await insertWorkItem(reportDate, phan, values, undefined, duAnId);
+            const item = await insertWorkItem(reportDate, phan, values, undefined, duAnId, (phan === "hom_nay" ? workToday : workNext).length);
             setHeader((current) =>
               current
                 ? { ...current, duAnId }
