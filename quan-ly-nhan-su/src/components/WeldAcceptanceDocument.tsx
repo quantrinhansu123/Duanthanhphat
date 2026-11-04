@@ -188,7 +188,7 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
       <div className="flex h-20 items-center justify-center overflow-hidden">
         {/* Kích thước cố định (không dùng % chiều cao) để ảnh luôn hiện khi in; không hiệu ứng blend. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {who && <img src={signatures[who.key] ?? who.chuKy} alt="" className="block h-20 w-auto max-w-full object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+        {who && signatures[who.key] && <img key={signatures[who.key]} src={signatures[who.key]} alt="" className="block h-20 w-auto max-w-full object-contain" />}
       </div>
       <p className="italic"><b>Tên:</b> {who?.ten ?? DOTS} &nbsp;<b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
     </div>
