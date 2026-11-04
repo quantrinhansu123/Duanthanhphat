@@ -27,9 +27,9 @@ export async function PUT(request: Request) {
     const store = (await readPrivateJson<Store>(FILE)) ?? {};
     if (body?.dataUrl === null) delete store[key];
     else {
-      // Ảnh đã được tải lên Cloudinary từ trình duyệt; ở đây chỉ lưu đường dẫn để dùng lại.
-      const url = typeof body?.dataUrl === "string" ? body.dataUrl : "";
-      if (!/^https:\/\/res\.cloudinary\.com\/[^\s"<>]+$/.test(url) || url.length > 1000) return NextResponse.json({ error: "Đường dẫn ảnh không hợp lệ." }, { status: 400 });
+      // Chỉ lưu đường dẫn ảnh (https) để dùng lại — dán link trực tiếp hoặc link Cloudinary sau khi tải lên.
+      const url = typeof body?.dataUrl === "string" ? body.dataUrl.trim() : "";
+      if (!/^https:\/\/[^\s"'<>]+$/.test(url) || url.length > 1000) return NextResponse.json({ error: "Link ảnh không hợp lệ (phải bắt đầu bằng https://)." }, { status: 400 });
       store[key] = url;
     }
     await writePrivateJson(FILE, store);

@@ -59,12 +59,22 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const [signatures, setSignatures] = useState<SignatureStore>({});
   const [sigOpen, setSigOpen] = useState(false);
   const [sigError, setSigError] = useState("");
+  const [sigLoadError, setSigLoadError] = useState("");
+  const [sigLinks, setSigLinks] = useState<Partial<Record<SignatureKey, string>>>({});
+
+  async function changeSignatureLink(key: SignatureKey, url: string) {
+    setSigError(""); setBusy(true);
+    try {
+      setSignatures(await saveRfiSignature(key, url));
+      setSigLinks((cur) => ({ ...cur, [key]: "" }));
+    } catch (e) { setSigError(e instanceof Error ? e.message : "Không lưu được link."); } finally { setBusy(false); }
+  }
   const hoSo = record?.ho_so.find((h) => h.loai === LOAI[kind]);
   const revisions = (record?.sua_doi ?? []).filter((r) => r.ho_so_id === hoSo?.id);
   const latest = revisions[revisions.length - 1];
 
   useEffect(() => {
-    if (kind === "rfi") void loadRfiSignatures().then(setSignatures);
+    if (kind === "rfi") loadRfiSignatures().then((v) => { setSignatures(v); setSigLoadError(""); }).catch((e) => setSigLoadError(e instanceof Error ? e.message : "Không tải được chữ ký"));
   }, [kind]);
 
   async function changeSignature(key: SignatureKey, file: File | null) {
@@ -112,6 +122,9 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
         <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
+      {kind === "rfi" && sigLoadError && (
+        <p role="alert" className="weld-doc-actions mx-auto mb-3 max-w-3xl rounded-lg bg-red-50 p-2 text-sm text-red-700">Không tải được chữ ký đã lưu: {sigLoadError}</p>
+      )}
       {kind === "rfi" && sigOpen && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
           <p className="text-xs text-slate-600">Chữ ký hiện trên phiếu của dự án Phú Quốc. Chọn ảnh PNG/JPG (nền trắng); ảnh được tải lên Cloudinary một lần và lưu lại để mọi máy dùng chung, không cần tải lại.</p>
@@ -125,6 +138,12 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                 <input type="file" accept="image/png,image/jpeg" disabled={busy} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void changeSignature(key, f); }} />
               </label>
               {signatures[key] && <button type="button" disabled={busy} onClick={() => void changeSignature(key, null)} className="text-xs font-semibold text-rose-600 cursor-pointer">Xóa</button>}
+              <div className="flex w-full gap-2">
+                <input type="url" inputMode="url" placeholder="Hoặc dán link ảnh (https://…)" value={sigLinks[key] ?? ""} onChange={(e) => setSigLinks((cur) => ({ ...cur, [key]: e.target.value }))}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-slate-300 px-2 text-xs" />
+                <button type="button" disabled={busy || !(sigLinks[key] ?? "").trim()} onClick={() => void changeSignatureLink(key, (sigLinks[key] ?? "").trim())}
+                  className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu link</button>
+              </div>
             </div>
           ))}
           {sigError && <p role="alert" className="text-red-600">{sigError}</p>}
@@ -158,7 +177,7 @@ const PQ = {
   phu: { ten: "Nguyễn Văn Trinh", chucVu: "PBĐH", chuKy: "/chu-ky/nha-thau-phu.jpg", key: "nha-thau-phu" as SignatureKey },
 };
 const DOTS = "……………";
-const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Chỉ huy trưởng", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
+const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Nhà thầu chính", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
 
 /** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
 function Signer({ title, org, who, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; signatures: SignatureStore }) {

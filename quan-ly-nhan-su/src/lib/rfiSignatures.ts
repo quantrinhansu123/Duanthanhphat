@@ -3,11 +3,10 @@ export type SignatureKey = "chi-huy-truong" | "nha-thau-phu" | "gach-trang-tri";
 export type SignatureStore = Partial<Record<SignatureKey, string>>;
 
 export async function loadRfiSignatures(): Promise<SignatureStore> {
-  try {
-    const res = await fetch("/api/rfi-signatures", { cache: "no-store" });
-    if (!res.ok) return {};
-    return ((await res.json()) as { signatures?: SignatureStore }).signatures ?? {};
-  } catch { return {}; }
+  const res = await fetch("/api/rfi-signatures", { cache: "no-store" });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${body.error ?? "Không tải được chữ ký"} (HTTP ${res.status})`);
+  return (body as { signatures?: SignatureStore }).signatures ?? {};
 }
 
 export async function saveRfiSignature(key: SignatureKey, dataUrl: string | null): Promise<SignatureStore> {
