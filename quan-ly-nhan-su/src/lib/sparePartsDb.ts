@@ -18,6 +18,7 @@ type Row = {
   trang_thai: string | null;
   ghi_chu: string | null;
   vi_tri_ton_kho?: unknown;
+  anh_url?: string | null;
 };
 
 function fromRow(row: Row): SparePart {
@@ -36,6 +37,7 @@ function fromRow(row: Row): SparePart {
     note: row.ghi_chu ?? "",
     // undefined = DB chưa có cột (chưa chạy migration).
     locations: row.vi_tri_ton_kho === undefined ? undefined : parseStockSplits(row.vi_tri_ton_kho),
+    imageUrl: row.anh_url === undefined ? undefined : row.anh_url ?? "",
   };
 }
 
@@ -54,12 +56,14 @@ function toRow(part: SparePart) {
     ghi_chu: part.note,
     // Chỉ gửi cột khi có dữ liệu để DB chưa chạy migration vẫn lưu được phụ tùng thường.
     ...(part.locations !== undefined ? { vi_tri_ton_kho: part.locations } : {}),
+    ...(part.imageUrl !== undefined ? { anh_url: part.imageUrl } : {}),
   };
 }
 
 function formatError(error: { code?: string; message: string }) {
   if (error.code === "23505") return "Mã phụ tùng đã tồn tại.";
   if (/vi_tri_ton_kho/.test(error.message)) return "Chưa có cột vi_tri_ton_kho — chạy migration_20261104_phu_tung_vi_tri.sql.";
+  if (/anh_url/.test(error.message)) return "Chưa có cột anh_url — chạy migration_20261105_phu_tung_anh.sql.";
   if (error.code === "42P01" || /schema cache|does not exist/i.test(error.message)) {
     return "Chưa có bảng phu_tung_thay_the trong database — chạy migration_20261027_phu_tung_thay_the.sql.";
   }

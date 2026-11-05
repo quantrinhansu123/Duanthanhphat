@@ -82,13 +82,39 @@ export async function uploadCloudinaryAsset(
   return signedUpload(file, folder, resourceType);
 }
 
+const MAX_IMAGE_SIDE = 1920;
+
+/** Thu nhỏ ảnh (cạnh dài ≤ 1920px, JPEG 0.85) trước khi tải để upload nhanh hơn nhiều. Lỗi/không lợi thì dùng ảnh gốc. */
+async function shrinkImage(file: File): Promise<File> {
+  // ponytail: bỏ qua gif/svg (mất hoạt ảnh/vector); ảnh nhỏ sẵn thì giữ nguyên.
+  if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || file.size < 300 * 1024) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 export async function uploadToCloudinary(
   file: File,
   folder = "thanhphat",
 ): Promise<{ result?: CloudinaryUploadResult; error?: string }> {
   if (!file.type.startsWith("image/")) return { error: "Chỉ hỗ trợ tải file ảnh." };
   if (file.size > 15 * 1024 * 1024) return { error: "Dung lượng ảnh không vượt quá 15 MB." };
-  return signedUpload(file, folder, "image");
+  return signedUpload(await shrinkImage(file), folder, "image");
 }
 
 export async function deleteCloudinaryAsset(

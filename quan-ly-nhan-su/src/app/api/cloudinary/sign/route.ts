@@ -8,6 +8,7 @@ const ALLOWED_FOLDERS = new Set([
   "thanhphat/trainings",
   "thanhphat/machines",
   "thanhphat/vehicles",
+  "thanhphat/spare-parts",
   "thanhphat/maintenance",
   "thanhphat/machine-operation-logs",
   "thanhphat/weld-journal/linked",

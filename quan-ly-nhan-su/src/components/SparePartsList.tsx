@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check } from "@/components/icons";
+import Image from "next/image";
+import { createPortal } from "react-dom";
+import { Check, MagnifyingGlass, X } from "@/components/icons";
+import { uploadToCloudinary } from "@/lib/cloudinaryClient";
 import {
   deriveSparePartStatus,
   sparePartCategories,
@@ -71,6 +74,8 @@ export default function SparePartsList() {
   const [modelFilter, setModelFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [nameQuery, setNameQuery] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [form, setForm] = useState<SparePart>(emptyForm());
   const [error, setError] = useState("");
@@ -91,18 +96,20 @@ export default function SparePartsList() {
   }, [list]);
 
   const filtered = useMemo(() => {
+    const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
+    const q = fold(nameQuery.trim());
     return list.filter((row) => {
+      if (q && !fold(`${row.name} ${row.code}`).includes(q)) return false;
       if (manufacturerFilter && row.manufacturer !== manufacturerFilter) return false;
       if (modelFilter && !row.compatibleModels.includes(modelFilter)) return false;
       if (categoryFilter && row.category !== categoryFilter) return false;
       if (statusFilter && row.status !== statusFilter) return false;
       return true;
     });
-  }, [list, manufacturerFilter, modelFilter, categoryFilter, statusFilter]);
+  }, [list, manufacturerFilter, modelFilter, categoryFilter, statusFilter, nameQuery]);
   const paged = usePaged(filtered);
 
   const lowStockCount = filtered.filter((row) => row.status === "Sắp hết" || row.status === "Hết hàng").length;
-  const hasFilter = Boolean(manufacturerFilter || modelFilter || categoryFilter || statusFilter);
   const allFilteredSelected = filtered.length > 0 && filtered.every((row) => selectedIds.includes(row.id));
 
   function toggleSelectAll() {
@@ -272,7 +279,65 @@ export default function SparePartsList() {
             <h2 className="text-sm font-bold text-slate-900">Danh mục phụ tùng thay thế</h2>
             <p className="mt-0.5 text-xs text-slate-500">Theo nhà sản xuất và model máy hàn tương thích</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={manufacturerFilter}
+            onChange={(event) => setManufacturerFilter(event.target.value)}
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[150px] sm:flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            aria-label="Lọc theo nhà sản xuất"
+          >
+            <option value="">Tất cả nhà sản xuất</option>
+            {manufacturers.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <select
+            value={modelFilter}
+            onChange={(event) => setModelFilter(event.target.value)}
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[150px] sm:flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            aria-label="Lọc theo model máy"
+          >
+            <option value="">Tất cả model máy</option>
+            {models.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[150px] sm:flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            aria-label="Lọc theo nhóm"
+          >
+            <option value="">Tất cả nhóm</option>
+            {sparePartCategories.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[150px] sm:flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            aria-label="Lọc theo trạng thái"
+          >
+            <option value="">Tất cả trạng thái</option>
+            {statusOptions.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[150px] sm:flex-1">
+            <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={nameQuery}
+              onChange={(event) => setNameQuery(event.target.value)}
+              autoComplete="off"
+              placeholder="Tìm theo tên hoặc mã..."
+              aria-label="Tìm theo tên"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
+            />
+          </div>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
             {selectedIds.length > 0 && (
               <button
                 type="button"
@@ -290,66 +355,6 @@ export default function SparePartsList() {
               <span className="text-base leading-none">+</span> Thêm phụ tùng
             </button>
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-          <select
-            value={manufacturerFilter}
-            onChange={(event) => setManufacturerFilter(event.target.value)}
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo nhà sản xuất"
-          >
-            <option value="">Tất cả nhà sản xuất</option>
-            {manufacturers.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            value={modelFilter}
-            onChange={(event) => setModelFilter(event.target.value)}
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo model máy"
-          >
-            <option value="">Tất cả model máy</option>
-            {models.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo nhóm"
-          >
-            <option value="">Tất cả nhóm</option>
-            {sparePartCategories.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] sm:text-sm"
-            aria-label="Lọc theo trạng thái"
-          >
-            <option value="">Tất cả trạng thái</option>
-            {statusOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-          {hasFilter && (
-            <button
-              type="button"
-              onClick={() => {
-                setManufacturerFilter("");
-                setModelFilter("");
-                setCategoryFilter("");
-                setStatusFilter("");
-              }}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm"
-            >
-              Xóa bộ lọc
-            </button>
-          )}
         </div>
       </section>
 
@@ -391,8 +396,17 @@ export default function SparePartsList() {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-mono font-bold text-[#0047AB]">{row.code}</div>
-                    <div className="mt-0.5 font-medium text-slate-900">{row.name}</div>
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-12 w-12 flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                        {row.imageUrl ? (
+                          <Image src={row.imageUrl} alt={row.name} fill className="object-cover" sizes="48px" />
+                        ) : null}
+                      </div>
+                      <div>
+                        <div className="font-mono font-bold text-[#0047AB]">{row.code}</div>
+                        <div className="mt-0.5 font-medium text-slate-900">{row.name}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-3.5 py-3 text-slate-700">{row.manufacturer}</td>
                   <td className="px-3.5 py-3">
@@ -447,25 +461,25 @@ export default function SparePartsList() {
       </div>
       <Pager {...paged.pagerProps} />
 
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onClick={() => setModal(null)}>
+      {modal && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onClick={() => setModal(null)}>
           <div
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl"
+            className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-xl sm:rounded-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-[#0047AB]">Phụ tùng thay thế</div>
                 <h3 className="mt-0.5 text-base font-bold text-slate-900">
                   {modal.mode === "add" ? "Thêm phụ tùng" : modal.mode === "edit" ? "Sửa phụ tùng" : "Chi tiết phụ tùng"}
                 </h3>
               </div>
-              <button type="button" onClick={() => setModal(null)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">
-                Đóng
+              <button type="button" onClick={() => setModal(null)} aria-label="Đóng" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+                <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-3.5 p-4 sm:p-5">
+            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4 sm:p-5">
               {error && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{error}</div>
               )}
@@ -502,6 +516,50 @@ export default function SparePartsList() {
                   className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs outline-hidden focus:border-[#0047AB] disabled:bg-slate-100 sm:text-sm"
                 />
               </label>
+              <div className="text-xs font-semibold text-slate-700 sm:text-[13px]">
+                Ảnh phụ tùng
+                <div className="mt-1.5 flex items-center gap-3">
+                  <div className="relative h-20 w-28 flex-none overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                    {form.imageUrl ? (
+                      <Image src={form.imageUrl} alt="Ảnh phụ tùng" fill className="object-cover" sizes="112px" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-normal text-slate-400">Chưa có ảnh</div>
+                    )}
+                  </div>
+                  {!readOnly && (
+                    <div className="flex flex-col items-start gap-1.5">
+                      <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                        {uploadingImage ? "Đang tải ảnh..." : form.imageUrl ? "Đổi ảnh" : "Chọn ảnh"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingImage}
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (!file) return;
+                            setUploadingImage(true);
+                            setError("");
+                            const { result, error: uploadError } = await uploadToCloudinary(file, "thanhphat/spare-parts");
+                            setUploadingImage(false);
+                            if (uploadError || !result) {
+                              setError(uploadError || "Tải ảnh thất bại.");
+                              return;
+                            }
+                            setForm((current) => ({ ...current, imageUrl: result.secure_url }));
+                          }}
+                        />
+                      </label>
+                      {form.imageUrl ? (
+                        <button type="button" onClick={() => setForm((current) => ({ ...current, imageUrl: "" }))} className="text-xs font-semibold text-rose-600 hover:underline">
+                          Xóa ảnh
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </div>
               <label className="block text-xs font-semibold text-slate-700 sm:text-[13px]">
                 Nhà sản xuất
                 <input
@@ -615,7 +673,7 @@ export default function SparePartsList() {
             </div>
 
             {!readOnly && (
-              <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
+              <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
                 <button type="button" onClick={() => setModal(null)} className="h-10 rounded-lg border border-slate-300 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:text-sm">
                   Hủy
                 </button>
@@ -625,11 +683,12 @@ export default function SparePartsList() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {bulkDeleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={closeBulkDelete}>
+      {bulkDeleteOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" onClick={closeBulkDelete}>
           <div
             role="dialog"
             aria-modal="true"
@@ -671,7 +730,8 @@ export default function SparePartsList() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {toast && (

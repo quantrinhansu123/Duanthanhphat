@@ -17,6 +17,8 @@ export type SparePart = {
   note: string;
   /** Tồn kho chia theo vị trí (kho / dự án). Có dữ liệu thì stockQty = tổng. */
   locations?: StockSplit[];
+  /** URL ảnh phụ tùng. undefined = DB chưa có cột anh_url. */
+  imageUrl?: string;
 };
 
 export const sparePartCategories = [
