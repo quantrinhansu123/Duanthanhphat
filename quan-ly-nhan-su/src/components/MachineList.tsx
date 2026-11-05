@@ -20,6 +20,7 @@ import {
 import {
   Camera,
   CaretRight,
+  MagnifyingGlass,
   PencilSimple,
   Plus,
   Trash,
@@ -2131,10 +2132,17 @@ export default function MachineList() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const filtered = useMemo(
-    () => list.filter((m) => equipmentGroup(m) === equipmentTab && (status === "Tất cả trạng thái" || m.status === status)),
-    [list, status, equipmentTab],
-  );
+  const [nameQuery, setNameQuery] = useState("");
+  const inGroup = useMemo(() => list.filter((m) => equipmentGroup(m) === equipmentTab), [list, equipmentTab]);
+  const filtered = useMemo(() => {
+    const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase();
+    const q = fold(nameQuery.trim());
+    return inGroup.filter(
+      (m) =>
+        (status === "Tất cả trạng thái" || m.status === status) &&
+        (!q || fold(`${m.name} ${m.code ?? ""}`).includes(q)),
+    );
+  }, [inGroup, status, nameQuery]);
   const paged = usePaged(filtered);
 
   const total = list.reduce((sum, m) => sum + equipmentQuantity(m), 0);
@@ -2325,6 +2333,18 @@ export default function MachineList() {
             {label}
           </button>
         ))}
+        <div className="relative w-full sm:w-64">
+          <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            autoComplete="off"
+            placeholder="Tìm theo tên hoặc mã..."
+            aria-label="Tìm theo tên"
+            className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3.5 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          />
+        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}

@@ -587,3 +587,19 @@ select:not([multiple]):focus {
   .print-frame-space.bottom { height: var(--pf-bottom, 15mm); }
   .print-frame > tbody > tr > td.print-frame-body { padding: 0 var(--pf-right, 15mm) 0 var(--pf-left, 20mm) !important; }
 }
+
+/* Ô nhập liệu: viền focus mỏng (1px), không vòng sáng dày. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+.app-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+.app-workspace select:focus-visible,
+.app-workspace textarea:focus-visible {
+  outline: 1px solid #0047ab;
+  outline-offset: 0;
+  box-shadow: none;
+  border-color: #0047ab;
+}
