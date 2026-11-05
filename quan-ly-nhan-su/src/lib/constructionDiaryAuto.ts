@@ -26,7 +26,9 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const range = km.length ? `${format(km[0])} – ${format(km[km.length - 1])}` : "Km… – Km…";
     const missing = km.length < group.length ? " (cần bổ sung lý trình)" : "";
     const quantity = group.reduce((sum, r) => sum + r.so_luong_thuc_hien, 0);
-    const codes = ` Mối số: ${group.map((r) => r.ma_hien_truong?.trim() || r.ma_lich_su).sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ")}.`;
+    // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
+    const fieldCodes = group.map((r) => r.ma_hien_truong?.trim() || r.ma_diem?.trim() || "").filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+    const codes = fieldCodes.length ? ` Mối số: ${fieldCodes.join(", ")}.` : "";
     return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
   }).join("\n");
 }
@@ -96,12 +98,17 @@ export function diaryManpowerDefaults(reports: Record<string, unknown>[], person
 }
 
 /** Mục 3 theo Báo cáo ngày (phần «Hôm nay»): mỗi hạng mục một dòng. Không có → "". */
-export function diaryReportWorkText(reports: Record<string, unknown>[]): string {
+export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds: DiaryWork[] = []): string {
+  // Báo cáo ngày lưu mã hệ thống PQ-… (cắt "(+N)"); nhật ký chỉ in mã hiện trường của các mối hàn trong ngày theo công nghệ.
+  const fieldCodes = (method: string) => dayWelds.filter((w) => w.cong_nghe_han === method)
+    .map((w) => w.ma_hien_truong?.trim() || w.ma_diem?.trim() || "").filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ");
   return reports.flatMap((row) => {
     const qty = Number(row.hom_nay);
-    const codes = String(row.ten_moi_han ?? "").trim();
+    const stored = String(row.ten_moi_han ?? "").trim();
+    const codes = /PQ-/i.test(stored) ? fieldCodes(/FBW/i.test(stored) ? "FBW" : /ATW/i.test(stored) ? "ATW" : "") : stored;
     const name = String(row.hang_muc ?? "").trim()
-      || (/FBW/i.test(codes) ? "Hàn chảy giáp mép" : /ATW/i.test(codes) ? "Hàn nhiệt nhôm" : "Công tác thi công");
+      || (/FBW/i.test(stored) ? "Hàn chảy giáp mép" : /ATW/i.test(stored) ? "Hàn nhiệt nhôm" : "Công tác thi công");
     if (!name && !(qty > 0)) return [];
     const unit = String(row.don_vi ?? "").trim() || "mối";
     const route = [row.tuyen_thuong ? "tuyến thượng" : "", row.tuyen_ha ? "tuyến hạ" : ""].filter(Boolean).join(", ");
@@ -115,7 +122,7 @@ export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so
   const group = (r: { bo_phan: string | null }) => { const p = (r.bo_phan ?? "").trim(); return p.startsWith("1") ? 0 : p.startsWith("3") ? 2 : 1; };
   return ["1. Máy hàn", "2. Máy và thiết bị khác", "3. Vật tư"].map((title, i) => {
     const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
-      .map((r) => `- ${(r.ten_thiet_bi ?? "").trim()}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
+      .map((r) => `- ${(r.ten_thiet_bi ?? "").trim().replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m)}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
     return `${title}:\n${lines.join("\n")}`;
   }).join("\n");
 }

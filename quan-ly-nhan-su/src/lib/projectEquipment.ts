@@ -26,9 +26,12 @@ export function assignedEquipment(machines: Pick<Machine, "id" | "code" | "name"
   const order: Record<EquipmentGroup, number> = { welding: 0, other: 1, materials: 2 };
   return rows.sort((a, b) => order[a.group] - order[b.group] || a.code.localeCompare(b.code, "vi"));
 }
+/** "Tên (model)"; bỏ ngoặc khi model trùng tên. */
+export const equipmentLabel = (m: { name: string; model: string }) =>
+  m.model && m.model.trim().toLowerCase() !== m.name.trim().toLowerCase() ? `${m.name} (${m.model})` : m.name;
 export function projectEquipmentText(equipment: ProjectEquipment[]): string {
   return ([ ["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"], ["materials", "3. Vật tư"] ] as const).map(([group, title]) => {
     const rows = equipment.filter((m) => m.group === group && !m.missing); // mã chưa liên kết danh mục không in ra mẫu
-    return `${title}:\n${rows.map((m) => m.missing ? `- ${m.name}; cần gán lại trong dự án` : `- ${m.name}${m.model ? ` (${m.model})` : ""}: ${m.quantity} bộ`).join("\n")}`;
+    return `${title}:\n${rows.map((m) => m.missing ? `- ${m.name}; cần gán lại trong dự án` : `- ${equipmentLabel(m)}: ${m.quantity} bộ`).join("\n")}`;
   }).join("\n");
 }

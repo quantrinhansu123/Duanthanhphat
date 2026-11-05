@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { formatSupabaseError, isSupabaseConfigured } from "@/lib/supabase/env";
 import { loadProjectEquipment } from "@/lib/projectEquipmentDb";
+import { equipmentLabel } from "@/lib/projectEquipment";
 import {
   addHoursToWeldTime,
   DEFAULT_WELD_WORK_HOURS,
@@ -1212,7 +1213,7 @@ export async function loadDailyReport(ngayBaoCao: string): Promise<DailyReportBu
       try {
         const assigned = await (equipmentPrefetch ?? loadProjectEquipment(bundle.header.duAnId));
         const linked: DailyEquipmentItem[] = assigned.map((m, i) => ({ id: `project:${m.id}`, baoCaoId: bundle.header!.id, thuTu: i,
-          tenThietBi: `${m.name}${m.model ? ` (${m.model})` : ""}`, soLuong: m.missing ? "" : String(m.quantity), boPhan: m.group === "welding" ? "1. Máy hàn" : m.group === "materials" ? "3. Vật tư" : "2. Máy và thiết bị khác", nguoiSuDung: "", ghiChu: m.missing ? "Cần gán lại đúng mã thiết bị trong dự án" : `Gán từ dự án · ${m.code}` }));
+          tenThietBi: equipmentLabel(m), soLuong: m.missing ? "" : String(m.quantity), boPhan: m.group === "welding" ? "1. Máy hàn" : m.group === "materials" ? "3. Vật tư" : "2. Máy và thiết bị khác", nguoiSuDung: "", ghiChu: m.missing ? "Cần gán lại đúng mã thiết bị trong dự án" : `Gán từ dự án · ${m.code}` }));
         equipment = [...linked, ...equipment.filter((e) => !e.id.startsWith("project:") && !linked.some((r) => r.tenThietBi === e.tenThietBi))];
       } catch (error) { equipmentError = `Chưa tải được thiết bị dự án: ${formatSupabaseError(error)}`; }
     }

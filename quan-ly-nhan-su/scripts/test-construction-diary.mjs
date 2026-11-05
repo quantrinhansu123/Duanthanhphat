@@ -20,7 +20,7 @@ const text = diaryWorkText([...rows, rows[0]], "weld");
 assert.match(text, /Hàn chảy giáp mép đoạn Km2\+005 – Km10\+100, thuộc tuyến hạ. Khối lượng: 3 mối/);
 assert.match(text, /Hàn nhiệt nhôm đoạn Km1\+000 – Km1\+000, thuộc tuyến thượng/);
 assert.equal(text.split("\n").length, 2);
-assert.match(diaryWorkText(rows, "grind"), /^Mài ray/);
+assert.match(diaryWorkText(rows, "grind"), /^- Mài ray/);
 assert.match(diaryWorkText(rows, "weld"), /Mối số: HP0002, HT0001/);
 assert.match(diaryWorkText(rows, "accept"), /Mối số: HP0002, HT0001/);
 assert.match(diaryWorkText([row("d", null, null)], "weld"), /Km… – Km…, thuộc tuyến ….*cần bổ sung lý trình/);

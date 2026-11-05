@@ -116,7 +116,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   return {
     ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment),
-    noiDungCongViec: diaryReportWorkText(reports) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
+    noiDungCongViec: diaryReportWorkText(reports, select(welds.map((w) => w.id))) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
     nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {
       const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
       return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
