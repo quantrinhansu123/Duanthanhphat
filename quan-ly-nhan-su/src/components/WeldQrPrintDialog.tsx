@@ -185,12 +185,8 @@ export default function WeldQrPrintDialog({
           systemCode: row.ma_lich_su,
           siteCode: row.ma_hien_truong,
           machineCode: row.ten_moi_han_theo_may,
-          qrText: buildWeldQrText({
-            lispCode: row.maDiem,
-            systemCode: row.ma_lich_su,
-            siteCode: row.ma_hien_truong,
-            machineCode: row.ten_moi_han_theo_may,
-          }),
+          // QR chỉ chứa mã Lisp: mã hệ thống/hiện trường/máy phụ thuộc ngày hàn thực tế nên cấp khi lưu nhật ký.
+          qrText: buildWeldQrText({ lispCode: row.maDiem }),
           linked: false,
         });
       }
@@ -364,10 +360,7 @@ export default function WeldQrPrintDialog({
                   {tag.linked ? (
                     <div className="km" style={{ color: "#0a7d3d", fontWeight: 700 }}>Đã hàn</div>
                   ) : (
-                    <>
-                      <div>{tag.systemCode}</div>
-                      <div>{tag.machineCode}</div>
-                    </>
+                    null
                   )}
                   {tag.chainage ? <div className="km">Km{tag.chainage.replace(/^km\s*/i, "")}</div> : null}
                 </>
@@ -403,7 +396,7 @@ export default function WeldQrPrintDialog({
           );
         })}
         {strips.length > 0 && (
-          <p className="hint">Dán tem lên ray theo đúng vị trí. Ngoài hiện trường: Nhật ký hàn → Quét QR → kiểm tra thợ hàn, máy, kết quả rồi Lưu. Mã hệ thống, mã hiện trường và mã máy trên tem là mã dự kiến, được giữ khi lưu.</p>
+          <p className="hint">Dán tem lên ray theo đúng vị trí. Ngoài hiện trường: Nhật ký hàn → Quét QR → kiểm tra thợ hàn, máy, kết quả rồi Lưu. Mã hệ thống, mã hiện trường và mã máy được cấp khi lưu nhật ký theo ngày hàn thực tế.</p>
         )}
 </PrintFrame>
       </article>
