@@ -2,6 +2,7 @@
 
 import { notifyPreShiftChecklist } from "@/lib/notificationsDb";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import MachinePreShiftChecklistPrint from "@/components/MachinePreShiftChecklistPrint";
 import { deaccent } from "@/i18n/deaccent";
 import SelectMenu from "@/components/SelectMenu";
@@ -813,8 +814,11 @@ function ChecklistFormSheet({
     });
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
+  // Portal ra document.body: modal fixed nằm trong vùng cuộn của AppShell sẽ bị thanh
+  // điều hướng dưới (z-20) che mất hàng nút Lưu/In.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
       <div className="flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-start gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0 flex-1">
@@ -1225,7 +1229,8 @@ function ChecklistFormSheet({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
