@@ -52,6 +52,10 @@ export default function LoginForm() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true); setError("");
+    // Trình duyệt tự điền có thể không kích hoạt onChange -> đọc thẳng từ form.
+    const fd = new FormData(event.currentTarget as HTMLFormElement);
+    const phoneValue = String(fd.get("phone") ?? phone).trim();
+    const passwordValue = String(fd.get("password") ?? password);
     try {
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
         setError("Chưa cấu hình Supabase trên máy này. Kiểm tra .env.local rồi khởi động lại npm run dev.");
@@ -64,7 +68,7 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/phone-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim(), password }),
+        body: JSON.stringify({ phone: phoneValue, password: passwordValue }),
       });
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -72,7 +76,7 @@ export default function LoginForm() {
         return;
       }
       try {
-        if (remember) localStorage.setItem(REMEMBER_KEY, phone.trim());
+        if (remember) localStorage.setItem(REMEMBER_KEY, phoneValue);
         else localStorage.removeItem(REMEMBER_KEY);
       } catch { /* không ghi nhớ được thì vẫn đăng nhập bình thường */ }
       // Chỉ quay về đường dẫn nội bộ để tránh chuyển hướng sang website khác.
@@ -96,14 +100,14 @@ export default function LoginForm() {
         <label htmlFor="login-phone" className="text-sm font-medium text-slate-800">Số điện thoại đăng nhập</label>
         <div className="relative mt-2">
           <Phone size={20} className={icon} aria-hidden />
-          <input id="login-phone" type="text" inputMode="tel" required autoComplete="username" placeholder="Nhập số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} className={field} />
+          <input id="login-phone" name="phone" type="text" inputMode="tel" required autoComplete="username" placeholder="Nhập số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} className={field} />
         </div>
       </div>
       <div>
         <label htmlFor="login-password" className="text-sm font-medium text-slate-800">Mật khẩu</label>
         <div className="relative mt-2">
           <LockKey size={20} className={icon} aria-hidden />
-          <input id="login-password" type={show ? "text" : "password"} required autoComplete="current-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} className={`${field} pr-12`} />
+          <input id="login-password" name="password" type={show ? "text" : "password"} required autoComplete="current-password" placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} className={`${field} pr-12`} />
           <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-pressed={show}
             className="absolute right-1.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#1e3a7a] focus-visible:outline-2 focus-visible:outline-[#1e3a7a] cursor-pointer">
             {show ? <EyeSlash size={20} aria-hidden /> : <Eye size={20} aria-hidden />}
@@ -119,7 +123,7 @@ export default function LoginForm() {
           <WarningCircle size={18} weight="fill" aria-hidden /> {error}
         </p>
       )}
-      <button type="submit" disabled={busy || !phone || !password}
+      <button type="submit" disabled={busy}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1e3a7a] text-sm font-bold text-white shadow-md shadow-[#1e3a7a]/25 transition-colors hover:bg-[#162d62] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a7a] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer">
         {busy ? <CircleNotch size={20} className="animate-spin" aria-hidden /> : <SignIn size={20} weight="bold" aria-hidden />}
         {busy ? "Đang đăng nhập…" : "Đăng nhập"}
