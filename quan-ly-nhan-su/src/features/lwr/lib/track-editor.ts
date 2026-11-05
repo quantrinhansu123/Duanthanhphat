@@ -87,7 +87,8 @@ export function parseChainage(value: string): number | null {
   if (!match) return null;
   const kilometres = Number(match[1]);
   const metres = Number(match[2].replace(",", "."));
-  const total = kilometres * 1000 + metres;
+  // Làm tròn mm để lý trình lẻ (4+012.307) so sánh/cộng không dính sai số số thực.
+  const total = Math.round((kilometres * 1000 + metres) * 1000) / 1000;
   return metres < 1000 && Number.isFinite(total) && total <= Number.MAX_SAFE_INTEGER
     ? total
     : null;
@@ -95,7 +96,7 @@ export function parseChainage(value: string): number | null {
 
 export function formatChainage(metres: number): string {
   if (!Number.isFinite(metres) || metres < 0 || metres > Number.MAX_SAFE_INTEGER) {
-    throw new RangeError("Lý trình phải là số mét nguyên không âm.");
+    throw new RangeError("Lý trình phải là số mét không âm.");
   }
   const [whole, fraction] = String(Number((metres % 1000).toFixed(3))).split(".");
   return `${Math.floor(metres / 1000)}+${whole.padStart(3, "0")}${fraction ? `.${fraction}` : ""}`;
@@ -220,7 +221,7 @@ export function ensureRowSpan(
   startMetres: number,
   endMetres: number,
 ): { rows: RailRow[]; startCellId: string; endCellId: string } {
-  if (!Number.isSafeInteger(startMetres) || !Number.isSafeInteger(endMetres) || endMetres <= startMetres) {
+  if (!Number.isFinite(startMetres) || !Number.isFinite(endMetres) || endMetres <= startMetres) {
     throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
   }
   const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
@@ -499,7 +500,7 @@ export function extendRailRows(rows: RailRow[], count: number, line?: string): R
     }
     const lastNumber = numbers.length ? Math.max(...numbers) : 0;
     if (!Number.isSafeInteger(lastNumber + count)
-      || !Number.isSafeInteger(lastMetres + count * RAIL_SEGMENT_LENGTH_METRES)) {
+      || !Number.isFinite(lastMetres + count * RAIL_SEGMENT_LENGTH_METRES)) {
       throw new RangeError("Lý trình hoặc mã thanh ray vượt giới hạn số.");
     }
     const additions = Array.from({ length: count }, (_, index): RailCell => {
@@ -534,7 +535,7 @@ export function placeShortRailSpan(
   endMetres: number,
   temps?: PlaceShortRailTemps,
 ): { rows: RailRow[]; cellId: string } {
-  if (!Number.isSafeInteger(startMetres) || !Number.isSafeInteger(endMetres) || startMetres < 0 || endMetres <= startMetres) {
+  if (!Number.isFinite(startMetres) || !Number.isFinite(endMetres) || startMetres < 0 || endMetres <= startMetres) {
     throw new RangeError("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
   }
   const next = rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
@@ -722,7 +723,7 @@ export function railCellLengthMetres(cell: RailCell): number | null {
   const from = parseChainage(cell.from);
   const to = parseChainage(cell.to);
   if (from === null || to === null) return null;
-  return to - from;
+  return Math.round((to - from) * 1000) / 1000;
 }
 
 /** T khóa = (T trái + T phải) / 2. */
@@ -794,22 +795,22 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   let newFrom = currentFrom;
   if (patch.from !== undefined) {
     const parsed = parseChainage(patch.from);
-    if (parsed === null || !Number.isSafeInteger(parsed)) {
-      throw new RangeError("Lý trình đầu không hợp lệ. Dùng dạng 0+000.");
+    if (parsed === null || !Number.isFinite(parsed)) {
+      throw new RangeError("Lý trình đầu không hợp lệ. Dùng dạng 0+000 hoặc 0+012.307.");
     }
     newFrom = parsed;
   }
 
   let newTo: number;
   if (patch.lengthMetres !== undefined) {
-    if (!Number.isSafeInteger(patch.lengthMetres) || patch.lengthMetres < 1) {
-      throw new RangeError("Chiều dài đoạn phải là số mét nguyên dương.");
+    if (!Number.isFinite(patch.lengthMetres) || patch.lengthMetres < 1) {
+      throw new RangeError("Chiều dài đoạn phải là số mét dương.");
     }
-    newTo = newFrom + patch.lengthMetres;
+    newTo = Math.round((newFrom + patch.lengthMetres) * 1000) / 1000;
   } else if (patch.to !== undefined) {
     const parsed = parseChainage(patch.to);
-    if (parsed === null || !Number.isSafeInteger(parsed)) {
-      throw new RangeError("Lý trình cuối không hợp lệ. Dùng dạng 0+000.");
+    if (parsed === null || !Number.isFinite(parsed)) {
+      throw new RangeError("Lý trình cuối không hợp lệ. Dùng dạng 0+000 hoặc 0+012.307.");
     }
     newTo = parsed;
   } else {
@@ -817,7 +818,7 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   }
 
   if (newTo <= newFrom) throw new RangeError("Lý trình cuối phải lớn hơn lý trình đầu.");
-  if (!Number.isSafeInteger(newTo) || newFrom < 0) throw new RangeError("Lý trình vượt giới hạn số.");
+  if (!Number.isFinite(newTo) || newFrom < 0) throw new RangeError("Lý trình vượt giới hạn số.");
 
   if (index > 0) {
     const previous = row.cells[index - 1];
@@ -837,8 +838,8 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
     if (length === null || length < 1 || start === null) {
       throw new RangeError("Không dồn được các thanh phía sau.");
     }
-    const end = start + length;
-    if (!Number.isSafeInteger(end)) throw new RangeError("Lý trình vượt giới hạn số.");
+    const end = Math.round((start + length) * 1000) / 1000;
+    if (!Number.isFinite(end)) throw new RangeError("Lý trình vượt giới hạn số.");
     row.cells[i].from = formatChainage(start);
     row.cells[i].to = formatChainage(end);
   }
@@ -1000,7 +1001,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         || cellIds.has(rawCell.id)) return null;
       const start = parseChainage(rawCell.from);
       const end = parseChainage(rawCell.to);
-      if (start === null || end === null || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+      if (start === null || end === null || !Number.isFinite(start) || !Number.isFinite(end)
         || end <= start || (previousEnd !== null && previousEnd !== start)) return null;
       const leftTemp = typeof rawCell.leftTemp === "number" ? rawCell.leftTemp : undefined;
       const rightTemp = typeof rawCell.rightTemp === "number" ? rawCell.rightTemp : undefined;
@@ -1127,8 +1128,8 @@ export function removeInstalledRange(
  * Truyền `line` (TUYẾN THƯỢNG / TUYẾN HẠ) để chỉ rải tuyến đó — chiều dài Thượng/Hạ độc lập.
  */
 export function generateRailRows(rows: RailRow[], start: number, end: number, line?: string): RailRow[] {
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start || end - start > 500_000) {
-    throw new RangeError("Nhập lý trình đầu/cuối theo mét nguyên, chiều dài tuyến tối đa 500 km.");
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end - start > 500_000) {
+    throw new RangeError("Nhập lý trình đầu/cuối hợp lệ (cuối lớn hơn đầu), chiều dài tuyến tối đa 500 km.");
   }
   if (line && !rows.some((row) => row.line === line)) {
     throw new RangeError(`Không tìm thấy tuyến ${line}.`);

@@ -148,12 +148,12 @@ export function RailDetailPanel({
       return;
     }
     const next = Number(lengthDraft.trim().replace(",", "."));
-    if (Number.isSafeInteger(next) && next === length) {
+    if (Number.isFinite(next) && next === length) {
       setLengthDraft(String(length));
       return;
     }
-    if (!Number.isSafeInteger(next) || next < 1) {
-      setFieldError("Chiều dài đoạn phải là số mét nguyên dương.");
+    if (!Number.isFinite(next) || next < 1) {
+      setFieldError("Chiều dài đoạn phải là số mét dương.");
       setLengthDraft(String(length));
       return;
     }
