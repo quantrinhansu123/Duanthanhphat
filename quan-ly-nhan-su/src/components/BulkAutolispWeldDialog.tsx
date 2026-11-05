@@ -58,9 +58,9 @@ export function BulkAutolispWeldDialog({
 }) {
   const [duAnId, setDuAnId] = useState(projects[0]?.id ?? "");
   const [performedAt, setPerformedAt] = useState(todayIso());
-  const [thoHanId, setThoHanId] = useState(welders[0]?.id ?? "");
+  const [thoHanId, setThoHanId] = useState("");
   const [mayId, setMayId] = useState(machines[0]?.id ?? "");
-  const [chungChi, setChungChi] = useState(welders[0]?.certificates[0] ?? "");
+  const [chungChi, setChungChi] = useState("");
   const [loaiRay, setLoaiRay] = useState("P50");
   const [congNghe, setCongNghe] = useState<WeldReportRow["cong_nghe_han"]>("FBW");
   const [loaiMoiHan, setLoaiMoiHan] = useState<WeldReportRow["loai_moi_han"]>("Sản xuất");
@@ -88,7 +88,6 @@ export function BulkAutolispWeldDialog({
   useEffect(() => {
     if (!open) return;
     setDuAnId((prev) => prev || projects[0]?.id || "");
-    setThoHanId((prev) => prev || welders[0]?.id || "");
     setMayId((prev) => prev || machines[0]?.id || "");
   }, [open, projects, welders, machines]);
 
@@ -333,6 +332,7 @@ export function BulkAutolispWeldDialog({
           <label className="text-xs font-semibold text-slate-700">
             Thợ hàn
             <select className={inputClass} value={thoHanId} onChange={(e) => setThoHanId(e.target.value)}>
+              <option value="">— Chọn thợ hàn —</option>
               {welders.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}

@@ -185,8 +185,9 @@ function emptyJournalForm(
   const machine = machines[0];
   const project = projects[0];
   const isInternalTraining = isInternalTrainingProject(project?.label ?? "");
-  // Việc kiểm tra chứng chỉ đang được tạm ẩn khi tạo mối hàn mới.
-  const welder = welders[0];
+  // Không tự chọn thợ hàn: người dùng phải chọn đúng người thực hiện.
+  const welder = undefined as CertifiedWelderOption | undefined;
+  void welders;
   return {
     ma_lich_su: "",
     performedAt: defaultPerformedAt(),
@@ -312,13 +313,8 @@ function applyJournalSuggestion(
   if (suggestion.du_an_id && projects.some((item) => item.id === suggestion.du_an_id)) {
     next.du_an_id = suggestion.du_an_id;
   }
-  const welder = welders.find((item) => item.id === suggestion.tho_han_id);
-  if (welder) {
-    next.tho_han_id = welder.id;
-    if (suggestion.chung_chi_su_dung && welder.certificates.includes(suggestion.chung_chi_su_dung)) {
-      next.chung_chi_su_dung = suggestion.chung_chi_su_dung;
-    }
-  }
+  // Không gợi ý thợ hàn từ mối hàn trước/lần nhập trước: người dùng tự chọn.
+  void welders;
   if (suggestion.may_id && machines.some((item) => item.id === suggestion.may_id)) {
     next.may_id = suggestion.may_id;
   }
@@ -680,7 +676,8 @@ function JournalFormModal({
 
   useEffect(() => {
     const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
-    const nextWelderId = selectedIsQualified ? form.tho_han_id : qualifiedWelders[0]?.id ?? "";
+    // Không tự đổi sang thợ đầu danh sách; thợ không đủ điều kiện thì bỏ chọn.
+    const nextWelderId = selectedIsQualified ? form.tho_han_id : "";
     const nextWelder = welders.find((welder) => welder.id === nextWelderId);
     const eligibleCertificates = nextWelder
       ? shouldCheckCertificate
