@@ -136,8 +136,9 @@ export default function ConstructionDiaryForm() {
     setBusy(true);
     try {
       const defaults = await loadDefaults(projectId, date);
-      setD((cur) => ({ ...cur, ...defaults.values }));
-      setStatus(defaults.warning || "Đã tự điền thời tiết, nhân lực, thiết bị và mục 3. Có thể sửa nội dung rồi bấm Lưu.");
+      const { thietBi, noiDungCongViec, nghiemThuHangNgay } = defaults.values;
+      setD((cur) => ({ ...cur, thietBi: thietBi ?? cur.thietBi, noiDungCongViec: noiDungCongViec ?? cur.noiDungCongViec, nghiemThuHangNgay: nghiemThuHangNgay ?? cur.nghiemThuHangNgay })); // giữ nguyên thời tiết, nhân lực đã nhập
+      setStatus(defaults.warning || "Đã tự điền lại thiết bị (2.2) và mục 3; thời tiết, nhân lực giữ nguyên. Có thể sửa nội dung rồi bấm Lưu.");
     } catch { setStatus("Không tải được dữ liệu tự điền. Nội dung hiện tại được giữ nguyên."); }
     finally { setBusy(false); }
   }
@@ -206,7 +207,7 @@ export default function ConstructionDiaryForm() {
             <input disabled={busy} className={inp} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy || loading || !projectId || !date} onClick={autofill} title="Điền lại thời tiết, nhân lực, thiết bị dự án và công việc theo ngày đang chọn" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại</button>
+            <button type="button" disabled={busy || loading || !projectId || !date} onClick={autofill} title="Điền lại thiết bị (2.2) và công việc (mục 3) theo ngày đang chọn; không đổi thời tiết, nhân lực" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại</button>
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang xử lý…" : "Lưu"}</button>
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={printDiary} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
           </div>
