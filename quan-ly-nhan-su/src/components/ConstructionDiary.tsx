@@ -44,7 +44,7 @@ const css = `@media screen { #diary-print { display: none; } }
   aside, header, .no-print { display: none !important; }
   #diary-print {
     position: absolute; left: 0; top: 0; width: 100%;
-    font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 16.5pt; color: black;
+    font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 13.5pt; color: black;
   }
   #diary-print h2 { margin: 0 0 2pt; font-size: 12.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
   #diary-print .diary-date { text-align: center; margin: 0 0 4pt; }
@@ -53,19 +53,19 @@ const css = `@media screen { #diary-print { display: none; } }
   #diary-print .diary-heading { margin-top: 5pt; font-weight: bold; }
   #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
   #diary-print .diary-section { break-inside: avoid; }
-  #diary-print .diary-dots { height: 14pt; border-bottom: 1px dotted black; }
+  #diary-print .diary-dots { height: 12pt; border-bottom: 1px dotted black; }
   #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
   #diary-print .diary-frame { width: 100%; border-collapse: collapse; border: 0; }
   #diary-print .diary-frame > thead, #diary-print .diary-frame > tbody, #diary-print .diary-frame > tfoot { border: 0; }
   #diary-print .diary-frame td { padding: 0; border: 0; }
   #diary-print .diary-frame-foot { padding: 0 15mm 0 20mm; }
-  #diary-print .diary-frame-space { height: 12mm; }
+  #diary-print .diary-frame-space { height: 8mm; }
   #diary-print .diary-frame > tbody > tr > td.diary-frame-body { padding: 0 15mm 0 20mm; }
-  #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 16pt; break-inside: avoid; }
+  #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
   #diary-print .diary-sig-sub { text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
   #diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
-  #diary-print .diary-sig-box { height: 24mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  #diary-print .diary-sig-box img { max-height: 22mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
+  #diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
   #diary-print .diary-page { text-align: right; margin: 0 15mm 0 20mm; padding-top: 2pt; font-size: 9pt; line-height: 12pt; }
   #diary-print .diary-frame > thead { display: table-header-group; }
   #diary-print .diary-frame > tfoot { display: table-footer-group; }

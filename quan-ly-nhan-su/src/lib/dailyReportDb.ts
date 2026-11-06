@@ -838,8 +838,7 @@ export async function loadDailyWorkFillFromJournal(
     soLuong: machine.soLuong || "1",
   }));
 
-  const tenMoiHan =
-    codes.length <= 6 ? codes.join(", ") : `${codes.slice(0, 6).join(", ")}… (+${codes.length - 6})`;
+  const tenMoiHan = codes.join(", ");
 
   return {
     date,
