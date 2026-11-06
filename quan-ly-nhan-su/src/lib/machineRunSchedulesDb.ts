@@ -647,6 +647,10 @@ export async function updateMachineRunSchedule(_id: string, _values: MachineRunS
   throw new Error("Lịch chạy máy chỉ tổng hợp từ nhật ký hàn — không sửa thủ công.");
 }
 
-export async function deleteMachineRunSchedule(_id: string) {
-  throw new Error("Lịch chạy máy chỉ tổng hợp từ nhật ký hàn — không xóa thủ công.");
+/** Xóa một dòng phân công máy. Lưu ý: nếu nhật ký hàn đồng bộ lại cùng ngày, dòng có thể được tạo lại. */
+export async function deleteMachineRunSchedule(id: string) {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase — không xóa được.");
+  const supabase = createClient();
+  const { error } = await supabase.from("phan_cong_may").delete().eq("id", id);
+  if (error) throw new Error(missingAssignmentTableMessage(error));
 }

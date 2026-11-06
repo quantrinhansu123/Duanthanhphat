@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Eye, Printer, Warning, X } from "@/components/icons";
+import { Check, Eye, Printer, TrashSimple, Warning, X } from "@/components/icons";
 import {
   formatScheduleDate,
   type LookupOption,
@@ -12,6 +12,7 @@ import {
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import { compareNewestDate } from "@/lib/dateOrder";
 import {
+  deleteMachineRunSchedule,
   importMachineRunReport,
   loadMachineRunScheduleBundle,
   loadScheduleJournalDetails,
@@ -116,6 +117,7 @@ export default function MachineAssignmentList() {
   const [detailRows, setDetailRows] = useState<WeldReportRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const reloadFuel = useCallback(async () => {
     const result = await loadDailyFuelRows();
@@ -274,6 +276,23 @@ export default function MachineAssignmentList() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
+  }
+
+  /** Xóa một dòng phân công máy đã tổng hợp. */
+  async function handleDeleteSchedule(row: MachineRunSchedule) {
+    const label = `${row.machineCode} · ${formatScheduleDate(row.date)}`;
+    if (!window.confirm(`Xóa dòng phân công ${label}?\n\nLưu ý: nếu Nhật ký hàn đồng bộ lại ngày này, dòng sẽ được tạo lại.`)) return;
+    setDeletingId(row.id);
+    try {
+      await deleteMachineRunSchedule(row.id);
+      setList((prev) => prev.filter((item) => item.id !== row.id));
+      showToast("Đã xóa dòng phân công");
+      void reload();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không xóa được dòng phân công");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function syncProjectToUrl(nextProjectId: string) {
@@ -643,19 +662,20 @@ export default function MachineAssignmentList() {
 
       <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1060px] table-fixed border-collapse text-left text-xs sm:text-sm">
             <colgroup>
-              <col className="w-[8%]" />
-              <col className="w-[15%]" />
-              <col className="w-[6%]" />
-              <col className="w-[8%]" />
-              <col className="w-[6%]" />
-              <col className="w-[6%]" />
-              <col className="w-[5%]" />
-              <col className="w-[12%]" />
-              <col className="w-[11%]" />
-              <col className="w-[16%]" />
               <col className="w-[7%]" />
+              <col className="w-[13%]" />
+              <col className="w-[5%]" />
+              <col className="w-[8%]" />
+              <col className="w-[5%]" />
+              <col className="w-[5%]" />
+              <col className="w-[4%]" />
+              <col className="w-[11%]" />
+              <col className="w-[10%]" />
+              <col className="w-[17%]" />
+              <col className="w-[7%]" />
+              <col className="w-[8%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
@@ -670,6 +690,7 @@ export default function MachineAssignmentList() {
                 <th className="px-2.5 py-3 sm:px-3">Thợ hàn</th>
                 <th className="px-2.5 py-3 sm:px-3">Mức dầu</th>
                 <th className="px-2 py-3 text-center">Chi tiết</th>
+                <th className="px-2 py-3 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -794,27 +815,39 @@ export default function MachineAssignmentList() {
                     )}
                   </td>
                   <td className="px-2 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => openDetail(row)}
-                      className="rounded-lg px-2 py-1.5 font-semibold text-[#0047AB] hover:bg-blue-50"
-                    >
-                      Chi tiết
-                    </button>
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openDetail(row)}
+                        className="w-full rounded-lg px-2 py-1.5 text-[11px] font-semibold text-[#0047AB] hover:bg-blue-50 sm:text-xs"
+                      >
+                        Chi tiết
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingId === row.id}
+                        onClick={() => void handleDeleteSchedule(row)}
+                        title="Xóa dòng phân công này"
+                        className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:text-xs"
+                      >
+                        <TrashSimple size={13} weight="bold" aria-hidden />
+                        {deletingId === row.id ? "Đang xóa…" : "Xóa"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 );
               })}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-500">
                     Chưa có báo cáo đã lưu. Bấm Tổng hợp, chọn từ ngày đến ngày.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-500">
                     Đang tải báo cáo đã lưu…
                   </td>
                 </tr>

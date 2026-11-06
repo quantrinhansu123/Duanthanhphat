@@ -341,16 +341,20 @@ export async function upsertPreShiftChecklist(
     try {
       const supabase = createClient();
       if (id) {
-        const { data, error } = await supabase.from(TABLE).update(payload).eq("id", id).select("*").single();
+        // Dùng maybeSingle để không ném PGRST116 khi bản ghi không còn trong DB
+        // (phiếu chỉ tồn tại trên máy này, hoặc đã bị xoá ở thiết bị khác).
+        const { data, error } = await supabase.from(TABLE).update(payload).eq("id", id).select("*").maybeSingle();
         if (error) throw new Error(formatSupabaseError(error));
-        return rowToRecord(data as TableRow);
+        if (data) return rowToRecord(data as TableRow);
+        // 0 dòng: id không còn trong DB → rơi xuống nhánh upsert bên dưới.
       }
       const { data, error } = await supabase
         .from(TABLE)
         .upsert(payload, { onConflict: "may_id,ngay,ca" })
         .select("*")
-        .single();
+        .maybeSingle();
       if (error) throw new Error(formatSupabaseError(error));
+      if (!data) throw new Error("Không đọc lại được phiếu vừa lưu. Kiểm tra quyền ghi bảng kiem_tra_may_truoc_ca.");
       return rowToRecord(data as TableRow);
     } catch (error) {
       const message = formatSupabaseError(error);
