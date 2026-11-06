@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { REPORT_TABS } from "@/data/reportTabs";
-import { SquaresFour, ShieldCheck, Wrench, Users, CalendarBlank } from "@/components/icons";
+import { SquaresFour, ShieldCheck, Wrench, Train, Users, CalendarBlank } from "@/components/icons";
 
 type ReportTabBarProps = {
   activeId: string;
@@ -14,6 +14,7 @@ const icons: Record<string, Icon> = {
   "bc-tong-quan": SquaresFour,
   "bc-chat-luong": ShieldCheck,
   "bc-may-moc": Wrench,
+  "bc-bao-cao-ray": Train,
   "bc-nhan-su": Users,
   "bc-bao-cao-ngay": CalendarBlank,
 };

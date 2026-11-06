@@ -250,6 +250,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Operational hours, welds per machine, downtime analysis, maintenance logs",
       },
       {
+        id: "bc-bao-cao-ray",
+        label: "Báo cáo ray",
+        labelEn: "Rail Report",
+        description: "Bảng tổng hợp mối hàn theo thanh ray: mã thiết kế, mã hiện trường, lý trình, ngày hàn, chiều dài, tình trạng",
+        descriptionEn: "Rail-by-rail weld summary: design code, field code, chainage, weld date, rail length, quality status",
+      },
+      {
         id: "bc-nhan-su",
         label: "Báo cáo nhân sự",
         labelEn: "Personnel Report",

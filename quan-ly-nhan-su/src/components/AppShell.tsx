@@ -59,6 +59,8 @@ const MachineReportDashboard = dynamic(
   () => import("@/components/MachineReportDashboard"), { loading: TabLoading, ssr: false });
 const PersonnelReportDashboard = dynamic(
   () => import("@/components/PersonnelReportDashboard"), { loading: TabLoading, ssr: false });
+const RailReportDashboard = dynamic(
+  () => import("@/components/RailReportDashboard"), { loading: TabLoading, ssr: false });
 const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { loading: TabLoading, ssr: false });
 const ProjectManagement = dynamic(() => import("@/components/ProjectManagement"), { loading: TabLoading, ssr: false });
 const WeldingJournalList = dynamic(() => import("@/components/WeldingJournalList"), { loading: TabLoading, ssr: false });
@@ -98,6 +100,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-san-luong": () => <OverviewDashboard />,
   "bc-chat-luong": () => <QualityReportDashboard />,
   "bc-may-moc": () => <MachineReportDashboard />,
+  "bc-bao-cao-ray": () => <RailReportDashboard />,
   "bc-nhan-su": () => <PersonnelReportDashboard />,
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
   "quan-ly-du-an": () => <ProjectManagement />,

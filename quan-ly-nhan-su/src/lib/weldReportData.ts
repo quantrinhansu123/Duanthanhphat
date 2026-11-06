@@ -89,6 +89,8 @@ export type WeldReportRow = {
   ma_hien_truong?: string | null;
   /** Mã Autolisp (toa_do.ma_diem: HT/HP/TT/TP…) gắn qua điểm GPS. */
   ma_diem?: string | null;
+  /** Lý trình (Km) — lấy từ toa_do, nếu trống thì từ lich_su_moi_han.ly_trinh. */
+  ly_trinh?: string | null;
   /** Giờ làm HH:mm[:ss]; giờ kết thúc nhỏ hơn giờ bắt đầu = qua đêm. */
   gio_bat_dau?: string | null;
   gio_ket_thuc?: string | null;
@@ -1406,20 +1408,20 @@ function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
   };
 }
 
-/** Gắn mã LISP (toa_do.ma_diem) vào từng dòng nhật ký theo liên kết GPS. */
+/** Gắn mã LISP (toa_do.ma_diem) và lý trình vào từng dòng nhật ký theo liên kết GPS. */
 async function attachLispCodesToJournalRows(rows: WeldReportRow[]): Promise<WeldReportRow[]> {
   if (!rows.length || !isSupabaseConfigured()) return rows;
   const ids = [...new Set(rows.map((row) => row.id).filter(Boolean))];
   if (!ids.length) return rows;
 
   const supabase = createClient();
-  const byWeldId = new Map<string, string>();
+  const byWeldId = new Map<string, { code: string; chainage: string }>();
   const chunkSize = 200;
   for (let offset = 0; offset < ids.length; offset += chunkSize) {
     const chunk = ids.slice(offset, offset + chunkSize);
     const { data, error } = await supabase
       .from("toa_do")
-      .select("ma_diem, lich_su_moi_han_id")
+      .select("ma_diem, ly_trinh, lich_su_moi_han_id")
       .in("lich_su_moi_han_id", chunk);
     if (error) {
       console.warn("[attachLispCodesToJournalRows]", error.message);
@@ -1427,15 +1429,22 @@ async function attachLispCodesToJournalRows(rows: WeldReportRow[]): Promise<Weld
     }
     for (const point of data ?? []) {
       const weldId = String(point.lich_su_moi_han_id ?? "").trim();
+      if (!weldId) continue;
       const code = String(point.ma_diem ?? "").trim();
-      if (weldId && code) byWeldId.set(weldId, code);
+      const chainage = String(point.ly_trinh ?? "").trim();
+      if (code || chainage) byWeldId.set(weldId, { code, chainage });
     }
   }
   if (!byWeldId.size) return rows;
-  return rows.map((row) => ({
-    ...row,
-    ma_diem: byWeldId.get(row.id) ?? row.ma_diem ?? null,
-  }));
+  return rows.map((row) => {
+    const hit = byWeldId.get(row.id);
+    if (!hit) return row;
+    return {
+      ...row,
+      ma_diem: hit.code || row.ma_diem || null,
+      ly_trinh: hit.chainage || row.ly_trinh || null,
+    };
+  });
 }
 
 let journalHasLinkedImages = true;
