@@ -81,9 +81,44 @@ try {
   await migrate("migration_20261101_rfi_doi_soat_trang_thai");
   assert.equal(await value("select count(*)::int from ho_so_nghiem_thu"), 3, "Migration is rerunnable");
   assert.equal(await publish(uuid(7), [late]), uuid(7), "Welds with NDT pass but no RFI can enter the acceptance workflow");
+  await migrate("migration_20261102_ndt_dat_thoat_cho_sieu_am");
+  await migrate("migration_20261102_rfi_khong_can_ndt_truoc");
+  await migrate("migration_20261106_nghiem_thu_tach_phan");
+  await migrate("migration_20261106_nghiem_thu_tach_phan");
+  const fresh = uuid(30), geo = uuid(31), ut = uuid(32);
+  await sql("insert into lich_su_moi_han(id,ma_lich_su,du_an_id,cong_nghe_han,loai_moi_han) values ($1,'SPLIT-1',$2,'FBW','Sản xuất')", [fresh, project]);
+  const candidates = () => sql("select loai from moi_cho_phieu_nt_tach where moi_han_id=$1 order by loai", [fresh]);
+  const inspect = (version, geometry, method="Siêu âm", ndt=null) => sql(
+    "select luu_kiem_tra_moi_han($1,$2,$3,'2026-10-30','Đạt',$4,$5,$6,$7,'tester')", [fresh, version, profile, geometry, method, ndt, ndt ? "2026-10-31" : null]);
+  const splitPublish = (id,kind) => value("select phat_phieu_nt_tach($1,$2,$3,$4,'2026-10-31',$5,'tester')", [id,project,kind,kind+'-'+id,[fresh]]);
+  const splitComplete = (id,revision) => value("select chot_phieu_nt_tach($1,'2026-10-31',$2,'tester')", [id,JSON.stringify([{id:fresh,phien_ban:revision,ket_qua:"Đạt"}])]);
+  await db.exec("set role service_role");
+  assert.equal(await value("select tinh_trang from chat_luong_moi_han where moi_han_id=$1",[fresh]),"Chờ mài");
+  assert.deepEqual(await candidates(),[]);
+  await inspect(1,{});
+  assert.deepEqual(await candidates(),[{loai:"sieu-am"}]);
+  await splitPublish(ut,"sieu-am");
+  await assert.rejects(() => splitComplete(ut,2), /chưa đủ điều kiện/);
+  await inspect(2,measurements);
+  assert.deepEqual(await candidates(),[{loai:"hinh-hoc"}]);
+  await splitPublish(geo,"hinh-hoc");
+  assert.equal(await splitPublish(geo,"hinh-hoc"),geo);
+  await assert.rejects(() => splitPublish(uuid(33),"hinh-hoc"), /chưa đủ điều kiện/);
+  await assert.rejects(() => splitComplete(geo,2), /phiên bản/);
+  await splitComplete(geo,3);
+  assert.equal(await value("select da_nt_truc_quan from dieu_kien_nt_tach where moi_han_id=$1",[fresh]),true);
+  await inspect(3,measurements,"Từ tính","Đạt");
+  await assert.rejects(() => splitComplete(ut,4), /chưa đủ điều kiện/);
+  await inspect(4,measurements,"Siêu âm","Đạt");
+  await splitComplete(ut,5);
+  assert.equal(await value("select du_lieu_chot->>'phien_ban' from phieu_nt_tach_moi where phieu_id=$1",[geo]),"3");
+  assert.equal(await value("select count(*)::int from phieu_nt_tach_moi where moi_han_id=$1 and ket_qua='Đạt'",[fresh]),2);
+  assert.equal(await publish(uuid(34),[fresh]),uuid(34),"Legacy workflow remains available for the same weld");
+  await db.exec("reset role");
   for (const role of ["anon", "authenticated"]) {
     await db.exec(`set role ${role}`);
     await assert.rejects(() => sign(draft), /permission denied/);
+    await assert.rejects(() => splitPublish(uuid(35),"sieu-am"), /permission denied/);
     await db.exec("reset role");
   }
   console.log("PASS RFI lifecycle: status filtering, atomic publishing, three draft documents, coordinates, completion retry, no duplicate dossier, missing-document guard, joint signing, unsigned status and privileges");

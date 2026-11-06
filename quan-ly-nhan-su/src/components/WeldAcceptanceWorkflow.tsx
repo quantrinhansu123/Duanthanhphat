@@ -6,6 +6,7 @@ import { loadProjects } from "@/lib/projectsDb";
 import { completeAcceptance, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiNumber, loadRfis,
   publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { defaultDecisions, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
+import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
@@ -93,6 +94,7 @@ function inferRoutes(welds: { ma_diem?: string | null }[]): { upper: boolean; lo
 export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [mode, setMode] = useState<"tong-hop" | SplitKind>("tong-hop");
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
@@ -170,7 +172,14 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <div className="grid grid-cols-3 gap-2">
+        <label className="flex flex-wrap items-center gap-2 text-sm font-semibold">Phương án nghiệm thu
+          <select className={input} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+            <option value="tong-hop">Nghiệm thu tổng hợp (module cũ)</option>
+            <option value="hinh-hoc">Nghiệm thu hình học, trực quan · RIF</option>
+            <option value="sieu-am">Nghiệm thu siêu âm · RFI</option>
+          </select>
+        </label>
+        {mode === "tong-hop" && <div className="grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
               key={id}
@@ -181,9 +190,11 @@ export default function WeldAcceptanceWorkflow() {
               {label}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
-      {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (
+      {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : mode !== "tong-hop" ? (
+        <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName} kind={mode} />
+      ) : (
         <div className="no-print">
           {tab === "rfi" && (
             <RfiPanel

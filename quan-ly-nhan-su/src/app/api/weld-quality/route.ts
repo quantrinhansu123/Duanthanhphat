@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
-import { loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ accepted, waiting, acceptance, signing });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
+    if (["split-list", "split-detail", "split-publish", "split-complete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
     if (body.action === "rfi-candidates") return NextResponse.json(await loadRfiCandidates(body));
     if (body.action === "rfi-number") return NextResponse.json({ so_phieu: await nextRfiNumber(qualityUuid(body.du_an_id)) });
     if (body.action === "rfi-publish") return NextResponse.json(await publishRfi(body, actor));

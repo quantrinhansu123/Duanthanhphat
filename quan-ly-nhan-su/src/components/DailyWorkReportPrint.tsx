@@ -191,14 +191,28 @@ function machineNames(row: PrintWorkRow) {
   return row.fallbackMay ? [row.fallbackMay] : [];
 }
 
+function machineCodes(row: PrintWorkRow) {
+  return (row.item?.mayChay ?? []).map((m) => m.maMay.trim()).filter(Boolean);
+}
+
 function machineTimes(row: PrintWorkRow, field: "gioBatDau" | "gioKetThuc") {
   return (row.item?.mayChay ?? []).map((m) => m[field].trim()).filter(Boolean);
 }
 
-function manpowerRange(row: PrintWorkRow, field: "gioBatDau" | "gioKetThuc") {
-  const times = machineTimes(row, field);
-  if (times.length === 0) return "";
-  return field === "gioBatDau" ? times.reduce((a, b) => (a < b ? a : b)) : times.reduce((a, b) => (a > b ? a : b));
+/** Gộp tên nhân lực nhiều nhóm, lọc rỗng, nối bằng dấu phẩy. */
+function joinNames(...names: string[]) {
+  return names.map((name) => name.trim()).filter(Boolean).join(", ");
+}
+
+/** 4 cột Nhân lực theo mẫu mới: Tổ trưởng / Tổ phó / Tổ phụ trợ / Công nhân. */
+function manpowerCells(item: DailyWorkItem | null) {
+  if (!item) return ["", "", "", ""];
+  return [
+    item.chtTen ?? "",
+    item.kySuTen ?? "",
+    joinNames(item.laiMayTen ?? "", item.thoVanHanhTen ?? ""),
+    joinNames(item.congNhanTen ?? "", item.vnrTen ?? ""),
+  ];
 }
 
 function Lines({ values }: { values: string[] }) {
@@ -219,6 +233,7 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
         const showNumber = numbered && Boolean(row.hangMuc.trim() || row.item);
         const serial = showNumber ? rows.slice(0, index + 1).filter((r) => r.hangMuc.trim() || r.item).length : "";
         const item = row.item;
+        const [toTruong, toPho, toPhuTro, congNhan] = manpowerCells(item);
         return (
           <tr key={`work-${index}`}>
             <td className="tt">{showNumber ? serial : ""}</td>
@@ -229,9 +244,11 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
             <td>{item?.denHomQua ?? ""}</td>
             <td>{item?.homNay ?? ""}</td>
             <td>{item?.tichLuy ?? ""}</td>
-            <td />
             <td className="wrap">
               <Lines values={machineNames(row)} />
+            </td>
+            <td className="wrap mono">
+              <Lines values={machineCodes(row)} />
             </td>
             <td>
               <Lines values={machineTimes(row, "gioBatDau")} />
@@ -239,13 +256,10 @@ function WorkBodyRows({ rows, numbered }: { rows: PrintWorkRow[]; numbered: bool
             <td>
               <Lines values={machineTimes(row, "gioKetThuc")} />
             </td>
-            <td className="wrap">{item?.chtTen ?? ""}</td>
-            <td className="wrap">{item?.kySuTen ?? ""}</td>
-            <td className="wrap">{item?.laiMayTen ?? ""}</td>
-            <td className="wrap">{item?.thoVanHanhTen ?? ""}</td>
-            <td className="wrap">{item?.congNhanTen ?? ""}{item?.vnrTen ? ` (Khác: ${item.vnrTen})` : ""}</td>
-            <td>{manpowerRange(row, "gioBatDau")}</td>
-            <td>{manpowerRange(row, "gioKetThuc")}</td>
+            <td className="wrap">{toTruong}</td>
+            <td className="wrap">{toPho}</td>
+            <td className="wrap">{toPhuTro}</td>
+            <td className="wrap">{congNhan}</td>
             <td className="wrap note">{printNote(item)}</td>
           </tr>
         );
@@ -383,20 +397,18 @@ export default function DailyWorkReportPrint({
               <col className="c-num" />
               <col className="c-num" />
               <col className="c-may" />
+              <col className="c-code" />
               <col className="c-time" />
               <col className="c-time" />
               <col className="c-man" />
               <col className="c-man" />
               <col className="c-man" />
               <col className="c-man" />
-              <col className="c-man" />
-              <col className="c-time" />
-              <col className="c-time" />
               <col className="c-note" />
             </colgroup>
             <thead>
               <tr>
-                <th colSpan={22} className="form-title">
+                <th colSpan={20} className="form-title">
                   BÁO CÁO CÔNG VIỆC NGÀY
                 </th>
               </tr>
@@ -405,8 +417,8 @@ export default function DailyWorkReportPrint({
                 <th rowSpan={3}>Hạng mục công việc</th>
                 <th colSpan={4}>Vị trí</th>
                 <th colSpan={5}>Năng suất</th>
-                <th colSpan={3}>Máy móc, thiết bị</th>
-                <th colSpan={7}>Nhân lực</th>
+                <th colSpan={4}>Máy móc, thiết bị</th>
+                <th colSpan={4}>Nhân lực</th>
                 <th rowSpan={3}>Ghi chú</th>
               </tr>
               <tr>
@@ -416,15 +428,14 @@ export default function DailyWorkReportPrint({
                 <th rowSpan={2}>Đến hôm qua</th>
                 <th rowSpan={2}>Hôm nay</th>
                 <th rowSpan={2}>Tích lũy</th>
-                <th rowSpan={2}>Thiết kế</th>
+                <th rowSpan={2}>Tiến độ %</th>
                 <th rowSpan={2}>Loại</th>
+                <th rowSpan={2}>Mã hiệu / số máy</th>
                 <th colSpan={2}>Thời gian làm việc</th>
-                <th rowSpan={2}>CHT</th>
-                <th rowSpan={2}>Kỹ sư</th>
-                <th rowSpan={2}>Lái máy</th>
-                <th rowSpan={2}>Thợ vận hành</th>
+                <th rowSpan={2}>Tổ trưởng</th>
+                <th rowSpan={2}>Tổ phó</th>
+                <th rowSpan={2}>Tổ phụ trợ</th>
                 <th rowSpan={2}>Công nhân</th>
-                <th colSpan={2}>Thời gian làm việc</th>
               </tr>
               <tr>
                 <th>Ray trái</th>
@@ -433,21 +444,19 @@ export default function DailyWorkReportPrint({
                 <th>Ray phải</th>
                 <th>Bắt đầu</th>
                 <th>Kết thúc</th>
-                <th>Bắt đầu</th>
-                <th>Kết thúc</th>
               </tr>
             </thead>
             <tbody>
               <tr className="section-row">
                 <td className="section-letter">A</td>
-                <td colSpan={21} className="section-title">
+                <td colSpan={19} className="section-title">
                   CÔNG VIỆC NGÀY HÔM NAY
                 </td>
               </tr>
               <WorkBodyRows rows={todayRows} numbered={false} />
               <tr className="section-row">
                 <td className="section-letter">B</td>
-                <td colSpan={21} className="section-title">
+                <td colSpan={19} className="section-title">
                   CÔNG VIỆC NGÀY TIẾP THEO
                   <span className="next-date">{nextDate}</span>
                 </td>
@@ -715,20 +724,25 @@ const PRINT_CSS = `
   padding: 1.4mm 0;
 }
 #daily-report-print .c-tt { width: 7mm; }
-#daily-report-print .c-hang { width: 32mm; }
-#daily-report-print .c-tick { width: 8.5mm; }
-#daily-report-print .c-unit { width: 11mm; }
+#daily-report-print .c-hang { width: 30mm; }
+#daily-report-print .c-tick { width: 8mm; }
+#daily-report-print .c-unit { width: 10mm; }
 #daily-report-print .c-num { width: 10mm; }
 #daily-report-print .c-may { width: 24mm; }
+#daily-report-print .c-code { width: 15mm; }
 #daily-report-print .c-time { width: 10.5mm; }
-#daily-report-print .c-man { width: 14mm; }
-#daily-report-print .c-note { width: 20mm; }
+#daily-report-print .c-man { width: 16mm; }
+#daily-report-print .c-note { width: 18mm; }
 #daily-report-print .hang-muc,
 #daily-report-print .wrap,
 #daily-report-print .note,
 #daily-report-print td.left {
   text-align: left;
   padding-left: 1.1mm;
+}
+#daily-report-print .mono {
+  font-family: "Courier New", monospace !important;
+  font-size: 7.5pt;
 }
 #daily-report-print .tt,
 #daily-report-print .tick {

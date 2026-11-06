@@ -29,6 +29,7 @@ export default function WeldQualityBulkDialog({
   onDone: (savedIds: string[]) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const stop = useRef(false);
   const [kind, setKind] = useState<"visual" | "ndt">("ndt");
   const [date, setDate] = useState(todayIso);
@@ -46,6 +47,8 @@ export default function WeldQualityBulkDialog({
   const [processed, setProcessed] = useState(0);
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  /** Đã xác nhận đối chiếu số đo — bắt buộc khi ghi trực quan Đạt hàng loạt. */
+  const [visualConfirmed, setVisualConfirmed] = useState(false);
 
   useEffect(() => {
     ref.current?.showModal();
@@ -85,10 +88,11 @@ export default function WeldQualityBulkDialog({
         Thao tác hàng loạt · {entries.length.toLocaleString("vi-VN")} mối đã chọn
       </h2>
       <p className="mt-2 text-sm text-slate-600">
-        Mặc định <b>Siêu âm đạt</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Sai số / số đo hình học nhập riêng từng mối hoặc qua Excel — không tự điền ở đây.
+        Mặc định <b>Siêu âm đạt</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.
       </p>
 
       <form
+        ref={formRef}
         className="mt-4 space-y-4"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -175,6 +179,21 @@ export default function WeldQualityBulkDialog({
           )}
         </fieldset>
 
+        {kind === "visual" && summary.pass > 0 && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              required
+              disabled={busy || successCount !== null}
+              checked={visualConfirmed}
+              onChange={(e) => setVisualConfirmed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-blue-700"
+            />
+            <span>
+              Tôi đã đối chiếu số đo trước khi dùng mức tối đa cho các ô sai số trống.
+            </span>
+          </label>
+        )}
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold text-slate-800">
             Tổng {summary.total} · Đạt {summary.pass} · Không đạt {summary.fail}
@@ -186,6 +205,20 @@ export default function WeldQualityBulkDialog({
             className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Đặt lại tất cả Đạt
+          </button>
+          {/* Đạt hết ngay: bỏ qua danh sách, ghi Đạt cho toàn bộ mối đã chọn. */}
+          <button
+            type="button"
+            disabled={busy || successCount !== null || missingFailReason}
+            onClick={() => {
+              markAllPass();
+              // Chờ state cập nhật rồi gửi form (đặt lại rồi submit ngay trong cùng tick).
+              window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+            }}
+            className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+            title="Ghi Đạt cho tất cả mối đã chọn, không cần chỉnh từng dòng"
+          >
+            Đạt hết ({summary.total})
           </button>
         </div>
 

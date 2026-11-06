@@ -216,6 +216,12 @@ export function hasRequiredGrindingLength(
   return measurements.chieu_dai_mai != null;
 }
 
+/** Inclusive maximum that can be suggested for a deviation field. Grinding length is measured separately. */
+export function deviationMaximum(key: GeometryCriterion, limits?: GeometryLimits | null): number | null {
+  const limit = limits?.[key];
+  return key !== "chieu_dai_mai" && limit?.maxInclusive ? limit.max : null;
+}
+
 export function evaluateGeometryCriterion(value: number | null, limit: GeometryLimit | null): QualityResult {
   if (value === null || !limit) return null;
   if (!Number.isFinite(value)) throw new Error("Số đo mm phải là số hữu hạn.");
@@ -256,6 +262,7 @@ export function evaluateWeldQuality(
   else if (!inspection) status = "Chờ mài";
   else if (ndtFail || forceFail) status = "Không đạt";
   else if (repairPath) status = "Sửa chữa/khắc phục";
+  else if (!inspection.ngay_mai && !inspection.truc_quan && !inspection.ket_qua_ndt) status = "Chờ mài";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";
   // Đã hoàn thành nghiệm thu (đợt không nháp) → chờ ký bộ hồ sơ.
   else if (pendingSignature) status = "Chờ ký biên bản";

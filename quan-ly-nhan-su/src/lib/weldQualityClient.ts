@@ -65,6 +65,7 @@ export async function markQualityPass(
   try {
     return await qualityRequest<{ results: { id: string; error?: string; phien_ban?: number }[] }>({
       action: "mark-pass",
+      fillDeviationMax: kind === "visual",
       entries,
       kind,
       date,

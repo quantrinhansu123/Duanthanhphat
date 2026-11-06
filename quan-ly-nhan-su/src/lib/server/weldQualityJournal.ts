@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applyJournalListFilters, orderJournalByWeldTime, WELD_TEST_STATUSES,
   type WeldJournalPageQuery, type WeldJournalPageResult, type WeldReportRow } from "@/lib/weldReportData";
-import { emptyWeldInspection, GEOMETRY_CRITERIA, normalizeWeldQualityStatus, parseWeldMeasurement, validateGeometryLimits, WELD_QUALITY_STATUSES, WELD_QUALITY_STATUS_ALIASES,
+import { deviationMaximum, emptyWeldInspection, GEOMETRY_CRITERIA, normalizeWeldQualityStatus, parseWeldMeasurement, validateGeometryLimits, WELD_QUALITY_STATUSES, WELD_QUALITY_STATUS_ALIASES,
   type GeometryLimits, type QualityResult, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
@@ -143,7 +143,9 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
   for (let offset = 0; offset < entries.length; offset += 5) {
     await Promise.all(entries.slice(offset, offset + 5).map(async (entry) => {
     try {
-      const { inspection } = await loadWeldQuality(entry.id);
+      const fill = body.kind === "visual" && entry.ket_qua === "Đạt" && body.fillDeviationMax === true;
+      const detail = fill ? await loadQualityDetail(entry.id) : null;
+      const { inspection } = detail ?? await loadWeldQuality(entry.id);
       const current = inspection ?? emptyWeldInspection(entry.id);
       if (current.phien_ban !== entry.phien_ban) throw new QualityApiError("Dữ liệu đã thay đổi; hãy tải lại.", 409);
       const patch =
@@ -165,6 +167,19 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
         ...patch,
         ...(entry.ghi_chu !== undefined ? { ghi_chu: entry.ghi_chu } : {}),
       };
+      if (detail) {
+        const rule = current.tieu_chuan_id
+          ? detail.rules.find(r => r.id === current.tieu_chuan_id)
+          : detail.rules.find(r => r.dang_ap_dung);
+        if (rule) {
+          next.tieu_chuan_id = rule.id;
+          next.gia_tri_do = { ...current.gia_tri_do };
+          for (const key of GEOMETRY_CRITERIA) {
+            const max = deviationMaximum(key, rule.dung_sai);
+            if (next.gia_tri_do[key] == null && max != null) next.gia_tri_do[key] = max;
+          }
+        }
+      }
       const saved = await saveWeldQualityInspection(parseQualityInspection(next, actor));
       results.push({ id: entry.id, phien_ban: saved.phien_ban });
     } catch (error) { results.push({ id: entry.id, error: error instanceof Error ? error.message : "Không lưu được kiểm tra." }); }

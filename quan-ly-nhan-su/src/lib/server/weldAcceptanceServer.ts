@@ -116,7 +116,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   return {
     ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment),
-    noiDungCongViec: diaryReportWorkText(reports, select(welds.map((w) => w.id))) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Không có công tác thi công trong ngày",
+    noiDungCongViec: diaryReportWorkText(reports, select(welds.map((w) => w.id))) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
     nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {
       const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
       return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
@@ -463,4 +463,63 @@ export async function setSignStatus(body: Record<string, unknown>) {
   const { error } = await db().rpc("ky_bo_ho_so_moi_han", { p_dot_id: dotId, p_tinh_trang_ky: body.tinh_trang_ky });
   if (error) throw error;
   return { ok: true, count: 3 };
+}
+
+/** Separate records share inspection data with the original workflow, but own their RIF/RFI and results. */
+export async function splitAcceptance(body: Record<string, unknown>, actor: string) {
+  const project = qualityUuid(body.du_an_id);
+  const kind = body.loai;
+  if (kind !== "hinh-hoc" && kind !== "sieu-am") throw new QualityApiError("Loại nghiệm thu không hợp lệ.");
+  if (body.action === "split-list") {
+    const [candidates, tickets] = await Promise.all([
+      fetchAll((a,b) => db().from("moi_cho_phieu_nt_tach").select("moi_han_id,ma_lich_su,da_nt_truc_quan,ngay_mai")
+        .eq("du_an_id",project).eq("loai",kind).order("ma_lich_su").order("moi_han_id").range(a,b)),
+      fetchAll((a,b) => db().from("phieu_nt_tach").select("id,so_phieu,ngay_moi,ngay_nghiem_thu,nguoi_lap,nguoi_nghiem_thu")
+        .eq("du_an_id",project).eq("loai",kind).order("ngay_moi",{ascending:false}).order("so_phieu").range(a,b)),
+    ]);
+    return { candidates, tickets };
+  }
+  const id = qualityUuid(body.id);
+  if (body.action === "split-publish") {
+    const ids = body.moi_han_ids, number = str(body.so_phieu,80), date = qualityDate(body.ngay_moi);
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200 || !number || !date)
+      throw new QualityApiError("Nhập số phiếu, ngày mời và chọn 1–200 mối.");
+    const { error } = await db().rpc("phat_phieu_nt_tach", { p_id:id, p_du_an:project, p_loai:kind,
+      p_so:number, p_ngay:date, p_moi:ids.map(qualityUuid), p_actor:actor });
+    if (error?.code === "23505") throw new QualityApiError("Số phiếu hoặc mối đã được dùng trong nhánh này.",409);
+    if (error) throw error;
+    return { id };
+  }
+  const ticket = await db().from("phieu_nt_tach").select("*").eq("id",id).eq("du_an_id",project).eq("loai",kind).single();
+  if (ticket.error) throw ticket.error;
+  if (body.action === "split-detail") {
+    const rows = await db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot")
+      .eq("phieu_id",id).order("ma_lich_su");
+    if (rows.error) throw rows.error;
+    const items = rows.data;
+    if (!ticket.data.ngay_nghiem_thu && items.length) {
+      const ids = items.map(r => r.moi_han_id);
+      const [eligible, inspections] = await Promise.all([
+        chunked<{moi_han_id:string; co_the_dat:boolean}>(ids, part => db().from("ung_vien_nt_tach").select("*").eq("loai",kind).eq("du_an_id",project).in("moi_han_id",part)),
+        chunked<{moi_han_id:string; phien_ban:number}>(ids, part => db().from("kiem_tra_moi_han").select("moi_han_id,phien_ban").in("moi_han_id",part)),
+      ]);
+      const evidence = new Map(eligible.map(r => [r.moi_han_id,r]));
+      const versions = new Map(inspections.map(r => [r.moi_han_id,r.phien_ban]));
+      return { ticket:ticket.data, items:items.map(r => ({...r, current:evidence.get(r.moi_han_id) ?? null, version:versions.get(r.moi_han_id)})) };
+    }
+    return { ticket:ticket.data, items };
+  }
+  if (body.action !== "split-complete") throw new QualityApiError("Thao tác không hợp lệ.");
+  const date = qualityDate(body.ngay_nghiem_thu);
+  if (!date || !Array.isArray(body.results) || !body.results.length || body.results.length>200)
+    throw new QualityApiError("Nhập ngày và kết quả nghiệm thu cho từng mối.");
+  const results = body.results.map(v => {
+    const r = object(v), reason = str(r.ly_do,1000);
+    if (!Number.isInteger(r.phien_ban) || (r.ket_qua!=="Đạt" && r.ket_qua!=="Không đạt") || (r.ket_qua==="Không đạt" && !reason))
+      throw new QualityApiError("Kết quả hoặc lý do không hợp lệ.");
+    return { id:qualityUuid(r.id), phien_ban:r.phien_ban, ket_qua:r.ket_qua, ly_do:reason };
+  });
+  const { error } = await db().rpc("chot_phieu_nt_tach",{p_id:id,p_ngay:date,p_ket_qua:results,p_actor:actor});
+  if (error) throw error;
+  return { id };
 }

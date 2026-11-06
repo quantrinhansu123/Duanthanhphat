@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "@/components/icons";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
 import WeldQualityRuleSelect from "@/components/WeldQualityRuleSelect";
-import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, isOptionalUntilMeasured, parseWeldMeasurement,
+import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, deviationMaximum, emptyWeldInspection, evaluateGeometryCriterion, evaluateWeldQuality, isOptionalUntilMeasured, parseWeldMeasurement,
   type GeometryCriterion, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { loadQualityInspection, saveQualityInspection } from "@/lib/weldQualityClient";
 import type { WeldReportRow } from "@/lib/weldReportData";
@@ -14,10 +14,21 @@ const buttonBase = "min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold f
 const button = `${buttonBase} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
 const primary = `${buttonBase} border-blue-700 bg-blue-700 text-white hover:bg-blue-800`;
 
+/** Chỉ giữ số đo thật; ô trống phải là undefined để gợi ý mức tối đa hoạt động. */
+function numbersFromMeasurements(values: Partial<Record<GeometryCriterion, number | null>>): Partial<Record<GeometryCriterion, string>> {
+  const next: Partial<Record<GeometryCriterion, string>> = {};
+  for (const key of GEOMETRY_CRITERIA) {
+    const value = values[key];
+    if (value != null) next[key] = String(value);
+  }
+  return next;
+}
+
 export default function WeldQualityDialog({ row, onClose, onSaved }: { row: WeldReportRow; onClose: () => void; onSaved: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState<SavedWeldInspection | null>(null);
   const [numbers, setNumbers] = useState<Partial<Record<GeometryCriterion, string>>>({});
+  const [suggestMax, setSuggestMax] = useState(false);
   const [rules, setRules] = useState<SavedWeldQualityRule[]>([]);
   const [accepted, setAccepted] = useState(false);
   const [pendingSignature, setPendingSignature] = useState(false);
@@ -40,7 +51,8 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
         if (current) next = { ...inspection, tieu_chuan_id: current.id };
       }
       setDraft(next);
-      setNumbers(Object.fromEntries(GEOMETRY_CRITERIA.map((k) => [k, inspection.gia_tri_do[k] == null ? "" : String(inspection.gia_tri_do[k])])));
+      setSuggestMax(false);
+      setNumbers(numbersFromMeasurements(inspection.gia_tri_do));
       setRules(data.rules);
       setAccepted(data.summary.tinh_trang === "Đạt");
       setPendingSignature(data.summary.tinh_trang === "Chờ ký biên bản");
@@ -49,9 +61,17 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
     return () => { active = false; };
   }, [row.id, row.du_an_id, reload]);
   const rule = rules.find((r) => r.id === draft?.tieu_chuan_id) ?? null;
+  const suggested = (key: GeometryCriterion) => suggestMax && draft?.ngay_mai && draft.truc_quan === "Đạt" && numbers[key] === undefined
+    ? deviationMaximum(key, rule?.dung_sai) : null;
+  function confirmVisual(value: SavedWeldInspection["truc_quan"]) {
+    if (!draft) return;
+    setSuggestMax(value === "Đạt");
+    if (value === "Đạt") setNumbers((old) => Object.fromEntries(Object.entries(old).filter(([, v]) => v?.trim())));
+    setDraft({ ...draft, truc_quan: value, xu_ly_truc_quan: value === "Không đạt" ? draft.xu_ly_truc_quan ?? "sua_chua" : null });
+  }
   const parseErrors: Partial<Record<GeometryCriterion, string>> = {};
   const measurements = Object.fromEntries(GEOMETRY_CRITERIA.map((k) => {
-    try { return [k, parseWeldMeasurement(numbers[k])]; }
+    try { return [k, parseWeldMeasurement(numbers[k] ?? suggested(k))]; }
     catch { parseErrors[k] = "Nhập số đo mm hợp lệ, ví dụ -0,10 hoặc 0,20."; return [k, null]; }
   }));
   const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted, pendingSignature) : null;
@@ -83,7 +103,8 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
             if (saved.tieu_chuan_id) {
               try { window.localStorage.setItem(`weld-quality-last-rule:${row.du_an_id}`, saved.tieu_chuan_id); } catch { /* ignore */ }
             }
-            setDraft(saved); setMessage("Đã lưu kiểm tra. Tình trạng được tính từ kết quả thực tế."); onSaved();
+            setNumbers(numbersFromMeasurements(saved.gia_tri_do));
+            setSuggestMax(false); setDraft(saved); setMessage("Đã lưu kiểm tra. Tình trạng được tính từ kết quả thực tế."); onSaved();
           } catch (err) { setError(err instanceof Error ? err.message : "Không lưu được kiểm tra."); }
           finally { setSaving(false); }
         }}>
@@ -125,7 +146,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
             )}
             <section className="rounded-xl border border-slate-200 p-4"><h3 className="font-bold">1. Kiểm tra sau mài</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Ngày hoàn thành mài<input type="date" className={input} value={draft.ngay_mai ?? ""} onChange={(e) => setDraft({ ...draft, ngay_mai: e.target.value || null })} /></label>
-                <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => setDraft({ ...draft, truc_quan: (e.target.value as SavedWeldInspection["truc_quan"]) || null, xu_ly_truc_quan: e.target.value === "Không đạt" ? (draft.xu_ly_truc_quan ?? "sua_chua") : null })}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>
+                <label className="text-sm font-semibold">Kiểm tra trực quan<select className={input} value={draft.truc_quan ?? ""} onChange={(e) => confirmVisual((e.target.value as SavedWeldInspection["truc_quan"]) || null)}><option value="">Chưa kiểm tra</option><option value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option></select></label></div>
               {draft.truc_quan === "Không đạt" || assessment?.geometry === "Không đạt" ? (
                 <fieldset className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
                   <legend className="px-1 text-sm font-semibold text-amber-950">Xử lý khi trực quan / độ lệch không đạt</legend>
@@ -149,7 +170,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
                           id={`measure-${k}`}
                           inputMode="decimal"
                           className={`${input} min-w-0 flex-1`}
-                          value={numbers[k] ?? ""}
+                          value={numbers[k] ?? suggested(k) ?? ""}
                           aria-invalid={Boolean(parseErrors[k])}
                           aria-describedby={`measure-help-${k}`}
                           onChange={(e) => setNumbers({ ...numbers, [k]: e.target.value })}
@@ -165,7 +186,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
                         </span>
                       </div>
                       <p id={`measure-help-${k}`} className={`mt-1.5 text-[11px] leading-snug ${parseErrors[k] ? "text-rose-700" : "text-slate-500"}`}>
-                        {parseErrors[k] ?? (limit
+                        {suggested(k) != null && "Tự điền mức tối đa · đối chiếu số đo trước khi lưu. "}{parseErrors[k] ?? (limit
                           ? `Giới hạn: ${limit.min === null ? "…" : `${limit.minInclusive ? "≥" : ">"} ${limit.min}`} ; ${limit.max === null ? "…" : `${limit.maxInclusive ? "≤" : "<"} ${limit.max}`} mm${isOptionalUntilMeasured(k) && measurements[k] == null ? " · chưa nhập: chưa chặn RFI; bắt buộc trước Đạt" : ""}`
                           : "Chưa chọn giới hạn. Ô trống khác số 0.")}
                       </p>

@@ -50,12 +50,36 @@ function emptyToNull(value: string | null | undefined) {
 const inputCls =
   "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
+/**
+ * Sinh mã ngắn từ tên ký hiệu: "Nhà ga" → "GA", "Đầu cầu / Đầu hầm" → "DAU-CAU",
+ * "Ghi rẽ trái" → "GHI-RE-TRAI". Bỏ dấu tiếng Việt để mã in được trên sơ đồ.
+ */
+function suggestCode(name: string) {
+  const ascii = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+  const words = ascii
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return "";
+  // Một hai chữ đầu: "Nhà ga" → GA (lấy chữ cuối nếu chữ đầu là từ đệm).
+  if (words.length === 1) return words[0].slice(0, 12);
+  if (words.length <= 2) return words[words.length - 1].slice(0, 12);
+  return words.slice(0, 3).join("-").slice(0, 20);
+}
+
 /** Add/edit modal. Avatar image is pasted (Ctrl+V) from the clipboard or picked from disk. */
 export function StructureForm({ initial, saving, onCancel, onSubmit }: StructureFormProps) {
   const [form, setForm] = useState<StructureInput>(() => toFormState(initial));
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(safeImageUrl(initial?.image_url));
   const [removed, setRemoved] = useState(false);
+  /** Người dùng đã sửa mã thủ công → không tự sinh lại từ tên. */
+  const [codeTouched, setCodeTouched] = useState(Boolean(initial));
 
   useEffect(() => {
     return () => {
@@ -103,15 +127,17 @@ export function StructureForm({ initial, saving, onCancel, onSubmit }: Structure
           e.preventDefault();
           const name = form.name.trim();
           if (!name) return;
+          // Mã ký hiệu: dùng mã đã nhập, nếu trống thì sinh từ tên, cuối cùng mới đến UUID.
+          const code = (form.code ?? "").trim() || suggestCode(name) || crypto.randomUUID();
           onSubmit(
             {
               ...form,
               name,
+              code,
               name_en: emptyToNull(form.name_en),
               line: emptyToNull(form.line),
               managing_unit: emptyToNull(form.managing_unit),
               note: emptyToNull(form.note),
-              code: initial?.code || crypto.randomUUID(),
             },
             file,
             removed,
@@ -133,8 +159,28 @@ export function StructureForm({ initial, saving, onCancel, onSubmit }: Structure
             required
             className={inputCls}
             value={form.name}
-            onChange={(e) => set("name", e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              // Chưa sửa mã thủ công → tự sinh mã ngắn từ tên (Nhà ga → GA) thay vì UUID.
+              setForm((f) => ({ ...f, name: next, code: codeTouched ? f.code : suggestCode(next) }));
+            }}
           />
+        </label>
+
+        <label className="mb-3 block text-xs text-slate-600">
+          Mã ký hiệu
+          <input
+            className={`${inputCls} font-mono uppercase`}
+            value={form.code}
+            placeholder="VD: GA, CAU, HAM, GH-TR"
+            onChange={(e) => {
+              setCodeTouched(true);
+              set("code", e.target.value.toUpperCase());
+            }}
+          />
+          <span className="mt-1 block text-[11px] font-normal text-slate-500">
+            Mã ngắn in trên sơ đồ. Để trống sẽ tự sinh từ tên ký hiệu.
+          </span>
         </label>
 
         <label className="mb-3 block text-xs text-slate-600">

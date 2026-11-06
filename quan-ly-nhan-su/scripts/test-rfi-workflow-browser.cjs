@@ -20,6 +20,7 @@ const mocks = {
   '@/lib/dailyFuelDb': `export const OIL_LEVEL_UNITS=['lít'];export const formatFuelDate=x=>x;export async function loadDailyFuelRows(){return {rows:[]}};export async function deleteDailyFuel(){};export async function upsertDailyFuel(x){window.__fuel=x;};`,
   '@/lib/notificationsDb': `export async function notifyCommanderOilLow(){}`,
   '@/lib/weldQualityClient': `
+    export const qualityRequest=async()=>({candidates:[],tickets:[]});
     const w={moi_han_id:'w1',ma_lich_su:'PQ-001',ma_diem:'TT0001',ly_trinh:'Km1+005',con_hieu_luc:true,phien_ban:3,tinh_trang:'Chờ siêu âm và nghiệm thu',du_dieu_kien_nghiem_thu:false,thieu_chieu_dai_mai:true,ly_do_chua_du_dieu_kien:'Thiếu chiều dài mài hoàn thiện (mm).'};
     const rfi={id:'rfi',so_phieu:'RFI-009',ngay_moi:'2026-11-01',trang_thai:'Đã phát hành',thong_tin:{tuyen_thuong:'1'},tong_moi:1,con_lai:1,tracking:{da_nghiem_thu:0,khong_dat:0,chua_nghiem_thu:1,cho_ky:0,da_ky:0,km_nghiem_thu:'—',thieu_ly_trinh:0,moi:[{...w,ket_qua:'Chưa nghiệm thu',da_ky:false}]}};
     let completed=false,signed=false;

@@ -40,6 +40,35 @@ function formatDate(iso: string | null | undefined) {
   return y && m && d ? `${Number(d)}/${Number(m)}/${y}` : "—";
 }
 
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-11-04" → "4-Nov-26" (đúng định dạng mẫu theo dõi điển hình ray). */
+function formatDateShortEn(iso: string | null | undefined) {
+  const [y, m, d] = String(iso ?? "").slice(0, 10).split("-");
+  const month = MONTHS_SHORT[Number(m) - 1];
+  if (!y || !month || !d) return "—";
+  return `${Number(d)}-${month}-${y.slice(-2)}`;
+}
+
+/**
+ * "FBW 041126 001" — tên mối hàn tại hiện trường theo mẫu:
+ * {công nghệ} {ddmmaa} {số thứ tự trong ngày, 3 chữ số}.
+ * Nguồn: mã hiện trường (FBW-05-11-26-0015) → đổi sang ddmmaa và lấy 3 số cuối phần TT.
+ */
+function formatSiteWeldName(row: WeldReportRow): string {
+  const method = (row.cong_nghe_han ?? "FBW").trim().toUpperCase();
+  const iso = getJournalRowDateIso(row);
+  const [, mm, dd] = String(iso ?? "").slice(0, 10).split("-");
+  const ddmmaa = mm && dd ? `${dd}${mm}${String(iso).slice(2, 4)}` : "";
+
+  // Mã hiện trường dạng FBW-05-11-26-0015 → lấy phần số thứ tự cuối.
+  const raw = (row.ma_hien_truong ?? "").trim() || (row.ma_lich_su ?? "").trim();
+  const seqMatch = /(\d+)$/.exec(raw);
+  const seq = seqMatch ? String(Number(seqMatch[1])).padStart(3, "0") : "";
+
+  return [method, ddmmaa, seq].filter(Boolean).join(" ");
+}
+
 function chainageSortKey(value: string) {
   const match = /(\d+)\+(\d+(?:\.\d+)?)/.exec(value ?? "");
   return match ? Number(match[1]) * 1000 + Number(match[2]) : Number.MAX_SAFE_INTEGER;
@@ -75,13 +104,12 @@ export default function RailReportDashboard() {
         const maLisp = (row.ma_diem ?? "").trim();
         const parsed = maLisp ? parseCoordinateCode(maLisp) : null;
         const route = parsed?.prefix ?? "";
-        const maHienTruong = (row.ma_lich_su ?? "").trim();
         return {
           key: row.id,
           maLisp: maLisp || "—",
-          maHienTruong: maHienTruong || "—",
+          maHienTruong: formatSiteWeldName(row),
           lyTrinh: normalizeChainage(row.ly_trinh),
-          ngayHan: formatDate(getJournalRowDateIso(row)),
+          ngayHan: formatDateShortEn(getJournalRowDateIso(row)),
           chieuDai: String(RAIL_LENGTH_MM),
           tinhTrang: statusLabel(row),
           ghiChu: (row.ghi_chu ?? "").trim() || "—",
@@ -114,7 +142,7 @@ export default function RailReportDashboard() {
   function openPrint() {
     setPrintPayload({
       rows: railRows,
-      title: "BẢNG TỔNG HỢP MỐI HÀN THEO THANH RAY",
+      title: "THEO DÕI ĐIỂN HÀNH RAY",
       projectLabel:
         appliedFilters.projects.length === 1
           ? appliedFilters.projects[0]

@@ -73,7 +73,7 @@ const TEXT_SECTIONS = [
 ] as const satisfies readonly (readonly [keyof ConstructionDiary, string, string, number])[];
 
 export default function ConstructionDiaryForm() {
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string; startDate: string }[]>([]);
   const [projectId, setProjectId] = useState("");
   const [date, setDate] = useState(today());
   const [d, setD] = useState<ConstructionDiary>(EMPTY_DIARY);
@@ -85,7 +85,7 @@ export default function ConstructionDiaryForm() {
   useEffect(reloadSaved, []);
   useEffect(() => {
     loadProjects({ includeProgress: false }).then((r) => {
-      setProjects(r.projects.map((p) => ({ id: p.id, name: p.name })));
+      setProjects(r.projects.map((p) => ({ id: p.id, name: p.name, startDate: p.startDate })));
       setProjectId((cur) => cur || r.projects[0]?.id || "");
     }).catch(() => setProjects([]));
   }, []);
@@ -133,6 +133,22 @@ export default function ConstructionDiaryForm() {
   }, []);
   const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
+
+  /**
+   * Số trang nhật ký: bắt đầu 5–6 cho ngày đầu dự án, mỗi ngày thi công dùng 2 trang,
+   * luỹ tiến 7–8, 9–10… Không có ngày bắt đầu dự án thì để trống (điền tay).
+   */
+  const [pageStart, pageEnd] = (() => {
+    const project = projects.find((p) => p.id === projectId);
+    const start = project?.startDate?.slice(0, 10);
+    if (!start || !date) return ["……", "……"];
+    const startMs = Date.parse(`${start}T00:00:00`);
+    const curMs = Date.parse(`${date}T00:00:00`);
+    if (!Number.isFinite(startMs) || !Number.isFinite(curMs)) return ["……", "……"];
+    const days = Math.max(0, Math.round((curMs - startMs) / 86400000));
+    const first = 5 + days * 2;
+    return [String(first), String(first + 1)];
+  })();
 
   /** Nội dung mục 3 khi in: gộp công việc + nghiệm thu hàng ngày (biểu mẫu không có mục 3.2 riêng). */
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
@@ -374,7 +390,7 @@ export default function ConstructionDiaryForm() {
           <div className="diary-fill" ref={fill1}>
             <div className="diary-ruled" style={{ height: lines[0] * LINE }}><div>{section3Print}</div></div>
           </div>
-          <p className="diary-foot">Trang ……</p>
+          <p className="diary-foot">Trang {pageStart}</p>
         </section>
 
         <section className="diary-sheet">
@@ -394,7 +410,7 @@ export default function ConstructionDiaryForm() {
             <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
             <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
           </div>
-          <p className="diary-foot">Trang ……</p>
+          <p className="diary-foot">Trang {pageEnd}</p>
         </section>
       </article>
     </div>

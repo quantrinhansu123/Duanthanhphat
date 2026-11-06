@@ -1408,32 +1408,37 @@ function normalizeJournalRow(row: WeldReportRow): WeldReportRow {
   };
 }
 
-/** Gắn mã LISP (toa_do.ma_diem) và lý trình vào từng dòng nhật ký theo liên kết GPS. */
+/**
+ * Gắn mã LISP (toa_do.ma_diem) và lý trình vào từng dòng nhật ký theo liên kết GPS.
+ * Tải một lần toàn bộ điểm đã gắn nhật ký rồi tra theo id — tránh 1 truy vấn/tối đa 200 dòng
+ * (báo cáo có thể 13.000+ dòng nên cách cũ rất chậm).
+ */
 async function attachLispCodesToJournalRows(rows: WeldReportRow[]): Promise<WeldReportRow[]> {
   if (!rows.length || !isSupabaseConfigured()) return rows;
-  const ids = [...new Set(rows.map((row) => row.id).filter(Boolean))];
-  if (!ids.length) return rows;
 
   const supabase = createClient();
   const byWeldId = new Map<string, { code: string; chainage: string }>();
-  const chunkSize = 200;
-  for (let offset = 0; offset < ids.length; offset += chunkSize) {
-    const chunk = ids.slice(offset, offset + chunkSize);
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("toa_do")
       .select("ma_diem, ly_trinh, lich_su_moi_han_id")
-      .in("lich_su_moi_han_id", chunk);
+      .not("lich_su_moi_han_id", "is", null)
+      .order("lich_su_moi_han_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
     if (error) {
       console.warn("[attachLispCodesToJournalRows]", error.message);
-      continue;
+      break;
     }
-    for (const point of data ?? []) {
+    const page = data ?? [];
+    for (const point of page) {
       const weldId = String(point.lich_su_moi_han_id ?? "").trim();
       if (!weldId) continue;
       const code = String(point.ma_diem ?? "").trim();
       const chainage = String(point.ly_trinh ?? "").trim();
       if (code || chainage) byWeldId.set(weldId, { code, chainage });
     }
+    if (page.length < pageSize) break;
   }
   if (!byWeldId.size) return rows;
   return rows.map((row) => {
@@ -2121,7 +2126,7 @@ export function loadWeldReportRows(
           }
         }
       }
-    })().catch((error) => {
+    })().then((rows) => attachLispCodesToJournalRows(rows)).catch((error) => {
       reportRowsPromises.delete(cacheKey);
       throw new Error(formatSupabaseError(error));
     });
