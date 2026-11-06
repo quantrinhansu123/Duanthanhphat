@@ -1389,12 +1389,12 @@ function journalPageSelect(
   return cols.join(",");
 }
 
-/** Ngày mới trước; trong cùng ngày sắp theo mã hệ thống tăng dần (TT 0001→n). */
+/** Ngày mới trước; trong cùng ngày mã hệ thống có số lớn hơn đứng trước. */
 export function orderJournalByWeldTime<T>(request: T, withCreatedAt: boolean, withExtras: boolean): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let next: any = request;
   next = next.order("ngay_thuc_hien", { ascending: false, nullsFirst: false });
-  next = next.order("ma_lich_su", { ascending: true, nullsFirst: false });
+  next = next.order("ma_lich_su", { ascending: false, nullsFirst: false });
   if (withExtras) next = next.order("gio_han", { ascending: true, nullsFirst: false });
   if (withCreatedAt) next = next.order("created_at", { ascending: true, nullsFirst: false });
   return next.order("id", { ascending: true }) as T;

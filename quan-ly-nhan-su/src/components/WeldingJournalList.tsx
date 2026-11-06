@@ -66,6 +66,7 @@ import {
   COORDINATE_RAIL_PREFIXES,
   detectMachineWeldNumbering,
   fieldCodeFromSystemCode,
+  hasOwnWeldSitePrefix,
   machineWeldCodeHint,
   machineWeldCodePlaceholder,
   normalizeCoordinateCode,
@@ -558,11 +559,11 @@ function JournalFormModal({
     };
   }, [mode, open, form.cong_nghe_han, form.performedAt, form.loai_moi_han, sitePrefix]);
 
-  const suggestedCode = useMemo(() => {
+  const suggestedCode = (() => {
     if (mode === "edit") return form.ma_lich_su;
     const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
     return suggestWeldCode(form.cong_nghe_han, form.performedAt, codes, sitePrefix, form.loai_moi_han);
-  }, [mode, form.ma_lich_su, existingCodes, prefixCodes, form.cong_nghe_han, form.performedAt, sitePrefix, form.loai_moi_han]);
+  })();
 
   useEffect(() => {
     if (!open || mode === "edit" || codeFromQr) return;
@@ -623,7 +624,7 @@ function JournalFormModal({
     );
   }, [open, mode, machineCodeEdited, suggestedMachineCode]);
 
-  const projectMissingCode = false; // tiền tố PQ cố định, không cần mã dự án
+  const projectMissingCode = Boolean(selectedProject) && !hasOwnWeldSitePrefix(selectedProject?.ma_du_an);
   const quickActive = mode === "create" && entryMode === "quick";
   const linkedActive = entryMode === "linked";
   const linkedTabBadge =
@@ -979,7 +980,7 @@ function JournalFormModal({
               options={projects.map((p) => ({
                 value: p.id,
                 label: p.label,
-                hint: p.ma_du_an || undefined,
+                hint: hasOwnWeldSitePrefix(p.ma_du_an) ? p.ma_du_an : "Chưa có mã dự án",
               }))}
               searchable={projects.length > 5}
               placeholder={projects.length === 0 ? "Chưa có dữ liệu dự án" : "Chọn dự án"}
@@ -1808,7 +1809,7 @@ export default function WeldingJournalList({
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
   const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
-  const [dateFrom, setDateFrom] = useState("");
+  const [dateFrom, setDateFrom] = useState("2026-11-04");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<WeldReportRow[]>([]);
@@ -1843,6 +1844,7 @@ export default function WeldingJournalList({
   const [machineError, setMachineError] = useState("");
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
   const [projectOptions, setProjectOptions] = useState<JournalProjectOption[]>([]);
+  const defaultProjectApplied = useRef(false);
 
   useEffect(() => {
     if (lockedResultFilter) setResultFilter(lockedResultFilter);
@@ -1893,7 +1895,15 @@ export default function WeldingJournalList({
     let active = true;
     loadJournalProjectOptions()
       .then((options) => {
-        if (active) setProjectOptions(options);
+        if (!active) return;
+        setProjectOptions(options);
+        if (!defaultProjectApplied.current) {
+          defaultProjectApplied.current = true;
+          const phuQuocProjects = options.filter((project) =>
+            project.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("phu quoc"),
+          );
+          setProjectFilter(phuQuocProjects.map((project) => project.label));
+        }
       })
       .catch(() => {
         if (active) setProjectOptions([]);
@@ -1982,11 +1992,11 @@ export default function WeldingJournalList({
     const gpsByPointCode = new Map(
       gpsPoints.map((point) => [point.code.trim().toLocaleLowerCase("vi"), point]),
     );
-    // Ngày mới trước; trong ngày sắp theo mã hệ thống tăng dần (0001 → n).
+    // Ngày mới trước; trong ngày mã hệ thống có số lớn hơn đứng trước.
     const orderedRows = [...rows].sort(
       (a, b) =>
         compareNewestDate(a.ngay_thuc_hien, b.ngay_thuc_hien) ||
-        a.ma_lich_su.localeCompare(b.ma_lich_su, "vi") ||
+        b.ma_lich_su.localeCompare(a.ma_lich_su, "vi", { numeric: true }) ||
         (a.gio_han || "").localeCompare(b.gio_han || "") ||
         a.id.localeCompare(b.id),
     );
