@@ -52,6 +52,16 @@ export async function authenticateWeldQuality(request: Request): Promise<string>
   if (error || !email) throw new QualityApiError("Phiên đăng nhập hết hạn; hãy đăng nhập lại.", 401);
   const allowed = await db.from("nguoi_dung_nghiem_thu").select("email").eq("email", email).maybeSingle();
   if (allowed.error) throw allowed.error;
-  if (!allowed.data) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
+  if (!allowed.data && !(await hasJournalEditRole(db, email))) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
   return email;
+}
+
+/** Role được tick "Sửa" ở Nhật ký hàn (Cấu hình → Phân quyền) cũng được ghi nhận chất lượng. */
+async function hasJournalEditRole(db: ReturnType<typeof createAdminClient>, email: string) {
+  const acc = await db.from("tai_khoan_phan_quyen").select("role,status").ilike("email", email).maybeSingle();
+  if (acc.error) throw acc.error;
+  if (!acc.data || acc.data.status === "Khóa") return false;
+  const perm = await db.from("phan_quyen").select("role").eq("role", acc.data.role).eq("tab_id", "nhat-ky-han").eq("can_edit", true).maybeSingle();
+  if (perm.error) throw perm.error;
+  return !!perm.data;
 }
