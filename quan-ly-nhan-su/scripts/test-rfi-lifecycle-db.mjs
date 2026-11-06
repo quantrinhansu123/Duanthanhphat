@@ -43,6 +43,18 @@ try {
   await assert.rejects(() => publish(), /Injected failure/);
   assert.equal(await value("select count(*)::int from phieu_yeu_cau_nghiem_thu"), 0, "Publishing must roll back if any document fails");
   await db.exec("drop trigger fail_document on ho_so_nghiem_thu; set role service_role");
+  await db.exec("reset role");
+  await migrate("migration_20261028_ho_so_sua_doi");
+  await migrate("migration_20261106_xoa_phieu_rfi");
+  await migrate("migration_20261106_xoa_phieu_rfi");
+  await db.exec("set role service_role");
+  await publish();
+  await sql("select xoa_phieu_rfi($1)", [rfi]);
+  for (const table of ["phieu_yeu_cau_nghiem_thu", "phieu_yeu_cau_nghiem_thu_moi", "dot_nghiem_thu", "dot_nghiem_thu_moi", "ho_so_nghiem_thu"]) {
+    assert.equal(await value(`select count(*)::int from ${table}`), 0, `Delete removes ${table}`);
+  }
+  assert.equal(await value("select count(*)::int from lich_su_moi_han"), 2, "Delete preserves welds");
+  await assert.rejects(() => sql("select xoa_phieu_rfi($1)", [rfi]), /không còn tồn tại/);
   assert.equal(await publish(), rfi);
   assert.equal(await publish(), rfi);
   const draft = await value("select id from dot_nghiem_thu where phieu_id=$1", [rfi]);
@@ -60,6 +72,7 @@ try {
   await sql("select luu_kiem_tra_moi_han($1,4,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [weld, profile, {...measurements,chieu_dai_mai:500}]);
   decisions[0].phien_ban = 5;
   assert.equal(await complete(), draft, "Finalize the existing draft without creating a fourth document");
+  await assert.rejects(() => sql("select xoa_phieu_rfi($1)", [rfi]), /Không thể xóa/);
   assert.equal(await complete(), draft, "Retry with the original request ID returns the same draft");
   assert.equal(await value("select count(*)::int from dot_nghiem_thu"), 1);
   assert.equal(await value("select count(*)::int from ho_so_nghiem_thu"), 3);

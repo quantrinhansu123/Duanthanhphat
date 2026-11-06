@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { completeAcceptance, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiNumber, loadRfis,
-  publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+  deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { defaultDecisions, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -402,6 +402,22 @@ function RfiPanel({
     refresh().catch((e) => setError(message(e)));
   }
 
+  async function removeRfi(r: RfiSummary) {
+    if (busy || !window.confirm(`Xóa phiếu ${r.so_phieu}?\n\nHồ sơ nháp liên quan sẽ bị xóa. Các mối hàn được giữ lại để phát phiếu mới. Không thể hoàn tác.`)) return;
+    setBusy(true); setError(""); setOkMsg("");
+    try {
+      await deleteRfi(r.id);
+      setRfis((current) => current.filter((item) => item.id !== r.id));
+      if (editingId === r.id) {
+        setEditingId(null);
+        requestId.current = crypto.randomUUID();
+      }
+      setRows([]); setInfo(null); setSelected(new Set());
+      setOkMsg(`Đã xóa phiếu ${r.so_phieu}.`);
+      await refresh(editingId !== null && editingId !== r.id);
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+
   const toggle = (id: string) => setSelected((cur) => {
     const n = new Set(cur);
     if (n.has(id)) n.delete(id); else n.add(id);
@@ -585,8 +601,9 @@ function RfiPanel({
                 <td className="p-2">{r.trang_thai}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <span className="inline-flex flex-nowrap justify-end gap-1">
-                    <button type="button" className={`${secondary} whitespace-nowrap`} onClick={() => beginEdit(r)}>Sửa</button>
+                    <button type="button" disabled={busy} className={`${secondary} whitespace-nowrap`} onClick={() => beginEdit(r)}>Sửa</button>
                     <button type="button" className={`${secondary} whitespace-nowrap`} onClick={() => Promise.resolve(onOpen(r)).catch((e) => setError(message(e)))}>Xem / In</button>
+                    <button type="button" disabled={busy} aria-label={`Xóa phiếu ${r.so_phieu}`} className={`${btn} whitespace-nowrap border border-red-300 bg-white text-red-700 hover:bg-red-50`} onClick={() => removeRfi(r)}>Xóa</button>
                   </span>
                 </td>
               </tr>

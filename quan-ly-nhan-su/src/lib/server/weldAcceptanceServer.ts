@@ -284,6 +284,16 @@ export async function listRfis(projectId: string) {
 }
 
 /** Sửa thông tin phiếu YCNT/RFI đã phát (không đổi danh sách mối đã chốt). */
+export async function deleteRfi(body: Record<string, unknown>) {
+  const id = qualityUuid(body.id);
+  const { error } = await db().rpc("xoa_phieu_rfi", { p_id: id });
+  if (error) {
+    if (error.code === "P0001") throw new QualityApiError(error.message, 409);
+    throw error;
+  }
+  return { id };
+}
+
 export async function updateRfi(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const { data: existing, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", id).single();

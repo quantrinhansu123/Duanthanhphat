@@ -99,6 +99,11 @@ export async function publishRfi(input: { id: string; du_an_id: string; so_phieu
   try { return await qualityRequest<{ id: string }>({ action: "rfi-publish", ...input }); } finally { notifyWeldQualityChanged(); }
 }
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
+export async function deleteRfi(id: string) {
+  const result = await qualityRequest<{ id: string }>({ action: "rfi-delete", id });
+  notifyWeldQualityChanged();
+  return result;
+}
 export const loadRfiDetail = (id: string) => qualityRequest<{ rfi: RfiSummary & { du_an_id: string }; welds: RfiWeld[] }>({ action: "rfi-detail", id });
 export async function updateRfi(input: { id: string; so_phieu: string; ngay_moi: string; thong_tin: Record<string, string> }) {
   try { return await qualityRequest<{ id: string }>({ action: "rfi-update", ...input }); } finally { notifyWeldQualityChanged(); }
