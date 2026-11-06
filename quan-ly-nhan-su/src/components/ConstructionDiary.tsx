@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
@@ -35,40 +35,33 @@ function weatherMark(thoiTiet: string): WeatherOption | "" {
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/25";
 const lbl = "flex flex-col text-xs font-semibold text-slate-600";
 const today = () => new Date().toLocaleDateString("sv-SE");
-const css = `@media screen { #diary-print { display: none; } }
+const LINE = 27; // px, khoảng cách dòng chấm theo bản mẫu
+const DOT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='27'%3E%3Crect y='26' width='1' height='1'/%3E%3C/svg%3E\")";
+const css = `@media screen { #diary-print { position: absolute; left: -10000px; top: 0; visibility: hidden; pointer-events: none; } }
+#diary-print { width: 210mm; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black; }
+#diary-print p { margin: 0; }
+#diary-print h2 { margin: 0 0 6pt; font-size: 13.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
+#diary-print .diary-sheet { width: 210mm; height: 296mm; box-sizing: border-box; padding: 16mm 15mm 18mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; break-after: page; page-break-after: always; }
+#diary-print .diary-sheet:last-child { break-after: auto; page-break-after: auto; }
+#diary-print .diary-foot { position: absolute; right: 15mm; bottom: 9mm; font-size: 11pt; }
+#diary-print .diary-date { text-align: right; margin: 0 0 6pt; }
+#diary-print .diary-heading { margin-top: 6pt; font-weight: bold; }
+#diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
+#diary-print .diary-indent { padding-left: 10mm; }
+#diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
+#diary-print .diary-ruled { line-height: ${LINE}px; background-image: ${DOT}; background-size: 3px ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
+#diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
+#diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
+#diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
 @media print {
   body * { visibility: hidden !important; }
   #diary-print, #diary-print * { visibility: visible !important; }
   html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
   body *:has(#diary-print) { position: static !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
   aside, header, .no-print { display: none !important; }
-  #diary-print {
-    position: absolute; left: 0; top: 0; width: 100%;
-    font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black;
-  }
-  #diary-print h2 { margin: 0 0 2pt; font-size: 13.5pt; line-height: 17pt; text-align: center; font-weight: bold; }
-  #diary-print .diary-date { text-align: center; margin: 0 0 4pt; }
-  #diary-print p { margin: 0; }
-  #diary-print .whitespace-pre-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
-  #diary-print .diary-heading { margin-top: 5pt; font-weight: bold; }
-  #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
-  #diary-print .diary-section { break-inside: avoid; }
-  #diary-print .diary-dots { height: 12pt; border-bottom: 1px dotted black; }
-  #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
-  #diary-print .diary-frame { width: 100%; border-collapse: collapse; border: 0; }
-  #diary-print .diary-frame > thead, #diary-print .diary-frame > tbody, #diary-print .diary-frame > tfoot { border: 0; }
-  #diary-print .diary-frame td { padding: 0; border: 0; }
-  #diary-print .diary-frame-foot { padding: 0 15mm 0 20mm; }
-  #diary-print .diary-frame-space { height: 8mm; }
-  #diary-print .diary-frame > tbody > tr > td.diary-frame-body { padding: 0 15mm 0 20mm; }
-  #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
-  #diary-print .diary-sig-sub { text-align: center; font-weight: bold; margin-top: 28pt; break-inside: avoid; }
-  #diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
-  #diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  #diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
-  #diary-print .diary-page { text-align: right; margin: 0 15mm 0 20mm; padding-top: 2pt; font-size: 9pt; line-height: 12pt; }
-  #diary-print .diary-frame > thead { display: table-header-group; }
-  #diary-print .diary-frame > tfoot { display: table-footer-group; }
+  #diary-print { position: absolute; left: 0; top: 0; }
   @page { size: A4 portrait; margin: 0; }
 }`;
 
@@ -124,6 +117,20 @@ export default function ConstructionDiaryForm() {
   }, [projectId, date]);
 
   const set = (k: keyof ConstructionDiary) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD((cur) => ({ ...cur, [k]: e.target.value }));
+  const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null);
+  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang 2, đo theo chỗ còn trống
+  useLayoutEffect(() => {
+    const measure = () => {
+      const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight;
+      if (a == null || b == null) return;
+      const next: [number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE))];
+      setLines((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const el of [fill1.current, fill2.current]) if (el) ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
 
@@ -344,52 +351,51 @@ export default function ConstructionDiaryForm() {
       </div>
 
       <article id="diary-print">
-        {/* Khung bảng: thead/tfoot lặp mỗi trang để làm lề trên/dưới, nhờ vậy đặt @page margin 0 mà trình duyệt không in đầu/cuối trang. */}
-        <table className="diary-frame">
-        <thead><tr><td><div className="diary-frame-space" /></td></tr></thead>
-        <tbody><tr><td className="diary-frame-body">
-        <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
-        <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "……"}</p>
+        <section className="diary-sheet">
+          <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
+          <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "202…."}</p>
 
-        <p className="diary-heading">1. Thời tiết:</p>
-        <p className="diary-check">
-          <Check checked={mark === "Bình thường"} /> Bình thường&nbsp;&nbsp;&nbsp;
-          <Check checked={mark === "Mưa"} /> Mưa&nbsp;&nbsp;&nbsp;
-          <Check checked={mark === "Nắng"} /> Nắng
-          &nbsp;&nbsp;&nbsp;&nbsp;Nhiệt độ: {d.nhietDo || "……"} °C
-        </p>
-        <p>Sáng: {d.sang || "………………"}&nbsp;&nbsp;&nbsp;Chiều: {d.chieu || "………………"}&nbsp;&nbsp;&nbsp;Tối: {d.toi || "………………"}</p>
+          <p className="diary-heading" style={{ marginTop: 0 }}>1. Thời tiết</p>
+          <p className="diary-indent diary-check">
+            Bình thường: <Check checked={mark === "Bình thường"} />&nbsp;&nbsp;&nbsp;&nbsp;
+            Mưa <Check checked={mark === "Mưa"} />&nbsp;&nbsp;&nbsp;&nbsp;
+            Nắng <Check checked={mark === "Nắng"} />&nbsp;&nbsp;&nbsp;&nbsp;
+            Nhiệt độ : {d.nhietDo ? `${d.nhietDo} °C` : ".........."}
+          </p>
+          <p className="diary-indent">Sáng {d.sang || "…………."}&nbsp;&nbsp;&nbsp;&nbsp;Chiều {d.chieu || "……...."}&nbsp;&nbsp;&nbsp;&nbsp;Tối {d.toi || "………….."}</p>
 
-        <p className="diary-heading">2. Tình hình nhân lực, thiết bị thi công:</p>
-        <p>2.1 Nhân lực: Ban chỉ huy: {d.banChiHuy || "……"} (người); Cán bộ kỹ thuật: {d.canBoKyThuat || "……"} (người); Công nhân: {d.congNhan || "……"} (người)</p>
-        <p>2.2 Thiết bị:</p>
-        <Block text={d.thietBi} min={3} />
+          <p className="diary-heading">2. Tình hình nhân lực, thiết bị thi công:</p>
+          <p className="diary-heading" style={{ marginTop: 0 }}>2.1 Nhân lực:</p>
+          <p className="diary-indent">Ban chỉ huy: {d.banChiHuy || "………"}(người); Cán bộ kỹ thuật: {d.canBoKyThuat || ".........."}(người); Công nhân {d.congNhan || "..........."}(người)</p>
+          <p className="diary-heading" style={{ marginTop: 0 }}>2.2 Thiết bị:</p>
+          <Ruled text={d.thietBi} min={5} />
 
-        <div className="diary-section">
           <p className="diary-heading">3. Nội dung công việc thực hiện:</p>
-          <Block text={section3Print} min={6} />
-        </div>
-
-        {TEXT_SECTIONS.map(([k, title, hint, rows]) => (
-          <div key={k} className="diary-section">
-            <p className="diary-heading">{title}{hint ? <> <span className="diary-hint">{hint}</span></> : null}:</p>
-            <Block text={d[k]} min={rows} />
+          <div className="diary-fill" ref={fill1}>
+            <div className="diary-ruled" style={{ height: lines[0] * LINE }}><div>{section3Print}</div></div>
           </div>
-        ))}
+          <p className="diary-foot">Trang ……</p>
+        </section>
 
-        <div className="diary-sig-row">
-          <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
-          <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div>
-            <div className="diary-sig-box" /></div>
-          <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div>
-            <div className="diary-sig-box" /></div>
-        </div>
-        </td></tr></tbody>
-        {/* tfoot lặp ở đáy MỌI trang: lề dưới */}
-        <tfoot><tr><td>
-          <div className="diary-frame-space" />
-        </td></tr></tfoot>
-        </table>
+        <section className="diary-sheet">
+          <div className="diary-fill" ref={fill2}>
+            <div className="diary-ruled" style={{ height: lines[1] * LINE }}><div style={{ marginTop: -lines[0] * LINE }}>{section3Print}</div></div>
+          </div>
+
+          {TEXT_SECTIONS.map(([k, title, hint, rows]) => (
+            <div key={k}>
+              <p className="diary-heading">{title}{hint ? <> <span className="diary-hint">{hint}</span></> : null}:</p>
+              <Ruled text={d[k]} min={rows} />
+            </div>
+          ))}
+
+          <div className="diary-sig-row">
+            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
+            <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
+            <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
+          </div>
+          <p className="diary-foot">Trang ……</p>
+        </section>
       </article>
     </div>
   );
@@ -400,9 +406,8 @@ function Check({ checked }: { checked: boolean }) {
 }
 
 /** Văn bản đã nhập, hoặc các dòng chấm để điền tay khi để trống. */
-function Block({ text, min }: { text: string; min: number }) {
-  if (text.trim()) return <p className="whitespace-pre-wrap">{text}</p>;
-  return <>{Array.from({ length: min }, (_, i) => <p key={i} className="diary-dots" aria-hidden="true">&nbsp;</p>)}</>;
+function Ruled({ text, min }: { text: string; min: number }) {
+  return <div className="diary-ruled" style={{ minHeight: min * LINE }}>{text.trim()}</div>;
 }
 
 function Card({ title, hint, wide, children }: { title: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
