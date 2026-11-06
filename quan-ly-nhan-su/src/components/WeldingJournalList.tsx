@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -65,7 +66,6 @@ import {
   COORDINATE_RAIL_PREFIXES,
   detectMachineWeldNumbering,
   fieldCodeFromSystemCode,
-  hasOwnWeldSitePrefix,
   machineWeldCodeHint,
   machineWeldCodePlaceholder,
   normalizeCoordinateCode,
@@ -623,7 +623,7 @@ function JournalFormModal({
     );
   }, [open, mode, machineCodeEdited, suggestedMachineCode]);
 
-  const projectMissingCode = Boolean(selectedProject) && !hasOwnWeldSitePrefix(selectedProject?.ma_du_an);
+  const projectMissingCode = false; // tiền tố PQ cố định, không cần mã dự án
   const quickActive = mode === "create" && entryMode === "quick";
   const linkedActive = entryMode === "linked";
   const linkedTabBadge =
@@ -904,7 +904,7 @@ function JournalFormModal({
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <button
         type="button"
@@ -979,7 +979,7 @@ function JournalFormModal({
               options={projects.map((p) => ({
                 value: p.id,
                 label: p.label,
-                hint: hasOwnWeldSitePrefix(p.ma_du_an) ? p.ma_du_an : "Chưa có mã dự án",
+                hint: p.ma_du_an || undefined,
               }))}
               searchable={projects.length > 5}
               placeholder={projects.length === 0 ? "Chưa có dữ liệu dự án" : "Chọn dự án"}
@@ -1737,7 +1737,7 @@ function JournalFormModal({
         </div>
       </div>
     </div>
-  );
+    , document.body);
 }
 
 function listIsoDates(from: string, to: string) {
@@ -2713,10 +2713,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
     try {
       // Chỉ nhập kinh/vĩ độ: RPC tự tạo điểm mã TT toàn cục → đặt lại mã 1→n theo tuyến (dự án).
       if (!values.toa_do_id && !values.ma_toa_do.trim() && values.kinh_do.trim() && values.vi_do.trim()) {
-        const routeCodes = gpsPoints
-          .filter((point) => (point.projectId ?? "") === values.du_an_id)
-          .map((point) => point.code);
-        values = { ...values, ma_toa_do: suggestCoordinateCode("TT", routeCodes) };
+        throw new Error("Chọn ray (HT/HP/TT/TP) hoặc nhập mã tọa độ để xác định đúng tuyến và ray.");
       }
       const coordError = manualCoordinateError(values);
       if (coordError) throw new Error(coordError);

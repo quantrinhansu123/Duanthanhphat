@@ -23,10 +23,9 @@ export function padWeldSequence(n: number, width = WELD_CODE_SEQUENCE_WIDTH) {
   return String(n).padStart(width, "0");
 }
 
-/** Chuẩn hóa mã dự án dùng làm tiền tố mã hệ thống. */
-export function normalizeWeldSitePrefix(value?: string | null) {
-  const trimmed = (value ?? "").trim().toUpperCase();
-  return trimmed || WELD_CODE_SITE_PREFIX;
+/** Tiền tố mã hệ thống cố định "PQ" theo rule (không phụ thuộc mã dự án). */
+export function normalizeWeldSitePrefix(_value?: string | null) {
+  return WELD_CODE_SITE_PREFIX;
 }
 
 /** Dự án đã có mã riêng để làm tiền tố (không phải dùng tiền tố dự phòng). */
@@ -234,7 +233,8 @@ export function nextWeldSequence(existingCodes: string[], prefix: string) {
   for (const code of existingCodes) {
     const parsed = parseSystemWeldCode(code);
     if (parsed) {
-      const codePrefix = `${parsed.site}-${parsed.method}-`;
+      // Bỏ qua tiền tố dự án cũ (vd DANB-): tính TT theo công nghệ để không bị reset về 0001.
+      const codePrefix = `${WELD_CODE_SITE_PREFIX}-${parsed.method}-`;
       if (codePrefix !== needle) continue;
       max = Math.max(max, parsed.seq);
       continue;
