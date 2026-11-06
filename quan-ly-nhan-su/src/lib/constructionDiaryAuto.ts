@@ -29,6 +29,7 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map((r) => r.ma_hien_truong?.trim() || r.ma_diem?.trim() || "").filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
     const codes = fieldCodes.length ? ` Mối số: ${fieldCodes.join(", ")}.` : "";
+    if (kind === "weld") return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, khối lượng ${quantity} mối hàn${fieldCodes.length ? `; bao gồm mối số: ${fieldCodes.join(", ")}` : ""}.`;
     return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
   }).join("\n");
 }
@@ -110,9 +111,9 @@ export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds
     const name = String(row.hang_muc ?? "").trim()
       || (/FBW/i.test(stored) ? "Hàn chảy giáp mép" : /ATW/i.test(stored) ? "Hàn nhiệt nhôm" : "Công tác thi công");
     if (!name && !(qty > 0)) return [];
-    const unit = String(row.don_vi ?? "").trim() || "mối";
-    const route = [row.tuyen_thuong ? "tuyến thượng" : "", row.tuyen_ha ? "tuyến hạ" : ""].filter(Boolean).join(", ");
-    return [`- ${name}${route ? `, ${route}` : ""}.${qty > 0 ? ` Khối lượng: ${qty} ${unit}.` : ""}${codes ? ` Mối số: ${codes}.` : ""}`];
+    const unit = String(row.don_vi ?? "").trim() || "mối hàn";
+    const task = /^thi công/i.test(name) ? name : `Thi công ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
+    return [`- ${task}${qty > 0 ? `, khối lượng ${qty} ${unit === "mối" ? "mối hàn" : unit}` : ""}${codes ? `; bao gồm mối số: ${codes}` : ""}.`];
   }).join("\n");
 }
 
@@ -123,6 +124,8 @@ export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so
   return ["1. Máy hàn", "2. Máy và thiết bị khác", "3. Vật tư"].map((title, i) => {
     const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
       .map((r) => `- ${(r.ten_thiet_bi ?? "").trim().replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m)}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
-    return `${title}:\n${lines.join("\n")}`;
+    // Máy hàn giữ mỗi dòng một máy; nhóm 2 và 3 gộp một dòng, ngăn bằng "; " (theo bản mẫu).
+    if (i === 0) return `${title}:\n${lines.join("\n")}`;
+    return `${title}: ${lines.map((l) => l.slice(2)).join("; ")}`;
   }).join("\n");
 }

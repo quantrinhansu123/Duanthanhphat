@@ -44,9 +44,9 @@ const css = `@media screen { #diary-print { display: none; } }
   aside, header, .no-print { display: none !important; }
   #diary-print {
     position: absolute; left: 0; top: 0; width: 100%;
-    font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 13.5pt; color: black;
+    font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black;
   }
-  #diary-print h2 { margin: 0 0 2pt; font-size: 12.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
+  #diary-print h2 { margin: 0 0 2pt; font-size: 13.5pt; line-height: 17pt; text-align: center; font-weight: bold; }
   #diary-print .diary-date { text-align: center; margin: 0 0 4pt; }
   #diary-print p { margin: 0; }
   #diary-print .whitespace-pre-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
