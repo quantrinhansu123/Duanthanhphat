@@ -11,7 +11,7 @@ import {
   railCellLockTemp,
   type RailCellPatch,
 } from "@lwr/lib/track-editor";
-import type { RailCell } from "@lwr/types/track";
+import type { RailCell, RailReportRow } from "@lwr/types/track";
 import { StressReleaseCalculator, type StressSaveResult } from "./StressReleaseCalculator";
 
 const inputClass =
@@ -56,6 +56,9 @@ export function ReleaseStatusButtons({
   );
 }
 
+const REPORT_DESIGN_MM = 5; // Thiết kế mặc định (auto) cho điểm M và điểm E
+const EMPTY_REPORT_ROW: RailReportRow = { temp: "", mActual: "", eActual: "", note: "" };
+
 function sameChainage(draft: string, stored: string) {
   const parsed = parseChainage(draft);
   const current = parseChainage(stored);
@@ -97,6 +100,16 @@ export function RailDetailPanel({
   const [leftTempDraft, setLeftTempDraft] = useState(String(sideTempOf(cell, "left")));
   const [rightTempDraft, setRightTempDraft] = useState(String(sideTempOf(cell, "right")));
   const [fieldError, setFieldError] = useState<string | null>(null);
+  // Hai tab: «Giải tỏa» (nhập nhiệt độ, lý trình, tính toán) và «Báo cáo» (bảng chuyển vị điểm M / E).
+  const [view, setView] = useState<"giai-toa" | "bao-cao">("giai-toa");
+  // Báo cáo chỉ có 1 dòng cho đoạn ray này; nhiệt độ lấy từ tab Giải tỏa, chỉ nhập chuyển vị thực tế M / E + ghi chú.
+  const [report, setReport] = useState<RailReportRow>(() => cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW });
+  useEffect(() => { setReport(cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW }); }, [cell.id, cell.report]);
+
+  function commitReport(next: RailReportRow) {
+    const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim();
+    apply({ report: empty ? null : { rows: [next] } });
+  }
 
   useEffect(() => {
     content.current?.scrollTo({ top: 0 });
@@ -242,73 +255,23 @@ export function RailDetailPanel({
             <button type="button" onClick={onClose} aria-label="Đóng chi tiết" className="rounded-lg border p-2"><X className="size-5" /></button>
           </div>
         </header>
+        <div role="tablist" aria-label="Chi tiết đoạn ray" className="grid shrink-0 grid-cols-2 gap-1 border-b bg-white px-3 pt-2">
+          {([["giai-toa", "Giải tỏa"], ["bao-cao", "Báo cáo"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={`rounded-t-lg border-b-2 px-3 py-2 text-sm font-bold ${view === key ? "border-blue-700 text-blue-800" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
-          <StressReleaseCalculator
-            compact
-            key={`${cell.id}-${lockTemp}`}
-            segmentId={cell.id}
-            statusSlot={
-              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
-            }
-            initialInput={{
-              ...DEFAULT_STRESS_INPUT,
-              trackSide,
-              leftLength: length,
-              rightLength: 0,
-              startChainage: cell.from,
-              endChainage: cell.to,
-              leftTemp: sideTempOf(cell, "left"),
-              rightTemp: sideTempOf(cell, "right"),
-            }}
-            onSave={onSaveParams}
-            onChainageCommit={(patch) => apply(patch)}
-          />
+          {view === "giai-toa" && (<>
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
-            <label className="block min-w-0">
-              <span className="text-slate-600">Lý trình đầu</span>
-              <span className="flex items-center gap-1">
-                <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
-                <input
-                  className={inputClass}
-                  value={fromDraft}
-                  aria-label="Lý trình đầu"
-                  onChange={(event) => setFromDraft(event.target.value)}
-                  onBlur={commitFrom}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitFrom(); } }}
-                />
-              </span>
-            </label>
-            <label className="block min-w-0">
-              <span className="text-slate-600">Lý trình cuối</span>
-              <span className="flex items-center gap-1">
-                <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
-                <input
-                  className={inputClass}
-                  value={toDraft}
-                  aria-label="Lý trình cuối"
-                  onChange={(event) => setToDraft(event.target.value)}
-                  onBlur={commitTo}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTo(); } }}
-                />
-              </span>
-            </label>
-            <label className="block min-w-0 col-span-2 sm:col-span-1">
-              <span className="text-slate-600">Chiều dài đoạn {lengthLocked ? "(đã khóa)" : "(sửa hàng ngày)"}</span>
-              <span className="flex items-center gap-1">
-                <input
-                  className={inputClass}
-                  inputMode="numeric"
-                  value={lengthDraft}
-                  aria-label="Chiều dài đoạn"
-                  disabled={lengthLocked}
-                  readOnly={lengthLocked}
-                  onChange={(event) => setLengthDraft(event.target.value)}
-                  onBlur={commitLength}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLength(); } }}
-                />
-                <span className="mt-1 shrink-0 font-semibold text-slate-500">m</span>
-              </span>
-            </label>
             <label className="block min-w-0">
               <span className="font-semibold text-amber-900">Nhiệt độ ray trái (°C)</span>
               <span className="flex items-center gap-1">
@@ -346,7 +309,140 @@ export function RailDetailPanel({
                 <span className="ml-2 text-xs font-medium text-emerald-700">= (T trái + T phải) / 2</span>
               </p>
             </div>
+            <label className="block min-w-0">
+              <span className="text-slate-600">Lý trình đầu</span>
+              <span className="flex items-center gap-1">
+                <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
+                <input
+                  className={inputClass}
+                  value={fromDraft}
+                  aria-label="Lý trình đầu"
+                  onChange={(event) => setFromDraft(event.target.value)}
+                  onBlur={commitFrom}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitFrom(); } }}
+                />
+              </span>
+            </label>
+            <label className="block min-w-0">
+              <span className="text-slate-600">Lý trình cuối</span>
+              <span className="flex items-center gap-1">
+                <span className="mt-1 shrink-0 font-semibold text-slate-500">Km</span>
+                <input
+                  className={inputClass}
+                  value={toDraft}
+                  aria-label="Lý trình cuối"
+                  onChange={(event) => setToDraft(event.target.value)}
+                  onBlur={commitTo}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTo(); } }}
+                />
+              </span>
+            </label>
+            <label className="block min-w-0 col-span-2">
+              <span className="text-slate-600">Chiều dài đoạn {lengthLocked ? "(đã khóa)" : "(sửa hàng ngày)"}</span>
+              <span className="flex items-center gap-1">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={lengthDraft}
+                  aria-label="Chiều dài đoạn"
+                  disabled={lengthLocked}
+                  readOnly={lengthLocked}
+                  onChange={(event) => setLengthDraft(event.target.value)}
+                  onBlur={commitLength}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLength(); } }}
+                />
+                <span className="mt-1 shrink-0 font-semibold text-slate-500">m</span>
+              </span>
+            </label>
           </div>
+          <StressReleaseCalculator
+            compact
+            key={`${cell.id}-${lockTemp}`}
+            segmentId={cell.id}
+            statusSlot={
+              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
+            }
+            initialInput={{
+              ...DEFAULT_STRESS_INPUT,
+              trackSide,
+              leftLength: length,
+              rightLength: 0,
+              startChainage: cell.from,
+              endChainage: cell.to,
+              leftTemp: sideTempOf(cell, "left"),
+              rightTemp: sideTempOf(cell, "right"),
+            }}
+            onSave={onSaveParams}
+            onChainageCommit={(patch) => apply(patch)}
+          />
+          </>)}
+          {view === "bao-cao" && (() => {
+            // Nhiệt độ khóa = (T ray trái + T ray phải) / 2 lấy từ tab Giải tỏa; nhiệt độ đo nhập tại thời điểm đo M / E.
+            const lock = draftLockTemp;
+            const measuredNumber = Number(report.temp.trim().replace(",", "."));
+            const diff = report.temp.trim() && Number.isFinite(measuredNumber) ? Math.round((measuredNumber - lock) * 1000) / 1000 : "—";
+            const inputCls = "mt-1 w-full min-w-0 rounded-md border border-amber-400 bg-white px-2 py-2 text-sm font-semibold focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600";
+            const autoBox = (label: string, value: string | number, unit: string) => (
+              <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="mt-0.5 font-bold text-slate-800">{value} <span className="text-xs font-medium text-slate-500">{unit}</span></p>
+              </div>
+            );
+            return (
+              <section className="space-y-3 rounded-lg border border-slate-300 bg-white p-3 text-sm">
+                <div>
+                  <h3 className="font-bold text-slate-900">Báo cáo chuyển vị điểm M / điểm E</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Đoạn ray {cell.id}. Các thông số tự lấy từ tab Giải tỏa; chỉ nhập chuyển vị thực tế và ghi chú.</p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Nhiệt độ</p>
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    {autoBox("Nhiệt độ khóa", lock, "°C")}
+                    <label className="block min-w-0 rounded-md border border-amber-300 bg-amber-50/60 px-3 py-2">
+                      <span className="text-xs font-semibold text-amber-900">Nhiệt độ đo (°C)</span>
+                      <input aria-label="Nhiệt độ đo (°C)" inputMode="decimal" className="mt-0.5 w-full min-w-0 bg-transparent font-bold text-slate-800 focus:outline-none" value={report.temp} onChange={(e) => setReport((r) => ({ ...r, temp: e.target.value }))} onBlur={() => commitReport(report)} placeholder="Nhập" />
+                    </label>
+                    {autoBox("Chênh nhiệt độ", diff, "°C")}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Khóa = (T ray trái + T ray phải) / 2 từ tab Giải tỏa; đo = nhiệt độ ray lúc đo điểm M / E (bạn nhập); chênh = đo − khóa.</p>
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="font-bold text-amber-900">Điểm M</p>
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <div className="min-w-0">
+                      <span className="text-slate-600">Thiết kế (mm)</span>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{REPORT_DESIGN_MM}</div>
+                    </div>
+                    <label className="block min-w-0">
+                      <span className="font-semibold text-amber-900">Thực tế (mm)</span>
+                      <input aria-label="Điểm M thực tế (mm)" inputMode="decimal" className={inputCls} value={report.mActual} onChange={(e) => setReport((r) => ({ ...r, mActual: e.target.value }))} onBlur={() => commitReport(report)} placeholder="Nhập số" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="font-bold text-amber-900">Điểm E</p>
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <div className="min-w-0">
+                      <span className="text-slate-600">Thiết kế (mm)</span>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{REPORT_DESIGN_MM}</div>
+                    </div>
+                    <label className="block min-w-0">
+                      <span className="font-semibold text-amber-900">Thực tế (mm)</span>
+                      <input aria-label="Điểm E thực tế (mm)" inputMode="decimal" className={inputCls} value={report.eActual} onChange={(e) => setReport((r) => ({ ...r, eActual: e.target.value }))} onBlur={() => commitReport(report)} placeholder="Nhập số" />
+                    </label>
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="font-semibold text-slate-700">Ghi chú</span>
+                  <textarea aria-label="Ghi chú" rows={3} className="mt-1 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600" value={report.note} onChange={(e) => setReport((r) => ({ ...r, note: e.target.value }))} onBlur={() => commitReport(report)} />
+                </label>
+              </section>
+            );
+          })()}
           {fieldError ? (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">{fieldError}</p>
           ) : null}

@@ -78,9 +78,17 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [projectError, setProjectError] = useState("");
+  const [projectsReady, setProjectsReady] = useState(false);
   useEffect(() => {
     let active = true;
-    void loadProjects({ includeProgress: false }).then(result => { if (active) { setProjects(result.projects); setProjectError(result.error ?? ""); } }).catch(cause => { if (active) setProjectError(String(cause)); });
+    void loadProjects({ includeProgress: false }).then(result => {
+      if (!active) return;
+      setProjects(result.projects);
+      setProjectError(result.error ?? "");
+      // Tự chọn dự án Phú Quốc trên bộ lọc khi mở trang (vẫn đổi được sang dự án khác / "chưa gán").
+      const pq = result.projects.find((p) => /phú quốc/i.test(p.name) || p.maDuAn?.trim().toUpperCase() === "PQ");
+      if (pq) setProjectId((cur) => cur || pq.id);
+    }).catch(cause => { if (active) setProjectError(String(cause)); }).finally(() => { if (active) setProjectsReady(true); });
     return () => { active = false; };
   }, []);
   const projectOptions = useMemo(
@@ -112,7 +120,7 @@ export function TrackDashboard({ initialCellId = DEFAULT_CELL_ID }: TrackDashboa
       </div>
     </div>
     {projectError && <p role="status" className="text-xs text-amber-700">Không tải đủ thông tin dự án: {projectError}</p>}
-    <ProjectTrackDashboard key={projectId} initialCellId={initialCellId} project={projects.find(p => p.id === projectId)} projects={projects} onAssigned={setProjectId} />
+    {projectsReady && <ProjectTrackDashboard key={projectId} initialCellId={initialCellId} project={projects.find(p => p.id === projectId)} projects={projects} onAssigned={setProjectId} />}
   </div>;
 }
 

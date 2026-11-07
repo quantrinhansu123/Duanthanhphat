@@ -45,6 +45,17 @@ function playChime() {
 
 const POLL_MS = 20000;
 
+/** Giờ + ngày thông báo được tạo, theo múi giờ Việt Nam: "10:15 · 07/11/2026". */
+function formatNotificationTime(value: string): string {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric", hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("hour")}:${get("minute")} · ${get("day")}/${get("month")}/${get("year")}`;
+}
+
 export default function NotificationBell({ label }: { label: string }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[]>([]);
@@ -121,6 +132,9 @@ export default function NotificationBell({ label }: { label: string }) {
               <div key={item.id} className="border-b border-slate-100 px-3 py-2.5 last:border-0">
                 <div className="text-sm font-bold text-rose-700">{item.title}</div>
                 <div className="mt-0.5 text-xs text-slate-700">{item.body}</div>
+                {formatNotificationTime(item.createdAt) && (
+                  <div className="mt-1 font-mono text-[11px] text-slate-500">{formatNotificationTime(item.createdAt)}</div>
+                )}
               </div>
             ))}
           </div>

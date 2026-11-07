@@ -8,6 +8,21 @@ export interface BandLabel {
   label: string;
 }
 
+/** Một dòng báo cáo đo chuyển vị điểm M / điểm E tại một thời điểm nhiệt độ (thiết kế mặc định 5 mm, chỉ nhập thực tế). */
+export interface RailReportRow {
+  /** Nhiệt độ đo (°C) tại thời điểm quan trắc. */
+  temp: string;
+  /** Điểm M — thực tế (mm). */
+  mActual: string;
+  /** Điểm E — thực tế (mm). */
+  eActual: string;
+  note: string;
+}
+
+export interface RailReport {
+  rows: RailReportRow[];
+}
+
 export interface RailCell {
   id: string;
   from: string;
@@ -25,6 +40,8 @@ export interface RailCell {
   placed?: boolean;
   /** True after stress release on this segment has passed. */
   released?: boolean;
+  /** Bảng báo cáo chuyển vị điểm M / E của đoạn ray. */
+  report?: RailReport;
 }
 
 export interface RailRow {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { parseCoordinateCode } from "@/lib/weldCode";
@@ -58,10 +59,17 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [signatures, setSignatures] = useState<SignatureStore>({});
+  // Hai bản in phiếu YCNT: có chữ ký dán sẵn (phát hành ngay) / không dán chữ ký (in ra ký trực tiếp).
+  const [withSignatures, setWithSignatures] = useState(true);
   const [sigOpen, setSigOpen] = useState(false);
   const [sigError, setSigError] = useState("");
   const [sigLoadError, setSigLoadError] = useState("");
   const [sigLinks, setSigLinks] = useState<Partial<Record<SignatureKey, string>>>({});
+
+  function printVersion(signed: boolean) {
+    flushSync(() => setWithSignatures(signed));
+    window.print();
+  }
 
   async function changeSignatureLink(key: SignatureKey, url: string) {
     setSigError(""); setBusy(true);
@@ -120,7 +128,14 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
             className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
-        <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+        {kind === "rfi" ? (
+          <>
+            <button type="button" onClick={() => printVersion(true)} title="Chữ ký nhà thầu chính / phụ đã dán sẵn trên phiếu — dùng để phát hành ngay" className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In bản có chữ ký (phát hành)</button>
+            <button type="button" onClick={() => printVersion(false)} title="Không dán chữ ký — in ra để ký trực tiếp" className="h-10 rounded-lg border border-[#0047AB] bg-white px-4 text-sm font-semibold text-[#0047AB] cursor-pointer hover:bg-blue-50">In bản ký tay (không dán chữ ký)</button>
+          </>
+        ) : (
+          <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+        )}
         <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
       {kind === "rfi" && sigLoadError && (
@@ -165,7 +180,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" disabled={busy} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
         </div>
       )}
-      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} signatures={signatures} /> : (
+      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} signatures={withSignatures ? signatures : { ...signatures, "chi-huy-truong": undefined, "nha-thau-phu": undefined }} /> : (
       record ? <WeldAcceptanceRecordPages record={record} kind={kind as RecordKind} /> : null)}
     </div>
   );

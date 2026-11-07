@@ -5,7 +5,7 @@ import {
   nextUnusedRailType,
   type StressInput,
 } from "./stress-release";
-import type { RailCell, RailRow } from "../types/track";
+import type { RailCell, RailReport, RailRow } from "../types/track";
 
 export const TRACK_LAYOUT_STORAGE_KEY = "tp-track-layout-v2";
 export const RAIL_SEGMENT_LENGTH_METRES = 500;
@@ -717,7 +717,21 @@ export type RailCellPatch = {
   leftTemp?: number;
   rightTemp?: number;
   released?: boolean;
+  /** Bảng báo cáo chuyển vị M/E; null để xóa. */
+  report?: RailReport | null;
 };
+
+/** Làm sạch dữ liệu báo cáo đọc từ JSON: bỏ dòng trống, giới hạn độ dài chuỗi. */
+export function sanitizeRailReport(value: unknown): RailReport | undefined {
+  if (!isRecord(value) || !Array.isArray(value.rows)) return undefined;
+  const text = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 200) : "");
+  const rows = value.rows.flatMap((raw) => {
+    if (!isRecord(raw)) return [];
+    const row = { temp: text(raw.temp), mActual: text(raw.mActual), eActual: text(raw.eActual), note: text(raw.note) };
+    return row.temp || row.mActual || row.eActual || row.note ? [row] : [];
+  }).slice(0, 200);
+  return rows.length ? { rows } : undefined;
+}
 
 export function railCellLengthMetres(cell: RailCell): number | null {
   const from = parseChainage(cell.from);
@@ -777,10 +791,15 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
     if (patch.released) cell.released = true;
     else delete cell.released;
   }
+  if (patch.report !== undefined) {
+    const report = sanitizeRailReport(patch.report);
+    if (report) cell.report = report;
+    else delete cell.report;
+  }
 
   const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
   if (!hasGeometry) {
-    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined) {
+    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined && patch.report === undefined) {
       throw new RangeError("Không có thông số để cập nhật.");
     }
     return next;
@@ -1018,6 +1037,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         ...(rightTemp !== undefined ? { rightTemp } : {}),
         ...(rawCell.placed ? { placed: true } : {}),
         ...(rawCell.released ? { released: true } : {}),
+        ...(sanitizeRailReport(rawCell.report) ? { report: sanitizeRailReport(rawCell.report) } : {}),
       });
       cellIds.add(rawCell.id);
       previousEnd = end;
