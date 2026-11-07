@@ -32,8 +32,19 @@ async function response<T>(res: Response): Promise<T> {
   return data as T;
 }
 
-export async function qualityRequest<T>(body: Record<string, unknown>): Promise<T> {
-  return response<T>(await fetch("/api/weld-quality", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify(body), cache: "no-store" }));
+// Các thao tác chỉ đọc: nếu cùng một yêu cầu đang chạy thì dùng chung kết quả (tránh gọi trùng khi nhiều khối cùng mở / React chạy hiệu ứng hai lần).
+const READ_ONLY_ACTIONS = new Set(["rfi-overview", "rfi-number", "rfi-candidates", "split-list", "split-detail", "report-weather", "diary-defaults", "rules-list"]);
+const inFlight = new Map<string, Promise<unknown>>();
+
+export function qualityRequest<T>(body: Record<string, unknown>): Promise<T> {
+  const send = async () => response<T>(await fetch("/api/weld-quality", { method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify(body), cache: "no-store" }));
+  if (!READ_ONLY_ACTIONS.has(String(body.action))) return send();
+  const key = JSON.stringify(body);
+  const running = inFlight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+  const promise = send().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
 }
 
 export const loadQualityJournal = (filters: WeldJournalPageQuery) => qualityRequest<WeldJournalPageResult>({ action: "list", filters });

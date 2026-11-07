@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { DotsThreeVertical } from "@/components/icons";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { completeAcceptance, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
   deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
@@ -260,6 +261,60 @@ export default function WeldAcceptanceWorkflow() {
         document.body,
       )}
     </div>
+  );
+}
+
+/** Nút "⋯" mở menu thao tác của một dòng (menu nổi, không bị khung bảng cắt). */
+function RowActionsMenu({ label, actions }: { label: string; actions: { label: string; danger?: boolean; disabled?: boolean; onSelect: () => void }[] }) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); };
+  }, [pos]);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(pos)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+        onClick={() => {
+          if (pos) { setPos(null); return; }
+          const rect = button.current?.getBoundingClientRect();
+          if (rect) setPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+        }}
+      >
+        <DotsThreeVertical size={18} weight="bold" aria-hidden />
+      </button>
+      {pos && createPortal(
+        <>
+          <div className="fixed inset-0 z-[120]" onClick={() => setPos(null)} aria-hidden />
+          <div role="menu" className="fixed z-[121] min-w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl" style={{ top: pos.top, right: pos.right }}>
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                role="menuitem"
+                disabled={action.disabled}
+                className={`block w-full px-3 py-2 text-left text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 ${action.danger ? "text-red-700 hover:bg-red-50" : "text-slate-800"}`}
+                onClick={() => { setPos(null); action.onSelect(); }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -653,11 +708,14 @@ function RfiPanel({
                 <td className="p-2 min-w-48">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
                 <td className="p-2">{r.trang_thai}</td>
                 <td className="whitespace-nowrap p-2 text-right">
-                  <span className="inline-flex flex-nowrap justify-end gap-1">
-                    <button type="button" disabled={busy} className={`${secondary} whitespace-nowrap`} onClick={() => beginEdit(r)}>Sửa</button>
-                    <button type="button" className={`${secondary} whitespace-nowrap`} onClick={() => Promise.resolve(onOpen(r)).catch((e) => setError(message(e)))}>Xem / In</button>
-                    <button type="button" disabled={busy} aria-label={`Xóa phiếu ${r.so_phieu}`} className={`${btn} whitespace-nowrap border border-red-300 bg-white text-red-700 hover:bg-red-50`} onClick={() => removeRfi(r)}>Xóa</button>
-                  </span>
+                  <RowActionsMenu
+                    label={`Thao tác phiếu ${r.so_phieu}`}
+                    actions={[
+                      { label: "Sửa", disabled: busy, onSelect: () => beginEdit(r) },
+                      { label: "Xem / In", onSelect: () => { void Promise.resolve(onOpen(r)).catch((e) => setError(message(e))); } },
+                      { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}

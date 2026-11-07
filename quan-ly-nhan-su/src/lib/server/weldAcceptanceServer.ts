@@ -535,6 +535,18 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       fetchAll((a,b) => db().from("phieu_nt_tach").select("id,so_phieu,ngay_moi,ngay_nghiem_thu,nguoi_lap,nguoi_nghiem_thu")
         .eq("du_an_id",project).eq("loai",kind).order("ngay_moi",{ascending:false}).order("so_phieu").range(a,b)),
     ]);
+    if (kind === "sieu-am") {
+      // RFI siêu âm chỉ nhận mối đã nghiệm thu hình học ĐẠT: qua phiếu hình học tách riêng, hoặc trạng thái «Chờ siêu âm» (hình học đã đạt ở bộ biên bản chính).
+      const geometryTickets = await fetchAll<{ id: string }>((a, b) => db().from("phieu_nt_tach").select("id")
+        .eq("du_an_id", project).eq("loai", "hinh-hoc").range(a, b));
+      const [passedSplit, waitingUltrasound] = await Promise.all([
+        chunked<{ moi_han_id: string }>(geometryTickets.map((t) => t.id), (part) => db().from("phieu_nt_tach_moi").select("moi_han_id").in("phieu_id", part).eq("ket_qua", "Đạt")),
+        fetchAll<{ moi_han_id: string }>((a, b) => db().from("chat_luong_moi_han").select("moi_han_id")
+          .eq("du_an_id", project).eq("tinh_trang", "Chờ siêu âm").order("moi_han_id").range(a, b)),
+      ]);
+      const geometryPassed = new Set([...passedSplit, ...waitingUltrasound].map((r) => r.moi_han_id));
+      return { candidates: (candidates as { moi_han_id: string }[]).filter((c) => geometryPassed.has(c.moi_han_id)), tickets };
+    }
     return { candidates, tickets };
   }
   const id = qualityUuid(body.id);

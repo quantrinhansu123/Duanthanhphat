@@ -31,6 +31,11 @@ function guardWrite(request: Request) {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new QualityApiError("Yêu cầu phải là JSON.", 415);
 }
 
+// Kết quả xác thực theo token được nhớ 60 giây: trang Biên bản mối hàn gọi API hàng chục lần,
+// mỗi lần xác thực lại tốn 2–3 vòng truy vấn Supabase. Thu hồi quyền có hiệu lực chậm nhất sau 60 giây.
+const AUTH_CACHE_MS = 60_000;
+const authCache = new Map<string, { email: string; until: number }>();
+
 /** Đăng nhập Supabase Auth (token trong header riêng) + danh sách email được phép; không có token thì dùng Basic Auth nếu đã cấu hình. */
 export async function authenticateWeldQuality(request: Request): Promise<string> {
   let token = request.headers.get("x-supabase-token");
@@ -46,6 +51,8 @@ export async function authenticateWeldQuality(request: Request): Promise<string>
     throw new QualityApiError("Phiên đăng nhập hết hạn; hãy tải lại trang và đăng nhập lại.", 401);
   }
   guardWrite(request);
+  const cached = authCache.get(token);
+  if (cached && cached.until > Date.now()) return cached.email;
   const db = createAdminClient();
   const { data, error } = await db.auth.getUser(token);
   const email = data.user?.email?.toLowerCase();
@@ -53,6 +60,8 @@ export async function authenticateWeldQuality(request: Request): Promise<string>
   const allowed = await db.from("nguoi_dung_nghiem_thu").select("email").eq("email", email).maybeSingle();
   if (allowed.error) throw allowed.error;
   if (!allowed.data && !(await hasJournalEditRole(db, email))) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
+  if (authCache.size > 200) authCache.clear();
+  authCache.set(token, { email, until: Date.now() + AUTH_CACHE_MS });
   return email;
 }
 
