@@ -39,6 +39,7 @@ export type WeldQualityInspection = {
 export type WeldQualityStatus =
   | "Chờ mài"
   | "Chờ siêu âm và nghiệm thu"
+  | "Chờ siêu âm"
   | "Chờ nghiệm thu"
   | "Sửa chữa/khắc phục"
   | "Chờ ký biên bản"
@@ -49,6 +50,7 @@ export type WeldQualityStatus =
 export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
   "Chờ mài",
   "Chờ siêu âm và nghiệm thu",
+  "Chờ siêu âm",
   "Chờ nghiệm thu",
   "Sửa chữa/khắc phục",
   "Chờ ký biên bản",
@@ -239,6 +241,7 @@ export function evaluateWeldQuality(
   _weldType: string,
   accepted = false,
   pendingSignature = false,
+  geometryAccepted = false,
 ) {
   const geometry = inspection ? evaluateGeometry(inspection.gia_tri_do, rule?.dung_sai ?? null) : null;
   const internalPass = Boolean(inspection?.ngay_mai && inspection.truc_quan === "Đạt" && geometry === "Đạt");
@@ -267,8 +270,9 @@ export function evaluateWeldQuality(
   // Đã hoàn thành nghiệm thu (đợt không nháp) → chờ ký bộ hồ sơ.
   else if (pendingSignature) status = "Chờ ký biên bản";
   // Đã siêu âm/NDT đạt → không còn «Chờ siêu âm…»; chờ hoàn thành nghiệm thu.
-  else if (internalPass && ndtPass) status = "Chờ nghiệm thu";
-  else if (internalPass) status = "Chờ siêu âm và nghiệm thu";
+  // Hình học đã nghiệm thu Đạt → chờ siêu âm; mới mài đạt → chờ nghiệm thu (kích thước hình học).
+  else if (internalPass && geometryAccepted) status = "Chờ siêu âm";
+  else if (internalPass) status = "Chờ nghiệm thu";
   // Hàn xong → tự động Chờ mài (mọi loại mối hàn).
   else status = "Chờ mài";
 

@@ -32,6 +32,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
   const [rules, setRules] = useState<SavedWeldQualityRule[]>([]);
   const [accepted, setAccepted] = useState(false);
   const [pendingSignature, setPendingSignature] = useState(false);
+  const [geometryAccepted, setGeometryAccepted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -56,6 +57,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
       setRules(data.rules);
       setAccepted(data.summary.tinh_trang === "Đạt");
       setPendingSignature(data.summary.tinh_trang === "Chờ ký biên bản");
+      setGeometryAccepted(data.summary.tinh_trang === "Chờ siêu âm");
     }).catch((e) => { if (active) setError(e instanceof Error ? e.message : "Không tải được kiểm tra."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -74,7 +76,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
     try { return [k, parseWeldMeasurement(numbers[k] ?? suggested(k))]; }
     catch { parseErrors[k] = "Nhập số đo mm hợp lệ, ví dụ -0,10 hoặc 0,20."; return [k, null]; }
   }));
-  const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted, pendingSignature) : null;
+  const assessment = draft ? evaluateWeldQuality({ ...draft, gia_tri_do: measurements }, rule, row.loai_moi_han, accepted, pendingSignature, geometryAccepted) : null;
   const blocked = accepted || row.so_luong_thuc_hien !== 1;
   const currentRule = rules.find((r) => r.dang_ap_dung);
   function configureRules() {

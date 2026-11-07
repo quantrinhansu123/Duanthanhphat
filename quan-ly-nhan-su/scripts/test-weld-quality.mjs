@@ -54,8 +54,9 @@ assert.equal(rules.evaluateWeldQuality(empty, rule, "Sản xuất").status, "Ch�
 // Mọi loại mối hàn cùng trình tự — không còn nhảy thẳng Chờ thí nghiệm cho Thử nghiệm/Chấp thuận.
 assert.equal(rules.evaluateWeldQuality(empty, rule, "Thử nghiệm").status, "Chờ mài");
 assert.equal(rules.evaluateWeldQuality(empty, rule, "Chấp thuận").status, "Chờ mài");
-assert.equal(rules.evaluateWeldQuality(inspection, rule, "Thử nghiệm").status, "Chờ siêu âm và nghiệm thu");
-assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").status, "Chờ siêu âm và nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(inspection, rule, "Thử nghiệm").status, "Chờ nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").status, "Chờ nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất", false, false, true).status, "Chờ siêu âm", "Hình học đã nghiệm thu → chờ siêu âm");
 assert.equal(rules.evaluateWeldQuality(inspection, null, "Sản xuất").rfiEligible, false);
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").rfiEligible, true);
 assert.equal(rules.evaluateWeldQuality(inspection, { ...rule, ndt_truoc_rfi: true }, "Sản xuất").rfiEligible, true, "Internal confirmation permits an invitation before NDT");
@@ -65,7 +66,7 @@ assert.equal(rules.deviationMaximum("doc_mat_lan", openLimits), null);
 assert.equal(rules.deviationMaximum("chieu_dai_mai", limits), limits.chieu_dai_mai?.max ?? null);
 assert.equal(rules.evaluateWeldQuality(inspection, rule, "Sản xuất").acceptanceEligible, false);
 const withoutMaiInspection = { ...inspection, gia_tri_do: withoutMai };
-assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").status, "Chờ siêu âm và nghiệm thu");
+assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").status, "Chờ nghiệm thu");
 assert.equal(rules.evaluateWeldQuality(withoutMaiInspection, rule, "Sản xuất").rfiEligible, true);
 
 const ndtPass = { ...inspection, ket_qua_ndt: "Đạt", ngay_ndt: "2026-10-28" };

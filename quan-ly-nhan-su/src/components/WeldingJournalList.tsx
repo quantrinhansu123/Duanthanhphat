@@ -112,8 +112,8 @@ type JournalStage = "all" | "han-xong" | "mai-xong" | "cho-nt" | "sua-chua" | "k
 const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
   { id: "han-xong", label: "Chờ mài", hint: "Đã hàn, đang chờ mài", statuses: ["Chờ mài"] },
-  { id: "mai-xong", label: "Chờ siêu âm & NT", hint: "Đã mài đạt, chưa siêu âm", statuses: ["Chờ siêu âm và nghiệm thu"] },
-  { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Đã siêu âm Đạt — chờ hoàn thành nghiệm thu", statuses: ["Chờ nghiệm thu"] },
+  { id: "mai-xong", label: "Chờ siêu âm", hint: "Đã nghiệm thu hình học — chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] },
+  { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Đã mài đạt — chờ nghiệm thu kích thước hình học", statuses: ["Chờ nghiệm thu"] },
   { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan/độ lệch không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
   { id: "ky-bb", label: "Chờ ký BB", hint: "Đã nghiệm thu Đạt — chờ ký bộ biên bản", statuses: ["Chờ ký biên bản"] },
   { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },

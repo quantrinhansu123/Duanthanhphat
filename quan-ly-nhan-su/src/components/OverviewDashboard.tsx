@@ -84,7 +84,7 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   passed: "Đạt",
   failed: "Không đạt",
   rework: "Mối hàn lại",
-  pending: "Chờ siêu âm và nghiệm thu",
+  pending: "Chờ siêu âm",
   grind: "Chờ mài",
   acceptance: "Chờ nghiệm thu",
   signing: "Chờ ký biên bản",
@@ -112,7 +112,7 @@ function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso:
   if (kind === "pending") {
     return rows.filter((row) => {
       const q = row.tinh_trang_chat_luong;
-      return q === "Chờ siêu âm và nghiệm thu" || resolveWeldTestStatus(row) === "Chờ thí nghiệm";
+      return q === "Chờ siêu âm" || q === "Chờ siêu âm và nghiệm thu" || resolveWeldTestStatus(row) === "Chờ thí nghiệm";
     });
   }
   if (kind === "grind") {

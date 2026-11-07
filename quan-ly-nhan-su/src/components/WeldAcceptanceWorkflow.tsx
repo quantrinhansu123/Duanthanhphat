@@ -540,7 +540,7 @@ function RfiPanel({
           <input className={input} placeholder="Bên mời (nhà thầu)" value={thongTin.ben_moi} onChange={(e) => setThongTin({ ...thongTin, ben_moi: e.target.value })} />
           <input className={input} placeholder="Bên nhận (TVGS/CĐT)" value={thongTin.ben_nhan} onChange={(e) => setThongTin({ ...thongTin, ben_nhan: e.target.value })} />
           <input className={input} placeholder="Phạm vi" value={thongTin.pham_vi} onChange={(e) => setThongTin({ ...thongTin, pham_vi: e.target.value })} />
-          {kind !== "nghiem-thu" && <input className={input} placeholder="Nội dung giám sát (nhập tay, vd: tuyến hạ Km4+075)" aria-label="Nội dung giám sát" value={thongTin.giam_sat} onChange={(e) => setThongTin({ ...thongTin, giam_sat: e.target.value })} />}
+          {kind !== "nghiem-thu" && <input className={input} placeholder="Giám sát: gõ tay lý trình (vd: tuyến hạ Km4+075-Km4+325)" aria-label="Nội dung giám sát" value={thongTin.giam_sat} onChange={(e) => setThongTin({ ...thongTin, giam_sat: e.target.value })} />}
           <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
             <legend className="px-1">Tuyến {monitoring ? "(bắt buộc)" : ""}</legend>
             <label className="inline-flex min-h-11 items-center gap-2 cursor-pointer">

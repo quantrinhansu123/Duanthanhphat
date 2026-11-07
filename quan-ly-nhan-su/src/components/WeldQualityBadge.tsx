@@ -9,6 +9,7 @@ export default function WeldQualityBadge({ status }: { status?: string | null })
         ? "border-rose-200 bg-rose-50 text-rose-800"
         : normalized === "Chờ mài" ||
             normalized === "Chờ siêu âm và nghiệm thu" ||
+            normalized === "Chờ siêu âm" ||
             normalized === "Chờ thí nghiệm" ||
             normalized === "Chờ nghiệm thu" ||
             normalized === "Chờ ký biên bản" ||
