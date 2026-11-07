@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadRfiNumber, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadRfiNumber, markQualityPass, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
 import WeldAcceptanceDocument from "@/components/WeldAcceptanceDocument";
 
@@ -44,6 +44,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [doc, setDoc] = useState<"invite" | null>(null);
+  // Ghi nhanh kết quả siêu âm ngay trên phiếu (ghi vào Kiểm tra chất lượng, cùng dữ liệu với Nhật ký hàn).
+  const [ndt, setNdt] = useState<Record<string, { ket_qua: string; date: string }>>({});
   const [ticketQuery, setTicketQuery] = useState("");
   const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong">("");
 
@@ -69,6 +71,17 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
     const next = await request<Detail>("split-detail", { id });
     setDetail(next); setResults({}); setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
   }
+  async function saveUltrasound(item: Item) {
+    const draft = ndt[item.moi_han_id];
+    const result = draft?.ket_qua;
+    if (result !== "Đạt" && result !== "Không đạt") { setError("Chọn kết quả siêu âm (Đạt / Không đạt)."); return; }
+    const when = draft?.date || today();
+    const response = await markQualityPass([{ id: item.moi_han_id, ma_lich_su: item.ma_lich_su, phien_ban: item.version ?? 0, ket_qua: result }], "ndt", when, "Siêu âm");
+    const failed = response.results.find((r) => r.error);
+    if (failed) throw new Error(failed.error);
+    setNdt((cur) => { const next = { ...cur }; delete next[item.moi_han_id]; return next; });
+    if (detail) await openTicket(detail.ticket.id);
+  }
   function patch(id: string, data: Partial<Decision>) {
     setResults(prev => ({ ...prev, [id]: { ...(prev[id] ?? { ket_qua: "", ly_do: "" }), ...data } }));
   }
@@ -79,7 +92,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
         && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), t.nguoi_lap, t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
       .sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   }, [list, ticketQuery, ticketStatus]);
-  const candidates = list?.candidates.filter(c => c.ma_lich_su.toLowerCase().includes(query.trim().toLowerCase())) ?? [];
+  // Ngày mài mới nhất lên đầu; cùng ngày thì mã lớn hơn trước; mối không có ngày xuống cuối.
+  const candidates = (list?.candidates.filter(c => c.ma_lich_su.toLowerCase().includes(query.trim().toLowerCase())) ?? [])
+    .sort((x, y) => (y.ngay_mai ?? "").localeCompare(x.ngay_mai ?? "") || y.ma_lich_su.localeCompare(x.ma_lich_su, "vi", { numeric: true }));
 
   return <section className="space-y-4">
     {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
@@ -170,7 +185,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
           <div className="min-w-0 flex-1">
             <b>{i.ma_lich_su}</b>
             <p className="mt-0.5 text-slate-600">{evidenceText(kind, detail.ticket.ngay_nghiem_thu ? i.du_lieu_chot : i.current)}</p>
-            {!i.ket_qua && !i.current?.co_the_dat && <p className="mt-1 text-amber-800">{kind === "sieu-am" ? "Để chọn Đạt, ghi kết quả bằng phương pháp Siêu âm và ngày thí nghiệm trong Kiểm tra chất lượng." : "Để chọn Đạt, bổ sung đủ số đo theo tiêu chí trong Kiểm tra chất lượng."}</p>}
+            {!i.ket_qua && !i.current?.co_the_dat && <p className="mt-1 text-amber-800">{kind === "sieu-am" ? "Để chọn Đạt, ghi kết quả siêu âm và ngày thí nghiệm ngay bên dưới." : "Để chọn Đạt, bổ sung đủ số đo theo tiêu chí trong Kiểm tra chất lượng."}</p>}
+            {kind === "sieu-am" && !i.ket_qua && !detail.ticket.ngay_nghiem_thu && !i.current?.ket_qua_ndt && (
+              <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-white p-2">
+                <label className="grid gap-0.5 text-xs font-semibold text-slate-700">Kết quả siêu âm
+                  <select aria-label={"Kết quả siêu âm " + i.ma_lich_su} disabled={busy} className={field} value={ndt[i.moi_han_id]?.ket_qua ?? ""} onChange={e => setNdt(cur => ({ ...cur, [i.moi_han_id]: { date: cur[i.moi_han_id]?.date || today(), ket_qua: e.target.value } }))}>
+                    <option value="">Chọn</option><option>Đạt</option><option>Không đạt</option>
+                  </select>
+                </label>
+                <label className="grid gap-0.5 text-xs font-semibold text-slate-700">Ngày thí nghiệm
+                  <input type="date" aria-label={"Ngày thí nghiệm " + i.ma_lich_su} disabled={busy} className={field} max={today()} value={ndt[i.moi_han_id]?.date ?? today()} onChange={e => setNdt(cur => ({ ...cur, [i.moi_han_id]: { ket_qua: cur[i.moi_han_id]?.ket_qua ?? "", date: e.target.value } }))} />
+                </label>
+                <button type="button" disabled={busy || !ndt[i.moi_han_id]?.ket_qua} className={button} onClick={() => run(() => saveUltrasound(i))}>Lưu kết quả siêu âm</button>
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 flex-col gap-1.5 sm:w-48">
             {i.ket_qua ? <p className={`rounded-md px-2 py-1.5 text-center font-semibold ${i.ket_qua === "Đạt" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{i.ket_qua}{i.ly_do ? ` · ${i.ly_do}` : ""}</p> : <>

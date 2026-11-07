@@ -230,6 +230,11 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   const geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
   const ultrasound = explicitScope ? flag(info.nt_sieu_am) : "1";
   if (!geometry && !ultrasound) throw new QualityApiError("Chọn nghiệm thu kích thước hình học, siêu âm hoặc cả hai.");
+  if (ultrasound && !geometry) {
+    const accepted = await geometryAcceptedTickets(qualityUuid(body.du_an_id), ids.map(qualityUuid));
+    const missing = ids.filter((id) => !accepted.has(qualityUuid(id)));
+    if (missing.length) throw new QualityApiError(`Phiếu siêu âm chỉ nhận mối đã nghiệm thu trực quan ĐẠT («Chờ siêu âm»). Có ${missing.length} mối chưa đủ điều kiện.`);
+  }
   const thong_tin = {
     dia_diem: str(info.dia_diem),
     ben_moi: str(info.ben_moi),
@@ -399,6 +404,21 @@ export async function loadRfiDetail(rfiId: string) {
   return { rfi, welds };
 }
 
+/** Mối đã nghiệm thu trực quan / hình học ĐẠT ở phiếu trực quan riêng (kèm số phiếu, ngày nghiệm thu). */
+async function geometryAcceptedTickets(projectId: string, weldIds: string[]) {
+  const tickets = await fetchAll<{ id: string; so_phieu: string; ngay_nghiem_thu: string | null }>((a, b) => db().from("phieu_nt_tach")
+    .select("id,so_phieu,ngay_nghiem_thu").eq("du_an_id", projectId).eq("loai", "hinh-hoc").not("ngay_nghiem_thu", "is", null).range(a, b));
+  const byId = new Map(tickets.map((t) => [t.id, t]));
+  const rows = tickets.length && weldIds.length ? await chunked<{ phieu_id: string; moi_han_id: string }>(weldIds, (part) =>
+    db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id").eq("loai", "hinh-hoc").eq("ket_qua", "Đạt").in("moi_han_id", part)) : [];
+  const out = new Map<string, { so_phieu: string; ngay_nghiem_thu: string }>();
+  for (const r of rows) {
+    const t = byId.get(r.phieu_id);
+    if (t?.ngay_nghiem_thu) out.set(r.moi_han_id, { so_phieu: t.so_phieu, ngay_nghiem_thu: t.ngay_nghiem_thu });
+  }
+  return out;
+}
+
 export async function completeRfi(body: Record<string, unknown>, actor: string) {
   const ngay = qualityDate(body.ngay_nghiem_thu);
   if (!ngay) throw new QualityApiError("Nhập ngày nghiệm thu.");
@@ -420,6 +440,15 @@ export async function completeRfi(body: Record<string, unknown>, actor: string) 
     ["sieu-am", !scope.ultrasound, "rfi_sieu_am_id", "rfi_sieu_am_so"],
   ] as const) {
     if (!needed) continue;
+    if (kind === "hinh-hoc" && !input[field]) {
+      // Phiếu chỉ siêu âm: phần trực quan đã nghiệm thu ở phiếu trực quan riêng → tự tìm, không bắt chọn tay.
+      const passedIds = ket_qua.filter((r) => r.ket_qua === "Đạt").map((r) => r.moi_han_id);
+      const accepted = await geometryAcceptedTickets(phieu.du_an_id, passedIds);
+      const missing = passedIds.filter((id) => !accepted.has(id) || accepted.get(id)!.ngay_nghiem_thu > ngay);
+      if (missing.length) throw new QualityApiError(`Có ${missing.length} mối chưa nghiệm thu trực quan ĐẠT trước ngày này; không thể chọn Đạt ở phiếu siêu âm.`, 409);
+      info[numberField] = [...new Set([...accepted.values()].map((t) => t.so_phieu))].join(", ");
+      continue;
+    }
     if (!input[field]) throw new QualityApiError(`Đề nghị cung cấp RFI ${kind === "hinh-hoc" ? "kích thước hình học" : "siêu âm"} trước khi hoàn thành và ký biên bản.`, 409);
     const reference = qualityUuid(input[field]);
     const { data: ticket, error } = await db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu")

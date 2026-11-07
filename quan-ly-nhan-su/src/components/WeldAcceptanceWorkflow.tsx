@@ -233,6 +233,7 @@ export default function WeldAcceptanceWorkflow() {
               onOpen={openRfi}
               onOpenIssuedList={setIssuedList}
               onPublished={afterPublishedRfi}
+              onGeometryPublished={() => setModes((cur) => (cur.includes("hinh-hoc") ? cur : [...cur, "hinh-hoc"]))}
             />
           )}
           {tab === "accept" && (
@@ -325,6 +326,7 @@ function RfiPanel({
   onOpen,
   onOpenIssuedList,
   onPublished,
+  onGeometryPublished,
 }: {
   projectId: string;
   editRfiId: string | null;
@@ -332,8 +334,11 @@ function RfiPanel({
   onOpen: (r: RfiSummary) => unknown;
   onOpenIssuedList: (list: { rfis: RfiSummary[]; unassigned: RfiCandidate[] }) => void;
   onPublished?: (phieuId: string) => unknown;
+  onGeometryPublished?: () => void;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
+  // Nội dung nghiệm thu khi phát: toàn bộ (→ bộ biên bản, ký) / chỉ trực quan (phiếu riêng → Chờ siêu âm) / chỉ siêu âm (mối đã NT trực quan).
+  const [scopeChoice, setScopeChoice] = useState<"toan-bo" | "truc-quan" | "sieu-am">("toan-bo");
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
@@ -423,7 +428,20 @@ function RfiPanel({
   async function publish() {
     setBusy(true); setError(""); setOkMsg("");
     try {
-      const payload = thongTinToPayload(thongTin);
+      if (!editingId && !monitoring && scopeChoice === "truc-quan") {
+        // Chỉ trực quan → phiếu trực quan riêng; nghiệm thu đạt thì mối chuyển «Chờ siêu âm».
+        const weldCount = selected.size;
+        await qualityRequest<{ id: string }>({ action: "split-publish", du_an_id: projectId, loai: "hinh-hoc",
+          id: requestId.current, so_phieu: soPhieu, ngay_moi: ngayMoi, moi_han_ids: [...selected] });
+        requestId.current = crypto.randomUUID();
+        setSelected(new Set());
+        setOkMsg(`Đã phát RFI trực quan ${soPhieu} (${weldCount} mối). Nghiệm thu ở khối «RFI bổ sung nghiệm thu hình học, trực quan» bên trên; đạt thì mối chuyển «Chờ siêu âm».`);
+        await refresh();
+        await search();
+        onGeometryPublished?.();
+        return;
+      }
+      const payload = thongTinToPayload(editingId || monitoring ? thongTin : { ...thongTin, nt_hinh_hoc: scopeChoice !== "sieu-am", nt_sieu_am: true });
       if (editingId) {
         await updateRfi({ id: editingId, so_phieu: soPhieu, ngay_moi: ngayMoi, thong_tin: payload });
         setOkMsg(`Đã cập nhật phiếu ${soPhieu}.`);
@@ -511,7 +529,10 @@ function RfiPanel({
 
   const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
-  const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+  const wrongRows = scopeChoice === "truc-quan" ? selectedRows.filter((r) => r.tinh_trang !== "Chờ nghiệm thu")
+    : scopeChoice === "sieu-am" ? selectedRows.filter((r) => r.tinh_trang !== "Chờ siêu âm") : [];
+  const scopeMissing = wrongRows.length > 0;
   const publishDisabled = busy || routeMissing || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
   return (
@@ -538,10 +559,18 @@ function RfiPanel({
           void publish();
         }}>
           <h3 id="rfi-publish-title" className="text-base font-bold">Nội dung nghiệm thu</h3>
-          <p className="text-sm text-slate-600">Chọn một hoặc cả hai nội dung cho phiếu {soPhieu} ({selected.size} mối).</p>
-          <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={thongTin.nt_hinh_hoc} onChange={e => setThongTin(t => ({ ...t, nt_hinh_hoc: e.target.checked }))} />Kích thước hình học</label>
-          <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={thongTin.nt_sieu_am} onChange={e => setThongTin(t => ({ ...t, nt_sieu_am: e.target.checked }))} />Siêu âm</label>
-          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Chọn ít nhất một nội dung nghiệm thu.</p>}
+          <p className="text-sm text-slate-600">Nghiệm thu gì cho phiếu {soPhieu} ({selected.size} mối)?</p>
+          {([
+            ["toan-bo", "Toàn bộ (trực quan + siêu âm)", "Nghiệm thu xong → Chờ ký biên bản → ký đủ → Đạt."],
+            ["truc-quan", "Chỉ trực quan (hình học)", "Phát RFI trực quan riêng; nghiệm thu đạt → Chờ siêu âm. Chỉ nhận mối «Chờ nghiệm thu»."],
+            ["sieu-am", "Chỉ siêu âm", "Cho mối đã nghiệm thu trực quan («Chờ siêu âm»); nghiệm thu xong → Chờ ký biên bản → ký đủ → Đạt."],
+          ] as const).map(([id, label, hint]) => (
+            <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${scopeChoice === id ? "border-[#0047AB] bg-blue-50" : "border-slate-200"}`}>
+              <input type="radio" name="rfi-scope" className="mt-0.5" checked={scopeChoice === id} onChange={() => setScopeChoice(id)} />
+              <span><b>{label}</b><br /><span className="text-xs text-slate-600">{hint}</span></span>
+            </label>
+          ))}
+          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Có {wrongRows.length} mối không đúng trạng thái cho lựa chọn này ({wrongRows.slice(0, 3).map((r) => r.ma_lich_su).join(", ")}{wrongRows.length > 3 ? "…" : ""}). Bỏ chọn các mối đó hoặc chọn «Toàn bộ».</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={secondary} onClick={() => publishDialogRef.current?.close()}>Hủy</button>
             <button type="submit" className={primary} disabled={publishDisabled || scopeMissing}>Phát yêu cầu mới</button>
@@ -552,8 +581,8 @@ function RfiPanel({
 
       {!monitoring && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Bước 2 — Tìm mối «Chờ siêu âm và nghiệm thu»</h3>
-          <p className="text-xs text-slate-600">Lấy mối đã mài / trực quan / sai số đạt và chưa thuộc RFI hiệu lực. Mối đã siêu âm đạt vẫn cần RFI để nghiệm thu và ký hồ sơ.</p>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Bước 2 — Tìm mối «Chờ nghiệm thu» (chưa nghiệm thu gì) và «Chờ siêu âm» (đã nghiệm thu trực quan)</h3>
+          <p className="text-xs text-slate-600">Chọn mối rồi bấm phát; hệ thống hỏi nghiệm thu Toàn bộ, Chỉ trực quan hay Chỉ siêu âm.</p>
           <div className="flex flex-wrap items-end gap-2">
             <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
             <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
@@ -760,9 +789,10 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
     }));
     setRequestId(crypto.randomUUID());
     const scope = rfiScope(d.rfi.thong_tin);
-    if (!scope.geometry || !scope.ultrasound) {
+    // Phiếu chỉ siêu âm: máy chủ tự lấy phiếu trực quan đã nghiệm thu. Chỉ phiếu cũ «chỉ hình học» mới cần chọn phiếu siêu âm bổ sung.
+    if (!scope.ultrasound) {
       const data = await qualityRequest<{ tickets: { id: string; so_phieu: string; ngay_nghiem_thu: string | null }[] }>({
-        action: "split-list", du_an_id: projectId, loai: !scope.geometry ? "hinh-hoc" : "sieu-am",
+        action: "split-list", du_an_id: projectId, loai: "sieu-am",
       });
       setSupplement(data.tickets.filter(t => t.ngay_nghiem_thu));
     }
@@ -795,14 +825,14 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   async function complete() {
     if (!active) return;
     const scope = rfiScope(active.rfi.thong_tin);
-    if ((!scope.geometry || !scope.ultrasound) && !supplementId) {
-      setError(`Đề nghị cung cấp RFI ${!scope.geometry ? "kích thước hình học" : "siêu âm"} đã nghiệm thu cho các mối này trước khi hoàn thành và ký biên bản.`);
+    if (!scope.ultrasound && !supplementId) {
+      setError("Đề nghị cung cấp RFI siêu âm đã nghiệm thu cho các mối này trước khi hoàn thành và ký biên bản.");
       return;
     }
     setBusy(true); setError("");
     try {
       const res = await completeAcceptance({ id: requestId, phieu_id: active.rfi.id, ngay_nghiem_thu: ngay, ket_qua: decisions,
-        thong_tin: { ...thongTin, ...(!scope.geometry ? { rfi_hinh_hoc_id: supplementId } : {}), ...(!scope.ultrasound ? { rfi_sieu_am_id: supplementId } : {}) } });
+        thong_tin: { ...thongTin, ...(!scope.ultrasound && supplementId ? { rfi_sieu_am_id: supplementId } : {}) } });
       setDone(`Đã hoàn thành nghiệm thu: ${sum.accepted} đạt, ${sum.failed} không đạt, ${sum.deferred} chưa nghiệm thu.`);
       setActive(null);
       await refresh();
@@ -891,8 +921,9 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
             <input className={input} type="date" value={ngay} onChange={(e) => setNgay(e.target.value)} />
             <input className={input} placeholder="Địa điểm" value={thongTin.dia_diem} onChange={(e) => setThongTin({ ...thongTin, dia_diem: e.target.value })} />
             <input className={input} placeholder="Thành phần tham dự" value={thongTin.thanh_phan} onChange={(e) => setThongTin({ ...thongTin, thanh_phan: e.target.value })} />
-            {(!rfiScope(active.rfi.thong_tin).geometry || !rfiScope(active.rfi.thong_tin).ultrasound) && <label className="grid gap-1 text-sm text-amber-900">
-              Bổ sung RFI {!rfiScope(active.rfi.thong_tin).geometry ? "kích thước hình học" : "siêu âm"} đã nghiệm thu
+            {!rfiScope(active.rfi.thong_tin).geometry && <p className="text-sm text-slate-600">Phiếu chỉ siêu âm: phần trực quan tự lấy từ RFI trực quan đã nghiệm thu của từng mối.</p>}
+            {!rfiScope(active.rfi.thong_tin).ultrasound && <label className="grid gap-1 text-sm text-amber-900">
+              Bổ sung RFI siêu âm đã nghiệm thu
               <select className={input} value={supplementId} onChange={e => setSupplementId(e.target.value)}>
                 <option value="">Chọn phiếu đã nghiệm thu trong cùng dự án</option>
                 {supplement.map(t => <option key={t.id} value={t.id}>{t.so_phieu}</option>)}
