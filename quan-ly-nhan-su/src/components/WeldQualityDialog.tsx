@@ -61,7 +61,7 @@ export default function WeldQualityDialog({ row, onClose, onSaved }: { row: Weld
     return () => { active = false; };
   }, [row.id, row.du_an_id, reload]);
   const rule = rules.find((r) => r.id === draft?.tieu_chuan_id) ?? null;
-  const suggested = (key: GeometryCriterion) => suggestMax && draft?.ngay_mai && draft.truc_quan === "Đạt" && numbers[key] === undefined
+  const suggested = (key: GeometryCriterion) => suggestMax && draft?.truc_quan === "Đạt" && numbers[key] === undefined
     ? deviationMaximum(key, rule?.dung_sai) : null;
   function confirmVisual(value: SavedWeldInspection["truc_quan"]) {
     if (!draft) return;

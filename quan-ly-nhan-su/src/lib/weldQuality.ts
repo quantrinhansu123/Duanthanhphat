@@ -219,7 +219,7 @@ export function hasRequiredGrindingLength(
 /** Inclusive maximum that can be suggested for a deviation field. Grinding length is measured separately. */
 export function deviationMaximum(key: GeometryCriterion, limits?: GeometryLimits | null): number | null {
   const limit = limits?.[key];
-  return key !== "chieu_dai_mai" && limit?.maxInclusive ? limit.max : null;
+  return limit?.maxInclusive ? limit.max : null;
 }
 
 export function evaluateGeometryCriterion(value: number | null, limit: GeometryLimit | null): QualityResult {
