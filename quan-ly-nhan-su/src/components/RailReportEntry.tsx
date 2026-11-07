@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import SelectMenu from "@/components/SelectMenu";
 import LongRailMonitoringPrint from "@/components/LongRailMonitoringPrint";
-import { loadProjects } from "@/lib/projectsDb";
-import type { Project } from "@/data/projects";
+import { loadProjectOptions } from "@/lib/projectsDb";
 import { reportEndMovement } from "@lwr/lib/stress-release";
 import {
   getPlacementSpan,
@@ -15,7 +14,8 @@ import {
   TRACK_LAYOUT_STORAGE_KEY,
   type TrackLayout,
 } from "@lwr/lib/track-editor";
-import { loadTrackLayout, serializeTrackLayout, upsertTrackLayout } from "@lwr/lib/track-layout-storage";
+import { chooseTrackLayout, readStoredTrackLayout, loadTrackLayout, serializeTrackLayout, upsertTrackLayout } from "@lwr/lib/track-layout-storage";
+import { loadLongRails, preferNewerLongRails } from "@lwr/lib/long-rail-storage";
 import type { RailCell, RailReportRow } from "@lwr/types/track";
 
 const REPORT_DESIGN_MM = 5; // Giới hạn cho phép tại điểm M theo quy trình.
@@ -38,7 +38,7 @@ function cellOptions(layout: TrackLayout | null): CellOption[] {
 
 /** Trang «Theo dõi ray hàn dài»: chọn dự án + tên thanh ray rồi điền báo cáo chuyển vị điểm M / điểm E. */
 export default function RailReportEntry() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectId, setProjectId] = useState("");
   const [projectsReady, setProjectsReady] = useState(false);
   const [layout, setLayout] = useState<TrackLayout | null>(null);
@@ -58,12 +58,12 @@ export default function RailReportEntry() {
 
   useEffect(() => {
     let active = true;
-    void loadProjects({ includeProgress: false })
-      .then((result) => {
+    void loadProjectOptions()
+      .then((projectList) => {
         if (!active) return;
-        setProjects(result.projects);
+        setProjects(projectList);
         // Tự chọn dự án Phú Quốc như trang Track Map.
-        const pq = result.projects.find((p) => /phú quốc/i.test(p.name) || p.maDuAn?.trim().toUpperCase() === "PQ");
+        const pq = projectList.find((p) => /phú quốc/i.test(p.name));
         if (pq) setProjectId((cur) => cur || pq.id);
       })
       .catch((cause) => { if (active) setMessage(`Không tải được danh sách dự án: ${String(cause)}`); })
@@ -81,10 +81,19 @@ export default function RailReportEntry() {
     setChecked([]);
     setPrintCells(null);
     void loadTrackLayout(projectId || undefined)
-      .then((result) => {
+      .then(async (result) => {
         if (!active) return;
-        setLayout(result.layout);
-        if (!result.layout) setMessage(result.error ?? "Dự án này chưa có sơ đồ thanh ray. Mở Tổng quan (Track Map) để tạo sơ đồ trước.");
+        const key = projectId ? `${TRACK_LAYOUT_STORAGE_KEY}:${projectId}` : TRACK_LAYOUT_STORAGE_KEY;
+        let local = readStoredTrackLayout(null);
+        try { local = readStoredTrackLayout(localStorage.getItem(key)); } catch { /* Use remote when browser storage is unavailable. */ }
+        if (!local.layout && !result.layout) {
+          setMessage(result.error ?? "Dự án này chưa có sơ đồ thanh ray. Mở Tổng quan (Track Map) để tạo sơ đồ trước.");
+          return;
+        }
+        const chosen = chooseTrackLayout({ local: local.layout, localSavedAt: local.savedAt, remote: result.layout, remoteUpdatedAt: result.updatedAt });
+        setLayout(chosen.layout);
+        const longRails = await loadLongRails(chosen.layout.longRails, projectId || undefined);
+        if (active) setLayout({ ...chosen.layout, longRails: preferNewerLongRails(chosen.layout.longRails, longRails.rails) });
       })
       .catch((cause) => { if (active) setMessage(`Không tải được sơ đồ: ${String(cause)}`); })
       .finally(() => { if (active) setLoading(false); });
@@ -103,7 +112,7 @@ export default function RailReportEntry() {
   const projectOptions = useMemo(
     () => [
       { value: "", label: "Sơ đồ hiện có (chưa gán dự án)" },
-      ...projects.map((p) => ({ value: p.id, label: p.name, hint: p.maDuAn?.trim() || undefined })),
+      ...projects.map((p) => ({ value: p.id, label: p.name })),
     ],
     [projects],
   );

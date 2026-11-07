@@ -48,6 +48,7 @@ export default function SelectMenu({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [typing, setTyping] = useState(false);
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +58,8 @@ export default function SelectMenu({
 
   useEffect(() => {
     if (!open) return;
+    // Native modal dialogs occupy the browser top layer; body portals sit behind them.
+    setPortalHost(boxRef.current?.closest("dialog") ?? document.body);
     function onClick(e: MouseEvent) {
       const t = e.target as Node;
       if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -175,7 +178,7 @@ export default function SelectMenu({
         </button>
       )}
 
-      {open && !disabled && typeof document !== "undefined" && createPortal(
+      {open && !disabled && portalHost && createPortal(
         <div
           ref={menuRef}
           style={menuStyle}
@@ -209,7 +212,7 @@ export default function SelectMenu({
             )}
           </div>
         </div>,
-        document.body,
+        portalHost,
       )}
     </div>
   );
