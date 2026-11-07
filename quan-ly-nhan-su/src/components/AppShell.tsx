@@ -59,6 +59,8 @@ const MachineReportDashboard = dynamic(
   () => import("@/components/MachineReportDashboard"), { loading: TabLoading, ssr: false });
 const PersonnelReportDashboard = dynamic(
   () => import("@/components/PersonnelReportDashboard"), { loading: TabLoading, ssr: false });
+const RailReportEntry = dynamic(
+  () => import("@/components/RailReportEntry"), { loading: TabLoading, ssr: false });
 const RailReportDashboard = dynamic(
   () => import("@/components/RailReportDashboard"), { loading: TabLoading, ssr: false });
 const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { loading: TabLoading, ssr: false });
@@ -109,6 +111,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   ),
   "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,
+  "lwr-nhap-bao-cao": () => <RailReportEntry />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
   "nhat-ky-han": () => <WeldingJournalList />,
   "bien-ban-moi-han": () => <WeldAcceptanceReport />,

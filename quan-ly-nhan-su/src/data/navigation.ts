@@ -156,6 +156,20 @@ export const navigation: NavItem[] = [
         description: "Danh mục và quản lý ký hiệu công trình trên sơ đồ ray",
         descriptionEn: "Catalogue and manage structure symbols on the rail schematic",
       },
+      {
+        id: "lwr-nhap-bao-cao",
+        label: "Theo dõi ray hàn dài",
+        labelEn: "Long Welded Rail Monitoring",
+        description: "Chọn thanh ray rồi điền báo cáo chuyển vị điểm M / điểm E",
+        descriptionEn: "Pick a rail and enter its M / E point displacement report",
+      },
+      {
+        id: "bc-bao-cao-ray",
+        label: "Báo cáo ray",
+        labelEn: "Rail Report",
+        description: "Bảng tổng hợp mối hàn theo thanh ray: mã thiết kế, mã hiện trường, lý trình, ngày hàn, chiều dài, tình trạng",
+        descriptionEn: "Rail-by-rail weld summary: design code, field code, chainage, weld date, rail length, quality status",
+      },
     ],
   },
   {
@@ -248,13 +262,6 @@ export const navigation: NavItem[] = [
         labelEn: "Machine Report",
         description: "Giờ vận hành, số mối hàn/máy, thời gian dừng, bảo trì",
         descriptionEn: "Operational hours, welds per machine, downtime analysis, maintenance logs",
-      },
-      {
-        id: "bc-bao-cao-ray",
-        label: "Báo cáo ray",
-        labelEn: "Rail Report",
-        description: "Bảng tổng hợp mối hàn theo thanh ray: mã thiết kế, mã hiện trường, lý trình, ngày hàn, chiều dài, tình trạng",
-        descriptionEn: "Rail-by-rail weld summary: design code, field code, chainage, weld date, rail length, quality status",
       },
       {
         id: "bc-nhan-su",
