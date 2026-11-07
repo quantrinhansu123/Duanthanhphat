@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DotsThreeVertical } from "@/components/icons";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { completeAcceptance, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
+import { completeAcceptance, completeGeometryAcceptance, markQualityPass, loadSplitRecords, signSplitRecord, loadGeometryRecord, type SplitRecordSummary, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
   deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { defaultDecisions, rfiScope, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { qualityRequest } from "@/lib/weldQualityClient";
@@ -109,8 +109,8 @@ export default function WeldAcceptanceWorkflow() {
   // Phương án nghiệm thu chọn được nhiều (tick) — mỗi phương án đã chọn hiện một khối bên dưới.
   const [modes, setModes] = useState<("tong-hop" | SplitKind)[]>(["tong-hop"]);
   const hasMode = (m: "tong-hop" | SplitKind) => modes.includes(m);
-  const toggleMode = (m: "tong-hop" | SplitKind) =>
-    setModes((cur) => (cur.includes(m) ? (cur.length > 1 ? cur.filter((x) => x !== m) : cur) : [...cur, m]));
+  // Dạng tab: mỗi lúc một phương án.
+  const toggleMode = (m: "tong-hop" | SplitKind) => setModes([m]);
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
@@ -188,21 +188,21 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <fieldset className="grid gap-1 text-sm font-semibold">
-          <legend className="mb-1">Phương án nghiệm thu <span className="font-normal text-slate-500">(tick chọn nhiều)</span></legend>
-          <div className="grid gap-1.5 rounded-lg border border-slate-300 bg-white p-2 sm:grid-cols-3">
+        <div className="grid gap-1 text-sm font-semibold">
+          <p className="mb-1">Phương án nghiệm thu</p>
+          <div role="tablist" aria-label="Phương án nghiệm thu" className="flex gap-1 overflow-x-auto border-b border-slate-300">
             {([
               ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
               ["hinh-hoc", "RFI bổ sung nghiệm thu hình học, trực quan"],
               ["sieu-am", "RFI bổ sung nghiệm thu siêu âm"],
             ] as const).map(([id, label]) => (
-              <label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-sm font-medium ${hasMode(id) ? "border-[#0047AB] bg-blue-50 text-[#0047AB]" : "border-transparent text-slate-700 hover:bg-slate-50"}`}>
-                <input type="checkbox" className="size-4 accent-[#0047AB]" checked={hasMode(id)} onChange={() => toggleMode(id)} />
+              <button key={id} type="button" role="tab" aria-selected={hasMode(id)} onClick={() => toggleMode(id)}
+                className={`-mb-px min-h-10 shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${hasMode(id) ? "border-[#0047AB] text-[#0047AB]" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-800"}`}>
                 {label}
-              </label>
+              </button>
             ))}
           </div>
-        </fieldset>
+        </div>
         {hasMode("tong-hop") && <div className="grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
@@ -219,7 +219,7 @@ export default function WeldAcceptanceWorkflow() {
       {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
       {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
         <div key={m} className="mb-4">
-          <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} />
+          <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} onPrintRecord={setPrintPack} />
         </div>
       ))}
       {hasMode("tong-hop") && (
@@ -233,14 +233,13 @@ export default function WeldAcceptanceWorkflow() {
               onOpen={openRfi}
               onOpenIssuedList={setIssuedList}
               onPublished={afterPublishedRfi}
-              onGeometryPublished={() => setModes((cur) => (cur.includes("hinh-hoc") ? cur : [...cur, "hinh-hoc"]))}
             />
           )}
           {tab === "accept" && (
-            <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} />
+            <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} onPrintRecord={setPrintPack} />
           )}
           {tab === "records" && (
-            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} />
+            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} onPrintRecord={setPrintPack} />
           )}
         </div>
       )}
@@ -326,7 +325,6 @@ function RfiPanel({
   onOpen,
   onOpenIssuedList,
   onPublished,
-  onGeometryPublished,
 }: {
   projectId: string;
   editRfiId: string | null;
@@ -334,11 +332,8 @@ function RfiPanel({
   onOpen: (r: RfiSummary) => unknown;
   onOpenIssuedList: (list: { rfis: RfiSummary[]; unassigned: RfiCandidate[] }) => void;
   onPublished?: (phieuId: string) => unknown;
-  onGeometryPublished?: () => void;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
-  // Nội dung nghiệm thu khi phát: toàn bộ (→ bộ biên bản, ký) / chỉ trực quan (phiếu riêng → Chờ siêu âm) / chỉ siêu âm (mối đã NT trực quan).
-  const [scopeChoice, setScopeChoice] = useState<"toan-bo" | "truc-quan" | "sieu-am">("toan-bo");
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
@@ -428,19 +423,6 @@ function RfiPanel({
   async function publish() {
     setBusy(true); setError(""); setOkMsg("");
     try {
-      if (!editingId && !monitoring && scopeChoice === "truc-quan") {
-        // Chỉ trực quan → phiếu trực quan riêng; nghiệm thu đạt thì mối chuyển «Chờ siêu âm».
-        const weldCount = selected.size;
-        await qualityRequest<{ id: string }>({ action: "split-publish", du_an_id: projectId, loai: "hinh-hoc",
-          id: requestId.current, so_phieu: soPhieu, ngay_moi: ngayMoi, moi_han_ids: [...selected] });
-        requestId.current = crypto.randomUUID();
-        setSelected(new Set());
-        setOkMsg(`Đã phát RFI trực quan ${soPhieu} (${weldCount} mối). Nghiệm thu ở khối «RFI bổ sung nghiệm thu hình học, trực quan» bên trên; đạt thì mối chuyển «Chờ siêu âm».`);
-        await refresh();
-        await search();
-        onGeometryPublished?.();
-        return;
-      }
       const payload = thongTinToPayload(editingId || monitoring ? thongTin : { ...thongTin, nt_hinh_hoc: scopeChoice !== "sieu-am", nt_sieu_am: true });
       if (editingId) {
         await updateRfi({ id: editingId, so_phieu: soPhieu, ngay_moi: ngayMoi, thong_tin: payload });
@@ -530,8 +512,10 @@ function RfiPanel({
   const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
   const selectedRows = rows.filter((r) => selected.has(r.id));
-  const wrongRows = scopeChoice === "truc-quan" ? selectedRows.filter((r) => r.tinh_trang !== "Chờ nghiệm thu")
-    : scopeChoice === "sieu-am" ? selectedRows.filter((r) => r.tinh_trang !== "Chờ siêu âm") : [];
+  // Nội dung nghiệm thu tự theo trạng thái mối: toàn mối «Chờ siêu âm» → phiếu siêu âm; còn lại → phiếu đầy đủ (lúc nghiệm thu chọn chỉ hình học hay toàn bộ).
+  const waitingUltrasound = selectedRows.filter((r) => r.tinh_trang === "Chờ siêu âm");
+  const scopeChoice: "toan-bo" | "sieu-am" = selectedRows.length > 0 && waitingUltrasound.length === selectedRows.length ? "sieu-am" : "toan-bo";
+  const wrongRows = scopeChoice === "toan-bo" ? waitingUltrasound : [];
   const scopeMissing = wrongRows.length > 0;
   const publishDisabled = busy || routeMissing || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
@@ -559,18 +543,10 @@ function RfiPanel({
           void publish();
         }}>
           <h3 id="rfi-publish-title" className="text-base font-bold">Nội dung nghiệm thu</h3>
-          <p className="text-sm text-slate-600">Nghiệm thu gì cho phiếu {soPhieu} ({selected.size} mối)?</p>
-          {([
-            ["toan-bo", "Toàn bộ (trực quan + siêu âm)", "Nghiệm thu xong → Chờ ký biên bản → ký đủ → Đạt."],
-            ["truc-quan", "Chỉ trực quan (hình học)", "Phát RFI trực quan riêng; nghiệm thu đạt → Chờ siêu âm. Chỉ nhận mối «Chờ nghiệm thu»."],
-            ["sieu-am", "Chỉ siêu âm", "Cho mối đã nghiệm thu trực quan («Chờ siêu âm»); nghiệm thu xong → Chờ ký biên bản → ký đủ → Đạt."],
-          ] as const).map(([id, label, hint]) => (
-            <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${scopeChoice === id ? "border-[#0047AB] bg-blue-50" : "border-slate-200"}`}>
-              <input type="radio" name="rfi-scope" className="mt-0.5" checked={scopeChoice === id} onChange={() => setScopeChoice(id)} />
-              <span><b>{label}</b><br /><span className="text-xs text-slate-600">{hint}</span></span>
-            </label>
-          ))}
-          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Có {wrongRows.length} mối không đúng trạng thái cho lựa chọn này ({wrongRows.slice(0, 3).map((r) => r.ma_lich_su).join(", ")}{wrongRows.length > 3 ? "…" : ""}). Bỏ chọn các mối đó hoặc chọn «Toàn bộ».</p>}
+          {scopeChoice === "sieu-am"
+            ? <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối đã nghiệm thu hình học («Chờ siêu âm») → <b>nghiệm thu siêu âm</b> (mối chưa có phiếu nghiệm thu hình học thì tự nghiệm thu cả hình học). Xong → Chờ ký biên bản → ký đủ → Đạt.</p>
+            : <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối «Mài xong» / «Chờ nghiệm thu». Khi nghiệm thu bấm <b>Trực quan đạt</b> (tự điền sai số max):<br />• chỉ hình học → in biên bản hình học riêng, mối chuyển «Chờ siêu âm»;<br />• có cả siêu âm đạt → in toàn bộ → ký → Đạt.</p>}
+          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Đang chọn lẫn {wrongRows.length} mối «Chờ siêu âm» ({wrongRows.slice(0, 3).map((r) => r.ma_lich_su).join(", ")}{wrongRows.length > 3 ? "…" : ""}) với mối «Mài xong». Phát riêng hai nhóm.</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={secondary} onClick={() => publishDialogRef.current?.close()}>Hủy</button>
             <button type="submit" className={primary} disabled={publishDisabled || scopeMissing}>Phát yêu cầu mới</button>
@@ -758,7 +734,9 @@ function RfiPanel({
   );
 }
 
-function AcceptPanel({ projectId, onCompleted }: { projectId: string; onCompleted: (recordId: string) => unknown }) {
+function AcceptPanel({ projectId, onCompleted, onPrintRecord }: { projectId: string; onCompleted: (recordId: string) => unknown; onPrintRecord?: (record: RecordSet) => void }) {
+  // «hinh-hoc»: chỉ nghiệm thu hình học → in biên bản hình học riêng, mối → Chờ siêu âm. «toan-bo»: hình học + siêu âm → in toàn bộ.
+  const [mode, setMode] = useState<"hinh-hoc" | "toan-bo">("toan-bo");
   const [supplement, setSupplement] = useState<{ id: string; so_phieu: string }[]>([]);
   const [supplementId, setSupplementId] = useState("");
   const [rfis, setRfis] = useState<RfiSummary[]>([]);
@@ -775,14 +753,20 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   const refresh = useCallback(() => loadRfis(projectId).then((r) => setRfis(r.rfis.filter((x) => x.trang_thai === "Đã phát hành" && x.con_lai > 0 && x.thong_tin?.loai_rfi !== "theo-doi"))), [projectId]);
   useEffect(() => { setActive(null); refresh().catch((e) => setError(message(e))); }, [projectId, refresh]);
 
-  async function open(r: RfiSummary) {
+  const geometryOptional = (rfi: RfiSummary) => { const s = rfiScope(rfi.thong_tin); return s.geometry && s.ultrasound; };
+  const decisionsFor = (rows: RfiWeld[], m: "hinh-hoc" | "toan-bo") =>
+    defaultDecisions(m === "hinh-hoc" ? rows.map((w) => ({ ...w, du_dieu_kien_nghiem_thu: Boolean(w.du_dieu_kien_hinh_hoc) })) : rows);
+  async function open(r: RfiSummary, keepMode?: "hinh-hoc" | "toan-bo") {
     setError(""); setDone("");
     setSupplement([]); setSupplementId("");
     const d = await loadRfiDetail(r.id);
     const openRows = d.welds.filter((w) => w.con_hieu_luc);
     setActive({ rfi: d.rfi, welds: openRows });
     setGrindingLengths({});
-    setDecisions(defaultDecisions(openRows));
+    // Mặc định: đã có siêu âm đạt → toàn bộ; chưa có → chỉ hình học (in biên bản hình học, mối chuyển Chờ siêu âm).
+    const m = !geometryOptional(d.rfi) ? "toan-bo" : keepMode ?? (openRows.some((w) => w.ket_qua_ndt === "Đạt") ? "toan-bo" : "hinh-hoc");
+    setMode(m);
+    setDecisions(decisionsFor(openRows, m));
     setThongTin((t) => ({
       dia_diem: t.dia_diem || d.rfi.thong_tin?.dia_diem || "",
       thanh_phan: t.thanh_phan,
@@ -799,7 +783,7 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   }
   const patch = (id: string, p: Partial<AcceptanceDecision>) => setDecisions((cur) => cur.map((d) => (d.moi_han_id === id ? { ...d, ...p } : d)));
   const sum = useMemo(() => summarizeDecisions(decisions), [decisions]);
-  const missingReason = decisions.some((d) => d.ket_qua !== "Đạt" && !d.ly_do?.trim());
+  const missingReason = mode !== "hinh-hoc" && decisions.some((d) => d.ket_qua !== "Đạt" && !d.ly_do?.trim());
 
   async function saveGrindingLength(w: RfiWeld) {
     if (!active) return;
@@ -814,7 +798,7 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
       const d = await loadRfiDetail(active.rfi.id);
       const rows = d.welds.filter((m) => m.con_hieu_luc);
       setActive({ rfi: d.rfi, welds: rows });
-      setDecisions((previous) => defaultDecisions(rows).map((next) => {
+      setDecisions((previous) => decisionsFor(rows, mode).map((next) => {
         const old = previous.find((m) => m.moi_han_id === next.moi_han_id);
         return old && old.phien_ban === next.phien_ban && next.moi_han_id !== w.moi_han_id ? old : next;
       }));
@@ -822,8 +806,46 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
 
+  /** Ghi nhanh cho các mối còn mở của phiếu: trực quan Đạt (tự điền sai số max) hoặc siêu âm Đạt, theo ngày nghiệm thu. */
+  async function quickPass(kind: "visual" | "ndt") {
+    if (!active) return;
+    const targets = active.welds.filter((w) => (kind === "visual" ? w.truc_quan !== "Đạt" : w.ket_qua_ndt !== "Đạt") && w.tinh_trang !== "Không đạt" && w.tinh_trang !== "Sửa chữa/khắc phục");
+    if (!targets.length) { setError(kind === "visual" ? "Các mối đã có trực quan Đạt." : "Các mối đã có siêu âm Đạt."); return; }
+    if (!window.confirm(kind === "visual"
+      ? `Ghi trực quan ĐẠT cho ${targets.length} mối (ngày ${ngay})?\nCác ô sai số còn trống sẽ tự điền mức tối đa cho phép theo tiêu chí. Chiều dài mài nhập theo thực tế.`
+      : `Ghi siêu âm ĐẠT cho ${targets.length} mối (ngày thí nghiệm ${ngay})?`)) return;
+    setBusy(true); setError("");
+    try {
+      const { results } = await markQualityPass(targets.map((w) => ({ id: w.moi_han_id, ma_lich_su: w.ma_lich_su, phien_ban: w.phien_ban })), kind, ngay, "Siêu âm");
+      const failed = results.filter((r) => r.error);
+      await open(active.rfi, kind === "ndt" ? "toan-bo" : mode);
+      if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+
+  function changeMode(m: "hinh-hoc" | "toan-bo") {
+    if (!active) return;
+    setMode(m);
+    setDecisions(decisionsFor(active.welds, m));
+  }
+
+  async function completeGeometry() {
+    if (!active) return;
+    const passed = decisions.filter((d) => d.ket_qua === "Đạt");
+    setBusy(true); setError("");
+    try {
+      const res = await completeGeometryAcceptance({ id: requestId, phieu_id: active.rfi.id, ngay_nghiem_thu: ngay,
+        ket_qua: passed.map((d) => ({ moi_han_id: d.moi_han_id, phien_ban: d.phien_ban })), thong_tin: thongTin });
+      setDone(`Đã nghiệm thu hình học ${passed.length} mối (phiếu ${res.record.dot.phieu_yeu_cau_nghiem_thu.so_phieu as string}). Các mối chuyển «Chờ siêu âm» — phát RFI mới để nghiệm thu siêu âm rồi ký.`);
+      setActive(null);
+      await refresh();
+      onPrintRecord?.(res.record);
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+
   async function complete() {
     if (!active) return;
+    if (mode === "hinh-hoc" && geometryOptional(active.rfi)) { await completeGeometry(); return; }
     const scope = rfiScope(active.rfi.thong_tin);
     if (!scope.ultrasound && !supplementId) {
       setError("Đề nghị cung cấp RFI siêu âm đã nghiệm thu cho các mối này trước khi hoàn thành và ký biên bản.");
@@ -864,7 +886,9 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
       )}
       {active && (() => {
         const anomalous = active.welds.filter((w) => isAnomalousRfiWeldStatus(w.tinh_trang));
-        const ready = active.welds.filter((w) => w.du_dieu_kien_nghiem_thu).length;
+        const geoMode = mode === "hinh-hoc" && geometryOptional(active.rfi);
+        const eligible = (w: RfiWeld) => (geoMode ? Boolean(w.du_dieu_kien_hinh_hoc) : w.du_dieu_kien_nghiem_thu);
+        const ready = active.welds.filter(eligible).length;
         return (
         <>
           <p className="text-sm font-semibold">
@@ -873,6 +897,25 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
               ? ` — ${ready} mối đủ điều kiện được mặc định “Đạt”; mối chưa đủ đặt “Chưa nghiệm thu”.`
               : " — chưa có mối đủ điều kiện nghiệm thu (không mặc định “Đạt”)."}
           </p>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm">
+            <span className="font-semibold">Ghi nhanh (ngày {ngay}):</span>
+            {rfiScope(active.rfi.thong_tin).geometry && <button type="button" className={secondary} disabled={busy} onClick={() => void quickPass("visual")} title="Ghi trực quan Đạt, tự điền sai số tối đa cho ô trống">Trực quan đạt (điền sai số max)</button>}
+            {rfiScope(active.rfi.thong_tin).ultrasound && <button type="button" className={secondary} disabled={busy} onClick={() => void quickPass("ndt")}>Siêu âm đạt</button>}
+          </div>
+          {geometryOptional(active.rfi) && (
+            <fieldset className="grid gap-2 sm:grid-cols-2">
+              <legend className="mb-1 text-sm font-semibold">Nghiệm thu lần này</legend>
+              {([
+                ["hinh-hoc", "Chỉ hình học / trực quan", "In biên bản hình học riêng → mối chuyển «Chờ siêu âm». Lần sau phát RFI nghiệm thu siêu âm rồi ký → Đạt."],
+                ["toan-bo", "Hình học + siêu âm đạt", "In toàn bộ biên bản → Chờ ký biên bản → ký đủ → Đạt."],
+              ] as const).map(([id, label, hint]) => (
+                <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${mode === id ? "border-[#0047AB] bg-blue-50" : "border-slate-200"}`}>
+                  <input type="radio" name="accept-mode" className="mt-0.5" checked={mode === id} disabled={busy} onChange={() => changeMode(id)} />
+                  <span><b>{label}</b><br /><span className="text-xs text-slate-600">{hint}</span></span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           {anomalous.length > 0 && (
             <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
               <b>Không đúng quy trình:</b> {anomalous.length} mối trên phiếu đang «Chờ mài» (hoặc chưa kiểm tra)
@@ -893,10 +936,11 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
                     <td className="p-2">{w.ma_lich_su}<p className="mt-1 text-slate-500">{w.ma_diem || "Chưa rõ tuyến"} · {w.ly_trinh || "Thiếu KM"}</p></td>
                     <td className={`p-2 min-w-64 ${bad ? "font-semibold text-rose-800" : ""}`}>
                       {w.tinh_trang}
-                      {w.ket_qua_ndt && <p className="mt-1 text-slate-600">NDT: {w.ket_qua_ndt} · Chiều dài mài: {w.chieu_dai_mai == null ? "Chưa nhập" : `${w.chieu_dai_mai} mm`}</p>}
+                      <p className="mt-1 text-slate-600">Chiều dài mài: {w.chieu_dai_mai == null ? "Chưa nhập" : `${w.chieu_dai_mai} mm`}</p>
                       {w.ten_tieu_chuan && <p className="mt-1 text-slate-500">Tiêu chí: {w.ten_tieu_chuan}</p>}
-                      {w.du_dieu_kien_nghiem_thu && <p className="mt-1 font-semibold text-emerald-700">Đủ điều kiện nghiệm thu</p>}
-                      {!w.du_dieu_kien_nghiem_thu && <p className="mt-1 text-amber-800">{w.ly_do_chua_du_dieu_kien || "Chưa đủ dữ liệu kiểm tra chất lượng."}</p>}
+                      <p className="mt-1 text-slate-600">Trực quan: {w.truc_quan || "Chưa"} · Siêu âm: {w.ket_qua_ndt || "Chưa"}</p>
+                      {eligible(w) && <p className="mt-1 font-semibold text-emerald-700">{geoMode ? "Đủ điều kiện nghiệm thu hình học" : "Đủ điều kiện nghiệm thu"}</p>}
+                      {!eligible(w) && <p className="mt-1 text-amber-800">{geoMode ? (w.truc_quan !== "Đạt" ? "Chưa có trực quan Đạt — bấm «Trực quan đạt»." : "Số đo / chiều dài mài chưa đạt theo tiêu chí.") : (w.ly_do_chua_du_dieu_kien || "Chưa đủ dữ liệu kiểm tra chất lượng.")}</p>}
                       {(w.thieu_chieu_dai_mai || grindingLengths[w.moi_han_id] !== undefined) && <div className="mt-2 flex flex-wrap items-end gap-2">
                         <label className="text-xs">Chiều dài mài (mm)
                           <input className={`${input} mt-1 block w-36`} inputMode="decimal" aria-label={`Chiều dài mài ${w.ma_lich_su}`} value={grindingLengths[w.moi_han_id] ?? ""} disabled={busy} onChange={(e) => setGrindingLengths((v) => ({ ...v, [w.moi_han_id]: e.target.value }))} />
@@ -906,9 +950,9 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
                     </td>
                     <td className="p-2">
                       <select className={input} aria-label={`Kết quả ${w.ma_lich_su}`} disabled={busy} value={d.ket_qua} onChange={(e) => patch(w.moi_han_id, { ket_qua: e.target.value as AcceptanceDecision["ket_qua"], ly_do: e.target.value === "Đạt" ? undefined : d.ly_do })}>
-                        <option value="Đạt" disabled={!w.du_dieu_kien_nghiem_thu}>Hoàn thành (Đạt)</option>
+                        <option value="Đạt" disabled={!eligible(w)}>{geoMode ? "Đạt hình học" : "Hoàn thành (Đạt)"}</option>
                         <option value="Chưa nghiệm thu">Chưa nghiệm thu</option>
-                        <option value="Không đạt">Không đạt</option>
+                        {!geoMode && <option value="Không đạt">Không đạt</option>}
                       </select>
                     </td>
                     <td className="p-2"><input className={`${input} w-full`} value={d.ly_do ?? ""} disabled={d.ket_qua === "Đạt"} onChange={(e) => patch(w.moi_han_id, { ly_do: e.target.value })} /></td>
@@ -930,8 +974,8 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
               </select>
               {!supplement.length && <span>Chưa có phiếu bổ sung đã nghiệm thu. Mở phương án nghiệm thu phần còn thiếu để phát phiếu và chốt kết quả.</span>}
             </label>}
-            <button type="button" className={primary} disabled={busy || !sum.accepted || missingReason} onClick={() => void complete()}>Hoàn thành nghiệm thu</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => open(active.rfi).catch((e) => setError(message(e)))}>Tải lại điều kiện</button>
+            <button type="button" className={primary} disabled={busy || !sum.accepted || missingReason} onClick={() => void complete()}>{geoMode ? "Hoàn thành hình học & in biên bản" : "Hoàn thành nghiệm thu"}</button>
+            <button type="button" className={secondary} disabled={busy} onClick={() => open(active.rfi, mode).catch((e) => setError(message(e)))}>Tải lại điều kiện</button>
             <button type="button" className={secondary} disabled={busy} onClick={() => setActive(null)}>Quay lại</button>
           </div>
           {missingReason && <p className="text-xs text-amber-700">Nhập lý do cho mọi mối không được chấp nhận.</p>}
@@ -946,8 +990,16 @@ function AcceptPanel({ projectId, onCompleted }: { projectId: string; onComplete
   );
 }
 
-function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onPrint: (id: string) => Promise<void> }) {
+function RecordsPanel({ projectId, onOpen, onPrint, onPrintRecord }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onPrint: (id: string) => Promise<void>; onPrintRecord?: (record: RecordSet) => void }) {
   const [records, setRecords] = useState<RecordSummary[]>([]);
+  // Phiếu siêu âm tách đã nghiệm thu: ký xong → mối (đã đạt hình học) thành «Đạt».
+  const [splitRecords, setSplitRecords] = useState<SplitRecordSummary[]>([]);
+  const refreshSplit = useCallback(() => loadSplitRecords(projectId).then((r) => setSplitRecords(r.records)), [projectId]);
+  useEffect(() => { refreshSplit().catch(() => undefined); }, [refreshSplit]);
+  async function toggleSplitSign(r: SplitRecordSummary) {
+    setBusy(true); setError("");
+    try { await signSplitRecord(r.id, !r.da_ky); await refreshSplit(); } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const refresh = useCallback(() => loadRecords(projectId).then((r) => setRecords(r.records)), [projectId]);
@@ -1028,11 +1080,25 @@ function RecordsPanel({ projectId, onOpen, onPrint }: { projectId: string; onOpe
           </div>
         );
       })}
-      {!records.length && (
+      {!records.length && !splitRecords.length && (
         <p className="text-sm text-slate-600">
           Chưa có hồ sơ. Phát RFI nghiệm thu xong là bộ 3 biên bản xuất hiện tại đây để in mang đi.
         </p>
       )}
+      {splitRecords.length > 0 && <h3 className="pt-2 text-sm font-bold text-slate-800">Biên bản RFI siêu âm (phiếu tách)</h3>}
+      {splitRecords.map((r) => (
+        <div key={r.id} className="space-y-2 rounded-lg border border-slate-200 p-3 text-sm">
+          <p className="font-semibold">
+            {r.so_phieu} · siêu âm · {r.ngay_nghiem_thu} · {r.nguoi_nghiem_thu ?? ""}
+            {r.da_ky ? <span className="ml-2 font-medium text-emerald-700">· Đã ký{r.nguoi_ky ? ` (${r.nguoi_ky})` : ""}</span> : <span className="ml-2 font-medium text-slate-500">· Chờ ký</span>}
+          </p>
+          <p className="text-xs text-slate-700">{r.tong_moi} mối · Đạt: {r.dat}. Ký xong, mối đã nghiệm thu hình học ĐẠT chuyển «Đạt».</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={r.da_ky ? secondary : primary} disabled={busy} onClick={() => void toggleSplitSign(r)}>{r.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký"}</button>
+            {onPrintRecord && <button type="button" className={secondary} disabled={busy} onClick={() => loadGeometryRecord(r.id).then(onPrintRecord).catch((e) => setError(message(e)))}>In biên bản</button>}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

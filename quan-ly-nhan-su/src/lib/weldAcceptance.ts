@@ -86,7 +86,7 @@ export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter)
 }
 
 /** Trạng thái được phép đưa vào phiếu RFI nghiệm thu (kể cả đã NDT Đạt nhưng chưa có RFI). */
-export const RFI_ELIGIBLE_STATUSES = ["Chờ siêu âm và nghiệm thu", "Chờ siêu âm", "Chờ nghiệm thu", "Chờ thí nghiệm"] as const;
+export const RFI_ELIGIBLE_STATUSES = ["Mài xong", "Chờ siêu âm và nghiệm thu", "Chờ siêu âm", "Chờ nghiệm thu", "Chờ thí nghiệm"] as const;
 
 export function isRfiEligibleStatus(tinhTrang: string): boolean {
   return (RFI_ELIGIBLE_STATUSES as readonly string[]).includes(tinhTrang);
@@ -105,8 +105,9 @@ export function rfiBlockReason(tinhTrang: string): string {
     case "Sửa chữa/khắc phục": return "Đang sửa chữa/khắc phục sau trực quan hoặc độ lệch";
     case "Chờ siêu âm và nghiệm thu":
     case "Chờ thí nghiệm": return "Chưa có siêu âm đạt";
-    case "Chờ siêu âm": return "Đã nghiệm thu hình học — đang chờ siêu âm";
-    case "Chờ nghiệm thu": return "Đã mài đạt — đang chờ nghiệm thu kích thước hình học";
+    case "Chờ siêu âm": return "Đã duyệt hình học — đang chờ siêu âm";
+    case "Mài xong": return "Đã mài xong — đang chờ nghiệm thu";
+    case "Chờ nghiệm thu": return "Hình học + siêu âm đạt — đang chờ nghiệm thu";
     case "Chờ ký biên bản": return "Đã nghiệm thu — đang chờ ký biên bản";
     default: return "Chưa đủ điều kiện (thiếu trực quan, hình học hoặc NDT theo tiêu chí)";
   }
@@ -118,7 +119,7 @@ export function acceptanceBlockReason(status: string, missingGrindingLength: boo
   if (missingGrindingLength) return "Thiếu chiều dài mài hoàn thiện (mm). Nhập số đo thực tế và lưu trước khi chọn Đạt.";
   if (status === "Chờ siêu âm và nghiệm thu" || status === "Chờ thí nghiệm") return "Chưa có kết quả NDT đạt và ngày thí nghiệm; kiểm tra lại dữ liệu chất lượng.";
   if (status === "Chờ siêu âm") return "Đã nghiệm thu hình học — cần kết quả siêu âm Đạt và ngày thí nghiệm.";
-  if (status === "Chờ nghiệm thu") return "Đã mài đạt — bổ sung đủ số đo (nếu thiếu) rồi hoàn thành nghiệm thu.";
+  if (status === "Mài xong" || status === "Chờ nghiệm thu") return "Đã mài xong — bấm «Trực quan đạt» (tự điền sai số max); có siêu âm đạt thì nghiệm thu toàn bộ.";
   if (status === "Chờ ký biên bản") return "Đã nghiệm thu Đạt — chuyển sang Hồ sơ để ký bộ biên bản.";
   return rfiBlockReason(status);
 }

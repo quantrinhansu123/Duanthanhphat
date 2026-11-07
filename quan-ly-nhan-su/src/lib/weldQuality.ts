@@ -33,11 +33,12 @@ export type WeldQualityInspection = {
 
 /**
  * Trình tự thống nhất mọi loại mối hàn (bỏ cột Kết quả NDT trên UI).
- * Chờ mài → Chờ siêu âm và nghiệm thu → (sau NDT Đạt) Chờ nghiệm thu → Chờ ký biên bản → Đạt
+ * Chờ mài → (bấm Mài xong) Mài xong → (trực quan đạt) Chờ nghiệm thu → Chờ siêu âm và nghiệm thu → (sau NDT Đạt) Chờ nghiệm thu → Chờ ký biên bản → Đạt
  * + Sửa chữa/khắc phục / Không đạt / Không thí nghiệm.
  */
 export type WeldQualityStatus =
   | "Chờ mài"
+  | "Mài xong"
   | "Chờ siêu âm và nghiệm thu"
   | "Chờ siêu âm"
   | "Chờ nghiệm thu"
@@ -49,6 +50,7 @@ export type WeldQualityStatus =
 
 export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
   "Chờ mài",
+  "Mài xong",
   "Chờ siêu âm và nghiệm thu",
   "Chờ siêu âm",
   "Chờ nghiệm thu",
@@ -272,7 +274,11 @@ export function evaluateWeldQuality(
   // Đã siêu âm/NDT đạt → không còn «Chờ siêu âm…»; chờ hoàn thành nghiệm thu.
   // Hình học đã nghiệm thu Đạt → chờ siêu âm; mới mài đạt → chờ nghiệm thu (kích thước hình học).
   else if (internalPass && geometryAccepted) status = "Chờ siêu âm";
-  else if (internalPass) status = "Chờ nghiệm thu";
+  // Duyệt hình học đạt: chưa siêu âm → Chờ siêu âm; siêu âm đạt → Chờ nghiệm thu.
+  else if (internalPass && inspection.ket_qua_ndt === "Đạt") status = "Chờ nghiệm thu";
+  else if (internalPass) status = "Chờ siêu âm";
+  // Đã bấm «Mài xong» (có ngày mài, chưa kết luận trực quan) → chờ nghiệm thu (phát RFI).
+  else if (inspection.ngay_mai && !inspection.truc_quan) status = "Mài xong";
   // Hàn xong → tự động Chờ mài (mọi loại mối hàn).
   else status = "Chờ mài";
 

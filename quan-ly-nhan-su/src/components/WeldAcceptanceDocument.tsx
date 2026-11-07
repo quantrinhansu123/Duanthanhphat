@@ -71,6 +71,24 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const [sigError, setSigError] = useState("");
   const [sigLoadError, setSigLoadError] = useState("");
   const [sigLinks, setSigLinks] = useState<Partial<Record<SignatureKey, string>>>({});
+  // Sửa nội dung in của phiếu YCNT ngay trên bản xem trước (lưu theo phiếu trên máy này; để trống = tự lấy).
+  const rfiKey = view.rfi ? `rfi-print:${view.rfi.rfi.id}` : "";
+  const [rfiEditOpen, setRfiEditOpen] = useState(false);
+  const [rfiOverrides, setRfiOverrides] = useState<RfiOverrides>(() => {
+    if (!rfiKey) return {};
+    try { return JSON.parse(window.localStorage.getItem(rfiKey) ?? "{}") as RfiOverrides; } catch { return {}; }
+  });
+  function setOverride(key: keyof RfiOverrides, value: string) {
+    setRfiOverrides((cur) => {
+      const next = { ...cur, [key]: value };
+      try { window.localStorage.setItem(rfiKey, JSON.stringify(next)); } catch { /* bỏ qua khi không lưu được */ }
+      return next;
+    });
+  }
+  function resetOverrides() {
+    setRfiOverrides({});
+    try { window.localStorage.removeItem(rfiKey); } catch { /* bỏ qua */ }
+  }
 
   function printVersion(signed: boolean) {
     flushSync(() => setWithSignatures(signed));
@@ -139,6 +157,9 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
             Sửa phiếu
           </button>
         ) : null}
+        {kind === "rfi" && view.rfi ? (
+          <button type="button" onClick={() => setRfiEditOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa nội dung in</button>
+        ) : null}
         {kind === "rfi" ? (
           <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
         ) : null}
@@ -158,6 +179,21 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       </div>
       {kind === "rfi" && sigLoadError && (
         <p role="alert" className="weld-doc-actions mx-auto mb-3 max-w-3xl rounded-lg bg-red-50 p-2 text-sm text-red-700">Không tải được chữ ký đã lưu: {sigLoadError}</p>
+      )}
+      {kind === "rfi" && view.rfi && rfiEditOpen && (
+        <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
+          <p className="text-xs text-slate-600">Sửa giá trị trên phiếu trước khi in. Để trống = tự lấy theo dữ liệu. Nội dung sửa được nhớ cho phiếu này trên máy này.</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {RFI_OVERRIDE_FIELDS.map(([key, label, type, placeholder]) => (
+              <label key={key} className={`block text-xs font-semibold text-slate-700 ${type === "textarea" ? "sm:col-span-3" : ""}`}>{label}
+                {type === "textarea"
+                  ? <textarea rows={2} placeholder={placeholder} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal" value={rfiOverrides[key] ?? ""} onChange={(e) => setOverride(key, e.target.value)} />
+                  : <input type={type} placeholder={placeholder} className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={rfiOverrides[key] ?? ""} onChange={(e) => setOverride(key, e.target.value)} />}
+              </label>
+            ))}
+          </div>
+          <button type="button" onClick={resetOverrides} className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">Về mặc định</button>
+        </div>
       )}
       {kind === "rfi" && sigOpen && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
@@ -257,7 +293,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" disabled={busy} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
         </div>
       )}
-      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} signatures={withSignatures ? signatures : { ...signatures, "chi-huy-truong": undefined, "nha-thau-phu": undefined }} /> : (
+      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} o={rfiOverrides} signatures={withSignatures ? signatures : { ...signatures, "chi-huy-truong": undefined, "nha-thau-phu": undefined }} /> : (
       record ? <WeldAcceptanceRecordPages record={record} kind={kind as RecordKind} /> : null)}
     </div>
   );
@@ -288,14 +324,37 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
   );
 }
 
-function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore }) {
+type RfiOverrides = Partial<Record<"so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan", string>>;
+const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
+  ["so_phieu", "Số phiếu", "text", "007/PYC-HR"],
+  ["ngay_lap", "Ngày lập phiếu", "date", ""],
+  ["noi_lap", "Nơi lập", "text", "Phú Quốc"],
+  ["ngay_nt", "Ngày nghiệm thu (mục 2)", "date", ""],
+  ["gio", "Giờ nghiệm thu", "time", ""],
+  ["ngay_nhan", "Ngày nhận (TVGS)", "date", ""],
+  ["km_dau", "Km đầu", "text", "4+486.85"],
+  ["km_cuoi", "Km cuối", "text", "4+486.85"],
+  ["dia_diem", "Địa điểm", "text", ""],
+  ["hang_muc", "Hạng mục", "text", ""],
+  ["nguoi_nhan", "Người nhận (TVGS)", "text", ""],
+  ["chuc_vu_nhan", "Chức vụ người nhận", "text", "Tư vấn giám sát trưởng"],
+  ["kinh_gui", "Kính gửi (mỗi dòng một bên)", "textarea", ""],
+  ["doi_tuong", "Đối tượng nghiệm thu (mỗi dòng một mục, thay toàn bộ mục 1)", "textarea", ""],
+];
+function viDate(iso?: string) {
+  const [y, m, d] = (iso ?? "").split("-");
+  return y && m && d ? `${d} tháng ${m} năm ${y}` : "";
+}
+
+function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore; o?: RfiOverrides }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
   const monitoring = t.loai_rfi === "theo-doi";
-  const [y, m, d] = rfi.ngay_moi.split("-");
+  const lines = (v?: string) => (v ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const [y, m, d] = (o.ngay_lap?.trim() || rfi.ngay_moi).split("-");
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
-  const kinhGui = t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
+  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
   const autoUpper = routes.some((r) => r === "TT" || r === "TP");
   const autoLower = routes.some((r) => r === "HT" || r === "HP");
@@ -305,11 +364,11 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
   const missingRoutes = welds.filter((_, i) => !routes[i]);
   const tuyen = upper && lower ? "tuyến thượng và tuyến hạ" : upper ? "tuyến thượng" : lower ? "tuyến hạ" : `tuyến ${DOTS}`;
   const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
-  const gio = (t.gio_bat_dau || "").trim();
+  const gio = (o.gio?.trim() || t.gio_bat_dau || "").trim();
   const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
   const ngay = `${d ?? "……"} tháng ${m ?? "……"} năm ${y ?? "……"}`;
   // Ngày nghiệm thu (mục 2) = ngày phát phiếu + 1.
-  const ngayNghiemThu = (() => {
+  const ngayNghiemThu = viDate(o.ngay_nt?.trim()) || (() => {
     const next = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d) + 1));
     if (!y || !m || !d || Number.isNaN(next.getTime())) return ngay;
     return `${String(next.getUTCDate()).padStart(2, "0")} tháng ${String(next.getUTCMonth() + 1).padStart(2, "0")} năm ${next.getUTCFullYear()}`;
@@ -326,22 +385,24 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
           ----------- ☙★❧ -----------
         </p>
       )}
-      <p className="mt-3 text-right italic">{pq?.noiLap ?? DOTS}, ngày {ngay}</p>
+      <p className="mt-3 text-right italic">{o.noi_lap?.trim() || pq?.noiLap || DOTS}, ngày {ngay}</p>
       <h2 className="mt-3 text-center font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
-      <p className="text-center">Số: {rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR</p>
+      <p className="text-center">Số: {o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR`}</p>
       <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
         <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
-        <dt>Hạng mục</dt><dd className="font-normal">: {pq?.goiThau ?? DOTS}</dd>
-        <dt>Địa điểm</dt><dd className="font-normal">: {t.dia_diem || pq?.diaDiem || DOTS}</dd>
+        <dt>Hạng mục</dt><dd className="font-normal">: {o.hang_muc?.trim() || pq?.goiThau || DOTS}</dd>
+        <dt>Địa điểm</dt><dd className="font-normal">: {o.dia_diem?.trim() || t.dia_diem || pq?.diaDiem || DOTS}</dd>
       </dl>
       <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
+      {lines(o.doi_tuong).length > 0 ? lines(o.doi_tuong).map((x) => <p key={x}>- {x.replace(/^-\s*/, "")}</p>) : <>
       {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
       {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => w.ma_lich_su).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
         return <>{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}{s.geometry && <p>- Nghiệm thu kích thước mối hàn {codes}{pv}</p>}</>; })()}
+      </>}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
-      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)}-{chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>
+      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
@@ -356,13 +417,13 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
             <td className="w-1/4 border border-black text-center font-bold">TƯ VẤN<br />GIÁM SÁT</td>
             <td className="w-[40%] border border-black p-1 align-top">
               <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
-                <span>Người nhận: {pq ? "Trần Văn Thanh" : DOTS}</span>
-                <span>Ngày nhận: {ngay}</span>
+                <span>Người nhận: {o.nguoi_nhan?.trim() || (pq ? "Trần Văn Thanh" : DOTS)}</span>
+                <span>Ngày nhận: {viDate(o.ngay_nhan?.trim()) || ngay}</span>
               </div>
             </td>
             <td className="border border-black p-1 align-top">
               <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
-                <span>Chức vụ: Tư vấn giám sát trưởng</span>
+                <span>Chức vụ: {o.chuc_vu_nhan?.trim() || "Tư vấn giám sát trưởng"}</span>
                 <span>Chữ ký:..........................................</span>
               </div>
             </td>

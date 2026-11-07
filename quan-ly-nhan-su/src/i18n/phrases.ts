@@ -7,6 +7,7 @@ export const PHRASES: Record<string, string> = {
   "Chưa có dữ liệu chất lượng": "No quality inspection recorded",
   "Hàn": "Welded",
   "Chờ mài": "Awaiting grinding",
+  "Mài xong": "Grinding done",
   "Chờ siêu âm và nghiệm thu": "Awaiting UT & acceptance",
   "Sửa chữa/khắc phục": "Repair / corrective action",
   "Chờ ký biên bản": "Awaiting minutes signing",

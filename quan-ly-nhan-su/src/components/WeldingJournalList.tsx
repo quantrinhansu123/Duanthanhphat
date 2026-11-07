@@ -107,13 +107,14 @@ const PAGE_SIZE = 50;
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
-type JournalStage = "all" | "han-xong" | "mai-xong" | "cho-nt" | "sua-chua" | "ky-bb" | "dat";
+type JournalStage = "all" | "han-xong" | "da-mai" | "mai-xong" | "cho-nt" | "sua-chua" | "ky-bb" | "dat";
 /** Giai đoạn theo trình tự chất lượng mới (một cột tình trạng; bỏ cột Kết quả NDT trên UI). */
 const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
   { id: "han-xong", label: "Chờ mài", hint: "Đã hàn, đang chờ mài", statuses: ["Chờ mài"] },
-  { id: "mai-xong", label: "Chờ siêu âm", hint: "Đã nghiệm thu hình học — chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] },
-  { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Đã mài đạt — chờ nghiệm thu kích thước hình học", statuses: ["Chờ nghiệm thu"] },
+  { id: "da-mai", label: "Mài xong", hint: "Đã mài xong — chờ phát RFI nghiệm thu", statuses: ["Mài xong"] },
+  { id: "mai-xong", label: "Chờ siêu âm", hint: "Đã duyệt hình học — chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] },
+  { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Hình học + siêu âm đạt — chờ nghiệm thu", statuses: ["Chờ nghiệm thu"] },
   { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan/độ lệch không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
   { id: "ky-bb", label: "Chờ ký BB", hint: "Đã nghiệm thu Đạt — chờ ký bộ biên bản", statuses: ["Chờ ký biên bản"] },
   { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },
@@ -1802,7 +1803,7 @@ export default function WeldingJournalList({
   const [selectedQuality, setSelectedQuality] = useState<Map<string, WeldQualitySelection>>(new Map());
   const [selectingAll, setSelectingAll] = useState(false);
   const [bulkQualityEntries, setBulkQualityEntries] = useState<WeldQualitySelection[] | null>(null);
-  const [bulkQualityKind, setBulkQualityKind] = useState<"visual" | "ndt">("ndt");
+  const [bulkQualityKind, setBulkQualityKind] = useState<"grind" | "visual" | "ndt">("ndt");
   const selectionToken = useRef(0);
   const qualityExcelInputRef = useRef<HTMLInputElement>(null);
   const [qualityImporting, setQualityImporting] = useState(false);
@@ -3105,6 +3106,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
           <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
           <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy…" : `Chọn toàn bộ (${total.toLocaleString("vi-VN")})`}</button>
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50" onClick={() => { setBulkQualityKind("grind"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Ghi ngày hoàn thành mài → Mài xong (phát RFI được)">Mài xong</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("visual"); setBulkQualityEntries([...selectedQuality.values()]); }}>Duyệt hình học hàng loạt</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("ndt"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
           <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập…" : "Nhập sai số / Excel"}</button>

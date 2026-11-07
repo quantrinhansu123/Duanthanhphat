@@ -5,7 +5,7 @@ import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJourna
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
 import { rfiScope, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
-import { acceptanceIssues, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
+import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
@@ -175,20 +175,27 @@ export async function loadRfiOverview(body: Record<string, unknown>) {
 }
 
 /**
- * Số phiếu kế tiếp = số lớn nhất đang dùng + 1, tính chung phiếu RFI chính và các phiếu tách riêng
- * (hình học / siêu âm) của dự án — đếm số phiếu như trước dễ ra số đã dùng và bị báo trùng.
+ * Số phiếu kế tiếp = số lớn nhất đang dùng + 1.
+ * - RFI chính: RFI-001… (tính cả phiếu tách cũ đánh số kiểu RFI-007 để không trùng).
+ * - Phiếu hình học tách: RFI-HH-001…; phiếu siêu âm tách: RFI-SA-001… (mỗi loại một dãy riêng).
  */
-export async function nextRfiNumber(projectId: string) {
+export async function nextRfiNumber(projectId: string, kind?: "hinh-hoc" | "sieu-am") {
+  const prefix = kind === "hinh-hoc" ? "RFI-HH-" : kind === "sieu-am" ? "RFI-SA-" : "RFI-";
   const [main, split] = await Promise.all([
-    fetchAll<{ so_phieu: string | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu").select("so_phieu").eq("du_an_id", projectId).order("id").range(a, b)),
-    fetchAll<{ so_phieu: string | null }>((a, b) => db().from("phieu_nt_tach").select("so_phieu").eq("du_an_id", projectId).order("id").range(a, b)),
+    kind ? Promise.resolve([] as { so_phieu: string | null }[])
+      : fetchAll<{ so_phieu: string | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu").select("so_phieu").eq("du_an_id", projectId).order("id").range(a, b)),
+    fetchAll<{ so_phieu: string | null }>((a, b) => {
+      const q = db().from("phieu_nt_tach").select("so_phieu").eq("du_an_id", projectId);
+      return (kind ? q.eq("loai", kind) : q).order("id").range(a, b);
+    }),
   ]);
+  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-\d+)?$/i;
   let highest = 0;
   for (const row of [...main, ...split]) {
-    const match = /(\d+)\s*$/.exec(row.so_phieu ?? "");
+    const match = pattern.exec((row.so_phieu ?? "").trim());
     if (match) highest = Math.max(highest, Number(match[1]));
   }
-  return `RFI-${String(highest + 1).padStart(3, "0")}`;
+  return `${prefix}${String(highest + 1).padStart(3, "0")}`;
 }
 
 export async function publishRfi(body: Record<string, unknown>, actor: string) {
@@ -227,13 +234,14 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   const info = object(body.thong_tin ?? {});
   const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
   const explicitScope = "nt_hinh_hoc" in info || "nt_sieu_am" in info;
-  const geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
+  let geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
   const ultrasound = explicitScope ? flag(info.nt_sieu_am) : "1";
   if (!geometry && !ultrasound) throw new QualityApiError("Chọn nghiệm thu kích thước hình học, siêu âm hoặc cả hai.");
   if (ultrasound && !geometry) {
     const accepted = await geometryAcceptedTickets(qualityUuid(body.du_an_id), ids.map(qualityUuid));
     const missing = ids.filter((id) => !accepted.has(qualityUuid(id)));
-    if (missing.length) throw new QualityApiError(`Phiếu siêu âm chỉ nhận mối đã nghiệm thu trực quan ĐẠT («Chờ siêu âm»). Có ${missing.length} mối chưa đủ điều kiện.`);
+    // Mối mới duyệt hình học nội bộ (chưa có phiếu nghiệm thu hình học) → phiếu nghiệm thu cả hình học + siêu âm.
+    if (missing.length) geometry = "1";
   }
   const thong_tin = {
     dia_diem: str(info.dia_diem),
@@ -394,6 +402,8 @@ export async function loadRfiDetail(rfiId: string) {
     kinh_do: where.get(l.moi_han_id)?.kinh_do == null ? null : Number(where.get(l.moi_han_id)?.kinh_do), phien_ban: q.get(l.moi_han_id)?.phien_ban ?? 0,
     tinh_trang: q.get(l.moi_han_id)?.tinh_trang ?? "", du_dieu_kien_nghiem_thu: q.get(l.moi_han_id)?.du_dieu_kien_nghiem_thu ?? false,
     thieu_chieu_dai_mai: missingLength.has(l.moi_han_id),
+    truc_quan: inspectionById.get(l.moi_han_id)?.truc_quan ?? null,
+    du_dieu_kien_hinh_hoc: geometryReady(inspectionById.get(l.moi_han_id), ruleById.get(inspectionById.get(l.moi_han_id)?.tieu_chuan_id ?? "")),
     chieu_dai_mai: inspectionById.get(l.moi_han_id)?.gia_tri_do.chieu_dai_mai ?? null,
     ket_qua_ndt: inspectionById.get(l.moi_han_id)?.ket_qua_ndt ?? null,
     ten_tieu_chuan: ruleById.get(inspectionById.get(l.moi_han_id)?.tieu_chuan_id ?? "")?.ten ?? null,
@@ -402,6 +412,84 @@ export async function loadRfiDetail(rfiId: string) {
       acceptanceBlockReason(q.get(l.moi_han_id)?.tinh_trang ?? "", missingLength.has(l.moi_han_id)) }));
   welds.sort((a, b) => a.ma_lich_su.localeCompare(b.ma_lich_su, "vi", { numeric: true }));
   return { rfi, welds };
+}
+
+/** Đủ điều kiện nghiệm thu riêng hình học: đã mài, trực quan Đạt, số đo trong dung sai, có chiều dài mài (nếu tiêu chí yêu cầu). */
+function geometryReady(i: SavedWeldInspection | undefined, rule: SavedWeldQualityRule | undefined) {
+  if (!i || !rule || !i.ngay_mai || i.truc_quan !== "Đạt" || i.ly_do_loai_nghiem_thu || i.xu_ly_truc_quan === "khong_dat" || i.ket_qua_ndt === "Không đạt") return false;
+  try { return evaluateGeometry(i.gia_tri_do ?? {}, rule.dung_sai) === "Đạt" && hasRequiredGrindingLength(i.gia_tri_do ?? {}, rule.dung_sai); } catch { return false; }
+}
+
+/** Nghiệm thu CHỈ hình học từ RFI chính: tạo phiếu hình học đã chốt, mối → «Chờ siêu âm»; trả về bộ biên bản hình học để in. */
+export async function completeRfiGeometry(body: Record<string, unknown>, actor: string) {
+  const ngay = qualityDate(body.ngay_nghiem_thu);
+  if (!ngay) throw new QualityApiError("Nhập ngày nghiệm thu.");
+  if (!Array.isArray(body.ket_qua) || !body.ket_qua.length || body.ket_qua.length > 2000) throw new QualityApiError("Chọn ít nhất một mối Đạt hình học.");
+  const ket_qua = body.ket_qua.map((v) => {
+    const r = object(v);
+    if (typeof r.phien_ban !== "number" || !Number.isSafeInteger(r.phien_ban)) throw new QualityApiError("Phiên bản không hợp lệ.");
+    return { moi_han_id: qualityUuid(r.moi_han_id), phien_ban: r.phien_ban };
+  });
+  const id = qualityUuid(body.id);
+  const { error } = await db().rpc("nt_hinh_hoc_tu_rfi", { p_id: id, p_phieu_id: qualityUuid(body.phieu_id), p_ngay: ngay, p_ket_qua: ket_qua, p_actor: actor });
+  if (error) {
+    if (error.code === "PGRST202") throw new QualityApiError("Chưa chạy migration 20261108 (nghiệm thu hình học từ RFI) trên Supabase.", 409);
+    if (error.code === "23505") throw new QualityApiError("Có mối đã nằm trong một phiếu hình học khác đang xử lý.", 409);
+    if (error.code === "P0001") throw new QualityApiError(error.message, 409);
+    throw error;
+  }
+  // Phiếu hình học tách đánh số riêng RFI-HH-xxx (hàm SQL tạm lấy số của RFI chính).
+  const { data: created } = await db().from("phieu_nt_tach").select("du_an_id,so_phieu").eq("id", id).single();
+  if (created && !/^RFI-HH-\d+$/i.test(created.so_phieu)) {
+    const { error: renameError } = await db().from("phieu_nt_tach").update({ so_phieu: await nextRfiNumber(created.du_an_id, "hinh-hoc") }).eq("id", id);
+    if (renameError && renameError.code !== "23505") throw renameError;
+  }
+  const info = object(body.thong_tin ?? {});
+  return { id, record: await loadGeometryRecord(id, { dia_diem: str(info.dia_diem), thanh_phan: str(info.thanh_phan, 1000) }) };
+}
+
+/** Bộ biên bản nghiệm thu kích thước hình học (in riêng) dựng từ phiếu hình học đã chốt. */
+export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}) {
+  const { data: ticket, error } = await db().from("phieu_nt_tach").select("*").eq("id", ticketId).single();
+  const ultrasound = ticket?.loai === "sieu-am";
+  if (error) throw error;
+  if (!ticket.ngay_nghiem_thu) throw new QualityApiError("Phiếu chưa nghiệm thu.");
+  const [rfiRes, projectRes, rows] = await Promise.all([
+    ticket.phieu_rfi_id ? db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", ticket.phieu_rfi_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    db().from("du_an").select("*").eq("id", ticket.du_an_id).maybeSingle(),
+    fetchAll<{ moi_han_id: string; ma_lich_su: string; ket_qua: string | null; ly_do: string | null; du_lieu_chot: Record<string, unknown> }>((a, b) =>
+      db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot").eq("phieu_id", ticketId).eq("ket_qua", "Đạt").order("moi_han_id").range(a, b)),
+  ]);
+  if (rfiRes.error) throw rfiRes.error;
+  if (projectRes.error) throw projectRes.error;
+  const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(rows.map((r) => r.moi_han_id),
+    (p) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p));
+  const where = new Map<string, { ma_diem: string | null; ly_trinh: string | null }>();
+  for (const p of points) {
+    const cur = where.get(p.lich_su_moi_han_id);
+    where.set(p.lich_su_moi_han_id, { ma_diem: cur?.ma_diem || p.ma_diem, ly_trinh: cur?.ly_trinh || p.ly_trinh });
+  }
+  // Phiếu siêu âm: kèm số phiếu hình học đã nghiệm thu của các mối.
+  const geometryNos = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu))].join(", ") : ticket.so_phieu;
+  const rfi = (rfiRes.data ?? { id: ticket.id, so_phieu: ticket.so_phieu, ngay_moi: ticket.ngay_moi, thong_tin: {} }) as Record<string, unknown>;
+  const rfiInfo = (rfi.thong_tin ?? {}) as Record<string, unknown>;
+  const moi = rows.map((r) => {
+    const d = r.du_lieu_chot ?? {};
+    const pt = where.get(r.moi_han_id);
+    const mh = { ...((d.moi_han as Record<string, unknown>) ?? { ma_lich_su: r.ma_lich_su }) };
+    if (!mh.ma_diem && pt?.ma_diem) mh.ma_diem = pt.ma_diem;
+    if (!mh.ly_trinh && pt?.ly_trinh) mh.ly_trinh = pt.ly_trinh;
+    return { moi_han_id: r.moi_han_id, ket_qua: r.ket_qua ?? "Đạt", ly_do: r.ly_do,
+      du_lieu_chot: { moi_han: mh, kiem_tra: (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
+  });
+  const docs = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
+  return {
+    dot: { id: ticket.id, ngay_nghiem_thu: ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
+      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasound ? ticket.so_phieu : "" },
+      phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
+    ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: "Chờ ký", du_lieu_chot: null })),
+    moi, sua_doi: [],
+  };
 }
 
 /** Mối đã nghiệm thu trực quan / hình học ĐẠT ở phiếu trực quan riêng (kèm số phiếu, ngày nghiệm thu). */
@@ -563,6 +651,32 @@ export async function setSignStatus(body: Record<string, unknown>) {
   return { ok: true, count: 3 };
 }
 
+/** Phiếu siêu âm tách đã nghiệm thu → hồ sơ chờ ký / đã ký (ký xong mối đạt cả hình học + siêu âm → «Đạt»). */
+export async function listSplitRecords(projectId: string) {
+  const tickets = await fetchAll<{ id: string; so_phieu: string; ngay_nghiem_thu: string; nguoi_nghiem_thu: string | null; da_ky: boolean | null; nguoi_ky: string | null; ngay_ky: string | null }>((a, b) =>
+    db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu,nguoi_nghiem_thu,da_ky,nguoi_ky,ngay_ky").eq("du_an_id", projectId).eq("loai", "sieu-am")
+      .not("ngay_nghiem_thu", "is", null).order("ngay_nghiem_thu", { ascending: false }).order("so_phieu").range(a, b));
+  const items = await chunkedPages<{ phieu_id: string; ket_qua: string | null }>(tickets.map((t) => t.id),
+    (ids, a, b) => db().from("phieu_nt_tach_moi").select("phieu_id,ket_qua").in("phieu_id", ids).order("phieu_id").order("moi_han_id").range(a, b));
+  return tickets.map((t) => {
+    const rows = items.filter((i) => i.phieu_id === t.id);
+    return { ...t, da_ky: Boolean(t.da_ky), tong_moi: rows.length, dat: rows.filter((r) => r.ket_qua === "Đạt").length };
+  });
+}
+
+export async function signSplitRecord(body: Record<string, unknown>, actor: string) {
+  const id = qualityUuid(body.id);
+  const signed = body.da_ky === true;
+  const { data, error } = await db().from("phieu_nt_tach").update({ da_ky: signed, nguoi_ky: signed ? actor : null, ngay_ky: signed ? new Date().toISOString() : null })
+    .eq("id", id).eq("loai", "sieu-am").not("ngay_nghiem_thu", "is", null).select("id");
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") throw new QualityApiError("Chưa chạy migration 20261108c (ký phiếu siêu âm tách) trên Supabase.", 409);
+    throw error;
+  }
+  if (!data?.length) throw new QualityApiError("Phiếu siêu âm chưa nghiệm thu hoặc không tồn tại.", 409);
+  return { ok: true };
+}
+
 /** Separate records share inspection data with the original workflow, but own their RIF/RFI and results. */
 export async function splitAcceptance(body: Record<string, unknown>, actor: string) {
   const project = qualityUuid(body.du_an_id);
@@ -570,24 +684,20 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
   if (kind !== "hinh-hoc" && kind !== "sieu-am") throw new QualityApiError("Loại nghiệm thu không hợp lệ.");
   if (body.action === "split-list") {
     const [candidates, tickets] = await Promise.all([
-      fetchAll((a,b) => db().from("moi_cho_phieu_nt_tach").select("moi_han_id,ma_lich_su,da_nt_truc_quan,ngay_mai")
+      fetchAll((a,b) => db().from("moi_cho_phieu_nt_tach").select("moi_han_id,ma_lich_su,da_nt_truc_quan,ngay_mai,truc_quan")
         .eq("du_an_id",project).eq("loai",kind).order("ma_lich_su").order("moi_han_id").range(a,b)),
       fetchAll((a,b) => db().from("phieu_nt_tach").select("id,so_phieu,ngay_moi,ngay_nghiem_thu,nguoi_lap,nguoi_nghiem_thu")
         .eq("du_an_id",project).eq("loai",kind).order("ngay_moi",{ascending:false}).order("so_phieu").range(a,b)),
     ]);
     if (kind === "sieu-am") {
-      // RFI siêu âm chỉ nhận mối đã nghiệm thu hình học ĐẠT: qua phiếu hình học tách riêng, hoặc trạng thái «Chờ siêu âm» (hình học đã đạt ở bộ biên bản chính).
-      const geometryTickets = await fetchAll<{ id: string }>((a, b) => db().from("phieu_nt_tach").select("id")
-        .eq("du_an_id", project).eq("loai", "hinh-hoc").range(a, b));
-      const [passedSplit, waitingUltrasound] = await Promise.all([
-        chunked<{ moi_han_id: string }>(geometryTickets.map((t) => t.id), (part) => db().from("phieu_nt_tach_moi").select("moi_han_id").in("phieu_id", part).eq("ket_qua", "Đạt")),
-        fetchAll<{ moi_han_id: string }>((a, b) => db().from("chat_luong_moi_han").select("moi_han_id")
-          .eq("du_an_id", project).eq("tinh_trang", "Chờ siêu âm").order("moi_han_id").range(a, b)),
-      ]);
-      const geometryPassed = new Set([...passedSplit, ...waitingUltrasound].map((r) => r.moi_han_id));
-      return { candidates: (candidates as { moi_han_id: string }[]).filter((c) => geometryPassed.has(c.moi_han_id)), tickets };
+      // RFI siêu âm chỉ hiện mối đang «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT, chưa siêu âm / chưa ký).
+      const waiting = await fetchAll<{ moi_han_id: string }>((a, b) => db().from("chat_luong_moi_han").select("moi_han_id")
+        .eq("du_an_id", project).eq("tinh_trang", "Chờ siêu âm").order("moi_han_id").range(a, b));
+      const ids = new Set(waiting.map((r) => r.moi_han_id));
+      return { candidates: (candidates as { moi_han_id: string }[]).filter((c) => ids.has(c.moi_han_id)), tickets };
     }
-    return { candidates, tickets };
+    // Phiếu hình học: chỉ hiện mối «Mài xong» (có ngày mài, chưa kết luận trực quan).
+    return { candidates: (candidates as { truc_quan: string | null }[]).filter((c) => !c.truc_quan), tickets };
   }
   const id = qualityUuid(body.id);
   if (body.action === "split-publish") {
@@ -597,7 +707,7 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     // Báo rõ nguyên nhân thay vì một thông báo chung: số phiếu trùng hay mối đã nằm trong phiếu đang xử lý.
     const sameNumber = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
       .eq("du_an_id", project).eq("loai", kind).eq("so_phieu", number);
-    if ((sameNumber.count ?? 0) > 0) throw new QualityApiError(`Số phiếu ${number} đã được dùng trong nhánh này. Chọn số khác (gợi ý: ${await nextRfiNumber(project)}).`, 409);
+    if ((sameNumber.count ?? 0) > 0) throw new QualityApiError(`Số phiếu ${number} đã được dùng trong nhánh này. Chọn số khác (gợi ý: ${await nextRfiNumber(project, kind)}).`, 409);
     const { error } = await db().rpc("phat_phieu_nt_tach", { p_id:id, p_du_an:project, p_loai:kind,
       p_so:number, p_ngay:date, p_moi:ids.map(qualityUuid), p_actor:actor });
     if (error?.code === "23505") throw new QualityApiError("Có mối đã nằm trong một phiếu khác đang xử lý của nhánh này. Bấm Tải lại để cập nhật danh sách mối.",409);

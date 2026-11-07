@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadRfiNumber, markQualityPass, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
 import WeldAcceptanceDocument from "@/components/WeldAcceptanceDocument";
 
 export type SplitKind = "hinh-hoc" | "sieu-am";
-type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean };
+type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean; truc_quan?: string | null };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null };
 type Evidence = { co_the_dat: boolean; ngay_mai: string; truc_quan: string; gia_tri_do: GeometryMeasurements; ngay_ndt: string | null; ket_qua_ndt: string | null; phuong_phap_ndt: string; ten_tieu_chuan: string | null };
 type Item = { moi_han_id: string; ma_lich_su: string; ma_diem?: string | null; ly_trinh?: string | null; current?: Evidence | null; version?: number; du_lieu_chot: Evidence; ket_qua: string | null; ly_do: string | null };
@@ -29,7 +29,7 @@ function evidenceText(kind: SplitKind, e?: Evidence | null) {
     GEOMETRY_LABELS[k] + " " + (e.gia_tri_do[k] == null ? "—" : e.gia_tri_do[k] + " mm"))].join(" · ");
 }
 
-export default function SplitWeldAcceptance({ project, projectName, kind }: { project: string; projectName: string; kind: SplitKind }) {
+export default function SplitWeldAcceptance({ project, projectName, kind, onPrintRecord }: { project: string; projectName: string; kind: SplitKind; onPrintRecord?: (record: RecordSet) => void }) {
   const prefix = "RFI";
   const request = useCallback(<T,>(action: string, data: Record<string, unknown> = {}) =>
     qualityRequest<T>({ action, du_an_id: project, loai: kind, ...data }), [project, kind]);
@@ -54,9 +54,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
     request<List>("split-list").then(data => { if (active) setList(data); })
       .catch(e => { if (active) setError(errorText(e)); });
     // Gợi ý sẵn số phiếu tiếp theo để không phải gõ tay (vẫn sửa được).
-    loadRfiNumber(project).then(r => { if (active) setNumber(cur => cur || r.so_phieu); }).catch(() => undefined);
+    loadRfiNumber(project, kind).then(r => { if (active) setNumber(cur => cur || r.so_phieu); }).catch(() => undefined);
     return () => { active = false; };
-  }, [request, project]);
+  }, [request, project, kind]);
 
   async function run(task: () => Promise<void>) {
     setBusy(true); setError("");
@@ -82,6 +82,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
     setNdt((cur) => { const next = { ...cur }; delete next[item.moi_han_id]; return next; });
     if (detail) await openTicket(detail.ticket.id);
   }
+  /** Trực quan Đạt hàng loạt cho các mối chưa đủ điều kiện của phiếu hình học (ô sai số trống tự điền mức tối đa). */
+  async function passVisual() {
+    if (!detail) return;
+    const targets = detail.items.filter((i) => !i.ket_qua && !i.current?.co_the_dat);
+    if (!targets.length) { setError("Các mối đã đủ điều kiện chọn Đạt."); return; }
+    if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối (ngày ${date})?\nÔ sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
+    const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
+    const failed = response.results.filter((r) => r.error);
+    const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+    setDetail(next);
+    // Mối vừa đủ điều kiện → đặt sẵn Đạt.
+    setResults((prev) => { const out = { ...prev }; for (const i of next.items) if (!i.ket_qua && i.current?.co_the_dat && !out[i.moi_han_id]?.ket_qua) out[i.moi_han_id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
+    if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+  }
   function patch(id: string, data: Partial<Decision>) {
     setResults(prev => ({ ...prev, [id]: { ...(prev[id] ?? { ket_qua: "", ly_do: "" }), ...data } }));
   }
@@ -104,13 +118,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
         void run(async () => {
           const { id } = await request<{ id: string }>("split-publish", { id: crypto.randomUUID(), so_phieu: number, ngay_moi: inviteDate, moi_han_ids: selected });
           setSelected([]); setNumber(""); await openTicket(id); await refresh();
-          void loadRfiNumber(project).then(r => setNumber(r.so_phieu)).catch(() => undefined);
+          void loadRfiNumber(project, kind).then(r => setNumber(r.so_phieu)).catch(() => undefined);
         });
       }}>
         <h3 className="font-bold">Phát {prefix} nghiệm thu {kindName(kind)}</h3>
-        <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Chọn mối đã xác nhận nội bộ đạt hình học và trực quan sau mài." : "Chỉ hiện mối đã nghiệm thu hình học ĐẠT, đang chờ siêu âm."}</p>
+        <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Chỉ hiện mối «Mài xong» (chưa kết luận trực quan). Khi nghiệm thu bấm «Trực quan đạt» (tự điền sai số max) rồi chọn Đạt → in biên bản hình học, mối chuyển «Chờ siêu âm»." : "Chỉ hiện mối «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT)."}</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm">Số phiếu {prefix}<input required maxLength={80} placeholder={prefix + "-001"} className={field} value={number} onChange={e => setNumber(e.target.value)} /></label>
+          <label className="grid gap-1 text-sm">Số phiếu {prefix}<input required maxLength={80} placeholder={kind === "hinh-hoc" ? "RFI-HH-001" : "RFI-SA-001"} className={field} value={number} onChange={e => setNumber(e.target.value)} /></label>
           <label className="grid gap-1 text-sm">Ngày mời<input required type="date" className={field} value={inviteDate} onChange={e => setInviteDate(e.target.value)} /></label>
         </div>
         <input aria-label="Tìm mã mối hàn" placeholder="Tìm mã mối hàn…" className={field + " w-full"} value={query} onChange={e => setQuery(e.target.value)} />
@@ -118,7 +132,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
           {candidates.map(c => <label key={c.moi_han_id} className="flex min-h-10 items-center gap-3 px-3 text-sm">
             <input type="checkbox" checked={selected.includes(c.moi_han_id)} disabled={busy || (selected.length >= 200 && !selected.includes(c.moi_han_id))}
               onChange={e => setSelected(e.target.checked ? [...selected, c.moi_han_id] : selected.filter(id => id !== c.moi_han_id))} />
-            <b>{c.ma_lich_su}</b><span className="text-slate-600">{c.da_nt_truc_quan ? "Đã nghiệm thu trực quan" : "Đã xác nhận nội bộ"} · {dateLabel(c.ngay_mai)}</span>
+            <b>{c.ma_lich_su}</b><span className="text-slate-600">{kind === "hinh-hoc" ? "Mài xong" : "Chờ siêu âm"} · {dateLabel(c.ngay_mai)}</span>
           </label>)}
           {!candidates.length && <p className="p-3 text-sm text-slate-600">{list ? "Không tìm thấy mối đủ điều kiện." : error ? "Chưa tải được danh sách." : "Đang tải danh sách…"}</p>}
         </div>
@@ -151,7 +165,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
                     <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
                     <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
                     <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${t.ngay_nghiem_thu ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{t.ngay_nghiem_thu ? "Đã nghiệm thu" : "Chờ nghiệm thu"}</span></td>
-                    <td className="px-3 py-2 text-right"><button disabled={busy} className={button} onClick={() => run(() => openTicket(t.id))}>{t.ngay_nghiem_thu ? "Xem" : "Nghiệm thu"}</button></td>
+                    <td className="px-3 py-2 text-right"><button disabled={busy} className={button} onClick={() => run(() => openTicket(t.id))}>{t.ngay_nghiem_thu ? "Xem" : "Nghiệm thu"}</button>{t.ngay_nghiem_thu && onPrintRecord && <button disabled={busy} className={button + " ml-1"} title={"In bộ biên bản nghiệm thu " + kindName(kind)} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(t.id)))}>In biên bản</button>}</td>
                   </tr>
                 ))}
                 {tickets.length === 0 && <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-500">Không có phiếu khớp bộ lọc.</td></tr>}
@@ -167,16 +181,33 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
         <button className={button} disabled={busy} onClick={() => { setDetail(null); void run(refresh); }}>← Danh sách</button>
         <button className={button} onClick={() => setDoc("invite")}>Xem phiếu {prefix}</button>
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
+        {kind === "hinh-hoc" && !detail.ticket.ngay_nghiem_thu && <button className={primary} disabled={busy} onClick={() => run(passVisual)} title="Ghi trực quan Đạt, ô sai số trống tự điền mức tối đa">Trực quan đạt (điền sai số max)</button>}
+        {detail.ticket.ngay_nghiem_thu && onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
       </div>
       <h3 className="font-bold">{detail.ticket.so_phieu} · Nghiệm thu {kindName(kind)}</h3>
       <form className="space-y-3" onSubmit={e => {
         e.preventDefault();
         void run(async () => {
-          await request("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: detail.items.map(i => ({
+          let items = detail.items;
+          // Hình học: mối chọn Đạt nhưng chưa ghi trực quan → tự ghi trực quan Đạt (ô sai số trống điền mức tối đa) rồi mới chốt.
+          const needVisual = kind === "hinh-hoc" ? items.filter(i => !i.ket_qua && results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat) : [];
+          if (needVisual.length) {
+            const response = await markQualityPass(needVisual.map(i => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
+            const failed = response.results.find(r => r.error);
+            if (failed) throw new Error(`${needVisual.find(i => i.moi_han_id === failed.id)?.ma_lich_su ?? ""}: ${failed.error}`);
+            const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+            setDetail(next);
+            items = next.items;
+            const still = items.filter(i => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
+            if (still.length) throw new Error(`Đã ghi trực quan Đạt nhưng ${still.map(i => i.ma_lich_su).join(", ")} vẫn chưa đủ số đo theo tiêu chí — bổ sung trong Kiểm tra chất lượng.`);
+          }
+          await request("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: items.map(i => ({
             id: i.moi_han_id, phien_ban: i.version, ...results[i.moi_han_id],
           })) });
           notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); await refresh();
+          // Hình học: in ngay bộ biên bản hình học riêng (mối đạt chuyển «Chờ siêu âm»).
+          if (onPrintRecord && Object.values(results).some((r) => r.ket_qua === "Đạt")) onPrintRecord(await loadGeometryRecord(detail.ticket.id));
         });
       }}>
         <label className="flex flex-wrap items-center gap-2 text-sm">Ngày nghiệm thu<input type="date" required className={field} min={detail.ticket.ngay_moi}
@@ -185,7 +216,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
           <div className="min-w-0 flex-1">
             <b>{i.ma_lich_su}</b>
             <p className="mt-0.5 text-slate-600">{evidenceText(kind, detail.ticket.ngay_nghiem_thu ? i.du_lieu_chot : i.current)}</p>
-            {!i.ket_qua && !i.current?.co_the_dat && <p className="mt-1 text-amber-800">{kind === "sieu-am" ? "Để chọn Đạt, ghi kết quả siêu âm và ngày thí nghiệm ngay bên dưới." : "Để chọn Đạt, bổ sung đủ số đo theo tiêu chí trong Kiểm tra chất lượng."}</p>}
+            {!i.ket_qua && !i.current?.co_the_dat && <p className="mt-1 text-amber-800">{kind === "sieu-am" ? "Để chọn Đạt, ghi kết quả siêu âm và ngày thí nghiệm ngay bên dưới." : (i.current?.truc_quan === "Đạt" ? "Số đo / chiều dài mài chưa đạt — bổ sung trong Kiểm tra chất lượng." : "Chưa ghi trực quan — chọn Đạt thì hệ thống tự ghi trực quan Đạt (điền sai số max) khi nghiệm thu.")}</p>}
             {kind === "sieu-am" && !i.ket_qua && !detail.ticket.ngay_nghiem_thu && !i.current?.ket_qua_ndt && (
               <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-white p-2">
                 <label className="grid gap-0.5 text-xs font-semibold text-slate-700">Kết quả siêu âm
@@ -203,7 +234,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
           <div className="flex shrink-0 flex-col gap-1.5 sm:w-48">
             {i.ket_qua ? <p className={`rounded-md px-2 py-1.5 text-center font-semibold ${i.ket_qua === "Đạt" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{i.ket_qua}{i.ly_do ? ` · ${i.ly_do}` : ""}</p> : <>
               <select aria-label={"Kết quả " + i.ma_lich_su} required disabled={busy} className={field + " w-full"} value={results[i.moi_han_id]?.ket_qua || ""} onChange={e => patch(i.moi_han_id, { ket_qua: e.target.value, ly_do: "" })}>
-                <option value="">Chọn kết quả</option><option disabled={!i.current?.co_the_dat}>Đạt</option><option>Không đạt</option>
+                <option value="">Chọn kết quả</option><option disabled={!i.current?.co_the_dat && !(kind === "hinh-hoc" && i.current?.truc_quan !== "Đạt")}>Đạt</option><option>Không đạt</option>
               </select>
               {results[i.moi_han_id]?.ket_qua === "Không đạt" && <input required maxLength={1000} aria-label={"Lý do " + i.ma_lich_su} placeholder="Lý do không đạt" className={field + " w-full"} value={results[i.moi_han_id]?.ly_do || ""} onChange={e => patch(i.moi_han_id, { ly_do: e.target.value })} />}
             </>}

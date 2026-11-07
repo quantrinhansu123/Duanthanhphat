@@ -298,8 +298,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                             <td>{str(w.ly_trinh)}</td>
                             <td>{left}</td>
                             <td>{right}</td>
+                            {/* Biên bản chỉ hình học: chưa nghiệm thu siêu âm → để trống cột siêu âm. */}
                             <td>{str(kt.truc_quan)}</td>
-                            <td>{str(kt.ket_qua_ndt)}</td>
+                            <td>{scope.ultrasound ? str(kt.ket_qua_ndt) : ""}</td>
                             {GEOMETRY_CRITERIA.map((k) => (
                               <td key={k}>{cellOf(k)}</td>
                             ))}

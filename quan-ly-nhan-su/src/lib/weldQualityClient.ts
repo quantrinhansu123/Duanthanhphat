@@ -69,7 +69,7 @@ export type WeldQualityBulkEntry = WeldQualitySelection & {
 
 export async function markQualityPass(
   entries: WeldQualityBulkEntry[],
-  kind: "visual" | "ndt",
+  kind: "grind" | "visual" | "ndt",
   date: string,
   method: string,
 ) {
@@ -93,7 +93,7 @@ import type { RfiTracking } from "@/lib/rfiTracking";
 
 export type RfiSummary = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string;
   thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number; tracking?: RfiTracking };
-export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean; thieu_chieu_dai_mai?: boolean; ly_do_chua_du_dieu_kien?: string; chieu_dai_mai?: number | null; ket_qua_ndt?: string | null; ten_tieu_chuan?: string | null };
+export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean; thieu_chieu_dai_mai?: boolean; ly_do_chua_du_dieu_kien?: string; chieu_dai_mai?: number | null; ket_qua_ndt?: string | null; ten_tieu_chuan?: string | null; truc_quan?: string | null; du_dieu_kien_hinh_hoc?: boolean };
 export type RecordSummary = { id: string; ngay_nghiem_thu: string; nguoi_lap: string; created_at: string;
   tong_moi?: number; da_nghiem_thu?: number; khong_dat?: number; chua_nghiem_thu?: number;
   thong_tin?: Record<string, unknown> | null;
@@ -105,7 +105,7 @@ export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_
 
 export const loadRfiCandidates = (du_an_id: string, filters: RfiCandidateFilter) =>
   qualityRequest<{ rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number }>({ action: "rfi-candidates", du_an_id, filters });
-export const loadRfiNumber = (du_an_id: string) => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id });
+export const loadRfiNumber = (du_an_id: string, loai?: "hinh-hoc" | "sieu-am") => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id, ...(loai ? { loai } : {}) });
 export const loadRfiOverview = (du_an_id: string) => qualityRequest<{
   rfis: RfiSummary[]; so_phieu: string;
   candidates: { rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number };
@@ -126,6 +126,16 @@ export async function updateRfi(input: { id: string; so_phieu: string; ngay_moi:
 export async function completeAcceptance(input: { id: string; phieu_id: string; ngay_nghiem_thu: string; ket_qua: AcceptanceDecision[]; thong_tin: Record<string, string> }) {
   try { return await qualityRequest<{ id: string }>({ action: "accept-complete", ...input }); } finally { notifyWeldQualityChanged(); }
 }
+/** Nghiệm thu chỉ hình học từ RFI chính → phiếu hình học đã chốt, mối «Chờ siêu âm»; trả bộ biên bản hình học để in. */
+export async function completeGeometryAcceptance(input: { id: string; phieu_id: string; ngay_nghiem_thu: string; ket_qua: { moi_han_id: string; phien_ban: number }[]; thong_tin: Record<string, string> }) {
+  try { return await qualityRequest<{ id: string; record: RecordSet }>({ action: "accept-complete-geometry", ...input }); } finally { notifyWeldQualityChanged(); }
+}
+export type SplitRecordSummary = { id: string; so_phieu: string; ngay_nghiem_thu: string; nguoi_nghiem_thu: string | null; da_ky: boolean; nguoi_ky: string | null; ngay_ky: string | null; tong_moi: number; dat: number };
+export const loadSplitRecords = (du_an_id: string) => qualityRequest<{ records: SplitRecordSummary[] }>({ action: "split-record-list", du_an_id });
+export async function signSplitRecord(id: string, da_ky: boolean) {
+  try { return await qualityRequest<{ ok: boolean }>({ action: "split-record-sign", id, da_ky }); } finally { notifyWeldQualityChanged(); }
+}
+export const loadGeometryRecord = (id: string) => qualityRequest<RecordSet>({ action: "geometry-record", id });
 export const loadRecords = (du_an_id: string) => qualityRequest<{ records: RecordSummary[] }>({ action: "record-list", du_an_id });
 export const loadRecordSet = (id: string) => qualityRequest<RecordSet>({ action: "record-set", id });
 export const setRecordSign = (id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") => qualityRequest<{ ok: true }>({ action: "record-sign", id, tinh_trang_ky });

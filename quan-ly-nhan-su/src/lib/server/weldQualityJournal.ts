@@ -127,7 +127,7 @@ export function parseQualityInspection(value: unknown, actor: string): SavedWeld
 }
 
 export async function markQualityBatch(body: Record<string, unknown>, actor: string) {
-  if (body.kind !== "visual" && body.kind !== "ndt") throw new QualityApiError("Thao tác kiểm tra không hợp lệ.");
+  if (body.kind !== "visual" && body.kind !== "ndt" && body.kind !== "grind") throw new QualityApiError("Thao tác kiểm tra không hợp lệ.");
   const date = qualityDate(body.date);
   if (!date || !Array.isArray(body.entries) || !body.entries.length || body.entries.length > 100) throw new QualityApiError("Chọn 1–100 mối mỗi lượt và nhập ngày kiểm tra.");
   const entries = body.entries.map((v) => {
@@ -148,10 +148,15 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
       const { inspection } = detail ?? await loadWeldQuality(entry.id);
       const current = inspection ?? emptyWeldInspection(entry.id);
       if (current.phien_ban !== entry.phien_ban) throw new QualityApiError("Dữ liệu đã thay đổi; hãy tải lại.", 409);
+      if (body.kind === "grind" && current.truc_quan) throw new QualityApiError("Mối đã có kết quả trực quan; sửa ngày mài trong Kiểm tra chất lượng.", 409);
       const patch =
-        body.kind === "visual"
+        body.kind === "grind"
+          // Mài xong: chỉ ghi ngày hoàn thành mài → trạng thái «Mài xong», chờ duyệt hình học.
+          ? { ngay_mai: date }
+          : body.kind === "visual"
           ? {
-              ngay_mai: date,
+              // Giữ ngày mài đã ghi ở bước «Mài xong»; chưa có thì lấy ngày duyệt.
+              ngay_mai: current.ngay_mai ?? date,
               truc_quan: entry.ket_qua,
               ...(entry.ket_qua === "Không đạt"
                 ? { xu_ly_truc_quan: current.xu_ly_truc_quan ?? "sua_chua" }

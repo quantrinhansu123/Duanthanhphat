@@ -26,14 +26,15 @@ export default function WeldQualityBulkDialog({
   onDone,
 }: {
   entries: WeldQualitySelection[];
-  initialKind?: "visual" | "ndt";
+  initialKind?: "grind" | "visual" | "ndt";
   onClose: () => void;
   onDone: (savedIds: string[]) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const stop = useRef(false);
-  const [kind, setKind] = useState<"visual" | "ndt">(initialKind);
+  const [kind, setKind] = useState<"grind" | "visual" | "ndt">(initialKind);
+  const grind = kind === "grind";
   const [date, setDate] = useState(todayIso);
   const [method, setMethod] = useState("Siêu âm");
   const [rows, setRows] = useState<RowDecision[]>(() =>
@@ -90,7 +91,7 @@ export default function WeldQualityBulkDialog({
         Thao tác hàng loạt · {entries.length.toLocaleString("vi-VN")} mối đã chọn
       </h2>
       <p className="mt-2 text-sm text-slate-600">
-        Mặc định <b>{kind === "visual" ? "Hình học / trực quan đạt" : "Siêu âm đạt"}</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.
+        {grind ? <>Ghi <b>ngày hoàn thành mài</b> cho các mối đã chọn → trạng thái <b>Mài xong</b>, phát RFI được. Trực quan / sai số ghi khi nghiệm thu.</> : <>Mặc định <b>{kind === "visual" ? "Hình học / trực quan đạt" : "Siêu âm đạt"}</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.</>}
       </p>
 
       <form
@@ -98,7 +99,7 @@ export default function WeldQualityBulkDialog({
         className="mt-4 space-y-4"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (missingFailReason) return;
+          if (missingFailReason && !grind) return;
           stop.current = false;
           setBusy(true);
           setErrors([]);
@@ -113,7 +114,8 @@ export default function WeldQualityBulkDialog({
                 phien_ban: row.phien_ban,
                 ma_lich_su: row.ma_lich_su,
                 ket_qua: row.ket_qua,
-                ghi_chu: row.ket_qua === "Không đạt" ? row.ly_do.trim() || null : undefined,
+                ghi_chu: !grind && row.ket_qua === "Không đạt" ? row.ly_do.trim() || null : undefined,
+                ...(grind ? { ket_qua: "Đạt" as const } : {}),
               }));
               const { results } = await markQualityPass(payload, kind, date, method);
               for (const result of results) {
@@ -149,12 +151,13 @@ export default function WeldQualityBulkDialog({
               value={kind}
               onChange={(e) => setKind(e.target.value as typeof kind)}
             >
+              <option value="grind">Mài xong</option>
               <option value="ndt">Siêu âm / NDT</option>
               <option value="visual">Hình học / trực quan sau mài</option>
             </select>
           </label>
           <label className="block text-sm font-semibold sm:col-span-1">
-            {kind === "visual" ? "Ngày mài / trực quan" : "Ngày thí nghiệm"}
+            {grind ? "Ngày hoàn thành mài" : kind === "visual" ? "Ngày duyệt hình học / trực quan" : "Ngày thí nghiệm"}
             <input
               type="date"
               required
@@ -196,7 +199,7 @@ export default function WeldQualityBulkDialog({
             </span>
           </label>
         )}
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        {!grind && <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold text-slate-800">
             Tổng {summary.total} · Đạt {summary.pass} · Không đạt {summary.fail}
           </span>
@@ -222,22 +225,22 @@ export default function WeldQualityBulkDialog({
           >
             Đạt hết ({summary.total})
           </button>
-        </div>
+        </div>}
 
         <div className="max-h-[42vh] overflow-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="sticky top-0 bg-slate-50 text-slate-600">
               <tr>
                 <th className="p-2.5 font-semibold">Mã mối</th>
-                <th className="p-2.5 font-semibold">Kết quả</th>
-                <th className="p-2.5 font-semibold">Lý do nếu không đạt</th>
+                {!grind && <th className="p-2.5 font-semibold">Kết quả</th>}
+                {!grind && <th className="p-2.5 font-semibold">Lý do nếu không đạt</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-t border-slate-100">
                   <td className="p-2.5 font-mono text-[#0047AB]">{row.ma_lich_su}</td>
-                  <td className="p-2.5">
+                  {!grind && <td className="p-2.5">
                     <select
                       disabled={busy || successCount !== null}
                       className="min-h-10 w-full min-w-[8.5rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 disabled:opacity-50"
@@ -252,8 +255,8 @@ export default function WeldQualityBulkDialog({
                       <option value="Đạt">Đạt</option>
                       <option value="Không đạt">Không đạt</option>
                     </select>
-                  </td>
-                  <td className="p-2.5">
+                  </td>}
+                  {!grind && <td className="p-2.5">
                     <input
                       disabled={busy || successCount !== null || row.ket_qua === "Đạt"}
                       className="min-h-10 w-full rounded-lg border border-slate-300 px-2 py-1.5 disabled:bg-slate-50 disabled:opacity-60"
@@ -261,7 +264,7 @@ export default function WeldQualityBulkDialog({
                       value={row.ly_do}
                       onChange={(e) => patchRow(row.id, { ly_do: e.target.value })}
                     />
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -277,7 +280,9 @@ export default function WeldQualityBulkDialog({
             ? `Đang xử lý ${processed}/${rows.length} mối…`
             : successCount !== null
               ? `Đã lưu ${successCount} mối. ${rows.length - processed} mối chưa xử lý. Các mối lỗi vẫn giữ trong tập chọn.`
-              : kind === "ndt"
+              : grind
+                ? "Chỉ ghi ngày hoàn thành mài; chưa ghi kết quả trực quan / hình học."
+                : kind === "ndt"
                 ? "Sẽ ghi ngày + phương pháp NDT theo từng dòng; sai số không đổi."
                 : "Sẽ ghi ngày mài + trực quan theo từng dòng; sai số không đổi."}
         </div>
@@ -295,12 +300,12 @@ export default function WeldQualityBulkDialog({
         <div className="flex flex-wrap gap-2">
           {successCount === null && (
             <button
-              disabled={busy || missingFailReason}
+              disabled={busy || (missingFailReason && !grind)}
               className="min-h-11 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
             >
               {busy
                 ? "Đang lưu…"
-                : `Lưu ${summary.pass} đạt${summary.fail ? ` · ${summary.fail} không đạt` : ""}`}
+                : grind ? `Ghi mài xong ${summary.total} mối` : `Lưu ${summary.pass} đạt${summary.fail ? ` · ${summary.fail} không đạt` : ""}`}
             </button>
           )}
           {busy ? (
