@@ -79,7 +79,8 @@ assert.ok((pack.match(/class="acceptance-page(?: [^"]*)?"/g) ?? []).length >= 3,
 assert.match(pack, /Địa điểm kiểm thử/);
 assert.match(pack, /Địa điểm đã sửa/);
 assert.match(pack, /08:00/);
-assert.match(pack, /01\/11\/2026/, "Draft documents follow the updated RFI invitation date");
+assert.doesNotMatch(pack, /01\/11\/2026|31\/10\/2026/, "Printed acceptance dates stay blank for handwriting");
+assert.match(pack.replace(/<!--.*?-->/g, ""), /NGÀY NGHIỆM THU:<\/b> ……\/……\/……/);
 assert.match(pack, /Nhà thầu kiểm thử/);
 assert.match(pack, /Tư vấn kiểm thử/);
 assert.match(pack, /Thợ kiểm thử/);

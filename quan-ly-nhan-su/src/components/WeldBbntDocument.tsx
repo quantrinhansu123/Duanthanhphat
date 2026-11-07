@@ -67,7 +67,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
               <p><b>CA HÀN:</b> {BOX} Ngày &nbsp; {BOX} Đêm</p>
               <p><b>RFI/ ITR No:</b> {str(rfi.so_phieu)}</p>
               <p><b>BIỆN PHÁP HÀN:</b> {BOX} Hàn cố định &nbsp; {BOX} Hàn di động</p>
-              <p><b>NGÀY NGHIỆM THU:</b> {str(dot.ngay_nghiem_thu)}</p>
+              <p><b>NGÀY NGHIỆM THU:</b> ……/……/…………</p>
               <p><b>LÝ TRÌNH:</b> Từ: ……………… Đến: ………………</p>
               <p><b>TÊN THỢ HÀN:</b> ………………………… &nbsp; <b>ID:</b> …………</p>
               <p><b>TUYẾN:</b> {BOX} Tuyến thượng &nbsp; {BOX} Tuyến hạ</p>

@@ -158,8 +158,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
     const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
-    const acceptIso = (record.dot.thong_tin as { draft?: boolean } | undefined)?.draft === true ? rfi.ngay_moi : record.dot.ngay_nghiem_thu;
-    const parts = dateParts(acceptIso);
+    const parts = dateParts(null);
     const day = `${parts.d}/${parts.m}/${parts.y}`;
     const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
