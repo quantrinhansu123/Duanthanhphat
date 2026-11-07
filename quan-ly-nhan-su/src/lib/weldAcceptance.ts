@@ -80,7 +80,8 @@ export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter)
     }
     return true;
   });
-  out.sort((a, b) => compareWeldCodes(a.ma_lich_su, b.ma_lich_su));
+  // Mối hàn gần nhất lên đầu: ngày hàn mới nhất trước (không có ngày xuống cuối), cùng ngày thì mã lớn hơn trước.
+  out.sort((a, b) => (b.ngay_thuc_hien ?? "").localeCompare(a.ngay_thuc_hien ?? "") || compareWeldCodes(b.ma_lich_su, a.ma_lich_su));
   return { rows: out, missingChainage };
 }
 

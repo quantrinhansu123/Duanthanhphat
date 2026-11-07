@@ -105,7 +105,11 @@ function inferRoutes(welds: { ma_diem?: string | null }[]): { upper: boolean; lo
 export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  const [mode, setMode] = useState<"tong-hop" | SplitKind>("tong-hop");
+  // Phương án nghiệm thu chọn được nhiều (tick) — mỗi phương án đã chọn hiện một khối bên dưới.
+  const [modes, setModes] = useState<("tong-hop" | SplitKind)[]>(["tong-hop"]);
+  const hasMode = (m: "tong-hop" | SplitKind) => modes.includes(m);
+  const toggleMode = (m: "tong-hop" | SplitKind) =>
+    setModes((cur) => (cur.includes(m) ? (cur.length > 1 ? cur.filter((x) => x !== m) : cur) : [...cur, m]));
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
@@ -183,14 +187,22 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <label className="grid gap-1 text-sm font-semibold">Phương án nghiệm thu
-          <select className={`${input} w-full`} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-            <option value="tong-hop">RFI giám sát / nghiệm thu và bộ biên bản</option>
-            <option value="hinh-hoc">RFI bổ sung nghiệm thu hình học, trực quan</option>
-            <option value="sieu-am">RFI bổ sung nghiệm thu siêu âm</option>
-          </select>
-        </label>
-        {mode === "tong-hop" && <div className="grid grid-cols-3 gap-2">
+        <fieldset className="grid gap-1 text-sm font-semibold">
+          <legend className="mb-1">Phương án nghiệm thu <span className="font-normal text-slate-500">(tick chọn nhiều)</span></legend>
+          <div className="grid gap-1.5 rounded-lg border border-slate-300 bg-white p-2 sm:grid-cols-3">
+            {([
+              ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
+              ["hinh-hoc", "RFI bổ sung nghiệm thu hình học, trực quan"],
+              ["sieu-am", "RFI bổ sung nghiệm thu siêu âm"],
+            ] as const).map(([id, label]) => (
+              <label key={id} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-sm font-medium ${hasMode(id) ? "border-[#0047AB] bg-blue-50 text-[#0047AB]" : "border-transparent text-slate-700 hover:bg-slate-50"}`}>
+                <input type="checkbox" className="size-4 accent-[#0047AB]" checked={hasMode(id)} onChange={() => toggleMode(id)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        {hasMode("tong-hop") && <div className="grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
               key={id}
@@ -203,9 +215,13 @@ export default function WeldAcceptanceWorkflow() {
           ))}
         </div>}
       </div>
-      {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : mode !== "tong-hop" ? (
-        <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName} kind={mode} />
-      ) : (
+      {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
+      {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
+        <div key={m} className="mb-4">
+          <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} />
+        </div>
+      ))}
+      {hasMode("tong-hop") && (
         <div className="no-print">
           {tab === "rfi" && (
             <RfiPanel
@@ -226,6 +242,7 @@ export default function WeldAcceptanceWorkflow() {
           )}
         </div>
       )}
+      </>)}
       {view && createPortal(
         <WeldAcceptanceDocument
           view={view}

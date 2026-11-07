@@ -181,6 +181,8 @@ const REPORT_COLUMNS_WITH_TEST_STATUS = [
 const REPORT_COLUMNS_WITH_TEST_STATUS_AND_CREATED_AT = [
   ...REPORT_COLUMNS_WITH_TEST_STATUS,
   "created_at",
+  // Tên mối hàn tại hiện trường theo Nhật ký hàn (Báo cáo ray). View cũ chưa có cột → tự lùi về bộ cột trước.
+  "ma_hien_truong",
 ] as const;
 
 const reportRowsPromises = new Map<string, Promise<WeldReportRow[]>>();
