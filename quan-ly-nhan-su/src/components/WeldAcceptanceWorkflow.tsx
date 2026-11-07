@@ -183,21 +183,13 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <fieldset className="rounded-lg border border-slate-200 p-3 text-sm">
-          <legend className="px-1 font-semibold">Phương án nghiệm thu</legend>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {([
-              ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
-              ["hinh-hoc", "RFI bổ sung nghiệm thu hình học, trực quan"],
-              ["sieu-am", "RFI bổ sung nghiệm thu siêu âm"],
-            ] as const).map(([value, label]) => (
-              <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2">
-                <input type="checkbox" checked={mode === value} onChange={() => setMode(value)} />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <label className="grid gap-1 text-sm font-semibold">Phương án nghiệm thu
+          <select className={`${input} w-full`} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+            <option value="tong-hop">RFI giám sát / nghiệm thu và bộ biên bản</option>
+            <option value="hinh-hoc">RFI bổ sung nghiệm thu hình học, trực quan</option>
+            <option value="sieu-am">RFI bổ sung nghiệm thu siêu âm</option>
+          </select>
+        </label>
         {mode === "tong-hop" && <div className="grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
