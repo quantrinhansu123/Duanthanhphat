@@ -182,13 +182,21 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <label className="flex flex-wrap items-center gap-2 text-sm font-semibold">Phương án nghiệm thu
-          <select className={input} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-            <option value="tong-hop">RFI giám sát / nghiệm thu và bộ biên bản</option>
-            <option value="hinh-hoc">RFI bổ sung nghiệm thu hình học, trực quan</option>
-            <option value="sieu-am">RFI bổ sung nghiệm thu siêu âm</option>
-          </select>
-        </label>
+        <fieldset className="rounded-lg border border-slate-200 p-3 text-sm">
+          <legend className="px-1 font-semibold">Phương án nghiệm thu</legend>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {([
+              ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
+              ["hinh-hoc", "RFI bổ sung nghiệm thu hình học, trực quan"],
+              ["sieu-am", "RFI bổ sung nghiệm thu siêu âm"],
+            ] as const).map(([value, label]) => (
+              <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2">
+                <input type="checkbox" checked={mode === value} onChange={() => setMode(value)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         {mode === "tong-hop" && <div className="grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
@@ -280,6 +288,7 @@ function RfiPanel({
   const [okMsg, setOkMsg] = useState("");
   const requestId = useRef(crypto.randomUUID());
   const editFormRef = useRef<HTMLDivElement | null>(null);
+  const publishDialogRef = useRef<HTMLDialogElement | null>(null);
 
   const refresh = useCallback(async (keepSoPhieu = false) => {
     const { rfis, so_phieu, candidates } = await loadRfiOverview(projectId);
@@ -437,7 +446,8 @@ function RfiPanel({
 
   const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
-  const publishDisabled = busy || routeMissing || (!monitoring && !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am) || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
+  const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
+  const publishDisabled = busy || routeMissing || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
   return (
     <section className="space-y-4">
@@ -455,11 +465,24 @@ function RfiPanel({
         <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring} onClick={() => setKind("theo-doi")} className={monitoring ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => setKind("ca-hai")} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
       </div>
-      {!monitoring && <fieldset className="flex flex-wrap gap-4 rounded-lg border border-slate-200 p-3 text-sm">
-        <legend className="px-1 font-semibold">Nội dung nghiệm thu (chọn một hoặc cả hai)</legend>
-        <label className="flex items-center gap-2"><input type="checkbox" disabled={busy || !!editingId} checked={thongTin.nt_hinh_hoc} onChange={e => setThongTin(t => ({ ...t, nt_hinh_hoc: e.target.checked }))} />Kích thước hình học</label>
-        <label className="flex items-center gap-2"><input type="checkbox" disabled={busy || !!editingId} checked={thongTin.nt_sieu_am} onChange={e => setThongTin(t => ({ ...t, nt_sieu_am: e.target.checked }))} />Siêu âm</label>
-      </fieldset>}
+      <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
+        <form method="dialog" className="space-y-4" onSubmit={(e) => {
+          e.preventDefault();
+          if (publishDisabled || scopeMissing) return;
+          publishDialogRef.current?.close();
+          void publish();
+        }}>
+          <h3 id="rfi-publish-title" className="text-base font-bold">Nội dung nghiệm thu</h3>
+          <p className="text-sm text-slate-600">Chọn một hoặc cả hai nội dung cho phiếu {soPhieu} ({selected.size} mối).</p>
+          <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={thongTin.nt_hinh_hoc} onChange={e => setThongTin(t => ({ ...t, nt_hinh_hoc: e.target.checked }))} />Kích thước hình học</label>
+          <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={thongTin.nt_sieu_am} onChange={e => setThongTin(t => ({ ...t, nt_sieu_am: e.target.checked }))} />Siêu âm</label>
+          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Chọn ít nhất một nội dung nghiệm thu.</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className={secondary} onClick={() => publishDialogRef.current?.close()}>Hủy</button>
+            <button type="submit" className={primary} disabled={publishDisabled || scopeMissing}>Phát yêu cầu mới</button>
+          </div>
+        </form>
+      </dialog>
       {monitoring && <p className="text-sm text-slate-600">Nhập phạm vi / lý trình để mời theo dõi công việc hàn. Phiếu này không xác nhận chất lượng nghiệm thu — có thể phát ngay không cần chọn mối.</p>}
 
       {!monitoring && !editingId && (
@@ -557,7 +580,10 @@ function RfiPanel({
             className={primary}
             disabled={publishDisabled}
             title={!editingId && !monitoring && !selected.size ? "Cần tìm và chọn ít nhất 1 mối trước khi phát phiếu mới" : undefined}
-            onClick={() => void publish()}
+            onClick={() => {
+              if (editingId || monitoring) void publish();
+              else publishDialogRef.current?.showModal();
+            }}
           >
             {editingId
               ? "Lưu sửa phiếu"
