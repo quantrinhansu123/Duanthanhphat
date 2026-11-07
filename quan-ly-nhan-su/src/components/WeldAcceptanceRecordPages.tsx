@@ -287,7 +287,6 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         const code = str(w.ma_diem);
                         const left = /^(TT|HT)/i.test(code) ? "✓" : "";
                         const right = /^(TP|HP)/i.test(code) ? "✓" : "";
-                        const note = str(kt.ghi_chu ?? (row?.ket_qua === "Không đạt" ? row.ly_do : ""));
                         const inLimit =
                           geometry ?? (row?.ket_qua === "Đạt" || row?.ket_qua === "Không đạt" ? row.ket_qua : "");
                         return (
@@ -304,7 +303,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                               <td key={k}>{cellOf(k)}</td>
                             ))}
                             <td>{inLimit}</td>
-                            <td>{note}{row && <><br />RFI HH: {show(geometryRfi)}<br />RFI SA: {show(ultrasoundRfi)}</>}</td>
+                            <td />
                           </tr>
                         );
                       })}
