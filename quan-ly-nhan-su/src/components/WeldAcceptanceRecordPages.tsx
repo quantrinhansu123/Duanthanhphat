@@ -158,7 +158,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
     const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
-    const parts = dateParts(null);
+    // Ngày nghiệm thu chỉ in khi đã chọn ở bản xem trước (mặc định để trống cho viết tay).
+    const parts = dateParts(t.ngay_nghiem_thu || null);
     const day = `${parts.d}/${parts.m}/${parts.y}`;
     const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
@@ -175,15 +176,15 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     if (doc.kind === "phu-luc") {
       const pages = Array.from({ length: Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE)) }, (_, i) => rows.slice(i * ROWS_PER_PAGE, i * ROWS_PER_PAGE + ROWS_PER_PAGE));
       const shifts = unique(pointRows.map((w) => w.ca_han));
-      const dayOn = shifts.some(isDayShift);
-      const nightOn = shifts.some(isNightShift);
-      const welders = unique(pointRows.map((w) => w.ten_tho_han));
-      const welderIds = unique(pointRows.map((w) => w.ma_nhan_su));
-      const machines = unique(pointRows.map((w) => w.ten_may || w.ma_may));
-      const upper = t.tuyen_thuong === "1" || pointRows.some((w) => /^(TT|TP)/i.test(str(w.ma_diem)));
-      const lower = t.tuyen_ha === "1" || pointRows.some((w) => /^(HT|HP)/i.test(str(w.ma_diem)));
-      const mobile = /un5|lưu động|di động|mobile/i.test(machines.join(" "));
-      const fixed = /kcm|k922|cố định|fixed/i.test(machines.join(" "));
+      const dayOn = t.ca_han ? t.ca_han !== "dem" : shifts.some(isDayShift);
+      const nightOn = t.ca_han ? t.ca_han !== "ngay" : shifts.some(isNightShift);
+      const welders = t.ten_tho_han ? [t.ten_tho_han] : unique(pointRows.map((w) => w.ten_tho_han));
+      const welderIds = t.id_tho_han ? [t.id_tho_han] : unique(pointRows.map((w) => w.ma_nhan_su));
+      const machines = t.may_han ? [t.may_han] : unique(pointRows.map((w) => w.ten_may || w.ma_may));
+      const upper = t.tuyen ? t.tuyen !== "ha" : (t.tuyen_thuong === "1" || pointRows.some((w) => /^(TT|TP)/i.test(str(w.ma_diem))));
+      const lower = t.tuyen ? t.tuyen !== "thuong" : (t.tuyen_ha === "1" || pointRows.some((w) => /^(HT|HP)/i.test(str(w.ma_diem))));
+      const mobile = t.bien_phap ? t.bien_phap === "di-dong" : /un5|lưu động|di động|mobile/i.test(machines.join(" "));
+      const fixed = t.bien_phap ? t.bien_phap === "co-dinh" : /kcm|k922|cố định|fixed/i.test(machines.join(" "));
 
       return pages.map((page, pageIndex) => (
         <article className="acceptance-page annex-page" key={`${doc.kind}-${pageIndex}`}>

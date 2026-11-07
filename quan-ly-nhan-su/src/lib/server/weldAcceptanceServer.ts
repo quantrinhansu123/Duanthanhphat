@@ -496,6 +496,11 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac"]) {
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
+  // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo"]) {
+    const value = str(t[key], 300);
+    if (value) thong_tin[key] = value;
+  }
   const { data: last, error: lastError } = await db().from("ho_so_nghiem_thu_sua_doi").select("phien_ban")
     .eq("ho_so_id", hoSoId).order("phien_ban", { ascending: false }).limit(1);
   if (lastError) throw lastError;

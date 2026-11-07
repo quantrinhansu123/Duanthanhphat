@@ -6,6 +6,8 @@ import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiW
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope } from "@/lib/weldAcceptance";
+import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
+import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
 
 export type DocKind = "rfi" | "hoan-thanh" | "phu-luc" | "giai-doan";
@@ -31,6 +33,9 @@ const css = `@media print {
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
+
+/** Thông tin / thời gian trên mẫu — sửa được ở bản xem trước (để trống = tự lấy từ dữ liệu đã chốt). */
+const PRINT_INFO_KEYS = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo"] as const;
 
 /** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
 const FREE_TEXT_FIELDS: [string, string][] = [
@@ -62,6 +67,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   // Hai bản in phiếu YCNT: có chữ ký dán sẵn (phát hành ngay) / không dán chữ ký (in ra ký trực tiếp).
   const [withSignatures, setWithSignatures] = useState(true);
   const [sigOpen, setSigOpen] = useState(false);
+  const [pickers, setPickers] = useState<{ people: { name: string; code: string }[]; machines: string[] }>({ people: [], machines: [] });
   const [sigError, setSigError] = useState("");
   const [sigLoadError, setSigLoadError] = useState("");
   const [sigLinks, setSigLinks] = useState<Partial<Record<SignatureKey, string>>>({});
@@ -78,6 +84,18 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       setSigLinks((cur) => ({ ...cur, [key]: "" }));
     } catch (e) { setSigError(e instanceof Error ? e.message : "Không lưu được link."); } finally { setBusy(false); }
   }
+  useEffect(() => {
+    if (!editing || kind === "rfi") return;
+    let live = true;
+    void Promise.all([loadPersonnelPickerRows().catch(() => []), loadJournalMachineOptions().catch(() => [])]).then(([people, machines]) => {
+      if (!live) return;
+      setPickers({
+        people: people.filter((p) => (p.trang_thai || "Hoạt động") !== "Khóa").map((p) => ({ name: p.ho_ten, code: p.ma_nhan_su ?? "" })),
+        machines: [...new Set(machines.map((m) => m.name?.trim() || m.code).filter(Boolean))],
+      });
+    });
+    return () => { live = false; };
+  }, [editing, kind]);
   const hoSo = record?.ho_so.find((h) => h.loai === LOAI[kind]);
   const revisions = (record?.sua_doi ?? []).filter((r) => r.ho_so_id === hoSo?.id);
   const latest = revisions[revisions.length - 1];
@@ -125,7 +143,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
         ) : null}
         {hoSo && (
-          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
+          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ...Object.fromEntries(PRINT_INFO_KEYS.map((k) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
             className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
         {kind === "rfi" ? (
@@ -167,9 +185,68 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       )}
       {editing && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
-          <p className="text-xs text-slate-600">Sửa địa điểm, thành phần tham dự và các mục nhập tay (BB hoàn thành). Số đo và danh sách mối đã chốt không thay đổi; bản sửa đổi được lưu kèm lý do và người sửa.</p>
+          <p className="text-xs text-slate-600">Sửa địa điểm, thành phần tham dự, thông tin và thời gian trên mẫu, và các mục nhập tay (BB hoàn thành). Số đo và danh sách mối đã chốt không thay đổi; bản sửa đổi được lưu kèm lý do và người sửa.</p>
           <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Địa điểm" value={form.dia_diem} onChange={(e) => setForm({ ...form, dia_diem: e.target.value })} />
           <input className="h-9 w-full rounded-lg border border-slate-300 px-2" placeholder="Thành phần tham dự" value={form.thanh_phan} onChange={(e) => setForm({ ...form, thanh_phan: e.target.value })} />
+          {kind !== "rfi" && (
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-600">Thông tin và thời gian trên mẫu</p>
+              <p className="text-xs text-slate-500">Chọn hoặc nhập để in lên mẫu; để trống thì mẫu tự lấy theo dữ liệu mối hàn / Nhật ký hàn.</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="block text-xs font-semibold text-slate-700">Ngày nghiệm thu
+                  <input type="date" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ngay_nghiem_thu ?? ""} onChange={(e) => setForm({ ...form, ngay_nghiem_thu: e.target.value })} />
+                </label>
+                {kind !== "phu-luc" && (<>
+                  <label className="block text-xs font-semibold text-slate-700">Bắt đầu (giờ)
+                    <input type="time" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.gio_bat_dau ?? ""} onChange={(e) => setForm({ ...form, gio_bat_dau: e.target.value })} />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Kết thúc (giờ)
+                    <input type="time" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.gio_ket_thuc ?? ""} onChange={(e) => setForm({ ...form, gio_ket_thuc: e.target.value })} />
+                  </label>
+                </>)}
+              </div>
+              {kind === "phu-luc" && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="block text-xs font-semibold text-slate-700">Ca hàn
+                    <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ca_han ?? ""} onChange={(e) => setForm({ ...form, ca_han: e.target.value })}>
+                      <option value="">Tự động theo nhật ký</option><option value="ngay">Ngày</option><option value="dem">Đêm</option><option value="ngay-dem">Ngày và đêm</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Biện pháp hàn
+                    <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.bien_phap ?? ""} onChange={(e) => setForm({ ...form, bien_phap: e.target.value })}>
+                      <option value="">Tự động theo máy</option><option value="co-dinh">Hàn cố định</option><option value="di-dong">Hàn di động</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Tuyến
+                    <select className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.tuyen ?? ""} onChange={(e) => setForm({ ...form, tuyen: e.target.value })}>
+                      <option value="">Tự động theo mã mối hàn</option><option value="thuong">Tuyến thượng</option><option value="ha">Tuyến hạ</option><option value="ca-hai">Tuyến thượng và tuyến hạ</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Goòng phẳng
+                    <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="KPS25-L8" value={form.goong ?? ""} onChange={(e) => setForm({ ...form, goong: e.target.value })} />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
+                    <input list="rec-people" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ten_tho_han ?? ""}
+                      onChange={(e) => { const name = e.target.value; const match = pickers.people.find((p) => p.name === name); setForm({ ...form, ten_tho_han: name, ...(match?.code ? { id_tho_han: match.code } : {}) }); }} />
+                    <datalist id="rec-people">{pickers.people.map((p) => <option key={p.name + p.code} value={p.name}>{p.code}</option>)}</datalist>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">ID thợ hàn
+                    <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.id_tho_han ?? ""} onChange={(e) => setForm({ ...form, id_tho_han: e.target.value })} />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">Máy hàn (chọn từ danh sách hoặc nhập)
+                    <input list="rec-machines" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.may_han ?? ""} onChange={(e) => setForm({ ...form, may_han: e.target.value })} />
+                    <datalist id="rec-machines">{pickers.machines.map((m) => <option key={m} value={m} />)}</datalist>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Vị trí: Km đầu
+                    <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="3+862.74" value={form.kmFrom ?? ""} onChange={(e) => setForm({ ...form, kmFrom: e.target.value })} />
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-700">Vị trí: Km cuối
+                    <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="4+087.42" value={form.kmTo ?? ""} onChange={(e) => setForm({ ...form, kmTo: e.target.value })} />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
           {kind === "hoan-thanh" && FREE_TEXT_FIELDS.map(([key, label]) => (
             <label key={key} className="block text-xs font-semibold text-slate-700">{label}
               <textarea rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal" value={form[key] ?? ""} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
