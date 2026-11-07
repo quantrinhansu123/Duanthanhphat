@@ -134,7 +134,37 @@ try {
     await assert.rejects(() => splitPublish(uuid(35),"sieu-am"), /permission denied/);
     await db.exec("reset role");
   }
-  console.log("PASS RFI lifecycle: status filtering, atomic publishing, three draft documents, coordinates, completion retry, no duplicate dossier, missing-document guard, joint signing, unsigned status and privileges");
+  await migrate("migration_20261106_rfi_pham_vi_nghiem_thu");
+  await migrate("migration_20261106_rfi_pham_vi_nghiem_thu");
+  await sign(draft);
+  await sign(draft, "Chờ ký");
+  for (const [n, missingKind, scope] of [
+    [50, "sieu-am", { nt_hinh_hoc: "1", nt_sieu_am: "" }],
+    [60, "hinh-hoc", { nt_hinh_hoc: "", nt_sieu_am: "1" }],
+  ]) {
+    const w = uuid(n), parent = uuid(n+1), ref = uuid(n+2), req = uuid(n+3);
+    await sql("insert into lich_su_moi_han(id,ma_lich_su,du_an_id,cong_nghe_han,loai_moi_han) values ($1,$2,$3,'FBW','Sản xuất')", [w, `SCOPE-${n}`, project]);
+    await sql("select luu_kiem_tra_moi_han($1,1,$2,'2026-10-30','Đạt',$3,'Siêu âm','Đạt','2026-10-31','tester')", [w,profile,{...measurements,chieu_dai_mai:500}]);
+    await sql("select phat_hanh_rfi_moi_han($1,$2,$3,'2026-10-31',$4,'tester',$5)", [parent,project,`RFI-SCOPE-${n}`,[w],JSON.stringify(scope)]);
+    const outcomes = JSON.stringify([{moi_han_id:w,phien_ban:2,ket_qua:"Đạt"}]);
+    const finalize = info => value("select hoan_thanh_nghiem_thu_moi_han($1,$2,'2026-10-31','tester',$3,$4)", [req,parent,outcomes,JSON.stringify(info)]);
+    await assert.rejects(() => finalize({}), /Đề nghị cung cấp RFI/, "Partial RFI cannot finalize by itself");
+    const d = await value("select id from dot_nghiem_thu where phieu_id=$1", [parent]);
+    assert.equal(await value("select thong_tin->>'draft' from dot_nghiem_thu where id=$1", [d]), "true", "Failed finalization rolls back");
+    await assert.rejects(() => sql("update phieu_yeu_cau_nghiem_thu set thong_tin='{}' where id=$1",[parent]), /Không đổi/);
+    await sql("select phat_phieu_nt_tach($1,$2,$3,$4,'2026-10-31',$5,'tester')", [ref,project,missingKind,`EXTRA-${n}`,[w]]);
+    const info = {[missingKind === "hinh-hoc" ? "rfi_hinh_hoc_id" : "rfi_sieu_am_id"]:ref};
+    await assert.rejects(() => finalize(info), /Đề nghị cung cấp RFI/, "Invitation alone is not a passing acceptance");
+    await sql("select chot_phieu_nt_tach($1,'2026-10-31',$2,'tester')", [ref,JSON.stringify([{id:w,phien_ban:2,ket_qua:"Đạt"}])]);
+    const wrong = {...info}; wrong[Object.keys(info)[0]] = missingKind === "sieu-am" ? geo : ut;
+    await assert.rejects(() => finalize(wrong), /Đề nghị cung cấp RFI/, "Wrong kind or weld cannot supplement acceptance");
+    assert.equal(await finalize(info),d);
+    await sql("update dot_nghiem_thu set thong_tin=thong_tin-$2 where id=$1", [d,Object.keys(info)[0]]);
+    await assert.rejects(() => sign(d), /Đề nghị cung cấp RFI/, "Signing checks both parts again");
+    await sql("update dot_nghiem_thu set thong_tin=thong_tin || $2::jsonb where id=$1", [d,JSON.stringify(info)]);
+    await sign(d);
+  }
+  console.log("PASS RFI lifecycle and split scope: partial RFI completion/signing guards, rollback, matching evidence and immutable scope");
 } catch (error) {
   console.error(error.message, error.where ?? "");
   process.exitCode = 1;

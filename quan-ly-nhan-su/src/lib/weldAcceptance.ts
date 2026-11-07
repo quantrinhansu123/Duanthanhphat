@@ -1,5 +1,17 @@
 // Quy tắc thuần cho chọn mối phát RFI (giai đoạn 4). Dùng chung cho server và test; không import server-only.
 
+export function rfiScope(info: Record<string, unknown> = {}) {
+  const explicit = "nt_hinh_hoc" in info || "nt_sieu_am" in info;
+  const on = (value: unknown) => value === "1" || value === true || value === "true";
+  return { geometry: explicit ? on(info.nt_hinh_hoc) : true, ultrasound: explicit ? on(info.nt_sieu_am) : true };
+}
+
+export function rfiAcceptanceTitle(info: Record<string, unknown> = {}) {
+  const scope = rfiScope(info);
+  return scope.geometry && scope.ultrasound ? "Nghiệm thu kích thước hình học và siêu âm mối hàn"
+    : scope.geometry ? "Nghiệm thu kích thước hình học mối hàn" : "Nghiệm thu siêu âm mối hàn";
+}
+
 export type RfiCandidate = {
   id: string;
   ma_lich_su: string;

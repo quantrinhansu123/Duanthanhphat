@@ -35,6 +35,15 @@ const DU_AN_COLUMNS = `${DU_AN_COLUMNS_BASE},vi_tri,ngay_bat_dau,ngay_ket_thuc,t
 const DU_AN_LIST_COLUMNS_BASE = "id,ma_du_an,du_an,nguoi_phu_trach,created_at,updated_at";
 const DU_AN_LIST_COLUMNS = `${DU_AN_LIST_COLUMNS_BASE},vi_tri,ngay_bat_dau,ngay_ket_thuc,tong_moi_han_du_kien`;
 
+/** Selectors only need IDs and names, without personnel or Storage metadata. */
+export async function loadProjectOptions(): Promise<{ id: string; name: string }[]> {
+  if (!hasSupabaseEnv()) return seedProjects.map(({ id, name }) => ({ id, name }));
+  const { data, error } = await createClient().from("du_an").select("id,du_an")
+    .order("created_at", { ascending: false }).order("id", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: String(row.id), name: String(row.du_an) }));
+}
+
 let projectsListPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =
   null;
 let projectsFullPromise: Promise<{ projects: Project[]; source: "supabase" | "seed"; error?: string }> | null =

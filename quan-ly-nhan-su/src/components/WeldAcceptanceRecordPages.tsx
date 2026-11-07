@@ -1,5 +1,6 @@
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
+import { rfiScope } from "@/lib/weldAcceptance";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
 export type RecordKind = "phu-luc" | "giai-doan" | "hoan-thanh";
@@ -10,7 +11,10 @@ export const ACCEPTANCE_DOCS: { kind: RecordKind; loai: string; title: string }[
 ];
 
 const BOX = "❐";
-const ROWS_PER_PAGE = 40;
+// Mỗi trang phụ lục tối đa 30 mối để bảng + chân trang + khối ký luôn nằm vừa 1 tờ A4.
+const ROWS_PER_PAGE = 30;
+// Số dòng tối thiểu của bảng: không in thêm dòng trống thừa.
+const MIN_BLANK_ROWS = 5;
 
 export const acceptancePrintCss = `
 .acceptance-page { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto 16px; padding: 12mm 17mm; background: white; color: black; font: 13px/1.35 'Times New Roman', serif; }
@@ -38,7 +42,7 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
 .acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 9px; }
-.acceptance-page .annex-sign td { height: 105px; font-size: 9px; text-align: left; font-weight: normal; }
+.acceptance-page .annex-sign td { height: 82px; font-size: 9px; text-align: left; font-weight: normal; }
 .acceptance-page .signature { text-align: center; font-weight: bold; margin-top: 10px; min-height: 95px; }
 .acceptance-page .signature small { display: block; font-weight: normal; font-style: italic; }
 .acceptance-page .dots { border-bottom: 1px dotted black; min-height: 21px; }
@@ -151,6 +155,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const hoSo = record.ho_so.find((h) => h.loai === doc.loai);
     const revision = record.sua_doi?.filter((r) => r.ho_so_id === hoSo?.id).sort((a, b) => a.phien_ban - b.phien_ban).at(-1);
     const t = { ...base, ...(revision?.thong_tin ?? {}) };
+    const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
+    const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
+    const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
     const acceptIso = (record.dot.thong_tin as { draft?: boolean } | undefined)?.draft === true ? rfi.ngay_moi : record.dot.ngay_nghiem_thu;
     const parts = dateParts(acceptIso);
     const day = `${parts.d}/${parts.m}/${parts.y}`;
@@ -209,7 +216,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>RFI/ ITR No:</b> {show(rfi.so_phieu)}</td>
+                        <td colSpan={2}><b>RFI/ ITR No:</b> {show(rfi.so_phieu)}<br />Hình học: {show(geometryRfi)} · Siêu âm: {show(ultrasoundRfi)}</td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>
@@ -263,7 +270,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                       </tr>
                     </thead>
                     <tbody>
-                      {Array.from({ length: ROWS_PER_PAGE }, (_, i) => {
+                      {Array.from({ length: Math.max(page.length, MIN_BLANK_ROWS) }, (_, i) => {
                         const row = page[i];
                         const w = row?.du_lieu_chot.moi_han ?? {};
                         const kt = row?.du_lieu_chot.kiem_tra ?? {};
@@ -298,7 +305,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                               <td key={k}>{cellOf(k)}</td>
                             ))}
                             <td>{inLimit}</td>
-                            <td>{note}</td>
+                            <td>{note}{row && <><br />RFI HH: {show(geometryRfi)}<br />RFI SA: {show(ultrasoundRfi)}</>}</td>
                           </tr>
                         );
                       })}
@@ -365,9 +372,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                   <table className="annex-sign">
                     <thead>
                       <tr>
-                        <th>ĐẠI DIỆN TƯ VẤN GIÁM SÁT</th>
-                        <th>ĐẠI DIỆN NHÀ THẦU CHÍNH</th>
-                        <th>ĐẠI DIỆN NHÀ THẦU PHỤ</th>
+                        <th>TƯ VẤN GIÁM SÁT</th>
+                        <th>NHÀ THẦU CHÍNH</th>
+                        <th>NHÀ THẦU PHỤ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -411,6 +418,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           </p>
           <h2>{doc.title}</h2>
           <p className="doc-no">Số: {show(rfi.so_phieu)}/BBNTCV</p>
+          <p>RFI hình học: {show(geometryRfi)} · RFI siêu âm: {show(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: {show(packageName)}</p>
@@ -508,6 +516,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           </p>
           <h2>{doc.title}</h2>
           <p className="doc-no">Số: {show(rfi.so_phieu)}/BBNTHT</p>
+          <p>RFI hình học: {show(geometryRfi)} · RFI siêu âm: {show(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: {show(packageName)}</p>

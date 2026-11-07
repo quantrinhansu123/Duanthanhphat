@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { parseCoordinateCode } from "@/lib/weldCode";
+import { rfiAcceptanceTitle } from "@/lib/weldAcceptance";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
 
 export type DocKind = "rfi" | "hoan-thanh" | "phu-luc" | "giai-doan";
@@ -243,7 +244,8 @@ function RfiForm({ rfi, welds, projectName, signatures }: { rfi: RfiSummary; wel
       </dl>
       <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
-      <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>
+      {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
+      {!monitoring && <p>- {rfiAcceptanceTitle(t)} {welds.map(w => w.ma_lich_su).join(", ")}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
       <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(monitoring ? t.kmFrom : km[0]?.v)}-{chainage(monitoring ? t.kmTo : km[km.length - 1]?.v)}</p>

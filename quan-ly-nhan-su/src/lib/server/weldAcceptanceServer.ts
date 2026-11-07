@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { rfiScope, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { acceptanceIssues, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, type DiaryWork } from "@/lib/constructionDiaryAuto";
@@ -131,21 +131,25 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
   const f = object(body.filters ?? {});
   const filter = { query: str(f.query), nameFrom: str(f.nameFrom), nameTo: str(f.nameTo), kmFrom: str(f.kmFrom, 40), kmTo: str(f.kmTo, 40),
     dateFrom: qualityDate(f.dateFrom) ?? "", dateTo: qualityDate(f.dateTo) ?? "" };
-  const quality = await fetchAll<QualityRow>((a, b) => db().from("chat_luong_moi_han")
-    .select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_rfi").eq("du_an_id", projectId).order("moi_han_id").range(a, b));
-  const linked = await fetchAll<{ moi_han_id: string }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
+  const [quality, linked] = await Promise.all([
+    fetchAll<QualityRow>((a, b) => db().from("chat_luong_moi_han")
+    .select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_rfi").eq("du_an_id", projectId).order("moi_han_id").range(a, b)),
+    fetchAll<{ moi_han_id: string }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
     .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(du_an_id)").eq("con_hieu_luc", true)
-    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("moi_han_id").range(a, b));
+    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("moi_han_id").range(a, b)),
+  ]);
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
   // Chỉ mối "Chờ siêu âm và nghiệm thu" — không lấy mối đã siêu âm Đạt / "Chờ ký biên bản".
   const isEligible = (q: QualityRow) =>
     q.du_dieu_kien_rfi && isRfiEligibleStatus(q.tinh_trang) && q.tinh_trang !== "Chờ ký biên bản" && !inRfi.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
   const ids = eligible.map((q) => q.moi_han_id);
-  const welds = await chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>
-    db().from("lich_su_moi_han").select("id,ma_lich_su,ngay_thuc_hien").in("id", p));
-  const points = await chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null }>(ids, (p) =>
-    db().from("toa_do").select("lich_su_moi_han_id,ly_trinh").in("lich_su_moi_han_id", p));
+  const [welds, points] = await Promise.all([
+    chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>
+      db().from("lich_su_moi_han").select("id,ma_lich_su,ngay_thuc_hien").in("id", p)),
+    chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null }>(ids, (p) =>
+      db().from("toa_do").select("lich_su_moi_han_id,ly_trinh").in("lich_su_moi_han_id", p)),
+  ]);
   const km = new Map(points.filter((p) => p.ly_trinh).map((p) => [p.lich_su_moi_han_id, p.ly_trinh as string]));
   const meta = new Map(eligible.map((q) => [q.moi_han_id, q]));
   const rows: RfiCandidate[] = welds.map((w) => ({ id: w.id, ma_lich_su: w.ma_lich_su, ngay_thuc_hien: w.ngay_thuc_hien,
@@ -159,6 +163,15 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     excluded[reason] = (excluded[reason] ?? 0) + 1;
   }
   return { rows: result.rows, missingChainage: result.missingChainage, excluded, total: eligible.length };
+}
+
+/** Initial RFI screen: share authentication and avoid a separate count query. */
+export async function loadRfiOverview(body: Record<string, unknown>) {
+  const projectId = qualityUuid(body.du_an_id);
+  const [rfis, candidates] = await Promise.all([
+    listRfis(projectId), loadRfiCandidates({ du_an_id: projectId, filters: {} }),
+  ]);
+  return { rfis, candidates, so_phieu: `RFI-${String(rfis.length + 1).padStart(3, "0")}` };
 }
 
 export async function nextRfiNumber(projectId: string) {
@@ -192,7 +205,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     }
     return { id: payload.id };
   }
-  if (body.loai_rfi && body.loai_rfi !== "nghiem-thu") throw new QualityApiError("Loại RFI không hợp lệ.");
+  if (body.loai_rfi && body.loai_rfi !== "nghiem-thu" && body.loai_rfi !== "ca-hai") throw new QualityApiError("Loại RFI không hợp lệ.");
   const ids = body.moi_han_ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > 2000) throw new QualityApiError("Chọn 1–2000 mối cho một phiếu.");
   const ngay = qualityDate(body.ngay_moi);
@@ -201,6 +214,10 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   if (!soPhieu) throw new QualityApiError("Nhập số phiếu.");
   const info = object(body.thong_tin ?? {});
   const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
+  const explicitScope = "nt_hinh_hoc" in info || "nt_sieu_am" in info;
+  const geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
+  const ultrasound = explicitScope ? flag(info.nt_sieu_am) : "1";
+  if (!geometry && !ultrasound) throw new QualityApiError("Chọn nghiệm thu kích thước hình học, siêu âm hoặc cả hai.");
   const thong_tin = {
     dia_diem: str(info.dia_diem),
     ben_moi: str(info.ben_moi),
@@ -209,7 +226,8 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     tuyen_thuong: flag(info.tuyen_thuong),
     tuyen_ha: flag(info.tuyen_ha),
     gio_bat_dau: str(info.gio_bat_dau, 10),
-    loai_rfi: "nghiem-thu",
+    loai_rfi: body.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu",
+    nt_hinh_hoc: geometry, nt_sieu_am: ultrasound,
   };
   const id = await publishWeldRfi({ id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
     moi_han_ids: ids.map(qualityUuid), nguoi_lap: actor, thong_tin });
@@ -377,8 +395,30 @@ export async function completeRfi(body: Record<string, unknown>, actor: string) 
     if (typeof r.phien_ban !== "number" || !Number.isSafeInteger(r.phien_ban)) throw new QualityApiError("Phiên bản không hợp lệ.");
     return { moi_han_id: qualityUuid(r.moi_han_id), phien_ban: r.phien_ban, ket_qua: r.ket_qua as "Đạt" | "Không đạt" | "Chưa nghiệm thu", ly_do: str(r.ly_do, 1000) || undefined };
   });
-  const id = await completeWeldAcceptance({ id: qualityUuid(body.id), phieu_id: qualityUuid(body.phieu_id), ngay_nghiem_thu: ngay,
-    nguoi_lap: actor, ket_qua, thong_tin: object(body.thong_tin ?? {}) });
+  const phieuId = qualityUuid(body.phieu_id);
+  const { data: phieu, error: phieuError } = await db().from("phieu_yeu_cau_nghiem_thu").select("du_an_id,thong_tin,so_phieu,ngay_moi").eq("id", phieuId).single();
+  if (phieuError) throw phieuError;
+  const scope = rfiScope(phieu.thong_tin);
+  const input = object(body.thong_tin ?? {});
+  const info = { ...input, rfi_hinh_hoc_so: scope.geometry ? phieu.so_phieu : "", rfi_sieu_am_so: scope.ultrasound ? phieu.so_phieu : "" };
+  for (const [kind, needed, field, numberField] of [
+    ["hinh-hoc", !scope.geometry, "rfi_hinh_hoc_id", "rfi_hinh_hoc_so"],
+    ["sieu-am", !scope.ultrasound, "rfi_sieu_am_id", "rfi_sieu_am_so"],
+  ] as const) {
+    if (!needed) continue;
+    if (!input[field]) throw new QualityApiError(`Đề nghị cung cấp RFI ${kind === "hinh-hoc" ? "kích thước hình học" : "siêu âm"} trước khi hoàn thành và ký biên bản.`, 409);
+    const reference = qualityUuid(input[field]);
+    const { data: ticket, error } = await db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu")
+      .eq("id", reference).eq("du_an_id", phieu.du_an_id).eq("loai", kind).single();
+    if (error || !ticket?.ngay_nghiem_thu || ticket.ngay_nghiem_thu > ngay) throw new QualityApiError("RFI bổ sung phải đúng dự án, đúng loại và đã nghiệm thu trước ngày hoàn thành.", 409);
+    const covered = await chunked<{ moi_han_id: string }>(ket_qua.filter(r => r.ket_qua === "Đạt").map(r => r.moi_han_id), part =>
+      db().from("phieu_nt_tach_moi").select("moi_han_id").eq("phieu_id", reference).eq("ket_qua", "Đạt").in("moi_han_id", part));
+    const ids = new Set(covered.map(r => r.moi_han_id));
+    if (ket_qua.some(r => r.ket_qua === "Đạt" && !ids.has(r.moi_han_id))) throw new QualityApiError("RFI bổ sung chưa có kết quả Đạt cho đủ các mối được nghiệm thu trong biên bản.", 409);
+    info[numberField] = ticket.so_phieu;
+  }
+  const id = await completeWeldAcceptance({ id: qualityUuid(body.id), phieu_id: phieuId, ngay_nghiem_thu: ngay,
+    nguoi_lap: actor, ket_qua, thong_tin: info });
   return { id };
 }
 
@@ -506,7 +546,10 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     const rows = await db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot")
       .eq("phieu_id",id).order("ma_lich_su");
     if (rows.error) throw rows.error;
-    const items = rows.data;
+    const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(
+      rows.data.map(r => r.moi_han_id), part => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", part));
+    const locations = new Map(points.map(p => [p.lich_su_moi_han_id, p]));
+    const items = rows.data.map(r => ({ ...r, ma_diem: locations.get(r.moi_han_id)?.ma_diem ?? null, ly_trinh: locations.get(r.moi_han_id)?.ly_trinh ?? null }));
     if (!ticket.data.ngay_nghiem_thu && items.length) {
       const ids = items.map(r => r.moi_han_id);
       const [eligible, inspections] = await Promise.all([

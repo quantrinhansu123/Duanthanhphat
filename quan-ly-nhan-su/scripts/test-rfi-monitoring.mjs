@@ -62,4 +62,12 @@ assert.equal(records.get("lower").thong_tin.tuyen_thuong,"");
 assert.equal(acceptanceCalls,0);
 await server.publishRfi({...input,id:"accept",loai_rfi:"nghiem-thu",moi_han_ids:["weld"]},"admin@example.com");
 assert.equal(acceptanceCalls,1,"Acceptance RFI retains its existing eligibility RPC");
+assert.equal(rules.rfiAcceptanceTitle({nt_hinh_hoc:"1",nt_sieu_am:""}),"Nghiệm thu kích thước hình học mối hàn");
+assert.equal(rules.rfiAcceptanceTitle({nt_hinh_hoc:"",nt_sieu_am:"1"}),"Nghiệm thu siêu âm mối hàn");
+assert.equal(rules.rfiAcceptanceTitle({}),"Nghiệm thu kích thước hình học và siêu âm mối hàn");
+await assert.rejects(()=>server.publishRfi({...input,id:"empty-scope",loai_rfi:"nghiem-thu",moi_han_ids:["weld"],
+  thong_tin:{nt_hinh_hoc:"",nt_sieu_am:""}},"admin@example.com"),/Chọn nghiệm thu/);
+await server.publishRfi({...input,id:"combined",loai_rfi:"ca-hai",moi_han_ids:["weld"],
+  thong_tin:{nt_hinh_hoc:"1",nt_sieu_am:""}},"admin@example.com");
+assert.equal(acceptanceCalls,2,"Supervision and acceptance can share one RFI");
 console.log("PASS monitoring RFI: name/Km ranges, validation, separate workflow, idempotency and acceptance regression");

@@ -122,7 +122,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
             </div>
             <p className="text-[10px]">(1): Đối với độ thẳng theo phương ngang, dung sai dương (+) sẽ làm tăng khổ đường. (2): Đối với độ phẳng mặt lăn, chỉ đo giá trị lớn nhất.</p>
             <div className="mt-3 grid grid-cols-3 gap-4 font-bold uppercase">
-              {["Đại diện tư vấn giám sát", "Đại diện nhà thầu chính", "Đại diện nhà thầu phụ"].map((s) => (
+              {["Tư vấn giám sát", "Nhà thầu chính", "Nhà thầu phụ"].map((s) => (
                 <div key={s}>{s}<div className="mt-1 font-normal normal-case leading-6">Họ và tên: …………………<br />Ngày: …………………<br />Chữ ký:</div></div>))}
             </div>
             <p className="mt-1 text-right text-[9px] text-slate-500">Trang {p + 1}/{pages.length}</p>

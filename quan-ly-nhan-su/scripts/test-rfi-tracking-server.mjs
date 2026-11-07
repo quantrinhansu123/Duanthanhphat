@@ -19,6 +19,8 @@ const batch = (id, phieu_id = "main", draft = false) => ({ id, phieu_id, created
 const result = (i, dot_id, ket_qua = "Đạt") => ({ dot_id, moi_han_id: String(i), ket_qua, du_lieu_chot: snapshot(i) });
 const kinds = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
 const tables = {
+  chat_luong_moi_han: [],
+  lich_su_moi_han: [],
   phieu_yeu_cau_nghiem_thu: ["main", "draft"].map((id) => ({ id, so_phieu: id, ngay_moi: "2026-11-01", du_an_id: "project", created_at: id, thong_tin: {} })),
   phieu_yeu_cau_nghiem_thu_moi: [...Array.from({ length: 1203 }, (_, i) => link(i + 1)), link(2000, "draft")],
   dot_nghiem_thu: [batch("a"), batch("b"), batch("c"), batch("d"), batch("e", "draft", true)],
@@ -58,7 +60,8 @@ const db = { from(table) {
 } };
 const server = load("server/weldAcceptanceServer", {
   "server-only": {}, "@/lib/supabase/admin": { createAdminClient: () => db },
-  "@/lib/server/weldQualityAuth": { QualityApiError: Error }, "@/lib/server/weldQualityJournal": {},
+  "@/lib/server/weldQualityAuth": { QualityApiError: Error },
+  "@/lib/server/weldQualityJournal": { qualityUuid: (v) => v, object: (v) => v, qualityDate: (v) => v || null },
   "@/lib/server/weldQualityDb": {}, "@/lib/weldAcceptance": acceptance, "@/lib/rfiTracking": tracking,
   "@/lib/weldQuality": {},
   "@/lib/constructionDiaryAuto": {}, "@/lib/server/projectEquipment": {}, "@/lib/projectEquipment": {},
@@ -76,4 +79,17 @@ assert.equal(main.tracking.moi.find((r) => r.moi_han_id === "1").ly_trinh, "Km1+
 assert.equal(draft.tracking.da_nghiem_thu, 0, "Draft snapshots must not count as completed acceptance");
 assert.ok(pages.some(([table, from]) => table === "dot_nghiem_thu_moi" && from === 1000), "Page through results exceeding PostgREST's 1000-row limit");
 assert.equal((await server.listRfis("other-project")).length, 0, "Scope to selected project");
+const overview = await server.loadRfiOverview({ du_an_id: "project" });
+assert.deepEqual(overview.rfis, rfis, "Combined load preserves tracking and frozen snapshots");
+assert.equal(overview.so_phieu, "RFI-003", "Reuse the complete project list for next number");
+assert.equal(overview.candidates.rows.length, 0);
+tables.chat_luong_moi_han.push({ du_an_id: "project", moi_han_id: "3000", phien_ban: 7,
+  tinh_trang: "Chờ siêu âm và nghiệm thu", du_dieu_kien_rfi: true });
+tables.lich_su_moi_han.push({ id: "3000", ma_lich_su: "NEW-3000", ngay_thuc_hien: "2026-11-06" });
+tables.toa_do.push({ id: "p2", lich_su_moi_han_id: "3000", ma_diem: "TT0002", ly_trinh: "Km2+000" });
+const withCandidates = await server.loadRfiOverview({ du_an_id: "project" });
+assert.equal(withCandidates.candidates.rows.length, 1);
+assert.equal(withCandidates.candidates.rows[0].phien_ban, 7);
+assert.equal(withCandidates.candidates.rows[0].ly_trinh, "Km2+000");
+assert.equal((await server.loadRfiOverview({ du_an_id: "other-project" })).candidates.rows.length, 0);
 console.log("PASS RFI server: 1203 welds across batches, full pagination, draft exclusion, actual signed counts, frozen KM and project scoping");

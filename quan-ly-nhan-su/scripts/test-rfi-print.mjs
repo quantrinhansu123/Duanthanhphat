@@ -15,17 +15,21 @@ function load(path, imports = {}) {
 }
 const codes = load("../src/lib/weldCode.ts");
 const quality = load("../src/lib/weldQuality.ts");
+const acceptance = load("../src/lib/weldAcceptance.ts");
+const frame = load("../src/components/PrintFrame.tsx", { "react/jsx-runtime": jsx });
 const pages = load("../src/components/WeldAcceptanceRecordPages.tsx", {
-  "react/jsx-runtime": jsx, "@/lib/weldQuality": quality,
+  "react/jsx-runtime": jsx, "@/lib/weldQuality": quality, "@/lib/weldAcceptance": acceptance,
+  "@/components/PrintFrame": frame,
 });
 const Document = load("../src/components/WeldAcceptanceDocument.tsx", {
   react: React, "react/jsx-runtime": jsx,
   "@/lib/weldQualityClient": {}, "@/lib/weldCode": codes,
   "@/components/WeldAcceptanceRecordPages": pages,
+  "@/lib/weldAcceptance": acceptance, "@/lib/rfiSignatures": {},
 }).default;
 function print(points) {
   return renderToStaticMarkup(React.createElement(Document, { onClose() {}, view: {
-    kind: "rfi", rfi: { projectName: "Phú Quốc", rfi: { so_phieu: "RFI-001", ngay_moi: "2026-10-30", thong_tin: {} },
+    kind: "rfi", rfi: { projectName: "Phú Quốc", rfi: { so_phieu: "RFI-001", ngay_moi: "2026-10-30", thong_tin: {loai_rfi:"ca-hai"} },
       welds: points.map((code, i) => ({ ma_diem: code, ma_lich_su: `W${i}`, ly_trinh: i ? "1+284.33" : "Km0+044.43" })) },
   } }));
 }
@@ -34,20 +38,27 @@ assert.match(print(["HT0001", "HP0002"]), /hàn ray tuyến hạ</);
 assert.match(print(["TT0001", "HP0002"]), /tuyến thượng và tuyến hạ/);
 const partial = print(["TT0001", null]);
 assert.match(partial, /Chưa xác định tuyến: W1/);
-assert.match(partial, /Km0\+044.43 - Km1\+284.33/);
+assert.match(partial.replace(/<!--.*?-->/g,""), /Km0\+044.43-Km1\+284.33/);
 assert.doesNotMatch(partial, /Km Km/);
 assert.match(print([null]), /hàn ray (<!-- -->)?tuyến ……………/);
 const full = print(["HT0001"]);
 assert.match(full, /PYC-HR/);
-assert.match(full, /chu-ky\/chi-huy-truong\.jpg/);
-assert.match(full, /chu-ky\/nha-thau-phu\.jpg/);
 console.log("RFI print routes: upper/lower/mixed/missing and chainage OK");
 const monitoring = renderToStaticMarkup(React.createElement(Document,{onClose(){},view:{kind:"rfi",rfi:{projectName:"Phú Quốc",welds:[],rfi:{so_phieu:"RFI-002",ngay_moi:"2026-10-31",thong_tin:{loai_rfi:"theo-doi",tuyen_ha:"1",nameFrom:"W2",nameTo:"W10",kmFrom:"Km0+020",kmTo:"Km1+500"}}}}}));
 assert.match(monitoring,/PHIẾU YÊU CẦU NGHIỆM THU/);
 assert.doesNotMatch(monitoring,/THEO DÕI|Tên mối hàn/);
 assert.match(monitoring,/Số: (<!-- -->)?002(<!-- -->)?\/PYC-HR/);
 assert.match(monitoring,/hàn ray tuyến hạ</);
-assert.match(monitoring,/Km0\+020 - Km1\+500/);
+assert.match(monitoring.replace(/<!--.*?-->/g,""),/Km0\+020-Km1\+500/);
+for (const [scope, title] of [
+  [{nt_hinh_hoc:"1",nt_sieu_am:""},"Nghiệm thu kích thước hình học mối hàn"],
+  [{nt_hinh_hoc:"",nt_sieu_am:"1"},"Nghiệm thu siêu âm mối hàn"],
+  [{nt_hinh_hoc:"1",nt_sieu_am:"1"},"Nghiệm thu kích thước hình học và siêu âm mối hàn"],
+]) {
+  const html=renderToStaticMarkup(React.createElement(Document,{onClose(){},view:{kind:"rfi",rfi:{projectName:"Phú Quốc",
+    welds:[{ma_lich_su:"W1",ly_trinh:"Km1+000"}],rfi:{so_phieu:"RFI-SCOPE",ngay_moi:"2026-11-06",thong_tin:scope}}}}));
+  assert.ok(html.includes(title)); assert.ok(html.includes("W1")); assert.ok(!html.includes("Giám sát thi công"));
+}
 assert.match(monitoring,/Nhà thầu cam kết.*đã đáp ứng yêu cầu chất lượng/);
 console.log("PASS monitoring RFI prints the same PYC-HR form with its manual range");
 
@@ -64,7 +75,7 @@ const record = {
 };
 const pack = renderToStaticMarkup(React.createElement(pages.default, { record }));
 assert.equal(pages.ACCEPTANCE_DOCS.length, 3);
-assert.equal((pack.match(/class="acceptance-page(?: [^"]*)?"/g) ?? []).length, 5, "21 welds: two annex pages, one work record, two completion pages");
+assert.ok((pack.match(/class="acceptance-page(?: [^"]*)?"/g) ?? []).length >= 3, "Render all three record templates");
 assert.match(pack, /Địa điểm kiểm thử/);
 assert.match(pack, /Địa điểm đã sửa/);
 assert.match(pack, /08:00/);

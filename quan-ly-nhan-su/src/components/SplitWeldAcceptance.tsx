@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { qualityRequest } from "@/lib/weldQualityClient";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
+import WeldAcceptanceDocument from "@/components/WeldAcceptanceDocument";
 
 export type SplitKind = "hinh-hoc" | "sieu-am";
 type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null };
 type Evidence = { co_the_dat: boolean; ngay_mai: string; truc_quan: string; gia_tri_do: GeometryMeasurements; ngay_ndt: string | null; ket_qua_ndt: string | null; phuong_phap_ndt: string; ten_tieu_chuan: string | null };
-type Item = { moi_han_id: string; ma_lich_su: string; current?: Evidence | null; version?: number; du_lieu_chot: Evidence; ket_qua: string | null; ly_do: string | null };
+type Item = { moi_han_id: string; ma_lich_su: string; ma_diem?: string | null; ly_trinh?: string | null; current?: Evidence | null; version?: number; du_lieu_chot: Evidence; ket_qua: string | null; ly_do: string | null };
 type Detail = { ticket: Ticket; items: Item[] };
 type List = { candidates: Candidate[]; tickets: Ticket[] };
 type Decision = { ket_qua: string; ly_do: string };
@@ -29,7 +30,7 @@ function evidenceText(kind: SplitKind, e?: Evidence | null) {
 }
 
 export default function SplitWeldAcceptance({ project, projectName, kind }: { project: string; projectName: string; kind: SplitKind }) {
-  const prefix = kind === "hinh-hoc" ? "RIF" : "RFI";
+  const prefix = "RFI";
   const request = useCallback(<T,>(action: string, data: Record<string, unknown> = {}) =>
     qualityRequest<T>({ action, du_an_id: project, loai: kind, ...data }), [project, kind]);
   const [list, setList] = useState<List | null>(null);
@@ -136,7 +137,16 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
         {!detail.ticket.ngay_nghiem_thu && <button className={primary} disabled={busy}>Chốt nghiệm thu và lập biên bản</button>}
       </form>
     </div>}
-    {doc && detail && createPortal(<div className="split-weld-print fixed inset-0 z-[110] overflow-y-auto bg-slate-100 p-4" role="dialog" aria-modal="true" aria-label={doc === "record" ? "Biên bản nghiệm thu" : "Phiếu yêu cầu nghiệm thu"}>
+    {doc === "invite" && detail && createPortal(<WeldAcceptanceDocument onClose={() => setDoc(null)} view={{ kind: "rfi", rfi: {
+      projectName,
+      rfi: { ...detail.ticket, trang_thai: detail.ticket.ngay_nghiem_thu ? "Đã hoàn thành" : "Đã phát hành", created_at: "",
+        tong_moi: detail.items.length, con_lai: detail.ticket.ngay_nghiem_thu ? 0 : detail.items.length,
+        thong_tin: { loai_rfi: "nghiem-thu", nt_hinh_hoc: kind === "hinh-hoc" ? "1" : "", nt_sieu_am: kind === "sieu-am" ? "1" : "" } },
+      welds: detail.items.map(i => ({ moi_han_id: i.moi_han_id, ma_lich_su: i.ma_lich_su, ly_trinh: i.ly_trinh ?? null, ma_diem: i.ma_diem ?? null,
+        con_hieu_luc: !detail.ticket.ngay_nghiem_thu, ngay_thuc_hien: null, vi_do: null, kinh_do: null,
+        phien_ban: i.version ?? 0, tinh_trang: i.ket_qua ?? "Chưa nghiệm thu", du_dieu_kien_nghiem_thu: Boolean(i.current?.co_the_dat) })),
+    } }} />, document.body)}
+    {doc === "record" && detail && createPortal(<div className="split-weld-print fixed inset-0 z-[110] overflow-y-auto bg-slate-100 p-4" role="dialog" aria-modal="true" aria-label="Biên bản nghiệm thu">
       <style>{`@media print { body > :not(.split-weld-print) {display:none!important} .split-weld-print {position:static!important;overflow:visible!important;padding:0!important;background:white!important} .split-weld-print article {max-width:none!important;padding:0!important} .split-weld-print tr {break-inside:avoid} @page {size:A4;margin:16mm} }`}</style>
       <div className="mx-auto mb-3 flex max-w-4xl justify-end gap-2 print:hidden"><button className={button} onClick={() => setDoc(null)}>Đóng</button><button className={primary} onClick={() => window.print()}>In / lưu PDF</button></div>
       <article className="mx-auto max-w-4xl space-y-4 bg-white p-6 font-serif text-black sm:p-10">
