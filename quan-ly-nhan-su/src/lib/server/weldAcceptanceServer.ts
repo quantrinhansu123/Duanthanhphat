@@ -168,16 +168,27 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
 /** Initial RFI screen: share authentication and avoid a separate count query. */
 export async function loadRfiOverview(body: Record<string, unknown>) {
   const projectId = qualityUuid(body.du_an_id);
-  const [rfis, candidates] = await Promise.all([
-    listRfis(projectId), loadRfiCandidates({ du_an_id: projectId, filters: {} }),
+  const [rfis, candidates, so_phieu] = await Promise.all([
+    listRfis(projectId), loadRfiCandidates({ du_an_id: projectId, filters: {} }), nextRfiNumber(projectId),
   ]);
-  return { rfis, candidates, so_phieu: `RFI-${String(rfis.length + 1).padStart(3, "0")}` };
+  return { rfis, candidates, so_phieu };
 }
 
+/**
+ * Số phiếu kế tiếp = số lớn nhất đang dùng + 1, tính chung phiếu RFI chính và các phiếu tách riêng
+ * (hình học / siêu âm) của dự án — đếm số phiếu như trước dễ ra số đã dùng và bị báo trùng.
+ */
 export async function nextRfiNumber(projectId: string) {
-  const { count, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("id", { count: "exact", head: true }).eq("du_an_id", projectId);
-  if (error) throw error;
-  return `RFI-${String((count ?? 0) + 1).padStart(3, "0")}`;
+  const [main, split] = await Promise.all([
+    fetchAll<{ so_phieu: string | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu").select("so_phieu").eq("du_an_id", projectId).order("id").range(a, b)),
+    fetchAll<{ so_phieu: string | null }>((a, b) => db().from("phieu_nt_tach").select("so_phieu").eq("du_an_id", projectId).order("id").range(a, b)),
+  ]);
+  let highest = 0;
+  for (const row of [...main, ...split]) {
+    const match = /(\d+)\s*$/.exec(row.so_phieu ?? "");
+    if (match) highest = Math.max(highest, Number(match[1]));
+  }
+  return `RFI-${String(highest + 1).padStart(3, "0")}`;
 }
 
 export async function publishRfi(body: Record<string, unknown>, actor: string) {
@@ -554,9 +565,13 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     const ids = body.moi_han_ids, number = str(body.so_phieu,80), date = qualityDate(body.ngay_moi);
     if (!Array.isArray(ids) || !ids.length || ids.length > 200 || !number || !date)
       throw new QualityApiError("Nhập số phiếu, ngày mời và chọn 1–200 mối.");
+    // Báo rõ nguyên nhân thay vì một thông báo chung: số phiếu trùng hay mối đã nằm trong phiếu đang xử lý.
+    const sameNumber = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
+      .eq("du_an_id", project).eq("loai", kind).eq("so_phieu", number);
+    if ((sameNumber.count ?? 0) > 0) throw new QualityApiError(`Số phiếu ${number} đã được dùng trong nhánh này. Chọn số khác (gợi ý: ${await nextRfiNumber(project)}).`, 409);
     const { error } = await db().rpc("phat_phieu_nt_tach", { p_id:id, p_du_an:project, p_loai:kind,
       p_so:number, p_ngay:date, p_moi:ids.map(qualityUuid), p_actor:actor });
-    if (error?.code === "23505") throw new QualityApiError("Số phiếu hoặc mối đã được dùng trong nhánh này.",409);
+    if (error?.code === "23505") throw new QualityApiError("Có mối đã nằm trong một phiếu khác đang xử lý của nhánh này. Bấm Tải lại để cập nhật danh sách mối.",409);
     if (error) throw error;
     return { id };
   }
