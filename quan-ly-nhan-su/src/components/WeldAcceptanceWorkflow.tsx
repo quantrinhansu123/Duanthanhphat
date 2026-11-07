@@ -31,6 +31,7 @@ type RfiThongTin = {
   ben_moi: string;
   ben_nhan: string;
   pham_vi: string;
+  giam_sat: string;
   tuyen_thuong: boolean;
   tuyen_ha: boolean;
   gio_bat_dau: string;
@@ -39,7 +40,7 @@ type RfiThongTin = {
 };
 
 const emptyThongTin = (): RfiThongTin => ({
-  dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "",
+  dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", giam_sat: "",
   tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "", nt_hinh_hoc: true, nt_sieu_am: true,
 });
 
@@ -49,6 +50,7 @@ function thongTinToPayload(t: RfiThongTin): Record<string, string> {
     ben_moi: t.ben_moi,
     ben_nhan: t.ben_nhan,
     pham_vi: t.pham_vi,
+    giam_sat: t.giam_sat,
     tuyen_thuong: t.tuyen_thuong ? "1" : "",
     tuyen_ha: t.tuyen_ha ? "1" : "",
     gio_bat_dau: t.gio_bat_dau,
@@ -64,6 +66,7 @@ function thongTinFromStored(raw: Record<string, string> | undefined): RfiThongTi
     ben_moi: t.ben_moi ?? "",
     ben_nhan: t.ben_nhan ?? "",
     pham_vi: t.pham_vi ?? "",
+    giam_sat: t.giam_sat ?? "",
     tuyen_thuong: t.tuyen_thuong === "1" || t.tuyen_thuong === "true",
     tuyen_ha: t.tuyen_ha === "1" || t.tuyen_ha === "true",
     gio_bat_dau: t.gio_bat_dau ?? "",
@@ -84,7 +87,7 @@ function loadRfiDraft(projectId: string): Partial<RfiThongTin> | null {
 function saveRfiDraft(projectId: string, t: RfiThongTin) {
   try {
     window.localStorage.setItem(rfiDraftKey(projectId), JSON.stringify({
-      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi,
+      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.giam_sat,
       tuyen_thuong: t.tuyen_thuong, tuyen_ha: t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
       nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am,
     }));
@@ -432,7 +435,7 @@ function RfiPanel({
   });
   const set = (k: keyof RfiCandidateFilter) => (e: React.ChangeEvent<HTMLInputElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
 
-  const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha;
+  const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
   const publishDisabled = busy || routeMissing || (!monitoring && !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am) || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
@@ -537,6 +540,7 @@ function RfiPanel({
           <input className={input} placeholder="Bên mời (nhà thầu)" value={thongTin.ben_moi} onChange={(e) => setThongTin({ ...thongTin, ben_moi: e.target.value })} />
           <input className={input} placeholder="Bên nhận (TVGS/CĐT)" value={thongTin.ben_nhan} onChange={(e) => setThongTin({ ...thongTin, ben_nhan: e.target.value })} />
           <input className={input} placeholder="Phạm vi" value={thongTin.pham_vi} onChange={(e) => setThongTin({ ...thongTin, pham_vi: e.target.value })} />
+          {kind !== "nghiem-thu" && <input className={input} placeholder="Nội dung giám sát (nhập tay, vd: tuyến hạ Km4+075)" aria-label="Nội dung giám sát" value={thongTin.giam_sat} onChange={(e) => setThongTin({ ...thongTin, giam_sat: e.target.value })} />}
           <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
             <legend className="px-1">Tuyến {monitoring ? "(bắt buộc)" : ""}</legend>
             <label className="inline-flex min-h-11 items-center gap-2 cursor-pointer">
@@ -563,7 +567,7 @@ function RfiPanel({
           </button>
           {editingId ? <button type="button" className={secondary} disabled={busy} onClick={cancelEdit}>Hủy sửa — phát phiếu mới</button> : null}
         </div>
-        {routeMissing && <p className="text-xs text-amber-800">Chọn tuyến thượng, tuyến hạ hoặc cả hai trước khi phát phiếu theo dõi.</p>}
+        {routeMissing && <p className="text-xs text-amber-800">Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi.</p>}
         {!editingId && !monitoring && !selected.size && (
           <p className="text-xs text-amber-800">Nút phát phiếu đang khóa vì chưa chọn mối. Bấm <b>Tìm mối đủ điều kiện</b>, tick mối (mặc định chọn hết), rồi phát lại.</p>
         )}

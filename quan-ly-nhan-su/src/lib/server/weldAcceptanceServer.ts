@@ -189,9 +189,10 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
     const info = object(body.thong_tin ?? {});
     const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
-    if (!flag(info.tuyen_thuong) && !flag(info.tuyen_ha)) throw new QualityApiError("Chọn ít nhất một tuyến cho phiếu theo dõi.");
+    const giam_sat = str(info.giam_sat, 200);
+    if (!flag(info.tuyen_thuong) && !flag(info.tuyen_ha) && !giam_sat) throw new QualityApiError("Chọn tuyến hoặc nhập nội dung giám sát cho phiếu theo dõi.");
     const payload = { id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: number, ngay_moi: date, nguoi_lap: actor,
-      thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
+      thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi), giam_sat,
         tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha), gio_bat_dau: str(info.gio_bat_dau, 10),
         loai_rfi: "theo-doi", ...fields } };
     const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
@@ -223,6 +224,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     ben_moi: str(info.ben_moi),
     ben_nhan: str(info.ben_nhan),
     pham_vi: str(info.pham_vi),
+    giam_sat: str(info.giam_sat, 200),
     tuyen_thuong: flag(info.tuyen_thuong),
     tuyen_ha: flag(info.tuyen_ha),
     gio_bat_dau: str(info.gio_bat_dau, 10),
@@ -329,11 +331,12 @@ export async function updateRfi(body: Record<string, unknown>) {
     ben_moi: str(info.ben_moi),
     ben_nhan: str(info.ben_nhan),
     pham_vi: str(info.pham_vi),
+    giam_sat: str(info.giam_sat ?? prev.giam_sat, 200),
     tuyen_thuong: flag(info.tuyen_thuong ?? prev.tuyen_thuong),
     tuyen_ha: flag(info.tuyen_ha ?? prev.tuyen_ha),
     gio_bat_dau: str(info.gio_bat_dau ?? prev.gio_bat_dau, 10),
   };
-  if (prev.loai_rfi === "theo-doi" && !thong_tin.tuyen_thuong && !thong_tin.tuyen_ha) throw new QualityApiError("Chọn ít nhất một tuyến cho phiếu theo dõi.");
+  if (prev.loai_rfi === "theo-doi" && !thong_tin.tuyen_thuong && !thong_tin.tuyen_ha && !thong_tin.giam_sat) throw new QualityApiError("Chọn tuyến hoặc nhập nội dung giám sát cho phiếu theo dõi.");
   const { error: upd } = await db().from("phieu_yeu_cau_nghiem_thu")
     .update({ so_phieu: soPhieu, ngay_moi: ngay, thong_tin })
     .eq("id", id);
