@@ -1802,6 +1802,7 @@ export default function WeldingJournalList({
   const [selectedQuality, setSelectedQuality] = useState<Map<string, WeldQualitySelection>>(new Map());
   const [selectingAll, setSelectingAll] = useState(false);
   const [bulkQualityEntries, setBulkQualityEntries] = useState<WeldQualitySelection[] | null>(null);
+  const [bulkQualityKind, setBulkQualityKind] = useState<"visual" | "ndt">("ndt");
   const selectionToken = useRef(0);
   const qualityExcelInputRef = useRef<HTMLInputElement>(null);
   const [qualityImporting, setQualityImporting] = useState(false);
@@ -2102,6 +2103,11 @@ export default function WeldingJournalList({
     setReloadToken((token) => token + 1);
     void refetchGpsPoints();
   }, [refetchGpsPoints]);
+
+  useEffect(() => {
+    window.addEventListener("weld-quality-changed", refetch);
+    return () => window.removeEventListener("weld-quality-changed", refetch);
+  }, [refetch]);
 
   /** Quét QR → mã Lisp → mở form Thêm nhật ký đã điền sẵn điểm, lý trình, GPS, dự án, mã hiện trường/mã máy in trên QR. */
   function handleQrResult(raw: string) {
@@ -3095,11 +3101,12 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
           <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
         </div>
-        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Chọn nhiều → Siêu âm đạt hàng loạt; chỉ chỉnh tay mối không đạt. Sai số nhập từng mối / Excel.</div>
+        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Chọn nhiều mối để duyệt hình học hoặc siêu âm / NDT hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
           <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
           <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy…" : `Chọn toàn bộ (${total.toLocaleString("vi-VN")})`}</button>
-          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => setBulkQualityEntries([...selectedQuality.values()])} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("visual"); setBulkQualityEntries([...selectedQuality.values()]); }}>Duyệt hình học hàng loạt</button>
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("ndt"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
           <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập…" : "Nhập sai số / Excel"}</button>
         </div>
         <input ref={qualityExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" aria-label="File kiểm tra chất lượng" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void handleQualityExcel(file); }} />
@@ -3617,7 +3624,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       {qualityRow && <WeldQualityDialog key={qualityRow.id} row={qualityRow} onClose={() => setQualityRow(null)} onSaved={() => {
         setSelectedQuality((current) => { const next = new Map(current); next.delete(qualityRow.id); return next; }); refetch();
       }} />}
-      {bulkQualityEntries && <WeldQualityBulkDialog entries={bulkQualityEntries} onClose={() => setBulkQualityEntries(null)} onDone={(ids) => {
+      {bulkQualityEntries && <WeldQualityBulkDialog entries={bulkQualityEntries} initialKind={bulkQualityKind} onClose={() => setBulkQualityEntries(null)} onDone={(ids) => {
         setSelectedQuality((current) => { const next = new Map(current); for (const id of ids) next.delete(id); return next; }); refetch();
       }} />}
       {machineError && (

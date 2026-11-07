@@ -727,8 +727,8 @@ export function sanitizeRailReport(value: unknown): RailReport | undefined {
   const text = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 200) : "");
   const rows = value.rows.flatMap((raw) => {
     if (!isRecord(raw)) return [];
-    const row = { temp: text(raw.temp), mActual: text(raw.mActual), eActual: text(raw.eActual), note: text(raw.note) };
-    return row.temp || row.mActual || row.eActual || row.note ? [row] : [];
+    const row = { temp: text(raw.temp), mActual: text(raw.mActual), eActual: text(raw.eActual), note: text(raw.note), measuredAt: text(raw.measuredAt), airTemp: text(raw.airTemp) };
+    return row.temp || row.mActual || row.eActual || row.note || row.measuredAt || row.airTemp ? [row] : [];
   }).slice(0, 200);
   return rows.length ? { rows } : undefined;
 }

@@ -1158,6 +1158,14 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             {detailOpen && cell ? (
               <RailDetailPanel
                 cell={cell}
+                savedParams={layout.longRails.filter(rail => {
+                  const row = layout.rows.find(item => item.cells.some(itemCell => itemCell.id === cell.id));
+                  if (!row || rail.rowKey !== railRowKey(row)) return false;
+                  const span = getPlacementSpan(layout.rows, rail);
+                  const from = parseChainage(cell.from);
+                  const to = parseChainage(cell.to);
+                  return span && from !== null && to !== null && span.startMetres < to && span.endMetres > from;
+                }).sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0]?.params}
                 trackSide={layout.rows.find(row => row.cells.some(item => item.id === cell.id))?.rail === "Ray phải" ? "RIGHT" : "LEFT"}
                 onClose={() => setDetailOpen(false)}
                 onPrev={() => step(-1)}

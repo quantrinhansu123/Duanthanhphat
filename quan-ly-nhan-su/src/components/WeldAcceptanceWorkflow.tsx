@@ -119,7 +119,8 @@ export default function WeldAcceptanceWorkflow() {
     })();
     loadProjectOptions().then((list) => {
       setProjects(list);
-      setProjectId((cur) => cur || (remembered && list.some((p) => p.id === remembered) ? remembered : list[0]?.id) || "");
+      const phuQuoc = list.find((project) => project.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("phu quoc"));
+      setProjectId((cur) => cur || phuQuoc?.id || (remembered && list.some((p) => p.id === remembered) ? remembered : list[0]?.id) || "");
     }).catch(() => setProjects([]));
   }, []);
 

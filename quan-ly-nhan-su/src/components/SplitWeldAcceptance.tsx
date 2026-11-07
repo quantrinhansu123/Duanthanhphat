@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { qualityRequest } from "@/lib/weldQualityClient";
+import { notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
 import WeldAcceptanceDocument from "@/components/WeldAcceptanceDocument";
 
@@ -119,6 +119,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind }: { pr
           await request("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: detail.items.map(i => ({
             id: i.moi_han_id, phien_ban: i.version, ...results[i.moi_han_id],
           })) });
+          notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); setDoc("record"); await refresh();
         });
       }}>

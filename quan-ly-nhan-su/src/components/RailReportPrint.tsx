@@ -10,6 +10,7 @@ export type RailReportPrintRow = {
   maLisp: string;
   maHienTruong: string;
   lyTrinh: string;
+  lyTrinhCuoi: string;
   ngayHan: string;
   chieuDai: string;
   tinhTrang: string;
@@ -81,6 +82,7 @@ export default function RailReportPrint({ payload, onClose }: {
               <col className="c-ma-lisp" />
               <col className="c-ma-ht" />
               <col className="c-km" />
+              <col className="c-km" />
               <col className="c-ngay" />
               <col className="c-dai" />
               <col className="c-tt" />
@@ -90,9 +92,10 @@ export default function RailReportPrint({ payload, onClose }: {
               <tr>
                 <th>Tên mối hàn theo thiết kế</th>
                 <th>Tên mối hàn tại hiện trường</th>
-                <th>Lý trình</th>
+                <th>Lý trình đầu</th>
+                <th>Lý trình cuối</th>
                 <th>Ngày hàn</th>
-                <th>Chiều dài thanh ray</th>
+                <th>Chiều dài thanh ray (mm)</th>
                 <th>Tình trạng</th>
                 <th>Ghi chú</th>
               </tr>
@@ -103,6 +106,7 @@ export default function RailReportPrint({ payload, onClose }: {
                   <td className="mono">{row.maLisp}</td>
                   <td className="mono">{row.maHienTruong}</td>
                   <td className="mono center">{row.lyTrinh}</td>
+                  <td className="mono center">{row.lyTrinhCuoi}</td>
                   <td className="center">{row.ngayHan}</td>
                   <td className="mono right">{row.chieuDai}</td>
                   <td className="center">{row.tinhTrang}</td>
@@ -145,12 +149,12 @@ const PRINT_CSS = `
 #rail-report-print table.rail-table .right { text-align: right; }
 #rail-report-print table.rail-table .mono { font-family: 'Courier New', monospace; font-size: 8pt; }
 #rail-report-print col.c-ma-lisp { width: 14%; }
-#rail-report-print col.c-ma-ht { width: 20%; }
-#rail-report-print col.c-km { width: 12%; }
+#rail-report-print col.c-ma-ht { width: 18%; }
+#rail-report-print col.c-km { width: 11%; }
 #rail-report-print col.c-ngay { width: 10%; }
-#rail-report-print col.c-dai { width: 13%; }
+#rail-report-print col.c-dai { width: 12%; }
 #rail-report-print col.c-tt { width: 11%; }
-#rail-report-print col.c-ghi { width: 20%; }
+#rail-report-print col.c-ghi { width: 13%; }
 #rail-report-print .sign-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10mm; text-align: center; font-size: 10pt; }
 #rail-report-print .sign-row p { margin: 2px 0 0; font-style: italic; font-weight: 400; font-size: 9pt; }
 @media print {

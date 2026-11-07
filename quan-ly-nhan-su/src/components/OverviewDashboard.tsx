@@ -804,12 +804,16 @@ export default function OverviewDashboard() {
   const PLAN_YEAR = Number(todayIso.slice(0, 4));
   const planYearStart = `${PLAN_YEAR}-01-01`;
   const planYearEnd = `${PLAN_YEAR}-12-31`;
-  // Không lọc ngày: tiến độ năm hiện tại đến hôm nay.
-  // Có lọc ngày: đúng khoảng đã chọn, cắt tại hôm nay nếu kỳ còn ở tương lai.
-  const asOfDate = isAllDates || todayIso < filterTo ? todayIso : filterTo;
+  // Chưa chọn ngày kết thúc: đối chiếu đến ngày dữ liệu mới nhất như biểu đồ.
+  // Có chọn ngày kết thúc: dùng kỳ đã chọn, tối đa đến hôm nay.
+  const latestProgressDate = showFastCharts ? fastLatestDataDate : latestDataDate;
+  const progressEndDate = (isAllDates || !appliedFilters.dateTo) && latestProgressDate
+    ? latestProgressDate
+    : isAllDates ? todayIso : filterTo;
+  const asOfDate = progressEndDate < todayIso ? progressEndDate : todayIso;
   const progressFrom = isAllDates ? planYearStart : filterFrom;
   const progressTo = isAllDates
-    ? (todayIso < planYearEnd ? todayIso : planYearEnd)
+    ? (asOfDate < planYearEnd ? asOfDate : planYearEnd)
     : asOfDate;
   const hasProgressRange = progressFrom <= progressTo;
   const plannedTarget = useMemo(

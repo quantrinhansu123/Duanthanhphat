@@ -8,8 +8,12 @@ export interface BandLabel {
   label: string;
 }
 
-/** Một dòng báo cáo đo chuyển vị điểm M / điểm E tại một thời điểm nhiệt độ (thiết kế mặc định 5 mm, chỉ nhập thực tế). */
+/** Một dòng báo cáo đo chuyển vị: M cho phép 5 mm; E tính từ thông số giải tỏa và nhiệt độ đo. */
 export interface RailReportRow {
+  /** Ngày giờ địa phương khi đo, định dạng datetime-local. */
+  measuredAt?: string;
+  /** Nhiệt độ không khí tại thời điểm đo (°C), chỉ ghi nhận. */
+  airTemp?: string;
   /** Nhiệt độ đo (°C) tại thời điểm quan trắc. */
   temp: string;
   /** Điểm M — thực tế (mm). */

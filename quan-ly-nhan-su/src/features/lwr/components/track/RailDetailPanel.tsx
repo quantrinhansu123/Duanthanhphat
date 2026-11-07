@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { detailForCell } from "@lwr/lib/track-data";
-import { DEFAULT_STRESS_INPUT, type StressInput } from "@lwr/lib/stress-release";
+import { DEFAULT_STRESS_INPUT, reportEndMovement, type StressInput } from "@lwr/lib/stress-release";
 import {
   lockTempFromSides,
   parseChainage,
@@ -56,8 +56,8 @@ export function ReleaseStatusButtons({
   );
 }
 
-const REPORT_DESIGN_MM = 5; // Thiết kế mặc định (auto) cho điểm M và điểm E
-const EMPTY_REPORT_ROW: RailReportRow = { temp: "", mActual: "", eActual: "", note: "" };
+const REPORT_DESIGN_MM = 5; // Giới hạn cho phép tại điểm M theo quy trình.
+const EMPTY_REPORT_ROW: RailReportRow = { temp: "", mActual: "", eActual: "", note: "", measuredAt: "", airTemp: "" };
 
 function sameChainage(draft: string, stored: string) {
   const parsed = parseChainage(draft);
@@ -79,8 +79,10 @@ export function RailDetailPanel({
   onChange,
   onSaveParams,
   onRemove,
+  savedParams,
 }: {
   cell: RailCell;
+  savedParams?: StressInput;
   trackSide?: "LEFT" | "RIGHT";
   onClose: () => void;
   onPrev: () => void;
@@ -90,6 +92,7 @@ export function RailDetailPanel({
   onRemove?: () => boolean | void;
 }) {
   const content = useRef<HTMLDivElement>(null);
+  const [calculatorInput, setCalculatorInput] = useState<{ cellId: string; input: StressInput } | null>(null);
   const length = railCellLengthMetres(cell) ?? 0;
   const detail = detailForCell(cell);
   const lockTemp = railCellLockTemp(cell);
@@ -107,7 +110,7 @@ export function RailDetailPanel({
   useEffect(() => { setReport(cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW }); }, [cell.id, cell.report]);
 
   function commitReport(next: RailReportRow) {
-    const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim();
+    const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim() && !next.measuredAt?.trim() && !next.airTemp?.trim();
     apply({ report: empty ? null : { rows: [next] } });
   }
 
@@ -364,6 +367,8 @@ export function RailDetailPanel({
             }
             initialInput={{
               ...DEFAULT_STRESS_INPUT,
+              ...savedParams,
+              ...(calculatorInput?.cellId === cell.id ? calculatorInput.input : {}),
               trackSide,
               leftLength: length,
               rightLength: 0,
@@ -373,6 +378,10 @@ export function RailDetailPanel({
               rightTemp: sideTempOf(cell, "right"),
             }}
             onSave={onSaveParams}
+            onInputChange={(input) => {
+              setCalculatorInput(previous => previous?.cellId === cell.id && JSON.stringify(previous.input) === JSON.stringify(input)
+                ? previous : { cellId: cell.id, input });
+            }}
             onChainageCommit={(patch) => apply(patch)}
           />
           </>)}
@@ -381,6 +390,8 @@ export function RailDetailPanel({
             const lock = draftLockTemp;
             const measuredNumber = Number(report.temp.trim().replace(",", "."));
             const diff = report.temp.trim() && Number.isFinite(measuredNumber) ? Math.round((measuredNumber - lock) * 1000) / 1000 : "—";
+            const params = calculatorInput?.cellId === cell.id ? calculatorInput.input : savedParams;
+            const eDesign = params && typeof diff === "number" ? reportEndMovement(params, measuredNumber - lock) : null;
             const inputCls = "mt-1 w-full min-w-0 rounded-md border border-amber-400 bg-white px-2 py-2 text-sm font-semibold focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600";
             const autoBox = (label: string, value: string | number, unit: string) => (
               <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
@@ -392,7 +403,18 @@ export function RailDetailPanel({
               <section className="space-y-3 rounded-lg border border-slate-300 bg-white p-3 text-sm">
                 <div>
                   <h3 className="font-bold text-slate-900">Báo cáo chuyển vị điểm M / điểm E</h3>
-                  <p className="mt-0.5 text-xs text-slate-500">Đoạn ray {cell.id}. Các thông số tự lấy từ tab Giải tỏa; chỉ nhập chuyển vị thực tế và ghi chú.</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Đoạn ray {cell.id}. Thông số tính toán lấy từ tab Giải tỏa; nhập thông tin quan trắc và chuyển vị thực tế.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block min-w-0">
+                    <span className="font-semibold text-slate-700">Ngày giờ đo</span>
+                    <input type="datetime-local" aria-label="Ngày giờ đo" className={inputCls} value={report.measuredAt ?? ""} onChange={(e) => setReport((r) => ({ ...r, measuredAt: e.target.value }))} onBlur={() => commitReport(report)} />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="font-semibold text-slate-700">Nhiệt độ không khí (°C)</span>
+                    <input aria-label="Nhiệt độ không khí (°C)" inputMode="decimal" className={inputCls} value={report.airTemp ?? ""} onChange={(e) => setReport((r) => ({ ...r, airTemp: e.target.value }))} onBlur={() => commitReport(report)} placeholder="Nhập nhiệt độ không khí" />
+                  </label>
                 </div>
 
                 <div>
@@ -424,10 +446,11 @@ export function RailDetailPanel({
 
                 <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
                   <p className="font-bold text-amber-900">Điểm E</p>
+                  <p className="mt-1 text-xs text-slate-600">Δ = (Pmax − Pj)² / (2EFr); Pmax = EFα × |T đo − T khóa|; Pj = 0. Thông số lấy từ Giải tỏa. Dấu âm thể hiện giảm nhiệt.</p>
                   <div className="mt-1 grid grid-cols-2 gap-3">
                     <div className="min-w-0">
                       <span className="text-slate-600">Thiết kế (mm)</span>
-                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{REPORT_DESIGN_MM}</div>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{eDesign === null ? "Chờ thông số / nhiệt độ đo" : Math.round(eDesign * 1000) / 1000}</div>
                     </div>
                     <label className="block min-w-0">
                       <span className="font-semibold text-amber-900">Thực tế (mm)</span>

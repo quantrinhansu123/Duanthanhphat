@@ -116,8 +116,10 @@ export function StressReleaseCalculator({
   chainageLocked = false,
   onChainageCommit,
   statusSlot,
+  onInputChange,
 }: {
   initialInput?: StressInput;
+  onInputChange?: (input: StressInput) => void;
   segmentId?: string;
   compact?: boolean;
   onSave?: (input: StressInput) => StressSaveResult | boolean | void;
@@ -217,6 +219,7 @@ export function StressReleaseCalculator({
   }
   // Legacy manually entered deformations must never override the thermal calculation.
   delete input.bufferDeformations;
+  useEffect(() => { onInputChange?.(input); });
   const errors = [...chainErrors, ...validateStressInput(input), ...(buffer && input.structuralGap <= 0 ? ["Khe hở cấu tạo ag phải lớn hơn 0."] : [])];
   const result = errors.length ? null : calculateStressRelease(input);
   const deltas = result?.bufferDeformations;

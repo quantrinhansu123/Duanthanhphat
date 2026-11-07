@@ -21,17 +21,19 @@ function todayIso() {
 
 export default function WeldQualityBulkDialog({
   entries,
+  initialKind = "ndt",
   onClose,
   onDone,
 }: {
   entries: WeldQualitySelection[];
+  initialKind?: "visual" | "ndt";
   onClose: () => void;
   onDone: (savedIds: string[]) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const stop = useRef(false);
-  const [kind, setKind] = useState<"visual" | "ndt">("ndt");
+  const [kind, setKind] = useState<"visual" | "ndt">(initialKind);
   const [date, setDate] = useState(todayIso);
   const [method, setMethod] = useState("Siêu âm");
   const [rows, setRows] = useState<RowDecision[]>(() =>
@@ -88,7 +90,7 @@ export default function WeldQualityBulkDialog({
         Thao tác hàng loạt · {entries.length.toLocaleString("vi-VN")} mối đã chọn
       </h2>
       <p className="mt-2 text-sm text-slate-600">
-        Mặc định <b>Siêu âm đạt</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.
+        Mặc định <b>{kind === "visual" ? "Hình học / trực quan đạt" : "Siêu âm đạt"}</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.
       </p>
 
       <form
@@ -148,7 +150,7 @@ export default function WeldQualityBulkDialog({
               onChange={(e) => setKind(e.target.value as typeof kind)}
             >
               <option value="ndt">Siêu âm / NDT</option>
-              <option value="visual">Trực quan sau mài</option>
+              <option value="visual">Hình học / trực quan sau mài</option>
             </select>
           </label>
           <label className="block text-sm font-semibold sm:col-span-1">

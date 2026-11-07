@@ -62,6 +62,14 @@ export interface StressInput {
 
 export const RAIL_STEEL_MODULUS = 210_840_000;
 export const RAIL_STEEL_ALPHA = 0.0000115;
+
+/** Chuyển vị đầu ray dài tại nhiệt độ quan trắc, Pj = 0; đầu vào m/kN, đầu ra mm. */
+export function reportEndMovement(input: Pick<StressInput, "modulus" | "area" | "alpha" | "resistance">, deltaTemp: number): number | null {
+  const { modulus, area, alpha, resistance } = input;
+  if (![modulus, area, alpha, resistance].every(value => Number.isFinite(value) && value > 0) || !Number.isFinite(deltaTemp)) return null;
+  const force = modulus * area * alpha * Math.abs(deltaTemp);
+  return Math.sign(deltaTemp) * force ** 2 / (2 * modulus * area * resistance) * 1000;
+}
 export const USER_DEFINE_RAIL_ID = "USER";
 export const BUFFER_RAIL_LENGTH = 25;
 export const FBW_OVERLAP_MM = -35.5;

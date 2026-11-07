@@ -19,13 +19,12 @@ type RailRow = {
   maLisp: string;      // Tên mối hàn theo thiết kế (mã Autolisp: TT0123…)
   maHienTruong: string; // Tên mối hàn tại hiện trường (mã hệ thống / mã hiện trường)
   lyTrinh: string;
+  lyTrinhCuoi: string;
   ngayHan: string;
   chieuDai: string;    // Chiều dài thanh ray (mm)
   tinhTrang: string;
   ghiChu: string;
 };
-
-const RAIL_LENGTH_MM = 24695; // Chiều dài thanh ray tiêu chuẩn 60R2 tại dự án Phú Quốc
 
 const ROUTE_LABELS: Record<string, string> = {
   TT: "Tuyến thượng · Ray trái",
@@ -50,23 +49,9 @@ function formatDateShortEn(iso: string | null | undefined) {
   return `${Number(d)}-${month}-${y.slice(-2)}`;
 }
 
-/**
- * "FBW 041126 001" — tên mối hàn tại hiện trường theo mẫu:
- * {công nghệ} {ddmmaa} {số thứ tự trong ngày, 3 chữ số}.
- * Nguồn: mã hiện trường (FBW-05-11-26-0015) → đổi sang ddmmaa và lấy 3 số cuối phần TT.
- */
+/** Giữ đầy đủ mã hiện trường đã lưu trong Nhật ký hàn. */
 function formatSiteWeldName(row: WeldReportRow): string {
-  const method = (row.cong_nghe_han ?? "FBW").trim().toUpperCase();
-  const iso = getJournalRowDateIso(row);
-  const [, mm, dd] = String(iso ?? "").slice(0, 10).split("-");
-  const ddmmaa = mm && dd ? `${dd}${mm}${String(iso).slice(2, 4)}` : "";
-
-  // Mã hiện trường dạng FBW-05-11-26-0015 → lấy phần số thứ tự cuối.
-  const raw = (row.ma_hien_truong ?? "").trim() || (row.ma_lich_su ?? "").trim();
-  const seqMatch = /(\d+)$/.exec(raw);
-  const seq = seqMatch ? String(Number(seqMatch[1])).padStart(3, "0") : "";
-
-  return [method, ddmmaa, seq].filter(Boolean).join(" ");
+  return (row.ma_hien_truong ?? "").trim() || "—";
 }
 
 function chainageSortKey(value: string) {
@@ -96,7 +81,20 @@ export default function RailReportDashboard() {
   const [routeFilter, setRouteFilter] = useState("Tất cả tuyến · ray");
   const [printPayload, setPrintPayload] = useState<RailReportPrintPayload | null>(null);
 
-  const baseRows = useMemo(() => filterWeldReportRows(rows, appliedFilters), [rows, appliedFilters]);
+  const phuQuocRows = useMemo(() => rows.filter(row => row.du_an.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("phu quoc")), [rows]);
+  const baseRows = useMemo(() => filterWeldReportRows(phuQuocRows, { ...appliedFilters, projects: [] }), [phuQuocRows, appliedFilters]);
+
+  // Lấy điểm cuối trước khi lọc ngày hoặc tìm kiếm.
+  const endChainages = useMemo(() => {
+    const points = new Map<string, string>();
+    for (const row of phuQuocRows) {
+      const code = parseCoordinateCode((row.ma_diem ?? "").trim());
+      if (code && row.ly_trinh) {
+        points.set(`${row.du_an_id}:${code.prefix}:${code.seq}`, normalizeChainage(row.ly_trinh));
+      }
+    }
+    return points;
+  }, [phuQuocRows]);
 
   const railRows = useMemo<RailRow[]>(() => {
     return baseRows
@@ -104,13 +102,22 @@ export default function RailReportDashboard() {
         const maLisp = (row.ma_diem ?? "").trim();
         const parsed = maLisp ? parseCoordinateCode(maLisp) : null;
         const route = parsed?.prefix ?? "";
+        const lyTrinhCuoi = parsed
+          ? endChainages.get(`${row.du_an_id}:${parsed.prefix}:${parsed.seq + 1}`) ?? "—"
+          : "—";
+        const start = chainageSortKey(normalizeChainage(row.ly_trinh));
+        const end = chainageSortKey(lyTrinhCuoi);
+        const lengthMm = start !== Number.MAX_SAFE_INTEGER && end !== Number.MAX_SAFE_INTEGER && end >= start
+          ? Math.round((end - start) * 1000)
+          : null;
         return {
           key: row.id,
           maLisp: maLisp || "—",
           maHienTruong: formatSiteWeldName(row),
           lyTrinh: normalizeChainage(row.ly_trinh),
+          lyTrinhCuoi,
           ngayHan: formatDateShortEn(getJournalRowDateIso(row)),
-          chieuDai: String(RAIL_LENGTH_MM),
+          chieuDai: lengthMm === null ? "—" : String(lengthMm),
           tinhTrang: statusLabel(row),
           ghiChu: (row.ghi_chu ?? "").trim() || "—",
           route,
@@ -123,11 +130,12 @@ export default function RailReportDashboard() {
         return (
           row.maLisp.toLocaleLowerCase("vi").includes(q) ||
           row.maHienTruong.toLocaleLowerCase("vi").includes(q) ||
-          row.lyTrinh.toLocaleLowerCase("vi").includes(q)
+          row.lyTrinh.toLocaleLowerCase("vi").includes(q) ||
+          row.lyTrinhCuoi.toLocaleLowerCase("vi").includes(q)
         );
       })
       .sort((a, b) => chainageSortKey(a.lyTrinh) - chainageSortKey(b.lyTrinh) || a.maLisp.localeCompare(b.maLisp, "vi"));
-  }, [baseRows, search, routeFilter]);
+  }, [baseRows, endChainages, search, routeFilter]);
 
   const routeOptions = useMemo(() => {
     const found = new Set<string>();
@@ -143,12 +151,7 @@ export default function RailReportDashboard() {
     setPrintPayload({
       rows: railRows,
       title: "THEO DÕI ĐIỂN HÀNH RAY",
-      projectLabel:
-        appliedFilters.projects.length === 1
-          ? appliedFilters.projects[0]
-          : appliedFilters.projects.length > 1
-            ? `${appliedFilters.projects.length} dự án`
-            : "Tất cả dự án",
+      projectLabel: baseRows[0]?.du_an || "Phú Quốc",
       dateLabel:
         appliedFilters.dateFrom || appliedFilters.dateTo
           ? `${formatDate(appliedFilters.dateFrom)} – ${formatDate(appliedFilters.dateTo)}`
@@ -163,7 +166,7 @@ export default function RailReportDashboard() {
           ? `Không tải được Supabase: ${error}`
           : loading
             ? "Đang tải dữ liệu nhật ký hàn…"
-            : `${railRows.length.toLocaleString("vi-VN")} thanh ray · lấy từ Nhật ký hàn`}
+            : `${railRows.length.toLocaleString("vi-VN")} thanh ray · Dự án Phú Quốc · lấy từ Nhật ký hàn`}
       </div>
 
       <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
@@ -204,24 +207,26 @@ export default function RailReportDashboard() {
             <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
               <th className="px-3 py-2.5">Tên mối hàn theo thiết kế</th>
               <th className="px-3 py-2.5">Tên mối hàn tại hiện trường</th>
-              <th className="px-3 py-2.5">Lý trình</th>
+              <th className="px-3 py-2.5">Lý trình đầu</th>
+              <th className="px-3 py-2.5">Lý trình cuối</th>
               <th className="px-3 py-2.5">Ngày hàn</th>
-              <th className="px-3 py-2.5 text-right">Chiều dài thanh ray</th>
+              <th className="px-3 py-2.5 text-right">Chiều dài thanh ray (mm)</th>
               <th className="px-3 py-2.5">Tình trạng</th>
               <th className="px-3 py-2.5">Ghi chú</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && !railRows.length ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
             ) : railRows.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
             ) : (
               railRows.map((row) => (
                 <tr key={row.key} className="hover:bg-slate-50/80">
                   <td className="whitespace-nowrap px-3 py-2 font-mono font-semibold text-[#0047AB]">{row.maLisp}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">{row.maHienTruong}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinh}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinhCuoi}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.ngayHan}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-slate-700">{row.chieuDai}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.tinhTrang}</td>
