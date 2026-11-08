@@ -108,10 +108,15 @@ export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   // Phương án nghiệm thu chọn được nhiều (tick) — mỗi phương án đã chọn hiện một khối bên dưới.
-  const [modes, setModes] = useState<("tong-hop" | SplitKind)[]>(["tong-hop"]);
-  const hasMode = (m: "tong-hop" | SplitKind) => modes.includes(m);
+  type Mode = "tong-hop" | SplitKind;
+  const [modes, setModes] = useState<Mode[]>(["hinh-hoc"]);
+  const hasMode = (m: Mode) => modes.includes(m);
   // Dạng tab: mỗi lúc một phương án.
-  const toggleMode = (m: "tong-hop" | SplitKind) => setModes([m]);
+  const toggleMode = (m: Mode) => setModes([m]);
+  // Modal «Duyệt siêu âm luôn?» → Có: sang tab siêu âm và mở sẵn phiếu vừa chuyển.
+  const [openUltrasoundId, setOpenUltrasoundId] = useState<string | null>(null);
+  const goToUltrasound = useCallback((id: string) => { setOpenUltrasoundId(id); setModes(["sieu-am"]); }, []);
+  const clearOpenUltrasound = useCallback(() => setOpenUltrasoundId(null), []);
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
@@ -193,7 +198,6 @@ export default function WeldAcceptanceWorkflow() {
       {/* Thẻ kiểu sổ: tab bo góc phía trên, tab đang chọn liền khối với khung nội dung bên dưới. */}
       <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print flex flex-wrap items-end gap-1 px-1">
         {([
-          ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
           ["hinh-hoc", "RFI bổ sung hình học, trực quan"],
           ["sieu-am", "RFI bổ sung siêu âm"],
         ] as const).map(([id, label]) => (
@@ -221,7 +225,11 @@ export default function WeldAcceptanceWorkflow() {
         {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
         {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
           <div key={m} className="mb-4">
-            <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} onPrintRecord={setPrintPack} />
+            {/* Luồng 2 tab: tạo & duyệt hình học → tự chuyển sang siêu âm duyệt tiếp. */}
+            <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName}
+              kind={m} stage={m === "hinh-hoc" ? "tao" : "duyet"} onPrintRecord={setPrintPack}
+              onGoToUltrasound={m === "hinh-hoc" ? goToUltrasound : undefined}
+              initialTicketId={m === "sieu-am" ? openUltrasoundId : null} onInitialTicketOpened={clearOpenUltrasound} />
           </div>
         ))}
         {hasMode("tong-hop") && (

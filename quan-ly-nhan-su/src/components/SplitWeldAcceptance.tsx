@@ -49,7 +49,20 @@ function evidenceShort(kind: SplitKind, e?: Evidence | null) {
   return `Trực quan: ${e.truc_quan ?? "chưa"} · số đo ${filled}/${GEOMETRY_CRITERIA.length}`;
 }
 
-export default function SplitWeldAcceptance({ project, projectName, kind, onPrintRecord }: { project: string; projectName: string; kind: SplitKind; onPrintRecord?: (record: RecordSet) => void }) {
+/**
+ * Luồng 2 tab: "tao" (hình học) phát phiếu & duyệt → chốt tự chuyển mối Đạt sang siêu âm cùng số phiếu;
+ * "duyet" (siêu âm) duyệt tiếp phiếu được chuyển tới rồi ký biên bản → mối «Đạt».
+ */
+export type SplitStage = "tao" | "duyet";
+
+export default function SplitWeldAcceptance({ project, projectName, kind, stage = "tao", onPrintRecord, onGoToUltrasound, initialTicketId, onInitialTicketOpened }: {
+  project: string; projectName: string; kind: SplitKind; stage?: SplitStage; onPrintRecord?: (record: RecordSet) => void;
+  /** Tab 1: sau khi chốt, người dùng chọn «Có» duyệt siêu âm ngay → chuyển sang tab 2 mở phiếu này. */
+  onGoToUltrasound?: (sieuAmTicketId: string) => void;
+  /** Tab 2: mở sẵn phiếu này khi vào tab (từ modal «Duyệt siêu âm ngay»). */
+  initialTicketId?: string | null;
+  onInitialTicketOpened?: () => void;
+}) {
   const prefix = "RFI";
   const request = useCallback(<T,>(action: string, data: Record<string, unknown> = {}) =>
     qualityRequest<T>({ action, du_an_id: project, loai: kind, ...data }), [project, kind]);
@@ -71,13 +84,15 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
   const [ticketQuery, setTicketQuery] = useState("");
   const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong">("");
   // 3 mục con như RFI chính: Phát phiếu YCNT · Nghiệm thu · Hồ sơ nghiệm thu.
-  const [sub, setSub] = useState<"rfi" | "accept" | "records">("rfi");
+  const [sub, setSub] = useState<"rfi" | "accept" | "records">(stage === "tao" ? "rfi" : "accept");
   // Mục «Phát phiếu» chia 3 bước dạng tab: Chọn mối · Thông tin phiếu · Phiếu đã phát.
   const [step, setStep] = useState<"chon" | "thong-tin" | "da-phat">("chon");
   const [info, setInfo] = useState<TicketInfo>(emptyInfo);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  /** Modal sau khi chốt tab 1: có duyệt siêu âm luôn không. */
+  const [askForward, setAskForward] = useState<{ soPhieu: string; count: number; sieuAmId: string; geometryId: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -87,6 +102,23 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
     loadRfiNumber(project, kind).then(r => { if (active) setNumber(cur => cur || r.so_phieu); }).catch(() => undefined);
     return () => { active = false; };
   }, [request, project, kind]);
+
+  // Vào tab 2 từ modal «Có»: mở ngay phiếu siêu âm vừa được chuyển tới.
+  useEffect(() => {
+    if (!initialTicketId) return;
+    let active = true;
+    setBusy(true);
+    request<Detail>("split-detail", { id: initialTicketId })
+      .then(next => {
+        if (!active) return;
+        setDetail(next); setPicked([]);
+        setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
+        setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
+      })
+      .catch(e => { if (active) setError(errorText(e)); })
+      .finally(() => { if (active) { setBusy(false); onInitialTicketOpened?.(); } });
+    return () => { active = false; };
+  }, [initialTicketId, request, onInitialTicketOpened]);
 
   async function run(task: () => Promise<void>) {
     setBusy(true); setError(""); setOkMsg("");
@@ -207,7 +239,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
                     { label: done ? "Xem chi tiết" : "Mở / nghiệm thu", disabled: busy, onSelect: () => void run(() => openTicket(t.id)) },
                     { label: "In phiếu YCNT", disabled: busy, onSelect: () => void run(async () => { await openTicket(t.id); setDoc("invite"); }) },
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
-                    { label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) },
+                    // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
+                    ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
                     { label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) },
                   ]} />
@@ -235,9 +268,12 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
 
   return <section className="space-y-4">
     {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-    {okMsg && !detail && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{okMsg}</p>}
-    {!detail && <div role="tablist" aria-label="Mục phiếu tách" className="grid grid-cols-3 gap-2">
-      {([["rfi", "Phát phiếu YCNT"], ["accept", `Nghiệm thu (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const).map(([id, label]) => (
+    {okMsg && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{okMsg}</p>}
+    {!detail && <div role="tablist" aria-label="Mục phiếu tách" className={`grid gap-2 ${stage === "tao" ? "grid-cols-3" : "grid-cols-2"}`}>
+      {(stage === "tao"
+        ? [["rfi", "Phát phiếu YCNT"], ["accept", `Nghiệm thu (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const
+        : [["accept", `Chờ duyệt siêu âm (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const
+      ).map(([id, label]) => (
         <button key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
           className={`min-h-12 w-full rounded-xl border-2 px-2 py-2.5 text-center text-xs font-extrabold leading-tight transition-all sm:text-base ${sub === id ? "border-[#0047AB] bg-[#0047AB] text-white shadow-lg shadow-blue-900/25" : "border-slate-300 bg-white text-slate-800 shadow-sm hover:-translate-y-0.5 hover:border-[#0047AB]/60 hover:bg-blue-50"}`}>{label}</button>
       ))}
@@ -271,7 +307,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
         });
       }}>
         <h3 className="text-lg font-extrabold text-slate-900">{editingId ? `Sửa phiếu ${number}` : `Phát ${prefix} nghiệm thu ${kindName(kind)}`}</h3>
-        <p className="text-sm text-slate-600">{editingId ? "Đổi số phiếu / ngày mời / thông tin in. Danh sách mối giữ nguyên." : kind === "hinh-hoc" ? "Chỉ hiện mối «Mài xong» (chưa kết luận trực quan). Khi nghiệm thu bấm «Trực quan đạt» (tự điền sai số max) rồi chọn Đạt → in biên bản hình học, mối chuyển «Chờ siêu âm»." : "Chỉ hiện mối «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT)."}</p>
+        <p className="text-sm text-slate-600">{editingId ? "Đổi số phiếu / ngày mời / thông tin in. Danh sách mối giữ nguyên." : kind === "hinh-hoc" ? "Chỉ hiện mối «Mài xong» (chưa kết luận trực quan). Khi nghiệm thu bấm «Trực quan đạt» (tự điền sai số max) rồi chọn Đạt → in biên bản hình học; mối Đạt tự chuyển sang tab siêu âm cùng số phiếu." : "Chỉ hiện mối «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT)."}</p>
         {!editingId && <div className={shownStep === "chon" ? "space-y-3" : "hidden"}>
           <div className="flex flex-wrap items-end gap-2">
             <input aria-label="Tìm mã mối hàn" placeholder="Tìm mã mối" className={field} value={filters.query ?? ""} onChange={setFilter("query")} />
@@ -350,9 +386,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
         <h3 className="text-lg font-extrabold text-slate-900">Phiếu chờ nghiệm thu {kindName(kind)}</h3>
         <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
       </div>
-      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Mở phiếu, chọn Đạt cho từng mối (tự ghi trực quan Đạt, điền sai số max) rồi chốt → in biên bản hình học, mối chuyển «Chờ siêu âm»." : "Mở phiếu, ghi kết quả siêu âm, chọn Đạt rồi chốt → «Chờ ký biên bản»; ký ở mục Hồ sơ nghiệm thu → «Đạt»."}</p>
+      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Mở phiếu, chọn Đạt cho từng mối (tự ghi trực quan Đạt, điền sai số max) rồi chốt → in biên bản hình học; mối Đạt tự chuyển sang tab «RFI bổ sung siêu âm» cùng số phiếu." : "Phiếu được chuyển tới từ tab hình học (chỉ gồm mối Đạt). Mở phiếu, ghi kết quả siêu âm, chọn Đạt rồi chốt → «Chờ ký biên bản»; ký ở mục Hồ sơ nghiệm thu → «Đạt»."}</p>
       {renderTicketTable(pendingTickets, "accept")}
-      {!pendingTickets.length && <p className="text-sm text-slate-500">Không có phiếu chờ nghiệm thu. Sang mục <b>Phát phiếu YCNT</b> để phát phiếu.</p>}
+      {!pendingTickets.length && <p className="text-sm text-slate-500">{stage === "tao" ? <>Không có phiếu chờ nghiệm thu. Sang mục <b>Phát phiếu YCNT</b> để phát phiếu.</> : "Không có phiếu chờ duyệt. Phiếu sẽ tự xuất hiện khi duyệt hình học xong ở tab 1."}</p>}
     </div>}
 
     {!detail && sub === "records" && <div className="space-y-3 rounded-xl border-2 border-slate-300 bg-white p-4 shadow-sm">
@@ -388,11 +424,19 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
             const still = items.filter(i => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
             if (still.length) throw new Error(`Đã ghi kết quả Đạt nhưng ${still.map(i => fieldWeldCode(i.ma_lich_su)).join(", ")} vẫn chưa đủ điều kiện theo tiêu chí — bổ sung trong Kiểm tra chất lượng.`);
           }
-          await request("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: items.map(i => ({
+          const done = await request<{ so_moi_chuyen?: number; sieu_am_id?: string; canh_bao?: string }>("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: items.map(i => ({
             id: i.moi_han_id, phien_ban: i.version, ...results[i.moi_han_id],
           })) });
           notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); await refresh();
+          if (done.canh_bao) setError(done.canh_bao);
+          if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «RFI bổ sung siêu âm».`);
+          else if (kind === "sieu-am") setOkMsg(`Đã duyệt phiếu ${detail.ticket.so_phieu}; ký biên bản ở mục Hồ sơ nghiệm thu.`);
+          // Tab 1 đã chuyển mối Đạt sang siêu âm → hỏi duyệt siêu âm luôn (Không thì in biên bản như cũ).
+          if (done.so_moi_chuyen && done.sieu_am_id && onGoToUltrasound) {
+            setAskForward({ soPhieu: detail.ticket.so_phieu, count: done.so_moi_chuyen, sieuAmId: done.sieu_am_id, geometryId: detail.ticket.id });
+            return;
+          }
           // Chốt xong: mở ngay bộ biên bản để in (mối Đạt chuyển trạng thái tiếp theo).
           if (onPrintRecord && Object.values(results).some((r) => r.ket_qua === "Đạt")) onPrintRecord(await loadGeometryRecord(detail.ticket.id));
         });
@@ -458,5 +502,30 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
         con_hieu_luc: !detail.ticket.ngay_nghiem_thu, ngay_thuc_hien: null, vi_do: null, kinh_do: null,
         phien_ban: i.version ?? 0, tinh_trang: i.ket_qua ?? "Chưa nghiệm thu", du_dieu_kien_nghiem_thu: Boolean(i.current?.co_the_dat) })),
     } }} />, document.body)}
+    {askForward && createPortal(
+      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ask-forward-title">
+        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+          <h2 id="ask-forward-title" className="text-lg font-extrabold text-slate-900">Duyệt siêu âm luôn?</h2>
+          <p className="text-sm text-slate-700">
+            Phiếu <b>{askForward.soPhieu}</b> đã duyệt hình học xong, <b>{askForward.count} mối Đạt</b> đã chuyển sang tab «RFI bổ sung siêu âm».
+            Bạn có muốn duyệt siêu âm cho phiếu này ngay không?
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className={button} disabled={busy} onClick={() => {
+              const { geometryId } = askForward;
+              setAskForward(null);
+              // Không: ở lại tab 1, in biên bản hình học như trước.
+              if (onPrintRecord) void run(async () => onPrintRecord(await loadGeometryRecord(geometryId)));
+            }}>Không</button>
+            <button type="button" className={primary} disabled={busy} autoFocus onClick={() => {
+              const { sieuAmId } = askForward;
+              setAskForward(null);
+              onGoToUltrasound?.(sieuAmId);
+            }}>Có, duyệt ngay</button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )}
   </section>;
 }

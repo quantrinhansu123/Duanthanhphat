@@ -771,6 +771,11 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     const { data: current, error: curError } = await db().from("phieu_nt_tach").select("*").eq("id", id).eq("du_an_id", project).eq("loai", kind).single();
     if (curError) throw curError;
     if (current.da_ky) throw new QualityApiError("Phiếu đã ký, hãy đặt lại «Chờ ký» trước khi xoá.", 409);
+    if (kind === "hinh-hoc" && current.ngay_nghiem_thu) {
+      const forwarded = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
+        .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", current.so_phieu);
+      if ((forwarded.count ?? 0) > 0) throw new QualityApiError(`Phiếu ${current.so_phieu} đã chuyển sang siêu âm. Xoá phiếu siêu âm ở tab 2 trước.`, 409);
+    }
     const rows = await db().from("phieu_nt_tach_moi").delete().eq("phieu_id", id);
     if (rows.error) throw rows.error;
     const del = await db().from("phieu_nt_tach").delete().eq("id", id);
@@ -809,7 +814,24 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       throw new QualityApiError("Kết quả hoặc lý do không hợp lệ.");
     return { id:qualityUuid(r.id), phien_ban:r.phien_ban, ket_qua:r.ket_qua, ly_do:reason };
   });
+  // Luồng 2 tab: chốt hình học xong, các mối Đạt tự sang phiếu siêu âm CÙNG số phiếu (tab 2 không phát phiếu).
+  const forward = kind === "hinh-hoc" ? results.filter(r => r.ket_qua === "Đạt").map(r => r.id) : [];
+  if (forward.length) {
+    const taken = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
+      .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", ticket.data.so_phieu);
+    if (taken.error) throw taken.error;
+    if ((taken.count ?? 0) > 0) throw new QualityApiError(`Nhánh siêu âm đã có phiếu số ${ticket.data.so_phieu}, không chuyển tiếp được. Đổi số phiếu hình học (Sửa phiếu) rồi chốt lại.`, 409);
+  }
   const { error } = await db().rpc("chot_phieu_nt_tach",{p_id:id,p_ngay:date,p_ket_qua:results,p_actor:actor});
   if (error) throw error;
-  return { id };
+  if (!forward.length) return { id, so_moi_chuyen: 0 };
+  const sieuAmId = crypto.randomUUID();
+  const published = await db().rpc("phat_phieu_nt_tach", { p_id: sieuAmId, p_du_an: project, p_loai: "sieu-am",
+    p_so: ticket.data.so_phieu, p_ngay: date, p_moi: forward, p_actor: actor });
+  if (published.error) {
+    return { id, so_moi_chuyen: 0, canh_bao: `Đã chốt hình học nhưng chưa chuyển được sang siêu âm: ${published.error.message}` };
+  }
+  try { await saveSplitInfo(sieuAmId, ticket.data.thong_tin); }
+  catch (e) { return { id, sieu_am_id: sieuAmId, so_moi_chuyen: forward.length, canh_bao: e instanceof Error ? e.message : String(e) }; }
+  return { id, sieu_am_id: sieuAmId, so_moi_chuyen: forward.length };
 }
