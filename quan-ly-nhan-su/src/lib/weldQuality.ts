@@ -252,9 +252,10 @@ export function evaluateWeldQuality(
   const ndtFail = inspection?.ket_qua_ndt === "Không đạt";
   const visualGeoFail = inspection?.truc_quan === "Không đạt" || geometry === "Không đạt";
   const fieldReject = Boolean(inspection?.ly_do_loai_nghiem_thu);
-  const forceFail = fieldReject || inspection?.xu_ly_truc_quan === "khong_dat";
-  const repairPath = Boolean(visualGeoFail && !ndtFail && !forceFail);
-  const failed = ndtFail || forceFail || (visualGeoFail && inspection?.xu_ly_truc_quan === "khong_dat");
+  // «Không đạt» cuối cùng chỉ khi chủ sở hữu chọn loại mối; Không đạt ở nghiệm thu RFI chính → Sửa chữa/khắc phục.
+  const forceFail = inspection?.xu_ly_truc_quan === "khong_dat";
+  const repairPath = Boolean((visualGeoFail || fieldReject) && !ndtFail && !forceFail);
+  const failed = ndtFail || forceFail;
   const grindingLengthOk = !inspection || hasRequiredGrindingLength(inspection.gia_tri_do, rule?.dung_sai ?? null);
   const ndtDated = Boolean(!rule?.yeu_cau_ndt || (inspection?.ket_qua_ndt === "Đạt" && inspection.ngay_ndt));
   const rfiEligible = Boolean(rule && internalPass && !ndtFail && !forceFail && !repairPath);
@@ -268,6 +269,8 @@ export function evaluateWeldQuality(
   else if (ndtFail || forceFail) status = "Không đạt";
   else if (repairPath) status = "Sửa chữa/khắc phục";
   else if (!inspection.ngay_mai && !inspection.truc_quan && !inspection.ket_qua_ndt) status = "Chờ mài";
+  // Đã bấm «Mài xong» (chưa kết luận trực quan / siêu âm): hiện «Mài xong» kể cả tiêu chí không yêu cầu siêu âm.
+  else if (inspection.ngay_mai && !inspection.truc_quan && !inspection.ket_qua_ndt) status = "Mài xong";
   else if (rule && !rule.yeu_cau_ndt) status = "Không thí nghiệm";
   // Đã hoàn thành nghiệm thu (đợt không nháp) → chờ ký bộ hồ sơ.
   else if (pendingSignature) status = "Chờ ký biên bản";

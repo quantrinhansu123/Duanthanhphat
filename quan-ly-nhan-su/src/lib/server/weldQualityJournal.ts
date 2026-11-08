@@ -59,6 +59,7 @@ export function parseQualityFilters(value: unknown): WeldJournalPageQuery {
   const dateFrom = qualityDate(v.dateFrom), dateTo = qualityDate(v.dateTo);
   if (dateFrom && dateTo && dateFrom > dateTo) throw new QualityApiError("Từ ngày phải trước hoặc bằng đến ngày.");
   return { page, pageSize, qualityStatusFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter,
+    welderName: text(v.welderName ?? "", 100).replace(/[(),%*]/g, " ").trim(),
     query: text(v.query ?? "", 200).replace(/[(),]/g, " "), projects: (v.projects as unknown[] ?? []).map((p) => text(p, 300)), dateFrom: dateFrom ?? "", dateTo: dateTo ?? "" };
 }
 

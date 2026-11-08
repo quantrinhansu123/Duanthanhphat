@@ -31,6 +31,7 @@ import {
   fetchFailedWeldsInDateRange,
   exportFilteredWeldJournal,
   deleteWeldJournalEntry,
+  deleteWeldJournalEntries,
   displayWeldCode,
   formatJournalDateIso,
   formatWeldWorkHours,
@@ -92,8 +93,8 @@ import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
-import { loadQualityJournal, exportQualityJournal, selectFilteredQuality, qualityRequest, notifyWeldQualityChanged } from "@/lib/weldQualityClient";
-import { parseWeldQualityExcel, qualityExcelColumns } from "@/lib/weldQualityExcel";
+import { loadQualityJournal, exportQualityJournal } from "@/lib/weldQualityClient";
+import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
 const WeldQualityDialog = dynamic(() => import("@/components/WeldQualityDialog"), {
@@ -115,7 +116,7 @@ const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?
   { id: "da-mai", label: "Mài xong", hint: "Đã mài xong — chờ phát RFI nghiệm thu", statuses: ["Mài xong"] },
   { id: "mai-xong", label: "Chờ siêu âm", hint: "Đã duyệt hình học — chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] },
   { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Hình học + siêu âm đạt — chờ nghiệm thu", statuses: ["Chờ nghiệm thu"] },
-  { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan/độ lệch không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
+  { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan / độ lệch / nghiệm thu không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
   { id: "ky-bb", label: "Chờ ký BB", hint: "Đã nghiệm thu Đạt — chờ ký bộ biên bản", statuses: ["Chờ ký biên bản"] },
   { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },
 ];
@@ -1791,6 +1792,13 @@ export default function WeldingJournalList({
 
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
+  // Lọc theo tên người hàn: gõ tên (một phần) là lọc, trễ ngắn để không gọi máy chủ mỗi phím.
+  const [welderDraft, setWelderDraft] = useState("");
+  const [welderName, setWelderName] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWelderName(welderDraft.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [welderDraft]);
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
   const [qualityStatusSelect, setQualityStatusSelect] = useState("Tất cả");
@@ -1801,13 +1809,9 @@ export default function WeldingJournalList({
   const [qualityError, setQualityError] = useState("");
   const [qualityRow, setQualityRow] = useState<WeldReportRow | null>(null);
   const [selectedQuality, setSelectedQuality] = useState<Map<string, WeldQualitySelection>>(new Map());
-  const [selectingAll, setSelectingAll] = useState(false);
   const [bulkQualityEntries, setBulkQualityEntries] = useState<WeldQualitySelection[] | null>(null);
   const [bulkQualityKind, setBulkQualityKind] = useState<"grind" | "visual" | "ndt">("ndt");
   const selectionToken = useRef(0);
-  const qualityExcelInputRef = useRef<HTMLInputElement>(null);
-  const [qualityImporting, setQualityImporting] = useState(false);
-  const [qualityImportReport, setQualityImportReport] = useState("");
   const [linkedWeldFilter, setLinkedWeldFilter] = useState("Tất cả");
   const [weldTypeFilter, setWeldTypeFilter] = useState("Tất cả");
   const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
@@ -1841,6 +1845,9 @@ export default function WeldingJournalList({
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Xóa hàng loạt các mối đã tick.
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -1928,6 +1935,7 @@ export default function WeldingJournalList({
       linkedWeldFilter,
       weldTypeFilter,
       weldMethodFilter,
+      welderName,
       dateFrom,
       dateTo,
       qualityStatusFilter,
@@ -1970,13 +1978,12 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;
     setSelectedQuality(new Map());
-    setSelectingAll(false);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
 
   const welderOptions = personnelWelderOptions;
   const projects = useMemo(
@@ -2093,7 +2100,7 @@ export default function WeldingJournalList({
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -2165,10 +2172,6 @@ export default function WeldingJournalList({
     window.setTimeout(() => setToast(""), 2500);
   }
 
-  function qualityFilters() {
-    return { page: 1, query: appliedQuery, projects: projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo, qualityStatusFilter };
-  }
-
   function toggleQualityRow(id: string) {
     const row = rows.find((r) => r.id === id);
     if (!row || !qualityReady) return;
@@ -2192,40 +2195,21 @@ export default function WeldingJournalList({
     });
   }
 
-  async function selectAllQuality() {
-    const token = ++selectionToken.current;
-    setSelectingAll(true);
+  async function confirmBulkDelete() {
+    if (bulkDeleting || !selectedQuality.size) return;
+    setBulkDeleting(true);
     try {
-      const { entries } = await selectFilteredQuality(qualityFilters());
-      if (token === selectionToken.current) setSelectedQuality(new Map(entries.map((e) => [e.id, e])));
-    } catch (err) { if (token === selectionToken.current) setQualityError(err instanceof Error ? err.message : "Không chọn được danh sách."); }
-    finally { if (token === selectionToken.current) setSelectingAll(false); }
-  }
-
-  async function handleQualityExcel(file: File) {
-    setQualityImporting(true); setQualityImportReport("");
-    let saved = 0;
-    let cancelled = false;
-    const failures: string[] = [];
-    try {
-      const entries = await parseWeldQualityExcel(file);
-      if (!window.confirm(`Nhập kiểm tra cho ${entries.length} mối? Ô trống giữ dữ liệu hiện tại. Mối có phiên bản đã thay đổi sẽ bị từ chối.`)) { cancelled = true; return; }
-      for (let offset = 0; offset < entries.length; offset += 100) {
-        setQualityImportReport(`Đang nhập ${offset}/${entries.length} kiểm tra…`);
-        const { results } = await qualityRequest<{ results: { id: string; error?: string }[] }>({ action: "import", entries: entries.slice(offset, offset + 100) });
-        for (const result of results) {
-          if (result.error) failures.push(`${result.id}: ${result.error}`);
-          else saved += 1;
-        }
-      }
-    } catch (err) { failures.push(err instanceof Error ? err.message : "Không nhập được file kiểm tra."); }
-    finally {
-      setQualityImporting(false);
-      if (!cancelled) {
-        setSelectedQuality(new Map()); refetch();
-        setQualityImportReport(`Đã lưu ${saved} kiểm tra.${failures.length ? `\n${failures.join("\n")}` : ""}`);
-        notifyWeldQualityChanged();
-      }
+      const ids = [...selectedQuality.keys()];
+      await deleteWeldJournalEntries(ids);
+      if (detailId && ids.includes(detailId)) setDetailId(null);
+      setSelectedQuality(new Map());
+      setBulkDeleteOpen(false);
+      refetch();
+      showToast(`Đã xóa ${ids.length} nhật ký hàn`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Không thể xóa các nhật ký hàn đã chọn");
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -2259,6 +2243,7 @@ export default function WeldingJournalList({
           linkedWeldFilter,
           weldTypeFilter,
           weldMethodFilter: "FBW",
+          welderName,
           dateFrom,
           dateTo,
         })
@@ -2314,6 +2299,7 @@ export default function WeldingJournalList({
         linkedWeldFilter,
         weldTypeFilter,
         weldMethodFilter,
+        welderName,
         dateFrom,
         dateTo,
       };
@@ -3019,6 +3005,19 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             buttonClassName="h-10 shadow-2xs"
           />
         </div>
+        <label className="min-w-0 text-xs font-semibold text-slate-700">
+          Người hàn (gõ tên)
+          <input
+            list="journal-welder-names"
+            value={welderDraft}
+            onChange={(event) => setWelderDraft(event.target.value)}
+            placeholder="VD: Trần Công Tiến"
+            className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+          />
+          <datalist id="journal-welder-names">
+            {[...new Set(rows.map((row) => row.ten_tho_han).filter(Boolean))].map((name) => <option key={name} value={name} />)}
+          </datalist>
+        </label>
         <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
           Từ ngày
           <DateField
@@ -3100,20 +3099,16 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
       <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50/40 p-2.5 text-sm sm:p-3">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
-          <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectingAll(false); setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
+          <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
         </div>
-        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Chọn nhiều mối để duyệt hình học hoặc siêu âm / NDT hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
+        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Tick các mối rồi bấm Mài xong, Duyệt hình học, Siêu âm / NDT hoặc Xóa hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-          <button type="button" disabled={!qualityReady || loading || !rows.length} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={toggleQualityPage}>{pageSelected ? "Bỏ chọn trang này" : "Chọn trang này"}</button>
-          <button type="button" disabled={!qualityReady || loading || selectingAll || !total} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => void selectAllQuality()}>{selectingAll ? "Đang lấy…" : `Chọn toàn bộ (${total.toLocaleString("vi-VN")})`}</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50" onClick={() => { setBulkQualityKind("grind"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Ghi ngày hoàn thành mài → Mài xong (phát RFI được)">Mài xong</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("visual"); setBulkQualityEntries([...selectedQuality.values()]); }}>Duyệt hình học hàng loạt</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("ndt"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
-          <button type="button" disabled={!qualityReady || qualityImporting} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm border border-slate-300 bg-white disabled:opacity-50" onClick={() => qualityExcelInputRef.current?.click()}>{qualityImporting ? "Đang nhập…" : "Nhập sai số / Excel"}</button>
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading || bulkDeleting} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50" onClick={() => setBulkDeleteOpen(true)} title="Xóa các nhật ký hàn đã tick">{`Xóa hàng loạt${selectedQuality.size ? ` (${selectedQuality.size.toLocaleString("vi-VN")})` : ""}`}</button>
         </div>
-        <input ref={qualityExcelInputRef} type="file" accept=".xlsx,.xls" className="hidden" aria-label="File kiểm tra chất lượng" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void handleQualityExcel(file); }} />
       </div>
-      {qualityImportReport && <div role="status" className="mb-3 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 p-3 text-sm">{qualityImportReport}</div>}
       <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">{heading}</div>
@@ -3334,6 +3329,30 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             : "Mã mối hàn, ngày, nhân sự và tọa độ GPS đồng bộ trực tiếp từ Supabase qua khóa ngoại và view bao_cao_moi_han_gps."}
         </div>
       </div>
+
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" onClick={() => !bulkDeleting && setBulkDeleteOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600"><Warning size={22} weight="bold" /></div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-bold text-slate-900">Xóa {selectedQuality.size.toLocaleString("vi-VN")} nhật ký hàn?</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                  {[...selectedQuality.values()].slice(0, 4).map((e) => displayWeldCode(e.ma_lich_su)).join(", ")}{selectedQuality.size > 4 ? `… và ${selectedQuality.size - 4} mối khác` : ""} sẽ bị xóa vĩnh viễn.
+                  Điểm GPS liên kết được gỡ khỏi mối hàn. Mối đã nằm trong phiếu hoặc biên bản nghiệm thu sẽ bị từ chối. Thao tác này không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting} className="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Hủy</button>
+              <button type="button" onClick={() => void confirmBulkDelete()} disabled={bulkDeleting} className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">
+                <TrashSimple size={15} weight="bold" />
+                {bulkDeleting ? "Đang xóa..." : `Xóa ${selectedQuality.size.toLocaleString("vi-VN")} nhật ký`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeleteId && (
         <div

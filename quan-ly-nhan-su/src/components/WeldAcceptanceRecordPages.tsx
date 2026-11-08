@@ -1,7 +1,10 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useEffect, useState, type CSSProperties } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
-import { rfiScope } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
+import { loadSignatureByName, personNameKey } from "@/lib/personnelCertificatesDb";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
@@ -18,7 +21,7 @@ const ROWS_PER_PAGE = 30;
 // Số dòng tối thiểu của bảng: không in thêm dòng trống thừa.
 const MIN_BLANK_ROWS = 5;
 /**
- * Phụ lục co giãn theo số dòng để dùng hết trang A4: đủ 30 dòng → hàng 16px, chữ 10px (vừa 1 trang);
+ * Phụ lục tối đa 30 mối/trang (nhiều hơn thì sang trang kế, mỗi trang có khối ký). Co giãn theo số dòng của trang: đủ 30 dòng → hàng 16px, chữ 10px (vừa 1 trang);
  * ít dòng hơn → hàng cao hơn (tối đa 24px, tổng bảng ≤ 420px để chừa chỗ tiêu đề cột), chữ to hơn (tối đa 11px).
  */
 function annexSizing(rows: number) {
@@ -54,7 +57,8 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
 .acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 12px; }
-.acceptance-page .annex-sign td { height: 82px; font-size: 12px; text-align: left; font-weight: normal; }
+.acceptance-page .annex-sign .sig-img { position: absolute; left: 62px; bottom: 3px; height: 38px; max-width: 55%; object-fit: contain; }
+.acceptance-page .annex-sign td { position: relative; height: 82px; font-size: 12px; text-align: left; font-weight: normal; }
 .acceptance-page .signature { text-align: center; font-weight: bold; margin-top: 10px; min-height: 95px; }
 .acceptance-page .signature small { display: block; font-weight: normal; font-style: italic; }
 .acceptance-page .dots { border-bottom: 1px dotted black; min-height: 21px; }
@@ -72,6 +76,8 @@ export const acceptancePrintCss = `
 .acceptance-page .conclude-line { margin: 3px 0 3px 0.5rem; }
 .acceptance-page .work-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 22px; text-align: center; font-weight: bold; text-transform: uppercase; }
 .acceptance-page .work-sign div { min-height: 96px; }
+.acceptance-page .work-sign .auto-sign { display: block; margin-top: 4px; }
+.acceptance-page .work-sign .auto-sign img { display: block; margin: 0 auto; height: 52px; max-width: 80%; object-fit: contain; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 120px; margin-top: 10px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
@@ -115,6 +121,34 @@ const timeText = (v: unknown) => {
   return raw.slice(0, 5);
 };
 const labels = ["TƯ VẤN GIÁM SÁT", "NHÀ THẦU CHÍNH", "NHÀ THẦU PHỤ"];
+const PARTY_KEYS = SIGNER_PARTIES.map(([key]) => key);
+
+/** Ảnh chữ ký trong hồ sơ Nhân sự theo tên (đã chuẩn hoá); tải một lần rồi dùng lại. */
+function usePersonSignatures() {
+  const [map, setMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let live = true;
+    void loadSignatureByName().then((m) => { if (live) setMap(m); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return map;
+}
+
+/** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. */
+function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number) {
+  const pick = (field: "ten" | "cv") => {
+    const key = `nguoi_${party}_${i}_${field}`;
+    return t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || "";
+  };
+  return { ten: pick("ten"), cv: pick("cv") };
+}
+/** Nhiều RFI → «RFI đầu đến RFI cuối» (chọn tới RFI cuối khi đã ký đủ hình học + siêu âm). */
+function rfiRange(value: string) {
+  const list = value.split(/[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+  if (list.length < 2) return show(value);
+  const sorted = [...list].sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+  return `${sorted[0]} đến ${sorted[sorted.length - 1]}`;
+}
 const str = (v: unknown) => (v == null ? "" : String(v));
 const unique = (values: unknown[]) => [...new Set(values.map(str).filter(Boolean))];
 const kmText = (v: unknown) => {
@@ -158,6 +192,8 @@ function isNightShift(ca: string) {
 }
 
 export default function WeldAcceptanceRecordPages({ record, kind }: { record: RecordSet; kind?: RecordKind }) {
+  const signatureByName = usePersonSignatures();
+  const signatureOf = (name: string) => (name ? signatureByName.get(personNameKey(name)) : undefined);
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
@@ -393,13 +429,19 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                     </thead>
                     <tbody>
                       <tr>
-                        {["HỌ VÀ TÊN:", "HỌ VÀ TÊN:", "HỌ VÀ TÊN:"].map((label, i) => (
-                          <td key={i}>
-                            {label}<br /><br />
-                            NGÀY:<br /><br />
-                            CHỮ KÝ:
-                          </td>
-                        ))}
+                        {PARTY_KEYS.map((party) => {
+                          const signer = resolveSigner(t, loadSignerDefaults(), party, 1);
+                          const signature = signatureOf(signer.ten);
+                          return (
+                            <td key={party}>
+                              HỌ VÀ TÊN: {signer.ten}<br /><br />
+                              NGÀY:<br /><br />
+                              CHỮ KÝ:
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              {signature && <img src={signature} alt="" className="sig-img" />}
+                            </td>
+                          );
+                        })}
                       </tr>
                     </tbody>
                   </table>
@@ -415,7 +457,17 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       const tvgs = t.ben_nhan || (pq ? "Công ty cổ phần Tư vấn thiết kế xây dựng công trình giao thông Miền Bắc (TEDI - NORTH)" : blank);
       const ntc = t.ben_moi || (pq ? "Tập đoàn đường sắt quốc gia Việt Nam" : blank);
       const ntp = "Công ty cổ phần công trình Thành Phát";
-      const weldNames = codes.length ? `${codes.join(", ")}${codes.length > 3 ? ", ………." : ""}` : "……………………";
+      // Tên mối hàn: liệt kê đủ, không thêm «……» ở cuối.
+      const weldNames = codes.length ? codes.join(", ") : "……………………";
+      // Tháng / năm tự lấy hiện tại; ngày để trống cho người dùng tự chọn (chọn ở «Sửa thông tin in» thì in đủ ngày).
+      const nowDate = new Date();
+      const wp = t.ngay_nghiem_thu ? parts : { d: "……", m: String(nowDate.getMonth() + 1).padStart(2, "0"), y: String(nowDate.getFullYear()) };
+      // Số biên bản: FBW/01/BBNTCV (01 = số thứ tự lấy từ số RFI; sửa được ở «Sửa thông tin in»).
+      const seq = /(\d+)\s*$/.exec(String(rfi.so_phieu ?? ""))?.[1];
+      const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
+      // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
+      const signerDefaults = loadSignerDefaults();
+      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || "……………………";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -428,11 +480,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             <div className="ornament">----------- ✦ -----------</div>
           </div>
           <p className="place-date">
-            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, ngày {parts.d} tháng {parts.m} năm {parts.y}
+            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, ngày {wp.d} tháng {wp.m} năm {wp.y}
           </p>
           <h2>{doc.title}</h2>
-          <p className="doc-no">Số: {show(rfi.so_phieu)}/BBNTCV</p>
-          <p>RFI hình học: {show(geometryRfi)} · RFI siêu âm: {show(ultrasoundRfi)}</p>
+          <p className="doc-no">Số: {bbNo}</p>
+          <p>RFI hình học: {rfiRange(geometryRfi)} · RFI siêu âm: {rfiRange(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: {show(packageName)}</p>
@@ -443,8 +495,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p>- {objectText}</p>
 
           <h3>2. Thời gian nghiệm thu:</h3>
-          <p>Bắt đầu&nbsp;&nbsp;: {timeText(t.gio_bat_dau)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
-          <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
+          <p>Bắt đầu&nbsp;&nbsp;: {timeText(t.gio_bat_dau)} ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
+          <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
           <p>Lý trình: Từ : Km {kmFrom} đến Km {kmTo}.</p>
@@ -452,14 +504,15 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
           {([
-            ["a) Tư vấn Giám sát", tvgs],
-            ["b) Nhà thầu chính", ntc],
-            ["c) Nhà thầu phụ", ntp],
-          ] as const).map(([role, company]) => (
+            ["a) Tư vấn Giám sát", tvgs, SIGNER_PARTIES[0][0]],
+            ["b) Nhà thầu chính", ntc, SIGNER_PARTIES[1][0]],
+            ["c) Nhà thầu phụ", ntp, SIGNER_PARTIES[2][0]],
+          ] as const).map(([role, company, party]) => (
             <div className="party" key={role}>
               <p><b>{role}:</b> {company}</p>
-              <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
-              <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
+              {[1, 2].map((i) => (
+                <p className="person" key={i}>Ông: {signer(`nguoi_${party}_${i}_ten`)} &nbsp; Chức vụ: {signer(`nguoi_${party}_${i}_cv`)}</p>
+              ))}
             </div>
           ))}
 
@@ -471,12 +524,23 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
           <h3>6. Các thành phần trực tiếp tham gia nghiệm thu:</h3>
           <div className="work-sign">
-            {labels.map((name) => (
-              <div key={name}>
-                {name}
-                <small>(Ký và ghi rõ họ tên)</small>
-              </div>
-            ))}
+            {labels.map((name, index) => {
+              const party = PARTY_KEYS[index];
+              const signed = [1, 2].map((i) => resolveSigner(t, signerDefaults, party, i)).filter((s) => signatureOf(s.ten));
+              return (
+                <div key={name}>
+                  {name}
+                  <small>(Ký và ghi rõ họ tên)</small>
+                  {signed.map((s) => (
+                    <span className="auto-sign" key={s.ten}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={signatureOf(s.ten)} alt="" />
+                      <small>{s.ten}</small>
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </PrintFrame>
 </article>

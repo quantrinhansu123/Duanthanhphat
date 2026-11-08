@@ -131,7 +131,7 @@ export async function completeGeometryAcceptance(input: { id: string; phieu_id: 
   try { return await qualityRequest<{ id: string; record: RecordSet }>({ action: "accept-complete-geometry", ...input }); } finally { notifyWeldQualityChanged(); }
 }
 export type SplitRecordSummary = { id: string; so_phieu: string; ngay_nghiem_thu: string; nguoi_nghiem_thu: string | null; da_ky: boolean; nguoi_ky: string | null; ngay_ky: string | null; tong_moi: number; dat: number };
-export const loadSplitRecords = (du_an_id: string) => qualityRequest<{ records: SplitRecordSummary[] }>({ action: "split-record-list", du_an_id });
+export const loadSplitRecords = (du_an_id: string, loai: "hinh-hoc" | "sieu-am" = "sieu-am") => qualityRequest<{ records: SplitRecordSummary[] }>({ action: "split-record-list", du_an_id, loai });
 export async function signSplitRecord(id: string, da_ky: boolean) {
   try { return await qualityRequest<{ ok: boolean }>({ action: "split-record-sign", id, da_ky }); } finally { notifyWeldQualityChanged(); }
 }

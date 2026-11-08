@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { detailForCell } from "@lwr/lib/track-data";
 import { DEFAULT_STRESS_INPUT, reportEndMovement, type StressInput } from "@lwr/lib/stress-release";
 import {
+  displayRailCode,
   lockTempFromSides,
   parseChainage,
   railCellLengthMetres,
@@ -80,9 +81,12 @@ export function RailDetailPanel({
   onSaveParams,
   onRemove,
   savedParams,
+  longRailCode,
 }: {
   cell: RailCell;
   savedParams?: StressInput;
+  /** Mã thanh LWR đang phủ đoạn ray này (hiện trên sơ đồ, VD HP0001). */
+  longRailCode?: string;
   trackSide?: "LEFT" | "RIGHT";
   onClose: () => void;
   onPrev: () => void;
@@ -235,8 +239,8 @@ export function RailDetailPanel({
       <div className="flex h-full flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
           <div>
-            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {cell.id}</h2>
-            <p className="text-sm text-slate-500">{detail.title}</p>
+            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {displayRailCode(cell.id)}</h2>
+            <p className="text-sm text-slate-500">{detail.title}{longRailCode ? ` · Thanh LWR ${displayRailCode(longRailCode)}` : ""}</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onPrev} aria-label="Đoạn trước" className="rounded-lg border p-2"><ChevronLeft className="size-5" /></button>
@@ -361,7 +365,7 @@ export function RailDetailPanel({
           <StressReleaseCalculator
             compact
             key={`${cell.id}-${lockTemp}`}
-            segmentId={cell.id}
+            segmentId={displayRailCode(cell.id)}
             statusSlot={
               <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
             }

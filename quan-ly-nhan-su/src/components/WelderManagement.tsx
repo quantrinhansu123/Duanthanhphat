@@ -36,6 +36,7 @@ import {
   personTrainedOnMachine,
   resolveRailTokensToConfig,
   upsertPersonnel,
+  savePersonnelSignature,
   type PersonnelCertificateRow,
 } from "@/lib/personnelCertificatesDb";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
@@ -689,6 +690,10 @@ export default function WelderManagement() {
         hinhAnh: values.photo,
         trangThai: values.status,
       });
+      if (values.signatureTouched) {
+        try { await savePersonnelSignature(row.employee_id, values.signature ?? ""); }
+        catch (signatureError) { window.alert(signatureError instanceof Error ? signatureError.message : "Không lưu được ảnh chữ ký."); }
+      }
       const saved = { ...personnelRowToWelder(row), status: values.status };
       setList((prev) => {
         const without = prev.filter((item) => item.id !== saved.id);

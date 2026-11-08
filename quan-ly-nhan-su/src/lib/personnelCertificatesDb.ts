@@ -272,6 +272,51 @@ export async function upsertPersonnel(input: PersonnelUpsertInput): Promise<Pers
   return data as unknown as PersonnelCertificateRow;
 }
 
+/** Bỏ dấu, thường hoá để so khớp tên người ký với hồ sơ nhân sự. */
+export function personNameKey(name: string) {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLocaleLowerCase("vi").replace(/\s+/g, " ").trim();
+}
+
+let signatureCache: { at: number; map: Map<string, string> } | null = null;
+
+/** Ảnh chữ ký của một nhân sự (rỗng nếu chưa có hoặc chưa chạy migration chu_ky). */
+export async function loadPersonnelSignature(employeeId: string): Promise<string> {
+  try {
+    if (!isSupabaseConfigured() || !employeeId.trim()) return "";
+    const { data, error } = await createClient().from("nhan_su").select("chu_ky").eq("employee_id", employeeId).maybeSingle();
+    if (error) return "";
+    return String((data as { chu_ky?: string | null } | null)?.chu_ky ?? "").trim();
+  } catch { return ""; }
+}
+
+export async function savePersonnelSignature(employeeId: string, url: string): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error("Chưa cấu hình Supabase nên không thể lưu chữ ký.");
+  const { error } = await createClient().from("nhan_su").update({ chu_ky: url.trim() || null }).eq("employee_id", employeeId);
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") throw new Error("Chưa chạy migration 20261108g (cột chu_ky của Nhân sự) trên Supabase.");
+    throw new Error(formatSupabaseError(error));
+  }
+  signatureCache = null;
+}
+
+/** Bảng tên (đã chuẩn hoá) → ảnh chữ ký của các nhân sự đã tải ảnh; dùng để tự ký lên biên bản. */
+export async function loadSignatureByName(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (signatureCache && now - signatureCache.at < 60_000) return signatureCache.map;
+  const map = new Map<string, string>();
+  try {
+    if (isSupabaseConfigured()) {
+      const { data, error } = await createClient().from("nhan_su").select("ho_ten,chu_ky").not("chu_ky", "is", null);
+      if (!error) for (const row of (data ?? []) as { ho_ten: string; chu_ky: string | null }[]) {
+        const url = String(row.chu_ky ?? "").trim();
+        if (url) map.set(personNameKey(row.ho_ten), url);
+      }
+    }
+  } catch { /* chưa có cột chu_ky → không tự ký */ }
+  signatureCache = { at: now, map };
+  return map;
+}
+
 export async function deletePersonnel(employeeId: string): Promise<void> {
   if (!isSupabaseConfigured()) {
     throw new Error("Chưa cấu hình Supabase nên không thể xóa hồ sơ thợ hàn.");

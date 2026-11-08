@@ -6,6 +6,7 @@ import type { Machine } from "@/data/machines";
 import { UploadSimple, X } from "@/components/icons";
 import { loadMachineCatalog } from "@/lib/machineCatalogDb";
 import { uploadToCloudinary } from "@/lib/cloudinaryClient";
+import { loadPersonnelSignature } from "@/lib/personnelCertificatesDb";
 import {
   parseTrainedMachineTokens,
   personTrainedOnMachine,
@@ -29,6 +30,9 @@ export type WelderFormValues = {
   trainedMachines: string;
   experience: string;
   photo: string;
+  /** Ảnh chữ ký (Cloudinary) — tự ký lên biên bản nghiệm thu. */
+  signature?: string;
+  signatureTouched?: boolean;
   status: Welder["status"];
 };
 
@@ -110,6 +114,11 @@ export default function WelderFormModal({
   >([]);
   const [pendingValues, setPendingValues] = useState<WelderFormValues | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
+  // Chia hồ sơ thành các tab cho gọn; nội dung các tab ẩn vẫn giữ nguyên dữ liệu.
+  const [tab, setTab] = useState<"info" | "rail" | "cert" | "media">("info");
+  const tabClass = (id: string) => (tab === id ? "space-y-3.5" : "hidden");
+  const signatureFileInputRef = useRef<HTMLInputElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const initializedFormKey = useRef<string | null>(null);
 
@@ -135,6 +144,13 @@ export default function WelderFormModal({
       a.localeCompare(b, "vi"),
     );
   }, [configuredRailOptions, railOptions, selectedRailTypes]);
+
+  const formTabs: [typeof tab, string][] = [
+    ["info", isEn ? "Information" : "Thông tin"],
+    ["rail", `${isEn ? "Rail types" : "Loại ray"}${selectedRailTypes.length ? ` (${selectedRailTypes.length})` : ""}`],
+    ["cert", `${isEn ? "Certificates & machines" : "Chứng chỉ & máy"}${form.certificates.length ? ` (${form.certificates.length})` : ""}`],
+    ["media", isEn ? "Photo & signature" : "Ảnh & chữ ký"],
+  ];
 
   const certificateChoices = useMemo(
     () => Array.from(new Set([
@@ -167,7 +183,13 @@ export default function WelderFormModal({
         trainedMachines: initial.trainedMachines === "Chưa cập nhật" ? "" : initial.trainedMachines,
         experience: initial.experience === "Chưa cập nhật" ? "" : initial.experience,
         photo: initial.photo?.startsWith("http") ? initial.photo : "",
+        signature: "",
+        signatureTouched: false,
         status: initial.status,
+      });
+      // Ảnh chữ ký tải riêng (không nằm trong danh sách cột chính của Nhân sự).
+      void loadPersonnelSignature(initial.id).then((url) => {
+        setForm((prev) => (prev.id === initial.id && !prev.signatureTouched ? { ...prev, signature: url } : prev));
       });
     } else {
       setForm({
@@ -177,6 +199,7 @@ export default function WelderFormModal({
       });
     }
     setError("");
+    setTab("info");
     setDuplicateMatches([]);
     setPendingValues(null);
   }, [open, initial, defaultDepartment, suggestedWeldingId]);
@@ -267,6 +290,25 @@ export default function WelderFormModal({
     if (photoFileInputRef.current) photoFileInputRef.current.value = "";
   }
 
+  async function handleSignatureFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      setError(isEn ? "Please choose a PNG or JPG signature image." : "Chọn ảnh chữ ký dạng PNG hoặc JPG (nền trắng hoặc trong suốt).");
+      return;
+    }
+    setUploadingSignature(true);
+    setError("");
+    const res = await uploadToCloudinary(file, "thanhphat/signatures");
+    setUploadingSignature(false);
+    if (res.result?.secure_url) {
+      setForm((prev) => ({ ...prev, signature: res.result!.secure_url, signatureTouched: true }));
+    } else {
+      setError(res.error || (isEn ? "Failed to upload image to Cloudinary." : "Không tải được ảnh lên Cloudinary."));
+    }
+    if (signatureFileInputRef.current) signatureFileInputRef.current.value = "";
+  }
+
   function toggleMachine(machine: Machine) {
     const identity = { code: machine.code, model: machine.model, name: machine.name };
     const isOn = personTrainedOnMachine(form.trainedMachines, identity);
@@ -312,6 +354,7 @@ export default function WelderFormModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
+      setTab("info");
       setError(isEn ? "Please enter full name." : "Vui lòng nhập họ tên.");
       return;
     }
@@ -353,7 +396,7 @@ export default function WelderFormModal({
       <button type="button" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={onClose} aria-label="Đóng" />
       <form
         onSubmit={handleSubmit}
-        className="relative z-10 flex max-h-[92dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-[980px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <div>
@@ -369,7 +412,14 @@ export default function WelderFormModal({
           </button>
         </div>
 
+        <div role="tablist" aria-label={isEn ? "Profile sections" : "Các mục hồ sơ"} className="flex shrink-0 flex-wrap gap-1 border-b border-slate-200 bg-slate-50 px-4 pt-2">
+          {formTabs.map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+              className={`-mb-px cursor-pointer rounded-t-lg border px-4 py-2 text-sm font-bold transition-colors ${tab === id ? "border-slate-200 border-b-white bg-white text-[#0047AB]" : "border-transparent text-slate-500 hover:bg-white/70 hover:text-slate-800"}`}>{label}</button>
+          ))}
+        </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
+          <div className={tabClass("info")}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="welder-welding-id" className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -442,6 +492,36 @@ export default function WelderFormModal({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                {isEn ? "Experience" : "Kinh nghiệm"}
+              </label>
+              <input
+                className={fieldClass}
+                value={form.experience}
+                onChange={(e) => set("experience", e.target.value)}
+                placeholder="5 năm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                {isEn ? "Status" : "Trạng thái"}
+              </label>
+              <select
+                className={fieldClass}
+                value={form.status}
+                onChange={(e) => set("status", e.target.value as Welder["status"])}
+              >
+                <option value="Hoạt động">{isEn ? "Active" : "Hoạt động"}</option>
+                <option value="Khóa">{isEn ? "Locked" : "Khóa"}</option>
+              </select>
+            </div>
+          </div>
+
+          </div>
+
+          <div className={tabClass("rail")}>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
               {isEn ? "Allowed rail types" : "Loại ray được phép hàn"}
@@ -449,7 +529,7 @@ export default function WelderFormModal({
             <p className="mt-0.5 text-[11px] text-slate-500">
               {isEn ? "From Rail type catalog / Weld joint management" : "Từ danh mục Loại ray · Quản lý mối hàn"}
             </p>
-            <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
+            <div className="mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1 sm:grid sm:grid-cols-2 sm:gap-1 sm:space-y-0">
               {railTypeChoices.map((rail) => {
                 const checked = selectedRailTypes.includes(rail);
                 return (
@@ -477,6 +557,9 @@ export default function WelderFormModal({
             )}
           </div>
 
+          </div>
+
+          <div className={tabClass("cert")}>
           <div>
             <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -496,7 +579,7 @@ export default function WelderFormModal({
                 {isEn ? "Loading certificate catalog…" : "Đang tải danh mục chứng chỉ…"}
               </div>
             ) : (
-              <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
+              <div className="mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1 sm:grid sm:grid-cols-2 sm:gap-1 sm:space-y-0">
                 {certificateChoices.map((certificate) => {
                   const checked = form.certificates.includes(certificate);
                   return (
@@ -546,7 +629,7 @@ export default function WelderFormModal({
                 placeholder="K920, AMS60"
               />
             ) : (
-              <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1">
+              <div className="mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 space-y-1 sm:grid sm:grid-cols-2 sm:gap-1 sm:space-y-0">
                 {machines.map((machine) => {
                   const checked = personTrainedOnMachine(form.trainedMachines, {
                     code: machine.code,
@@ -585,33 +668,9 @@ export default function WelderFormModal({
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                {isEn ? "Experience" : "Kinh nghiệm"}
-              </label>
-              <input
-                className={fieldClass}
-                value={form.experience}
-                onChange={(e) => set("experience", e.target.value)}
-                placeholder="5 năm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                {isEn ? "Status" : "Trạng thái"}
-              </label>
-              <select
-                className={fieldClass}
-                value={form.status}
-                onChange={(e) => set("status", e.target.value as Welder["status"])}
-              >
-                <option value="Hoạt động">{isEn ? "Active" : "Hoạt động"}</option>
-                <option value="Khóa">{isEn ? "Locked" : "Khóa"}</option>
-              </select>
-            </div>
           </div>
 
+          <div className={tabClass("media")}>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
               {isEn ? "Photo" : "Ảnh đại diện"}
@@ -672,6 +731,49 @@ export default function WelderFormModal({
                 </div>
               </div>
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              {isEn ? "Signature image" : "Ảnh chữ ký"}
+            </label>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {isEn
+                ? "Upload a signature image (Cloudinary). It is stamped automatically on acceptance records when this person is listed as a signer."
+                : "Tải ảnh chữ ký lên Cloudinary. Khi người này được ghi là người ký trên biên bản nghiệm thu, hệ thống tự ký bằng ảnh này."}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="flex h-16 w-40 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-white">
+                {form.signature?.trim() ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.signature.trim()} alt="" className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <span className="text-[11px] text-slate-400">{isEn ? "No signature" : "Chưa có chữ ký"}</span>
+                )}
+              </div>
+              <input ref={signatureFileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => void handleSignatureFile(e)} />
+              <button
+                type="button"
+                disabled={uploadingSignature || Boolean(saving)}
+                onClick={() => signatureFileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <UploadSimple size={14} weight="bold" aria-hidden />
+                {uploadingSignature ? (isEn ? "Uploading…" : "Đang tải lên…") : form.signature?.trim() ? (isEn ? "Change signature" : "Đổi ảnh chữ ký") : (isEn ? "Upload signature" : "Tải ảnh chữ ký")}
+              </button>
+              {form.signature?.trim() ? (
+                <button
+                  type="button"
+                  disabled={uploadingSignature || Boolean(saving)}
+                  onClick={() => setForm((prev) => ({ ...prev, signature: "", signatureTouched: true }))}
+                  className="text-xs font-semibold text-rose-600 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {isEn ? "Remove signature" : "Gỡ chữ ký"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
           </div>
 
           {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}

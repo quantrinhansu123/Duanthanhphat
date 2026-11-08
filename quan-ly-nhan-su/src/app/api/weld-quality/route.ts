@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ accepted, waiting, acceptance, signing });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
-    if (["split-list", "split-detail", "split-publish", "split-complete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
+    if (["split-list", "split-detail", "split-publish", "split-complete", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
     if (body.action === "rfi-overview") return NextResponse.json(await loadRfiOverview(body));
     if (body.action === "rfi-candidates") return NextResponse.json(await loadRfiCandidates(body));
     if (body.action === "rfi-number") return NextResponse.json({ so_phieu: await nextRfiNumber(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" || body.loai === "sieu-am" ? body.loai : undefined) });
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     if (body.action === "geometry-record") return NextResponse.json(await loadGeometryRecord(qualityUuid(body.id)));
     if (body.action === "accepted-on-date") return NextResponse.json(await acceptedOnDate(body));
     if (body.action === "record-list") return NextResponse.json({ records: await listRecords(qualityUuid(body.du_an_id)) });
-    if (body.action === "split-record-list") return NextResponse.json({ records: await listSplitRecords(qualityUuid(body.du_an_id)) });
+    if (body.action === "split-record-list") return NextResponse.json({ records: await listSplitRecords(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am") });
     if (body.action === "split-record-sign") return NextResponse.json(await signSplitRecord(body, actor));
     if (body.action === "record-set") return NextResponse.json(await loadRecordSet(qualityUuid(body.id)));
     if (body.action === "record-revise") return NextResponse.json(await reviseRecord(body, actor));

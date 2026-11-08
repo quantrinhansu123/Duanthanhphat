@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { DotsThreeVertical } from "@/components/icons";
+import RowActionsMenu from "@/components/RowActionsMenu";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { completeAcceptance, completeGeometryAcceptance, markQualityPass, loadSplitRecords, signSplitRecord, loadGeometryRecord, type SplitRecordSummary, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
   deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
@@ -180,7 +180,7 @@ export default function WeldAcceptanceWorkflow() {
 
   return (
     <div className="px-4 sm:px-6 pb-8 no-print-root">
-      <div className="no-print mb-3 space-y-2">
+      <div className="no-print mb-3">
         <select
           className={`${input} w-full`}
           value={projectId}
@@ -189,22 +189,24 @@ export default function WeldAcceptanceWorkflow() {
         >
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <div className="grid gap-1 text-sm font-semibold">
-          <p className="mb-1">Phương án nghiệm thu</p>
-          <div role="tablist" aria-label="Phương án nghiệm thu" className="flex gap-1 overflow-x-auto border-b border-slate-300">
-            {([
-              ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
-              ["hinh-hoc", "RFI bổ sung nghiệm thu hình học, trực quan"],
-              ["sieu-am", "RFI bổ sung nghiệm thu siêu âm"],
-            ] as const).map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-selected={hasMode(id)} onClick={() => toggleMode(id)}
-                className={`-mb-px min-h-10 shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${hasMode(id) ? "border-[#0047AB] text-[#0047AB]" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-800"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {hasMode("tong-hop") && <div className="grid grid-cols-3 gap-2">
+      </div>
+      {/* Thẻ kiểu sổ: tab bo góc phía trên, tab đang chọn liền khối với khung nội dung bên dưới. */}
+      <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print flex flex-wrap items-end gap-1 px-1">
+        {([
+          ["tong-hop", "RFI giám sát / nghiệm thu và bộ biên bản"],
+          ["hinh-hoc", "RFI bổ sung hình học, trực quan"],
+          ["sieu-am", "RFI bổ sung siêu âm"],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={hasMode(id)} onClick={() => toggleMode(id)}
+            className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${hasMode(id)
+              ? "z-10 -mb-[2px] border-[#0047AB] bg-white py-3 text-[#0047AB]"
+              : "border-slate-200 bg-slate-100 py-2.5 text-slate-600 hover:bg-white hover:text-slate-900"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="rounded-b-xl rounded-tr-xl border-2 border-[#0047AB] bg-white p-3 sm:p-4">
+        {hasMode("tong-hop") && <div className="no-print mb-3 grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
               key={id}
@@ -216,35 +218,35 @@ export default function WeldAcceptanceWorkflow() {
             </button>
           ))}
         </div>}
+        {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
+        {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
+          <div key={m} className="mb-4">
+            <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} onPrintRecord={setPrintPack} />
+          </div>
+        ))}
+        {hasMode("tong-hop") && (
+          <div className="no-print">
+            {tab === "rfi" && (
+              <RfiPanel
+                key={projectId}
+                projectId={projectId}
+                editRfiId={editRfiId}
+                onEditConsumed={consumeEditRfi}
+                onOpen={openRfi}
+                onOpenIssuedList={setIssuedList}
+                onPublished={afterPublishedRfi}
+              />
+            )}
+            {tab === "accept" && (
+              <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} onPrintRecord={setPrintPack} />
+            )}
+            {tab === "records" && (
+              <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} onPrintRecord={setPrintPack} />
+            )}
+          </div>
+        )}
+        </>)}
       </div>
-      {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
-      {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
-        <div key={m} className="mb-4">
-          <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName} kind={m} onPrintRecord={setPrintPack} />
-        </div>
-      ))}
-      {hasMode("tong-hop") && (
-        <div className="no-print">
-          {tab === "rfi" && (
-            <RfiPanel
-              key={projectId}
-              projectId={projectId}
-              editRfiId={editRfiId}
-              onEditConsumed={consumeEditRfi}
-              onOpen={openRfi}
-              onOpenIssuedList={setIssuedList}
-              onPublished={afterPublishedRfi}
-            />
-          )}
-          {tab === "accept" && (
-            <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} onPrintRecord={setPrintPack} />
-          )}
-          {tab === "records" && (
-            <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} onPrintRecord={setPrintPack} />
-          )}
-        </div>
-      )}
-      </>)}
       {view && createPortal(
         <WeldAcceptanceDocument
           view={view}
@@ -265,59 +267,6 @@ export default function WeldAcceptanceWorkflow() {
   );
 }
 
-/** Nút "⋯" mở menu thao tác của một dòng (menu nổi, không bị khung bảng cắt). */
-function RowActionsMenu({ label, actions }: { label: string; actions: { label: string; danger?: boolean; disabled?: boolean; onSelect: () => void }[] }) {
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!pos) return;
-    const close = () => setPos(null);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); };
-  }, [pos]);
-  return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={Boolean(pos)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-        onClick={() => {
-          if (pos) { setPos(null); return; }
-          const rect = button.current?.getBoundingClientRect();
-          if (rect) setPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
-        }}
-      >
-        <DotsThreeVertical size={18} weight="bold" aria-hidden />
-      </button>
-      {pos && createPortal(
-        <>
-          <div className="fixed inset-0 z-[120]" onClick={() => setPos(null)} aria-hidden />
-          <div role="menu" className="fixed z-[121] min-w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl" style={{ top: pos.top, right: pos.right }}>
-            {actions.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                role="menuitem"
-                disabled={action.disabled}
-                className={`block w-full px-3 py-2 text-left text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 ${action.danger ? "text-red-700 hover:bg-red-50" : "text-slate-800"}`}
-                onClick={() => { setPos(null); action.onSelect(); }}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </>,
-        document.body,
-      )}
-    </>
-  );
-}
 
 function RfiPanel({
   projectId,

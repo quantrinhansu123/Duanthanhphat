@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { rfiScope, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, type DiaryWork } from "@/lib/constructionDiaryAuto";
@@ -481,7 +481,7 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
   }
   // Phiếu siêu âm: kèm số phiếu hình học đã nghiệm thu của các mối.
   const geometryNos = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu))].join(", ") : ticket.so_phieu;
-  const rfi = (rfiRes.data ?? { id: ticket.id, so_phieu: ticket.so_phieu, ngay_moi: ticket.ngay_moi, thong_tin: {} }) as Record<string, unknown>;
+  const rfi = (rfiRes.data ?? { id: ticket.id, so_phieu: ticket.so_phieu, ngay_moi: ticket.ngay_moi, thong_tin: ticket.thong_tin ?? {} }) as Record<string, unknown>;
   const rfiInfo = (rfi.thong_tin ?? {}) as Record<string, unknown>;
   const moi = rows.map((r) => {
     const d = r.du_lieu_chot ?? {};
@@ -635,7 +635,7 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
-  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo"]) {
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", ...SIGNER_KEYS]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;
   }
@@ -662,9 +662,9 @@ export async function setSignStatus(body: Record<string, unknown>) {
 }
 
 /** Phiếu siêu âm tách đã nghiệm thu → hồ sơ chờ ký / đã ký (ký xong mối đạt cả hình học + siêu âm → «Đạt»). */
-export async function listSplitRecords(projectId: string) {
+export async function listSplitRecords(projectId: string, kind: "hinh-hoc" | "sieu-am" = "sieu-am") {
   const tickets = await fetchAll<{ id: string; so_phieu: string; ngay_nghiem_thu: string; nguoi_nghiem_thu: string | null; da_ky: boolean | null; nguoi_ky: string | null; ngay_ky: string | null }>((a, b) =>
-    db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu,nguoi_nghiem_thu,da_ky,nguoi_ky,ngay_ky").eq("du_an_id", projectId).eq("loai", "sieu-am")
+    db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu,nguoi_nghiem_thu,da_ky,nguoi_ky,ngay_ky").eq("du_an_id", projectId).eq("loai", kind)
       .not("ngay_nghiem_thu", "is", null).order("ngay_nghiem_thu", { ascending: false }).order("so_phieu").range(a, b));
   const items = await chunkedPages<{ phieu_id: string; ket_qua: string | null }>(tickets.map((t) => t.id),
     (ids, a, b) => db().from("phieu_nt_tach_moi").select("phieu_id,ket_qua").in("phieu_id", ids).order("phieu_id").order("moi_han_id").range(a, b));
@@ -678,13 +678,38 @@ export async function signSplitRecord(body: Record<string, unknown>, actor: stri
   const id = qualityUuid(body.id);
   const signed = body.da_ky === true;
   const { data, error } = await db().from("phieu_nt_tach").update({ da_ky: signed, nguoi_ky: signed ? actor : null, ngay_ky: signed ? new Date().toISOString() : null })
-    .eq("id", id).eq("loai", "sieu-am").not("ngay_nghiem_thu", "is", null).select("id");
+    .eq("id", id).not("ngay_nghiem_thu", "is", null).select("id");
   if (error) {
     if (error.code === "42703" || error.code === "PGRST204") throw new QualityApiError("Chưa chạy migration 20261108c (ký phiếu siêu âm tách) trên Supabase.", 409);
     throw error;
   }
-  if (!data?.length) throw new QualityApiError("Phiếu siêu âm chưa nghiệm thu hoặc không tồn tại.", 409);
+  if (!data?.length) throw new QualityApiError("Phiếu chưa nghiệm thu hoặc không tồn tại.", 409);
   return { ok: true };
+}
+
+/** Gắn lý trình (km) của từng mối để lọc theo khoảng Km ở màn hình phát phiếu tách. */
+async function withChainage<T extends { moi_han_id: string }>(rows: T[]) {
+  if (!rows.length) return rows.map((r) => ({ ...r, ly_trinh: null as string | null }));
+  const points = await chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null }>(rows.map((r) => r.moi_han_id),
+    (p) => db().from("toa_do").select("lich_su_moi_han_id,ly_trinh").in("lich_su_moi_han_id", p));
+  const km = new Map(points.filter((p) => p.ly_trinh).map((p) => [p.lich_su_moi_han_id, p.ly_trinh as string]));
+  return rows.map((r) => ({ ...r, ly_trinh: km.get(r.moi_han_id) ?? null }));
+}
+
+/** Thông tin in phiếu tách (giống RFI chính). Chưa chạy migration 20261108d thì báo rõ. */
+async function saveSplitInfo(id: string, value: unknown) {
+  if (value == null) return;
+  const info = object(value);
+  const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
+  const thong_tin = { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
+    gio_bat_dau: str(info.gio_bat_dau, 10),
+    // Không chọn tuyến → bỏ khoá để phiếu tự xác định tuyến theo mã điểm của mối.
+    ...(flag(info.tuyen_thuong) || flag(info.tuyen_ha) ? { tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha) } : {}) };
+  const { error } = await db().from("phieu_nt_tach").update({ thong_tin }).eq("id", id);
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") throw new QualityApiError("Đã lưu phiếu nhưng chưa lưu được thông tin in: cần chạy migration 20261108d trên Supabase.", 409);
+    throw error;
+  }
 }
 
 /** Separate records share inspection data with the original workflow, but own their RIF/RFI and results. */
@@ -696,7 +721,7 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     const [candidates, tickets] = await Promise.all([
       fetchAll((a,b) => db().from("moi_cho_phieu_nt_tach").select("moi_han_id,ma_lich_su,da_nt_truc_quan,ngay_mai,truc_quan")
         .eq("du_an_id",project).eq("loai",kind).order("ma_lich_su").order("moi_han_id").range(a,b)),
-      fetchAll((a,b) => db().from("phieu_nt_tach").select("id,so_phieu,ngay_moi,ngay_nghiem_thu,nguoi_lap,nguoi_nghiem_thu")
+      fetchAll((a,b) => db().from("phieu_nt_tach").select("*")
         .eq("du_an_id",project).eq("loai",kind).order("ngay_moi",{ascending:false}).order("so_phieu").range(a,b)),
     ]);
     if (kind === "sieu-am") {
@@ -704,10 +729,10 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       const waiting = await fetchAll<{ moi_han_id: string }>((a, b) => db().from("chat_luong_moi_han").select("moi_han_id")
         .eq("du_an_id", project).eq("tinh_trang", "Chờ siêu âm").order("moi_han_id").range(a, b));
       const ids = new Set(waiting.map((r) => r.moi_han_id));
-      return { candidates: (candidates as { moi_han_id: string }[]).filter((c) => ids.has(c.moi_han_id)), tickets };
+      return { candidates: await withChainage((candidates as { moi_han_id: string }[]).filter((c) => ids.has(c.moi_han_id))), tickets };
     }
     // Phiếu hình học: chỉ hiện mối «Mài xong» (có ngày mài, chưa kết luận trực quan).
-    return { candidates: (candidates as { truc_quan: string | null }[]).filter((c) => !c.truc_quan), tickets };
+    return { candidates: await withChainage((candidates as { moi_han_id: string; truc_quan: string | null }[]).filter((c) => !c.truc_quan)), tickets };
   }
   const id = qualityUuid(body.id);
   if (body.action === "split-publish") {
@@ -722,6 +747,34 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       p_so:number, p_ngay:date, p_moi:ids.map(qualityUuid), p_actor:actor });
     if (error?.code === "23505") throw new QualityApiError("Có mối đã nằm trong một phiếu khác đang xử lý của nhánh này. Bấm Tải lại để cập nhật danh sách mối.",409);
     if (error) throw error;
+    await saveSplitInfo(id, body.thong_tin);
+    return { id };
+  }
+  if (body.action === "split-update") {
+    // Sửa phiếu đã phát: số phiếu, thông tin in; ngày mời chỉ đổi khi chưa nghiệm thu.
+    const { data: current, error: curError } = await db().from("phieu_nt_tach").select("*").eq("id", id).eq("du_an_id", project).eq("loai", kind).single();
+    if (curError) throw curError;
+    const number = str(body.so_phieu, 80), date = qualityDate(body.ngay_moi);
+    if (!number || !date) throw new QualityApiError("Nhập số phiếu và ngày mời.");
+    if (number !== current.so_phieu) {
+      const same = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true }).eq("du_an_id", project).eq("loai", kind).eq("so_phieu", number);
+      if ((same.count ?? 0) > 0) throw new QualityApiError(`Số phiếu ${number} đã được dùng trong nhánh này.`, 409);
+    }
+    if (current.ngay_nghiem_thu && date !== current.ngay_moi) throw new QualityApiError("Phiếu đã nghiệm thu, không đổi được ngày mời.", 409);
+    const { error: updError } = await db().from("phieu_nt_tach").update({ so_phieu: number, ngay_moi: date }).eq("id", id);
+    if (updError) throw updError;
+    await saveSplitInfo(id, body.thong_tin);
+    return { id };
+  }
+  if (body.action === "split-delete") {
+    // Xoá phiếu (chưa ký): các mối quay lại trạng thái trước nghiệm thu / danh sách chờ phát phiếu. Phiếu đã ký phải đặt lại «Chờ ký» trước.
+    const { data: current, error: curError } = await db().from("phieu_nt_tach").select("*").eq("id", id).eq("du_an_id", project).eq("loai", kind).single();
+    if (curError) throw curError;
+    if (current.da_ky) throw new QualityApiError("Phiếu đã ký, hãy đặt lại «Chờ ký» trước khi xoá.", 409);
+    const rows = await db().from("phieu_nt_tach_moi").delete().eq("phieu_id", id);
+    if (rows.error) throw rows.error;
+    const del = await db().from("phieu_nt_tach").delete().eq("id", id);
+    if (del.error) throw del.error;
     return { id };
   }
   const ticket = await db().from("phieu_nt_tach").select("*").eq("id",id).eq("du_an_id",project).eq("loai",kind).single();

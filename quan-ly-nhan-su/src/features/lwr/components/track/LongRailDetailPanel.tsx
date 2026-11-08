@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { formatChainage, getPlacementSpan, railDisplayLabel, type LongRail, type TrackLayout } from "@lwr/lib/track-editor";
+import { displayRailCode, formatChainage, getPlacementSpan, railDisplayLabel, type LongRail, type TrackLayout } from "@lwr/lib/track-editor";
 import type { StressInput } from "@lwr/lib/stress-release";
 import { StressReleaseCalculator, type StressSaveResult } from "./StressReleaseCalculator";
 import { ReleaseStatusButtons } from "./RailDetailPanel";
@@ -41,7 +41,7 @@ export function LongRailDetailPanel({
       <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
         <div>
           <h2 id="long-rail-detail-title" className="text-lg font-bold">
-            Lý trình {longRail.code}
+            Lý trình {displayRailCode(longRail.code)}
           </h2>
           <p className="text-sm text-slate-500">{longRail.label || "Chưa đặt tên"}</p>
         </div>
@@ -77,7 +77,7 @@ export function LongRailDetailPanel({
         <StressReleaseCalculator
           key={longRail.id}
           compact
-          segmentId={longRail.code}
+          segmentId={displayRailCode(longRail.code)}
           chainageLocked={Boolean(longRail.completedAt)}
           statusSlot={
             onPassChange

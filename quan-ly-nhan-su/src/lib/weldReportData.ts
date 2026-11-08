@@ -1306,6 +1306,27 @@ export async function deleteWeldJournalEntry(id: string) {
   notifyMachineRunScheduleChanged(weldDate);
 }
 
+/** Xóa nhiều nhật ký hàn một lượt (theo từng nhóm 100). Mối đã nằm trong phiếu/biên bản nghiệm thu bị cơ sở dữ liệu từ chối và báo lỗi. */
+export async function deleteWeldJournalEntries(ids: string[]) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Chưa cấu hình Supabase nên không thể xóa nhật ký hàn.");
+  }
+  const supabase = createClient();
+  const dates = new Set<string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = ids.slice(i, i + 100);
+    const { data } = await supabase.from("lich_su_moi_han").select("ngay_thuc_hien").in("id", part);
+    for (const r of data ?? []) {
+      const d = String(r.ngay_thuc_hien ?? "").slice(0, 10);
+      if (d) dates.add(d);
+    }
+    const { error } = await supabase.from("lich_su_moi_han").delete().in("id", part);
+    if (error) throw new Error(formatSupabaseError(error));
+  }
+  invalidateWeldReportCache();
+  for (const d of dates) notifyMachineRunScheduleChanged(d);
+}
+
 export function uniqueProjectOptions(rows: WeldReportRow[]) {
   const map = new Map<string, { id: string; label: string }>();
   for (const row of rows) {
@@ -1358,6 +1379,8 @@ export type WeldJournalPageQuery = {
   weldTypeFilter?: string;
   /** Công nghệ hàn: FBW / ATW (hoặc "Tất cả"). */
   weldMethodFilter?: string;
+  /** Lọc theo tên người hàn (gõ một phần tên). */
+  welderName?: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -1468,6 +1491,7 @@ type JournalListFilter = {
   linkedWeldFilter?: string;
   weldTypeFilter?: string;
   weldMethodFilter?: string;
+  welderName?: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -1533,6 +1557,8 @@ export function applyJournalListFilters<T>(
   if (linkedWeldFilter === "Chưa liên kết") next = next.is("moi_han_lien_ket", null);
   if (weldTypeFilter && weldTypeFilter !== "Tất cả") next = next.eq("loai_moi_han", weldTypeFilter);
   if (weldMethodFilter && weldMethodFilter !== "Tất cả") next = next.eq("cong_nghe_han", weldMethodFilter);
+  const welderName = (filters.welderName ?? "").replace(/[(),%*]/g, " ").trim();
+  if (welderName) next = next.ilike("ten_tho_han", `%${welderName}%`);
 
   if (mode === "status") {
     if (resultFilter === "Không đạt") {
@@ -1576,6 +1602,7 @@ export async function loadWeldJournalPage({
   linkedWeldFilter = "Tất cả",
   weldTypeFilter = "Tất cả",
   weldMethodFilter = "Tất cả",
+  welderName = "",
   dateFrom = "",
   dateTo = "",
 }: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
@@ -1597,6 +1624,7 @@ export async function loadWeldJournalPage({
     linkedWeldFilter,
     weldTypeFilter,
     weldMethodFilter,
+    welderName,
     dateFrom,
     dateTo,
   };
@@ -1634,31 +1662,31 @@ export async function loadWeldJournalPage({
   if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
     });
   }
   if (error && journalRequestUsedLinkedImages && /anh_moi_han_lien_ket/.test(error.message ?? "")) {
     journalHasLinkedImages = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
     });
   }
   if (error && journalRequestUsedCaHan && /ca_han/.test(error.message ?? "")) {
     journalHasCaHan = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
     });
   }
   if (error && journalRequestUsedExtras && isWeldExtrasColumnError(error.message)) {
     journalHasWeldExtras = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
     });
   }
   if (error && journalRequestUsedSiteExtras && isWeldSiteColumnError(error.message)) {
     journalHasSiteExtras = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
     });
   }
   if (error) {
@@ -1739,6 +1767,7 @@ export async function exportFilteredWeldJournal({
   linkedWeldFilter = "Tất cả",
   weldTypeFilter = "Tất cả",
   weldMethodFilter = "Tất cả",
+  welderName = "",
   dateFrom = "",
   dateTo = "",
 }: WeldJournalExportQuery): Promise<WeldReportRow[]> {
@@ -1755,6 +1784,7 @@ export async function exportFilteredWeldJournal({
     linkedWeldFilter,
     weldTypeFilter,
     weldMethodFilter,
+    welderName,
     dateFrom,
     dateTo,
   };

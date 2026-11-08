@@ -158,3 +158,26 @@ export function summarizeDecisions(d: AcceptanceDecision[]) {
     deferred: d.filter((x) => x.ket_qua === "Chưa nghiệm thu").length,
   };
 }
+
+/** Thành phần ký trên biên bản nghiệm thu công việc: mỗi bên 2 người (họ tên + chức vụ). */
+export const SIGNER_PARTIES = [["tvgs", "Tư vấn Giám sát"], ["ntc", "Nhà thầu chính"], ["ntp", "Nhà thầu phụ"]] as const;
+export const SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].flatMap((i) => [`nguoi_${party}_${i}_ten`, `nguoi_${party}_${i}_cv`]));
+/** Người ký mặc định khi chưa có bản sửa / chưa nhớ: nhà thầu phụ (Thành Phát) người 1 = Trần Công Tiến. Sửa ở «Sửa thông tin in». */
+export const DEFAULT_SIGNERS: Record<string, string> = { nguoi_ntp_1_ten: "Trần Công Tiến" };
+const SIGNER_STORAGE = "weld-acceptance-signers";
+
+/** Người ký nhập gần nhất (nhớ trên máy này) — tự điền cho các lần in sau; người khác ký thì nhập lại ở «Sửa thông tin in». */
+export function loadSignerDefaults(): Record<string, string> {
+  try {
+    if (typeof window === "undefined") return {};
+    const raw = JSON.parse(window.localStorage.getItem(SIGNER_STORAGE) ?? "{}") as Record<string, unknown>;
+    return Object.fromEntries(SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, raw[k] as string]] : [])));
+  } catch { return {}; }
+}
+export function saveSignerDefaults(values: Record<string, string | undefined>) {
+  try {
+    if (typeof window === "undefined") return;
+    const next = { ...loadSignerDefaults(), ...Object.fromEntries(SIGNER_KEYS.flatMap((k) => (values[k]?.trim() ? [[k, values[k]!.trim()]] : []))) };
+    window.localStorage.setItem(SIGNER_STORAGE, JSON.stringify(next));
+  } catch { /* bỏ qua khi không lưu được */ }
+}

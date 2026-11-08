@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
-import { rfiScope } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
@@ -35,7 +35,7 @@ const css = `@media print {
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
 /** Thông tin / thời gian trên mẫu — sửa được ở bản xem trước (để trống = tự lấy từ dữ liệu đã chốt). */
-const PRINT_INFO_KEYS = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo"] as const;
+const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", ...SIGNER_KEYS];
 
 /** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
 const FREE_TEXT_FIELDS: [string, string][] = [
@@ -142,6 +142,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     setBusy(true); setError("");
     try {
       const { ly_do, ...thongTin } = form;
+      saveSignerDefaults(thongTin); // nhớ người ký cho các lần in sau
       await reviseRecord(hoSo.id, thongTin, ly_do.trim() || "Cập nhật nội dung nhập tay");
       setRecord(await loadRecordSet(String(record.dot.id)));
       setEditing(false);
@@ -151,31 +152,31 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   return (
     <div className={`${kind === "rfi" ? "" : "acceptance-print-root"} fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4`} role="dialog" aria-modal="true" aria-label={TITLES[kind]}>
       <style>{kind === "rfi" ? css : acceptancePrintCss}</style>
-      <div className="weld-doc-actions sticky top-0 z-[110] mx-auto mb-3 flex max-w-3xl flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+      <div className="weld-doc-actions sticky top-0 z-[110] mx-auto mb-3 flex max-w-3xl flex-nowrap items-center justify-end gap-1.5 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
         {kind === "rfi" && view.rfi && onEditRfi ? (
-          <button type="button" onClick={() => onEditRfi(view.rfi!.rfi)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+          <button type="button" onClick={() => onEditRfi(view.rfi!.rfi)} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
             Sửa phiếu
           </button>
         ) : null}
         {kind === "rfi" && view.rfi ? (
-          <button type="button" onClick={() => setRfiEditOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa nội dung in</button>
+          <button type="button" onClick={() => setRfiEditOpen((v) => !v)} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa nội dung in</button>
         ) : null}
         {kind === "rfi" ? (
-          <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
+          <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
         ) : null}
         {hoSo && (
-          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ...Object.fromEntries(PRINT_INFO_KEYS.map((k) => [k, String(latest?.thong_tin[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
+          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ...Object.fromEntries(PRINT_INFO_KEYS.map((k) => [k, String(latest?.thong_tin[k] ?? loadSignerDefaults()[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
+            className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
         {kind === "rfi" ? (
           <>
-            <button type="button" onClick={() => printVersion(true)} title="Chữ ký nhà thầu chính / phụ đã dán sẵn trên phiếu — dùng để phát hành ngay" className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In bản có chữ ký (phát hành)</button>
-            <button type="button" onClick={() => printVersion(false)} title="Không dán chữ ký — in ra để ký trực tiếp" className="h-10 rounded-lg border border-[#0047AB] bg-white px-4 text-sm font-semibold text-[#0047AB] cursor-pointer hover:bg-blue-50">In bản ký tay (không dán chữ ký)</button>
+            <button type="button" onClick={() => printVersion(true)} title="Chữ ký nhà thầu chính / phụ đã dán sẵn trên phiếu — dùng để phát hành ngay" className="h-9 whitespace-nowrap rounded-lg bg-[#0047AB] px-3 text-[13px] font-semibold text-white cursor-pointer hover:bg-[#00388A]">In có chữ ký</button>
+            <button type="button" onClick={() => printVersion(false)} title="Không dán chữ ký — in ra để ký trực tiếp" className="h-9 whitespace-nowrap rounded-lg border border-[#0047AB] bg-white px-3 text-[13px] font-semibold text-[#0047AB] cursor-pointer hover:bg-blue-50">In ký tay</button>
           </>
         ) : (
-          <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+          <button type="button" onClick={() => window.print()} className="h-9 whitespace-nowrap rounded-lg bg-[#0047AB] px-3 text-[13px] font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
         )}
-        <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-300 bg-slate-100 px-5 text-sm font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
+        <button type="button" onClick={onClose} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-3 text-[13px] font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
       {kind === "rfi" && sigLoadError && (
         <p role="alert" className="weld-doc-actions mx-auto mb-3 max-w-3xl rounded-lg bg-red-50 p-2 text-sm text-red-700">Không tải được chữ ký đã lưu: {sigLoadError}</p>
@@ -241,6 +242,25 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                   </label>
                 </>)}
               </div>
+              {kind === "giai-doan" && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700 sm:max-w-xs">Số biên bản (để trống = tự đặt FBW/số RFI/BBNTCV)
+                    <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="FBW/01/BBNTCV" value={form.so_bb ?? ""} onChange={(e) => setForm({ ...form, so_bb: e.target.value })} />
+                  </label>
+                  <p className="text-xs font-semibold text-slate-700">Người trực tiếp tham gia nghiệm thu <span className="font-normal text-slate-500">— nhớ cho các lần in sau; lần nào người khác ký thì nhập lại.</span></p>
+                  {SIGNER_PARTIES.map(([party, label]) => (
+                    <div key={party} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <p className="mb-1 text-xs font-semibold text-slate-600">{label}</p>
+                      {[1, 2].map((i) => (
+                        <div key={i} className="mb-1 grid gap-2 sm:grid-cols-2">
+                          <input aria-label={`${label} người ${i}: họ tên`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder={`Ông (người ${i})`} value={form[`nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_ten`]: e.target.value })} />
+                          <input aria-label={`${label} người ${i}: chức vụ`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder="Chức vụ" value={form[`nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_cv`]: e.target.value })} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
               {kind === "phu-luc" && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="block text-xs font-semibold text-slate-700">Ca hàn
