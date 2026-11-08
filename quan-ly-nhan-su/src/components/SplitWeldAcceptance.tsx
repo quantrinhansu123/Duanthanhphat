@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadGeometryRecord, loadRfiNumber, markQualityPass, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { fieldWeldCode, weldCodeMatches } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
 import WeldAcceptanceDocument from "@/components/WeldAcceptanceDocument";
 
@@ -107,7 +108,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
       .sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   }, [list, ticketQuery, ticketStatus]);
   // Ngày mài mới nhất lên đầu; cùng ngày thì mã lớn hơn trước; mối không có ngày xuống cuối.
-  const candidates = (list?.candidates.filter(c => c.ma_lich_su.toLowerCase().includes(query.trim().toLowerCase())) ?? [])
+  const candidates = (list?.candidates.filter(c => weldCodeMatches(c.ma_lich_su, query)) ?? [])
     .sort((x, y) => (y.ngay_mai ?? "").localeCompare(x.ngay_mai ?? "") || y.ma_lich_su.localeCompare(x.ma_lich_su, "vi", { numeric: true }));
 
   return <section className="space-y-4">
@@ -128,11 +129,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
           <label className="grid gap-1 text-sm">Ngày mời<input required type="date" className={field} value={inviteDate} onChange={e => setInviteDate(e.target.value)} /></label>
         </div>
         <input aria-label="Tìm mã mối hàn" placeholder="Tìm mã mối hàn…" className={field + " w-full"} value={query} onChange={e => setQuery(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {/* Chọn tất cả = các mối đang hiện (theo ô tìm), tối đa 200 mối một phiếu. */}
+          <button type="button" className={button} disabled={busy || !candidates.length}
+            onClick={() => setSelected(prev => [...new Set([...prev, ...candidates.map(c => c.moi_han_id)])].slice(0, 200))}>
+            Chọn tất cả ({Math.min(candidates.length, 200)})
+          </button>
+          <button type="button" className={button} disabled={busy || !selected.length} onClick={() => setSelected([])}>Bỏ chọn</button>
+          <span className="text-slate-600">Đã chọn {selected.length}{candidates.length > 200 ? " · tối đa 200 mối một phiếu" : ""}</span>
+        </div>
         <div className="max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
           {candidates.map(c => <label key={c.moi_han_id} className="flex min-h-10 items-center gap-3 px-3 text-sm">
             <input type="checkbox" checked={selected.includes(c.moi_han_id)} disabled={busy || (selected.length >= 200 && !selected.includes(c.moi_han_id))}
               onChange={e => setSelected(e.target.checked ? [...selected, c.moi_han_id] : selected.filter(id => id !== c.moi_han_id))} />
-            <b>{c.ma_lich_su}</b><span className="text-slate-600">{kind === "hinh-hoc" ? "Mài xong" : "Chờ siêu âm"} · {dateLabel(c.ngay_mai)}</span>
+            <b title={c.ma_lich_su}>{fieldWeldCode(c.ma_lich_su)}</b><span className="text-slate-600">{kind === "hinh-hoc" ? "Mài xong" : "Chờ siêu âm"} · {dateLabel(c.ngay_mai)}</span>
           </label>)}
           {!candidates.length && <p className="p-3 text-sm text-slate-600">{list ? "Không tìm thấy mối đủ điều kiện." : error ? "Chưa tải được danh sách." : "Đang tải danh sách…"}</p>}
         </div>
@@ -165,7 +175,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
                     <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
                     <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
                     <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${t.ngay_nghiem_thu ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{t.ngay_nghiem_thu ? "Đã nghiệm thu" : "Chờ nghiệm thu"}</span></td>
-                    <td className="px-3 py-2 text-right"><button disabled={busy} className={button} onClick={() => run(() => openTicket(t.id))}>{t.ngay_nghiem_thu ? "Xem" : "Nghiệm thu"}</button>{t.ngay_nghiem_thu && onPrintRecord && <button disabled={busy} className={button + " ml-1"} title={"In bộ biên bản nghiệm thu " + kindName(kind)} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(t.id)))}>In biên bản</button>}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right"><button disabled={busy} className={button} onClick={() => run(() => openTicket(t.id))}>{t.ngay_nghiem_thu ? "Xem" : "Nghiệm thu"}</button>
+                      <button disabled={busy} className={button + " ml-1"} title={"Xem / in phiếu yêu cầu nghiệm thu " + t.so_phieu} onClick={() => run(async () => { await openTicket(t.id); setDoc("invite"); })}>In phiếu</button>
+                      {onPrintRecord && <button disabled={busy} className={button + " ml-1"} title={t.ngay_nghiem_thu ? "In bộ biên bản nghiệm thu " + kindName(kind) : "In mẫu biên bản (trống kết quả) mang ra hiện trường"} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(t.id)))}>In biên bản</button>}</td>
                   </tr>
                 ))}
                 {tickets.length === 0 && <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-500">Không có phiếu khớp bộ lọc.</td></tr>}
@@ -182,7 +194,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
         <button className={button} onClick={() => setDoc("invite")}>Xem phiếu {prefix}</button>
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {kind === "hinh-hoc" && !detail.ticket.ngay_nghiem_thu && <button className={primary} disabled={busy} onClick={() => run(passVisual)} title="Ghi trực quan Đạt, ô sai số trống tự điền mức tối đa">Trực quan đạt (điền sai số max)</button>}
-        {detail.ticket.ngay_nghiem_thu && onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
+        {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
       </div>
       <h3 className="font-bold">{detail.ticket.so_phieu} · Nghiệm thu {kindName(kind)}</h3>
       <form className="space-y-3" onSubmit={e => {
@@ -214,7 +226,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, onPrin
           disabled={Boolean(detail.ticket.ngay_nghiem_thu) || busy} value={date} onChange={e => setDate(e.target.value)} /></label>
         {detail.items.map(i => <div key={i.moi_han_id} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0 flex-1">
-            <b>{i.ma_lich_su}</b>
+            <b title={i.ma_lich_su}>{fieldWeldCode(i.ma_lich_su)}</b>
             <p className="mt-0.5 text-slate-600">{evidenceText(kind, detail.ticket.ngay_nghiem_thu ? i.du_lieu_chot : i.current)}</p>
             {!i.ket_qua && !i.current?.co_the_dat && <p className="mt-1 text-amber-800">{kind === "sieu-am" ? "Để chọn Đạt, ghi kết quả siêu âm và ngày thí nghiệm ngay bên dưới." : (i.current?.truc_quan === "Đạt" ? "Số đo / chiều dài mài chưa đạt — bổ sung trong Kiểm tra chất lượng." : "Chưa ghi trực quan — chọn Đạt thì hệ thống tự ghi trực quan Đạt (điền sai số max) khi nghiệm thu.")}</p>}
             {kind === "sieu-am" && !i.ket_qua && !detail.ticket.ngay_nghiem_thu && !i.current?.ket_qua_ndt && (

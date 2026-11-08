@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
-import { parseCoordinateCode } from "@/lib/weldCode";
+import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
@@ -330,7 +330,7 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["ngay_lap", "Ngày lập phiếu", "date", ""],
   ["noi_lap", "Nơi lập", "text", "Phú Quốc"],
   ["ngay_nt", "Ngày nghiệm thu (mục 2)", "date", ""],
-  ["gio", "Giờ nghiệm thu", "time", ""],
+  ["gio", "Giờ nghiệm thu (mặc định 8h00)", "time", ""],
   ["ngay_nhan", "Ngày nhận (TVGS)", "date", ""],
   ["km_dau", "Km đầu", "text", "4+486.85"],
   ["km_cuoi", "Km cuối", "text", "4+486.85"],
@@ -364,7 +364,8 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
   const missingRoutes = welds.filter((_, i) => !routes[i]);
   const tuyen = upper && lower ? "tuyến thượng và tuyến hạ" : upper ? "tuyến thượng" : lower ? "tuyến hạ" : `tuyến ${DOTS}`;
   const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
-  const gio = (o.gio?.trim() || t.gio_bat_dau || "").trim();
+  // Giờ nghiệm thu: chưa nhập thì gợi ý sẵn 8h00 (sửa được ở «Sửa nội dung in»).
+  const gio = (o.gio?.trim() || t.gio_bat_dau || "08:00").trim();
   const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
   const ngay = `${d ?? "……"} tháng ${m ?? "……"} năm ${y ?? "……"}`;
   // Ngày nghiệm thu (mục 2) = ngày phát phiếu + 1.
@@ -387,7 +388,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       )}
       <p className="mt-3 text-right italic">{o.noi_lap?.trim() || pq?.noiLap || DOTS}, ngày {ngay}</p>
       <h2 className="mt-3 text-center font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
-      <p className="text-center">Số: {o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-/i, "")}/PYC-HR`}</p>
+      <p className="text-center">Số: {o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-(?:HH-|SA-)?/i, "")}/PYC-HR`}</p>
       <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
         <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
         <dt>Hạng mục</dt><dd className="font-normal">: {o.hang_muc?.trim() || pq?.goiThau || DOTS}</dd>
@@ -397,10 +398,10 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
       {lines(o.doi_tuong).length > 0 ? lines(o.doi_tuong).map((x) => <p key={x}>- {x.replace(/^-\s*/, "")}</p>) : <>
       {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
-      {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => w.ma_lich_su).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
+      {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
         return <>{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}{s.geometry && <p>- Nghiệm thu kích thước mối hàn {codes}{pv}</p>}</>; })()}
       </>}
-      {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => w.ma_lich_su).join(", ")}</p>}
+      {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => fieldWeldCode(w.ma_lich_su)).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
       <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>

@@ -448,22 +448,32 @@ export async function completeRfiGeometry(body: Record<string, unknown>, actor: 
   return { id, record: await loadGeometryRecord(id, { dia_diem: str(info.dia_diem), thanh_phan: str(info.thanh_phan, 1000) }) };
 }
 
-/** Bộ biên bản nghiệm thu kích thước hình học (in riêng) dựng từ phiếu hình học đã chốt. */
+/** Bộ biên bản của phiếu tách (hình học / siêu âm). Phiếu chưa nghiệm thu → mẫu trống kết quả để in mang ra hiện trường. */
 export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}) {
   const { data: ticket, error } = await db().from("phieu_nt_tach").select("*").eq("id", ticketId).single();
   const ultrasound = ticket?.loai === "sieu-am";
   if (error) throw error;
-  if (!ticket.ngay_nghiem_thu) throw new QualityApiError("Phiếu chưa nghiệm thu.");
+  const pending = !ticket.ngay_nghiem_thu;
   const [rfiRes, projectRes, rows] = await Promise.all([
     ticket.phieu_rfi_id ? db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", ticket.phieu_rfi_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     db().from("du_an").select("*").eq("id", ticket.du_an_id).maybeSingle(),
     fetchAll<{ moi_han_id: string; ma_lich_su: string; ket_qua: string | null; ly_do: string | null; du_lieu_chot: Record<string, unknown> }>((a, b) =>
-      db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot").eq("phieu_id", ticketId).eq("ket_qua", "Đạt").order("moi_han_id").range(a, b)),
+      db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot").eq("phieu_id", ticketId).order("moi_han_id").range(a, b)),
   ]);
+  // Phiếu đã chốt: chỉ in mối Đạt. Phiếu chờ nghiệm thu: in đủ mối, để trống kết quả.
+  const printed = pending ? rows : rows.filter((r) => r.ket_qua === "Đạt");
+  rows.splice(0, rows.length, ...printed);
   if (rfiRes.error) throw rfiRes.error;
   if (projectRes.error) throw projectRes.error;
   const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(rows.map((r) => r.moi_han_id),
     (p) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p));
+  // Thông tin mối (ca, máy, loại ray…) như bộ biên bản RFI chính.
+  const [weldRows, reportRows] = await Promise.all([
+    chunked<Record<string, unknown> & { id: string }>(rows.map((r) => r.moi_han_id), (p) => db().from("lich_su_moi_han").select("*").in("id", p)),
+    chunked<Record<string, unknown> & { id: string }>(rows.map((r) => r.moi_han_id), (p) => db().from("bao_cao_moi_han_theo_du_an").select("*").in("id", p)).catch(() => []),
+  ]);
+  const weldInfo = new Map(weldRows.map((w) => [w.id, w]));
+  const reportInfo = new Map(reportRows.map((w) => [w.id, w]));
   const where = new Map<string, { ma_diem: string | null; ly_trinh: string | null }>();
   for (const p of points) {
     const cur = where.get(p.lich_su_moi_han_id);
@@ -476,11 +486,11 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
   const moi = rows.map((r) => {
     const d = r.du_lieu_chot ?? {};
     const pt = where.get(r.moi_han_id);
-    const mh = { ...((d.moi_han as Record<string, unknown>) ?? { ma_lich_su: r.ma_lich_su }) };
+    const mh: Record<string, unknown> = { ma_lich_su: r.ma_lich_su, ...(weldInfo.get(r.moi_han_id) ?? {}), ...(reportInfo.get(r.moi_han_id) ?? {}), ...((d.moi_han as Record<string, unknown>) ?? {}) };
     if (!mh.ma_diem && pt?.ma_diem) mh.ma_diem = pt.ma_diem;
     if (!mh.ly_trinh && pt?.ly_trinh) mh.ly_trinh = pt.ly_trinh;
-    return { moi_han_id: r.moi_han_id, ket_qua: r.ket_qua ?? "Đạt", ly_do: r.ly_do,
-      du_lieu_chot: { moi_han: mh, kiem_tra: (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
+    return { moi_han_id: r.moi_han_id, ket_qua: pending ? "" : r.ket_qua ?? "Đạt", ly_do: r.ly_do,
+      du_lieu_chot: { moi_han: mh, kiem_tra: pending ? {} : (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
   });
   const docs = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   return {

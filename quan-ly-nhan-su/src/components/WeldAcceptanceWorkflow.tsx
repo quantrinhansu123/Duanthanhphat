@@ -12,7 +12,7 @@ import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAccep
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
-import { parseCoordinateCode } from "@/lib/weldCode";
+import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { parseWeldMeasurement } from "@/lib/weldQuality";
 
 const input = "min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:text-sm";
@@ -42,7 +42,8 @@ type RfiThongTin = {
 
 const emptyThongTin = (): RfiThongTin => ({
   dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", giam_sat: "",
-  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "", nt_hinh_hoc: true, nt_sieu_am: true,
+  // Giờ nghiệm thu gợi ý sẵn 8h00 cho mọi loại phiếu (nghiệm thu / theo dõi / cả giám sát và nghiệm thu).
+  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true,
 });
 
 function thongTinToPayload(t: RfiThongTin): Record<string, string> {
@@ -546,7 +547,7 @@ function RfiPanel({
           {scopeChoice === "sieu-am"
             ? <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối đã nghiệm thu hình học («Chờ siêu âm») → <b>nghiệm thu siêu âm</b> (mối chưa có phiếu nghiệm thu hình học thì tự nghiệm thu cả hình học). Xong → Chờ ký biên bản → ký đủ → Đạt.</p>
             : <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối «Mài xong» / «Chờ nghiệm thu». Khi nghiệm thu bấm <b>Trực quan đạt</b> (tự điền sai số max):<br />• chỉ hình học → in biên bản hình học riêng, mối chuyển «Chờ siêu âm»;<br />• có cả siêu âm đạt → in toàn bộ → ký → Đạt.</p>}
-          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Đang chọn lẫn {wrongRows.length} mối «Chờ siêu âm» ({wrongRows.slice(0, 3).map((r) => r.ma_lich_su).join(", ")}{wrongRows.length > 3 ? "…" : ""}) với mối «Mài xong». Phát riêng hai nhóm.</p>}
+          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Đang chọn lẫn {wrongRows.length} mối «Chờ siêu âm» ({wrongRows.slice(0, 3).map((r) => fieldWeldCode(r.ma_lich_su)).join(", ")}{wrongRows.length > 3 ? "…" : ""}) với mối «Mài xong». Phát riêng hai nhóm.</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={secondary} onClick={() => publishDialogRef.current?.close()}>Hủy</button>
             <button type="submit" className={primary} disabled={publishDisabled || scopeMissing}>Phát yêu cầu mới</button>
@@ -591,7 +592,7 @@ function RfiPanel({
                   <tbody>{rows.map((r) => (
                     <tr key={r.id} className="border-t border-slate-100">
                       <td className="p-2"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={r.ma_lich_su} /></td>
-                      <td className="p-2">{r.ma_lich_su}</td><td className="p-2">{r.ngay_thuc_hien ?? "—"}</td><td className="p-2">{r.ly_trinh ?? "—"}</td><td className="p-2">{r.tinh_trang}</td>
+                      <td className="p-2" title={r.ma_lich_su}>{fieldWeldCode(r.ma_lich_su)}</td><td className="p-2">{r.ngay_thuc_hien ?? "—"}</td><td className="p-2">{r.ly_trinh ?? "—"}</td><td className="p-2">{r.tinh_trang}</td>
                     </tr>))}</tbody>
                 </table>
               </div>
@@ -933,7 +934,7 @@ function AcceptPanel({ projectId, onCompleted, onPrintRecord }: { projectId: str
                 const bad = isAnomalousRfiWeldStatus(w.tinh_trang);
                 return (
                   <tr key={w.moi_han_id} className={`border-t border-slate-100 ${bad ? "bg-rose-50" : ""}`}>
-                    <td className="p-2">{w.ma_lich_su}<p className="mt-1 text-slate-500">{w.ma_diem || "Chưa rõ tuyến"} · {w.ly_trinh || "Thiếu KM"}</p></td>
+                    <td className="p-2" title={w.ma_lich_su}>{fieldWeldCode(w.ma_lich_su)}<p className="mt-1 text-slate-500">{w.ma_diem || "Chưa rõ tuyến"} · {w.ly_trinh || "Thiếu KM"}</p></td>
                     <td className={`p-2 min-w-64 ${bad ? "font-semibold text-rose-800" : ""}`}>
                       {w.tinh_trang}
                       <p className="mt-1 text-slate-600">Chiều dài mài: {w.chieu_dai_mai == null ? "Chưa nhập" : `${w.chieu_dai_mai} mm`}</p>

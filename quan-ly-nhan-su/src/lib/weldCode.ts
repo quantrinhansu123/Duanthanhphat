@@ -505,3 +505,23 @@ export function planWeldCodeAssignments(
     };
   });
 }
+
+/**
+ * Mã hiện trường để in / hiển thị trong nghiệm thu: bỏ tiền tố dự án (PQ-) và dấu gạch, dạng «FBW 051126 0012».
+ * Ưu tiên mã hiện trường đã lưu; không đúng mẫu thì suy ra từ mã hệ thống.
+ */
+export function fieldWeldCode(systemCode?: string | null, fieldCode?: string | null): string {
+  const pattern = /(FBW|ATW)[-\s]?(\d{2})[-\s]?(\d{2})[-\s]?(\d{2})[-\s]?(\d+)\s*$/i;
+  for (const source of [fieldCode, systemCode]) {
+    const m = pattern.exec((source ?? "").trim());
+    if (m) return `${m[1].toUpperCase()} ${m[2]}${m[3]}${m[4]} ${m[5]}`;
+  }
+  return (fieldCode || systemCode || "").trim().replace(/^PQ-/i, "");
+}
+
+/** So khớp tìm kiếm mã mối bỏ qua dấu gạch / khoảng trắng / hoa thường («051126 0012» khớp «PQ-FBW-05-11-26-0012»). */
+export function weldCodeMatches(code: string, query: string): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const q = norm(query);
+  return !q || norm(code).includes(q);
+}

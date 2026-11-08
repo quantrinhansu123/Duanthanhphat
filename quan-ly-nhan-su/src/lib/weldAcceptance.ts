@@ -1,4 +1,5 @@
 // Quy tắc thuần cho chọn mối phát RFI (giai đoạn 4). Dùng chung cho server và test; không import server-only.
+import { weldCodeMatches } from "@/lib/weldCode";
 
 export function rfiScope(info: Record<string, unknown> = {}) {
   const explicit = "nt_hinh_hoc" in info || "nt_sieu_am" in info;
@@ -67,7 +68,7 @@ export function filterRfiCandidates(rows: RfiCandidate[], f: RfiCandidateFilter)
   const byKm = kmFrom != null || kmTo != null;
   const missingChainage: string[] = [];
   const out = rows.filter((r) => {
-    if (q && !r.ma_lich_su.toLowerCase().includes(q)) return false;
+    if (q && !weldCodeMatches(r.ma_lich_su, q)) return false;
     if (f.nameFrom && compareWeldCodes(r.ma_lich_su, f.nameFrom) < 0) return false;
     if (f.nameTo && compareWeldCodes(r.ma_lich_su, f.nameTo) > 0) return false;
     if (f.dateFrom && (!r.ngay_thuc_hien || r.ngay_thuc_hien < f.dateFrom)) return false;

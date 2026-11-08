@@ -1,6 +1,8 @@
+import type { CSSProperties } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
 import { rfiScope } from "@/lib/weldAcceptance";
+import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
 export type RecordKind = "phu-luc" | "giai-doan" | "hoan-thanh";
@@ -15,34 +17,44 @@ const BOX = "❐";
 const ROWS_PER_PAGE = 30;
 // Số dòng tối thiểu của bảng: không in thêm dòng trống thừa.
 const MIN_BLANK_ROWS = 5;
+/**
+ * Phụ lục co giãn theo số dòng để dùng hết trang A4: đủ 30 dòng → hàng 16px, chữ 10px (vừa 1 trang);
+ * ít dòng hơn → hàng cao hơn (tối đa 24px, tổng bảng ≤ 420px để chừa chỗ tiêu đề cột), chữ to hơn (tối đa 11px).
+ */
+function annexSizing(rows: number) {
+  const row = rows >= ROWS_PER_PAGE ? 16 : Math.max(16, Math.min(24, Math.floor(420 / Math.max(rows, 1))));
+  const font = row >= 22 ? 11 : row >= 19 ? 10.5 : 10;
+  return { "--annex-row": `${row}px`, "--annex-font": `${font}px` } as CSSProperties;
+}
 
 export const acceptancePrintCss = `
 .acceptance-page { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto 16px; padding: 12mm 17mm; background: white; color: black; font: 13px/1.35 'Times New Roman', serif; }
-.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 12mm 12mm 6mm 7mm; font: 9px/1.2 'Times New Roman', serif; }
+.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 6mm 6mm 5mm 8mm; font: 11px/1.25 'Times New Roman', serif; }
 .acceptance-page h2 { font-size: 15px; font-weight: bold; text-align: center; margin: 12px 0 2px; }
-.acceptance-page.annex-page h2 { font-size: 12px; margin: 0; padding: 4px 2px; text-transform: uppercase; }
+.acceptance-page.annex-page h2 { font-size: 14.5px; margin: 0; padding: 4px 2px; text-transform: uppercase; }
 .acceptance-page h3 { font-weight: bold; margin-top: 8px; }
 .acceptance-page p { margin: 3px 0; }
 .acceptance-page table { width: 100%; border-collapse: collapse; }
 .acceptance-page th, .acceptance-page td { border: 1px solid black; padding: 3px; overflow-wrap: anywhere; }
 .acceptance-page .annex-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .acceptance-page .annex-sheet > tbody > tr > td { border: 1px solid black; padding: 2px 4px; vertical-align: top; }
-.acceptance-page .annex-sheet .title-cell { text-align: center; font-weight: bold; font-size: 12px; text-transform: uppercase; padding: 5px 2px; }
-.acceptance-page .annex-sheet .head-left { font-weight: bold; text-transform: uppercase; font-size: 9.5px; line-height: 1.35; }
-.acceptance-page .annex-sheet .head-right { width: 28%; font-size: 9px; }
-.acceptance-page .annex { font-size: 7.2px; table-layout: fixed; border-collapse: collapse; width: 100%; }
+.acceptance-page .annex-sheet .title-cell { text-align: center; font-weight: bold; font-size: 16px; text-transform: uppercase; padding: 5px 2px; }
+.acceptance-page .annex-sheet .head-left { font-weight: bold; text-transform: uppercase; font-size: 12.5px; line-height: 1.35; }
+.acceptance-page .annex-sheet .head-right { width: 28%; font-size: 12px; }
+.acceptance-page .annex { font-size: var(--annex-font, 10px); table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
-.acceptance-page .annex td { height: 12.5px; text-align: center; padding: 0 1px; vertical-align: middle; }
-.acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5px; }
+.acceptance-page .annex td { height: var(--annex-row, 16px); text-align: center; padding: 0 1px; vertical-align: middle; }
+.acceptance-page .annex td.weld-name { white-space: nowrap; }
+.acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
 .acceptance-page .annex-meta-grid td { border: 1px solid black; padding: 2px 4px; vertical-align: middle; }
-.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8px; }
+.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
 .acceptance-page .annex-foot > tbody > tr > td { border: 1px solid black; padding: 3px 4px; vertical-align: top; }
 .acceptance-page .annex-tol { width: 100%; border-collapse: collapse; }
-.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 7.5px; padding: 1px 3px; }
+.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 10.5px; padding: 1px 3px; }
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
-.acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 9px; }
-.acceptance-page .annex-sign td { height: 82px; font-size: 9px; text-align: left; font-weight: normal; }
+.acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 12px; }
+.acceptance-page .annex-sign td { height: 82px; font-size: 12px; text-align: left; font-weight: normal; }
 .acceptance-page .signature { text-align: center; font-weight: bold; margin-top: 10px; min-height: 95px; }
 .acceptance-page .signature small { display: block; font-weight: normal; font-style: italic; }
 .acceptance-page .dots { border-bottom: 1px dotted black; min-height: 21px; }
@@ -83,7 +95,9 @@ export const acceptancePrintCss = `
   .acceptance-page:first-of-type {
     break-before: auto !important; page-break-before: auto !important;
   }
+  /* Phụ lục: lề in hẹp do PrintFrame tạo (6mm, trái 9mm để đóng tập). */
   .acceptance-page.annex-page { padding: 0; }
+  .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
   @page { size: A4 portrait; margin: 0; }
@@ -163,7 +177,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const day = `${parts.d}/${parts.m}/${parts.y}`;
     const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
-    const codes = rows.map((r) => String(r.du_lieu_chot.moi_han?.ma_lich_su ?? "")).filter(Boolean);
+    const codes = rows.map((r) => fieldWeldCode(String(r.du_lieu_chot.moi_han?.ma_lich_su ?? ""), r.du_lieu_chot.moi_han?.ma_hien_truong as string | null | undefined)).filter(Boolean);
     const pointRows = rows.map((r) => r.du_lieu_chot.moi_han ?? {});
     const chainage = pointRows.map((w) => w.ly_trinh).filter(Boolean).map(String);
     const sortedChainage = chainage
@@ -188,7 +202,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
       return pages.map((page, pageIndex) => (
         <article className="acceptance-page annex-page" key={`${doc.kind}-${pageIndex}`}>
-<PrintFrame top="20mm" right="19mm">
+<PrintFrame top="6mm" right="6mm" bottom="6mm" left="9mm">
           <table className="annex-sheet">
             <tbody>
               <tr>
@@ -241,9 +255,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
               <tr>
                 <td colSpan={2} style={{ padding: 0 }}>
-                  <table className="annex">
+                  <table className="annex" style={annexSizing(Math.max(page.length, MIN_BLANK_ROWS))}>
                     <colgroup>
-                      {[3, 11, 8, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 15].map((w, i) => (
+                      {[3, 15, 7, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12].map((w, i) => (
                         <col key={i} style={{ width: `${w}%` }} />
                       ))}
                     </colgroup>
@@ -293,7 +307,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         return (
                           <tr key={i}>
                             <td>{pageIndex * ROWS_PER_PAGE + i + 1}</td>
-                            <td>{str(w.ma_lich_su)}</td>
+                            <td className="weld-name">{fieldWeldCode(str(w.ma_lich_su), w.ma_hien_truong as string | null | undefined)}</td>
                             <td>{str(w.loai_ray)}</td>
                             <td>{str(w.ly_trinh)}</td>
                             <td>{left}</td>

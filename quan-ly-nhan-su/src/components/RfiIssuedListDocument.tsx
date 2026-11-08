@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldWeldCode } from "@/lib/weldCode";
 import { useEffect, useState } from "react";
 import type { RfiSummary } from "@/lib/weldQualityClient";
 import type { RfiCandidate } from "@/lib/weldAcceptance";
@@ -134,7 +135,7 @@ export default function RfiIssuedListDocument({
           <p className="mt-1 text-xs text-slate-700">Mối đủ điều kiện phát RFI và chưa nằm trong RFI hiệu lực. Chưa bao gồm mối đang chờ mài, sửa chữa hoặc chưa đủ điều kiện chất lượng.</p>
           {unassigned.length > 0 && <div className="rfi-table-scroll mt-2 overflow-x-auto"><table className="w-full border-collapse text-xs">
             <thead><tr>{["Mã mối", "Ngày hàn", "Lý trình", "Tình trạng"].map((title) => <th key={title} className="border border-slate-400 p-2 text-left">{title}</th>)}</tr></thead>
-            <tbody>{unassigned.map((w) => <tr key={w.id}><td className="border border-slate-400 p-2">{w.ma_lich_su}</td><td className="border border-slate-400 p-2">{w.ngay_thuc_hien ? formatDate(w.ngay_thuc_hien) : "—"}</td><td className="border border-slate-400 p-2">{w.ly_trinh || "Thiếu KM"}</td><td className="border border-slate-400 p-2">{w.tinh_trang}</td></tr>)}</tbody>
+            <tbody>{unassigned.map((w) => <tr key={w.id}><td className="border border-slate-400 p-2">{fieldWeldCode(w.ma_lich_su)}</td><td className="border border-slate-400 p-2">{w.ngay_thuc_hien ? formatDate(w.ngay_thuc_hien) : "—"}</td><td className="border border-slate-400 p-2">{w.ly_trinh || "Thiếu KM"}</td><td className="border border-slate-400 p-2">{w.tinh_trang}</td></tr>)}</tbody>
           </table></div>}
         </section>
         <section className={`rfi-control-detail mt-5 ${showDetails ? "block" : "hidden"}`}>
@@ -144,7 +145,7 @@ export default function RfiIssuedListDocument({
             <div className="rfi-table-scroll overflow-x-auto"><table className="mt-1 w-full min-w-[650px] border-collapse text-xs">
               <thead><tr>{["Mã mối", "Tuyến / Vị trí", "KM", "Kết quả nghiệm thu", "Hồ sơ"].map((title) => <th key={title} className="border border-slate-400 p-2 text-left">{title}</th>)}</tr></thead>
               <tbody>{r.tracking?.moi.map((w) => <tr key={w.moi_han_id}>
-                <td className="border border-slate-400 p-2">{w.ma_lich_su}</td>
+                <td className="border border-slate-400 p-2">{fieldWeldCode(w.ma_lich_su)}</td>
                 <td className="border border-slate-400 p-2">{weldRoute(w.ma_diem)} · {w.ma_diem || "—"}</td>
                 <td className="border border-slate-400 p-2">{w.ly_trinh || "Thiếu KM"}</td>
                 <td className="border border-slate-400 p-2">{w.ket_qua}</td>
