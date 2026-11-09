@@ -311,6 +311,23 @@ async function childSigningByRfi(parentIds: string[]) {
   return new Map([...groups].map(([id, children]) => [id, rfiChildSigning(children)]));
 }
 
+/** Nội dung in nhập tay của phiếu yêu cầu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km) — lưu theo phiếu, dùng chung mọi máy. */
+const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+export async function saveRfiPrintInfo(body: Record<string, unknown>) {
+  const id = qualityUuid(body.id);
+  const values = object(body.values ?? {});
+  const { data: existing, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("thong_tin").eq("id", id).single();
+  if (error) throw error;
+  const thong_tin: Record<string, unknown> = { ...(existing.thong_tin ?? {}) };
+  for (const key of PRINT_INFO_KEYS) {
+    const value = str(values[key], 2000);
+    if (value) thong_tin[`in_${key}`] = value; else delete thong_tin[`in_${key}`];
+  }
+  const { error: updateError } = await db().from("phieu_yeu_cau_nghiem_thu").update({ thong_tin }).eq("id", id);
+  if (updateError) throw updateError;
+  return { id };
+}
+
 export async function listRfis(projectId: string) {
   type Snapshot = { moi_han?: { ma_lich_su?: string; ma_diem?: string; ly_trinh?: string } };
   type Rfi = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string; thong_tin: Record<string, string>; created_at: string };

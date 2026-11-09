@@ -115,6 +115,8 @@ export const loadRfiOverview = (du_an_id: string) => qualityRequest<{
 export async function publishRfi(input: { id: string; du_an_id: string; so_phieu: string; ngay_moi: string; moi_han_ids: string[]; thong_tin: Record<string, string>; loai_rfi?: "nghiem-thu" | "theo-doi" | "ca-hai"; filters?: RfiCandidateFilter }) {
   try { return await qualityRequest<{ id: string }>({ action: "rfi-publish", ...input }); } finally { notifyWeldQualityChanged(); }
 }
+/** Lưu nội dung in nhập tay của phiếu yêu cầu (đối tượng, nội dung vị trí, ngày giờ, Km). */
+export const saveRfiPrintInfo = (id: string, values: Record<string, string>) => qualityRequest<{ id: string }>({ action: "rfi-print-save", id, values });
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
 export async function deleteRfi(id: string) {
   const result = await qualityRequest<{ id: string }>({ action: "rfi-delete", id });

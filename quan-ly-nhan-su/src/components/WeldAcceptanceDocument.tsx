@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { loadRecordSet, reviseRecord, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { loadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
@@ -74,19 +74,40 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   // Sửa nội dung in của phiếu YCNT ngay trên bản xem trước (lưu theo phiếu trên máy này; để trống = tự lấy).
   const rfiKey = view.rfi ? `rfi-print:${view.rfi.rfi.id}` : "";
   const [rfiEditOpen, setRfiEditOpen] = useState(false);
+  const [printSaved, setPrintSaved] = useState("");
+  const printSaveTimer = useRef<number | null>(null);
+  // Ưu tiên: nội dung đã lưu theo phiếu (dùng chung mọi máy) > bản nháp trên máy > giá trị nhập gần nhất (tự điền cho phiếu mới).
   const [rfiOverrides, setRfiOverrides] = useState<RfiOverrides>(() => {
     if (!rfiKey) return {};
-    try { return JSON.parse(window.localStorage.getItem(rfiKey) ?? "{}") as RfiOverrides; } catch { return {}; }
+    let local: RfiOverrides = {}, remembered: RfiOverrides = {};
+    try { local = JSON.parse(window.localStorage.getItem(rfiKey) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
+    try { remembered = JSON.parse(window.localStorage.getItem(RFI_PRINT_DEFAULTS) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
+    const saved: RfiOverrides = {};
+    for (const key of RFI_PRINT_SAVED_KEYS) {
+      const value = view.rfi?.rfi.thong_tin?.[`in_${key}`];
+      if (value) saved[key] = value;
+    }
+    return { doi_tuong: remembered.doi_tuong, noi_dung: remembered.noi_dung, ...local, ...saved };
   });
+  function persistOverrides(next: RfiOverrides) {
+    try { window.localStorage.setItem(rfiKey, JSON.stringify(next)); } catch { /* bỏ qua khi không lưu được */ }
+    // Nhớ đối tượng + nội dung vị trí để tự điền cho các phiếu sau (khi đổi thì sửa lại).
+    try { window.localStorage.setItem(RFI_PRINT_DEFAULTS, JSON.stringify({ doi_tuong: next.doi_tuong ?? "", noi_dung: next.noi_dung ?? "" })); } catch { /* bỏ qua */ }
+    if (printSaveTimer.current) window.clearTimeout(printSaveTimer.current);
+    setPrintSaved("Đang lưu…");
+    printSaveTimer.current = window.setTimeout(() => {
+      const values = Object.fromEntries(RFI_PRINT_SAVED_KEYS.map((k) => [k, next[k] ?? ""]));
+      saveRfiPrintInfo(view.rfi!.rfi.id, values).then(() => setPrintSaved("Đã lưu cho phiếu này")).catch(() => setPrintSaved("Chưa lưu được lên máy chủ (vẫn nhớ trên máy này)"));
+    }, 700);
+  }
   function setOverride(key: keyof RfiOverrides, value: string) {
-    setRfiOverrides((cur) => {
-      const next = { ...cur, [key]: value };
-      try { window.localStorage.setItem(rfiKey, JSON.stringify(next)); } catch { /* bỏ qua khi không lưu được */ }
-      return next;
-    });
+    const next = { ...rfiOverrides, [key]: value };
+    setRfiOverrides(next);
+    persistOverrides(next);
   }
   function resetOverrides() {
     setRfiOverrides({});
+    persistOverrides({});
     try { window.localStorage.removeItem(rfiKey); } catch { /* bỏ qua */ }
   }
 
@@ -193,7 +214,10 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
               </label>
             ))}
           </div>
-          <button type="button" onClick={resetOverrides} className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">Về mặc định</button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={resetOverrides} className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">Về mặc định</button>
+            {printSaved && <span className="text-xs text-slate-500">{printSaved}</span>}
+          </div>
         </div>
       )}
       {kind === "rfi" && sigOpen && (
@@ -344,7 +368,10 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
   );
 }
 
-type RfiOverrides = Partial<Record<"so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan", string>>;
+/** Các mục nhập tay được lưu theo phiếu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km). */
+const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
+type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan", string>>;
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
   ["so_phieu", "Số phiếu", "text", "007/PYC-HR"],
   ["ngay_lap", "Ngày lập phiếu", "date", ""],
@@ -354,6 +381,7 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["ngay_nhan", "Ngày nhận (TVGS)", "date", ""],
   ["km_dau", "Km đầu", "text", "4+486.85"],
   ["km_cuoi", "Km cuối", "text", "4+486.85"],
+  ["noi_dung", "Nội dung tại vị trí (mục 2) — nhập một lần, tự nhớ", "text", "Giám sát thi công hàn ray"],
   ["dia_diem", "Địa điểm", "text", ""],
   ["hang_muc", "Hạng mục", "text", ""],
   ["nguoi_nhan", "Người nhận (TVGS)", "text", ""],
@@ -423,7 +451,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       </>}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => fieldWeldCode(w.ma_lich_su)).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
-      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}</p>
+      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}{o.noi_dung?.trim() ? <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {o.noi_dung.trim()}</> : null}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
