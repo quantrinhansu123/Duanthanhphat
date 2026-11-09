@@ -141,8 +141,10 @@ export function buildAutolispBulkPreview(
   context: AutolispBulkContext,
   existingSystemCodes: string[],
   existingMachineCodes: string[],
+  options?: { keepOrder?: boolean },
 ): AutolispBulkPreviewRow[] {
-  const sorted = sortAutolispPoints(points);
+  // keepOrder: giữ đúng thứ tự hàn đã sinh (xen kẽ trái/phải) để mã hệ thống / mã hiện trường cấp theo thứ tự đó.
+  const sorted = options?.keepOrder ? points : sortAutolispPoints(points);
   const usedSystem = new Set(existingSystemCodes.map((c) => c.trim().toUpperCase()).filter(Boolean));
   const usedMachine = new Set(existingMachineCodes.map((c) => c.trim().toUpperCase()).filter(Boolean));
   const performedAt = performedAtIso(context);

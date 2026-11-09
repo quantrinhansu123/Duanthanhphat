@@ -17,6 +17,7 @@ import {
   type AutolispBulkPreviewRow,
 } from "@/lib/bulkCreateWeldsFromAutolisp";
 import { fetchUnlinkedGpsPoints, fetchMapPointsFromDb } from "@/lib/mapPointsDb";
+import { pairedLispSequence } from "@/lib/lispSequence";
 import {
   loadMachineFieldCodesForSuggestion,
   loadWeldCodesWithPrefix,
@@ -67,6 +68,10 @@ export function BulkAutolispWeldDialog({
   const [prefixes, setPrefixes] = useState<CoordinateRailPrefix[]>([...COORDINATE_RAIL_PREFIXES]);
   const [kmFrom, setKmFrom] = useState("");
   const [kmTo, setKmTo] = useState("");
+  // Sinh theo 2 mã Lisp đầu (một mã mỗi ray): hàn xen kẽ trái/phải, mỗi ray chạy liên tục.
+  const [firstLeft, setFirstLeft] = useState("");
+  const [firstRight, setFirstRight] = useState("");
+  const [seqCount, setSeqCount] = useState(20);
   /** Mặc định gồm điểm đã gắn để ghi đè nhật ký cũ. */
   const [includeLinked, setIncludeLinked] = useState(true);
 
@@ -158,13 +163,29 @@ export function BulkAutolispWeldDialog({
       const sourcePoints = source.points;
       setPointCount(sourcePoints.length);
 
-      const filtered = filterAutolispPointsForBulk(sourcePoints, {
+      const seqMode = Boolean(firstLeft.trim() || firstRight.trim());
+      let filtered = filterAutolispPointsForBulk(sourcePoints, {
         prefixes,
         chainageFromM: fromM,
         chainageToM: toM,
         projectId: duAnId || null,
         onlyUnlinked: !includeLinked,
       });
+      if (seqMode) {
+        const count = Math.min(AUTOLISP_BULK_MAX, Math.max(2, Math.round(Number(seqCount) || 0)));
+        const codes = pairedLispSequence(firstLeft, firstRight, count);
+        if (!codes.length) {
+          setError("2 mã Lisp đầu phải là hai ray của cùng một tuyến (vd HT0168 và HP0170, hoặc TT… và TP…).");
+          return;
+        }
+        const byCode = new Map(sourcePoints.map((point) => [point.code.trim().toUpperCase(), point]));
+        const missing = codes.filter((code) => !byCode.has(code));
+        if (missing.length) {
+          setError(`Chưa có điểm Autolisp: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Giảm số mối hoặc import thêm điểm.`);
+          return;
+        }
+        filtered = codes.map((code) => byCode.get(code)!);
+      }
 
       const prefix = buildWeldCodePrefix(congNghe, `${performedAt.slice(0, 10)}T08:00`, sitePrefix, loaiMoiHan);
       const [systemCodes, machineCodes] = await Promise.all([
@@ -174,7 +195,7 @@ export function BulkAutolispWeldDialog({
       setExistingSystem(systemCodes);
       setExistingMachine(machineCodes);
 
-      const preview = buildAutolispBulkPreview(filtered, context, systemCodes, machineCodes);
+      const preview = buildAutolispBulkPreview(filtered, context, systemCodes, machineCodes, { keepOrder: seqMode });
       setRows(preview);
       if (!preview.length) {
         setError("Không có điểm Autolisp khớp bộ lọc. Kiểm tra import Excel / dải / Km.");
@@ -186,7 +207,7 @@ export function BulkAutolispWeldDialog({
       setLoadingPoints(false);
       setPreviewing(false);
     }
-  }, [context, prefixes, kmFrom, kmTo, includeLinked, duAnId, congNghe, performedAt, sitePrefix, loaiMoiHan, machine]);
+  }, [context, prefixes, kmFrom, kmTo, includeLinked, duAnId, congNghe, performedAt, sitePrefix, loaiMoiHan, machine, firstLeft, firstRight, seqCount]);
 
   function setRowSelected(pointId: string, selected: boolean) {
     setRows((prev) => {
@@ -413,6 +434,24 @@ export function BulkAutolispWeldDialog({
               placeholder="1+500"
             />
           </label>
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 sm:col-span-2 lg:col-span-3">
+            <div className="text-xs font-bold text-sky-900">Hoặc tự sinh từ 2 mã Lisp đầu (bỏ trống để lọc theo dải / lý trình ở trên)</div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <label className="text-xs font-semibold text-slate-700">
+                Mã Lisp ray trái (mối đầu)
+                <input className={`${inputClass} font-mono uppercase`} value={firstLeft} onChange={(e) => setFirstLeft(e.target.value.toUpperCase())} placeholder="HT0168" />
+              </label>
+              <label className="text-xs font-semibold text-slate-700">
+                Mã Lisp ray phải (mối đầu)
+                <input className={`${inputClass} font-mono uppercase`} value={firstRight} onChange={(e) => setFirstRight(e.target.value.toUpperCase())} placeholder="HP0170" />
+              </label>
+              <label className="text-xs font-semibold text-slate-700">
+                Số mối cần sinh
+                <input type="number" min={2} max={AUTOLISP_BULK_MAX} className={inputClass} value={seqCount} onChange={(e) => setSeqCount(Number(e.target.value))} />
+              </label>
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-600">Mỗi ray chạy liên tục, hai ray đánh số độc lập; hàn xen kẽ trái → phải (HT0168, HP0170, HT0169, HP0171…).</p>
+          </div>
           <label className="flex items-end gap-2 pb-2 text-xs font-semibold text-slate-700">
             <input
               type="checkbox"

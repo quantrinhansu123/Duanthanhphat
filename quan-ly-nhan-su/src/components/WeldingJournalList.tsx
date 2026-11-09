@@ -93,6 +93,8 @@ import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
+import { loadDayLispCodes } from "@/lib/dayLispCodes";
+import { nextLispCode } from "@/lib/lispSequence";
 import { loadQualityJournal, exportQualityJournal, loadWeldPaymentsOf, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
@@ -722,6 +724,31 @@ function JournalFormModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, uploadingImages, saving, form.anh_moi_han_lien_ket]);
+
+  // Mã Lisp tự điền: hàn mối đầu của mỗi ray xong thì các mối sau tự lấy mã kế tiếp (mỗi ray chạy liên tục, hai ray độc lập).
+  const [lispHint, setLispHint] = useState("");
+  // Mảng điểm đổi tham chiếu mỗi lần render → đọc qua ref, chỉ phụ thuộc việc đã có điểm hay chưa.
+  const lispPointsRef = useRef(unlinkedGpsPoints);
+  lispPointsRef.current = unlinkedGpsPoints;
+  const hasLispPoints = unlinkedGpsPoints.length > 0;
+  const lispDate = form.performedAt.slice(0, 10);
+  useEffect(() => {
+    if (!open || mode !== "create" || codeFromQr) { setLispHint(""); return; }
+    if (!form.du_an_id || !lispDate || !hasLispPoints) return;
+    let active = true;
+    loadDayLispCodes(form.du_an_id, lispDate).then((codes) => {
+      if (!active) return;
+      const code = nextLispCode(codes);
+      if (!code) { setLispHint(codes.length ? "Ray còn lại chưa có mối nào trong ngày: chọn/nhập mã Lisp mối đầu của ray đó, các mối sau tự điền." : ""); return; }
+      const point = lispPointsRef.current.find((p) => p.code.trim().toUpperCase() === code);
+      if (!point) { setLispHint(`Mã kế tiếp theo quy tắc: ${code} — chưa có điểm trống này trong danh sách Autolisp.`); return; }
+      setForm((prev) => prev.toa_do_id || prev.ma_toa_do.trim() ? prev : {
+        ...prev, toa_do_id: point.id, ly_trinh: point.chainage || prev.ly_trinh, kinh_do: String(point.longitude), vi_do: String(point.latitude),
+      });
+      setLispHint(`Tự điền ${code} theo quy tắc (mỗi ray chạy liên tục, hai ray độc lập). Đổi lại nếu hàn khác thứ tự.`);
+    }).catch(() => { if (active) setLispHint(""); });
+    return () => { active = false; };
+  }, [open, mode, codeFromQr, form.du_an_id, lispDate, hasLispPoints]);
 
   if (!open) return null;
 
@@ -1361,7 +1388,7 @@ function JournalFormModal({
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
                 {unlinkedGpsPoints.length > 0
-                  ? "Chọn điểm thiết kế → tự điền Km/GPS. Sau khi lưu, mã vị trí hiện trên bảng nhật ký."
+                  ? (lispHint || "Chọn điểm thiết kế → tự điền Km/GPS. Sau khi lưu, mã vị trí hiện trên bảng nhật ký.")
                   : "Chưa có điểm Autolisp trống. Import/thêm điểm ở Bản đồ rồi mở lại form, hoặc giữ điểm đang gắn (khi sửa)."}
               </span>
             </label>
