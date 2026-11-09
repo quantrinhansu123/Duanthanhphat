@@ -8,6 +8,7 @@ type BarcodeDetectorLike = {
 };
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike;
 const scanOffsets = [0, -0.12, 0.12];
+const tightScanOffsets = [0, -0.05, 0.05];
 
 /**
  * Quét mã QR bằng camera sau của điện thoại / máy tính bảng.
@@ -114,14 +115,21 @@ export default function QrScanDialog({
               if (!text) {
                 const { videoWidth: width, videoHeight: height } = video;
                 const shortSide = Math.min(width, height);
-                const side = Math.round(shortSide * 0.36);
                 // Quét các vùng chồng lấn để tách những tem nằm sát nhau trên cùng tờ in.
-                const index = scanIndex++ % (scanOffsets.length ** 2 + 1);
-                if (index === scanOffsets.length ** 2) {
+                const wideCount = scanOffsets.length ** 2;
+                const index = scanIndex++ % (tightScanOffsets.length + wideCount + 1);
+                if (index < tightScanOffsets.length) {
+                  // Một vùng nhỏ quanh dấu + tránh lấy các ô định vị từ tem bên cạnh.
+                  const side = Math.round(shortSide * 0.26);
+                  text = decodeFrame(side, side, (width - side) / 2,
+                    (height - side) / 2 + tightScanOffsets[index] * shortSide);
+                } else if (index === tightScanOffsets.length + wideCount) {
                   text = decodeFrame(width, height);
                 } else {
-                  const dx = scanOffsets[index % scanOffsets.length];
-                  const dy = scanOffsets[Math.floor(index / scanOffsets.length)];
+                  const side = Math.round(shortSide * 0.36);
+                  const wideIndex = index - tightScanOffsets.length;
+                  const dx = scanOffsets[wideIndex % scanOffsets.length];
+                  const dy = scanOffsets[Math.floor(wideIndex / scanOffsets.length)];
                   text = decodeFrame(side, side, (width - side) / 2 + dx * shortSide, (height - side) / 2 + dy * shortSide);
                 }
               }
