@@ -25,6 +25,7 @@ export default function QrScanDialog({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraError, setCameraError] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [starting, setStarting] = useState(false);
   const [manual, setManual] = useState("");
   const onResultRef = useRef(onResult);
@@ -36,6 +37,7 @@ export default function QrScanDialog({
     let stream: MediaStream | null = null;
     let timer = 0;
     setCameraError("");
+    setPhotoError("");
     setManual("");
 
     async function start() {
@@ -143,6 +145,33 @@ export default function QrScanDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  async function scanPhoto(file: File) {
+    const preview = videoRef.current;
+    const url = URL.createObjectURL(file);
+    setPhotoError("");
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      if (videoRef.current !== preview) return;
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const result = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" });
+      if (result?.data) onResultRef.current(result.data);
+      else setPhotoError("Không đọc được QR trong ảnh. Chụp rõ toàn bộ mã và phần viền trắng.");
+    } catch {
+      if (videoRef.current === preview) setPhotoError("Không mở được ảnh. Hãy chọn ảnh khác.");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Quét mã QR vị trí hàn">
@@ -156,6 +185,7 @@ export default function QrScanDialog({
           {starting && <p className="absolute inset-0 flex items-center justify-center text-sm text-white">Đang mở camera…</p>}
         </div>
         {cameraError && <p role="alert" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">{cameraError}</p>}
+        {photoError && <p role="alert" className="mt-2 text-xs text-amber-900">{photoError}</p>}
         <form
           className="mt-3 flex gap-2"
           onSubmit={(event) => {
@@ -172,7 +202,15 @@ export default function QrScanDialog({
           />
           <button type="submit" disabled={!manual.trim()} className="h-10 cursor-pointer rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">Dùng mã</button>
         </form>
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex flex-wrap justify-between gap-2">
+          <label className="inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 focus-within:ring-2 focus-within:ring-blue-600">
+            Đọc QR từ ảnh
+            <input type="file" accept="image/*" className="sr-only" onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) void scanPhoto(file);
+            }} />
+          </label>
           <button type="button" onClick={onClose} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Đóng</button>
         </div>
       </div>

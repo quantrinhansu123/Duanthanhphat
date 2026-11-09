@@ -203,7 +203,7 @@ export default function WeldQrPrintDialog({
   useEffect(() => {
     let active = true;
     Promise.all(
-      tags.map(async (tag) => [tag.pointId, await QRCode.toDataURL(tag.qrText, { margin: 0, width: 240, errorCorrectionLevel: "M" })] as const),
+      tags.map(async (tag) => [tag.pointId, await QRCode.toDataURL(tag.qrText, { margin: 4, width: 240, errorCorrectionLevel: "M" })] as const),
     )
       .then((entries) => { if (active) setQrImages(Object.fromEntries(entries)); })
       .catch(() => { if (active) setQrImages({}); });
@@ -273,7 +273,7 @@ export default function WeldQrPrintDialog({
       #weld-qr-print .rail { position:relative; height:9mm; }
       #weld-qr-print .rail::before { content:""; position:absolute; left:0; right:0; top:50%; height:1.1mm; margin-top:-0.55mm; background:#2f5fb3; }
       #weld-qr-print .rail .dot { position:absolute; left:50%; top:50%; width:2.2mm; height:2.2mm; margin:-1.1mm 0 0 -1.1mm; border-radius:50%; background:#111; }
-      #weld-qr-print .qr img { display:block; width:17mm; height:17mm; margin:1.5mm auto; image-rendering:pixelated; }
+      #weld-qr-print .qr img { display:block; width:23.5mm; height:23.5mm; margin:1.5mm auto; image-rendering:pixelated; }
       #weld-qr-print .gap { height:3mm; border-bottom:0; }
       #weld-qr-print .hint { margin-top:4mm; font-size:8.5pt; color:#444; }
       @media print {
