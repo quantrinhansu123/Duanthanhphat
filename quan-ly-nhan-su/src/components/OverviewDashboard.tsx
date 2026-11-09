@@ -74,14 +74,14 @@ const PROJECT_COLORS = [
 const CHART_ZOOM_MAX = 8;
 const LOOKUP_PAGE_SIZE = 80;
 
-type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind" | "acceptance" | "signing" | "groundDone" | "ultrasound" | "paid";
+type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind" | "acceptance" | "signing" | "groundDone" | "ultrasound" | "paid" | "partialPaid" | "unpaid";
 
 const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   projects: "Dự án",
   all: "Tổng mối hàn",
   today: "Hôm nay",
   latest: "Ngày gần nhất",
-  passed: "Đạt",
+  passed: "Đã ký",
   failed: "Không đạt",
   rework: "Mối hàn lại",
   pending: "Chờ siêu âm",
@@ -91,6 +91,8 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   groundDone: "Mài xong",
   ultrasound: "Chờ siêu âm",
   paid: "Đã thanh toán",
+  partialPaid: "Thanh toán một phần",
+  unpaid: "Chưa thanh toán",
 };
 
 function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
@@ -1639,7 +1641,7 @@ export default function OverviewDashboard() {
         <button type="button" onClick={() => setLookup("passed")} className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold tracking-wider text-emerald-700 uppercase">
-              ĐẠT
+              ĐÃ KÝ
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
@@ -1755,6 +1757,24 @@ export default function OverviewDashboard() {
             <span className="text-xs text-slate-400">mối</span>
           </div>
           <div className="mt-2.5 text-xs text-slate-500">Mối nghiệm thu Đạt đã thanh toán đủ 100%</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("partialPaid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-amber-700">THANH TOÁN MỘT PHẦN</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.partialPaidCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu, thanh toán 30/50/70%</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("unpaid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-slate-600">CHƯA THANH TOÁN</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.unpaidCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu Đạt, chưa ghi thanh toán</div>
         </button>
 
         <button type="button" onClick={() => setLookup("signing")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
@@ -2795,7 +2815,7 @@ export default function OverviewDashboard() {
         <ReportLookupDialog
           kind={lookup}
           loading={lookup !== "projects" && loading && selectedRows.length === 0}
-          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : lookup === "groundDone" ? (quality?.ground ?? []) : lookup === "ultrasound" ? (quality?.ultrasound ?? []) : lookup === "paid" ? (quality?.paid ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : lookup === "groundDone" ? (quality?.ground ?? []) : lookup === "ultrasound" ? (quality?.ultrasound ?? []) : lookup === "paid" ? (quality?.paid ?? []) : lookup === "partialPaid" ? (quality?.partialPaid ?? []) : lookup === "unpaid" ? (quality?.unpaid ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
           projects={selectedProjects.map((project) => ({
             id: project.id,
             name: project.name,

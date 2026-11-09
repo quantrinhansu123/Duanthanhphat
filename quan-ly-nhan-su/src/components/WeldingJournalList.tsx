@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -124,6 +124,14 @@ const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?
   { id: "ky-bb", label: "Chờ ký BB", hint: "Đã nghiệm thu Đạt — chờ ký bộ biên bản", statuses: ["Chờ ký biên bản"] },
   { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },
 ];
+
+/**
+ * Nhãn kết quả thí nghiệm trong Nhật ký hàn: NDT/siêu âm Không đạt hiển thị "Lỗi"
+ * (tinh_trang_thi_nghiem = "Không đạt" chỉ do siêu âm fail đồng bộ từ trigger, nên đổi nhãn an toàn).
+ */
+function displayTestStatus(status: string | null | undefined) {
+  return status === "Không đạt" ? "Lỗi" : (status ?? "Chưa tải");
+}
 
 type JournalProjectOption = { id: string; label: string; ma_du_an: string };
 
@@ -3374,7 +3382,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                               ? "bg-slate-400"
                               : "bg-amber-500"
                       }`} />
-                      {w.testStatus}
+                      {displayTestStatus(w.testStatus)}
                     </span>
                   </td>
                   ) : null}
@@ -3572,7 +3580,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                           : "border-amber-200 bg-amber-50 text-amber-700"
                   }`}
                 >
-                  {detailView.testStatus}
+                  {displayTestStatus(detailView.testStatus)}
                 </span>
                 {detailRaw && (
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-600">

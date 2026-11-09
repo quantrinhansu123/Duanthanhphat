@@ -155,7 +155,7 @@ export async function setRfiChildSign(phieu_rfi_id: string, tinh_trang_ky: "Chá»
 }
 
 export type DashboardQualityData = { accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[];
-  ground?: WeldReportRow[]; ultrasound?: WeldReportRow[]; paid?: WeldReportRow[] };
+  ground?: WeldReportRow[]; ultrasound?: WeldReportRow[]; paid?: WeldReportRow[]; partialPaid?: WeldReportRow[]; unpaid?: WeldReportRow[] };
 export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: string; dateTo?: string }) =>
   qualityRequest<DashboardQualityData>({ action: "dashboard-quality", filters });
 

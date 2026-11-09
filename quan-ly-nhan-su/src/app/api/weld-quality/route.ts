@@ -3,7 +3,7 @@ import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQuali
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
-import { listPayments, listPaymentIds, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
+import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
@@ -59,9 +59,19 @@ export async function POST(request: Request) {
       const base = object(body.filters ?? {});
       const [accepted, waiting, acceptance, signing, ground, ultrasound] = await Promise.all(["Đạt", "Chờ mài", "Chờ nghiệm thu", "Chờ ký biên bản", "Mài xong", "Chờ siêu âm"].map((qualityStatusFilter) =>
         loadQualityJournalRows(parseQualityFilters({ ...base, qualityStatusFilter, page: 1, pageSize: 1000 }))));
-      // Đã thanh toán = mối đã nghiệm thu Đạt có ghi thanh toán.
-      const paidIds = new Set((await listPaymentIds(accepted.map((r) => r.id))));
-      return NextResponse.json({ accepted, waiting, acceptance, signing, ground, ultrasound, paid: accepted.filter((r) => paidIds.has(r.id)) });
+      // Thanh toán tính trên mối đã nghiệm thu Đạt: đủ 100% / một phần (30·50·70) / chưa thanh toán.
+      const payments = await paymentsOf(accepted.map((r) => r.id));
+      const tyLeById = new Map(payments.map((p) => [p.moi_han_id, p.ty_le]));
+      const paid: typeof accepted = [];
+      const partialPaid: typeof accepted = [];
+      const unpaid: typeof accepted = [];
+      for (const row of accepted) {
+        const tyLe = tyLeById.get(row.id);
+        if (tyLe === 100) paid.push(row);
+        else if (tyLe != null) partialPaid.push(row);
+        else unpaid.push(row);
+      }
+      return NextResponse.json({ accepted, waiting, acceptance, signing, ground, ultrasound, paid, partialPaid, unpaid });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (["split-list", "split-detail", "split-publish", "split-complete", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
