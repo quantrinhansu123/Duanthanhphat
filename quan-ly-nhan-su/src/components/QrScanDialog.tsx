@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 
 type BarcodeDetectorLike = {
-  detect: (source: CanvasImageSource) => Promise<{ rawValue: string }[]>;
+  detect: (source: CanvasImageSource) => Promise<{ rawValue: string; boundingBox: DOMRectReadOnly }[]>;
 };
 type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDetectorLike;
+const scanOffsets = [0, -0.12, 0.12];
 
 /**
  * Quét mã QR bằng camera sau của điện thoại / máy tính bảng.
@@ -68,6 +69,11 @@ export default function QrScanDialog({
         try { detector = Detector ? new Detector({ formats: ["qr_code"] }) : null; } catch { detector = null; }
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        let scanIndex = 0;
+        const centerDistance = (x: number, y: number) =>
+          Math.hypot(x - video.videoWidth / 2, y - video.videoHeight / 2);
+        const inTarget = (x: number, y: number) =>
+          centerDistance(x, y) <= Math.min(video.videoWidth, video.videoHeight) * 0.14;
         const decodeFrame = (width: number, height: number, x = 0, y = 0) => {
           if (!ctx) return "";
           const scale = Math.min(1, 960 / Math.max(width, height));
@@ -77,7 +83,12 @@ export default function QrScanDialog({
           if (canvas.height !== scaledHeight) canvas.height = scaledHeight;
           ctx.drawImage(video, x, y, width, height, 0, 0, scaledWidth, scaledHeight);
           const image = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
-          return jsQR(image.data, scaledWidth, scaledHeight, { inversionAttempts: "attemptBoth" })?.data ?? "";
+          const result = jsQR(image.data, scaledWidth, scaledHeight, { inversionAttempts: "attemptBoth" });
+          if (!result) return "";
+          const { topLeftCorner, bottomRightCorner } = result.location;
+          const centerX = x + (topLeftCorner.x + bottomRightCorner.x) * width / (2 * scaledWidth);
+          const centerY = y + (topLeftCorner.y + bottomRightCorner.y) * height / (2 * scaledHeight);
+          return inTarget(centerX, centerY) ? result.data : "";
         };
 
         const tick = async () => {
@@ -88,7 +99,13 @@ export default function QrScanDialog({
               if (detector) {
                 try {
                   const found = await detector.detect(video);
-                  text = found.find((code) => code.rawValue.trim())?.rawValue ?? "";
+                  const candidates = found.filter(({ rawValue, boundingBox: box }) =>
+                    rawValue.trim() && box && inTarget(box.x + box.width / 2, box.y + box.height / 2));
+                  candidates.sort((a, b) => {
+                    const distance = ({ x, y, width, height }: DOMRectReadOnly) => centerDistance(x + width / 2, y + height / 2);
+                    return distance(a.boundingBox) - distance(b.boundingBox);
+                  });
+                  text = candidates[0]?.rawValue ?? "";
                 } catch {
                   detector = null;
                 }
@@ -96,10 +113,17 @@ export default function QrScanDialog({
               if (stopped) return;
               if (!text) {
                 const { videoWidth: width, videoHeight: height } = video;
-                // Giữ chi tiết của tem nhỏ trong vùng giữa trước khi thử toàn khung.
-                const side = Math.round(Math.min(width, height) * 0.8);
-                text = decodeFrame(side, side, (width - side) / 2, (height - side) / 2)
-                  || decodeFrame(width, height);
+                const shortSide = Math.min(width, height);
+                const side = Math.round(shortSide * 0.36);
+                // Quét các vùng chồng lấn để tách những tem nằm sát nhau trên cùng tờ in.
+                const index = scanIndex++ % (scanOffsets.length ** 2 + 1);
+                if (index === scanOffsets.length ** 2) {
+                  text = decodeFrame(width, height);
+                } else {
+                  const dx = scanOffsets[index % scanOffsets.length];
+                  const dy = scanOffsets[Math.floor(index / scanOffsets.length)];
+                  text = decodeFrame(side, side, (width - side) / 2 + dx * shortSide, (height - side) / 2 + dy * shortSide);
+                }
               }
               if (text) {
                 stopped = true;
@@ -178,10 +202,12 @@ export default function QrScanDialog({
       <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs" onClick={onClose} />
       <div className="relative z-10 w-full max-w-[440px] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-5">
         <h3 className="text-base font-bold text-slate-900 sm:text-lg">Quét QR vị trí hàn</h3>
-        <p className="mt-1 text-xs text-slate-600">Đưa mã QR trên ray vào khung. Hệ thống đọc mã Lisp (HT/HP/TT/TP) rồi tự điền các thông số còn lại.</p>
+        <p className="mt-1 text-xs text-slate-600">Đặt tâm của tem cần quét vào dấu + và giữ yên. Nếu trên tờ có nhiều tem, di chuyển camera để chọn đúng tem.</p>
         <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-slate-900">
           <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-          <div className="pointer-events-none absolute inset-[18%] rounded-xl border-2 border-white/80" aria-hidden />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+            <span className="grid size-14 place-items-center rounded-lg border-2 border-white bg-black/15 text-2xl font-bold text-white">+</span>
+          </div>
           {starting && <p className="absolute inset-0 flex items-center justify-center text-sm text-white">Đang mở camera…</p>}
         </div>
         {cameraError && <p role="alert" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">{cameraError}</p>}
