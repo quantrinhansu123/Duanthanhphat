@@ -10,7 +10,7 @@ type BarcodeDetectorCtor = new (options?: { formats?: string[] }) => BarcodeDete
 
 /**
  * Quét mã QR bằng camera sau của điện thoại / máy tính bảng.
- * Dùng BarcodeDetector của trình duyệt khi có (Chrome, Android), không có (iPhone Safari…) thì giải mã bằng jsQR.
+ * Thử BarcodeDetector trước, rồi dùng jsQR nếu bộ đọc của trình duyệt chưa nhận được mã.
  * Luôn có ô nhập tay — dùng khi không mở được camera, hoặc với máy quét cầm tay (gõ mã rồi Enter).
  */
 export default function QrScanDialog({
@@ -49,12 +49,16 @@ export default function QrScanDialog({
       }
       setStarting(true);
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
         if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
         const video = videoRef.current;
         if (!video) return;
         video.srcObject = stream;
-        await video.play().catch(() => undefined);
+        await video.play();
+        if (stopped) return;
         setStarting(false);
 
         const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
@@ -62,22 +66,38 @@ export default function QrScanDialog({
         try { detector = Detector ? new Detector({ formats: ["qr_code"] }) : null; } catch { detector = null; }
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const decodeFrame = (width: number, height: number, x = 0, y = 0) => {
+          if (!ctx) return "";
+          const scale = Math.min(1, 960 / Math.max(width, height));
+          const scaledWidth = Math.round(width * scale);
+          const scaledHeight = Math.round(height * scale);
+          if (canvas.width !== scaledWidth) canvas.width = scaledWidth;
+          if (canvas.height !== scaledHeight) canvas.height = scaledHeight;
+          ctx.drawImage(video, x, y, width, height, 0, 0, scaledWidth, scaledHeight);
+          const image = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
+          return jsQR(image.data, scaledWidth, scaledHeight, { inversionAttempts: "attemptBoth" })?.data ?? "";
+        };
 
         const tick = async () => {
           if (stopped) return;
           try {
-            if (video.readyState >= 2 && video.videoWidth > 0) {
+            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
               let text = "";
               if (detector) {
-                const found = await detector.detect(video);
-                text = found[0]?.rawValue ?? "";
-              } else if (ctx) {
-                const scale = Math.min(1, 640 / video.videoWidth);
-                canvas.width = Math.round(video.videoWidth * scale);
-                canvas.height = Math.round(video.videoHeight * scale);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                text = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" })?.data ?? "";
+                try {
+                  const found = await detector.detect(video);
+                  text = found.find((code) => code.rawValue.trim())?.rawValue ?? "";
+                } catch {
+                  detector = null;
+                }
+              }
+              if (stopped) return;
+              if (!text) {
+                const { videoWidth: width, videoHeight: height } = video;
+                // Giữ chi tiết của tem nhỏ trong vùng giữa trước khi thử toàn khung.
+                const side = Math.round(Math.min(width, height) * 0.8);
+                text = decodeFrame(side, side, (width - side) / 2, (height - side) / 2)
+                  || decodeFrame(width, height);
               }
               if (text) {
                 stopped = true;
@@ -92,6 +112,8 @@ export default function QrScanDialog({
         };
         void tick();
       } catch (error) {
+        stream?.getTracks().forEach((t) => t.stop());
+        if (stopped) return;
         setStarting(false);
         const name = error instanceof DOMException ? error.name : "";
         setCameraError(
@@ -129,7 +151,7 @@ export default function QrScanDialog({
         <h3 className="text-base font-bold text-slate-900 sm:text-lg">Quét QR vị trí hàn</h3>
         <p className="mt-1 text-xs text-slate-600">Đưa mã QR trên ray vào khung. Hệ thống đọc mã Lisp (HT/HP/TT/TP) rồi tự điền các thông số còn lại.</p>
         <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-slate-900">
-          <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
+          <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
           <div className="pointer-events-none absolute inset-[18%] rounded-xl border-2 border-white/80" aria-hidden />
           {starting && <p className="absolute inset-0 flex items-center justify-center text-sm text-white">Đang mở camera…</p>}
         </div>
