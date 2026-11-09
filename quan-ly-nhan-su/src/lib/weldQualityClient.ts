@@ -105,7 +105,7 @@ export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_
 
 export const loadRfiCandidates = (du_an_id: string, filters: RfiCandidateFilter) =>
   qualityRequest<{ rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number }>({ action: "rfi-candidates", du_an_id, filters });
-export const loadRfiNumber = (du_an_id: string, loai?: "hinh-hoc" | "sieu-am") => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id, ...(loai ? { loai } : {}) });
+export const loadRfiNumber = (du_an_id: string, loai?: "hinh-hoc" | "sieu-am", phieu_rfi_id?: string) => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id, ...(loai ? { loai } : {}), ...(phieu_rfi_id ? { phieu_rfi_id } : {}) });
 export const loadRfiOverview = (du_an_id: string) => qualityRequest<{
   rfis: RfiSummary[]; so_phieu: string;
   candidates: { rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number };
@@ -160,9 +160,15 @@ export const reviseRecord = (ho_so_id: string, thong_tin: Record<string, string>
 export type WeldPayment = { moi_han_id: string; ngay_thanh_toan: string; ty_le: number; ghi_chu: string | null };
 export const loadWeldPayments = (du_an_id: string) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-list", du_an_id });
 /** Thanh toán của đúng các mối đang hiện (danh sách nhật ký hàn). */
-export const loadWeldPaymentsOf = (moi_han_ids: string[]) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-map", moi_han_ids });
+export const loadWeldPaymentsOf = (moi_han_ids: string[]) => qualityRequest<{ payments: WeldPayment[]; ultrasoundRates: Record<string, number> }>({ action: "payment-map", moi_han_ids });
 export const loadTicketWelds = (du_an_id: string, phieu_id: string) => qualityRequest<{ moi_han_ids: string[] }>({ action: "payment-ticket", du_an_id, phieu_id });
-export const saveWeldPayments = (du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, ty_le: number, ghi_chu: string) =>
-  qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, ty_le, ghi_chu });
-export const clearWeldPayments = (du_an_id: string, moi_han_ids: string[]) =>
-  qualityRequest<{ count: number }>({ action: "payment-clear", du_an_id, moi_han_ids });
+export async function saveWeldPayments(du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, ty_le: number, ghi_chu: string) {
+  const result = await qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, ty_le, ghi_chu });
+  window.dispatchEvent(new Event("weld-payment-changed"));
+  return result;
+}
+export async function clearWeldPayments(du_an_id: string, moi_han_ids: string[]) {
+  const result = await qualityRequest<{ count: number }>({ action: "payment-clear", du_an_id, moi_han_ids });
+  window.dispatchEvent(new Event("weld-payment-changed"));
+  return result;
+}

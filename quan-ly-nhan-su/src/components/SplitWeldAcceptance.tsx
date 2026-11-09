@@ -386,9 +386,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <h3 className="text-lg font-extrabold text-slate-900">Phiếu chờ nghiệm thu {kindName(kind)}</h3>
         <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
       </div>
-      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Mở phiếu, chọn Đạt cho từng mối (tự ghi trực quan Đạt, điền sai số max) rồi chốt → in biên bản hình học; mối Đạt tự chuyển sang tab «RFI bổ sung siêu âm» cùng số phiếu." : "Phiếu được chuyển tới từ tab hình học (chỉ gồm mối Đạt). Mở phiếu, ghi kết quả siêu âm, chọn Đạt rồi chốt → «Chờ ký biên bản»; ký ở mục Hồ sơ nghiệm thu → «Đạt»."}</p>
+      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Mở phiếu hình học đã phát từ RFI, ghi kết quả từng mối rồi chốt để in biên bản." : "Mở phiếu siêu âm đã phát từ RFI, ghi kết quả từng mối rồi chốt. Ký biên bản trong mục Hồ sơ nghiệm thu."}</p>
       {renderTicketTable(pendingTickets, "accept")}
-      {!pendingTickets.length && <p className="text-sm text-slate-500">{stage === "tao" ? <>Không có phiếu chờ nghiệm thu. Sang mục <b>Phát phiếu YCNT</b> để phát phiếu.</> : "Không có phiếu chờ duyệt. Phiếu sẽ tự xuất hiện khi duyệt hình học xong ở tab 1."}</p>}
+      {!pendingTickets.length && <p className="text-sm text-slate-500">Không có phiếu chờ duyệt. Sang tab <b>RFI</b> để phát phiếu.</p>}
     </div>}
 
     {!detail && sub === "records" && <div className="space-y-3 rounded-xl border-2 border-slate-300 bg-white p-4 shadow-sm">

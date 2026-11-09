@@ -419,7 +419,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       {lines(o.doi_tuong).length > 0 ? lines(o.doi_tuong).map((x) => <p key={x}>- {x.replace(/^-\s*/, "")}</p>) : <>
       {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
       {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
-        return <>{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}{s.geometry && <p>- Nghiệm thu kích thước mối hàn {codes}{pv}</p>}</>; })()}
+        return <>{s.geometry && <p>- Nghiệm thu kích thước hình học, trực quan mối hàn {codes}{pv}</p>}{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}</>; })()}
       </>}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => fieldWeldCode(w.ma_lich_su)).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>

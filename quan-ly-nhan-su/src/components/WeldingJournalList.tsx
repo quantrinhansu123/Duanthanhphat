@@ -17,6 +17,7 @@ import { deleteCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinaryClien
 import { loadMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { deleteMapPoint, linkGpsPointToWeld, setWeldPointCode, unlinkGpsPointsFromWeld } from "@/lib/mapPointsDb";
 import { createClient } from "@/lib/supabase/client";
+import { useAccess } from "@/lib/useAccess";
 import {
   loadPersonnelCertificateOptions,
   loadPersonnelCertificateRows,
@@ -45,6 +46,7 @@ import {
   loadWeldLunchBreak,
   loadWeldCodesWithPrefix,
   loadWeldJournalPage,
+  loadJournalWeldById,
   normalizeWeldTime,
   spreadWeldSlotTime,
   parseWeldLinkedImageAssets,
@@ -95,7 +97,7 @@ import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
 import { loadDayLispCodes } from "@/lib/dayLispCodes";
 import { nextLispCode } from "@/lib/lispSequence";
-import { loadQualityJournal, exportQualityJournal, loadWeldPaymentsOf, type WeldPayment } from "@/lib/weldQualityClient";
+import { loadQualityJournal, exportQualityJournal, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
@@ -1814,6 +1816,7 @@ export default function WeldingJournalList({
 } = {}) {
   const failedWeldMode = lockedResultFilter === "Không đạt";
   const { lang, t } = useLanguage();
+  const { userName } = useAccess();
   const router = useRouter();
   const { points: gpsPoints, loading: gpsLoading, error: gpsError, refetch: refetchGpsPoints } = useWeldLogGpsPoints();
 
@@ -2101,10 +2104,8 @@ export default function WeldingJournalList({
     [gpsPoints],
   );
 
-  const openEditById = useCallback(
-    (id: string) => {
-      const raw = rows.find((row) => row.id === id);
-      if (!raw) return;
+  const openEditRow = useCallback(
+    (raw: WeldReportRow) => {
       setEditingRow(raw);
       setEditingForm(journalRowToForm(raw, gpsPointForRow(raw)));
       setFormOpen(true);
@@ -2114,20 +2115,65 @@ export default function WeldingJournalList({
         }
       });
     },
-    [rows, gpsPointForRow],
+    [gpsPointForRow],
   );
+  const openEditById = useCallback((id: string) => {
+    const raw = rows.find((row) => row.id === id);
+    if (raw) openEditRow(raw);
+  }, [rows, openEditRow]);
 
   const detailRaw = detailId ? rows.find((row) => row.id === detailId) ?? null : null;
   // Cột «Thanh toán» (thay cột Lý do không đạt; lý do vẫn xem được khi bấm vào mối).
   const [paymentByWeld, setPaymentByWeld] = useState<Map<string, WeldPayment>>(new Map());
+  const [ultrasoundRates, setUltrasoundRates] = useState<Record<string, number> | null>(null);
+  const [paymentEdit, setPaymentEdit] = useState<{ id: string; projectId: string; name: string; rate: number; note: string; date: string } | null>(null);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+
+  async function updatePayment(useAutomatic = false) {
+    if (!paymentEdit || paymentSaving) return;
+    setPaymentSaving(true);
+    setPaymentError("");
+    try {
+      const { id, projectId, rate, note, date } = paymentEdit;
+      if (useAutomatic) await clearWeldPayments(projectId, [id]);
+      else await saveWeldPayments(projectId, [id], date, rate, note);
+      setPaymentEdit(null);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Không lưu được thanh toán.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
   const pageIdsKey = pageRows.map((w) => w.id).join(",");
   useEffect(() => {
-    if (!pageIdsKey) { setPaymentByWeld(new Map()); return; }
-    let active = true;
-    loadWeldPaymentsOf(pageIdsKey.split(","))
-      .then((r) => { if (active) setPaymentByWeld(new Map(r.payments.map((p) => [p.moi_han_id, p]))); })
-      .catch(() => { if (active) setPaymentByWeld(new Map()); });
-    return () => { active = false; };
+    setUltrasoundRates(null);
+    setPaymentByWeld(new Map());
+    if (!pageIdsKey) return;
+    let request = 0;
+    const refresh = async () => {
+      const current = ++request;
+      try {
+        const { payments, ultrasoundRates } = await loadWeldPaymentsOf(pageIdsKey.split(","));
+        if (current !== request) return;
+        setPaymentByWeld(new Map(payments.map((p) => [p.moi_han_id, p])));
+        setUltrasoundRates(ultrasoundRates);
+      } catch {
+        if (current !== request) return;
+        setPaymentByWeld(new Map());
+        setUltrasoundRates(null);
+      }
+    };
+    void refresh();
+    window.addEventListener("weld-payment-changed", refresh);
+    window.addEventListener("weld-quality-changed", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      request++;
+      window.removeEventListener("weld-payment-changed", refresh);
+      window.removeEventListener("weld-quality-changed", refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, [pageIdsKey]);
   const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
 
@@ -2155,31 +2201,45 @@ export default function WeldingJournalList({
     return () => window.removeEventListener("weld-quality-changed", refetch);
   }, [refetch]);
 
-  /** Quét QR → mã Lisp → mở form Thêm nhật ký đã điền sẵn điểm, lý trình, GPS, dự án, mã hiện trường/mã máy in trên QR. */
-  function handleQrResult(raw: string) {
+  /** Mở nhật ký đã gắn với điểm hoặc điền sẵn biểu mẫu cho điểm chưa gắn. */
+  async function handleQrResult(raw: string) {
+    setQrOpen(false);
     const payload = parseWeldQr(raw);
     if (!payload) {
       showToast("QR không có mã vị trí HT/HP/TT/TP. Thử quét lại hoặc nhập mã tay.");
       return;
     }
-    const matches = gpsPoints.filter((point) => normalizeCoordinateCode(point.code) === payload.lispCode);
+    const points = gpsPoints.filter((point) => normalizeCoordinateCode(point.code) === payload.lispCode);
+    const matchingCode = payload.systemCode
+      ? points.filter((point) => point.weldCode?.trim().toUpperCase() === payload.systemCode)
+      : [];
+    const matches = matchingCode.length ? matchingCode : points;
     if (matches.length === 0) {
       showToast(`Không tìm thấy điểm ${payload.lispCode} trong danh sách Autolisp. Import/thêm điểm ở Bản đồ trước.`);
       return;
     }
-    const free = matches.filter((point) => !point.isLinked && !point.weldId);
-    if (free.length === 0) {
-      const linked = matches.find((point) => point.weldCode);
-      showToast(`Điểm ${payload.lispCode} đã gắn mối hàn${linked?.weldCode ? ` ${linked.weldCode}` : ""}.`);
-      setQrOpen(false);
+    if (matches.length > 1) {
+      showToast(`Có nhiều điểm trùng mã ${payload.lispCode}. Dùng QR có mã hệ thống của mối hàn.`);
       return;
     }
-    if (free.length > 1) {
-      showToast(`Có ${free.length} điểm trùng mã ${payload.lispCode} ở các dự án. Chọn điểm thủ công trong form Thêm nhật ký.`);
-      setQrOpen(false);
+    const point = matches[0];
+    if (point.isLinked || point.weldId) {
+      const code = point.weldCode?.trim() || payload.systemCode;
+      const matchesWeld = (row: WeldReportRow) => point.weldId
+        ? row.id === point.weldId
+        : !!code && row.ma_lich_su.trim().toUpperCase() === code.toUpperCase()
+          && (!point.projectId || row.du_an_id === point.projectId);
+      try {
+        const weld = rows.find(matchesWeld) ?? (point.weldId
+          ? await loadJournalWeldById(point.weldId)
+          : code && (await loadWeldJournalPage({ page: 1, query: code })).rows.find(matchesWeld));
+        if (weld) openEditRow(weld);
+        else showToast(`Không tìm thấy nhật ký đã gắn với điểm ${payload.lispCode}.`);
+      } catch {
+        showToast("Không tải được nhật ký của mối hàn. Vui lòng quét lại.");
+      }
       return;
     }
-    const point = free[0];
     const base = applyJournalSuggestion(
       emptyJournalForm(projectOptions, welderOptions, machineOptions),
       readRememberedJournalEntry(),
@@ -2188,10 +2248,15 @@ export default function WeldingJournalList({
       machineOptions,
     );
     const projectId = point.projectId && projectOptions.some((project) => project.id === point.projectId) ? point.projectId : base.du_an_id;
+    const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
+    const accountName = nameKey(userName);
+    const accountWelders = accountName ? welderOptions.filter((welder) => nameKey(welder.label) === accountName) : [];
+    const accountWelder = accountWelders.length === 1 ? accountWelders[0] : undefined;
     setEditingRow(null);
     setEditingForm({
       ...base,
       du_an_id: projectId,
+      tho_han_id: accountWelder?.id ?? "",
       toa_do_id: point.id,
       ly_trinh: point.chainage || base.ly_trinh,
       kinh_do: String(point.longitude),
@@ -2200,9 +2265,10 @@ export default function WeldingJournalList({
       ma_hien_truong: payload.siteCode || base.ma_hien_truong,
       ten_moi_han_theo_may: payload.machineCode || base.ten_moi_han_theo_may,
     });
-    setQrOpen(false);
     setFormOpen(true);
-    showToast(`Đã quét ${payload.lispCode}. Kiểm tra thợ hàn, máy, kết quả rồi bấm Lưu.`);
+    showToast(accountWelder
+      ? `Đã quét ${payload.lispCode} và điền người hàn ${accountWelder.label}.`
+      : `Đã quét ${payload.lispCode}. Hãy chọn người hàn nếu tài khoản chưa khớp danh mục thợ hàn.`);
   }
 
   function showToast(message: string) {
@@ -2967,6 +3033,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
            >
              Tìm
            </button>
+           <button type="button" onClick={() => setQrOpen(true)} aria-label="Quét QR mối hàn"
+             className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg border border-[#0047AB] bg-white px-2 text-xs font-semibold text-[#0047AB] hover:bg-blue-50 sm:hidden">
+             <Camera size={16} aria-hidden /> Quét QR
+           </button>
            {(searchDraft || appliedQuery) && (
              <button
                type="button"
@@ -3223,6 +3293,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="whitespace-nowrap p-2.5 font-semibold">Thanh toán</th>
+                <th className="min-w-[10rem] p-2.5 font-semibold">Ghi chú</th>
                 {failedWeldMode ? (
                   <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
                 ) : null}
@@ -3261,14 +3332,18 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   ) : null}
                   <td className="whitespace-nowrap p-2.5">
                     {(() => {
-                      const pay = paymentByWeld.get(w.id);
-                      if (!pay) return <span className="text-xs text-slate-400">Chưa</span>;
+                      const manual = paymentByWeld.get(w.id);
+                      if (!manual && !ultrasoundRates) return <span className="text-xs text-slate-400">—</span>;
+                      const rate = manual?.ty_le ?? ultrasoundRates?.[w.id] ?? 0;
                       return (
-                        <span title={pay.ghi_chu ?? ""} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${pay.ty_le === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-                          {pay.ty_le}%
+                        <span title={manual ? "Tỷ lệ đã chỉnh tay" : "Tỷ lệ theo phiếu siêu âm"} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${rate === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                          {rate}%
                         </span>
                       );
                     })()}
+                  </td>
+                  <td className="max-w-[18rem] break-words p-2.5 text-xs text-slate-600">
+                    {paymentByWeld.get(w.id)?.ghi_chu || "—"}
                   </td>
                   {failedWeldMode ? (
                   <td className="p-2.5 whitespace-nowrap">
@@ -3295,40 +3370,34 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   </td>
                   ) : null}
                   <td className="whitespace-nowrap p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
-                  <td className="p-2.5 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <button type="button" className="min-h-11 rounded-lg border border-blue-700 bg-blue-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-blue-700" onClick={(e) => { e.stopPropagation(); const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditById(w.id);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-200 cursor-pointer"
-                        title="Sửa nhật ký hàn"
-                      >
-                        <PencilSimple size={14} weight="bold" />
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPendingDeleteId(w.id);
-                        }}
-                        className="inline-flex items-center justify-center rounded-lg border border-rose-500 bg-rose-600 p-1.5 text-white shadow-sm hover:bg-rose-700 cursor-pointer"
-                        title="Xóa nhật ký hàn"
-                        aria-label="Xóa nhật ký hàn"
-                      >
-                        <TrashSimple size={14} weight="bold" />
-                      </button>
-                    </div>
+                  <td className="p-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <details name="journal-weld-actions">
+                      <summary aria-label={`Thao tác mối ${w.weldName}`} className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-300 text-lg font-bold hover:bg-slate-100">⋯</summary>
+                      <div className="mt-1 grid min-w-28 rounded-lg border border-slate-200 bg-white p-1 text-xs"
+                        onClick={(e) => { if ((e.target as HTMLElement).closest("button")) e.currentTarget.closest("details")?.removeAttribute("open"); }}>
+                        <button type="button" className="rounded px-2 py-2 text-left hover:bg-slate-100" onClick={() => { const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
+                        <button type="button" className="rounded px-2 py-2 text-left hover:bg-slate-100" onClick={() => openEditById(w.id)}>Sửa</button>
+                        <button type="button" className="rounded px-2 py-2 text-left hover:bg-slate-100" onClick={() => {
+                          const raw = rows.find((r) => r.id === w.id);
+                          if (!raw) return;
+                          const saved = paymentByWeld.get(w.id);
+                          setPaymentError("");
+                          setPaymentEdit({
+                            id: w.id, projectId: raw.du_an_id, name: w.weldName,
+                            rate: saved?.ty_le ?? ultrasoundRates?.[w.id] ?? 100,
+                            note: saved?.ghi_chu ?? "",
+                            date: saved?.ngay_thanh_toan ?? new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date()),
+                          });
+                        }}>Thanh toán</button>
+                        <button type="button" className="rounded px-2 py-2 text-left text-rose-700 hover:bg-rose-50" onClick={() => setPendingDeleteId(w.id)}>Xóa</button>
+                      </div>
+                    </details>
                   </td>
                 </tr>
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={failedWeldMode ? 17 : 15} className="px-3 py-10 text-center text-sm text-slate-500">
                     {lockedResultFilter === "Không đạt"
                       ? "Không có mối hàn lỗi phù hợp với bộ lọc."
                       : "Không có nhật ký hàn phù hợp với bộ lọc."}
@@ -3671,6 +3740,31 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         onScanQr={() => setQrOpen(true)}
       />
 
+      {paymentEdit && (
+        <div role="dialog" aria-modal="true" aria-labelledby="journal-payment-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
+          <form className="w-full max-w-sm space-y-3 rounded-xl bg-white p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); void updatePayment(); }}>
+            <h2 id="journal-payment-title" className="font-bold text-slate-900">Thanh toán · {paymentEdit.name}</h2>
+            <p className="text-xs text-slate-600">Có thể lưu tỷ lệ và ghi chú cho mối đã nghiệm thu Đạt.</p>
+            <label className="block text-sm">Tỷ lệ thanh toán
+              <select className="mt-1 block w-full rounded-lg border border-slate-300 p-2" value={paymentEdit.rate} onChange={(e) => setPaymentEdit({ ...paymentEdit, rate: Number(e.target.value) })}>
+                {[30, 50, 70, 100].map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
+              </select>
+            </label>
+            <label className="block text-sm">Ngày thanh toán
+              <input required type="date" className="mt-1 block w-full rounded-lg border border-slate-300 p-2" value={paymentEdit.date} onChange={(e) => setPaymentEdit({ ...paymentEdit, date: e.target.value })} />
+            </label>
+            <label className="block text-sm">Ghi chú thanh toán
+              <textarea className="mt-1 block w-full rounded-lg border border-slate-300 p-2" rows={3} maxLength={500} value={paymentEdit.note} onChange={(e) => setPaymentEdit({ ...paymentEdit, note: e.target.value })} />
+            </label>
+            {paymentError && <p role="alert" className="text-sm text-rose-700">{paymentError}</p>}
+            <div className="flex flex-wrap justify-end gap-2 text-sm">
+              {paymentByWeld.has(paymentEdit.id) && <button type="button" disabled={paymentSaving} className="rounded-lg border px-3 py-2" onClick={() => void updatePayment(true)}>Bỏ chỉnh tay và ghi chú</button>}
+              <button type="button" disabled={paymentSaving} className="rounded-lg border px-3 py-2" onClick={() => setPaymentEdit(null)}>Đóng</button>
+              <button type="submit" disabled={paymentSaving} className="rounded-lg bg-blue-700 px-3 py-2 font-semibold text-white disabled:opacity-50">Lưu</button>
+            </div>
+          </form>
+        </div>
+      )}
       <QrScanDialog open={qrOpen} onClose={() => setQrOpen(false)} onResult={handleQrResult} />
 
       <BulkAutolispWeldDialog

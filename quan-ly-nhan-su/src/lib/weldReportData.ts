@@ -1857,6 +1857,13 @@ export async function exportFilteredWeldJournal({
 }
 
 /** Mối hàn gần nhất của dự án tính đến `untilDate` — dùng để gợi ý form thêm mới. */
+export async function loadJournalWeldById(id: string): Promise<WeldReportRow | null> {
+  const { data, error } = await createClient()
+    .from("bao_cao_moi_han_theo_du_an").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(formatSupabaseError(error));
+  return data ? normalizeJournalRow(data as unknown as WeldReportRow) : null;
+}
+
 export async function loadLatestProjectWeld(projectId: string, untilDate: string): Promise<WeldReportRow | null> {
   if (!projectId || !isSupabaseConfigured()) return null;
   const supabase = createClient();

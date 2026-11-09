@@ -6,7 +6,7 @@ import RowActionsMenu from "@/components/RowActionsMenu";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { completeAcceptance, completeGeometryAcceptance, markQualityPass, loadSplitRecords, signSplitRecord, loadGeometryRecord, type SplitRecordSummary, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
   deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import { defaultDecisions, rfiScope, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
+import { defaultDecisions, rfiAcceptanceTitle, rfiScope, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { qualityRequest } from "@/lib/weldQualityClient";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -107,15 +107,11 @@ function inferRoutes(welds: { ma_diem?: string | null }[]): { upper: boolean; lo
 export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  // Phương án nghiệm thu chọn được nhiều (tick) — mỗi phương án đã chọn hiện một khối bên dưới.
-  type Mode = "tong-hop" | SplitKind;
-  const [modes, setModes] = useState<Mode[]>(["hinh-hoc"]);
-  const hasMode = (m: Mode) => modes.includes(m);
-  // Dạng tab: mỗi lúc một phương án.
-  const toggleMode = (m: Mode) => setModes([m]);
+  type Mode = "rfi" | SplitKind;
+  const [mode, setMode] = useState<Mode>("rfi");
   // Modal «Duyệt siêu âm luôn?» → Có: sang tab siêu âm và mở sẵn phiếu vừa chuyển.
   const [openUltrasoundId, setOpenUltrasoundId] = useState<string | null>(null);
-  const goToUltrasound = useCallback((id: string) => { setOpenUltrasoundId(id); setModes(["sieu-am"]); }, []);
+  const goToUltrasound = useCallback((id: string) => { setOpenUltrasoundId(id); setMode("sieu-am"); }, []);
   const clearOpenUltrasound = useCallback(() => setOpenUltrasoundId(null), []);
   const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
@@ -154,6 +150,7 @@ export default function WeldAcceptanceWorkflow() {
   }
   function startEditRfi(rfi: RfiSummary) {
     setView(null);
+    setMode("rfi");
     setTab("rfi");
     setEditRfiId(rfi.id);
   }
@@ -161,26 +158,6 @@ export default function WeldAcceptanceWorkflow() {
   async function afterAccepted(recordId: string) {
     setTab("records");
     setView({ kind: "giai-doan", record: await loadRecordSet(recordId) });
-  }
-
-  /** Sau phát RFI: hỏi in bộ 3 biên bản mang hiện trường. */
-  async function afterPublishedRfi(phieuId: string) {
-    const wantPrint = window.confirm("Bạn có muốn in biên bản nghiệm thu luôn không?\n\nBấm OK để in đủ hồ sơ (1)(2)(3) mang ra hiện trường.");
-    if (!wantPrint) return;
-    try {
-      const { records } = await loadRecords(projectId);
-      const match = records.find((r) => r.phieu_yeu_cau_nghiem_thu.id === phieuId);
-      if (!match) {
-        window.alert("Đã phát RFI nhưng chưa thấy bộ 3 biên bản.\n\nChạy migration tạo hồ sơ khi phát RFI, rồi mở tab Hồ sơ nghiệm thu để in.");
-        setTab("records");
-        return;
-      }
-      setPrintPack(await loadRecordSet(match.id));
-      setTab("records");
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Không mở được bộ in biên bản.");
-      setTab("records");
-    }
   }
 
   return (
@@ -198,11 +175,12 @@ export default function WeldAcceptanceWorkflow() {
       {/* Thẻ kiểu sổ: tab bo góc phía trên, tab đang chọn liền khối với khung nội dung bên dưới. */}
       <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print flex flex-wrap items-end gap-1 px-1">
         {([
+          ["rfi", "RFI"],
           ["hinh-hoc", "RFI bổ sung hình học, trực quan"],
           ["sieu-am", "RFI bổ sung siêu âm"],
         ] as const).map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={hasMode(id)} onClick={() => toggleMode(id)}
-            className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${hasMode(id)
+          <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
+            className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
               ? "z-10 -mb-[2px] border-[#0047AB] bg-white py-3 text-[#0047AB]"
               : "border-slate-200 bg-slate-100 py-2.5 text-slate-600 hover:bg-white hover:text-slate-900"}`}>
             {label}
@@ -210,7 +188,7 @@ export default function WeldAcceptanceWorkflow() {
         ))}
       </div>
       <div className="rounded-b-xl rounded-tr-xl border-2 border-[#0047AB] bg-white p-3 sm:p-4">
-        {hasMode("tong-hop") && <div className="no-print mb-3 grid grid-cols-3 gap-2">
+        {mode === "rfi" && <div className="no-print mb-3 grid grid-cols-3 gap-2">
           {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
             <button
               key={id}
@@ -223,16 +201,16 @@ export default function WeldAcceptanceWorkflow() {
           ))}
         </div>}
         {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
-        {modes.filter((m): m is SplitKind => m !== "tong-hop").map((m) => (
-          <div key={m} className="mb-4">
-            {/* Luồng 2 tab: tạo & duyệt hình học → tự chuyển sang siêu âm duyệt tiếp. */}
-            <SplitWeldAcceptance key={projectId + m} project={projectId} projectName={projectName}
-              kind={m} stage={m === "hinh-hoc" ? "tao" : "duyet"} onPrintRecord={setPrintPack}
-              onGoToUltrasound={m === "hinh-hoc" ? goToUltrasound : undefined}
-              initialTicketId={m === "sieu-am" ? openUltrasoundId : null} onInitialTicketOpened={clearOpenUltrasound} />
+        {mode !== "rfi" && (
+          <div className="mb-4">
+            {/* Phiếu được phát trong tab RFI; hai tab chuyên môn dùng để duyệt và xem hồ sơ. */}
+            <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName}
+              kind={mode} stage="duyet" onPrintRecord={setPrintPack}
+              onGoToUltrasound={mode === "hinh-hoc" ? goToUltrasound : undefined}
+              initialTicketId={mode === "sieu-am" ? openUltrasoundId : null} onInitialTicketOpened={clearOpenUltrasound} />
           </div>
-        ))}
-        {hasMode("tong-hop") && (
+        )}
+        {mode === "rfi" && (
           <div className="no-print">
             {tab === "rfi" && (
               <RfiPanel
@@ -242,7 +220,6 @@ export default function WeldAcceptanceWorkflow() {
                 onEditConsumed={consumeEditRfi}
                 onOpen={openRfi}
                 onOpenIssuedList={setIssuedList}
-                onPublished={afterPublishedRfi}
               />
             )}
             {tab === "accept" && (
@@ -282,14 +259,12 @@ function RfiPanel({
   onEditConsumed,
   onOpen,
   onOpenIssuedList,
-  onPublished,
 }: {
   projectId: string;
   editRfiId: string | null;
   onEditConsumed: () => void;
   onOpen: (r: RfiSummary) => unknown;
   onOpenIssuedList: (list: { rfis: RfiSummary[]; unassigned: RfiCandidate[] }) => void;
-  onPublished?: (phieuId: string) => unknown;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
   const monitoring = kind === "theo-doi";
@@ -306,6 +281,7 @@ function RfiPanel({
     return { ...emptyThongTin(), ...draft };
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [rfiTab, setRfiTab] = useState<"publish" | "issued">("publish");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -340,6 +316,7 @@ function RfiPanel({
     loadRfiDetail(editRfiId)
       .then((d) => {
         if (!live) return;
+        setRfiTab("publish");
         setEditingId(d.rfi.id);
         setSoPhieu(d.rfi.so_phieu);
         setNgayMoi(d.rfi.ngay_moi);
@@ -381,7 +358,7 @@ function RfiPanel({
   async function publish() {
     setBusy(true); setError(""); setOkMsg("");
     try {
-      const payload = thongTinToPayload(editingId || monitoring ? thongTin : { ...thongTin, nt_hinh_hoc: scopeChoice !== "sieu-am", nt_sieu_am: true });
+      const payload = thongTinToPayload(thongTin);
       if (editingId) {
         await updateRfi({ id: editingId, so_phieu: soPhieu, ngay_moi: ngayMoi, thong_tin: payload });
         setOkMsg(`Đã cập nhật phiếu ${soPhieu}.`);
@@ -390,7 +367,7 @@ function RfiPanel({
         await refresh();
         return;
       }
-      const published = await publishRfi({
+      await publishRfi({
         id: requestId.current,
         du_an_id: projectId,
         so_phieu: soPhieu,
@@ -403,14 +380,12 @@ function RfiPanel({
       const weldCount = selected.size;
       requestId.current = crypto.randomUUID();
       setSelected(new Set());
-      setOkMsg(monitoring
-        ? "Đã phát phiếu theo dõi mới."
-        : `Đã phát phiếu yêu cầu mới (${weldCount} mối).`);
       await refresh();
       if (!monitoring) {
         await search();
-        await Promise.resolve(onPublished?.(published.id));
       }
+      setRfiTab("issued");
+      setOkMsg(monitoring ? "Đã phát phiếu theo dõi mới." : `Đã phát phiếu yêu cầu mới (${weldCount} mối).`);
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
 
@@ -420,6 +395,7 @@ function RfiPanel({
     setOkMsg("");
     loadRfiDetail(r.id)
       .then((d) => {
+        setRfiTab("publish");
         setKind(d.rfi.thong_tin?.loai_rfi === "theo-doi" ? "theo-doi" : d.rfi.thong_tin?.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu");
         setEditingId(d.rfi.id);
         setSoPhieu(d.rfi.so_phieu);
@@ -469,16 +445,23 @@ function RfiPanel({
 
   const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
-  const selectedRows = rows.filter((r) => selected.has(r.id));
-  // Nội dung nghiệm thu tự theo trạng thái mối: toàn mối «Chờ siêu âm» → phiếu siêu âm; còn lại → phiếu đầy đủ (lúc nghiệm thu chọn chỉ hình học hay toàn bộ).
-  const waitingUltrasound = selectedRows.filter((r) => r.tinh_trang === "Chờ siêu âm");
-  const scopeChoice: "toan-bo" | "sieu-am" = selectedRows.length > 0 && waitingUltrasound.length === selectedRows.length ? "sieu-am" : "toan-bo";
-  const wrongRows = scopeChoice === "toan-bo" ? waitingUltrasound : [];
-  const scopeMissing = wrongRows.length > 0;
-  const publishDisabled = busy || routeMissing || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
+  const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
+  const tooManyWelds = !monitoring && !editingId && selected.size > 200;
+  const publishDisabled = busy || routeMissing || tooManyWelds || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
   return (
     <section className="space-y-4">
+      <div role="tablist" aria-label="Phát hành RFI" className="grid grid-cols-2 gap-2">
+        {([["publish", "Phát phiếu"], ["issued", "Danh sách phiếu đã phát"]] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" id={`rfi-tab-${id}`} aria-controls={`rfi-panel-${id}`}
+            aria-selected={rfiTab === id} onClick={() => setRfiTab(id)} className={rfiTab === id ? primary : secondary}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {okMsg && <p role="status" className="text-sm text-emerald-700">{okMsg}</p>}
+      <div role="tabpanel" id="rfi-panel-publish" aria-labelledby="rfi-tab-publish" hidden={rfiTab !== "publish"} className="space-y-4">
       <div className="rounded-xl border border-[#0047AB]/25 bg-[#0047AB]/5 p-4">
         <h2 className="text-sm font-bold text-slate-900">Phát phiếu yêu cầu nghiệm thu mới</h2>
         <p className="mt-1 text-xs text-slate-600">
@@ -501,10 +484,18 @@ function RfiPanel({
           void publish();
         }}>
           <h3 id="rfi-publish-title" className="text-base font-bold">Nội dung nghiệm thu</h3>
-          {scopeChoice === "sieu-am"
-            ? <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối đã nghiệm thu hình học («Chờ siêu âm») → <b>nghiệm thu siêu âm</b> (mối chưa có phiếu nghiệm thu hình học thì tự nghiệm thu cả hình học). Xong → Chờ ký biên bản → ký đủ → Đạt.</p>
-            : <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối «Mài xong» / «Chờ nghiệm thu». Khi nghiệm thu bấm <b>Trực quan đạt</b> (tự điền sai số max):<br />• chỉ hình học → in biên bản hình học riêng, mối chuyển «Chờ siêu âm»;<br />• có cả siêu âm đạt → in toàn bộ → ký → Đạt.</p>}
-          {scopeMissing && <p role="alert" className="text-sm text-amber-800">Đang chọn lẫn {wrongRows.length} mối «Chờ siêu âm» ({wrongRows.slice(0, 3).map((r) => fieldWeldCode(r.ma_lich_su)).join(", ")}{wrongRows.length > 3 ? "…" : ""}) với mối «Mài xong». Phát riêng hai nhóm.</p>}
+          <p className="text-sm text-slate-700">Phiếu <b>{soPhieu}</b> · {selected.size} mối</p>
+          <fieldset className="space-y-2 text-sm">
+            <legend className="mb-2 text-slate-600">Chọn một hoặc cả hai nội dung</legend>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={thongTin.nt_hinh_hoc} onChange={(e) => setThongTin({ ...thongTin, nt_hinh_hoc: e.target.checked })} />
+              Hình học, trực quan
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={thongTin.nt_sieu_am} onChange={(e) => setThongTin({ ...thongTin, nt_sieu_am: e.target.checked })} />
+              Siêu âm
+            </label>
+          </fieldset>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className={secondary} onClick={() => publishDialogRef.current?.close()}>Hủy</button>
             <button type="submit" className={primary} disabled={publishDisabled || scopeMissing}>Phát yêu cầu mới</button>
@@ -515,8 +506,9 @@ function RfiPanel({
 
       {!monitoring && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Bước 2 — Tìm mối «Chờ nghiệm thu» (chưa nghiệm thu gì) và «Chờ siêu âm» (đã nghiệm thu trực quan)</h3>
-          <p className="text-xs text-slate-600">Chọn mối rồi bấm phát; hệ thống hỏi nghiệm thu Toàn bộ, Chỉ trực quan hay Chỉ siêu âm.</p>
+          <h3 className="text-xs font-bold text-slate-500">Tìm các mối đủ điều kiện Hình học và Siêu âm</h3>
+          <p className="text-xs text-slate-600">Chọn mối rồi bấm phát để chọn Hình học, Siêu âm hoặc cả hai.</p>
+          {tooManyWelds && <p role="alert" className="text-sm text-amber-800">Chọn tối đa 200 mối cho một phiếu để có thể duyệt đầy đủ.</p>}
           <div className="flex flex-wrap items-end gap-2">
             <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
             <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
@@ -567,8 +559,6 @@ function RfiPanel({
         </div>
       )}
 
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {okMsg && <p className="text-sm text-emerald-700">{okMsg}</p>}
 
       <div ref={editFormRef} className={`space-y-2 rounded-lg border p-3 ${editingId ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
         <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -627,6 +617,8 @@ function RfiPanel({
         )}
       </div>
 
+      </div>
+      <div role="tabpanel" id="rfi-panel-issued" aria-labelledby="rfi-tab-issued" hidden={rfiTab !== "issued"} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <h3 className="text-sm font-bold">Danh sách phiếu yêu cầu nghiệm thu đã phát</h3>
         <button
@@ -640,7 +632,7 @@ function RfiPanel({
         </button>
       </div>
       {unassigned.length > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc tìm mối phía trên để phát phiếu.
+        Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
       </p>}
       <div className="overflow-auto rounded-lg border border-slate-200">
         <table className="w-full text-xs sm:text-sm">
@@ -664,7 +656,7 @@ function RfiPanel({
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
                 <td className="p-2">{r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi" : r.thong_tin?.loai_rfi === "ca-hai" ? "Giám sát & nghiệm thu" : "Nghiệm thu"}</td>
+                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi" : rfiAcceptanceTitle(r.thong_tin)}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
@@ -683,10 +675,11 @@ function RfiPanel({
               </tr>
             ))}
             {!rfis.length && (
-              <tr><td colSpan={10} className="p-3 text-slate-500">Chưa có phiếu. Dùng khung “Phát phiếu yêu cầu nghiệm thu mới” phía trên.</td></tr>
+              <tr><td colSpan={10} className="p-3 text-slate-500">Chưa có phiếu. Mở tab “Phát phiếu” để tạo phiếu mới.</td></tr>
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </section>
   );

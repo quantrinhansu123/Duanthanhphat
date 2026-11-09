@@ -267,14 +267,18 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   const info = object(body.thong_tin ?? {});
   const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
   const explicitScope = "nt_hinh_hoc" in info || "nt_sieu_am" in info;
-  let geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
+  const geometry = explicitScope ? flag(info.nt_hinh_hoc) : "1";
   const ultrasound = explicitScope ? flag(info.nt_sieu_am) : "1";
   if (!geometry && !ultrasound) throw new QualityApiError("Chọn nghiệm thu kích thước hình học, siêu âm hoặc cả hai.");
-  if (ultrasound && !geometry) {
+  if (explicitScope) {
+    if (ids.length > 200) throw new QualityApiError("Chọn tối đa 200 mối cho một phiếu hình học hoặc siêu âm.");
     const accepted = await geometryAcceptedTickets(qualityUuid(body.du_an_id), ids.map(qualityUuid));
-    const missing = ids.filter((id) => !accepted.has(qualityUuid(id)));
-    // Mối mới duyệt hình học nội bộ (chưa có phiếu nghiệm thu hình học) → phiếu nghiệm thu cả hình học + siêu âm.
-    if (missing.length) geometry = "1";
+    if (!geometry && ids.some((id) => !accepted.has(qualityUuid(id)))) {
+      throw new QualityApiError("Phiếu chỉ siêu âm cần các mối đã nghiệm thu hình học Đạt. Chọn cả hai nội dung cho các mối chưa nghiệm thu hình học.");
+    }
+    if (geometry && accepted.size) {
+      throw new QualityApiError("Danh sách có mối đã nghiệm thu hình học Đạt. Phát phiếu chỉ siêu âm riêng cho các mối này.");
+    }
   }
   const thong_tin = {
     dia_diem: str(info.dia_diem),
@@ -847,8 +851,8 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       throw new QualityApiError("Kết quả hoặc lý do không hợp lệ.");
     return { id:qualityUuid(r.id), phien_ban:r.phien_ban, ket_qua:r.ket_qua, ly_do:reason };
   });
-  // Luồng 2 tab: chốt hình học xong, các mối Đạt tự sang phiếu siêu âm CÙNG số phiếu (tab 2 không phát phiếu).
-  const forward = kind === "hinh-hoc" ? results.filter(r => r.ket_qua === "Đạt").map(r => r.id) : [];
+  // Chỉ phiếu hình học độc lập cũ tự chuyển sang siêu âm. RFI đã xác định phạm vi khi phát.
+  const forward = kind === "hinh-hoc" && !ticket.data.phieu_rfi_id ? results.filter(r => r.ket_qua === "Đạt").map(r => r.id) : [];
   if (forward.length) {
     const taken = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
       .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", ticket.data.so_phieu);

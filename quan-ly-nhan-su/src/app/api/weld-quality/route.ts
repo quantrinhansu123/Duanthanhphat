@@ -3,7 +3,7 @@ import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQuali
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
-import { listPayments, listPaymentIds, paymentsOf, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
+import { listPayments, listPaymentIds, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
@@ -47,7 +47,11 @@ export async function POST(request: Request) {
     if (body.action === "rule-sync") return NextResponse.json({ sync: await applyQualityRule(qualityUuid(body.id), actor) });
     if (body.action === "rules-list") return NextResponse.json(await listQualityRules(String(body.du_an_id ?? "")));
     if (body.action === "payment-list") return NextResponse.json({ payments: await listPayments(qualityUuid(body.du_an_id)) });
-    if (body.action === "payment-map") return NextResponse.json({ payments: await paymentsOf(Array.isArray(body.moi_han_ids) ? body.moi_han_ids.slice(0, 500).map(qualityUuid) : []) });
+    if (body.action === "payment-map") {
+      const ids = Array.isArray(body.moi_han_ids) ? body.moi_han_ids.slice(0, 500).map(qualityUuid) : [];
+      const [payments, ultrasoundRates] = await Promise.all([paymentsOf(ids), ultrasoundPaymentRates(ids)]);
+      return NextResponse.json({ payments, ultrasoundRates });
+    }
     if (body.action === "payment-ticket") return NextResponse.json({ moi_han_ids: await weldsOfTicket(qualityUuid(body.du_an_id), qualityUuid(body.phieu_id)) });
     if (body.action === "payment-set") return NextResponse.json(await setPayments(body, actor));
     if (body.action === "payment-clear") return NextResponse.json(await clearPayments(body));

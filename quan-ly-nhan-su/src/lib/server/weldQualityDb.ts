@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatSupabaseError } from "@/lib/supabase/env";
+import { ensureRfiChildTickets } from "@/lib/server/rfiChildTickets";
 import {
   validateGeometryLimits, validateGeometryMeasurements,
   type SavedWeldInspection, type SavedWeldQualityRule, type WeldQualityStatus,
@@ -74,11 +75,19 @@ export type PublishWeldRfi = {
 };
 
 export async function publishWeldRfi(input: PublishWeldRfi): Promise<string> {
-  const { data, error } = await createAdminClient().rpc("phat_hanh_rfi_moi_han", {
+  const args = {
     p_id: input.id, p_du_an_id: input.du_an_id, p_so_phieu: input.so_phieu,
     p_ngay_moi: input.ngay_moi, p_moi_han_ids: input.moi_han_ids,
     p_nguoi_lap: input.nguoi_lap, p_thong_tin: input.thong_tin,
-  });
+  };
+  const { data, error } = await createAdminClient().rpc("phat_hanh_rfi_va_phieu_con", args);
+  if (error?.code === "PGRST202") {
+    // Compatibility while the atomic publishing migration is being deployed.
+    const published = await createAdminClient().rpc("phat_hanh_rfi_moi_han", args);
+    if (published.error) throw new Error(formatSupabaseError(published.error));
+    await ensureRfiChildTickets(input);
+    return published.data as string;
+  }
   if (error) throw new Error(formatSupabaseError(error));
   return data as string;
 }

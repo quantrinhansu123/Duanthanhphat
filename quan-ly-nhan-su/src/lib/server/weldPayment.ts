@@ -39,6 +39,24 @@ export async function paymentsOf(moiIds: string[]): Promise<PaymentRow[]> {
   return out;
 }
 
+/** Tỷ lệ theo kết quả của từng mối trên phiếu siêu âm. */
+export async function ultrasoundPaymentRates(moiIds: string[]): Promise<Record<string, number>> {
+  const rates: Record<string, number> = {};
+  for (let i = 0; i < moiIds.length; i += 200) {
+    const { data, error } = await db().from("phieu_nt_tach_moi")
+      .select("moi_han_id,phieu_nt_tach!inner(da_ky,ngay_nghiem_thu)")
+      .eq("loai", "sieu-am").eq("ket_qua", "Đạt")
+      .not("phieu_nt_tach.ngay_nghiem_thu", "is", null)
+      .in("moi_han_id", moiIds.slice(i, i + 200));
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const ticket = Array.isArray(row.phieu_nt_tach) ? row.phieu_nt_tach[0] : row.phieu_nt_tach;
+      if (ticket) rates[row.moi_han_id] = ticket.da_ky ? 100 : 70;
+    }
+  }
+  return rates;
+}
+
 /** Thanh toán đủ 100% trong danh sách mối đã cho. */
 export async function listPaymentIds(moiIds: string[]): Promise<string[]> {
   return (await paymentsOf(moiIds)).filter((r) => r.ty_le === 100).map((r) => r.moi_han_id);
