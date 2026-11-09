@@ -378,6 +378,8 @@ function JournalFormModal({
   initial,
   projects,
   welders,
+  accountWelderId,
+  accountName,
   machines,
   existingCodes,
   recordId,
@@ -396,6 +398,8 @@ function JournalFormModal({
   initial?: JournalFormValues | null;
   projects: JournalProjectOption[];
   welders: CertifiedWelderOption[];
+  accountWelderId?: string;
+  accountName?: string;
   machines: MachineOption[];
   existingCodes: string[];
   /** Id bản ghi đang sửa — bỏ qua khi kiểm tra trùng mã. */
@@ -481,6 +485,7 @@ function JournalFormModal({
     : [];
 
   const initializedForm = useRef<JournalFormValues | null | undefined>(undefined);
+  const welderChosen = useRef(false);
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && (!wasOpen.current || initializedForm.current !== initial)) {
@@ -492,6 +497,7 @@ function JournalFormModal({
         machines,
       );
       setForm(next);
+      welderChosen.current = Boolean(next.tho_han_id);
       setProjectSuggestion(null);
       initialImageIds.current = new Set(next.anh_moi_han_lien_ket.map((asset) => asset.publicId));
       removedImages.current = [];
@@ -511,6 +517,12 @@ function JournalFormModal({
     }
     wasOpen.current = open;
   }, [open, initial, projects, welders, machines, mode]);
+
+  useEffect(() => {
+    if (!open || mode !== "create" || !accountWelderId || welderChosen.current) return;
+    welderChosen.current = true;
+    setForm((current) => ({ ...current, tho_han_id: accountWelderId }));
+  }, [open, mode, initial, accountWelderId]);
 
   const suggestionOptions = useRef({ projects, welders, machines });
   useEffect(() => {
@@ -682,10 +694,7 @@ function JournalFormModal({
   }
 
   useEffect(() => {
-    const selectedIsQualified = qualifiedWelders.some((welder) => welder.id === form.tho_han_id);
-    // Không tự đổi sang thợ đầu danh sách; thợ không đủ điều kiện thì bỏ chọn.
-    const nextWelderId = selectedIsQualified ? form.tho_han_id : "";
-    const nextWelder = welders.find((welder) => welder.id === nextWelderId);
+    const nextWelder = welders.find((welder) => welder.id === form.tho_han_id);
     const eligibleCertificates = nextWelder
       ? shouldCheckCertificate
         ? eligibleCertificatesForWeld(nextWelder.certificates, qualificationContext)
@@ -696,13 +705,12 @@ function JournalFormModal({
       : eligibleCertificates.find((certificate) => isCertificateCompatibleWithMachine(certificate, selectedMachine))
         ?? eligibleCertificates[0]
         ?? "";
-    if (form.chung_chi_su_dung === nextCertificate && form.tho_han_id === nextWelderId) return;
+    if (form.chung_chi_su_dung === nextCertificate) return;
     setForm((prev) => ({
       ...prev,
-      tho_han_id: nextWelderId,
       chung_chi_su_dung: nextCertificate,
     }));
-  }, [form.chung_chi_su_dung, form.tho_han_id, qualifiedWelders, qualificationContext, selectedMachine, shouldCheckCertificate, welders]);
+  }, [form.chung_chi_su_dung, form.tho_han_id, qualificationContext, selectedMachine, shouldCheckCertificate, welders]);
 
   useEffect(() => {
     if (!form.moi_han_lien_ket) return;
@@ -1396,8 +1404,8 @@ function JournalFormModal({
             </label>
           )}
           {!quickActive && !form.toa_do_id && (
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-              <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3.5">
+              <label className="col-span-2 block text-xs font-semibold text-slate-700 sm:col-span-1 sm:text-[13px]">
                 Hoặc nhập mã tọa độ
                 <input
                   value={form.ma_toa_do}
@@ -1426,8 +1434,8 @@ function JournalFormModal({
               </label>
             </div>
           )}
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-            <div className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3.5">
+            <div className="col-span-2 min-w-0 text-xs font-semibold text-slate-700 sm:col-span-1 sm:text-[13px]">
               <label htmlFor="journal-weld-code">Mã hệ thống</label>
               <input
                 id="journal-weld-code"
@@ -1474,9 +1482,9 @@ function JournalFormModal({
             </label>
           </div>
 
-          <div className={`grid grid-cols-1 gap-3.5 ${quickActive ? "" : "sm:grid-cols-2"}`}>
+          <div className={`grid gap-2.5 sm:gap-3.5 ${quickActive ? "grid-cols-1" : "grid-cols-2"}`}>
             {!quickActive && (
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            <label className="block min-w-0 text-xs sm:text-[13px] font-semibold text-slate-700">
               Ngày giờ
               <DateField
                 withTime
@@ -1486,7 +1494,7 @@ function JournalFormModal({
               />
             </label>
             )}
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+            <label className="block min-w-0 text-xs sm:text-[13px] font-semibold text-slate-700">
               Tình trạng thí nghiệm
               <SelectMenu
                 disabled={qualityRecorded}
@@ -1500,8 +1508,8 @@ function JournalFormModal({
             </label>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-            <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 sm:gap-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <label className="col-span-2 block text-xs font-semibold text-slate-700 sm:col-span-1 sm:text-[13px]">
               Ca hàn
               <SelectMenu
                 value={form.ca_han}
@@ -1526,7 +1534,7 @@ function JournalFormModal({
                       : current.gio_ket_thuc,
                   }));
                 }}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                className="mt-1.5 block h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1535,7 +1543,7 @@ function JournalFormModal({
                 type="time"
                 value={form.gio_ket_thuc}
                 onChange={(event) => setForm({ ...form, gio_ket_thuc: event.target.value })}
-                className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+                className="mt-1.5 block h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
               />
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
@@ -1557,11 +1565,15 @@ function JournalFormModal({
             </div>
           </div>
 
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          <div className="grid grid-cols-2 gap-2.5 sm:contents">
+          <label className="block min-w-0 text-xs sm:text-[13px] font-semibold text-slate-700">
             Người trực tiếp hàn
             <SelectMenu
               value={form.tho_han_id}
-              onChange={(tho_han_id) => setForm({ ...form, tho_han_id })}
+              onChange={(tho_han_id) => {
+                welderChosen.current = true;
+                setForm({ ...form, tho_han_id });
+              }}
               options={welders.map((w) => {
                 const qualified = qualifiedWelders.some((item) => item.id === w.id);
                 return {
@@ -1580,6 +1592,12 @@ function JournalFormModal({
               className="mt-1.5"
               buttonClassName="h-10 shadow-2xs"
             />
+            {mode === "create" && accountName && !accountWelderId && !form.tho_han_id && (
+              <span className="mt-1 block text-xs font-normal text-slate-600">Tài khoản {accountName} chưa khớp duy nhất với danh mục thợ hàn. Chọn người thực hiện từ danh sách.</span>
+            )}
+            {selectedWelder && selectedEligibleCertificates.length === 0 && (
+              <span className="mt-1 block text-xs font-normal text-amber-800">Người hàn chưa có chứng chỉ phù hợp để lưu nhật ký.</span>
+            )}
             {shouldCheckCertificate && (
               <span className={`mt-1.5 block rounded-lg border px-2.5 py-2 text-[11px] font-medium ${qualifiedWelders.length > 0 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
                 Yêu cầu: {describeCertificateRequirement(qualificationContext)} · {qualifiedWelders.length} nhân sự phù hợp
@@ -1587,7 +1605,7 @@ function JournalFormModal({
             )}
           </label>
 
-          <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
+          <label className="block min-w-0 text-xs sm:text-[13px] font-semibold text-slate-700">
             Chứng chỉ sử dụng
             <SelectMenu
               value={form.chung_chi_su_dung}
@@ -1619,6 +1637,7 @@ function JournalFormModal({
               buttonClassName="h-10 shadow-2xs"
             />
           </label>
+          </div>
 
           <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
             Máy thực hiện
@@ -1656,7 +1675,7 @@ function JournalFormModal({
             </span>
           </label>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3.5">
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Loại ray
               <SelectMenu
@@ -2016,6 +2035,11 @@ export default function WeldingJournalList({
   }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
 
   const welderOptions = personnelWelderOptions;
+  const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
+  const accountName = nameKey(userName);
+  const accountWelders = accountName ? welderOptions.filter((welder) => nameKey(welder.label) === accountName) : [];
+  const accountWelder = accountWelders.length === 1 ? accountWelders[0] : undefined;
+
   const projects = useMemo(
     () => projectOptions.map((item) => item.label),
     [projectOptions],
@@ -2248,15 +2272,10 @@ export default function WeldingJournalList({
       machineOptions,
     );
     const projectId = point.projectId && projectOptions.some((project) => project.id === point.projectId) ? point.projectId : base.du_an_id;
-    const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
-    const accountName = nameKey(userName);
-    const accountWelders = accountName ? welderOptions.filter((welder) => nameKey(welder.label) === accountName) : [];
-    const accountWelder = accountWelders.length === 1 ? accountWelders[0] : undefined;
     setEditingRow(null);
     setEditingForm({
       ...base,
       du_an_id: projectId,
-      tho_han_id: accountWelder?.id ?? "",
       toa_do_id: point.id,
       ly_trinh: point.chainage || base.ly_trinh,
       kinh_do: String(point.longitude),
@@ -2266,9 +2285,7 @@ export default function WeldingJournalList({
       ten_moi_han_theo_may: payload.machineCode || base.ten_moi_han_theo_may,
     });
     setFormOpen(true);
-    showToast(accountWelder
-      ? `Đã quét ${payload.lispCode} và điền người hàn ${accountWelder.label}.`
-      : `Đã quét ${payload.lispCode}. Hãy chọn người hàn nếu tài khoản chưa khớp danh mục thợ hàn.`);
+    showToast(`Đã quét ${payload.lispCode}. Kiểm tra thông tin rồi bấm Lưu.`);
   }
 
   function showToast(message: string) {
@@ -2975,7 +2992,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 sm:mb-4 sm:text-sm">
+      <div className="mb-3 grid grid-cols-3 gap-1.5 text-[11px] text-slate-600 [&>span]:justify-center sm:mb-4 sm:flex sm:flex-wrap sm:items-center sm:text-sm">
         <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1"><strong className="font-mono font-semibold tabular-nums text-slate-900">{total.toLocaleString("vi-VN")}</strong> bản ghi</span>
         {!failedWeldMode ? (
           <>
@@ -3231,33 +3248,18 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         <div className="mt-3.5 space-y-2.5 lg:hidden">
           {pageRows.map((w) => (
             <div key={w.id} className={`flex min-w-0 items-stretch overflow-hidden rounded-xl border bg-white shadow-2xs transition-colors hover:border-[#0047AB]/40 hover:bg-blue-50/40 ${selectedQuality.has(w.id) ? "border-[#0047AB]/60 bg-blue-50/50" : "border-slate-200"}`}>
-            <label className="flex w-10 shrink-0 cursor-pointer items-start justify-center pt-3.5"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label>
+            <label className="flex w-10 shrink-0 cursor-pointer items-center justify-center"><input type="checkbox" className="h-5 w-5 accent-blue-700" disabled={!qualityReady || loading} checked={selectedQuality.has(w.id)} onChange={() => toggleQualityRow(w.id)} aria-label={`Chọn mối ${w.weldName}`} /></label>
             <button
               type="button"
               onClick={() => setDetailId(w.id)}
-              className="flex min-w-0 flex-1 items-center gap-2 py-3 pr-3 text-left cursor-pointer"
+              className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-3 text-left cursor-pointer"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="block min-w-0 truncate font-mono text-[13px] font-bold text-[#0047AB]">{w.weldName}</span>
-                  <span className="shrink-0"><WeldQualityBadge status={w.qualityStatus} /></span>
+                <span className="block break-words font-mono text-[13px] font-bold text-[#0047AB]">{w.weldName}</span>
+                <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
+                  <span className="min-w-0 break-words text-xs font-semibold text-slate-900">{w.operator}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-slate-500">{w.performedDate}</span>
                 </div>
-                <div className="mt-1 truncate text-sm font-semibold text-slate-900">
-                  {w.operator} <span className="font-normal text-slate-400">·</span> <span className="font-mono text-xs font-normal text-slate-500">{w.performedDate} · {w.shift}</span>
-                </div>
-                <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-lg bg-slate-50 px-2 py-1.5 font-mono text-[11px] text-slate-600">
-                  <dt className="text-slate-400" title="Mã vị trí">VT</dt><dd className="truncate">{w.lispCode}</dd>
-                  <dt className="text-slate-400" title="Mã hiện trường">HT</dt><dd className="truncate">{w.siteCode}</dd>
-                  <dt className="text-slate-400" title="Mã trong máy">TM</dt><dd className="truncate">{w.machineCode}</dd>
-                </dl>
-                <div className="mt-1.5 truncate text-[11px] text-slate-500">🏗️ {w.project}</div>
-                <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px]">
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">{w.weldType}</span>
-                  <span className={`min-w-0 truncate ${w.machine === "Chưa gán máy" ? "text-amber-700" : "text-[#0047AB]"}`}>⚙️ {w.machine}</span>
-                </div>
-                {w.resultType === "fail" && (
-                  <div className="mt-1 line-clamp-2 text-[11px] font-medium text-rose-700">⚠ {w.failureReason}</div>
-                )}
               </div>
               <span className="shrink-0 text-slate-300">
                 <CaretRight size={16} weight="bold" aria-hidden />
@@ -3715,6 +3717,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         open={formOpen}
         mode={editingRow ? "edit" : "create"}
         initial={editingForm}
+        accountName={userName}
+        accountWelderId={accountWelder?.id}
         projects={projectOptions}
         welders={welderOptions}
         machines={machineOptions}
