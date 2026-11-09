@@ -3,6 +3,7 @@ import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQuali
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { listPayments, listPaymentIds, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
 import { loadProjectWeather } from "@/lib/server/projectWeather";
@@ -45,11 +46,16 @@ export async function POST(request: Request) {
     if (body.action === "rule") return NextResponse.json(await createQualityRuleForWeld(body, actor));
     if (body.action === "rule-sync") return NextResponse.json({ sync: await applyQualityRule(qualityUuid(body.id), actor) });
     if (body.action === "rules-list") return NextResponse.json(await listQualityRules(String(body.du_an_id ?? "")));
+    if (body.action === "payment-list") return NextResponse.json({ payments: await listPayments(qualityUuid(body.du_an_id)) });
+    if (body.action === "payment-set") return NextResponse.json(await setPayments(body, actor));
+    if (body.action === "payment-clear") return NextResponse.json(await clearPayments(body));
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
-      const [accepted, waiting, acceptance, signing] = await Promise.all(["Đạt", "Chờ mài", "Chờ siêu âm", "Chờ ký biên bản"].map((qualityStatusFilter) =>
+      const [accepted, waiting, acceptance, signing, ground, ultrasound] = await Promise.all(["Đạt", "Chờ mài", "Chờ nghiệm thu", "Chờ ký biên bản", "Mài xong", "Chờ siêu âm"].map((qualityStatusFilter) =>
         loadQualityJournalRows(parseQualityFilters({ ...base, qualityStatusFilter, page: 1, pageSize: 1000 }))));
-      return NextResponse.json({ accepted, waiting, acceptance, signing });
+      // Đã thanh toán = mối đã nghiệm thu Đạt có ghi thanh toán.
+      const paidIds = new Set((await listPaymentIds(accepted.map((r) => r.id))));
+      return NextResponse.json({ accepted, waiting, acceptance, signing, ground, ultrasound, paid: accepted.filter((r) => paidIds.has(r.id)) });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (["split-list", "split-detail", "split-publish", "split-complete", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));

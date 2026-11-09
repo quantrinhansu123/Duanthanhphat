@@ -74,7 +74,7 @@ const PROJECT_COLORS = [
 const CHART_ZOOM_MAX = 8;
 const LOOKUP_PAGE_SIZE = 80;
 
-type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind" | "acceptance" | "signing";
+type ReportLookupKind = "projects" | "all" | "today" | "latest" | "passed" | "failed" | "rework" | "pending" | "grind" | "acceptance" | "signing" | "groundDone" | "ultrasound" | "paid";
 
 const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   projects: "Dự án",
@@ -88,6 +88,9 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   grind: "Chờ mài",
   acceptance: "Chờ nghiệm thu",
   signing: "Chờ ký biên bản",
+  groundDone: "Mài xong",
+  ultrasound: "Chờ siêu âm",
+  paid: "Đã thanh toán",
 };
 
 function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
@@ -1724,7 +1727,34 @@ export default function OverviewDashboard() {
             <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.acceptanceCount) : "—"}</span>
             <span className="text-xs text-slate-400">mối</span>
           </div>
-          <div className="mt-2.5 text-xs text-slate-500">Đã phát / chờ phát RFI, chờ siêu âm và nghiệm thu</div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã siêu âm đạt, chờ nghiệm thu hoàn tất</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("groundDone")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-slate-600">MÀI XONG</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.groundCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã mài, chưa phát RFI hình học</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("ultrasound")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ SIÊU ÂM</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.ultrasoundCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu hình học, chờ siêu âm</div>
+        </button>
+
+        <button type="button" onClick={() => setLookup("paid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-emerald-700">ĐÃ THANH TOÁN</div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.paidCount) : "—"}</span>
+            <span className="text-xs text-slate-400">mối</span>
+          </div>
+          <div className="mt-2.5 text-xs text-slate-500">Mối nghiệm thu Đạt đã ghi thanh toán</div>
         </button>
 
         <button type="button" onClick={() => setLookup("signing")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
@@ -2765,7 +2795,7 @@ export default function OverviewDashboard() {
         <ReportLookupDialog
           kind={lookup}
           loading={lookup !== "projects" && loading && selectedRows.length === 0}
-          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : lookup === "groundDone" ? (quality?.ground ?? []) : lookup === "ultrasound" ? (quality?.ultrasound ?? []) : lookup === "paid" ? (quality?.paid ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
           projects={selectedProjects.map((project) => ({
             id: project.id,
             name: project.name,

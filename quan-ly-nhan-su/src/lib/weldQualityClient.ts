@@ -146,11 +146,20 @@ export async function setRecordSetSign(dot_id: string, tinh_trang_ky: "Chờ ký
   return result;
 }
 
+export type DashboardQualityData = { accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[];
+  ground?: WeldReportRow[]; ultrasound?: WeldReportRow[]; paid?: WeldReportRow[] };
 export const loadDashboardQuality = (filters: { projects?: string[]; dateFrom?: string; dateTo?: string }) =>
-  qualityRequest<{ accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[] }>({ action: "dashboard-quality", filters });
+  qualityRequest<DashboardQualityData>({ action: "dashboard-quality", filters });
 
 export const loadAcceptedOnDate = (date: string, du_an_id?: string | null) =>
   qualityRequest<{ count: number }>({ action: "accepted-on-date", date, du_an_id: du_an_id || undefined });
 
 export const reviseRecord = (ho_so_id: string, thong_tin: Record<string, string>, ly_do: string) =>
   qualityRequest<{ ok: true }>({ action: "record-revise", ho_so_id, thong_tin, ly_do });
+
+export type WeldPayment = { moi_han_id: string; ngay_thanh_toan: string; dot_thanh_toan: string | null };
+export const loadWeldPayments = (du_an_id: string) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-list", du_an_id });
+export const saveWeldPayments = (du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, dot_thanh_toan: string) =>
+  qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, dot_thanh_toan });
+export const clearWeldPayments = (du_an_id: string, moi_han_ids: string[]) =>
+  qualityRequest<{ count: number }>({ action: "payment-clear", du_an_id, moi_han_ids });

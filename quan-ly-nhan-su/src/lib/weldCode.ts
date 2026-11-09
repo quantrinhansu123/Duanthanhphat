@@ -507,14 +507,14 @@ export function planWeldCodeAssignments(
 }
 
 /**
- * Mã hiện trường để in / hiển thị trong nghiệm thu: bỏ tiền tố dự án (PQ-) và dấu gạch, dạng «FBW 051126 0012».
+ * Mã hiện trường để in / hiển thị trong nghiệm thu: bỏ tiền tố dự án (PQ-) và dấu gạch, dạng «FBW-ddmmyyxxxx» (VD FBW-0511260012).
  * Ưu tiên mã hiện trường đã lưu; không đúng mẫu thì suy ra từ mã hệ thống.
  */
 export function fieldWeldCode(systemCode?: string | null, fieldCode?: string | null): string {
   const pattern = /(FBW|ATW)[-\s]?(\d{2})[-\s]?(\d{2})[-\s]?(\d{2})[-\s]?(\d+)\s*$/i;
   for (const source of [fieldCode, systemCode]) {
     const m = pattern.exec((source ?? "").trim());
-    if (m) return `${m[1].toUpperCase()} ${m[2]}${m[3]}${m[4]} ${m[5]}`;
+    if (m) return `${m[1].toUpperCase()}-${m[2]}${m[3]}${m[4]}${m[5].padStart(4, "0")}`;
   }
   return (fieldCode || systemCode || "").trim().replace(/^PQ-/i, "");
 }

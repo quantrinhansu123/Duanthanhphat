@@ -11,22 +11,41 @@ function load(name, imports = {}, globals = {}) {
   return exports;
 }
 const trackEditor = load("../features/lwr/lib/track-editor", { "./track-data": {}, "./stress-release": {} });
-const { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText } = load("constructionDiaryAuto", {
-  "./weldAcceptance": load("weldAcceptance"), "@lwr/lib/track-editor": trackEditor,
+const weldCode = load("weldCode");
+const { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName } = load("constructionDiaryAuto", {
+  "./weldAcceptance": load("weldAcceptance", { "@/lib/weldCode": weldCode }), "./weldCode": weldCode, "@lwr/lib/track-editor": trackEditor,
 });
 const row = (id, ma_diem, ly_trinh, quantity = 1, method = "FBW") => ({ id, ma_diem, ly_trinh, ma_lich_su: `PQ-${id}`, so_luong_thuc_hien: quantity, cong_nghe_han: method });
 const rows = [row("a", "HT0001", "Km10+100", 2), row("b", "HP0002", "Km2+005"), row("c", "TT0001", "Km1+000", 1, "ATW")];
 const text = diaryWorkText([...rows, rows[0]], "weld");
-assert.match(text, /Hàn chảy giáp mép đoạn Km2\+005 – Km10\+100, thuộc tuyến hạ. Khối lượng: 3 mối/);
-assert.match(text, /Hàn nhiệt nhôm đoạn Km1\+000 – Km1\+000, thuộc tuyến thượng/);
+assert.match(text, /Thi công hàn chảy giáp mép, khối lượng 3 mối hàn/);
+assert.match(text, /Thi công hàn nhiệt nhôm, khối lượng 1 mối hàn/);
+assert.match(diaryWorkText(rows, "grind"), /Mài ray đoạn Km2\+005 – Km10\+100/);
+assert.match(diaryWorkText(rows, "grind"), /thuộc tuyến hạ. Khối lượng: 3 mối/);
 assert.equal(text.split("\n").length, 2);
 assert.match(diaryWorkText(rows, "grind"), /^- Mài ray/);
-assert.match(diaryWorkText(rows, "weld"), /Mối số: HP0002, HT0001/);
+assert.match(diaryWorkText(rows, "weld"), /bao gồm mối số: HP0002, HT0001/);
 assert.match(diaryWorkText(rows, "accept"), /Mối số: HP0002, HT0001/);
-assert.match(diaryWorkText([row("d", null, null)], "weld"), /Km… – Km…, thuộc tuyến ….*cần bổ sung lý trình/);
+assert.match(diaryWorkText([row("d", null, null)], "grind"), /Km… – Km…, thuộc tuyến ….*cần bổ sung lý trình/);
 assert.match(diaryWorkText([rows[0], row("d", "HT0002", "bad")], "grind"), /cần bổ sung lý trình/);
 assert.equal(diaryWorkText([], "weld"), "");
-assert.match(diaryWorkText([row("f", "TT0002", "Km0+044.43")], "weld"), /Km0\+044\.43/);
+assert.match(diaryWorkText([row("f", "TT0002", "Km0+044.43")], "grind"), /Km0\+044\.43/);
+// Mã hiện trường: bỏ PQ-, dạng FBW-ddmmyyxxxx.
+assert.equal(weldCode.fieldWeldCode("PQ-FBW-04-11-26-0002"), "FBW-0411260002");
+assert.match(diaryWorkText([{ ...row("g", "HT0001", "Km1+000"), ma_hien_truong: "FBW-04-11-26-0001" }], "weld"), /bao gồm mối số: FBW-0411260001\./);
+// Báo cáo ngày cắt «… (+2)» → in đủ mã của mọi mối trong ngày, hết thì chấm.
+const day = [1, 2, 3].map((n) => ({ ...row(`w${n}`, `HT000${n}`, "Km1+000"), ma_hien_truong: `FBW-04-11-26-000${n}` }));
+const report = diaryReportWorkText([{ hom_nay: 3, hang_muc: "Hàn chảy giáp mép", don_vi: "mối", ten_moi_han: "PQ-FBW-04-11-26-0001, PQ-FBW-04-11-26-0002… (+1)" }], day);
+assert.equal(report, "- Thi công hàn chảy giáp mép, khối lượng 3 mối hàn; bao gồm mối số: FBW-0411260001, FBW-0411260002, FBW-0411260003.");
+// Máy hàn: tên chuẩn, không lặp mã trong ngoặc; thiết bị khác giữ nguyên.
+assert.equal(diaryMachineName("Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6 (UN5-150ZC2-C6)"), "Máy hàn chảy giáp mép UN5-150ZC2-C6");
+const equipment = diaryReportEquipmentText([
+  { ten_thiet_bi: "Máy hàn tiếp xúc đối đầu ray lưu động UN5-150ZC2-C6 (UN5-150ZC2-C6)", so_luong: 1, bo_phan: "1. Máy hàn" },
+  { ten_thiet_bi: "Dao cắt phôi ray 60R2-UN5 (DCP60R2-UN5-01)", so_luong: 1, bo_phan: "2. Máy và thiết bị khác" },
+]);
+assert.match(equipment, /^1\. Máy hàn:\n- Máy hàn chảy giáp mép UN5-150ZC2-C6: 1 bộ\n2\. Máy và thiết bị khác: Dao cắt phôi ray 60R2-UN5 \(DCP60R2-UN5-01\): 1 bộ/);
+// Báo RFI: tên công tác do người gọi đặt.
+assert.match(diaryWorkText(rows, "accept", "Báo RFI số 3 nghiệm thu hình học"), /^- Báo RFI số 3 nghiệm thu hình học đoạn/);
 console.log("construction diary defaults OK");
 
 const rail = { id: "lwr", code: "HT-01", projectId: "p", rowKey: "HT", startCellId: "HT-01", endCellId: "HT-01", releaseDate: "2026-10-27", completedAt: "2026-10-28T18:00:00Z" };

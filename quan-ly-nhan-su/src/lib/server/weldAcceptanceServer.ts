@@ -6,7 +6,7 @@ import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQuality
 import { rfiScope, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
-import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, type DiaryWork } from "@/lib/constructionDiaryAuto";
+import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
 import { projectEquipmentText } from "@/lib/projectEquipment";
 import { readPrivateJson } from "@/lib/server/privateJsonStorage";
@@ -64,7 +64,21 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       .eq("dot_nghiem_thu.ngay_nghiem_thu", date).eq("dot_nghiem_thu.phieu_yeu_cau_nghiem_thu.du_an_id", projectId)
       .neq("ket_qua", "Chưa nghiệm thu").order("moi_han_id").range(a, b)),
   ]);
-  const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id)])];
+  // RFI báo trong ngày (phiếu chính + phiếu tách hình học/siêu âm) và kết quả nghiệm thu phiếu tách trong ngày → vào nhật ký thi công.
+  const [mainRfis, splitRfis, splitDone] = await Promise.all([
+    fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
+      .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)),
+    fetchAll<{ id: string; so_phieu: string; loai: string }>((a, b) => db().from("phieu_nt_tach")
+      .select("id,so_phieu,loai").eq("du_an_id", projectId).eq("ngay_moi", date).order("so_phieu").range(a, b)),
+    fetchAll<{ moi_han_id: string; loai: string; ket_qua: string | null; phieu_nt_tach: { du_an_id: string; ngay_nghiem_thu: string | null } | { du_an_id: string; ngay_nghiem_thu: string | null }[] }>((a, b) => db().from("phieu_nt_tach_moi")
+      .select("moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)").eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").range(a, b)),
+  ]);
+  const [mainRfiWelds, splitRfiWelds] = await Promise.all([
+    chunked<{ phieu_id: string; moi_han_id: string }>(mainRfis.map((r) => r.id), (p) => db().from("phieu_yeu_cau_nghiem_thu_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
+    chunked<{ phieu_id: string; moi_han_id: string }>(splitRfis.map((r) => r.id), (p) => db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
+  ]);
+  const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id),
+    ...mainRfiWelds.map((w) => w.moi_han_id), ...splitRfiWelds.map((w) => w.moi_han_id), ...splitDone.map((w) => w.moi_han_id)])];
   const [all, points] = await Promise.all([
     chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh,ma_hien_truong").eq("du_an_id", projectId).in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
@@ -115,12 +129,31 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
   return {
     ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
-    thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment),
-    noiDungCongViec: diaryReportWorkText(reports, select(welds.map((w) => w.id))) || [diaryWorkText(select(welds.map((w) => w.id)), "weld"), diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"), diaryStressReleaseText(layout, projectId, date)].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
-    nghiemThuHangNgay: ["Đạt", "Không đạt"].map((result) => {
-      const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
-      return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
-    }).filter(Boolean).join("\n") || "Không có công tác nghiệm thu",
+    thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
+    // Mục hàn lấy theo báo cáo ngày nếu có; mài ray, RFI báo trong ngày và giải tỏa ứng suất luôn được ghép thêm (không bị báo cáo ngày che mất).
+    noiDungCongViec: [
+      diaryReportWorkText(reports, select(welds.map((w) => w.id))) || diaryWorkText(select(welds.map((w) => w.id)), "weld"),
+      diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
+      ...mainRfis.map((r) => {
+        const scope = rfiScope(r.thong_tin ?? {});
+        const what = scope.geometry && scope.ultrasound ? "hình học và siêu âm" : scope.ultrasound ? "siêu âm" : "hình học";
+        return diaryWorkText(select(mainRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${what}`);
+      }),
+      // Phiếu hình học/siêu âm sinh ra từ RFI chính trong cùng ngày đã nằm trong dòng RFI chính → không ghi lặp.
+      ...splitRfis.filter((r) => { const own = splitRfiWelds.filter((w) => w.phieu_id === r.id); return !own.length || !own.every((w) => mainRfiWelds.some((m) => m.moi_han_id === w.moi_han_id)); }).map((r) => diaryWorkText(select(splitRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${r.loai === "sieu-am" ? "siêu âm" : "hình học"}`)),
+      diaryStressReleaseText(layout, projectId, date),
+    ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
+    nghiemThuHangNgay: [
+      ...["Đạt", "Không đạt"].map((result) => {
+        const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
+        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
+      }),
+      // Nghiệm thu phiếu tách (hình học / siêu âm) chốt trong ngày.
+      ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
+        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "hình học"} mối hàn`);
+        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
+      })),
+    ].filter(Boolean).join("\n") || "Không có công tác nghiệm thu",
   };
 }
 
