@@ -1754,7 +1754,7 @@ export default function OverviewDashboard() {
             <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.paidCount) : "—"}</span>
             <span className="text-xs text-slate-400">mối</span>
           </div>
-          <div className="mt-2.5 text-xs text-slate-500">Mối nghiệm thu Đạt đã ghi thanh toán</div>
+          <div className="mt-2.5 text-xs text-slate-500">Mối nghiệm thu Đạt đã thanh toán đủ 100%</div>
         </button>
 
         <button type="button" onClick={() => setLookup("signing")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">

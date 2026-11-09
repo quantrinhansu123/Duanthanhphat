@@ -13,7 +13,7 @@ import {
 } from "@/lib/weldReportData";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { createClient } from "@/lib/supabase/client";
-import { clearWeldPayments, loadWeldPayments, saveWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
+import { clearWeldPayments, loadRfis, loadTicketWelds, loadWeldPayments, saveWeldPayments, type RfiSummary, type WeldPayment } from "@/lib/weldQualityClient";
 
 /** Một dòng trong mẫu "Báo cáo ray": mỗi mối hàn là một thanh ray. */
 type RailRow = {
@@ -27,7 +27,8 @@ type RailRow = {
   tinhTrang: string;
   ghiChu: string;
   daNghiemThu: boolean;
-  thanhToan: string; // ngày thanh toán ("—" nếu chưa)
+  thanhToan: string; // tỷ lệ đã thanh toán, VD "50%" ("—" nếu chưa)
+  thanhToanGhiChu: string;
 };
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -102,7 +103,9 @@ export default function RailReportDashboard() {
   const [payments, setPayments] = useState<Map<string, WeldPayment>>(new Map());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const [payBatch, setPayBatch] = useState("");
+  const [payPercent, setPayPercent] = useState(100);
+  const [payNote, setPayNote] = useState("");
+  const [rfis, setRfis] = useState<RfiSummary[]>([]);
   const [payMessage, setPayMessage] = useState("");
   const projectIdForPay = baseRows[0]?.du_an_id;
   const reloadPayments = () => {
@@ -111,6 +114,18 @@ export default function RailReportDashboard() {
       .catch(() => setPayMessage("Không tải được dữ liệu thanh toán (cần chạy migration thanh_toan_moi_han)."));
   };
   useEffect(() => { void reloadPayments(); }, [projectIdForPay]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (projectIdForPay) loadRfis(projectIdForPay).then((r) => setRfis(r.rfis)).catch(() => setRfis([])); }, [projectIdForPay]);
+
+  /** Chọn theo phiếu: chọn mọi mối của phiếu đó đang hiện trong bảng. */
+  async function selectByTicket(ticketId: string) {
+    if (!projectIdForPay || !ticketId) return;
+    setPayMessage("");
+    try {
+      const { moi_han_ids } = await loadTicketWelds(projectIdForPay, ticketId);
+      const shown = new Set(railRows.map((r) => r.key));
+      setSelected(new Set(moi_han_ids.filter((id) => shown.has(id))));
+    } catch (e) { setPayMessage(e instanceof Error ? e.message : "Không đọc được phiếu."); }
+  }
 
   // Lấy điểm cuối trước khi lọc ngày hoặc tìm kiếm.
   // Điểm thiết kế (toa_do) cho cả mối chưa hàn / chưa gắn mối hàn → luôn có lý trình cuối của thanh ray.
@@ -169,7 +184,8 @@ export default function RailReportDashboard() {
           tinhTrang: statusLabel(row),
           ghiChu: (row.ghi_chu ?? "").trim() || "—",
           daNghiemThu: row.tinh_trang_chat_luong === "Đạt",
-          thanhToan: payments.get(row.id) ? formatDateShortEn(payments.get(row.id)!.ngay_thanh_toan) : "—",
+          thanhToan: payments.get(row.id) ? `${payments.get(row.id)!.ty_le}%` : "—",
+          thanhToanGhiChu: payments.get(row.id)?.ghi_chu ?? "",
           route,
         };
       })
@@ -212,11 +228,12 @@ export default function RailReportDashboard() {
   const summary = useMemo(() => {
     const welded = baseRows.filter((r) => r.loai_moi_han !== "Chấp thuận");
     const accepted = welded.filter((r) => r.tinh_trang_chat_luong === "Đạt").length;
-    const paid = welded.filter((r) => payments.has(r.id)).length;
+    const paid = welded.filter((r) => payments.get(r.id)?.ty_le === 100).length;
+    const partial = welded.filter((r) => payments.has(r.id) && payments.get(r.id)!.ty_le < 100).length;
     return [
       `Tổng số mối đã hàn: ${welded.length.toLocaleString("vi-VN")}${pct(welded.length, plannedTotal)} (không tính chấp thuận)`,
       `Tổng số mối đã nghiệm thu: ${accepted.toLocaleString("vi-VN")}${pct(accepted, plannedTotal)}`,
-      `Tổng số mối đã thanh toán: ${paid.toLocaleString("vi-VN")}${pct(paid, plannedTotal)}`,
+      `Tổng số mối đã thanh toán: ${paid.toLocaleString("vi-VN")}${pct(paid, plannedTotal)}${partial ? ` · thanh toán một phần: ${partial}` : ""}`,
     ];
   }, [baseRows, plannedTotal, payments]);
 
@@ -226,7 +243,7 @@ export default function RailReportDashboard() {
     try {
       const chosen = [...selected];
       if (clear) await clearWeldPayments(projectIdForPay, chosen);
-      else await saveWeldPayments(projectIdForPay, chosen, payDate, payBatch);
+      else await saveWeldPayments(projectIdForPay, chosen, payDate, payPercent, payNote);
       await reloadPayments();
       setSelected(new Set());
       setPayMessage(clear ? `Đã bỏ thanh toán ${chosen.length} mối.` : `Đã ghi thanh toán ${chosen.length} mối.`);
@@ -235,11 +252,11 @@ export default function RailReportDashboard() {
 
   async function exportExcel() {
     const XLSX = await import("xlsx");
-    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình đầu", "Lý trình cuối", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán"];
+    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình đầu", "Lý trình cuối", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán", "Ghi chú thanh toán"];
     const aoa = [["THEO DÕI CÔNG VIỆC HÀN RAY"], [`Dự án: ${baseRows[0]?.du_an || "Phú Quốc"}`], ...summary.map((l) => [l]), [], head,
-      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.lyTrinhCuoi, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan])];
+      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.lyTrinhCuoi, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan, r.thanhToanGhiChu])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [18, 24, 14, 14, 12, 14, 18, 14].map((wch) => ({ wch }));
+    ws["!cols"] = [18, 24, 14, 14, 12, 14, 18, 12, 24].map((wch) => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Theo doi han ray");
     XLSX.writeFile(wb, `Theo-doi-cong-viec-han-ray-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -304,7 +321,7 @@ export default function RailReportDashboard() {
           In báo cáo ray
         </button>
         <button type="button" onClick={exportExcel} disabled={!railRows.length}
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0047AB] px-4 text-sm font-semibold text-[#0047AB] hover:bg-blue-50 disabled:opacity-50">
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">
           Xuất Excel
         </button>
       </div>
@@ -314,12 +331,23 @@ export default function RailReportDashboard() {
         <label className="text-xs font-semibold text-slate-600">Ngày thanh toán
           <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="mt-1 block h-10 rounded-lg border border-slate-300 px-3 text-sm font-normal" />
         </label>
-        <label className="text-xs font-semibold text-slate-600">Đợt / ghi chú
-          <input value={payBatch} onChange={(e) => setPayBatch(e.target.value)} placeholder="VD: Đợt 1" className="mt-1 block h-10 w-40 rounded-lg border border-slate-300 px-3 text-sm font-normal" />
+        <label className="text-xs font-semibold text-slate-600">Tình trạng thanh toán
+          <select value={payPercent} onChange={(e) => setPayPercent(Number(e.target.value))} className="mt-1 block h-10 rounded-lg border border-slate-300 px-3 text-sm font-normal">
+            {[30, 50, 70, 100].map((n) => <option key={n} value={n}>{n}%{n === 100 ? " (mặc định)" : ""}</option>)}
+          </select>
         </label>
-        <button type="button" disabled={!selected.size || !payDate} onClick={() => void applyPayment(false)} className="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Ghi thanh toán</button>
-        <button type="button" disabled={!selected.size} onClick={() => void applyPayment(true)} className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Bỏ thanh toán</button>
-        <button type="button" onClick={() => setSelected(new Set(railRows.filter((r) => r.daNghiemThu && r.thanhToan === "—").map((r) => r.key)))} className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Chọn mối đạt chưa thanh toán</button>
+        <label className="text-xs font-semibold text-slate-600">Ghi chú
+          <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder={payPercent < 100 ? `VD: thanh toán ${payPercent}%` : "Ghi chú thanh toán"} className="mt-1 block h-10 w-52 rounded-lg border border-slate-300 px-3 text-sm font-normal" />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">Chọn theo phiếu
+          <select defaultValue="" onChange={(e) => { void selectByTicket(e.target.value); e.target.value = ""; }} className="mt-1 block h-10 rounded-lg border border-slate-300 px-3 text-sm font-normal">
+            <option value="">— Chọn phiếu RFI —</option>
+            {rfis.map((r) => <option key={r.id} value={r.id}>{r.so_phieu}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!selected.size || !payDate} onClick={() => void applyPayment(false)} className="h-10 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">Ghi thanh toán</button>
+        <button type="button" disabled={!selected.size} onClick={() => void applyPayment(true)} className="h-10 rounded-lg border border-rose-300 bg-rose-50 px-4 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Bỏ thanh toán</button>
+        <button type="button" onClick={() => setSelected(new Set(railRows.filter((r) => r.daNghiemThu && r.thanhToan === "—").map((r) => r.key)))} className="h-10 rounded-lg border border-sky-300 bg-sky-50 px-4 text-sm font-bold text-sky-800 hover:bg-sky-100">Chọn mối đạt chưa thanh toán</button>
         {payMessage && <span className="text-xs font-medium text-slate-700" role="status">{payMessage}</span>}
       </div>
 
@@ -356,7 +384,7 @@ export default function RailReportDashboard() {
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.ngayHan}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-slate-700">{row.chieuDai}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.tinhTrang}</td>
-                  <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.thanhToan}</td>
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700" title={row.thanhToanGhiChu}>{row.thanhToan}{row.thanhToanGhiChu ? " ·" : ""}</td>
                   <td className="px-3 py-2 text-slate-600">{row.ghiChu}</td>
                 </tr>
               ))

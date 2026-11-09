@@ -93,7 +93,7 @@ import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
-import { loadQualityJournal, exportQualityJournal } from "@/lib/weldQualityClient";
+import { loadQualityJournal, exportQualityJournal, loadWeldPaymentsOf, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
@@ -2091,6 +2091,17 @@ export default function WeldingJournalList({
   );
 
   const detailRaw = detailId ? rows.find((row) => row.id === detailId) ?? null : null;
+  // Cột «Thanh toán» (thay cột Lý do không đạt; lý do vẫn xem được khi bấm vào mối).
+  const [paymentByWeld, setPaymentByWeld] = useState<Map<string, WeldPayment>>(new Map());
+  const pageIdsKey = pageRows.map((w) => w.id).join(",");
+  useEffect(() => {
+    if (!pageIdsKey) { setPaymentByWeld(new Map()); return; }
+    let active = true;
+    loadWeldPaymentsOf(pageIdsKey.split(","))
+      .then((r) => { if (active) setPaymentByWeld(new Map(r.payments.map((p) => [p.moi_han_id, p]))); })
+      .catch(() => { if (active) setPaymentByWeld(new Map()); });
+    return () => { active = false; };
+  }, [pageIdsKey]);
   const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -3184,7 +3195,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                 {failedWeldMode ? (
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
-                <th className="p-2.5 font-semibold">Lý do không đạt</th>
+                <th className="whitespace-nowrap p-2.5 font-semibold">Thanh toán</th>
                 {failedWeldMode ? (
                   <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
                 ) : null}
@@ -3221,10 +3232,16 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   {failedWeldMode ? (
                     <td className="p-2.5 whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{w.weldMethod}</td>
                   ) : null}
-                  <td
-                    className={`p-2.5 max-w-[180px] ${w.resultType === "fail" ? "line-clamp-2 text-xs font-medium text-rose-700" : "text-slate-400"}`}
-                  >
-                    {w.failureReason}
+                  <td className="whitespace-nowrap p-2.5">
+                    {(() => {
+                      const pay = paymentByWeld.get(w.id);
+                      if (!pay) return <span className="text-xs text-slate-400">Chưa</span>;
+                      return (
+                        <span title={pay.ghi_chu ?? ""} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${pay.ty_le === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                          {pay.ty_le}%
+                        </span>
+                      );
+                    })()}
                   </td>
                   {failedWeldMode ? (
                   <td className="p-2.5 whitespace-nowrap">
@@ -3253,14 +3270,14 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <td className="whitespace-nowrap p-2.5"><WeldQualityBadge status={w.qualityStatus} /></td>
                   <td className="p-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
-                      <button type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-800 hover:bg-blue-100" onClick={(e) => { e.stopPropagation(); const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
+                      <button type="button" className="min-h-11 rounded-lg border border-blue-700 bg-blue-600 px-3 text-xs font-bold text-white shadow-sm hover:bg-blue-700" onClick={(e) => { e.stopPropagation(); const raw = rows.find((r) => r.id === w.id); if (raw) setQualityRow(raw); }}>Kiểm tra</button>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           openEditById(w.id);
                         }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-[#0047AB] hover:bg-blue-50 hover:text-[#0047AB] cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-100 px-2.5 py-1.5 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-200 cursor-pointer"
                         title="Sửa nhật ký hàn"
                       >
                         <PencilSimple size={14} weight="bold" />
@@ -3272,7 +3289,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                           e.stopPropagation();
                           setPendingDeleteId(w.id);
                         }}
-                        className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white p-1.5 text-rose-600 hover:bg-rose-50 cursor-pointer"
+                        className="inline-flex items-center justify-center rounded-lg border border-rose-500 bg-rose-600 p-1.5 text-white shadow-sm hover:bg-rose-700 cursor-pointer"
                         title="Xóa nhật ký hàn"
                         aria-label="Xóa nhật ký hàn"
                       >

@@ -157,9 +157,12 @@ export const loadAcceptedOnDate = (date: string, du_an_id?: string | null) =>
 export const reviseRecord = (ho_so_id: string, thong_tin: Record<string, string>, ly_do: string) =>
   qualityRequest<{ ok: true }>({ action: "record-revise", ho_so_id, thong_tin, ly_do });
 
-export type WeldPayment = { moi_han_id: string; ngay_thanh_toan: string; dot_thanh_toan: string | null };
+export type WeldPayment = { moi_han_id: string; ngay_thanh_toan: string; ty_le: number; ghi_chu: string | null };
 export const loadWeldPayments = (du_an_id: string) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-list", du_an_id });
-export const saveWeldPayments = (du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, dot_thanh_toan: string) =>
-  qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, dot_thanh_toan });
+/** Thanh toán của đúng các mối đang hiện (danh sách nhật ký hàn). */
+export const loadWeldPaymentsOf = (moi_han_ids: string[]) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-map", moi_han_ids });
+export const loadTicketWelds = (du_an_id: string, phieu_id: string) => qualityRequest<{ moi_han_ids: string[] }>({ action: "payment-ticket", du_an_id, phieu_id });
+export const saveWeldPayments = (du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, ty_le: number, ghi_chu: string) =>
+  qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, ty_le, ghi_chu });
 export const clearWeldPayments = (du_an_id: string, moi_han_ids: string[]) =>
   qualityRequest<{ count: number }>({ action: "payment-clear", du_an_id, moi_han_ids });
