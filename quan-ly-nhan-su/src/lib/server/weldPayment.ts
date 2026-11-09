@@ -76,17 +76,35 @@ export async function listPayments(projectId: string) {
 /** Ghi thanh toán theo mối (chọn theo phiếu = chọn các mối của phiếu rồi ghi): chỉ mối đã nghiệm thu «Đạt» của đúng dự án; tỷ lệ 30/50/70/100 (mặc định 100). */
 export async function setPayments(body: Record<string, unknown>, actor: string) {
   const projectId = qualityUuid(body.du_an_id);
-  const moiIds = ids(body.moi_han_ids);
+  const ticketId = body.phieu_id == null ? null : qualityUuid(body.phieu_id);
   const ngay = qualityDate(body.ngay_thanh_toan);
   if (!ngay) throw new QualityApiError("Nhập ngày thanh toán.");
   const tyLe = body.ty_le == null ? 100 : Number(body.ty_le);
   if (!PERCENTS.includes(tyLe)) throw new QualityApiError("Tỷ lệ thanh toán chỉ nhận 30, 50, 70 hoặc 100%.");
   const ghiChu = typeof body.ghi_chu === "string" ? body.ghi_chu.trim().slice(0, 500) : "";
-  const { data, error } = await db().from("chat_luong_moi_han").select("moi_han_id,tinh_trang").eq("du_an_id", projectId).in("moi_han_id", moiIds);
-  if (error) throw error;
-  const accepted = new Set((data ?? []).filter((r) => r.tinh_trang === "Đạt").map((r) => r.moi_han_id as string));
-  const rejected = moiIds.filter((id) => !accepted.has(id));
-  if (rejected.length) throw new QualityApiError(`Chỉ thanh toán được mối đã nghiệm thu Đạt; ${rejected.length} mối chưa đủ điều kiện.`);
+  let moiIds: string[];
+  if (ticketId) {
+    const { data, error } = await db().from("phieu_nt_tach_moi")
+      .select("moi_han_id,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)")
+      .eq("phieu_id", ticketId).eq("ket_qua", "Đạt").eq("phieu_nt_tach.du_an_id", projectId)
+      .not("phieu_nt_tach.ngay_nghiem_thu", "is", null).limit(501);
+    if (error) throw error;
+    if (!data?.length) throw new QualityApiError("Phiếu chưa chốt nghiệm thu hoặc không có mối Đạt trong dự án này.");
+    moiIds = ids(data.map(row => row.moi_han_id));
+  } else {
+    moiIds = ids(body.moi_han_ids);
+  }
+  // Không ràng buộc trạng thái nghiệm thu: lưu tỷ lệ cho mọi mối được chọn. Chỉ kiểm tra mối thuộc đúng dự án.
+  {
+    const found = new Set<string>();
+    for (let i = 0; i < moiIds.length; i += 200) {
+      const { data, error } = await db().from("lich_su_moi_han").select("id").eq("du_an_id", projectId).in("id", moiIds.slice(i, i + 200));
+      if (error) throw error;
+      (data ?? []).forEach((r) => found.add(r.id as string));
+    }
+    const foreign = moiIds.filter((id) => !found.has(id));
+    if (foreign.length) throw new QualityApiError(`Có ${foreign.length} mối không thuộc dự án này nên không lưu được thanh toán.`);
+  }
   const { error: saveError } = await db().from("thanh_toan_moi_han").upsert(
     moiIds.map((moi_han_id) => ({ moi_han_id, du_an_id: projectId, ngay_thanh_toan: ngay, ty_le: tyLe, ghi_chu: ghiChu || null, nguoi_cap_nhat: actor })),
     { onConflict: "moi_han_id" });

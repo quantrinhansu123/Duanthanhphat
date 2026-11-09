@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, signSplitRecord, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { filterRfiCandidates, type RfiCandidateFilter } from "@/lib/weldAcceptance";
@@ -13,7 +13,7 @@ export type SplitKind = "hinh-hoc" | "sieu-am";
 type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean; truc_quan?: string | null; ly_trinh?: string | null };
 type TicketInfo = { dia_diem: string; ben_moi: string; ben_nhan: string; pham_vi: string; tuyen_thuong: boolean; tuyen_ha: boolean; gio_bat_dau: string };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null;
-  thong_tin?: Record<string, string> | null; da_ky?: boolean | null; nguoi_ky?: string | null };
+  thong_tin?: Record<string, string> | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
 // Giờ nghiệm thu gợi ý sẵn 8h00 như RFI chính.
 const emptyInfo = (): TicketInfo => ({ dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00" });
 const infoFromTicket = (t: Ticket): TicketInfo => {
@@ -90,6 +90,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [info, setInfo] = useState<TicketInfo>(emptyInfo);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState("");
+  const [payment, setPayment] = useState<{ ticket: Ticket; rate: string; note: string } | null>(null);
+  const paymentDialog = useRef<HTMLDialogElement>(null);
+  const paymentOpen = Boolean(payment);
+  useEffect(() => {
+    if (paymentOpen) paymentDialog.current?.showModal();
+    else paymentDialog.current?.close();
+  }, [paymentOpen]);
   const formRef = useRef<HTMLFormElement>(null);
   /** Modal sau khi chốt tab 1: có duyệt siêu âm luôn không. */
   const [askForward, setAskForward] = useState<{ soPhieu: string; count: number; sieuAmId: string; geometryId: string } | null>(null);
@@ -217,7 +224,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     return <div className="overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th><th className="px-3 py-2">Ngày mời</th><th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th><th className="px-3 py-2">Ngày mời</th><th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
@@ -231,7 +238,15 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
               <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
-              <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span></td>
+              <td className="px-3 py-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                {t.payment_rates?.some(rate => rate > 0)
+                  ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{t.payment_rates.filter(rate => rate > 0).map(rate => `${rate}%`).join(" / ")}</span>
+                  : <span className="text-xs text-slate-400">{done ? "Chưa thanh toán" : "—"}</span>}
+              </td>
+              <td className="max-w-[16rem] px-3 py-2 text-xs text-slate-700" title={t.payment_notes?.join(" · ")}>{t.payment_notes?.length ? <span className="line-clamp-2">{t.payment_notes.join(" · ")}</span> : "—"}</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">
                 <span className="inline-flex items-center gap-1">
                   <button type="button" disabled={busy} className={button} onClick={primaryAction.onClick}>{primaryAction.label}</button>
@@ -242,6 +257,11 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
+                    // Thanh toán tính theo các mối Đạt của phiếu → phiếu chưa nghiệm thu thì chưa dùng được (hiện mờ để biết có chức năng).
+                    { label: done ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)", disabled: busy || !done, onSelect: () => {
+                      setError(""); setOkMsg("");
+                      setPayment({ ticket: t, rate: t.payment_rates?.length === 1 && t.payment_rates[0] ? String(t.payment_rates[0]) : "", note: "" });
+                    } },
                     { label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) },
                   ]} />
                 </span>
@@ -267,12 +287,42 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     .sort((x, y) => (y.ngay_mai ?? "").localeCompare(x.ngay_mai ?? "") || y.ma_lich_su.localeCompare(x.ma_lich_su, "vi", { numeric: true }));
 
   return <section className="space-y-4">
-    {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+    {error && !payment && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
     {okMsg && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{okMsg}</p>}
+    <dialog ref={paymentDialog} aria-labelledby="split-payment-title"
+      onCancel={e => { e.preventDefault(); if (!busy) { setPayment(null); setError(""); } }}
+      className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
+      {payment && <form className="space-y-3" onSubmit={e => {
+        e.preventDefault();
+        void run(async () => {
+          const saved = await saveTicketPayments(project, payment.ticket.id, today(), Number(payment.rate), payment.note);
+          setPayment(null);
+          setOkMsg(`Đã lưu thanh toán ${payment.rate}% cho ${saved.count} mối Đạt của phiếu ${payment.ticket.so_phieu}.`);
+          await refresh();
+        });
+      }}>
+        <h3 id="split-payment-title" className="text-lg font-bold">Thanh toán phiếu {payment.ticket.so_phieu}</h3>
+        <p className="text-sm text-slate-600">Tỷ lệ và ghi chú sẽ thay thế thông tin thanh toán đã lưu của các mối Đạt trong phiếu.</p>
+        <label className="grid gap-1 text-sm">Phần trăm
+          <select className={field} required disabled={busy} value={payment.rate} onChange={e => setPayment({ ...payment, rate: e.target.value })}>
+            <option value="">Chọn tỷ lệ</option>
+            {[30, 50, 70, 100].map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm">Ghi chú
+          <textarea className={field} rows={3} maxLength={500} disabled={busy} value={payment.note} onChange={e => setPayment({ ...payment, note: e.target.value })} />
+        </label>
+        {error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" className={button} disabled={busy} onClick={() => { setPayment(null); setError(""); }}>Hủy</button>
+          <button type="submit" className={primary} disabled={busy || !payment.rate}>Lưu thanh toán</button>
+        </div>
+      </form>}
+    </dialog>
     {!detail && <div role="tablist" aria-label="Mục phiếu tách" className={`grid gap-2 ${stage === "tao" ? "grid-cols-3" : "grid-cols-2"}`}>
       {(stage === "tao"
         ? [["rfi", "Phát phiếu YCNT"], ["accept", `Nghiệm thu (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const
-        : [["accept", `Chờ duyệt siêu âm (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const
+        : [["accept", `Chờ duyệt ${kindName(kind)} (${pendingTickets.length})`], ["records", `Hồ sơ nghiệm thu (${doneTickets.length})`]] as const
       ).map(([id, label]) => (
         <button key={id} type="button" role="tab" aria-selected={sub === id} onClick={() => setSub(id)}
           className={`min-h-12 w-full rounded-xl border-2 px-2 py-2.5 text-center text-xs font-extrabold leading-tight transition-all sm:text-base ${sub === id ? "border-[#0047AB] bg-[#0047AB] text-white shadow-lg shadow-blue-900/25" : "border-slate-300 bg-white text-slate-800 shadow-sm hover:-translate-y-0.5 hover:border-[#0047AB]/60 hover:bg-blue-50"}`}>{label}</button>
@@ -386,9 +436,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <h3 className="text-lg font-extrabold text-slate-900">Phiếu chờ nghiệm thu {kindName(kind)}</h3>
         <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
       </div>
-      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Mở phiếu hình học đã phát từ RFI, ghi kết quả từng mối rồi chốt để in biên bản." : "Mở phiếu siêu âm đã phát từ RFI, ghi kết quả từng mối rồi chốt. Ký biên bản trong mục Hồ sơ nghiệm thu."}</p>
+      <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Ghi kết quả từng mối rồi chốt nghiệm thu để lập biên bản và chuyển các mối Đạt sang siêu âm." : "Mở phiếu siêu âm, ghi kết quả từng mối rồi chốt. Ký biên bản trong mục Hồ sơ nghiệm thu."}</p>
       {renderTicketTable(pendingTickets, "accept")}
-      {!pendingTickets.length && <p className="text-sm text-slate-500">Không có phiếu chờ duyệt. Sang tab <b>RFI</b> để phát phiếu.</p>}
+      {!pendingTickets.length && <p className="text-sm text-slate-500">Không có phiếu chờ duyệt. Sang tab <b>Phát phiếu RFI</b> để phát phiếu.</p>}
     </div>}
 
     {!detail && sub === "records" && <div className="space-y-3 rounded-xl border-2 border-slate-300 bg-white p-4 shadow-sm">
@@ -404,6 +454,12 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       <div className="flex flex-wrap items-center gap-2">
         <button className={button} disabled={busy} onClick={() => { setDetail(null); void run(refresh); }}>← Danh sách</button>
         <button className={button} onClick={() => setDoc("invite")}>Xem phiếu {prefix}</button>
+        {kind === "hinh-hoc" && detail.ticket.ngay_nghiem_thu && onGoToUltrasound && detail.items.some(i => i.ket_qua === "Đạt") &&
+          <button type="button" className={button} disabled={busy} onClick={() => run(async () => {
+            const next = await request<{ sieu_am_id?: string; canh_bao?: string }>("split-forward-ultrasound", { id: detail.ticket.id });
+            if (next.canh_bao) { setError(next.canh_bao); return; }
+            if (next.sieu_am_id) onGoToUltrasound(next.sieu_am_id);
+          })}>Mở hoặc tạo phiếu siêu âm</button>}
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
       </div>
@@ -430,7 +486,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); await refresh();
           if (done.canh_bao) setError(done.canh_bao);
-          if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «RFI bổ sung siêu âm».`);
+          if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «nghiệm thu Siêu âm».`);
           else if (kind === "sieu-am") setOkMsg(`Đã duyệt phiếu ${detail.ticket.so_phieu}; ký biên bản ở mục Hồ sơ nghiệm thu.`);
           // Tab 1 đã chuyển mối Đạt sang siêu âm → hỏi duyệt siêu âm luôn (Không thì in biên bản như cũ).
           if (done.so_moi_chuyen && done.sieu_am_id && onGoToUltrasound) {
@@ -507,7 +563,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
           <h2 id="ask-forward-title" className="text-lg font-extrabold text-slate-900">Duyệt siêu âm luôn?</h2>
           <p className="text-sm text-slate-700">
-            Phiếu <b>{askForward.soPhieu}</b> đã duyệt hình học xong, <b>{askForward.count} mối Đạt</b> đã chuyển sang tab «RFI bổ sung siêu âm».
+            Phiếu <b>{askForward.soPhieu}</b> đã duyệt hình học xong, <b>{askForward.count} mối Đạt</b> đã chuyển sang tab «nghiệm thu Siêu âm».
             Bạn có muốn duyệt siêu âm cho phiếu này ngay không?
           </p>
           <div className="flex flex-wrap justify-end gap-2">

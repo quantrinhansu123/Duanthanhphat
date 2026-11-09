@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
-import { rfiScope, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName, type DiaryWork } from "@/lib/constructionDiaryAuto";
@@ -12,6 +12,7 @@ import { projectEquipmentText } from "@/lib/projectEquipment";
 import { readPrivateJson } from "@/lib/server/privateJsonStorage";
 import type { ProjectMetadataStore } from "@/data/projectMetadata";
 import { validateTrackLayout } from "@lwr/lib/track-editor";
+import { listPayments } from "@/lib/server/weldPayment";
 
 const db = () => createAdminClient();
 
@@ -297,6 +298,19 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   return { id };
 }
 
+async function childSigningByRfi(parentIds: string[]) {
+  type Child = { phieu_rfi_id: string; loai: string; ngay_nghiem_thu: string | null; da_ky: boolean | null };
+  const rows = await chunkedPages<Child>(parentIds, (ids, a, b) => db().from("phieu_nt_tach")
+    .select("phieu_rfi_id,loai,ngay_nghiem_thu,da_ky").in("phieu_rfi_id", ids).order("id").range(a, b));
+  const groups = new Map<string, Child[]>();
+  for (const row of rows) {
+    const group = groups.get(row.phieu_rfi_id) ?? [];
+    group.push(row);
+    groups.set(row.phieu_rfi_id, group);
+  }
+  return new Map([...groups].map(([id, children]) => [id, rfiChildSigning(children)]));
+}
+
 export async function listRfis(projectId: string) {
   type Snapshot = { moi_han?: { ma_lich_su?: string; ma_diem?: string; ly_trinh?: string } };
   type Rfi = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string; thong_tin: Record<string, string>; created_at: string };
@@ -314,13 +328,14 @@ export async function listRfis(projectId: string) {
       .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at").order("id").range(a, b)),
   ]);
   const completed = batches.filter((d) => d.thong_tin?.draft !== true);
-  const [results, docs, points] = await Promise.all([
+  const [results, docs, points, signing] = await Promise.all([
     chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string; du_lieu_chot: Snapshot }>(completed.map((d) => d.id),
       (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua,du_lieu_chot").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b)),
     chunkedPages<{ dot_id: string; loai: string; tinh_trang_ky: string }>(completed.map((d) => d.id),
       (ids, a, b) => db().from("ho_so_nghiem_thu").select("dot_id,loai,tinh_trang_ky").in("dot_id", ids).order("id").range(a, b)),
     chunkedPages<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>([...new Set(links.map((l) => l.moi_han_id))],
       (ids, a, b) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", ids).order("id").range(a, b)),
+    childSigningByRfi(rfis.map(r => r.id)),
   ]);
   const required = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   const where = new Map(points.map((p) => [p.lich_su_moi_han_id, p]));
@@ -360,7 +375,7 @@ export async function listRfis(projectId: string) {
         da_ky: Boolean(result && required.every((loai) => signedKinds.get(result.dot_id)?.has(loai))),
       };
     }));
-    return { ...r, tong_moi: linked.length, con_lai: linked.filter((l) => l.con_hieu_luc).length, tracking };
+    return { ...r, child_signing: signing.get(r.id), tong_moi: linked.length, con_lai: linked.filter((l) => l.con_hieu_luc).length, tracking };
   });
 }
 
@@ -534,7 +549,7 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
     dot: { id: ticket.id, ngay_nghiem_thu: ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
       thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasound ? ticket.so_phieu : "" },
       phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
-    ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: "Chờ ký", du_lieu_chot: null })),
+    ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: ticket.da_ky ? "Đã ký" : "Chờ ký", du_lieu_chot: null })),
     moi, sua_doi: [],
   };
 }
@@ -611,15 +626,20 @@ export async function acceptedOnDate(body: Record<string, unknown>) {
 }
 
 export async function listRecords(projectId: string) {
+  type Parent = { id: string; so_phieu: string; du_an_id: string };
   const data = await fetchAll((a, b) => db().from("dot_nghiem_thu")
     .select("id,ngay_nghiem_thu,nguoi_lap,thong_tin,created_at,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,du_an_id),ho_so_nghiem_thu(id,loai,tinh_trang_ky)")
-    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at", { ascending: false }).order("id").range(a, b));
-  const results = await chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string }>(data.map((r) => r.id),
-    (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b));
+    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at", { ascending: false }).order("id").range(a, b)
+    .overrideTypes<{ phieu_yeu_cau_nghiem_thu: Parent }[]>());
+  const [results, signing] = await Promise.all([
+    chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string }>(data.map((r) => r.id),
+      (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b)),
+    childSigningByRfi([...new Set<string>(data.map(r => r.phieu_yeu_cau_nghiem_thu.id))]),
+  ]);
   return data.map((r) => {
     const rows = results.filter((m) => m.dot_id === r.id);
     const draft = r.thong_tin?.draft === true;
-    return { ...r, tong_moi: rows.length,
+    return { ...r, child_signing: signing.get(r.phieu_yeu_cau_nghiem_thu.id), tong_moi: rows.length,
       da_nghiem_thu: draft ? 0 : rows.filter((m) => m.ket_qua === "Đạt").length,
       khong_dat: draft ? 0 : rows.filter((m) => m.ket_qua === "Không đạt").length,
       chua_nghiem_thu: draft ? rows.length : rows.filter((m) => m.ket_qua === "Chưa nghiệm thu").length };
@@ -685,14 +705,35 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   return { ok: true };
 }
 
-export async function setSignStatus(body: Record<string, unknown>) {
+export async function setSignStatus(body: Record<string, unknown>, actor: string) {
   if (body.tinh_trang_ky !== "Chờ ký" && body.tinh_trang_ky !== "Đã ký") throw new QualityApiError("Tình trạng ký không hợp lệ.");
-  let dotId = body.dot_id ? qualityUuid(body.dot_id) : "";
-  if (!dotId) {
+  let dotId = body.dot_id ? qualityUuid(body.dot_id) : null;
+  let parentId = body.phieu_rfi_id ? qualityUuid(body.phieu_rfi_id) : null;
+  if (!dotId && !parentId) {
     const { data, error } = await db().from("ho_so_nghiem_thu").select("dot_id").eq("id", qualityUuid(body.id)).single();
     if (error) throw error;
     dotId = data.dot_id;
   }
+  if (dotId) {
+    const { data, error } = await db().from("dot_nghiem_thu").select("phieu_id").eq("id", dotId).single();
+    if (error) throw error;
+    parentId = data.phieu_id;
+  }
+  if (parentId) {
+    const { data: children, error } = await db().from("phieu_nt_tach").select("id,loai,ngay_nghiem_thu,da_ky").eq("phieu_rfi_id", parentId);
+    if (error) throw error;
+    const state = rfiChildSigning(children);
+    if (state) {
+      const signed = body.tinh_trang_ky === "Đã ký";
+      if (signed && !state.canSign) throw new QualityApiError("Cần chốt nghiệm thu các phiếu con trước khi ký cả bộ.", 409);
+      const { error: updateError } = await db().from("phieu_nt_tach").update({
+        da_ky: signed, nguoi_ky: signed ? actor : null, ngay_ky: signed ? new Date().toISOString() : null,
+      }).in("id", children.map(child => child.id));
+      if (updateError) throw updateError;
+      return { ok: true, count: children.length };
+    }
+  }
+  if (!dotId) throw new QualityApiError("Phiếu RFI chưa có phiếu con để ký.", 409);
   const { error } = await db().rpc("ky_bo_ho_so_moi_han", { p_dot_id: dotId, p_tinh_trang_ky: body.tinh_trang_ky });
   if (error) throw error;
   return { ok: true, count: 3 };
@@ -749,18 +790,103 @@ async function saveSplitInfo(id: string, value: unknown) {
   }
 }
 
+function ultrasoundTicketNumber(ticket: { phieu_rfi_id: string | null; so_phieu: string }) {
+  if (!ticket.phieu_rfi_id) return ticket.so_phieu;
+  return ticket.so_phieu.replace(/-HH$/, "") + "-SA";
+}
+
+async function forwardGeometryTicket(ticket: {
+  id: string; du_an_id: string; phieu_rfi_id: string | null; so_phieu: string;
+  ngay_nghiem_thu: string; thong_tin: unknown;
+}, actor: string) {
+  const { data: passed, error } = await db().from("phieu_nt_tach_moi").select("moi_han_id")
+    .eq("phieu_id", ticket.id).eq("ket_qua", "Đạt");
+  if (error) throw error;
+  if (!passed.length) return { id: ticket.id, so_moi_chuyen: 0 };
+
+  if (ticket.phieu_rfi_id) {
+    const sibling = await db().from("phieu_nt_tach").select("id").eq("loai", "sieu-am")
+      .eq("phieu_rfi_id", ticket.phieu_rfi_id).maybeSingle();
+    if (sibling.error) throw sibling.error;
+    if (sibling.data) return { id: ticket.id, sieu_am_id: sibling.data.id, so_moi_chuyen: passed.length };
+  }
+
+  const number = ultrasoundTicketNumber(ticket);
+  const findExisting = async () => {
+    const existing = await db().from("phieu_nt_tach").select("id,phieu_rfi_id").eq("du_an_id", ticket.du_an_id)
+      .eq("loai", "sieu-am").eq("so_phieu", number).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data) return null;
+    const rows = await db().from("phieu_nt_tach_moi").select("moi_han_id").eq("phieu_id", existing.data.id);
+    if (rows.error) throw rows.error;
+    const ids = new Set(rows.data.map(row => row.moi_han_id));
+    if (existing.data.phieu_rfi_id || ids.size !== passed.length || passed.some(row => !ids.has(row.moi_han_id))) {
+      throw new QualityApiError(`Số phiếu siêu âm ${number} đã được dùng cho danh sách mối khác.`, 409);
+    }
+    return existing.data.id;
+  };
+  let sieuAmId = await findExisting();
+  let created = false;
+  if (!sieuAmId) {
+    sieuAmId = crypto.randomUUID();
+    const published = await db().rpc("phat_phieu_nt_tach", {
+      p_id: sieuAmId, p_du_an: ticket.du_an_id, p_loai: "sieu-am", p_so: number,
+      p_ngay: ticket.ngay_nghiem_thu, p_moi: passed.map(row => row.moi_han_id), p_actor: actor,
+    });
+    if (published.error) {
+      const concurrentId = await findExisting();
+      if (!concurrentId) throw new QualityApiError(published.error.message, 409);
+      sieuAmId = concurrentId;
+    } else created = true;
+  }
+  if (ticket.phieu_rfi_id) {
+    const { error: linkError } = await db().from("phieu_nt_tach").update({ phieu_rfi_id: ticket.phieu_rfi_id })
+      .eq("id", sieuAmId).is("phieu_rfi_id", null);
+    if (linkError) throw linkError;
+  }
+  if (created) {
+    try { await saveSplitInfo(sieuAmId, ticket.thong_tin); }
+    catch (e) { return { id: ticket.id, sieu_am_id: sieuAmId, so_moi_chuyen: passed.length, canh_bao: e instanceof Error ? e.message : String(e) }; }
+  }
+  return { id: ticket.id, sieu_am_id: sieuAmId, so_moi_chuyen: passed.length };
+}
+
+async function ticketPaymentRates(project: string, ticketIds: string[]) {
+  const rates = new Map<string, Set<number>>();
+  // Ghi chú thanh toán các mối của phiếu (khác nhau thì liệt kê, bỏ trùng).
+  const notes = new Map<string, Set<string>>();
+  if (!ticketIds.length) return { rates, notes };
+  const payments = await listPayments(project);
+  if (!payments.length) return { rates, notes };
+  const byWeld = new Map(payments.map(payment => [payment.moi_han_id, payment.ty_le]));
+  const noteByWeld = new Map(payments.filter(payment => payment.ghi_chu?.trim()).map(payment => [payment.moi_han_id, payment.ghi_chu!.trim()]));
+  const rows = await chunkedPages<{ phieu_id: string; moi_han_id: string }>(ticketIds, (ids, a, b) => db()
+    .from("phieu_nt_tach_moi").select("phieu_id,moi_han_id").in("phieu_id", ids)
+    .eq("ket_qua", "Đạt").order("phieu_id").order("moi_han_id").range(a, b));
+  for (const row of rows) {
+    const values = rates.get(row.phieu_id) ?? new Set<number>();
+    values.add(byWeld.get(row.moi_han_id) ?? 0);
+    rates.set(row.phieu_id, values);
+    const note = noteByWeld.get(row.moi_han_id);
+    if (note) notes.set(row.phieu_id, (notes.get(row.phieu_id) ?? new Set<string>()).add(note));
+  }
+  return { rates, notes };
+}
+
 /** Separate records share inspection data with the original workflow, but own their RIF/RFI and results. */
 export async function splitAcceptance(body: Record<string, unknown>, actor: string) {
   const project = qualityUuid(body.du_an_id);
   const kind = body.loai;
   if (kind !== "hinh-hoc" && kind !== "sieu-am") throw new QualityApiError("Loại nghiệm thu không hợp lệ.");
   if (body.action === "split-list") {
-    const [candidates, tickets] = await Promise.all([
+    const [candidates, ticketRows] = await Promise.all([
       fetchAll((a,b) => db().from("moi_cho_phieu_nt_tach").select("moi_han_id,ma_lich_su,da_nt_truc_quan,ngay_mai,truc_quan")
         .eq("du_an_id",project).eq("loai",kind).order("ma_lich_su").order("moi_han_id").range(a,b)),
       fetchAll((a,b) => db().from("phieu_nt_tach").select("*")
         .eq("du_an_id",project).eq("loai",kind).order("ngay_moi",{ascending:false}).order("so_phieu").range(a,b)),
     ]);
+    const { rates, notes } = await ticketPaymentRates(project, ticketRows.filter(t => t.ngay_nghiem_thu).map(t => t.id));
+    const tickets = ticketRows.map(t => ({ ...t, payment_rates: [...(rates.get(t.id) ?? [])].sort((a, b) => a - b), payment_notes: [...(notes.get(t.id) ?? [])] }));
     if (kind === "sieu-am") {
       // RFI siêu âm chỉ hiện mối đang «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT, chưa siêu âm / chưa ký).
       const waiting = await fetchAll<{ moi_han_id: string }>((a, b) => db().from("chat_luong_moi_han").select("moi_han_id")
@@ -810,7 +936,8 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     if (current.da_ky) throw new QualityApiError("Phiếu đã ký, hãy đặt lại «Chờ ký» trước khi xoá.", 409);
     if (kind === "hinh-hoc" && current.ngay_nghiem_thu) {
       const forwarded = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
-        .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", current.so_phieu);
+        .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", ultrasoundTicketNumber(current));
+      if (forwarded.error) throw forwarded.error;
       if ((forwarded.count ?? 0) > 0) throw new QualityApiError(`Phiếu ${current.so_phieu} đã chuyển sang siêu âm. Xoá phiếu siêu âm ở tab 2 trước.`, 409);
     }
     const rows = await db().from("phieu_nt_tach_moi").delete().eq("phieu_id", id);
@@ -821,6 +948,12 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
   }
   const ticket = await db().from("phieu_nt_tach").select("*").eq("id",id).eq("du_an_id",project).eq("loai",kind).single();
   if (ticket.error) throw ticket.error;
+  if (body.action === "split-forward-ultrasound") {
+    if (kind !== "hinh-hoc" || !ticket.data.ngay_nghiem_thu) {
+      throw new QualityApiError("Cần chốt nghiệm thu hình học trước khi chuyển sang siêu âm.", 409);
+    }
+    return forwardGeometryTicket(ticket.data, actor);
+  }
   if (body.action === "split-detail") {
     const rows = await db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot")
       .eq("phieu_id",id).order("ma_lich_su");
@@ -851,24 +984,12 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       throw new QualityApiError("Kết quả hoặc lý do không hợp lệ.");
     return { id:qualityUuid(r.id), phien_ban:r.phien_ban, ket_qua:r.ket_qua, ly_do:reason };
   });
-  // Chỉ phiếu hình học độc lập cũ tự chuyển sang siêu âm. RFI đã xác định phạm vi khi phát.
-  const forward = kind === "hinh-hoc" && !ticket.data.phieu_rfi_id ? results.filter(r => r.ket_qua === "Đạt").map(r => r.id) : [];
-  if (forward.length) {
-    const taken = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
-      .eq("du_an_id", project).eq("loai", "sieu-am").eq("so_phieu", ticket.data.so_phieu);
-    if (taken.error) throw taken.error;
-    if ((taken.count ?? 0) > 0) throw new QualityApiError(`Nhánh siêu âm đã có phiếu số ${ticket.data.so_phieu}, không chuyển tiếp được. Đổi số phiếu hình học (Sửa phiếu) rồi chốt lại.`, 409);
-  }
   const { error } = await db().rpc("chot_phieu_nt_tach",{p_id:id,p_ngay:date,p_ket_qua:results,p_actor:actor});
   if (error) throw error;
-  if (!forward.length) return { id, so_moi_chuyen: 0 };
-  const sieuAmId = crypto.randomUUID();
-  const published = await db().rpc("phat_phieu_nt_tach", { p_id: sieuAmId, p_du_an: project, p_loai: "sieu-am",
-    p_so: ticket.data.so_phieu, p_ngay: date, p_moi: forward, p_actor: actor });
-  if (published.error) {
-    return { id, so_moi_chuyen: 0, canh_bao: `Đã chốt hình học nhưng chưa chuyển được sang siêu âm: ${published.error.message}` };
+  if (kind !== "hinh-hoc") return { id, so_moi_chuyen: 0 };
+  try { return await forwardGeometryTicket({ ...ticket.data, ngay_nghiem_thu: date }, actor); }
+  catch (e) {
+    const reason = e && typeof e === "object" && "message" in e ? e.message : String(e);
+    return { id, so_moi_chuyen: 0, canh_bao: `Đã chốt hình học. Bấm «Mở hoặc tạo phiếu siêu âm» để thử lại. ${reason}` };
   }
-  try { await saveSplitInfo(sieuAmId, ticket.data.thong_tin); }
-  catch (e) { return { id, sieu_am_id: sieuAmId, so_moi_chuyen: forward.length, canh_bao: e instanceof Error ? e.message : String(e) }; }
-  return { id, sieu_am_id: sieuAmId, so_moi_chuyen: forward.length };
 }

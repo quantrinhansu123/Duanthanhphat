@@ -13,6 +13,18 @@ export function rfiAcceptanceTitle(info: Record<string, unknown> = {}) {
     : scope.geometry ? "Nghiệm thu kích thước hình học mối hàn" : "Nghiệm thu siêu âm mối hàn";
 }
 
+export function rfiChildSigning(children: { loai: string; ngay_nghiem_thu: string | null; da_ky: boolean | null }[]) {
+  if (!children.length) return null;
+  const ultrasoundSigned = children.some(child => child.loai === "sieu-am" && child.da_ky);
+  const geometrySigned = children.some(child => child.loai === "hinh-hoc" && child.da_ky);
+  const canSign = children.every(child => Boolean(child.ngay_nghiem_thu));
+  const allSigned = children.every(child => child.da_ky === true);
+  return {
+    status: ultrasoundSigned ? "Đã ký đầy đủ" : geometrySigned ? "Chờ siêu âm" : canSign ? "Chờ ký" : "Chờ nghiệm thu",
+    canSign, allSigned,
+  };
+}
+
 export type RfiCandidate = {
   id: string;
   ma_lich_su: string;

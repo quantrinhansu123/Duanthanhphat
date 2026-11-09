@@ -88,15 +88,17 @@ export async function markQualityPass(
 }
 
 // ---- Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ ----
-import type { AcceptanceDecision, RfiCandidate, RfiCandidateFilter } from "@/lib/weldAcceptance";
+import type { AcceptanceDecision, RfiCandidate, RfiCandidateFilter, rfiChildSigning } from "@/lib/weldAcceptance";
 import type { RfiTracking } from "@/lib/rfiTracking";
 
 export type RfiSummary = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string;
-  thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number; tracking?: RfiTracking };
+  thong_tin: Record<string, string>; created_at: string; tong_moi: number; con_lai: number; tracking?: RfiTracking;
+  child_signing?: ReturnType<typeof rfiChildSigning> };
 export type RfiWeld = { moi_han_id: string; con_hieu_luc: boolean; ma_lich_su: string; ma_diem?: string | null; ngay_thuc_hien: string | null; ly_trinh: string | null; vi_do: number | null; kinh_do: number | null; phien_ban: number; tinh_trang: string; du_dieu_kien_nghiem_thu: boolean; thieu_chieu_dai_mai?: boolean; ly_do_chua_du_dieu_kien?: string; chieu_dai_mai?: number | null; ket_qua_ndt?: string | null; ten_tieu_chuan?: string | null; truc_quan?: string | null; du_dieu_kien_hinh_hoc?: boolean };
 export type RecordSummary = { id: string; ngay_nghiem_thu: string; nguoi_lap: string; created_at: string;
   tong_moi?: number; da_nghiem_thu?: number; khong_dat?: number; chua_nghiem_thu?: number;
   thong_tin?: Record<string, unknown> | null;
+  child_signing?: ReturnType<typeof rfiChildSigning>;
   phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string }; ho_so_nghiem_thu: { id: string; loai: string; tinh_trang_ky: string }[] };
 export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_thu: Record<string, unknown> & { du_an: Record<string, unknown> } };
   ho_so: { id: string; loai: string; tinh_trang_ky: string; du_lieu_chot: unknown }[];
@@ -145,6 +147,10 @@ export async function setRecordSetSign(dot_id: string, tinh_trang_ky: "Chờ ký
   notifyWeldQualityChanged();
   return result;
 }
+export async function setRfiChildSign(phieu_rfi_id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") {
+  await qualityRequest({ action: "record-sign", phieu_rfi_id, tinh_trang_ky });
+  notifyWeldQualityChanged();
+}
 
 export type DashboardQualityData = { accepted: WeldReportRow[]; waiting: WeldReportRow[]; acceptance?: WeldReportRow[]; signing?: WeldReportRow[];
   ground?: WeldReportRow[]; ultrasound?: WeldReportRow[]; paid?: WeldReportRow[] };
@@ -157,6 +163,12 @@ export const loadAcceptedOnDate = (date: string, du_an_id?: string | null) =>
 export const reviseRecord = (ho_so_id: string, thong_tin: Record<string, string>, ly_do: string) =>
   qualityRequest<{ ok: true }>({ action: "record-revise", ho_so_id, thong_tin, ly_do });
 
+/** Báo thanh toán đã đổi: cho cửa sổ hiện tại (sự kiện) và các tab khác của trình duyệt (storage event). */
+export const PAYMENT_CHANGED_KEY = "weld-payment-changed-at";
+function announcePaymentChange() {
+  window.dispatchEvent(new Event("weld-payment-changed"));
+  try { window.localStorage.setItem(PAYMENT_CHANGED_KEY, String(Date.now())); } catch { /* bỏ qua khi không ghi được */ }
+}
 export type WeldPayment = { moi_han_id: string; ngay_thanh_toan: string; ty_le: number; ghi_chu: string | null };
 export const loadWeldPayments = (du_an_id: string) => qualityRequest<{ payments: WeldPayment[] }>({ action: "payment-list", du_an_id });
 /** Thanh toán của đúng các mối đang hiện (danh sách nhật ký hàn). */
@@ -164,11 +176,16 @@ export const loadWeldPaymentsOf = (moi_han_ids: string[]) => qualityRequest<{ pa
 export const loadTicketWelds = (du_an_id: string, phieu_id: string) => qualityRequest<{ moi_han_ids: string[] }>({ action: "payment-ticket", du_an_id, phieu_id });
 export async function saveWeldPayments(du_an_id: string, moi_han_ids: string[], ngay_thanh_toan: string, ty_le: number, ghi_chu: string) {
   const result = await qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, moi_han_ids, ngay_thanh_toan, ty_le, ghi_chu });
-  window.dispatchEvent(new Event("weld-payment-changed"));
+  announcePaymentChange();
+  return result;
+}
+export async function saveTicketPayments(du_an_id: string, phieu_id: string, ngay_thanh_toan: string, ty_le: number, ghi_chu: string) {
+  const result = await qualityRequest<{ count: number }>({ action: "payment-set", du_an_id, phieu_id, ngay_thanh_toan, ty_le, ghi_chu });
+  announcePaymentChange();
   return result;
 }
 export async function clearWeldPayments(du_an_id: string, moi_han_ids: string[]) {
   const result = await qualityRequest<{ count: number }>({ action: "payment-clear", du_an_id, moi_han_ids });
-  window.dispatchEvent(new Event("weld-payment-changed"));
+  announcePaymentChange();
   return result;
 }

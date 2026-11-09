@@ -1,19 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { completeAcceptance, completeGeometryAcceptance, markQualityPass, loadSplitRecords, signSplitRecord, loadGeometryRecord, type SplitRecordSummary, loadQualityInspection, saveQualityInspection, loadRecords, loadRecordSet, loadRfiCandidates, loadRfiDetail, loadRfiOverview, loadRfis,
-  deleteRfi, publishRfi, setRecordSetSign, updateRfi, type RecordSet, type RecordSummary, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import { defaultDecisions, rfiAcceptanceTitle, rfiScope, isAnomalousRfiWeldStatus, summarizeDecisions, type AcceptanceDecision, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
-import { qualityRequest } from "@/lib/weldQualityClient";
+import { loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
-import { parseWeldMeasurement } from "@/lib/weldQuality";
 
 const input = "min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:text-sm";
 const btn = "min-h-11 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
@@ -113,7 +110,6 @@ export default function WeldAcceptanceWorkflow() {
   const [openUltrasoundId, setOpenUltrasoundId] = useState<string | null>(null);
   const goToUltrasound = useCallback((id: string) => { setOpenUltrasoundId(id); setMode("sieu-am"); }, []);
   const clearOpenUltrasound = useCallback(() => setOpenUltrasoundId(null), []);
-  const [tab, setTab] = useState<"rfi" | "accept" | "records">("rfi");
   const [view, setView] = useState<View>(null);
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
   const [issuedList, setIssuedList] = useState<{ rfis: RfiSummary[]; unassigned: RfiCandidate[] } | null>(null);
@@ -142,22 +138,10 @@ export default function WeldAcceptanceWorkflow() {
     const d = await loadRfiDetail(rfi.id);
     setView({ kind: "rfi", rfi: { rfi: d.rfi, welds: d.welds, projectName } });
   }
-  async function openRecord(id: string, kind: DocKind) {
-    setView({ kind, record: await loadRecordSet(id) });
-  }
-  async function openPrintPack(id: string) {
-    setPrintPack(await loadRecordSet(id));
-  }
   function startEditRfi(rfi: RfiSummary) {
     setView(null);
     setMode("rfi");
-    setTab("rfi");
     setEditRfiId(rfi.id);
-  }
-
-  async function afterAccepted(recordId: string) {
-    setTab("records");
-    setView({ kind: "giai-doan", record: await loadRecordSet(recordId) });
   }
 
   return (
@@ -175,9 +159,9 @@ export default function WeldAcceptanceWorkflow() {
       {/* Thẻ kiểu sổ: tab bo góc phía trên, tab đang chọn liền khối với khung nội dung bên dưới. */}
       <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print flex flex-wrap items-end gap-1 px-1">
         {([
-          ["rfi", "RFI"],
-          ["hinh-hoc", "RFI bổ sung hình học, trực quan"],
-          ["sieu-am", "RFI bổ sung siêu âm"],
+          ["rfi", "Phát phiếu RFI"],
+          ["hinh-hoc", "Nghiệm thu Hình Học"],
+          ["sieu-am", "nghiệm thu Siêu âm"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
             className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
@@ -188,18 +172,6 @@ export default function WeldAcceptanceWorkflow() {
         ))}
       </div>
       <div className="rounded-b-xl rounded-tr-xl border-2 border-[#0047AB] bg-white p-3 sm:p-4">
-        {mode === "rfi" && <div className="no-print mb-3 grid grid-cols-3 gap-2">
-          {([["rfi", "Phát phiếu YCNT"], ["accept", "Nghiệm thu"], ["records", "Hồ sơ nghiệm thu"]] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`${tab === id ? primary : secondary} h-auto min-h-9 w-full px-1.5 py-2 text-center text-[11px] leading-tight sm:px-4 sm:text-sm`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>}
         {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
         {mode !== "rfi" && (
           <div className="mb-4">
@@ -212,22 +184,16 @@ export default function WeldAcceptanceWorkflow() {
         )}
         {mode === "rfi" && (
           <div className="no-print">
-            {tab === "rfi" && (
-              <RfiPanel
-                key={projectId}
-                projectId={projectId}
-                editRfiId={editRfiId}
-                onEditConsumed={consumeEditRfi}
-                onOpen={openRfi}
-                onOpenIssuedList={setIssuedList}
-              />
-            )}
-            {tab === "accept" && (
-              <AcceptPanel key={projectId} projectId={projectId} onCompleted={afterAccepted} onPrintRecord={setPrintPack} />
-            )}
-            {tab === "records" && (
-              <RecordsPanel key={projectId} projectId={projectId} onOpen={openRecord} onPrint={openPrintPack} onPrintRecord={setPrintPack} />
-            )}
+            <RfiPanel
+              key={projectId}
+              projectId={projectId}
+              projects={projects}
+              onProjectChange={setProjectId}
+              editRfiId={editRfiId}
+              onEditConsumed={consumeEditRfi}
+              onOpen={openRfi}
+              onOpenIssuedList={setIssuedList}
+            />
           </div>
         )}
         </>)}
@@ -259,8 +225,13 @@ function RfiPanel({
   onEditConsumed,
   onOpen,
   onOpenIssuedList,
+  projects,
+  onProjectChange,
 }: {
   projectId: string;
+  /** Danh sách dự án + đổi dự án ngay trong bộ lọc chọn mối. */
+  projects?: { id: string; name: string }[];
+  onProjectChange?: (id: string) => void;
   editRfiId: string | null;
   onEditConsumed: () => void;
   onOpen: (r: RfiSummary) => unknown;
@@ -282,9 +253,18 @@ function RfiPanel({
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rfiTab, setRfiTab] = useState<"publish" | "issued">("publish");
+  const [publishStep, setPublishStep] = useState<"kind" | "welds" | "details">("kind");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  // Thanh toán theo phiếu: áp cho các mối đã nghiệm thu Đạt của RFI (tỷ lệ 30/50/70/100%).
+  const [payment, setPayment] = useState<{ rfi: RfiSummary; ids: string[]; rate: string; note: string } | null>(null);
+  const paymentDialog = useRef<HTMLDialogElement | null>(null);
+  const paymentOpen = Boolean(payment);
+  useEffect(() => {
+    if (paymentOpen) paymentDialog.current?.showModal();
+    else paymentDialog.current?.close();
+  }, [paymentOpen]);
   const requestId = useRef(crypto.randomUUID());
   const editFormRef = useRef<HTMLDivElement | null>(null);
   const publishDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -295,6 +275,15 @@ function RfiPanel({
     setUnassigned(candidates.rows);
     if (!keepSoPhieu) setSoPhieu(so_phieu);
   }, [projectId]);
+
+  async function toggleChildSigning(rfi: RfiSummary) {
+    setBusy(true); setError("");
+    try {
+      await setRfiChildSign(rfi.id, rfi.child_signing?.allSigned ? "Chờ ký" : "Đã ký");
+      await refresh(true);
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  }
 
   useEffect(() => {
     setRows([]); setInfo(null); setSelected(new Set()); setError(""); setOkMsg("");
@@ -385,6 +374,7 @@ function RfiPanel({
         await search();
       }
       setRfiTab("issued");
+      setPublishStep("kind");
       setOkMsg(monitoring ? "Đã phát phiếu theo dõi mới." : `Đã phát phiếu yêu cầu mới (${weldCount} mối).`);
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
@@ -446,6 +436,7 @@ function RfiPanel({
   const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
   const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
+  const activeStep = editingId ? "details" : publishStep;
   const tooManyWelds = !monitoring && !editingId && selected.size > 200;
   const publishDisabled = busy || routeMissing || tooManyWelds || (!editingId && !canPublishNew) || !soPhieu.trim() || !ngayMoi;
 
@@ -461,6 +452,35 @@ function RfiPanel({
       </div>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {okMsg && <p role="status" className="text-sm text-emerald-700">{okMsg}</p>}
+      <dialog ref={paymentDialog} aria-labelledby="rfi-payment-title"
+        onCancel={(e) => { e.preventDefault(); if (!busy) { setPayment(null); setError(""); } }}
+        className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
+        {payment && <form className="space-y-3" onSubmit={(e) => {
+          e.preventDefault();
+          setBusy(true); setError("");
+          void saveWeldPayments(projectId, payment.ids, today(), Number(payment.rate), payment.note)
+            .then((saved) => { setPayment(null); setOkMsg(`Đã lưu thanh toán ${payment.rate}% cho ${saved.count} mối Đạt của phiếu ${payment.rfi.so_phieu}.`); return refresh(); })
+            .catch((err) => setError(message(err)))
+            .finally(() => setBusy(false));
+        }}>
+          <h3 id="rfi-payment-title" className="text-lg font-bold">Thanh toán phiếu {payment.rfi.so_phieu}</h3>
+          <p className="text-sm text-slate-600">Áp dụng cho {payment.ids.length} mối đã nghiệm thu Đạt của phiếu; thay thế thông tin thanh toán đã lưu của các mối đó.</p>
+          <label className="grid gap-1 text-sm">Phần trăm
+            <select className={input} required disabled={busy} value={payment.rate} onChange={(e) => setPayment({ ...payment, rate: e.target.value })}>
+              <option value="">Chọn tỷ lệ</option>
+              {[30, 50, 70, 100].map((rate) => <option key={rate} value={rate}>{rate}%</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">Ghi chú
+            <textarea className={input} rows={3} maxLength={500} disabled={busy} value={payment.note} onChange={(e) => setPayment({ ...payment, note: e.target.value })} />
+          </label>
+          {error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" className={secondary} disabled={busy} onClick={() => { setPayment(null); setError(""); }}>Hủy</button>
+            <button type="submit" className={primary} disabled={busy || !payment.rate}>Lưu thanh toán</button>
+          </div>
+        </form>}
+      </dialog>
       <div role="tabpanel" id="rfi-panel-publish" aria-labelledby="rfi-tab-publish" hidden={rfiTab !== "publish"} className="space-y-4">
       <div className="rounded-xl border border-[#0047AB]/25 bg-[#0047AB]/5 p-4">
         <h2 className="text-sm font-bold text-slate-900">Phát phiếu yêu cầu nghiệm thu mới</h2>
@@ -471,10 +491,24 @@ function RfiPanel({
         </p>
       </div>
 
+      <div role="tablist" aria-label="Các bước phát phiếu RFI" className="grid grid-cols-3 gap-2">
+        {([["kind", "1. Loại phiếu"], ["welds", "2. Chọn mối"], ["details", "3. Thông tin phiếu"]] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" id={`rfi-step-${id}`} aria-controls={`rfi-step-panel-${id}`}
+            aria-selected={activeStep === id} disabled={busy || (Boolean(editingId) && id !== "details") || (monitoring && id === "welds")}
+            onClick={() => setPublishStep(id)}
+            className={`${activeStep === id ? primary : secondary} h-auto min-h-10 px-2 py-2 text-center text-xs leading-tight`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
       <div role="group" aria-label="Loại phiếu" className="flex flex-wrap gap-2">
         <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => setKind("nghiem-thu")} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring} onClick={() => setKind("theo-doi")} className={monitoring ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => setKind("ca-hai")} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+      </div>
+      {monitoring && <p className="text-sm text-slate-600">Phiếu theo dõi có thể phát ngay mà không cần chọn mối.</p>}
+      <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
         <form method="dialog" className="space-y-4" onSubmit={(e) => {
@@ -502,14 +536,16 @@ function RfiPanel({
           </div>
         </form>
       </dialog>
-      {monitoring && <p className="text-sm text-slate-600">Nhập phạm vi / lý trình để mời theo dõi công việc hàn. Phiếu này không xác nhận chất lượng nghiệm thu — có thể phát ngay không cần chọn mối.</p>}
-
+      <div role="tabpanel" id="rfi-step-panel-welds" aria-labelledby="rfi-step-welds" hidden={activeStep !== "welds"} className="space-y-3">
       {!monitoring && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
           <h3 className="text-xs font-bold text-slate-500">Tìm các mối đủ điều kiện Hình học và Siêu âm</h3>
           <p className="text-xs text-slate-600">Chọn mối rồi bấm phát để chọn Hình học, Siêu âm hoặc cả hai.</p>
           {tooManyWelds && <p role="alert" className="text-sm text-amber-800">Chọn tối đa 200 mối cho một phiếu để có thể duyệt đầy đủ.</p>}
           <div className="flex flex-wrap items-end gap-2">
+            <select aria-label="Lọc theo dự án" title="Lọc theo dự án" className={`${input} min-w-52`} value={projectId} onChange={(e) => onProjectChange?.(e.target.value)} disabled={!onProjectChange || busy}>
+              {(projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
             <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
             <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
             <input className={input} type="date" title="Đến ngày hàn" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
@@ -549,7 +585,12 @@ function RfiPanel({
           )}
         </div>
       )}
+      <button type="button" className={secondary} disabled={busy || !selected.size || tooManyWelds} onClick={() => setPublishStep("details")}>
+        Tiếp tục · {selected.size} mối đã chọn
+      </button>
+      </div>
 
+      <div role="tabpanel" id="rfi-step-panel-details" aria-labelledby="rfi-step-details" hidden={activeStep !== "details"} className="space-y-3">
       {monitoring && !editingId && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 p-3">
           <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
@@ -613,10 +654,11 @@ function RfiPanel({
         </div>
         {routeMissing && <p className="text-xs text-amber-800">Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi.</p>}
         {!editingId && !monitoring && !selected.size && (
-          <p className="text-xs text-amber-800">Nút phát phiếu đang khóa vì chưa chọn mối. Bấm <b>Tìm mối đủ điều kiện</b>, tick mối (mặc định chọn hết), rồi phát lại.</p>
+          <p className="text-xs text-amber-800">Mở tab <b>2. Chọn mối</b> để tìm và chọn các mối trước khi phát phiếu.</p>
         )}
       </div>
 
+      </div>
       </div>
       <div role="tabpanel" id="rfi-panel-issued" aria-labelledby="rfi-tab-issued" hidden={rfiTab !== "issued"} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -661,13 +703,25 @@ function RfiPanel({
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
                 <td className="p-2 min-w-48">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
-                <td className="p-2">{r.trang_thai}</td>
+                <td className="p-2">{r.child_signing?.status ?? r.trang_thai}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <RowActionsMenu
                     label={`Thao tác phiếu ${r.so_phieu}`}
                     actions={[
                       { label: "Sửa", disabled: busy, onSelect: () => beginEdit(r) },
                       { label: "Xem / In", onSelect: () => { void Promise.resolve(onOpen(r)).catch((e) => setError(message(e))); } },
+                      ...(r.child_signing ? [{
+                        label: r.child_signing.allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký",
+                        disabled: busy || !r.child_signing.canSign, onSelect: () => void toggleChildSigning(r),
+                      }] : []),
+                      (() => {
+                        const paidIds = (r.tracking?.moi ?? []).filter((m) => m.ket_qua === "Đạt").map((m) => m.moi_han_id);
+                        return {
+                          label: paidIds.length ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)",
+                          disabled: busy || !paidIds.length,
+                          onSelect: () => { setError(""); setOkMsg(""); setPayment({ rfi: r, ids: paidIds, rate: "", note: "" }); },
+                        };
+                      })(),
                       { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
                     ]}
                   />
@@ -681,375 +735,6 @@ function RfiPanel({
         </table>
       </div>
       </div>
-    </section>
-  );
-}
-
-function AcceptPanel({ projectId, onCompleted, onPrintRecord }: { projectId: string; onCompleted: (recordId: string) => unknown; onPrintRecord?: (record: RecordSet) => void }) {
-  // «hinh-hoc»: chỉ nghiệm thu hình học → in biên bản hình học riêng, mối → Chờ siêu âm. «toan-bo»: hình học + siêu âm → in toàn bộ.
-  const [mode, setMode] = useState<"hinh-hoc" | "toan-bo">("toan-bo");
-  const [supplement, setSupplement] = useState<{ id: string; so_phieu: string }[]>([]);
-  const [supplementId, setSupplementId] = useState("");
-  const [rfis, setRfis] = useState<RfiSummary[]>([]);
-  const [active, setActive] = useState<{ rfi: RfiSummary; welds: RfiWeld[] } | null>(null);
-  const [decisions, setDecisions] = useState<AcceptanceDecision[]>([]);
-  const [ngay, setNgay] = useState(today());
-  const [thongTin, setThongTin] = useState({ dia_diem: "", thanh_phan: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [done, setDone] = useState("");
-  const [grindingLengths, setGrindingLengths] = useState<Record<string, string>>({});
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-
-  const refresh = useCallback(() => loadRfis(projectId).then((r) => setRfis(r.rfis.filter((x) => x.trang_thai === "Đã phát hành" && x.con_lai > 0 && x.thong_tin?.loai_rfi !== "theo-doi"))), [projectId]);
-  useEffect(() => { setActive(null); refresh().catch((e) => setError(message(e))); }, [projectId, refresh]);
-
-  const geometryOptional = (rfi: RfiSummary) => { const s = rfiScope(rfi.thong_tin); return s.geometry && s.ultrasound; };
-  const decisionsFor = (rows: RfiWeld[], m: "hinh-hoc" | "toan-bo") =>
-    defaultDecisions(m === "hinh-hoc" ? rows.map((w) => ({ ...w, du_dieu_kien_nghiem_thu: Boolean(w.du_dieu_kien_hinh_hoc) })) : rows);
-  async function open(r: RfiSummary, keepMode?: "hinh-hoc" | "toan-bo") {
-    setError(""); setDone("");
-    setSupplement([]); setSupplementId("");
-    const d = await loadRfiDetail(r.id);
-    const openRows = d.welds.filter((w) => w.con_hieu_luc);
-    setActive({ rfi: d.rfi, welds: openRows });
-    setGrindingLengths({});
-    // Mặc định: đã có siêu âm đạt → toàn bộ; chưa có → chỉ hình học (in biên bản hình học, mối chuyển Chờ siêu âm).
-    const m = !geometryOptional(d.rfi) ? "toan-bo" : keepMode ?? (openRows.some((w) => w.ket_qua_ndt === "Đạt") ? "toan-bo" : "hinh-hoc");
-    setMode(m);
-    setDecisions(decisionsFor(openRows, m));
-    setThongTin((t) => ({
-      dia_diem: t.dia_diem || d.rfi.thong_tin?.dia_diem || "",
-      thanh_phan: t.thanh_phan,
-    }));
-    setRequestId(crypto.randomUUID());
-    const scope = rfiScope(d.rfi.thong_tin);
-    // Phiếu chỉ siêu âm: máy chủ tự lấy phiếu trực quan đã nghiệm thu. Chỉ phiếu cũ «chỉ hình học» mới cần chọn phiếu siêu âm bổ sung.
-    if (!scope.ultrasound) {
-      const data = await qualityRequest<{ tickets: { id: string; so_phieu: string; ngay_nghiem_thu: string | null }[] }>({
-        action: "split-list", du_an_id: projectId, loai: "sieu-am",
-      });
-      setSupplement(data.tickets.filter(t => t.ngay_nghiem_thu));
-    }
-  }
-  const patch = (id: string, p: Partial<AcceptanceDecision>) => setDecisions((cur) => cur.map((d) => (d.moi_han_id === id ? { ...d, ...p } : d)));
-  const sum = useMemo(() => summarizeDecisions(decisions), [decisions]);
-  const missingReason = mode !== "hinh-hoc" && decisions.some((d) => d.ket_qua !== "Đạt" && !d.ly_do?.trim());
-
-  async function saveGrindingLength(w: RfiWeld) {
-    if (!active) return;
-    setBusy(true); setError("");
-    try {
-      const length = parseWeldMeasurement(grindingLengths[w.moi_han_id]);
-      if (length == null) throw new Error("Nhập chiều dài mài thực tế (mm), không để trống.");
-      const { inspection } = await loadQualityInspection(w.moi_han_id);
-      if (!inspection) throw new Error("Mối chưa có dữ liệu kiểm tra. Mở Kiểm tra trong nhật ký hàn.");
-      if (inspection.phien_ban !== w.phien_ban) throw new Error("Dữ liệu đã thay đổi; bấm Tải lại điều kiện rồi nhập lại số đo.");
-      await saveQualityInspection({ ...inspection, gia_tri_do: { ...inspection.gia_tri_do, chieu_dai_mai: length } });
-      const d = await loadRfiDetail(active.rfi.id);
-      const rows = d.welds.filter((m) => m.con_hieu_luc);
-      setActive({ rfi: d.rfi, welds: rows });
-      setDecisions((previous) => decisionsFor(rows, mode).map((next) => {
-        const old = previous.find((m) => m.moi_han_id === next.moi_han_id);
-        return old && old.phien_ban === next.phien_ban && next.moi_han_id !== w.moi_han_id ? old : next;
-      }));
-      setRequestId(crypto.randomUUID());
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-
-  /** Ghi nhanh cho các mối còn mở của phiếu: trực quan Đạt (tự điền sai số max) hoặc siêu âm Đạt, theo ngày nghiệm thu. */
-  async function quickPass(kind: "visual" | "ndt") {
-    if (!active) return;
-    const targets = active.welds.filter((w) => (kind === "visual" ? w.truc_quan !== "Đạt" : w.ket_qua_ndt !== "Đạt") && w.tinh_trang !== "Không đạt" && w.tinh_trang !== "Sửa chữa/khắc phục");
-    if (!targets.length) { setError(kind === "visual" ? "Các mối đã có trực quan Đạt." : "Các mối đã có siêu âm Đạt."); return; }
-    if (!window.confirm(kind === "visual"
-      ? `Ghi trực quan ĐẠT cho ${targets.length} mối (ngày ${ngay})?\nCác ô sai số còn trống sẽ tự điền mức tối đa cho phép theo tiêu chí. Chiều dài mài nhập theo thực tế.`
-      : `Ghi siêu âm ĐẠT cho ${targets.length} mối (ngày thí nghiệm ${ngay})?`)) return;
-    setBusy(true); setError("");
-    try {
-      const { results } = await markQualityPass(targets.map((w) => ({ id: w.moi_han_id, ma_lich_su: w.ma_lich_su, phien_ban: w.phien_ban })), kind, ngay, "Siêu âm");
-      const failed = results.filter((r) => r.error);
-      await open(active.rfi, kind === "ndt" ? "toan-bo" : mode);
-      if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-
-  function changeMode(m: "hinh-hoc" | "toan-bo") {
-    if (!active) return;
-    setMode(m);
-    setDecisions(decisionsFor(active.welds, m));
-  }
-
-  async function completeGeometry() {
-    if (!active) return;
-    const passed = decisions.filter((d) => d.ket_qua === "Đạt");
-    setBusy(true); setError("");
-    try {
-      const res = await completeGeometryAcceptance({ id: requestId, phieu_id: active.rfi.id, ngay_nghiem_thu: ngay,
-        ket_qua: passed.map((d) => ({ moi_han_id: d.moi_han_id, phien_ban: d.phien_ban })), thong_tin: thongTin });
-      setDone(`Đã nghiệm thu hình học ${passed.length} mối (phiếu ${res.record.dot.phieu_yeu_cau_nghiem_thu.so_phieu as string}). Các mối chuyển «Chờ siêu âm» — phát RFI mới để nghiệm thu siêu âm rồi ký.`);
-      setActive(null);
-      await refresh();
-      onPrintRecord?.(res.record);
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-
-  async function complete() {
-    if (!active) return;
-    if (mode === "hinh-hoc" && geometryOptional(active.rfi)) { await completeGeometry(); return; }
-    const scope = rfiScope(active.rfi.thong_tin);
-    if (!scope.ultrasound && !supplementId) {
-      setError("Đề nghị cung cấp RFI siêu âm đã nghiệm thu cho các mối này trước khi hoàn thành và ký biên bản.");
-      return;
-    }
-    setBusy(true); setError("");
-    try {
-      const res = await completeAcceptance({ id: requestId, phieu_id: active.rfi.id, ngay_nghiem_thu: ngay, ket_qua: decisions,
-        thong_tin: { ...thongTin, ...(!scope.ultrasound && supplementId ? { rfi_sieu_am_id: supplementId } : {}) } });
-      setDone(`Đã hoàn thành nghiệm thu: ${sum.accepted} đạt, ${sum.failed} không đạt, ${sum.deferred} chưa nghiệm thu.`);
-      setActive(null);
-      await refresh();
-      await onCompleted(res.id);
-    } catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-
-  return (
-    <section className="space-y-3">
-      <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-        Bộ 3 biên bản đã có từ lúc phát RFI để in mang đi. Sau khi siêu âm và kiểm tra, bấm <b>Hoàn thành nghiệm thu</b> để cập nhật kết quả, rồi xác nhận ký chung tại <b>Hồ sơ nghiệm thu</b>.
-      </p>
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {done && <p className="text-sm text-green-700">{done}</p>}
-      {!active && (
-        <><p className="text-sm font-semibold">Chờ nghiệm thu: {rfis.length} RFI · {rfis.reduce((n, r) => n + r.con_lai, 0)} mối</p>
-        <ul className="divide-y divide-slate-100 text-sm">
-          {rfis.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <span>{r.so_phieu} · mời {r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""} · còn {r.con_lai}/{r.tong_moi} mối</span>
-              <button type="button" className={primary} onClick={() => open(r).catch((e) => setError(message(e)))}>Nghiệm thu</button>
-            </li>))}
-          {!rfis.length && (
-            <li className="py-3 text-slate-600">
-              Không có RFI đang chờ nghiệm thu. Hãy sang tab <b>Phát RFI</b> phát hành phiếu nghiệm thu trước, rồi quay lại đây.
-            </li>
-          )}
-        </ul></>
-      )}
-      {active && (() => {
-        const anomalous = active.welds.filter((w) => isAnomalousRfiWeldStatus(w.tinh_trang));
-        const geoMode = mode === "hinh-hoc" && geometryOptional(active.rfi);
-        const eligible = (w: RfiWeld) => (geoMode ? Boolean(w.du_dieu_kien_hinh_hoc) : w.du_dieu_kien_nghiem_thu);
-        const ready = active.welds.filter(eligible).length;
-        return (
-        <>
-          <p className="text-sm font-semibold">
-            {active.rfi.so_phieu}
-            {ready > 0
-              ? ` — ${ready} mối đủ điều kiện được mặc định “Đạt”; mối chưa đủ đặt “Chưa nghiệm thu”.`
-              : " — chưa có mối đủ điều kiện nghiệm thu (không mặc định “Đạt”)."}
-          </p>
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm">
-            <span className="font-semibold">Ghi nhanh (ngày {ngay}):</span>
-            {rfiScope(active.rfi.thong_tin).geometry && <button type="button" className={secondary} disabled={busy} onClick={() => void quickPass("visual")} title="Ghi trực quan Đạt, tự điền sai số tối đa cho ô trống">Trực quan đạt (điền sai số max)</button>}
-            {rfiScope(active.rfi.thong_tin).ultrasound && <button type="button" className={secondary} disabled={busy} onClick={() => void quickPass("ndt")}>Siêu âm đạt</button>}
-          </div>
-          {geometryOptional(active.rfi) && (
-            <fieldset className="grid gap-2 sm:grid-cols-2">
-              <legend className="mb-1 text-sm font-semibold">Nghiệm thu lần này</legend>
-              {([
-                ["hinh-hoc", "Chỉ hình học / trực quan", "In biên bản hình học riêng → mối chuyển «Chờ siêu âm». Lần sau phát RFI nghiệm thu siêu âm rồi ký → Đạt."],
-                ["toan-bo", "Hình học + siêu âm đạt", "In toàn bộ biên bản → Chờ ký biên bản → ký đủ → Đạt."],
-              ] as const).map(([id, label, hint]) => (
-                <label key={id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${mode === id ? "border-[#0047AB] bg-blue-50" : "border-slate-200"}`}>
-                  <input type="radio" name="accept-mode" className="mt-0.5" checked={mode === id} disabled={busy} onChange={() => changeMode(id)} />
-                  <span><b>{label}</b><br /><span className="text-xs text-slate-600">{hint}</span></span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          {anomalous.length > 0 && (
-            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
-              <b>Không đúng quy trình:</b> {anomalous.length} mối trên phiếu đang «Chờ mài» (hoặc chưa kiểm tra)
-              — RFI chỉ dành cho mối đã «Chờ siêu âm và nghiệm thu». Có thể phiếu phát khi mối còn đủ điều kiện rồi tình trạng tụt lại
-              (thiếu số đo / chiều dài mài), hoặc dữ liệu lệch. Vào <b>Nhật ký hàn → Kiểm tra</b> hoàn tất mài/trực quan/số đo rồi quay lại;
-              hệ thống tạm đặt “Chưa nghiệm thu” chứ <b>không phải</b> cho phép nghiệm thu mối chờ mài.
-            </p>
-          )}
-          <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-slate-50"><tr><th className="p-2 text-left">Mã mối / KM</th><th className="p-2 text-left">Tình trạng / Điều kiện còn thiếu</th><th className="p-2 text-left">Kết quả</th><th className="p-2 text-left">Lý do (nếu loại)</th></tr></thead>
-              <tbody>{active.welds.map((w) => {
-                const d = decisions.find((x) => x.moi_han_id === w.moi_han_id);
-                if (!d) return null;
-                const bad = isAnomalousRfiWeldStatus(w.tinh_trang);
-                return (
-                  <tr key={w.moi_han_id} className={`border-t border-slate-100 ${bad ? "bg-rose-50" : ""}`}>
-                    <td className="p-2" title={w.ma_lich_su}>{fieldWeldCode(w.ma_lich_su)}<p className="mt-1 text-slate-500">{w.ma_diem || "Chưa rõ tuyến"} · {w.ly_trinh || "Thiếu KM"}</p></td>
-                    <td className={`p-2 min-w-64 ${bad ? "font-semibold text-rose-800" : ""}`}>
-                      {w.tinh_trang}
-                      <p className="mt-1 text-slate-600">Chiều dài mài: {w.chieu_dai_mai == null ? "Chưa nhập" : `${w.chieu_dai_mai} mm`}</p>
-                      {w.ten_tieu_chuan && <p className="mt-1 text-slate-500">Tiêu chí: {w.ten_tieu_chuan}</p>}
-                      <p className="mt-1 text-slate-600">Trực quan: {w.truc_quan || "Chưa"} · Siêu âm: {w.ket_qua_ndt || "Chưa"}</p>
-                      {eligible(w) && <p className="mt-1 font-semibold text-emerald-700">{geoMode ? "Đủ điều kiện nghiệm thu hình học" : "Đủ điều kiện nghiệm thu"}</p>}
-                      {!eligible(w) && <p className="mt-1 text-amber-800">{geoMode ? (w.truc_quan !== "Đạt" ? "Chưa có trực quan Đạt — bấm «Trực quan đạt»." : "Số đo / chiều dài mài chưa đạt theo tiêu chí.") : (w.ly_do_chua_du_dieu_kien || "Chưa đủ dữ liệu kiểm tra chất lượng.")}</p>}
-                      {(w.thieu_chieu_dai_mai || grindingLengths[w.moi_han_id] !== undefined) && <div className="mt-2 flex flex-wrap items-end gap-2">
-                        <label className="text-xs">Chiều dài mài (mm)
-                          <input className={`${input} mt-1 block w-36`} inputMode="decimal" aria-label={`Chiều dài mài ${w.ma_lich_su}`} value={grindingLengths[w.moi_han_id] ?? ""} disabled={busy} onChange={(e) => setGrindingLengths((v) => ({ ...v, [w.moi_han_id]: e.target.value }))} />
-                        </label>
-                        <button type="button" className={secondary} disabled={busy || !grindingLengths[w.moi_han_id]?.trim()} onClick={() => void saveGrindingLength(w)}>Lưu số đo</button>
-                      </div>}
-                    </td>
-                    <td className="p-2">
-                      <select className={input} aria-label={`Kết quả ${w.ma_lich_su}`} disabled={busy} value={d.ket_qua} onChange={(e) => patch(w.moi_han_id, { ket_qua: e.target.value as AcceptanceDecision["ket_qua"], ly_do: e.target.value === "Đạt" ? undefined : d.ly_do })}>
-                        <option value="Đạt" disabled={!eligible(w)}>{geoMode ? "Đạt hình học" : "Hoàn thành (Đạt)"}</option>
-                        <option value="Chưa nghiệm thu">Chưa nghiệm thu</option>
-                        {!geoMode && <option value="Không đạt">Không đạt</option>}
-                      </select>
-                    </td>
-                    <td className="p-2"><input className={`${input} w-full`} value={d.ly_do ?? ""} disabled={d.ket_qua === "Đạt"} onChange={(e) => patch(w.moi_han_id, { ly_do: e.target.value })} /></td>
-                  </tr>);
-              })}</tbody>
-            </table>
-          </div>
-          <p className="text-sm">Tổng {sum.total} · chấp nhận <b>{sum.accepted}</b> · không đạt {sum.failed} · chưa nghiệm thu {sum.deferred}. Cập nhật kết quả vào bộ 3 biên bản đã tạo lúc phát RFI.</p>
-          <div className="flex flex-wrap items-end gap-2">
-            <input className={input} type="date" value={ngay} onChange={(e) => setNgay(e.target.value)} />
-            <input className={input} placeholder="Địa điểm" value={thongTin.dia_diem} onChange={(e) => setThongTin({ ...thongTin, dia_diem: e.target.value })} />
-            <input className={input} placeholder="Thành phần tham dự" value={thongTin.thanh_phan} onChange={(e) => setThongTin({ ...thongTin, thanh_phan: e.target.value })} />
-            {!rfiScope(active.rfi.thong_tin).geometry && <p className="text-sm text-slate-600">Phiếu chỉ siêu âm: phần trực quan tự lấy từ RFI trực quan đã nghiệm thu của từng mối.</p>}
-            {!rfiScope(active.rfi.thong_tin).ultrasound && <label className="grid gap-1 text-sm text-amber-900">
-              Bổ sung RFI siêu âm đã nghiệm thu
-              <select className={input} value={supplementId} onChange={e => setSupplementId(e.target.value)}>
-                <option value="">Chọn phiếu đã nghiệm thu trong cùng dự án</option>
-                {supplement.map(t => <option key={t.id} value={t.id}>{t.so_phieu}</option>)}
-              </select>
-              {!supplement.length && <span>Chưa có phiếu bổ sung đã nghiệm thu. Mở phương án nghiệm thu phần còn thiếu để phát phiếu và chốt kết quả.</span>}
-            </label>}
-            <button type="button" className={primary} disabled={busy || !sum.accepted || missingReason} onClick={() => void complete()}>{geoMode ? "Hoàn thành hình học & in biên bản" : "Hoàn thành nghiệm thu"}</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => open(active.rfi, mode).catch((e) => setError(message(e)))}>Tải lại điều kiện</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => setActive(null)}>Quay lại</button>
-          </div>
-          {missingReason && <p className="text-xs text-amber-700">Nhập lý do cho mọi mối không được chấp nhận.</p>}
-          {!sum.accepted && !anomalous.length && <p className="text-xs text-amber-800">Chưa có mối đủ điều kiện Đạt. Bổ sung điều kiện còn thiếu ở từng dòng, lưu rồi hoàn thành nghiệm thu.</p>}
-          {anomalous.length > 0 && !sum.accepted && (
-            <p className="text-xs text-rose-800">Nút hoàn thành đang khóa vì chưa có mối “Đạt” — xử lý Kiểm tra cho các mối chờ mài trước.</p>
-          )}
-        </>
-        );
-      })()}
-    </section>
-  );
-}
-
-function RecordsPanel({ projectId, onOpen, onPrint, onPrintRecord }: { projectId: string; onOpen: (id: string, kind: DocKind) => unknown; onPrint: (id: string) => Promise<void>; onPrintRecord?: (record: RecordSet) => void }) {
-  const [records, setRecords] = useState<RecordSummary[]>([]);
-  // Phiếu siêu âm tách đã nghiệm thu: ký xong → mối (đã đạt hình học) thành «Đạt».
-  const [splitRecords, setSplitRecords] = useState<SplitRecordSummary[]>([]);
-  const refreshSplit = useCallback(() => loadSplitRecords(projectId).then((r) => setSplitRecords(r.records)), [projectId]);
-  useEffect(() => { refreshSplit().catch(() => undefined); }, [refreshSplit]);
-  async function toggleSplitSign(r: SplitRecordSummary) {
-    setBusy(true); setError("");
-    try { await signSplitRecord(r.id, !r.da_ky); await refreshSplit(); } catch (e) { setError(message(e)); } finally { setBusy(false); }
-  }
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const refresh = useCallback(() => loadRecords(projectId).then((r) => setRecords(r.records)), [projectId]);
-  useEffect(() => { refresh().catch((e) => setError(message(e))); }, [refresh]);
-  // Chỉ đúng 3 biên bản theo trình tự hồ sơ — không có BBNT thứ 4.
-  const kinds: [string, DocKind][] = [
-    ["(1) Phụ lục Biên bản nghiệm thu mối hàn", "phu-luc"],
-    ["(2) Biên bản nghiệm thu công việc", "giai-doan"],
-    ["(3) Biên bản hoàn thành công việc", "hoan-thanh"],
-  ];
-  const requiredLoai = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
-
-  async function toggleSignSet(r: RecordSummary) {
-    setBusy(true); setError("");
-    try {
-      const docs = r.ho_so_nghiem_thu ?? [];
-      if (requiredLoai.some((loai) => !docs.some((h) => h.loai === loai))) {
-        throw new Error("Thiếu một trong ba biên bản — chưa đủ điều kiện ký.");
-      }
-      const allSigned = docs.filter((h) => requiredLoai.includes(h.loai)).every((h) => h.tinh_trang_ky === "Đã ký");
-      await setRecordSetSign(r.id, allSigned ? "Chờ ký" : "Đã ký");
-      await refresh();
-    } catch (e) { setError(message(e)); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <section className="space-y-3">
-      <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-        Chỉ <b>3 biên bản</b>: (1) Phụ lục BBNT mối hàn · (2) BB nghiệm thu công việc · (3) BB hoàn thành công việc.
-        Một nút ký chung cho cả bộ — thiếu bất kỳ cái nào thì chưa đủ điều kiện.
-      </p>
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      {records.map((r) => {
-        const requiredDocs = (r.ho_so_nghiem_thu ?? []).filter((h) => requiredLoai.includes(h.loai));
-        const complete = requiredDocs.length === 3;
-        const isDraft = r.thong_tin?.draft === true;
-        const allSigned = complete && !isDraft && requiredDocs.every((h) => h.tinh_trang_ky === "Đã ký");
-        const signBlockedReason = !complete
-          ? "Thiếu một trong ba biên bản"
-          : isDraft
-            ? "Cần vào tab Nghiệm thu → Hoàn thành nghiệm thu trước khi xác nhận ký"
-            : undefined;
-        return (
-          <div key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
-            <p className="font-semibold">
-              {r.phieu_yeu_cau_nghiem_thu.so_phieu} · {r.ngay_nghiem_thu} · {r.nguoi_lap}
-              {!complete && <span className="ml-2 text-amber-700 font-medium">· Thiếu hồ sơ</span>}
-              {allSigned ? (
-                <span className="ml-2 text-emerald-700 font-medium">· Đã ký bộ hồ sơ</span>
-              ) : isDraft && complete ? (
-                <span className="ml-2 text-amber-700 font-medium">· Chờ nghiệm thu</span>
-              ) : complete ? (
-                <span className="ml-2 text-slate-500 font-medium">· Chờ ký</span>
-              ) : null}
-            </p>
-            <p className="text-xs text-slate-700">{r.tong_moi ?? "—"} mối trong bộ hồ sơ · Đạt: {r.da_nghiem_thu ?? "—"} · Không đạt: {r.khong_dat ?? "—"} · Chưa nghiệm thu: {r.chua_nghiem_thu ?? "—"}</p>
-            {isDraft && complete && (
-              <p className="text-xs text-amber-800">
-                Bộ 3 biên bản chỉ để in mang đi. Mở tab <b>Nghiệm thu</b>, chọn {r.phieu_yeu_cau_nghiem_thu.so_phieu}, bấm <b>Hoàn thành nghiệm thu</b> — sau đó mới bật được nút Đã ký.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {kinds.map(([label, kind]) => (
-                <button key={kind} type="button" className={secondary} onClick={() => Promise.resolve(onOpen(r.id, kind)).catch((e) => setError(message(e)))}>{label}</button>
-              ))}
-              <button
-                type="button"
-                className={allSigned ? secondary : primary}
-                disabled={busy || !complete || isDraft}
-                title={signBlockedReason}
-                onClick={() => void toggleSignSet(r)}
-              >
-                {allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký"}
-              </button>
-              <button type="button" className={secondary} disabled={busy || !complete} onClick={() => onPrint(r.id).catch((e) => setError(message(e)))}>In đủ bộ (1)(2)(3)</button>
-            </div>
-          </div>
-        );
-      })}
-      {!records.length && !splitRecords.length && (
-        <p className="text-sm text-slate-600">
-          Chưa có hồ sơ. Phát RFI nghiệm thu xong là bộ 3 biên bản xuất hiện tại đây để in mang đi.
-        </p>
-      )}
-      {splitRecords.length > 0 && <h3 className="pt-2 text-sm font-bold text-slate-800">Biên bản RFI siêu âm (phiếu tách)</h3>}
-      {splitRecords.map((r) => (
-        <div key={r.id} className="space-y-2 rounded-lg border border-slate-200 p-3 text-sm">
-          <p className="font-semibold">
-            {r.so_phieu} · siêu âm · {r.ngay_nghiem_thu} · {r.nguoi_nghiem_thu ?? ""}
-            {r.da_ky ? <span className="ml-2 font-medium text-emerald-700">· Đã ký{r.nguoi_ky ? ` (${r.nguoi_ky})` : ""}</span> : <span className="ml-2 font-medium text-slate-500">· Chờ ký</span>}
-          </p>
-          <p className="text-xs text-slate-700">{r.tong_moi} mối · Đạt: {r.dat}. Ký xong, mối đã nghiệm thu hình học ĐẠT chuyển «Đạt».</p>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={r.da_ky ? secondary : primary} disabled={busy} onClick={() => void toggleSplitSign(r)}>{r.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký"}</button>
-            {onPrintRecord && <button type="button" className={secondary} disabled={busy} onClick={() => loadGeometryRecord(r.id).then(onPrintRecord).catch((e) => setError(message(e)))}>In biên bản</button>}
-          </div>
-        </div>
-      ))}
     </section>
   );
 }

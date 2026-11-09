@@ -97,7 +97,7 @@ import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
 import { loadDayLispCodes } from "@/lib/dayLispCodes";
 import { nextLispCode } from "@/lib/lispSequence";
-import { loadQualityJournal, exportQualityJournal, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
+import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
@@ -2192,11 +2192,18 @@ export default function WeldingJournalList({
     window.addEventListener("weld-payment-changed", refresh);
     window.addEventListener("weld-quality-changed", refresh);
     window.addEventListener("focus", refresh);
+    // Tab khác lưu thanh toán (storage event) hoặc quay lại tab này → nạp lại cột Thanh toán.
+    const onStorage = (event: StorageEvent) => { if (event.key === PAYMENT_CHANGED_KEY) void refresh(); };
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       request++;
       window.removeEventListener("weld-payment-changed", refresh);
       window.removeEventListener("weld-quality-changed", refresh);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [pageIdsKey]);
   const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
