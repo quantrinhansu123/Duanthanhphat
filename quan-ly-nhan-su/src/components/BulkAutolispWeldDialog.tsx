@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MachineOption } from "@/data/machineAssignments";
 import { WELD_TYPE_OPTIONS } from "@/data/weldTypes";
 import {
@@ -291,9 +292,10 @@ export function BulkAutolispWeldDialog({
     }
   }
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // Gắn ra document.body (như form thêm nhật ký) để phủ kín màn hình, không bị thanh bên / thanh trên đè lên.
+  return createPortal(
     <div
       className="fixed inset-0 z-[2200] flex items-start justify-center overflow-y-auto bg-slate-900/50 p-3 sm:p-6"
       role="dialog"
@@ -594,6 +596,7 @@ export function BulkAutolispWeldDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
