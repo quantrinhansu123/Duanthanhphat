@@ -266,7 +266,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>RFI/ ITR No:</b> {show(rfi.so_phieu)}<br />Hình học: {show(geometryRfi)} · Siêu âm: {show(ultrasoundRfi)}</td>
+                        <td colSpan={2}><b>RFI/ ITR No:</b> {show(String(rfi.so_phieu ?? "").replace(/-(HH|SA)$/i, ""))}</td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>

@@ -3310,7 +3310,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                   <th className="p-2.5 font-semibold">Công nghệ</th>
                 ) : null}
                 <th className="whitespace-nowrap p-2.5 font-semibold">Thanh toán</th>
-                <th className="min-w-[10rem] p-2.5 font-semibold">Ghi chú</th>
                 {failedWeldMode ? (
                   <th className="min-w-[9rem] whitespace-nowrap p-2.5 font-semibold">Kết quả NDT</th>
                 ) : null}
@@ -3358,9 +3357,6 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                         </span>
                       );
                     })()}
-                  </td>
-                  <td className="max-w-[18rem] break-words p-2.5 text-xs text-slate-600">
-                    {paymentByWeld.get(w.id)?.ghi_chu || "—"}
                   </td>
                   {failedWeldMode ? (
                   <td className="p-2.5 whitespace-nowrap">
@@ -3414,7 +3410,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={failedWeldMode ? 17 : 15} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={failedWeldMode ? 16 : 14} className="px-3 py-10 text-center text-sm text-slate-500">
                     {lockedResultFilter === "Không đạt"
                       ? "Không có mối hàn lỗi phù hợp với bộ lọc."
                       : "Không có nhật ký hàn phù hợp với bộ lọc."}
