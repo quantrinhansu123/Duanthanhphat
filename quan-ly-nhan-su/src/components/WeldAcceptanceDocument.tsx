@@ -395,6 +395,11 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["kinh_gui", "Kính gửi (mỗi dòng một bên)", "textarea", ""],
   ["doi_tuong", "Đối tượng nghiệm thu (mỗi dòng một mục, thay toàn bộ mục 1)", "textarea", ""],
 ];
+/** Nơi lập tự lấy từ địa điểm của phiếu: chỉ tên nơi (bỏ chữ «Địa điểm:», phần sau dấu phẩy, và đoạn lý trình/Km). */
+function placeName(v?: string) {
+  const p = (v ?? "").replace(/^\s*địa điểm\s*:?\s*/i, "").split(",")[0].trim();
+  return /\d|lý trình/i.test(p) ? "" : p;
+}
 function viDate(iso?: string) {
   const [y, m, d] = (iso ?? "").split("-");
   return y && m && d ? `${d} tháng ${m} năm ${y}` : "";
@@ -440,7 +445,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
           ----------- ☙★❧ -----------
         </p>
       )}
-      <p className="mt-3 text-right italic">{o.noi_lap?.trim() || pq?.noiLap || DOTS}, ngày {ngay}</p>
+      <p className="mt-3 text-right italic">{o.noi_lap?.trim() || pq?.noiLap || placeName(o.dia_diem?.trim() || t.dia_diem) || DOTS}, ngày {ngay}</p>
       <h2 className="mt-3 text-center font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
       <p className="text-center">Số: {o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-(?:HH-|SA-)?/i, "")}/PYC-HR`}</p>
       <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
