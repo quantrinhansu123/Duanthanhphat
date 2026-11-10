@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
 import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
-import { loadSignatureByName, personNameKey } from "@/lib/personnelCertificatesDb";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
@@ -43,8 +42,8 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .acceptance-page .annex-sheet > tbody > tr > td { border: 1px solid black; padding: 2px 4px; vertical-align: top; }
 .acceptance-page .annex-sheet .title-cell { text-align: center; font-weight: bold; font-size: 16px; text-transform: uppercase; padding: 5px 2px; }
-.acceptance-page .annex-sheet .head-left { font-weight: bold; text-transform: uppercase; font-size: 12.5px; line-height: 1.35; }
-.acceptance-page .annex-sheet .head-right { width: 28%; font-size: 12px; }
+.acceptance-page .annex-sheet .head-left { font-weight: bold; text-transform: uppercase; font-size: 11.5px; line-height: 1.4; white-space: nowrap; }
+.acceptance-page .annex-sheet .head-right { width: 17%; font-size: 12px; }
 .acceptance-page .annex { font-size: var(--annex-font, 10px); table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
 .acceptance-page .annex th.serial-heading { white-space: nowrap; }
@@ -79,7 +78,6 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 22px; text-align: center; font-weight: bold; text-transform: uppercase; }
 .acceptance-page .work-sign div { min-height: 96px; }
 .acceptance-page .work-sign .auto-sign { display: block; margin-top: 4px; }
-.acceptance-page .work-sign .auto-sign img { display: block; margin: 0 auto; height: 52px; max-width: 80%; object-fit: contain; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 120px; margin-top: 10px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
@@ -129,17 +127,6 @@ const PARTY_KEYS = SIGNER_PARTIES.map(([key]) => key);
 /** Số phiếu như in trên phiếu YCNT: bỏ chữ «RFI-» ở đầu, giữ đuôi -HH / -SA (vd 004-HH). */
 function pycNumber(rfi: Record<string, unknown>) {
   return String(rfi.so_phieu ?? "").replace(/^RFI-/i, "");
-}
-
-/** Ảnh chữ ký trong hồ sơ Nhân sự theo tên (đã chuẩn hoá); tải một lần rồi dùng lại. */
-function usePersonSignatures() {
-  const [map, setMap] = useState<Map<string, string>>(new Map());
-  useEffect(() => {
-    let live = true;
-    void loadSignatureByName().then((m) => { if (live) setMap(m); }).catch(() => undefined);
-    return () => { live = false; };
-  }, []);
-  return map;
 }
 
 /** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. */
@@ -200,8 +187,6 @@ function isNightShift(ca: string) {
 }
 
 export default function WeldAcceptanceRecordPages({ record, kind }: { record: RecordSet; kind?: RecordKind }) {
-  const signatureByName = usePersonSignatures();
-  const signatureOf = (name: string) => (name ? signatureByName.get(personNameKey(name)) : undefined);
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
@@ -544,15 +529,14 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <div className="work-sign">
             {labels.map((name, index) => {
               const party = PARTY_KEYS[index];
-              const signed = [1, 2].map((i) => resolveSigner(t, signerDefaults, party, i)).filter((s) => signatureOf(s.ten));
+              // Không chèn ảnh chữ ký: để trống cho ký tay; chỉ ghi họ tên người đã nhập ở «Sửa thông tin in».
+              const signed = [1, 2].map((i) => resolveSigner(t, signerDefaults, party, i)).filter((s) => s.ten);
               return (
                 <div key={name}>
                   {name}
                   <small>(Ký và ghi rõ họ tên)</small>
                   {signed.map((s) => (
                     <span className="auto-sign" key={s.ten}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={signatureOf(s.ten)} alt="" />
                       <small>{s.ten}</small>
                     </span>
                   ))}

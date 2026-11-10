@@ -108,7 +108,8 @@ const WeldQualityBulkDialog = dynamic(() => import("@/components/WeldQualityBulk
   loading: () => <p role="status">Đang mở kiểm tra hàng loạt…</p>,
 });
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+const PAGE_SIZE_KEY = "weld-journal-page-size";
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
@@ -1875,6 +1876,19 @@ export default function WeldingJournalList({
   const [dateFrom, setDateFrom] = useState("2026-11-04");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
+  // Số mối hiện mỗi trang (nhớ theo trình duyệt): 50 / 100 / 200 / 500.
+  const [pageSize, setPageSizeState] = useState(50);
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(PAGE_SIZE_KEY));
+      if (PAGE_SIZE_OPTIONS.includes(saved)) setPageSizeState(saved);
+    } catch { /* bỏ qua */ }
+  }, []);
+  function changePageSize(value: number) {
+    setPageSizeState(value);
+    setPage(1);
+    try { window.localStorage.setItem(PAGE_SIZE_KEY, String(value)); } catch { /* bỏ qua */ }
+  }
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [total, setTotal] = useState(0);
   const [passCount, setPassCount] = useState(0);
@@ -1985,7 +1999,7 @@ export default function WeldingJournalList({
     setError("");
     const filters = {
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       query: appliedQuery,
       projects: projectFilter,
       resultFilter,
@@ -2035,7 +2049,7 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter, pageSize, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;
@@ -2216,10 +2230,10 @@ export default function WeldingJournalList({
   }, [pageIdsKey]);
   const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pageFrom = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const pageTo = Math.min(currentPage * PAGE_SIZE, total);
+  const pageFrom = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageTo = Math.min(currentPage * pageSize, total);
 
   useEffect(() => {
     setPage(1);
@@ -3255,7 +3269,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0047AB]">
             {gpsLoading
               ? "Đang ghép GPS…"
-              : `${pageFrom}–${pageTo} / ${total.toLocaleString("vi-VN")} · ${PAGE_SIZE}/trang`}
+              : `${pageFrom}–${pageTo} / ${total.toLocaleString("vi-VN")} · ${pageSize}/trang`}
           </span>
         </div>
 
@@ -3428,6 +3442,13 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             {" · "}
             Hiển thị <strong className="font-mono text-slate-800">{pageFrom}–{pageTo}</strong> trên{" "}
             <strong className="font-mono text-slate-800">{total.toLocaleString("vi-VN")}</strong>
+            {" · "}
+            <label className="inline-flex items-center gap-1">Hiện
+              <select aria-label="Số mối hiện mỗi trang" value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))} className="h-7 rounded-md border border-slate-300 bg-white px-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              mối
+            </label>
           </div>
           <div className="flex items-center gap-2">
             <button
