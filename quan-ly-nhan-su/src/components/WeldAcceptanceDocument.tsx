@@ -431,7 +431,8 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
-  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
+  const benNhanLines = lines((t.ben_nhan ?? "").replace(/;/g, "\n"));
+  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
   const autoUpper = routes.some((r) => r === "TT" || r === "TP");
   const autoLower = routes.some((r) => r === "HT" || r === "HP");

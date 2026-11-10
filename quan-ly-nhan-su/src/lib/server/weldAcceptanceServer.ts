@@ -5,6 +5,7 @@ import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJourna
 import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
 import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
+import { fieldWeldCode } from "@/lib/weldCode";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
@@ -293,8 +294,32 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     loai_rfi: body.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu",
     nt_hinh_hoc: geometry, nt_sieu_am: ultrasound,
   };
-  const id = await publishWeldRfi({ id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
-    moi_han_ids: ids.map(qualityUuid), nguoi_lap: actor, thong_tin });
+  const parentId = qualityUuid(body.id), weldIds = ids.map(qualityUuid);
+  // Mỗi mối chỉ nằm trong một phiếu hình học / siêu âm đang xử lý: báo rõ phiếu nào đang giữ mối thay vì lỗi ràng buộc của CSDL.
+  const kinds = [geometry ? "hinh-hoc" : "", ultrasound ? "sieu-am" : ""].filter(Boolean);
+  const held = await chunkedPages<{ moi_han_id: string; ma_lich_su: string; phieu_id: string; loai: string; ket_qua: string | null }>(weldIds, (part, from, to) => db()
+    .from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,phieu_id,loai,ket_qua").in("moi_han_id", part).in("loai", kinds)
+    .order("moi_han_id").order("phieu_id").range(from, to));
+  const active = held.filter((row) => row.ket_qua !== "Không đạt");
+  if (active.length) {
+    const tickets = await db().from("phieu_nt_tach").select("id,so_phieu,phieu_rfi_id").in("id", [...new Set(active.map((row) => row.phieu_id))]);
+    if (tickets.error) throw tickets.error;
+    const info = new Map(tickets.data.map((t) => [t.id as string, t]));
+    const blocking = active.filter((row) => info.get(row.phieu_id)?.phieu_rfi_id !== parentId);
+    if (blocking.length) {
+      const numbers = [...new Set(blocking.map((row) => info.get(row.phieu_id)?.so_phieu ?? "?"))].join(", ");
+      const welds = blocking.slice(0, 3).map((row) => fieldWeldCode(row.ma_lich_su)).join(", ");
+      throw new QualityApiError(`${blocking.length} mối đã nằm trong phiếu đang xử lý (${numbers}), ví dụ ${welds}. Mở phiếu đó để nghiệm thu, hoặc xóa phiếu cũ trước khi phát phiếu mới.`, 409);
+    }
+  }
+  let id: string;
+  try {
+    id = await publishWeldRfi({ id: parentId, du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
+      moi_han_ids: weldIds, nguoi_lap: actor, thong_tin });
+  } catch (error) {
+    if (error instanceof Error && /nt_tach_moi_dang_xu_ly/.test(error.message)) throw new QualityApiError("Có mối đã nằm trong một phiếu hình học hoặc siêu âm khác đang xử lý. Bấm Tải lại để cập nhật danh sách mối.", 409);
+    throw error;
+  }
   return { id };
 }
 
