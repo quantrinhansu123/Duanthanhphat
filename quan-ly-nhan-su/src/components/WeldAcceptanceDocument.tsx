@@ -425,6 +425,7 @@ function viDate(iso?: string) {
 function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore; o?: RfiOverrides }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
   const monitoring = t.loai_rfi === "theo-doi";
+  const ultrasoundOnly = !monitoring && (() => { const sc = rfiScope(t); return sc.ultrasound && !sc.geometry; })();
   const lines = (v?: string) => (v ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
   const [y, m, d] = (o.ngay_lap?.trim() || rfi.ngay_moi).split("-");
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
@@ -485,8 +486,8 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
         <p className="mt-2 text-justify">- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu các công việc đề nghị nêu trên để nhà thầu triển khai các công việc tiếp theo.</p>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        {/* Phiếu yêu cầu chỉ có Nhà thầu chính ký; để trống bên trái giữ vị trí chữ ký bên phải. */}
-        <div aria-hidden />
+        {/* Phiếu nghiệm thu siêu âm (không kèm hình học) chỉ có Nhà thầu chính ký; để trống bên trái giữ vị trí chữ ký bên phải. */}
+        {ultrasoundOnly ? <div aria-hidden /> : <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} ten={o.ntp_ten} chucVu={o.ntp_chuc_vu} signatures={signatures} />}
         <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} ten={o.ntc_ten} chucVu={o.ntc_chuc_vu} signatures={signatures} />
       </div>
       <table className="mt-3 w-full border-collapse border border-black">
