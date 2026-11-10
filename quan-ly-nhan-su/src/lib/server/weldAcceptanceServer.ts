@@ -709,7 +709,7 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
-  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS]) {
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;
   }

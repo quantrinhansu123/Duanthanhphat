@@ -8,7 +8,7 @@ import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 
 /** Các mục thông tin trên mẫu dùng chung cho cả bộ — sửa một lần, áp dụng cho 3 biên bản. */
-const SHARED_KEYS = ["ngay_nghiem_thu", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
+const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_thu", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
   ...SIGNER_PARTIES.flatMap(([party]) => [`nguoi_${party}_1_ten`, `nguoi_${party}_1_cv`, `ngay_ky_${party}`])];
 const input = "mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal";
 const label = "block text-xs font-semibold text-slate-700";
@@ -49,12 +49,14 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
 
   function openEditor() {
     // Giá trị hiện hành: bản sửa mới nhất của biên bản đầu tiên có giá trị, rồi tới dữ liệu đợt.
-    const dot = (record.dot.thong_tin ?? {}) as Record<string, string>;
+    const rfiInfo = (record.dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, string>;
+    const dot = { ...rfiInfo, ...((record.dot.thong_tin ?? {}) as Record<string, string>) };
     const infos = record.ho_so.map((h) => (latestOf(h.id)?.thong_tin ?? {}) as Record<string, string>);
     const defaults = loadSignerDefaults();
     setForm(Object.fromEntries(SHARED_KEYS.map((k) => {
       const saved = infos.map((i) => i[k]).find(Boolean) ?? dot[k];
-      if (saved) return [k, String(saved)];
+      // Địa điểm cũ nhập «Lý trình …» đã có ở mục Vị trí nên không nạp lại vào ô này.
+      if (saved && !(k === "dia_diem" && /^s*lý trình/i.test(String(saved)))) return [k, String(saved)];
       if (k === "ngay_nghiem_thu") return [k, String(record.dot.ngay_nghiem_thu ?? "").slice(0, 10)];
       return [k, String(defaults[k] ?? "")];
     })));
@@ -96,6 +98,12 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
     {editing && (
       <div className="weld-print-pack-actions mx-auto mb-3 max-w-4xl space-y-3 rounded-xl bg-white p-4 text-sm shadow-lg">
         <p className="text-xs text-slate-600">Sửa một lần, áp dụng cho cả 3 biên bản trong bộ. Để trống thì mẫu tự lấy theo dữ liệu mối hàn / Nhật ký hàn. Số đo và danh sách mối đã chốt không thay đổi.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {text("dia_diem", "Địa điểm", "Phú Quốc - An Giang")}
+          {text("pham_vi", "Phạm vi")}
+          {text("ben_moi", "Bên mời (nhà thầu)")}
+          {text("ben_nhan", "Bên nhận (TVGS/CĐT)")}
+        </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <label className={label}>Ngày nghiệm thu
             <input type="date" className={input} value={form.ngay_nghiem_thu ?? ""} onChange={(e) => set("ngay_nghiem_thu", e.target.value)} />
