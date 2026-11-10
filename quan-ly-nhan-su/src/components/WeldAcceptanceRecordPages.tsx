@@ -444,14 +444,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                       <tr>
                         {PARTY_KEYS.map((party) => {
                           const signer = resolveSigner(t, loadSignerDefaults(), party, 1);
-                          const signature = signatureOf(signer.ten);
                           return (
                             <td key={party}>
                               HỌ VÀ TÊN: {signer.ten}<br /><br />
                               NGÀY: {signDate(t, party)}<br /><br />
                               CHỮ KÝ:
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              {signature && <img src={signature} alt="" className="sig-img" />}
                             </td>
                           );
                         })}
