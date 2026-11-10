@@ -17,22 +17,23 @@ export const ACCEPTANCE_DOCS: { kind: RecordKind; loai: string; title: string }[
 
 const BOX = "❐";
 // Mỗi trang phụ lục tối đa 30 mối để bảng + chân trang + khối ký luôn nằm vừa 1 tờ A4.
-const ROWS_PER_PAGE = 30;
+const ROWS_PER_PAGE = 26;
 // Số dòng tối thiểu của bảng: không in thêm dòng trống thừa.
 const MIN_BLANK_ROWS = 5;
 /**
- * Phụ lục tối đa 30 mối/trang (nhiều hơn thì sang trang kế, mỗi trang có khối ký). Co giãn theo số dòng của trang: đủ 30 dòng → hàng 16px, chữ 10px (vừa 1 trang);
- * ít dòng hơn → hàng cao hơn (tối đa 24px, tổng bảng ≤ 420px để chừa chỗ tiêu đề cột), chữ to hơn (tối đa 11px).
+ * Phụ lục tối đa 26 mối/trang (nhiều hơn thì sang trang kế, mỗi trang có khối ký). Co giãn theo số dòng của trang: đủ 26 dòng → hàng 16px, chữ 10px (vừa 1 trang);
+ * ít dòng hơn → hàng cao hơn (tối đa 24px, tổng bảng ≤ 380px để chừa chỗ tiêu đề cột), chữ to hơn (tối đa 11px).
  */
 function annexSizing(rows: number) {
-  const row = rows >= ROWS_PER_PAGE ? 16 : Math.max(16, Math.min(24, Math.floor(420 / Math.max(rows, 1))));
+  const row = rows >= ROWS_PER_PAGE ? 16 : Math.max(16, Math.min(24, Math.floor(380 / Math.max(rows, 1))));
   const font = row >= 22 ? 11 : row >= 19 ? 10.5 : 10;
   return { "--annex-row": `${row}px`, "--annex-font": `${font}px` } as CSSProperties;
 }
 
 export const acceptancePrintCss = `
 .acceptance-page { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto 16px; padding: 12mm 17mm; background: white; color: black; font: 13px/1.35 'Times New Roman', serif; }
-.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 15mm 5mm 5mm 20mm; font: 11px/1.25 'Times New Roman', serif; }
+.acceptance-page.annex-page { position: relative; width: 210mm; min-height: 297mm; padding: 15mm 5mm 5mm 20mm; font: 11px/1.25 'Times New Roman', serif; }
+.acceptance-page.annex-page .page-no { position: absolute; right: 7mm; bottom: 2.5mm; margin: 0; font-size: 11px; }
 .acceptance-page h2 { font-size: 15px; font-weight: bold; text-align: center; margin: 12px 0 2px; }
 .acceptance-page.annex-page h2 { font-size: 14.5px; margin: 0; padding: 4px 2px; text-transform: uppercase; }
 .acceptance-page h3 { font-weight: bold; margin-top: 8px; }
@@ -51,10 +52,10 @@ export const acceptancePrintCss = `
 .acceptance-page .annex td.weld-name { white-space: nowrap; }
 .acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
 .acceptance-page .annex-meta-grid td { border: 1px solid black; padding: 2px 4px; vertical-align: middle; }
-.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
+.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .acceptance-page .annex-foot > tbody > tr > td { border: 1px solid black; padding: 3px 4px; vertical-align: top; }
 .acceptance-page .annex-tol { width: 100%; border-collapse: collapse; }
-.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 12px; padding: 1px 3px; }
+.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 11px; padding: 1px 3px; }
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
 .acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 12px; }
@@ -103,7 +104,7 @@ export const acceptancePrintCss = `
     break-before: auto !important; page-break-before: auto !important;
   }
   /* PrintFrame áp dụng lề của phụ lục khi in. */
-  .acceptance-page.annex-page { padding: 0; }
+  .acceptance-page.annex-page { padding: 0; min-height: 296mm; }
   .acceptance-page .annex-sign { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
@@ -399,7 +400,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                           <p style={{ margin: 0 }}>
                             2. Tiêu chuẩn tham chiếu bổ sung cho ray rãnh và các nội dung chưa được quy định chi tiết trong TCVN: CECS 429 : 2016 – Tiêu chuẩn nghiệm thu chất lượng hàn chảy giáp mép ray rãnh cho đường sắt đô thị.
                           </p>
-                          <p style={{ margin: "6px 0 0", fontSize: "11px" }}>
+                          <p style={{ margin: "6px 0 0", fontSize: "10px" }}>
                             Ghi chú:<br />
                             (1): Đối với độ thẳng theo phương ngang, dung sai dương (+) sẽ làm tăng khổ đường<br />
                             (2): Đối với độ phẳng mặt lăn, chỉ đo giá trị lớn nhất
@@ -464,8 +465,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
             </tbody>
           </table>
-          <p style={{ margin: "3px 2px 0", textAlign: "right", fontSize: "11px" }}>Trang {pageIndex + 1}/{pages.length}</p>
         </PrintFrame>
+        {/* Số trang nằm sát đáy tờ giấy, không theo cuối bảng. */}
+        <p className="page-no">Trang {pageIndex + 1}/{pages.length}</p>
 </article>
       ));
     }
