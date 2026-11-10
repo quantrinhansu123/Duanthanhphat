@@ -224,7 +224,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     return <div className="overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th><th className="px-3 py-2">Ngày mời</th><th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
@@ -235,7 +235,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             return <tr key={t.id} className="hover:bg-slate-50">
               <td className="px-3 py-2 font-mono text-slate-500">{i + 1}</td>
               <td className="px-3 py-2 font-bold">{t.so_phieu}</td>
-              <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>
+              {kind === "hinh-hoc" && <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>}
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
               <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
               <td className="px-3 py-2">
@@ -486,7 +486,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); await refresh();
           if (done.canh_bao) setError(done.canh_bao);
-          if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «nghiệm thu Siêu âm».`);
+          if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «Nghiệm thu Siêu âm».`);
           else if (kind === "sieu-am") setOkMsg(`Đã duyệt phiếu ${detail.ticket.so_phieu}; ký biên bản ở mục Hồ sơ nghiệm thu.`);
           // Tab 1 đã chuyển mối Đạt sang siêu âm → hỏi duyệt siêu âm luôn (Không thì in biên bản như cũ).
           if (done.so_moi_chuyen && done.sieu_am_id && onGoToUltrasound) {
@@ -563,7 +563,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
           <h2 id="ask-forward-title" className="text-lg font-extrabold text-slate-900">Duyệt siêu âm luôn?</h2>
           <p className="text-sm text-slate-700">
-            Phiếu <b>{askForward.soPhieu}</b> đã duyệt hình học xong, <b>{askForward.count} mối Đạt</b> đã chuyển sang tab «nghiệm thu Siêu âm».
+            Phiếu <b>{askForward.soPhieu}</b> đã duyệt hình học xong, <b>{askForward.count} mối Đạt</b> đã chuyển sang tab «Nghiệm thu Siêu âm».
             Bạn có muốn duyệt siêu âm cho phiếu này ngay không?
           </p>
           <div className="flex flex-wrap justify-end gap-2">

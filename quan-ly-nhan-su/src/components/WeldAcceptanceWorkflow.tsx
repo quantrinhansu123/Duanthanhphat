@@ -161,7 +161,7 @@ export default function WeldAcceptanceWorkflow() {
         {([
           ["rfi", "Phát phiếu RFI"],
           ["hinh-hoc", "Nghiệm thu Hình Học"],
-          ["sieu-am", "nghiệm thu Siêu âm"],
+          ["sieu-am", "Nghiệm thu Siêu âm"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
             className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
