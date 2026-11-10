@@ -77,7 +77,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
             <table className="mt-2 w-full border-collapse">
               <thead>
                 <tr>
-                  <th className={th} rowSpan={3}>No.</th><th className={th} rowSpan={3}>TÊN MỐI HÀN</th>
+                  <th className={th} rowSpan={3}>STT</th><th className={th} rowSpan={3}>TÊN MỐI HÀN</th>
                   <th className={th} rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th><th className={th} rowSpan={3}>LÝ TRÌNH MỐI HÀN</th>
                   <th className={th} colSpan={2} rowSpan={2}>RAY</th>
                   <th className={th} colSpan={8}>NGHIỆM THU KÍCH THƯỚC HÌNH HỌC (ĐẠT/KHÔNG ĐẠT)</th>

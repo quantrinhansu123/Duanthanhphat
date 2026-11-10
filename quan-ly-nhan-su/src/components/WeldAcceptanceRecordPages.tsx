@@ -32,7 +32,7 @@ function annexSizing(rows: number) {
 
 export const acceptancePrintCss = `
 .acceptance-page { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto 16px; padding: 12mm 17mm; background: white; color: black; font: 13px/1.35 'Times New Roman', serif; }
-.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 6mm 6mm 5mm 8mm; font: 11px/1.25 'Times New Roman', serif; }
+.acceptance-page.annex-page { width: 210mm; min-height: 297mm; padding: 15mm 5mm 5mm 20mm; font: 11px/1.25 'Times New Roman', serif; }
 .acceptance-page h2 { font-size: 15px; font-weight: bold; text-align: center; margin: 12px 0 2px; }
 .acceptance-page.annex-page h2 { font-size: 14.5px; margin: 0; padding: 4px 2px; text-transform: uppercase; }
 .acceptance-page h3 { font-weight: bold; margin-top: 8px; }
@@ -50,10 +50,10 @@ export const acceptancePrintCss = `
 .acceptance-page .annex td.weld-name { white-space: nowrap; }
 .acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
 .acceptance-page .annex-meta-grid td { border: 1px solid black; padding: 2px 4px; vertical-align: middle; }
-.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.acceptance-page .annex-foot { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
 .acceptance-page .annex-foot > tbody > tr > td { border: 1px solid black; padding: 3px 4px; vertical-align: top; }
 .acceptance-page .annex-tol { width: 100%; border-collapse: collapse; }
-.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 10.5px; padding: 1px 3px; }
+.acceptance-page .annex-tol th, .acceptance-page .annex-tol td { font-size: 12px; padding: 1px 3px; }
 .acceptance-page .annex-sign { width: 100%; border-collapse: collapse; margin-top: 0; }
 .acceptance-page .annex-sign th, .acceptance-page .annex-sign td { border: 1px solid black; text-align: center; vertical-align: top; padding: 4px 6px; }
 .acceptance-page .annex-sign th { font-weight: bold; text-transform: uppercase; font-size: 12px; }
@@ -101,8 +101,9 @@ export const acceptancePrintCss = `
   .acceptance-page:first-of-type {
     break-before: auto !important; page-break-before: auto !important;
   }
-  /* Phụ lục: lề in hẹp do PrintFrame tạo (6mm, trái 9mm để đóng tập). */
+  /* PrintFrame áp dụng lề của phụ lục khi in. */
   .acceptance-page.annex-page { padding: 0; }
+  .acceptance-page .annex-sign { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
@@ -208,8 +209,9 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
     const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
-    // Ngày nghiệm thu chỉ in khi đã chọn ở bản xem trước (mặc định để trống cho viết tay).
-    const parts = dateParts(t.ngay_nghiem_thu || null);
+    // Ngày nghiệm thu: ưu tiên bản sửa đổi in → ngày nghiệm thu của phiếu YCNT (đợt nghiệm thu).
+    const acceptanceDate = t.ngay_nghiem_thu || String(record.dot.ngay_nghiem_thu ?? "");
+    const parts = dateParts(acceptanceDate || null);
     const day = `${parts.d}/${parts.m}/${parts.y}`;
     const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
@@ -238,7 +240,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
 
       return pages.map((page, pageIndex) => (
         <article className="acceptance-page annex-page" key={`${doc.kind}-${pageIndex}`}>
-<PrintFrame top="6mm" right="6mm" bottom="6mm" left="9mm">
+<PrintFrame right="5mm" bottom="5mm">
           <table className="annex-sheet">
             <tbody>
               <tr>
@@ -299,7 +301,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                     </colgroup>
                     <thead>
                       <tr>
-                        <th rowSpan={3}>No.</th>
+                        <th rowSpan={3}>STT</th>
                         <th rowSpan={3}>TÊN MỐI HÀN</th>
                         <th rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th>
                         <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>
@@ -323,7 +325,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                       {Array.from({ length: Math.max(page.length, MIN_BLANK_ROWS) }, (_, i) => {
                         const row = page[i];
                         const w = row?.du_lieu_chot.moi_han ?? {};
-                        const kt = row?.du_lieu_chot.kiem_tra ?? {};
+                        // Phiếu con chép dữ liệu chốt ở mức ngoài cùng, phiếu cũ để trong kiem_tra — đọc cả hai.
+                        const kt = (row?.du_lieu_chot.kiem_tra ?? row?.du_lieu_chot ?? {}) as NonNullable<typeof row>["du_lieu_chot"]["kiem_tra"] & Record<string, never>;
                         const measurements = (kt.gia_tri_do ?? {}) as Record<string, number | null>;
                         const limits = (row?.du_lieu_chot.tieu_chuan?.dung_sai ?? null) as GeometryLimits | null;
                         const geometry = row
@@ -340,6 +343,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         const right = /^(TP|HP)/i.test(code) ? "✓" : "";
                         const inLimit =
                           geometry ?? (row?.ket_qua === "Đạt" || row?.ket_qua === "Không đạt" ? row.ket_qua : "");
+                        const passed = inLimit === "Đạt";
+                        const hasMeasure = GEOMETRY_CRITERIA.some((k) => measurements[k] != null);
                         return (
                           <tr key={i}>
                             <td>{pageIndex * ROWS_PER_PAGE + i + 1}</td>
@@ -349,10 +354,10 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                             <td>{left}</td>
                             <td>{right}</td>
                             {/* Biên bản chỉ hình học: chưa nghiệm thu siêu âm → để trống cột siêu âm. */}
-                            <td>{str(kt.truc_quan)}</td>
-                            <td>{scope.ultrasound ? str(kt.ket_qua_ndt) : ""}</td>
+                            <td>{str(kt.truc_quan) || (passed ? "Đạt" : "")}</td>
+                            <td>{scope.ultrasound ? str(kt.ket_qua_ndt) || (passed ? "Đạt" : "") : ""}</td>
                             {GEOMETRY_CRITERIA.map((k) => (
-                              <td key={k}>{cellOf(k)}</td>
+                              <td key={k}>{hasMeasure ? cellOf(k) : passed ? "Đạt" : ""}</td>
                             ))}
                             <td>{inLimit}</td>
                             <td />
@@ -380,12 +385,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                           <p style={{ margin: 0 }}>
                             2. Tiêu chuẩn tham chiếu bổ sung cho ray rãnh và các nội dung chưa được quy định chi tiết trong TCVN: CECS 429 : 2016 – Tiêu chuẩn nghiệm thu chất lượng hàn chảy giáp mép ray rãnh cho đường sắt đô thị.
                           </p>
-                          <p style={{ margin: "6px 0 0", fontSize: "7.5px" }}>
+                          <p style={{ margin: "6px 0 0", fontSize: "11px" }}>
                             Ghi chú:<br />
                             (1): Đối với độ thẳng theo phương ngang, dung sai dương (+) sẽ làm tăng khổ đường<br />
                             (2): Đối với độ phẳng mặt lăn, chỉ đo giá trị lớn nhất
                           </p>
-                          <p style={{ margin: "4px 0 0", textAlign: "right" }}>Trang {pageIndex + 1}/{pages.length}</p>
                         </td>
                         <td style={{ padding: 0 }}>
                           <table className="annex-tol">
@@ -449,6 +453,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
             </tbody>
           </table>
+          <p style={{ margin: "3px 2px 0", textAlign: "right", fontSize: "11px" }}>Trang {pageIndex + 1}/{pages.length}</p>
         </PrintFrame>
 </article>
       ));
@@ -461,7 +466,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       const weldNames = codes.length ? codes.join(", ") : "……………………";
       // Tháng / năm tự lấy hiện tại; ngày để trống cho người dùng tự chọn (chọn ở «Sửa thông tin in» thì in đủ ngày).
       const nowDate = new Date();
-      const wp = t.ngay_nghiem_thu ? parts : { d: "……", m: String(nowDate.getMonth() + 1).padStart(2, "0"), y: String(nowDate.getFullYear()) };
+      const wp = acceptanceDate ? parts : { d: "……", m: String(nowDate.getMonth() + 1).padStart(2, "0"), y: String(nowDate.getFullYear()) };
       // Số biên bản: FBW/01/BBNTCV (01 = số thứ tự lấy từ số RFI; sửa được ở «Sửa thông tin in»).
       const seq = /(\d+)\s*$/.exec(String(rfi.so_phieu ?? ""))?.[1];
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
