@@ -347,14 +347,15 @@ const PQ = {
   duAn: "Tuyến tàu điện đô thị đoạn 1", goiThau: "Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray", diaDiem: "Đặc khu Phú Quốc, Tỉnh An Giang", noiLap: "Phú Quốc",
   kinhGui: ["Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc;", "Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North)."],
   chinh: { ten: "Nguyễn Tất Đạt", chucVu: "Chỉ huy trưởng", chuKy: "/chu-ky/chi-huy-truong.jpg", key: "chi-huy-truong" as SignatureKey },
-  phu: { ten: "Nguyễn Văn Trinh", chucVu: "PBĐH", chuKy: "/chu-ky/nha-thau-phu.jpg", key: "nha-thau-phu" as SignatureKey },
+  phu: { ten: "Trần Công Tiến", chucVu: "Chỉ huy trưởng", chuKy: "/chu-ky/nha-thau-phu.jpg", key: "nha-thau-phu" as SignatureKey },
 };
 const DOTS = "……………";
 const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Nhà thầu chính", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
 
 /** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
 function Signer({ title, org, who, ten, chucVu, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; ten?: string; chucVu?: string; signatures: SignatureStore }) {
-  const name = ten?.trim(), role = chucVu?.trim();
+  // Ô nhập tay > mặc định của dự án (Phú Quốc) > không in.
+  const name = ten?.trim() || who?.ten, role = chucVu?.trim() || who?.chucVu;
   return (
     <div className="text-center">
       <p className="font-bold">{title}</p>
