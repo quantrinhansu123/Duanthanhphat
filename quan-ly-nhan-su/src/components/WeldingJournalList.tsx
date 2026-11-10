@@ -97,7 +97,7 @@ import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
 import { loadDayLispCodes } from "@/lib/dayLispCodes";
 import { nextLispCode } from "@/lib/lispSequence";
-import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
+import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, resetToWaitingGrind, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
@@ -1853,6 +1853,15 @@ export default function WeldingJournalList({
   // Lọc theo tên người hàn: gõ tên (một phần) là lọc, trễ ngắn để không gọi máy chủ mỗi phím.
   const [welderDraft, setWelderDraft] = useState("");
   const [welderName, setWelderName] = useState("");
+  // Từ mối … tới mối …: theo số đuôi của Mã hệ thống (vd …-0039 → 39).
+  const [seqFromDraft, setSeqFromDraft] = useState("");
+  const [seqToDraft, setSeqToDraft] = useState("");
+  const [seqFrom, setSeqFrom] = useState("");
+  const [seqTo, setSeqTo] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setSeqFrom(seqFromDraft.replace(/D/g, "")); setSeqTo(seqToDraft.replace(/D/g, "")); }, 450);
+    return () => window.clearTimeout(timer);
+  }, [seqFromDraft, seqToDraft]);
   useEffect(() => {
     const timer = window.setTimeout(() => setWelderName(welderDraft.trim()), 350);
     return () => window.clearTimeout(timer);
@@ -1919,6 +1928,7 @@ export default function WeldingJournalList({
   // Xóa hàng loạt các mối đã tick.
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkResetting, setBulkResetting] = useState(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -2009,6 +2019,8 @@ export default function WeldingJournalList({
       welderName,
       dateFrom,
       dateTo,
+      seqFrom,
+      seqTo,
       qualityStatusFilter,
     };
     setQualityReady(false);
@@ -2049,12 +2061,12 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter, pageSize, reloadToken]);
+  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter, pageSize, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;
     setSelectedQuality(new Map());
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
 
   const welderOptions = personnelWelderOptions;
   const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
@@ -2237,7 +2249,7 @@ export default function WeldingJournalList({
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
+  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -2315,6 +2327,29 @@ export default function WeldingJournalList({
     });
     setFormOpen(true);
     showToast(`Đã quét ${payload.lispCode}. Kiểm tra thông tin rồi bấm Lưu.`);
+  }
+
+  /** Đưa các mối đã tick về «Chờ mài» (xoá ngày mài và kết quả kiểm tra); mối đã nằm trong phiếu hoặc có thanh toán bị từ chối. */
+  async function bulkResetToWaitingGrind() {
+    const entries = [...selectedQuality.values()];
+    if (!entries.length) return;
+    if (!window.confirm(`Đưa ${entries.length} mối về «Chờ mài»?\nNgày mài và mọi kết quả kiểm tra của các mối này sẽ bị xóa. Mối đã nằm trong phiếu nghiệm thu hoặc đã có thanh toán sẽ bị bỏ qua.`)) return;
+    setBulkResetting(true);
+    try {
+      const { results } = await resetToWaitingGrind(entries.map((e) => ({ id: e.id, ma_lich_su: e.ma_lich_su, phien_ban: e.phien_ban })));
+      const failed = results.filter((x) => x.error);
+      const done = new Set(results.filter((x) => !x.error).map((x) => x.id));
+      setSelectedQuality((current) => { const next = new Map(current); for (const id of done) next.delete(id); return next; });
+      refetch();
+      if (failed.length) {
+        const code = (id: string) => displayWeldCode(entries.find((e) => e.id === id)?.ma_lich_su ?? id);
+        window.alert(`${done.size} mối đã về «Chờ mài». ${failed.length} mối chưa đổi được:\n` + failed.slice(0, 5).map((x) => `${code(x.id)}: ${x.error}`).join("\n"));
+      } else showToast(`Đã đưa ${done.size} mối về «Chờ mài».`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không đưa về Chờ mài được.");
+    } finally {
+      setBulkResetting(false);
+    }
   }
 
   function showToast(message: string) {
@@ -2396,6 +2431,8 @@ export default function WeldingJournalList({
           welderName,
           dateFrom,
           dateTo,
+          seqFrom,
+          seqTo,
         })
       )
         .filter((row) => row.cong_nghe_han === "FBW" && row.ngay_thuc_hien)
@@ -2452,6 +2489,8 @@ export default function WeldingJournalList({
         welderName,
         dateFrom,
         dateTo,
+        seqFrom,
+        seqTo,
       };
       const exportRows = qualityReady || qualityStatusFilter !== "Tất cả"
         ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter })).rows
@@ -3172,34 +3211,48 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             {[...new Set(rows.map((row) => row.ten_tho_han).filter(Boolean))].map((name) => <option key={name} value={name} />)}
           </datalist>
         </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
-          Từ ngày
-          <DateField
-            value={dateFrom}
-            onChange={(value) => setDateFrom(dateTo && value > dateTo ? dateTo : value)}
-            className="w-full"
-          />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
-          Đến ngày
-          <DateField
-            value={dateTo}
-            onChange={(value) => setDateTo(dateFrom && value < dateFrom ? dateFrom : value)}
-            className="w-full"
-          />
-        </label>
-        {(dateFrom || dateTo) && (
-          <button
-            type="button"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-            }}
-            className="col-span-2 lg:col-span-1 inline-flex h-10 w-full items-center justify-center self-end rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer sm:text-sm"
-          >
-            Xóa ngày
-          </button>
-        )}
+        <div className="col-span-full grid grid-cols-2 items-end gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Từ mối (số đuôi mã)
+            <input inputMode="numeric" value={seqFromDraft} onChange={(e) => setSeqFromDraft(e.target.value.replace(/D/g, "").slice(0, 5))} placeholder="VD: 39"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Tới mối
+            <input inputMode="numeric" value={seqToDraft} onChange={(e) => setSeqToDraft(e.target.value.replace(/D/g, "").slice(0, 5))} placeholder="VD: 64"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Từ ngày
+            <DateField
+              value={dateFrom}
+              onChange={(value) => setDateFrom(dateTo && value > dateTo ? dateTo : value)}
+              className="w-full"
+            />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Đến ngày
+            <DateField
+              value={dateTo}
+              onChange={(value) => setDateTo(dateFrom && value < dateFrom ? dateFrom : value)}
+              className="w-full"
+            />
+          </label>
+          {(dateFrom || dateTo || seqFromDraft || seqToDraft) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setSeqFromDraft("");
+                setSeqToDraft("");
+              }}
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50"
+            >
+              Xóa ngày / mối
+            </button>
+          )}
+        </div>
        </div>
 
        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
@@ -3255,8 +3308,9 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
           <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
         </div>
-        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Tick các mối rồi bấm Mài xong, Duyệt hình học, Siêu âm / NDT hoặc Xóa hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
+        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Tick các mối rồi bấm Chờ mài, Mài xong, Duyệt hình học, Siêu âm / NDT hoặc Xóa hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading || bulkResetting} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50" onClick={() => void bulkResetToWaitingGrind()} title="Xóa ngày mài và kết quả kiểm tra → Chờ mài (mối chưa vào phiếu / chưa thanh toán)">{bulkResetting ? "Đang đổi…" : "Chờ mài"}</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50" onClick={() => { setBulkQualityKind("grind"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Ghi ngày hoàn thành mài → Mài xong (phát RFI được)">Mài xong</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("visual"); setBulkQualityEntries([...selectedQuality.values()]); }}>Duyệt hình học hàng loạt</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("ndt"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>

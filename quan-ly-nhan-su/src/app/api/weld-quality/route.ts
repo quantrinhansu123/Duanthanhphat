@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
-  loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
+  loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "save") return NextResponse.json({ inspection: await saveWeldQualityInspection(parseQualityInspection(body.inspection, actor)) });
     if (body.action === "mark-pass") return NextResponse.json({ results: await markQualityBatch(body, actor) });
+    if (body.action === "reset-grind") return NextResponse.json({ results: await resetQualityToWaitingGrind(body, actor) });
     if (body.action === "import") return NextResponse.json({ results: await importQualityBatch(body, actor) });
     if (body.action === "rule") return NextResponse.json(await createQualityRuleForWeld(body, actor));
     if (body.action === "rule-sync") return NextResponse.json({ sync: await applyQualityRule(qualityUuid(body.id), actor) });

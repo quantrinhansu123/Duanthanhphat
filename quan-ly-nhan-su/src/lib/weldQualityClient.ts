@@ -87,6 +87,15 @@ export async function markQualityPass(
   }
 }
 
+/** Đưa các mối về «Chờ mài» (xoá ngày mài và kết quả kiểm tra). */
+export async function resetToWaitingGrind(entries: WeldQualityBulkEntry[]) {
+  try {
+    return await qualityRequest<{ results: { id: string; error?: string; phien_ban?: number }[] }>({ action: "reset-grind", entries });
+  } finally {
+    notifyWeldQualityChanged();
+  }
+}
+
 // ---- Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ ----
 import type { AcceptanceDecision, RfiCandidate, RfiCandidateFilter, rfiChildSigning } from "@/lib/weldAcceptance";
 import type { RfiTracking } from "@/lib/rfiTracking";
