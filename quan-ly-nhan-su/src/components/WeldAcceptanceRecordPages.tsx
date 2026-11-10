@@ -46,6 +46,7 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sheet .head-right { width: 28%; font-size: 12px; }
 .acceptance-page .annex { font-size: var(--annex-font, 10px); table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
+.acceptance-page .annex th.serial-heading { white-space: nowrap; }
 .acceptance-page .annex td { height: var(--annex-row, 16px); text-align: center; padding: 0 1px; vertical-align: middle; }
 .acceptance-page .annex td.weld-name { white-space: nowrap; }
 .acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
@@ -213,6 +214,13 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     const acceptanceDate = t.ngay_nghiem_thu || String(record.dot.ngay_nghiem_thu ?? "");
     const parts = dateParts(acceptanceDate || null);
     const day = `${parts.d}/${parts.m}/${parts.y}`;
+    // Ngày ở khung chữ ký cuối: bản sửa riêng từng bên → không có thì lấy ngày nghiệm thu ở trên.
+    const signDate = (info: Record<string, string>, party: string) => {
+      const value = info[`ngay_ky_${party}`] || acceptanceDate;
+      if (!value) return "";
+      const p = dateParts(value);
+      return `${p.d}/${p.m}/${p.y}`;
+    };
     const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
     const codes = rows.map((r) => fieldWeldCode(String(r.du_lieu_chot.moi_han?.ma_lich_su ?? ""), r.du_lieu_chot.moi_han?.ma_hien_truong as string | null | undefined)).filter(Boolean);
@@ -301,7 +309,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                     </colgroup>
                     <thead>
                       <tr>
-                        <th rowSpan={3}>STT</th>
+                        <th rowSpan={3} className="serial-heading">STT</th>
                         <th rowSpan={3}>TÊN MỐI HÀN</th>
                         <th rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th>
                         <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>
@@ -439,7 +447,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                           return (
                             <td key={party}>
                               HỌ VÀ TÊN: {signer.ten}<br /><br />
-                              NGÀY:<br /><br />
+                              NGÀY: {signDate(t, party)}<br /><br />
                               CHỮ KÝ:
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               {signature && <img src={signature} alt="" className="sig-img" />}

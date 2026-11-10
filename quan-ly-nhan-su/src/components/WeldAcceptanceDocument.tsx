@@ -35,7 +35,7 @@ const css = `@media print {
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
 /** Thông tin / thời gian trên mẫu — sửa được ở bản xem trước (để trống = tự lấy từ dữ liệu đã chốt). */
-const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", ...SIGNER_KEYS];
+const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS];
 
 /** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
 const FREE_TEXT_FIELDS: [string, string][] = [
@@ -328,6 +328,17 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                   <label className="block text-xs font-semibold text-slate-700">Vị trí: Km cuối
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="4+087.42" value={form.kmTo ?? ""} onChange={(e) => setForm({ ...form, kmTo: e.target.value })} />
                   </label>
+                  <p className="text-xs font-semibold text-slate-700 sm:col-span-2">Khung chữ ký cuối phụ lục <span className="font-normal text-slate-500">— để trống ngày = lấy ngày nghiệm thu ở trên.</span></p>
+                  {SIGNER_PARTIES.map(([party, label]) => (
+                    <div key={party} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:col-span-2 sm:grid-cols-2">
+                      <label className="block text-xs font-semibold text-slate-600">{label}: họ và tên
+                        <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_1_ten`]: e.target.value })} />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">{label}: ngày
+                        <input type="date" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form[`ngay_ky_${party}`] ?? ""} onChange={(e) => setForm({ ...form, [`ngay_ky_${party}`]: e.target.value })} />
+                      </label>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
