@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Mở app bằng điện thoại qua IP mạng LAN (vd http://192.168.x.x:3010): nếu không khai báo, Next dev chặn (403) các file JS nên trang không tải được. */
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
   experimental: {
     optimizePackageImports: [
       "@phosphor-icons/react",
