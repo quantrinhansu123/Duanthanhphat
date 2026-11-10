@@ -1858,14 +1858,15 @@ export default function WeldingJournalList({
   const [seqToDraft, setSeqToDraft] = useState("");
   const [seqFrom, setSeqFrom] = useState("");
   const [seqTo, setSeqTo] = useState("");
-  useEffect(() => {
-    const timer = window.setTimeout(() => { setSeqFrom(seqFromDraft.replace(/D/g, "")); setSeqTo(seqToDraft.replace(/D/g, "")); }, 450);
-    return () => window.clearTimeout(timer);
-  }, [seqFromDraft, seqToDraft]);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setWelderName(welderDraft.trim()), 350);
-    return () => window.clearTimeout(timer);
-  }, [welderDraft]);
+  // Bộ lọc chỉ chạy khi bấm «Lọc» (đỡ tải lại bảng mỗi lần chọn / gõ): «pending» = đã sửa bộ lọc nhưng chưa bấm Lọc.
+  const [pending, setPending] = useState(false);
+  const pend = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); setPending(true); };
+  function applyFilters() {
+    setWelderName(welderDraft.trim());
+    setSeqFrom(seqFromDraft.replace(/\D/g, ""));
+    setSeqTo(seqToDraft.replace(/\D/g, ""));
+    setPending(false);
+  }
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
   const [qualityStatusSelect, setQualityStatusSelect] = useState("Tất cả");
@@ -1884,6 +1885,17 @@ export default function WeldingJournalList({
   const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("2026-11-04");
   const [dateTo, setDateTo] = useState("");
+  // Bộ lọc đang áp dụng cho bảng: theo dõi bộ lọc tức thời, trừ lúc đang chờ bấm «Lọc» (đóng băng đến khi bấm).
+  const liveFilters = { appliedQuery, projectKey: projectFilter.join("|"), resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter };
+  const [committed, setCommitted] = useState(() => ({ ...liveFilters, projects: projectFilter }));
+  useEffect(() => {
+    if (pending) return;
+    setCommitted((cur) => {
+      const same = (Object.keys(liveFilters) as (keyof typeof liveFilters)[]).every((k) => liveFilters[k] === cur[k]);
+      return same ? cur : { ...liveFilters, projects: projectFilter };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
   const [page, setPage] = useState(1);
   // Số mối hiện mỗi trang (nhớ theo trình duyệt): 50 / 100 / 200 / 500.
   const [pageSize, setPageSizeState] = useState(50);
@@ -2010,18 +2022,18 @@ export default function WeldingJournalList({
     const filters = {
       page,
       pageSize,
-      query: appliedQuery,
-      projects: projectFilter,
-      resultFilter,
-      linkedWeldFilter,
-      weldTypeFilter,
-      weldMethodFilter,
-      welderName,
-      dateFrom,
-      dateTo,
-      seqFrom,
-      seqTo,
-      qualityStatusFilter,
+      query: committed.appliedQuery,
+      projects: committed.projects,
+      resultFilter: committed.resultFilter,
+      linkedWeldFilter: committed.linkedWeldFilter,
+      weldTypeFilter: committed.weldTypeFilter,
+      weldMethodFilter: committed.weldMethodFilter,
+      welderName: committed.welderName,
+      dateFrom: committed.dateFrom,
+      dateTo: committed.dateTo,
+      seqFrom: committed.seqFrom,
+      seqTo: committed.seqTo,
+      qualityStatusFilter: committed.qualityStatusFilter,
     };
     setQualityReady(false);
     const loadPage = async () => {
@@ -2031,7 +2043,7 @@ export default function WeldingJournalList({
         return result;
       } catch (qualityLoadError) {
         if (active) setQualityError(qualityLoadError instanceof Error ? qualityLoadError.message : "Không tải được chất lượng.");
-        if (qualityStatusFilter !== "Tất cả") throw qualityLoadError;
+        if (committed.qualityStatusFilter !== "Tất cả") throw qualityLoadError;
         return loadWeldJournalPage(filters);
       }
     };
@@ -2061,12 +2073,12 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter, pageSize, reloadToken]);
+  }, [page, committed, pageSize, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;
     setSelectedQuality(new Map());
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
+  }, [committed]);
 
   const welderOptions = personnelWelderOptions;
   const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
@@ -2249,7 +2261,7 @@ export default function WeldingJournalList({
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
+  }, [committed]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -2422,17 +2434,17 @@ export default function WeldingJournalList({
       const { fillAppendix5Fbw, APPENDIX5_MAX_ROWS } = await import("@/lib/fillAppendix5Fbw");
       const exportRows = (
         await exportFilteredWeldJournal({
-          query: appliedQuery,
-          projects: projectFilter,
-          resultFilter,
-          linkedWeldFilter,
-          weldTypeFilter,
+          query: committed.appliedQuery,
+          projects: committed.projects,
+          resultFilter: committed.resultFilter,
+          linkedWeldFilter: committed.linkedWeldFilter,
+          weldTypeFilter: committed.weldTypeFilter,
           weldMethodFilter: "FBW",
-          welderName,
-          dateFrom,
-          dateTo,
-          seqFrom,
-          seqTo,
+          welderName: committed.welderName,
+          dateFrom: committed.dateFrom,
+          dateTo: committed.dateTo,
+          seqFrom: committed.seqFrom,
+          seqTo: committed.seqTo,
         })
       )
         .filter((row) => row.cong_nghe_han === "FBW" && row.ngay_thuc_hien)
@@ -2480,20 +2492,20 @@ export default function WeldingJournalList({
     setExporting(true);
     try {
       const exportFilters = {
-        query: appliedQuery,
-        projects: projectFilter,
-        resultFilter,
-        linkedWeldFilter,
-        weldTypeFilter,
-        weldMethodFilter,
-        welderName,
-        dateFrom,
-        dateTo,
-        seqFrom,
-        seqTo,
+        query: committed.appliedQuery,
+        projects: committed.projects,
+        resultFilter: committed.resultFilter,
+        linkedWeldFilter: committed.linkedWeldFilter,
+        weldTypeFilter: committed.weldTypeFilter,
+        weldMethodFilter: committed.weldMethodFilter,
+        welderName: committed.welderName,
+        dateFrom: committed.dateFrom,
+        dateTo: committed.dateTo,
+        seqFrom: committed.seqFrom,
+        seqTo: committed.seqTo,
       };
-      const exportRows = qualityReady || qualityStatusFilter !== "Tất cả"
-        ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter })).rows
+      const exportRows = qualityReady || committed.qualityStatusFilter !== "Tất cả"
+        ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter: committed.qualityStatusFilter })).rows
         : await exportFilteredWeldJournal(exportFilters);
 
       const gpsByWeldId = new Map(
@@ -3082,7 +3094,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               role="tab"
               aria-selected={stage === s.id}
               title={s.hint}
-              onClick={() => { setStage(s.id); setPage(1); }}
+              onClick={() => { setStage(s.id); setPage(1); applyFilters(); }}
               className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition-colors cursor-pointer sm:min-h-10 sm:rounded-lg sm:px-4 sm:text-sm ${
                 stage === s.id ? "bg-[#0047AB] text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
               }`}
@@ -3142,7 +3154,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Dự án
           <MultiSelectMenu
             values={projectFilter}
-            onChange={setProjectFilter}
+            onChange={pend(setProjectFilter)}
             options={projects.map((p) => ({ value: p, label: p }))}
             allLabel="Tất cả dự án"
             closeOnSelect
@@ -3156,7 +3168,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             Kết quả NDT (lịch sử)
             <SelectMenu
               value={resultFilter}
-              onChange={setResultFilter}
+              onChange={pend(setResultFilter)}
               options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
               disabled={Boolean(lockedResultFilter)}
               className="mt-1"
@@ -3172,7 +3184,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Mối liên kết
           <SelectMenu
             value={linkedWeldFilter}
-            onChange={setLinkedWeldFilter}
+            onChange={pend(setLinkedWeldFilter)}
             options={["Tất cả", "Có liên kết", "Chưa liên kết"].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3182,7 +3194,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Loại mối hàn
           <SelectMenu
             value={weldTypeFilter}
-            onChange={setWeldTypeFilter}
+            onChange={pend(setWeldTypeFilter)}
             options={["Tất cả", ...WELD_TYPE_OPTIONS].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3192,7 +3204,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Công nghệ hàn
           <SelectMenu
             value={weldMethodFilter}
-            onChange={setWeldMethodFilter}
+            onChange={pend(setWeldMethodFilter)}
             options={["Tất cả", "FBW", "ATW"].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3203,7 +3215,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <input
             list="journal-welder-names"
             value={welderDraft}
-            onChange={(event) => setWelderDraft(event.target.value)}
+            onChange={(event) => { setWelderDraft(event.target.value); setPending(true); }}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             placeholder="VD: Trần Công Tiến"
             className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
           />
@@ -3214,19 +3227,19 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         <div className="col-span-full grid grid-cols-2 items-end gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
             Từ mối (số đuôi mã)
-            <input inputMode="numeric" value={seqFromDraft} onChange={(e) => setSeqFromDraft(e.target.value.replace(/D/g, "").slice(0, 5))} placeholder="VD: 39"
+            <input inputMode="numeric" value={seqFromDraft} onChange={(e) => { setSeqFromDraft(e.target.value.replace(/\D/g, "").slice(0, 5)); setPending(true); }} onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }} placeholder="VD: 39"
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
             Tới mối
-            <input inputMode="numeric" value={seqToDraft} onChange={(e) => setSeqToDraft(e.target.value.replace(/D/g, "").slice(0, 5))} placeholder="VD: 64"
+            <input inputMode="numeric" value={seqToDraft} onChange={(e) => { setSeqToDraft(e.target.value.replace(/\D/g, "").slice(0, 5)); setPending(true); }} onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }} placeholder="VD: 64"
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
             Từ ngày
             <DateField
               value={dateFrom}
-              onChange={(value) => setDateFrom(dateTo && value > dateTo ? dateTo : value)}
+              onChange={(value) => { setDateFrom(dateTo && value > dateTo ? dateTo : value); setPending(true); }}
               className="w-full"
             />
           </label>
@@ -3234,7 +3247,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             Đến ngày
             <DateField
               value={dateTo}
-              onChange={(value) => setDateTo(dateFrom && value < dateFrom ? dateFrom : value)}
+              onChange={(value) => { setDateTo(dateFrom && value < dateFrom ? dateFrom : value); setPending(true); }}
               className="w-full"
             />
           </label>
@@ -3246,12 +3259,24 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                 setDateTo("");
                 setSeqFromDraft("");
                 setSeqToDraft("");
+                setSeqFrom("");
+                setSeqTo("");
+                setPending(false);
               }}
               className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50"
             >
               Xóa ngày / mối
             </button>
           )}
+          <button
+            type="button"
+            onClick={applyFilters}
+            title="Áp dụng các bộ lọc đã chọn cho bảng"
+            className={`inline-flex h-10 w-full items-center justify-center rounded-lg px-3 text-sm font-semibold shadow-2xs ${pending ? "bg-[#0047AB] text-white hover:bg-[#003a8c]" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+          >
+            {pending ? "Lọc •" : "Lọc"}
+          </button>
+
         </div>
        </div>
 
