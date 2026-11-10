@@ -186,7 +186,12 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" onClick={() => setSigOpen((v) => !v)} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Chữ ký</button>
         ) : null}
         {hoSo && (
-          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ...Object.fromEntries(PRINT_INFO_KEYS.map((k) => [k, String(latest?.thong_tin[k] ?? loadSignerDefaults()[k] ?? "")])), ly_do: "" }); setEditing((v) => !v); }}
+          <button type="button" onClick={() => { setForm({ dia_diem: String(latest?.thong_tin.dia_diem ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.dia_diem ?? "")), thanh_phan: String(latest?.thong_tin.thanh_phan ?? ((record?.dot.thong_tin as Record<string, string> | undefined)?.thanh_phan ?? "")), ...Object.fromEntries(FREE_TEXT_FIELDS.map(([k]) => [k, String(latest?.thong_tin[k] ?? "")])), ...Object.fromEntries(PRINT_INFO_KEYS.map((k) => {
+            const saved = latest?.thong_tin[k];
+            if (saved) return [k, String(saved)];
+            if (k === "ngay_nghiem_thu") return [k, String(record?.dot.ngay_nghiem_thu ?? "").slice(0, 10)];
+            return [k, String(loadSignerDefaults()[k] ?? "")];
+          })), ly_do: "" }); setEditing((v) => !v); }}
             className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">Sửa thông tin in</button>
         )}
         {kind === "rfi" ? (
