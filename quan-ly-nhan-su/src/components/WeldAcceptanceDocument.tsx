@@ -353,7 +353,8 @@ const DOTS = "……………";
 const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Nhà thầu chính", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
 
 /** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
-function Signer({ title, org, who, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; signatures: SignatureStore }) {
+function Signer({ title, org, who, ten, chucVu, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; ten?: string; chucVu?: string; signatures: SignatureStore }) {
+  const name = ten?.trim(), role = chucVu?.trim();
   return (
     <div className="text-center">
       <p className="font-bold">{title}</p>
@@ -363,7 +364,7 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {who && signatures[who.key] && <img key={signatures[who.key]} src={signatures[who.key]} alt="" className="block h-20 w-auto max-w-full object-contain" />}
       </div>
-      <p className="italic"><b>Tên:</b> {who?.ten ?? DOTS} &nbsp;<b>Chức vụ:</b> {who?.chucVu ?? DOTS}</p>
+      {(name || role) && <p className="italic">{name && <><b>Tên:</b> {name}</>}{name && role && <>&nbsp;</>}{role && <><b>Chức vụ:</b> {role}</>}</p>}
     </div>
   );
 }
@@ -371,7 +372,7 @@ function Signer({ title, org, who, signatures }: { title: string; org: string; w
 /** Các mục nhập tay được lưu theo phiếu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km). */
 const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
 const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
-type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan", string>>;
+type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan" | "ntp_ten" | "ntp_chuc_vu" | "ntc_ten" | "ntc_chuc_vu", string>>;
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
   ["so_phieu", "Số phiếu", "text", "007/PYC-HR"],
   ["ngay_lap", "Ngày lập phiếu", "date", ""],
@@ -386,6 +387,11 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["hang_muc", "Hạng mục", "text", ""],
   ["nguoi_nhan", "Người nhận (TVGS)", "text", ""],
   ["chuc_vu_nhan", "Chức vụ người nhận", "text", "Tư vấn giám sát trưởng"],
+  // 4 ô dưới: để trống thì không in dòng tương ứng ở khối ký.
+  ["ntp_ten", "Nhà thầu phụ — tên", "text", ""],
+  ["ntp_chuc_vu", "Nhà thầu phụ — chức vụ", "text", ""],
+  ["ntc_ten", "Nhà thầu chính — tên", "text", ""],
+  ["ntc_chuc_vu", "Nhà thầu chính — chức vụ", "text", ""],
   ["kinh_gui", "Kính gửi (mỗi dòng một bên)", "textarea", ""],
   ["doi_tuong", "Đối tượng nghiệm thu (mỗi dòng một mục, thay toàn bộ mục 1)", "textarea", ""],
 ];
@@ -457,8 +463,8 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
         <p className="mt-2 text-justify">- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu các công việc đề nghị nêu trên để nhà thầu triển khai các công việc tiếp theo.</p>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} signatures={signatures} />
-        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} signatures={signatures} />
+        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} ten={o.ntp_ten} chucVu={o.ntp_chuc_vu} signatures={signatures} />
+        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} ten={o.ntc_ten} chucVu={o.ntc_chuc_vu} signatures={signatures} />
       </div>
       <table className="mt-3 w-full border-collapse border border-black">
         <tbody>
