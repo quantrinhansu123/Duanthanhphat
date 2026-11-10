@@ -221,7 +221,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       const p = dateParts(value);
       return `${p.d}/${p.m}/${p.y}`;
     };
-    const location = t.dia_diem || (pq ? "Đặc khu Phú Quốc, Tỉnh An Giang" : "");
+    // Địa điểm là nơi thi công; lý trình đã có ở mục Vị trí nên không in lại ở đây (kể cả dữ liệu cũ nhập «Lý trình …»).
+    const location = (t.dia_diem && !/^s*lý trình/i.test(t.dia_diem) ? t.dia_diem : "") || (pq ? "Phú Quốc - An Giang" : "");
     const packageName = t.goi_thau || (pq ? "Gói thầu XL-03: Cung cấp và thi công lắp đặt hệ thống ray" : "");
     const codes = rows.map((r) => fieldWeldCode(String(r.du_lieu_chot.moi_han?.ma_lich_su ?? ""), r.du_lieu_chot.moi_han?.ma_hien_truong as string | null | undefined)).filter(Boolean);
     const pointRows = rows.map((r) => r.du_lieu_chot.moi_han ?? {});
