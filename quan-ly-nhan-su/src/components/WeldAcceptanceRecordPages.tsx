@@ -10,7 +10,7 @@ import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type Ge
 
 export type RecordKind = "phu-luc" | "giai-doan" | "hoan-thanh";
 export const ACCEPTANCE_DOCS: { kind: RecordKind; loai: string; title: string }[] = [
-  { kind: "phu-luc", loai: "Phụ lục công việc", title: "BIÊN BẢN NGHIỆM THU MỐI HÀN CHẢY GIÁP MÉP" },
+  { kind: "phu-luc", loai: "Phụ lục công việc", title: "PHỤ LỤC BIÊN BẢN NGHIỆM THU MỐI HÀN CHẢY GIÁP MÉP" },
   { kind: "giai-doan", loai: "Giai đoạn xây dựng", title: "BIÊN BẢN NGHIỆM THU CÔNG VIỆC XÂY DỰNG" },
   { kind: "hoan-thanh", loai: "Hoàn thành công việc", title: "BIÊN BẢN NGHIỆM THU HOÀN THÀNH GIAI ĐOẠN THI CÔNG" },
 ];
@@ -268,7 +268,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>RFI/ ITR No:</b> {show(String(rfi.so_phieu ?? "").replace(/-(HH|SA)$/i, ""))}</td>
+                        <td colSpan={2}><b>PYC số:</b> {show(rfi.so_phieu)}</td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>
