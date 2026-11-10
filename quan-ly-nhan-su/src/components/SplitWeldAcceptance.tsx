@@ -143,19 +143,25 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
     setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
   }
-  /** Trực quan Đạt hàng loạt cho các mối chưa đủ điều kiện của phiếu hình học (ô sai số trống tự điền mức tối đa). */
-  async function passVisual() {
+  /** «Đạt hàng loạt»: phiếu hình học tự ghi trực quan Đạt cho mối đã tick còn thiếu điều kiện (ô sai số trống tự điền mức tối đa), rồi đặt kết quả Đạt. */
+  async function passPicked() {
     if (!detail) return;
-    const targets = detail.items.filter((i) => !i.ket_qua && !i.current?.co_the_dat);
-    if (!targets.length) { setError("Các mối đã đủ điều kiện chọn Đạt."); return; }
-    if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối (ngày ${date})?\nÔ sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
-    const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
-    const failed = response.results.filter((r) => r.error);
-    const next = await request<Detail>("split-detail", { id: detail.ticket.id });
-    setDetail(next);
-    // Mối vừa đủ điều kiện → đặt sẵn Đạt.
-    setResults((prev) => { const out = { ...prev }; for (const i of next.items) if (!i.ket_qua && i.current?.co_the_dat && !out[i.moi_han_id]?.ket_qua) out[i.moi_han_id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
-    if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+    setError("");
+    const chosen = new Set(picked);
+    let items = detail.items;
+    const targets = kind === "hinh-hoc" ? items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !i.current?.co_the_dat) : [];
+    if (targets.length) {
+      if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
+Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
+      const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
+      const failed = response.results.filter((r) => r.error);
+      const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+      setDetail(next);
+      items = next.items;
+      if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+    }
+    const ready = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && (kind !== "hinh-hoc" || i.current?.co_the_dat)).map((i) => i.moi_han_id);
+    setResults((prev) => { const out = { ...prev }; for (const id of ready) out[id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
   }
   /** Đặt kết quả cho các mối đã tick ("" = xoá kết quả). Không đạt cần lý do. */
   function bulkSet(value: "Đạt" | "Không đạt" | "") {
@@ -507,11 +513,10 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           <button type="button" className={button} disabled={busy} onClick={() => setPicked(pendingItems.map(i => i.moi_han_id))}>Tick tất cả</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => setPicked([])}>Bỏ tick</button>
           <span className="text-slate-600">Đã tick {picked.length}</span>
-          <button type="button" className={primary} disabled={busy || !picked.length} onClick={() => bulkSet("Đạt")} title="Đặt kết quả Đạt cho các mối đã tick (tự ghi kiểm tra khi chốt)">Đạt hàng loạt</button>
+          <button type="button" className={primary} disabled={busy || !picked.length} onClick={() => run(passPicked)} title="Đặt kết quả Đạt cho các mối đã tick; phiếu hình học tự ghi trực quan Đạt cho mối còn thiếu điều kiện">Đạt hàng loạt</button>
           <input aria-label="Lý do không đạt hàng loạt" placeholder="Lý do (cho Không đạt hàng loạt)" className={field + " min-w-0 flex-1"} value={bulkReason} onChange={e => setBulkReason(e.target.value)} />
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("Không đạt")}>Không đạt hàng loạt</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("")}>Xoá kết quả</button>
-          {kind === "hinh-hoc" && <button type="button" className={button} disabled={busy} onClick={() => run(passVisual)} title="Ghi trực quan Đạt ngay cho các mối chưa đủ điều kiện, ô sai số trống tự điền mức tối đa">Điền trực quan đạt</button>}
         </div>}
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-[640px] border-collapse text-left text-sm">

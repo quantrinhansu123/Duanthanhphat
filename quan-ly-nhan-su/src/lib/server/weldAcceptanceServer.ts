@@ -337,18 +337,26 @@ async function childSigningByRfi(parentIds: string[]) {
 }
 
 /** Nội dung in nhập tay của phiếu yêu cầu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km) — lưu theo phiếu, dùng chung mọi máy. */
-const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const values = object(body.values ?? {});
-  const { data: existing, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("thong_tin").eq("id", id).single();
-  if (error) throw error;
-  const thong_tin: Record<string, unknown> = { ...(existing.thong_tin ?? {}) };
+  // Phiếu in có thể là RFI cha (tab 1) hoặc phiếu hình học / siêu âm (tab 2, 3): lưu vào đúng bảng của phiếu.
+  let table: "phieu_yeu_cau_nghiem_thu" | "phieu_nt_tach" = "phieu_yeu_cau_nghiem_thu";
+  let found = await db().from(table).select("thong_tin").eq("id", id).maybeSingle();
+  if (found.error) throw found.error;
+  if (!found.data) {
+    table = "phieu_nt_tach";
+    found = await db().from(table).select("thong_tin").eq("id", id).maybeSingle();
+    if (found.error) throw found.error;
+    if (!found.data) throw new QualityApiError("Không tìm thấy phiếu để lưu.", 404);
+  }
+  const thong_tin: Record<string, unknown> = { ...(found.data.thong_tin ?? {}) };
   for (const key of PRINT_INFO_KEYS) {
     const value = str(values[key], 2000);
     if (value) thong_tin[`in_${key}`] = value; else delete thong_tin[`in_${key}`];
   }
-  const { error: updateError } = await db().from("phieu_yeu_cau_nghiem_thu").update({ thong_tin }).eq("id", id);
+  const { error: updateError } = await db().from(table).update({ thong_tin }).eq("id", id);
   if (updateError) throw updateError;
   return { id };
 }
@@ -821,7 +829,10 @@ async function saveSplitInfo(id: string, value: unknown) {
   if (value == null) return;
   const info = object(value);
   const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
-  const thong_tin = { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
+  // Giữ nội dung in đã sửa (in_*) khi cập nhật thông tin phiếu.
+  const current = await db().from("phieu_nt_tach").select("thong_tin").eq("id", id).maybeSingle();
+  const kept = Object.fromEntries(Object.entries(object(current.data?.thong_tin ?? {})).filter(([k]) => k.startsWith("in_")));
+  const thong_tin = { ...kept, dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
     gio_bat_dau: str(info.gio_bat_dau, 10),
     // Không chọn tuyến → bỏ khoá để phiếu tự xác định tuyến theo mã điểm của mối.
     ...(flag(info.tuyen_thuong) || flag(info.tuyen_ha) ? { tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha) } : {}) };

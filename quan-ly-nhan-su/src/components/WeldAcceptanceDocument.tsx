@@ -209,7 +209,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       )}
       {kind === "rfi" && view.rfi && rfiEditOpen && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
-          <p className="text-xs text-slate-600">Sửa giá trị trên phiếu trước khi in. Để trống = tự lấy theo dữ liệu. Nội dung sửa được nhớ cho phiếu này trên máy này.</p>
+          <p className="text-xs text-slate-600">Sửa giá trị trên phiếu trước khi in. Để trống = tự lấy theo dữ liệu. Nội dung sửa được lưu vào hệ thống theo phiếu, dùng lâu dài trên mọi máy.</p>
           <div className="grid gap-2 sm:grid-cols-3">
             {RFI_OVERRIDE_FIELDS.map(([key, label, type, placeholder]) => (
               <label key={key} className={`block text-xs font-semibold text-slate-700 ${type === "textarea" ? "sm:col-span-3" : ""}`}>{label}
@@ -386,8 +386,8 @@ function Signer({ title, org, who, ten, chucVu, signatures }: { title: string; o
   );
 }
 
-/** Các mục nhập tay được lưu theo phiếu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km). */
-const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+/** Mọi mục sửa ở «Sửa nội dung in» được lưu vào CSDL theo phiếu (dùng lâu dài, mọi máy). */
+const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
 type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan" | "ntp_ten" | "ntp_chuc_vu" | "ntc_ten" | "ntc_chuc_vu", string>>;
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [

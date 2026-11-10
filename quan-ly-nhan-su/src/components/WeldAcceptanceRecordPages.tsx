@@ -125,6 +125,11 @@ const timeText = (v: unknown) => {
 const labels = ["TƯ VẤN GIÁM SÁT", "NHÀ THẦU CHÍNH", "NHÀ THẦU PHỤ"];
 const PARTY_KEYS = SIGNER_PARTIES.map(([key]) => key);
 
+/** Số phiếu như in trên phiếu YCNT: bỏ chữ «RFI-» ở đầu, giữ đuôi -HH / -SA (vd 004-HH). */
+function pycNumber(rfi: Record<string, unknown>) {
+  return String(rfi.so_phieu ?? "").replace(/^RFI-/i, "");
+}
+
 /** Ảnh chữ ký trong hồ sơ Nhân sự theo tên (đã chuẩn hoá); tải một lần rồi dùng lại. */
 function usePersonSignatures() {
   const [map, setMap] = useState<Map<string, string>>(new Map());
@@ -277,7 +282,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>PYC số:</b> {show(rfi.so_phieu)}</td>
+                        <td colSpan={2}><b>PYC số:</b> {show(pycNumber(rfi))}</td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>
