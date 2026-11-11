@@ -698,61 +698,7 @@ function WorkFormModal({
     setFilling(false);
   }, [open, currentDuAnId]);
 
-  useEffect(() => {
-    if (!open || phan !== "hom_nay") return;
-    const type = matchWorkType(workTypes, form.hangMuc);
-    const method = workTypeWeldMethod(type);
-    if (!method || !type) return;
-    const date = reportDate.trim() || todayIsoLocal();
-    let cancelled = false;
-    setFilling(true);
-    setError("");
-    void loadDailyWorkFillFromJournal(date, method, projectId || undefined, type)
-      .then((filled) => {
-        if (cancelled) return;
-        setForm((current) =>
-          applyJournalFill(
-            {
-              ...emptyWorkInput(type),
-              hangMuc: current.hangMuc || type.ten,
-              congViecId: type.id,
-              tuyenHa: current.tuyenHa,
-              tuyenThuong: current.tuyenThuong,
-              cht: current.cht,
-              kySu: current.kySu,
-              laiMay: current.laiMay,
-              thoVanHanh: current.thoVanHanh,
-              congNhan: current.congNhan,
-              vnr: current.vnr,
-              chtTen: current.chtTen,
-              kySuTen: current.kySuTen,
-              laiMayTen: current.laiMayTen,
-              thoVanHanhTen: current.thoVanHanhTen,
-              congNhanTen: current.congNhanTen,
-              vnrTen: current.vnrTen,
-              mayChay: current.mayChay,
-            },
-            filled,
-            personnel,
-          ),
-        );
-        setFillNote(
-          filled.entryCount > 0
-            ? `Đã điền ${filled.homNay || 0} mối · ${filled.entryCount} bản ghi Nhật ký hàn (${method}) ngày ${displayDate(date)}.`
-            : `Không có bản ghi Nhật ký hàn ${method} ngày ${displayDate(date)}.`,
-        );
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Không lấy được Nhật ký hàn");
-      })
-      .finally(() => {
-        if (!cancelled) setFilling(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, phan, form.hangMuc, reportDate, workTypes, projectId, personnel]);
+  // Đã tắt tự điền khi chọn hạng mục: bấm «Điền từ Nhật ký hàn» hoặc dùng «Tạo báo cáo» theo ngày để lấy dữ liệu.
 
   // Nhân lực tự điền theo Ngày + Dự án: ưu tiên báo cáo gần nhất trước ngày này (cùng dự án, hạng mục);
   // chưa có thì lấy nhân sự đã gán cho dự án, mỗi người tự xếp đúng vai trò theo chức vụ.
@@ -1650,29 +1596,53 @@ export default function DailyWorkReport() {
     void reloadList();
   }, [reloadList]);
 
-  // Phiếu chưa gắn dự án: nếu Nhật ký hàn của ngày đó chỉ có 1 dự án thì tự gắn dự án đó.
-  const projectInferred = useRef(new Set<string>());
-  useEffect(() => {
-    if (loading || !header || header.duAnId || workToday.length === 0) return;
-    if (projectInferred.current.has(header.id)) return;
-    projectInferred.current.add(header.id);
-    let cancelled = false;
-    void (async () => {
-      const ids = new Set<string>();
+  // Đã tắt tự gắn dự án: dự án được gắn khi bấm «Tạo báo cáo» hoặc chọn tay.
+
+  const [creating, setCreating] = useState(false);
+
+  /**
+   * Chế độ tạo báo cáo theo ngày: chọn ngày rồi bấm «Tạo báo cáo» thì tạo các công việc hôm nay
+   * của đúng ngày đã chọn (lấy từ Nhật ký hàn của ngày đó, theo từng công nghệ hàn). Không còn tự tạo khi mở trang.
+   */
+  async function createReportForDate() {
+    const date = reportDate;
+    if (!date) { showToast("Chọn ngày báo cáo trước."); return; }
+    setCreating(true);
+    try {
+      const projects = new Set<string>();
       for (const method of ["ATW", "FBW"] as const) {
-        const id = await singleProjectOnDate(reportDate, method);
-        if (id) ids.add(id);
+        const id = await singleProjectOnDate(date, method);
+        if (id) projects.add(id);
       }
-      if (cancelled || ids.size !== 1) return;
-      try {
-        const next = await ensureDailyReportProject(reportDate, [...ids][0]);
-        if (cancelled) return;
-        setHeader(next);
-        void reloadList();
-      } catch { /* không gắn được thì để chọn tay */ }
-    })();
-    return () => { cancelled = true; };
-  }, [loading, header, workToday.length, reportDate, reloadList]);
+      const projectId = linkedProjectId || (projects.size === 1 ? [...projects][0] : "");
+      if (!projectId) {
+        showToast(projects.size > 1 ? "Ngày này có mối hàn của nhiều dự án: chọn dự án cho phiếu trước khi tạo." : "Nhật ký hàn ngày này chưa có mối hàn nào để tạo báo cáo.");
+        return;
+      }
+      let created = 0, existing = 0;
+      for (const type of workTypes) {
+        const method = workTypeWeldMethod(type);
+        if (!method) continue;
+        const filled = await loadDailyWorkFillFromJournal(date, method, projectId, type);
+        if (!(filled.entryCount > 0)) continue;
+        if (workToday.some((w) => w.congViecId === type.id || w.hangMuc === type.ten)) { existing += 1; continue; }
+        const input = applyJournalFill({ ...emptyWorkInput(type), hangMuc: type.ten, congViecId: type.id }, filled, personnel);
+        await insertWorkItem(date, "hom_nay", input, null, projectId, workToday.length + created);
+        created += 1;
+      }
+      await ensureDailyReportProject(date, projectId).then(setHeader).catch(() => undefined);
+      await reload(date);
+      void reloadList();
+      const label = date.split("-").reverse().join("/");
+      showToast(created > 0
+        ? `Đã tạo ${created} công việc cho ngày ${label}.${existing ? ` ${existing} công việc đã có sẵn nên giữ nguyên.` : ""}`
+        : existing > 0 ? `Ngày ${label} đã có đủ công việc, không tạo thêm.` : `Nhật ký hàn ngày ${label} chưa có công việc hàn để tạo.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không tạo được báo cáo.");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const autoFilledDates = useRef(new Set<string>());
 
@@ -1941,7 +1911,7 @@ export default function DailyWorkReport() {
         <div>
           <h1 className="text-base sm:text-lg font-bold text-slate-900">Báo cáo công việc ngày</h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            Mỗi dòng là một ngày đã báo cáo. Nhấn Thêm mới để nhập công việc, thiết bị hoặc sự cố. Báo cáo ảnh nằm tab bên cạnh — in kèm nhau.
+            Chọn ngày rồi bấm «Tạo báo cáo» để tạo các công việc của đúng ngày đó từ Nhật ký hàn (không còn tự tạo). Mỗi dòng bên dưới là một ngày đã báo cáo; nhấn Thêm phiếu mới để nhập thêm công việc, thiết bị hoặc sự cố. Báo cáo ảnh nằm tab bên cạnh — in kèm nhau.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-600 shadow-xs sm:flex sm:flex-wrap sm:items-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
@@ -1954,6 +1924,14 @@ export default function DailyWorkReport() {
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-hidden focus:ring-2 focus:ring-[#0047ab]/25 sm:w-auto"
             />
           </label>
+          <button
+            type="button"
+            disabled={creating}
+            onClick={() => void createReportForDate()}
+            className="col-span-2 h-10 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white hover:bg-[#00388A] disabled:opacity-60 cursor-pointer"
+          >
+            {creating ? "Đang tạo…" : "Tạo báo cáo ngày này"}
+          </button>
           <button
             type="button"
             onClick={() => setReportDate(todayIsoLocal())}
