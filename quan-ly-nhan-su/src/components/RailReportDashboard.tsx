@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Printer } from "@/components/icons";
-import RailReportPrint, { type RailReportPrintPayload } from "@/components/RailReportPrint";
+import RailReportPrint, { type RailReportPair, type RailReportPrintPayload, type RailReportPrintRow } from "@/components/RailReportPrint";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/lib/weldReportData";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { createClient } from "@/lib/supabase/client";
-import { clearWeldPayments, loadRfis, loadTicketWelds, loadWeldPayments, saveWeldPayments, type RfiSummary, type WeldPayment } from "@/lib/weldQualityClient";
+import { clearWeldPayments, exportQualityJournal, loadRfis, loadTicketWelds, loadWeldPayments, saveWeldPayments, type RfiSummary, type WeldPayment } from "@/lib/weldQualityClient";
 
 /** Một dòng trong mẫu "Báo cáo ray": mỗi mối hàn là một thanh ray. */
 type RailRow = {
@@ -26,6 +26,7 @@ type RailRow = {
   chieuDai: string;    // Chiều dài thanh ray (mm)
   tinhTrang: string;
   ghiChu: string;
+  route: string;
   daNghiemThu: boolean;
   thanhToan: string; // tỷ lệ đã thanh toán, VD "50%" ("—" nếu chưa)
   thanhToanGhiChu: string;
@@ -98,6 +99,24 @@ export default function RailReportDashboard() {
   // Bỏ bản ghi rác: không có mã hiện trường lẫn mã thiết kế thì không xác định được là thanh ray nào.
   const baseRows = useMemo(() => filterWeldReportRows(phuQuocRows, { ...appliedFilters, projects: [] })
     .filter((row) => (row.ma_hien_truong ?? "").trim() || (row.ma_diem ?? "").trim()), [phuQuocRows, appliedFilters]);
+
+  // Tình trạng theo đúng Nhật ký hàn («Tình trạng chất lượng»): bảng báo cáo chung không có cột này nên lấy từ Nhật ký hàn.
+  const [qualityById, setQualityById] = useState<Map<string, string>>(new Map());
+  const qualityProject = baseRows[0]?.du_an;
+  const [qualityReload, setQualityReload] = useState(0);
+  useEffect(() => {
+    const reload = () => setQualityReload((n) => n + 1);
+    window.addEventListener("weld-quality-changed", reload);
+    return () => window.removeEventListener("weld-quality-changed", reload);
+  }, []);
+  useEffect(() => {
+    if (!qualityProject) return;
+    let active = true;
+    exportQualityJournal({ page: 1, projects: [qualityProject], qualityStatusFilter: "Tất cả" })
+      .then((r) => { if (active) setQualityById(new Map(r.rows.filter((x) => x.tinh_trang_chat_luong).map((x) => [x.id, x.tinh_trang_chat_luong as string]))); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [qualityProject, qualityReload]);
 
   // Thanh toán theo mối hàn (chỉ mối đã nghiệm thu Đạt mới ghi được).
   const [payments, setPayments] = useState<Map<string, WeldPayment>>(new Map());
@@ -181,9 +200,9 @@ export default function RailReportDashboard() {
           lyTrinhCuoi,
           ngayHan: formatDateShortEn(getJournalRowDateIso(row)),
           chieuDai: lengthMm === null ? "—" : String(lengthMm),
-          tinhTrang: statusLabel(row),
+          tinhTrang: qualityById.get(row.id) ?? statusLabel(row),
           ghiChu: (row.ghi_chu ?? "").trim() || "—",
-          daNghiemThu: row.tinh_trang_chat_luong === "Đạt",
+          daNghiemThu: (qualityById.get(row.id) ?? row.tinh_trang_chat_luong) === "Đạt",
           thanhToan: payments.get(row.id) ? `${payments.get(row.id)!.ty_le}%` : "—",
           thanhToanGhiChu: payments.get(row.id)?.ghi_chu ?? "",
           route,
@@ -204,7 +223,7 @@ export default function RailReportDashboard() {
       .sort((a, b) => (a.seq === b.seq ? 0 : a.seq === Number.MAX_SAFE_INTEGER ? 1 : b.seq === Number.MAX_SAFE_INTEGER ? -1 : a.iso.localeCompare(b.iso) || a.seq - b.seq)
         || chainageSortKey(a.lyTrinh) - chainageSortKey(b.lyTrinh) || a.maLisp.localeCompare(b.maLisp, "vi"))
       .map(({ iso: _iso, seq: _seq, ...rest }) => rest);
-  }, [baseRows, endChainages, search, routeFilter, payments]);
+  }, [baseRows, endChainages, search, routeFilter, payments, qualityById]);
 
   const routeOptions = useMemo(() => {
     const found = new Set<string>();
@@ -227,15 +246,18 @@ export default function RailReportDashboard() {
   }, [projectId]);
   const summary = useMemo(() => {
     const welded = baseRows.filter((r) => r.loai_moi_han !== "Chấp thuận");
-    const accepted = welded.filter((r) => r.tinh_trang_chat_luong === "Đạt").length;
+    const accepted = welded.filter((r) => (qualityById.get(r.id) ?? r.tinh_trang_chat_luong) === "Đạt").length;
+    const weldDays = new Set(welded.map((r) => getJournalRowDateIso(r).slice(0, 10)).filter(Boolean)).size;
+    const perDay = weldDays > 0 ? (welded.length / weldDays).toLocaleString("vi-VN", { maximumFractionDigits: 1 }) : "0";
     const paid = welded.filter((r) => payments.get(r.id)?.ty_le === 100).length;
     const partial = welded.filter((r) => payments.has(r.id) && payments.get(r.id)!.ty_le < 100).length;
     return [
-      `Tổng số mối đã hàn: ${welded.length.toLocaleString("vi-VN")}${pct(welded.length, plannedTotal)} (không tính chấp thuận)`,
+      `Tổng số mối đã hàn: ${welded.length.toLocaleString("vi-VN")}${pct(welded.length, plannedTotal)}`,
       `Tổng số mối đã nghiệm thu: ${accepted.toLocaleString("vi-VN")}${pct(accepted, plannedTotal)}`,
       `Tổng số mối đã thanh toán: ${paid.toLocaleString("vi-VN")}${pct(paid, plannedTotal)}${partial ? ` · thanh toán một phần: ${partial}` : ""}`,
+      `Trung bình ngày: ${perDay} mối`,
     ];
-  }, [baseRows, plannedTotal, payments]);
+  }, [baseRows, plannedTotal, payments, qualityById]);
 
   async function applyPayment(clear: boolean) {
     if (!projectIdForPay || selected.size === 0) return;
@@ -262,17 +284,36 @@ export default function RailReportDashboard() {
     XLSX.writeFile(wb, `Theo-doi-cong-viec-han-ray-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  /** Mở bản in với đúng dữ liệu đang xem. */
-  function openPrint() {
+  /** Mở bản in A4 ngang cho một tuyến (hạ hoặc thượng): ray trái bên trái, ray phải bên phải, cùng thứ tự thanh. */
+  function openPrint(line: "ha" | "thuong") {
+    const [leftPrefix, rightPrefix] = line === "ha" ? ["HT", "HP"] : ["TT", "TP"];
+    const bySeq = new Map<number, { left: RailReportPrintRow[]; right: RailReportPrintRow[] }>();
+    for (const row of railRows) {
+      const parsed = parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp);
+      if (!parsed || (parsed.prefix !== leftPrefix && parsed.prefix !== rightPrefix)) continue;
+      const entry = bySeq.get(parsed.seq) ?? { left: [], right: [] };
+      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, lyTrinhCuoi: row.lyTrinhCuoi, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang };
+      (parsed.prefix === leftPrefix ? entry.left : entry.right).push(printRow);
+      bySeq.set(parsed.seq, entry);
+    }
+    const pairs: RailReportPair[] = [];
+    for (const [seq, entry] of [...bySeq].sort((a, b) => a[0] - b[0])) {
+      for (let k = 0; k < Math.max(entry.left.length, entry.right.length); k++) {
+        pairs.push({ key: `${seq}-${k}`, left: entry.left[k] ?? null, right: entry.right[k] ?? null });
+      }
+    }
+    const leftCount = pairs.filter((p) => p.left).length, rightCount = pairs.filter((p) => p.right).length;
     setPrintPayload({
-      rows: railRows,
+      pairs,
       title: "THEO DÕI CÔNG VIỆC HÀN RAY",
-      summary,
+      summary: [...summary, `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"}: ${leftCount.toLocaleString("vi-VN")} mối ray trái (${leftPrefix}) · ${rightCount.toLocaleString("vi-VN")} mối ray phải (${rightPrefix})`],
       projectLabel: baseRows[0]?.du_an || "Phú Quốc",
       dateLabel:
         appliedFilters.dateFrom || appliedFilters.dateTo
           ? `${formatDate(appliedFilters.dateFrom)} – ${formatDate(appliedFilters.dateTo)}`
           : "Toàn bộ kỳ",
+      leftLabel: `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"} · Ray trái (${leftPrefix})`,
+      rightLabel: `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"} · Ray phải (${rightPrefix})`,
     });
   }
 
@@ -313,12 +354,21 @@ export default function RailReportDashboard() {
         </label>
         <button
           type="button"
-          onClick={openPrint}
+          onClick={() => openPrint("ha")}
           disabled={!railRows.length}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
         >
           <Printer size={16} weight="bold" aria-hidden />
-          In báo cáo ray
+          In tuyến hạ
+        </button>
+        <button
+          type="button"
+          onClick={() => openPrint("thuong")}
+          disabled={!railRows.length}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
+        >
+          <Printer size={16} weight="bold" aria-hidden />
+          In tuyến thượng
         </button>
         <button type="button" onClick={exportExcel} disabled={!railRows.length}
           className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">

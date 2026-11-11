@@ -12,22 +12,25 @@ export type RailReportPrintRow = {
   lyTrinh: string;
   lyTrinhCuoi: string;
   ngayHan: string;
-  chieuDai: string;
   tinhTrang: string;
-  ghiChu: string;
 };
 
+/** Một hàng của bảng ngang: thanh ray trái (HT/TT) bên trái, ray phải (HP/TP) bên phải, cùng số thứ tự thanh. */
+export type RailReportPair = { key: string; left: RailReportPrintRow | null; right: RailReportPrintRow | null };
+
 export type RailReportPrintPayload = {
-  rows: RailReportPrintRow[];
+  pairs: RailReportPair[];
   title: string;
   summary: string[];
   projectLabel: string;
   dateLabel: string;
+  leftLabel: string;
+  rightLabel: string;
 };
 
 /**
  * Mẫu in "BẢNG TỔNG HỢP MỐI HÀN THEO THANH RAY".
- * Nghe sự kiện `rail-report-print` từ màn hình báo cáo; mở ở dạng dialog, in qua PrintFrame (A4 dọc).
+ * Nghe sự kiện `rail-report-print` từ màn hình báo cáo; mở ở dạng dialog, in qua PrintFrame (A4 ngang, hai ray trái / phải cạnh nhau).
  */
 export default function RailReportPrint({ payload, onClose }: {
   payload: RailReportPrintPayload | null;
@@ -44,7 +47,7 @@ export default function RailReportPrint({ payload, onClose }: {
 
   if (!payload || typeof document === "undefined") return null;
 
-  const { rows, title, summary, projectLabel, dateLabel } = payload;
+  const { pairs, title, summary, projectLabel, dateLabel, leftLabel, rightLabel } = payload;
 
   return createPortal(
     <div id="rail-report-print" role="dialog" aria-modal="true" aria-label={title}>
@@ -53,7 +56,7 @@ export default function RailReportPrint({ payload, onClose }: {
         <div>
           <div className="toolbar-title">{title}</div>
           <div className="toolbar-sub">
-            {projectLabel} · {dateLabel} · {rows.length.toLocaleString("vi-VN")} thanh ray
+            {projectLabel} · {dateLabel} · {pairs.length.toLocaleString("vi-VN")} vị trí thanh ray
           </div>
         </div>
         <div className="toolbar-actions">
@@ -69,7 +72,7 @@ export default function RailReportPrint({ payload, onClose }: {
       </div>
 
       <article className="sheet">
-        <PrintFrame top="12mm" bottom="12mm" left="12mm" right="12mm">
+        <PrintFrame top="10mm" bottom="10mm" left="10mm" right="10mm">
           <header className="doc-header">
             <div className="brand-row">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -86,35 +89,36 @@ export default function RailReportPrint({ payload, onClose }: {
 
           <table className="rail-table">
             <colgroup>
-              <col className="c-ma-lisp" />
-              <col className="c-ma-ht" />
-              <col className="c-km" />
-              <col className="c-km" />
-              <col className="c-ngay" />
-              <col className="c-dai" />
-              <col className="c-tt" />
+              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
+              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
             </colgroup>
             <thead>
               <tr>
-                <th>Tên mối hàn theo thiết kế</th>
-                <th>Tên mối hàn tại hiện trường</th>
-                <th>Lý trình đầu</th>
-                <th>Lý trình cuối</th>
-                <th>Ngày hàn</th>
-                <th>Chiều dài thanh ray (mm)</th>
-                <th>Tình trạng</th>
+                <th colSpan={6} className="side-head">{leftLabel}</th>
+                <th colSpan={6} className="side-head">{rightLabel}</th>
+              </tr>
+              <tr>
+                {[0, 1].flatMap((side) => [
+                  <th key={`a${side}`}>Tên mối hàn theo thiết kế</th>,
+                  <th key={`b${side}`}>Tên mối hàn tại hiện trường</th>,
+                  <th key={`c${side}`}>Lý trình đầu</th>,
+                  <th key={`d${side}`}>Lý trình cuối</th>,
+                  <th key={`e${side}`}>Ngày hàn</th>,
+                  <th key={`f${side}`}>Tình trạng</th>,
+                ])}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.key}>
-                  <td className="mono">{row.maLisp}</td>
-                  <td className="mono">{row.maHienTruong}</td>
-                  <td className="mono center">{row.lyTrinh}</td>
-                  <td className="mono center">{row.lyTrinhCuoi}</td>
-                  <td className="center">{row.ngayHan}</td>
-                  <td className="mono right">{row.chieuDai}</td>
-                  <td className="center">{row.tinhTrang}</td>
+              {pairs.map((pair) => (
+                <tr key={pair.key}>
+                  {[pair.left, pair.right].flatMap((row, side) => row ? [
+                    <td key={`a${side}`} className="mono">{row.maLisp}</td>,
+                    <td key={`b${side}`} className="mono">{row.maHienTruong}</td>,
+                    <td key={`c${side}`} className="mono center">{row.lyTrinh}</td>,
+                    <td key={`d${side}`} className="mono center">{row.lyTrinhCuoi}</td>,
+                    <td key={`e${side}`} className="center">{row.ngayHan}</td>,
+                    <td key={`f${side}`} className="center">{row.tinhTrang}</td>,
+                  ] : [0, 1, 2, 3, 4, 5].map((n) => <td key={`x${side}${n}`}>&nbsp;</td>))}
                 </tr>
               ))}
             </tbody>
@@ -138,7 +142,7 @@ const PRINT_CSS = `
 #rail-report-print .btn-close { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
 #rail-report-print .summary { margin: 0 0 6px; font-size: 10pt; font-weight: 700; }
 #rail-report-print .summary p { margin: 1px 0; }
-#rail-report-print .sheet { width: 210mm; box-sizing: border-box; margin: 16px auto; padding: 0; background: #fff; font-family: 'Times New Roman', serif; }
+#rail-report-print .sheet { width: 297mm; box-sizing: border-box; margin: 16px auto; padding: 0; background: #fff; font-family: 'Times New Roman', serif; }
 #rail-report-print .doc-header { text-align: center; margin-bottom: 6px; }
 #rail-report-print .brand-row { display: flex; align-items: center; gap: 4mm; padding-bottom: 3mm; margin-bottom: 3mm; border-bottom: 1.2pt solid #0047AB; text-align: left; }
 #rail-report-print .brand-logo { width: 17mm; height: 17mm; object-fit: contain; flex: none; }
@@ -153,14 +157,15 @@ const PRINT_CSS = `
 #rail-report-print table.rail-table .center { text-align: center; }
 #rail-report-print table.rail-table .right { text-align: right; }
 #rail-report-print table.rail-table .mono { font-family: 'Courier New', monospace; font-size: 7pt; }
-#rail-report-print col.c-ma-lisp { width: 16%; }
-#rail-report-print col.c-ma-ht { width: 22%; }
-#rail-report-print col.c-km { width: 12%; }
-#rail-report-print col.c-ngay { width: 11%; }
-#rail-report-print col.c-dai { width: 14%; }
-#rail-report-print col.c-tt { width: 13%; }
+#rail-report-print table.rail-table th.side-head { background: #dbe6f5; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.02em; }
+#rail-report-print table.rail-table td:nth-child(6) { border-right: 1.2pt solid #444; }
+#rail-report-print col.c-ma { width: 7.6%; }
+#rail-report-print col.c-ht { width: 9.6%; }
+#rail-report-print col.c-km { width: 7.4%; }
+#rail-report-print col.c-ngay { width: 6.4%; }
+#rail-report-print col.c-tt { width: 7.6%; }
 @media print {
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 landscape; margin: 0; }
   body:has(#rail-report-print) > :not(#rail-report-print) { display: none !important; }
   #rail-report-print { position: static; overflow: visible; background: #fff; }
   #rail-report-print .print-toolbar { display: none; }
