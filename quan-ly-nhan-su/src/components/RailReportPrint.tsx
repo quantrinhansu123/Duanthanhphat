@@ -10,7 +10,6 @@ export type RailReportPrintRow = {
   maLisp: string;
   maHienTruong: string;
   lyTrinh: string;
-  lyTrinhCuoi: string;
   ngayHan: string;
   tinhTrang: string;
   /** Mối hàn bổ sung sau: số thứ tự nhỏ hơn nhưng hàn muộn hơn các mối có số lớn hơn → in chữ đỏ. */
@@ -91,20 +90,19 @@ export default function RailReportPrint({ payload, onClose }: {
 
           <table className="rail-table">
             <colgroup>
-              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
-              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
+              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
+              <col className="c-ma" /><col className="c-ht" /><col className="c-km" /><col className="c-ngay" /><col className="c-tt" />
             </colgroup>
             <thead>
               <tr>
-                <th colSpan={6} className="side-head">{leftLabel}</th>
-                <th colSpan={6} className="side-head">{rightLabel}</th>
+                <th colSpan={5} className="side-head">{leftLabel}</th>
+                <th colSpan={5} className="side-head">{rightLabel}</th>
               </tr>
               <tr>
                 {[0, 1].flatMap((side) => [
                   <th key={`a${side}`}>Tên mối hàn theo thiết kế</th>,
                   <th key={`b${side}`}>Tên mối hàn tại hiện trường</th>,
-                  <th key={`c${side}`}>Lý trình đầu</th>,
-                  <th key={`d${side}`}>Lý trình cuối</th>,
+                  <th key={`c${side}`}>Lý trình</th>,
                   <th key={`e${side}`}>Ngày hàn</th>,
                   <th key={`f${side}`}>Tình trạng</th>,
                 ])}
@@ -117,10 +115,9 @@ export default function RailReportPrint({ payload, onClose }: {
                     <td key={`a${side}`} className={`mono${row.late ? " late" : ""}`}>{row.maLisp}</td>,
                     <td key={`b${side}`} className={`mono${row.late ? " late" : ""}`}>{row.maHienTruong}</td>,
                     <td key={`c${side}`} className={`mono center${row.late ? " late" : ""}`}>{row.lyTrinh}</td>,
-                    <td key={`d${side}`} className={`mono center${row.late ? " late" : ""}`}>{row.lyTrinhCuoi}</td>,
                     <td key={`e${side}`} className={`center${row.late ? " late" : ""}`}>{row.ngayHan}</td>,
                     <td key={`f${side}`} className={`center${row.late ? " late" : ""}`}>{row.tinhTrang}</td>,
-                  ] : [0, 1, 2, 3, 4, 5].map((n) => <td key={`x${side}${n}`}>&nbsp;</td>))}
+                  ] : [0, 1, 2, 3, 4].map((n) => <td key={`x${side}${n}`}>&nbsp;</td>))}
                 </tr>
               ))}
             </tbody>
@@ -163,12 +160,12 @@ const PRINT_CSS = `
 #rail-report-print table.rail-table .right { text-align: right; }
 #rail-report-print table.rail-table .mono { font-family: 'Courier New', monospace; font-size: 7pt; }
 #rail-report-print table.rail-table th.side-head { background: #dbe6f5; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.02em; }
-#rail-report-print table.rail-table td:nth-child(6) { border-right: 1.2pt solid #444; }
-#rail-report-print col.c-ma { width: 7.6%; }
-#rail-report-print col.c-ht { width: 9.6%; }
-#rail-report-print col.c-km { width: 7.4%; }
-#rail-report-print col.c-ngay { width: 6.4%; }
-#rail-report-print col.c-tt { width: 7.6%; }
+#rail-report-print table.rail-table td:nth-child(5) { border-right: 1.2pt solid #444; }
+#rail-report-print col.c-ma { width: 10%; }
+#rail-report-print col.c-ht { width: 13%; }
+#rail-report-print col.c-km { width: 11%; }
+#rail-report-print col.c-ngay { width: 8%; }
+#rail-report-print col.c-tt { width: 8%; }
 @media print {
   @page { size: A4 landscape; margin: 0; }
   body:has(#rail-report-print) > :not(#rail-report-print) { display: none !important; }

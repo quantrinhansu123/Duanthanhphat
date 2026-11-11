@@ -275,11 +275,11 @@ export default function RailReportDashboard() {
 
   async function exportExcel() {
     const XLSX = await import("xlsx");
-    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình đầu", "Lý trình cuối", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán", "Ghi chú thanh toán"];
+    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán", "Ghi chú thanh toán"];
     const aoa = [["THEO DÕI CÔNG VIỆC HÀN RAY"], [`Dự án: ${baseRows[0]?.du_an || "Phú Quốc"}`], ...summary.map((l) => [l]), [], head,
-      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.lyTrinhCuoi, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan, r.thanhToanGhiChu])];
+      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan, r.thanhToanGhiChu])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [18, 24, 14, 14, 12, 14, 18, 12, 24].map((wch) => ({ wch }));
+    ws["!cols"] = [18, 24, 14, 12, 14, 18, 12, 24].map((wch) => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Theo doi han ray");
     XLSX.writeFile(wb, `Theo-doi-cong-viec-han-ray-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -306,7 +306,7 @@ export default function RailReportDashboard() {
       const parsed = parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp);
       if (!parsed || (parsed.prefix !== leftPrefix && parsed.prefix !== rightPrefix)) continue;
       const entry = bySeq.get(parsed.seq) ?? { left: [], right: [] };
-      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, lyTrinhCuoi: row.lyTrinhCuoi, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang, late: lateKeys.has(row.key) };
+      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang, late: lateKeys.has(row.key) };
       (parsed.prefix === leftPrefix ? entry.left : entry.right).push(printRow);
       bySeq.set(parsed.seq, entry);
     }
@@ -422,8 +422,7 @@ export default function RailReportDashboard() {
               <th className="w-8 px-3 py-2.5"></th>
               <th className="px-3 py-2.5">Tên mối hàn theo thiết kế</th>
               <th className="px-3 py-2.5">Tên mối hàn tại hiện trường</th>
-              <th className="px-3 py-2.5">Lý trình đầu</th>
-              <th className="px-3 py-2.5">Lý trình cuối</th>
+              <th className="px-3 py-2.5">Lý trình</th>
               <th className="px-3 py-2.5">Ngày hàn</th>
               <th className="px-3 py-2.5 text-right">Chiều dài thanh ray (mm)</th>
               <th className="px-3 py-2.5">Tình trạng</th>
@@ -433,9 +432,9 @@ export default function RailReportDashboard() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && !railRows.length ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
             ) : railRows.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
             ) : (
               railRows.map((row) => (
                 <tr key={row.key} className="hover:bg-slate-50/80">
@@ -444,7 +443,6 @@ export default function RailReportDashboard() {
                   <td className="whitespace-nowrap px-3 py-2 font-mono font-semibold text-[#0047AB]">{row.maLisp}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">{row.maHienTruong}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinh}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinhCuoi}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.ngayHan}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-slate-700">{row.chieuDai}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.tinhTrang}</td>
