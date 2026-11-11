@@ -142,15 +142,24 @@ function pycNumber(rfi: Record<string, unknown>) {
 /** Chỉnh sửa trực tiếp trên bản xem trước: `draft` là các ô đã sửa chưa lưu, `set` ghi một ô. Không truyền = chỉ xem/in. */
 export type RecordEditor = { draft: Record<string, string>; set: (key: string, value: string) => void };
 /** Một ô điền được: có `editor` thì gõ trực tiếp (lưu khi rời ô), không thì chỉ in giá trị / dấu chấm. */
-function Ed({ k, v, editor, ph = "……………………", block, date }: { k: string; v: string; editor?: RecordEditor; ph?: string; block?: boolean; date?: boolean }) {
+export function Ed({ k, v, editor, ph = "……………………", block, date, time }: { k: string; v: string; editor?: RecordEditor; ph?: string; block?: boolean; date?: boolean; time?: boolean }) {
   // date: giá trị lưu dạng ISO yyyy-mm-dd, hiển thị và gõ dạng dd/mm/yyyy.
-  const shown = date && v ? v.slice(0, 10).split("-").reverse().join("/") : v;
+  // time: giá trị lưu dạng HH:MM, hiển thị và gõ dạng 8h00 (nhận cả 8:00, 8h).
+  const shown = date && v ? v.slice(0, 10).split("-").reverse().join("/")
+    : time && v.includes(":") ? `${Number(v.split(":")[0])}h${v.split(":")[1] ?? "00"}` : v;
   if (!editor) return <>{shown || ph}</>;
   return (
     <span className={block ? "ed-field ed-block" : "ed-field"} contentEditable suppressContentEditableWarning spellCheck={false} data-ph={ph}
       onKeyDown={(e) => { if (e.key === "Enter" && !block) { e.preventDefault(); e.currentTarget.blur(); } }}
       onBlur={(e) => {
         const raw = (e.currentTarget.innerText ?? "").replace(/ /g, " ").trim();
+        if (time) {
+          const t = /^(\d{1,2})\s*[h:]\s*(\d{0,2})$/i.exec(raw);
+          if (raw && !t) { e.currentTarget.textContent = shown; return; } // không đúng giờ → trả về giá trị cũ
+          const hhmm = t ? `${t[1].padStart(2, "0")}:${(t[2] || "0").padStart(2, "0")}` : "";
+          if (hhmm !== v) editor.set(k, hhmm);
+          return;
+        }
         if (!date) { if (raw !== v) editor.set(k, raw); return; }
         const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(raw);
         if (raw && !m) { e.currentTarget.textContent = shown; return; } // không đúng dd/mm/yyyy → trả về giá trị cũ
@@ -160,9 +169,10 @@ function Ed({ k, v, editor, ph = "……………………", block, date }: { k:
   );
 }
 /** «ngày dd tháng mm năm yyyy» có ba ô gõ riêng; đủ hợp lệ thì ghi lại thành một ngày ISO vào `k`. */
-function EdViDate({ k, iso, fallback, editor }: { k: string; iso: string; fallback: { d: string; m: string; y: string }; editor?: RecordEditor }) {
+export function EdViDate({ k, iso, fallback, editor, lead = "ngày" }: { k: string; iso: string; fallback: { d: string; m: string; y: string }; editor?: RecordEditor; lead?: string }) {
   const [y, m, d] = iso ? iso.slice(0, 10).split("-") : [fallback.y, fallback.m, fallback.d];
-  if (!editor) return <>ngày {d} tháng {m} năm {y}</>;
+  const pre = lead ? `${lead} ` : "";
+  if (!editor) return <>{pre}{d} tháng {m} năm {y}</>;
   const commit = (e: FocusEvent<HTMLElement>) => {
     const spans = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[data-part]") ?? [])];
     const [dd, mm, yy] = spans.map((s) => (s.innerText ?? "").trim());
@@ -173,7 +183,7 @@ function EdViDate({ k, iso, fallback, editor }: { k: string; iso: string; fallba
   };
   const part = (text: string, ph: string) => <span className="ed-field" data-part contentEditable suppressContentEditableWarning spellCheck={false} data-ph={ph} onBlur={commit}
     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}>{text}</span>;
-  return <span>ngày {part(d, "……")} tháng {part(m, "……")} năm {part(y, "……")}</span>;
+  return <span>{pre}{part(d, "……")} tháng {part(m, "……")} năm {part(y, "……")}</span>;
 }
 /** Ô nhập nhiều dòng (đánh giá, kết luận…): chưa có chữ thì in sẵn các dòng chấm, ô gõ phủ lên trên. */
 function EdLines({ k, v, lines, editor }: { k: string; v: string; lines: number; editor?: RecordEditor }) {
