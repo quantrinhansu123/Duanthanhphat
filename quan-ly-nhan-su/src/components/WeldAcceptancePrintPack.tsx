@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { loadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
+import { reloadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss } from "@/components/WeldAcceptanceRecordPages";
 import { SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
+import ComboInput from "@/components/ComboInput";
 
 /** Các mục thông tin trên mẫu dùng chung cho cả bộ — sửa một lần, áp dụng cho 3 biên bản. */
 const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_thu", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
@@ -72,7 +73,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
         const current = (latestOf(hoSo.id)?.thong_tin ?? {}) as Record<string, string>;
         await reviseRecord(hoSo.id, { ...current, ...form }, "Sửa thông tin in cả bộ hồ sơ");
       }
-      setRecord(await loadRecordSet(String(record.dot.id)));
+      setRecord(await reloadRecordSet(record));
       setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
   }
@@ -126,13 +127,13 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
           {text("goong", "Goòng phẳng", "KPS25-L8")}
           {text("so_bb", "Số biên bản", "FBW/01/BBNTCV")}
           <label className={label}>Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
-            <input list="pack-people" className={input} value={form.ten_tho_han ?? ""}
-              onChange={(e) => { const name = e.target.value; const match = people.find((p) => p.name === name); setForm((cur) => ({ ...cur, ten_tho_han: name, ...(match?.code ? { id_tho_han: match.code } : {}) })); }} />
-            <datalist id="pack-people">{people.map((p) => <option key={p.name + p.code} value={p.name}>{p.code}</option>)}</datalist>
+            <ComboInput className={input} value={form.ten_tho_han ?? ""} options={people.map((p) => ({ value: p.name, hint: p.code }))}
+              onChange={(name, match) => setForm((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
           </label>
           {text("id_tho_han", "ID thợ hàn")}
-          {text("may_han", "Máy hàn (chọn hoặc nhập)", "", "pack-machines")}
-          <datalist id="pack-machines">{machines.map((m) => <option key={m} value={m} />)}</datalist>
+          <label className={label}>Máy hàn (chọn hoặc nhập)
+            <ComboInput className={input} value={form.may_han ?? ""} options={machines.map((m) => ({ value: m }))} onChange={(v) => set("may_han", v)} />
+          </label>
           {text("kmFrom", "Vị trí: Km đầu", "3+862.74")}
           {text("kmTo", "Vị trí: Km cuối", "4+087.42")}
         </div>

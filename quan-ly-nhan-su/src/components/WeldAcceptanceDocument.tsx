@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { loadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import ComboInput from "@/components/ComboInput";
+import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
@@ -165,7 +166,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       const { ly_do, ...thongTin } = form;
       saveSignerDefaults(thongTin); // nhớ người ký cho các lần in sau
       await reviseRecord(hoSo.id, thongTin, ly_do.trim() || "Cập nhật nội dung nhập tay");
-      setRecord(await loadRecordSet(String(record.dot.id)));
+      setRecord(await reloadRecordSet(record));
       setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được bản sửa đổi."); } finally { setBusy(false); }
   }
@@ -312,16 +313,14 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="KPS25-L8" value={form.goong ?? ""} onChange={(e) => setForm({ ...form, goong: e.target.value })} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
-                    <input list="rec-people" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ten_tho_han ?? ""}
-                      onChange={(e) => { const name = e.target.value; const match = pickers.people.find((p) => p.name === name); setForm({ ...form, ten_tho_han: name, ...(match?.code ? { id_tho_han: match.code } : {}) }); }} />
-                    <datalist id="rec-people">{pickers.people.map((p) => <option key={p.name + p.code} value={p.name}>{p.code}</option>)}</datalist>
+                    <ComboInput className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ten_tho_han ?? ""} options={pickers.people.map((p) => ({ value: p.name, hint: p.code }))}
+                      onChange={(name, match) => setForm((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">ID thợ hàn
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.id_tho_han ?? ""} onChange={(e) => setForm({ ...form, id_tho_han: e.target.value })} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">Máy hàn (chọn từ danh sách hoặc nhập)
-                    <input list="rec-machines" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.may_han ?? ""} onChange={(e) => setForm({ ...form, may_han: e.target.value })} />
-                    <datalist id="rec-machines">{pickers.machines.map((m) => <option key={m} value={m} />)}</datalist>
+                    <ComboInput className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.may_han ?? ""} options={pickers.machines.map((m) => ({ value: m }))} onChange={(v) => setForm((cur) => ({ ...cur, may_han: v }))} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">Vị trí: Km đầu
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="3+862.74" value={form.kmFrom ?? ""} onChange={(e) => setForm({ ...form, kmFrom: e.target.value })} />

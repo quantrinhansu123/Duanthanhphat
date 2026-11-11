@@ -673,7 +673,11 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
       thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasound ? ticket.so_phieu : "" },
       phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
     ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: ticket.da_ky ? "Đã ký" : "Chờ ký", du_lieu_chot: null })),
-    moi, sua_doi: [],
+    moi,
+    sua_doi: docs.flatMap((_, i) => {
+      const saved = (ticket.thong_tin?.in_ho_so as Record<string, { thong_tin: Record<string, string>; ly_do: string; nguoi_sua: string; created_at: string }> | undefined)?.[i];
+      return saved ? [{ id: `${ticket.id}-${i}-v1`, ho_so_id: `${ticket.id}-${i}`, phien_ban: 1, ...saved }] : [];
+    }),
   };
 }
 
@@ -805,7 +809,9 @@ export async function loadRecordSet(dotId: string) {
 
 /** Thêm bản sửa đổi thông tin in (địa điểm, thành phần…); không đụng tới dữ liệu chốt. */
 export async function reviseRecord(body: Record<string, unknown>, actor: string) {
-  const hoSoId = qualityUuid(body.ho_so_id);
+  // Bộ biên bản của phiếu tách (hình học / siêu âm) có id ảo `<uuid phiếu>-<0..2>`: lưu bản sửa vào phieu_nt_tach.thong_tin.
+  const virtual = typeof body.ho_so_id === "string" ? /^(.{36})-([0-2])$/.exec(body.ho_so_id) : null;
+  const hoSoId = virtual ? "" : qualityUuid(body.ho_so_id);
   const lyDo = str(body.ly_do, 1000);
   if (!lyDo) throw new QualityApiError("Cần nêu lý do sửa đổi.");
   const t = object(body.thong_tin);
@@ -818,6 +824,15 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;
+  }
+  if (virtual) {
+    const ticketId = qualityUuid(virtual[1]);
+    const { data: ticket, error: ticketError } = await db().from("phieu_nt_tach").select("thong_tin").eq("id", ticketId).single();
+    if (ticketError) throw ticketError;
+    const prints = { ...((ticket.thong_tin?.in_ho_so as Record<string, unknown>) ?? {}), [virtual[2]]: { thong_tin, ly_do: lyDo, nguoi_sua: actor, created_at: new Date().toISOString() } };
+    const { error: saveError } = await db().from("phieu_nt_tach").update({ thong_tin: { ...(ticket.thong_tin ?? {}), in_ho_so: prints } }).eq("id", ticketId);
+    if (saveError) throw saveError;
+    return { ok: true };
   }
   const { data: last, error: lastError } = await db().from("ho_so_nghiem_thu_sua_doi").select("phien_ban")
     .eq("ho_so_id", hoSoId).order("phien_ban", { ascending: false }).limit(1);
