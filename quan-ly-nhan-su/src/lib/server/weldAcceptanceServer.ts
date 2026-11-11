@@ -248,6 +248,15 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
       thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi), giam_sat,
         tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha), gio_bat_dau: str(info.gio_bat_dau, 10),
         loai_rfi: "theo-doi", cong_viec: info.cong_viec === "gtus" ? "gtus" : "", ...fields } };
+    if (payload.thong_tin.cong_viec === "gtus") {
+      const ids = String(info.lwr_ids ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      if (!ids.length || ids.length > 50) throw new QualityApiError("Chọn 1–50 thanh LWR đã hoàn thành để phát phiếu giải toả ứng suất.");
+      const { candidates } = await listGtusCandidates({ du_an_id: payload.du_an_id, exclude_rfi_id: payload.id });
+      const eligible = new Map(candidates.map((c) => [c.id, c]));
+      const bad = ids.find((id) => !eligible.has(id) || eligible.get(id)!.used);
+      if (bad) throw new QualityApiError("Có thanh LWR chưa đủ điều kiện hoặc đã nằm trong phiếu giải toả ứng suất khác. Bấm Tải lại để cập nhật danh sách.", 409);
+      Object.assign(payload.thong_tin, { lwr_ids: ids.join(","), lwr_codes: ids.map((id) => eligible.get(id)!.code).join(", ") });
+    }
     const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
     if (error) {
       if (error.code !== "23505") throw error;
@@ -359,6 +368,39 @@ export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   const { error: updateError } = await db().from(table).update({ thong_tin }).eq("id", id);
   if (updateError) throw updateError;
   return { id };
+}
+
+/** Thanh LWR đủ điều kiện phát RFI giải toả ứng suất: đã đưa lên track map (có vị trí lý trình đầu–cuối) và chưa nằm trong RFI GTUS nào. */
+export async function listGtusCandidates(body: Record<string, unknown>) {
+  const projectId = qualityUuid(body.du_an_id);
+  const { data, error } = await db().from("lwr_long_rails").select("id,code,label,row_key,params").limit(1000);
+  if (error) throw error;
+  const used = new Map<string, string>();
+  const rfis = await db().from("phieu_yeu_cau_nghiem_thu").select("id,so_phieu,thong_tin").eq("du_an_id", projectId).limit(2000);
+  if (rfis.error) throw rfis.error;
+  for (const rfi of rfis.data) {
+    const info = (rfi.thong_tin ?? {}) as Record<string, unknown>;
+    if (info.cong_viec !== "gtus" || rfi.id === body.exclude_rfi_id) continue; // phát lại cùng yêu cầu (retry) không tự chặn chính nó
+    for (const id of String(info.lwr_ids ?? "").split(",").filter(Boolean)) used.set(id, String(rfi.so_phieu));
+  }
+  const lines: Record<string, { route: "ha" | "thuong"; rail: "trai" | "phai" }> = {
+    DT: { route: "ha", rail: "trai" }, DP: { route: "ha", rail: "phai" }, UT: { route: "thuong", rail: "trai" }, UP: { route: "thuong", rail: "phai" },
+  };
+  const candidates = data.flatMap((row) => {
+    const line = lines[String(row.row_key)];
+    const params = (row.params ?? {}) as Record<string, unknown>;
+    const placement = (params.placement ?? {}) as Record<string, unknown>;
+    const start = Number(placement.startMetres), end = Number(placement.endMetres);
+    if (!line || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    if (typeof placement.projectId === "string" && placement.projectId && placement.projectId !== projectId) return [];
+    const code = String(row.code ?? "").replace(/^[0-9a-f-]{36}:/i, "");
+    return [{ id: String(row.id), code, ...line, startMetres: start, endMetres: end,
+      releaseDate: typeof placement.releaseDate === "string" ? placement.releaseDate : null,
+      completedAt: typeof placement.completedAt === "string" ? placement.completedAt : null,
+      used: used.get(String(row.id)) ?? null }];
+  });
+  candidates.sort((a, b) => Number(a.route === "thuong") - Number(b.route === "thuong") || a.startMetres - b.startMetres || a.rail.localeCompare(b.rail));
+  return { candidates };
 }
 
 export async function listRfis(projectId: string) {

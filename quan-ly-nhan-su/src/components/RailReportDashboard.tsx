@@ -26,6 +26,7 @@ type RailRow = {
   chieuDai: string;    // Chiều dài thanh ray (mm)
   tinhTrang: string;
   ghiChu: string;
+  iso: string;
   route: string;
   daNghiemThu: boolean;
   thanhToan: string; // tỷ lệ đã thanh toán, VD "50%" ("—" nếu chưa)
@@ -222,7 +223,7 @@ export default function RailReportDashboard() {
       // Thứ tự theo mã hiện trường (đúng thứ tự hàn): mối chưa có mã xuống cuối; cùng mã thì theo lý trình.
       .sort((a, b) => (a.seq === b.seq ? 0 : a.seq === Number.MAX_SAFE_INTEGER ? 1 : b.seq === Number.MAX_SAFE_INTEGER ? -1 : a.iso.localeCompare(b.iso) || a.seq - b.seq)
         || chainageSortKey(a.lyTrinh) - chainageSortKey(b.lyTrinh) || a.maLisp.localeCompare(b.maLisp, "vi"))
-      .map(({ iso: _iso, seq: _seq, ...rest }) => rest);
+      .map(({ seq: _seq, ...rest }) => rest);
   }, [baseRows, endChainages, search, routeFilter, payments, qualityById]);
 
   const routeOptions = useMemo(() => {
@@ -287,12 +288,25 @@ export default function RailReportDashboard() {
   /** Mở bản in A4 ngang cho một tuyến (hạ hoặc thượng): ray trái bên trái, ray phải bên phải, cùng thứ tự thanh. */
   function openPrint(line: "ha" | "thuong") {
     const [leftPrefix, rightPrefix] = line === "ha" ? ["HT", "HP"] : ["TT", "TP"];
+    // Mối bổ sung sau: cùng ray, số nhỏ hơn nhưng hàn muộn hơn một mối có số lớn hơn → in đỏ.
+    const lateKeys = new Set<string>();
+    for (const prefix of [leftPrefix, rightPrefix]) {
+      const sameRail = railRows
+        .map((row) => ({ row, parsed: parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp) }))
+        .filter((x) => x.parsed?.prefix === prefix && x.row.iso)
+        .sort((a, b) => b.parsed!.seq - a.parsed!.seq);
+      let earliestHigher = "";
+      for (const { row, parsed } of sameRail) {
+        if (earliestHigher && row.iso > earliestHigher && parsed) lateKeys.add(row.key);
+        if (!earliestHigher || row.iso < earliestHigher) earliestHigher = row.iso;
+      }
+    }
     const bySeq = new Map<number, { left: RailReportPrintRow[]; right: RailReportPrintRow[] }>();
     for (const row of railRows) {
       const parsed = parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp);
       if (!parsed || (parsed.prefix !== leftPrefix && parsed.prefix !== rightPrefix)) continue;
       const entry = bySeq.get(parsed.seq) ?? { left: [], right: [] };
-      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, lyTrinhCuoi: row.lyTrinhCuoi, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang };
+      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, lyTrinhCuoi: row.lyTrinhCuoi, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang, late: lateKeys.has(row.key) };
       (parsed.prefix === leftPrefix ? entry.left : entry.right).push(printRow);
       bySeq.set(parsed.seq, entry);
     }

@@ -13,6 +13,8 @@ export type RailReportPrintRow = {
   lyTrinhCuoi: string;
   ngayHan: string;
   tinhTrang: string;
+  /** Mối hàn bổ sung sau: số thứ tự nhỏ hơn nhưng hàn muộn hơn các mối có số lớn hơn → in chữ đỏ. */
+  late?: boolean;
 };
 
 /** Một hàng của bảng ngang: thanh ray trái (HT/TT) bên trái, ray phải (HP/TP) bên phải, cùng số thứ tự thanh. */
@@ -112,17 +114,18 @@ export default function RailReportPrint({ payload, onClose }: {
               {pairs.map((pair) => (
                 <tr key={pair.key}>
                   {[pair.left, pair.right].flatMap((row, side) => row ? [
-                    <td key={`a${side}`} className="mono">{row.maLisp}</td>,
-                    <td key={`b${side}`} className="mono">{row.maHienTruong}</td>,
-                    <td key={`c${side}`} className="mono center">{row.lyTrinh}</td>,
-                    <td key={`d${side}`} className="mono center">{row.lyTrinhCuoi}</td>,
-                    <td key={`e${side}`} className="center">{row.ngayHan}</td>,
-                    <td key={`f${side}`} className="center">{row.tinhTrang}</td>,
+                    <td key={`a${side}`} className={`mono${row.late ? " late" : ""}`}>{row.maLisp}</td>,
+                    <td key={`b${side}`} className={`mono${row.late ? " late" : ""}`}>{row.maHienTruong}</td>,
+                    <td key={`c${side}`} className={`mono center${row.late ? " late" : ""}`}>{row.lyTrinh}</td>,
+                    <td key={`d${side}`} className={`mono center${row.late ? " late" : ""}`}>{row.lyTrinhCuoi}</td>,
+                    <td key={`e${side}`} className={`center${row.late ? " late" : ""}`}>{row.ngayHan}</td>,
+                    <td key={`f${side}`} className={`center${row.late ? " late" : ""}`}>{row.tinhTrang}</td>,
                   ] : [0, 1, 2, 3, 4, 5].map((n) => <td key={`x${side}${n}`}>&nbsp;</td>))}
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="late-note">Chữ <span className="late">màu đỏ</span>: mối hàn bổ sung sau (hàn muộn hơn các mối có số thứ tự lớn hơn); ô trống: mối chưa hàn.</p>
 
         </PrintFrame>
       </article>
@@ -155,6 +158,8 @@ const PRINT_CSS = `
 #rail-report-print table.rail-table th, #rail-report-print table.rail-table td { border: 0.4pt solid #444; padding: 2.4pt 3pt; vertical-align: middle; overflow-wrap: anywhere; }
 #rail-report-print table.rail-table th { background: #eef2f7; font-weight: 700; text-align: center; font-size: 7pt; line-height: 1.2; }
 #rail-report-print table.rail-table .center { text-align: center; }
+#rail-report-print .late { color: #d00000; font-weight: 700; }
+#rail-report-print .late-note { margin: 4px 0 0; font-size: 7.5pt; font-style: italic; }
 #rail-report-print table.rail-table .right { text-align: right; }
 #rail-report-print table.rail-table .mono { font-family: 'Courier New', monospace; font-size: 7pt; }
 #rail-report-print table.rail-table th.side-head { background: #dbe6f5; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.02em; }

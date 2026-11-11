@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -37,12 +37,15 @@ type RfiThongTin = {
   nt_sieu_am: boolean;
   /** "gtus" = phiếu giám sát và nghiệm thu giải toả ứng suất ray (theo tuyến, không cần chọn mối). */
   cong_viec: string;
+  /** Phiếu GTUS: id và mã các thanh LWR đã chọn (cách nhau bằng dấu phẩy). */
+  lwr_ids: string;
+  lwr_codes: string;
 };
 
 const emptyThongTin = (): RfiThongTin => ({
   dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", giam_sat: "",
   // Giờ nghiệm thu gợi ý sẵn 8h00 cho mọi loại phiếu (nghiệm thu / theo dõi / cả giám sát và nghiệm thu).
-  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true, cong_viec: "",
+  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true, cong_viec: "", lwr_ids: "", lwr_codes: "",
 });
 
 function thongTinToPayload(t: RfiThongTin): Record<string, string> {
@@ -58,6 +61,8 @@ function thongTinToPayload(t: RfiThongTin): Record<string, string> {
     nt_hinh_hoc: t.nt_hinh_hoc ? "1" : "",
     nt_sieu_am: t.nt_sieu_am ? "1" : "",
     cong_viec: t.cong_viec,
+    lwr_ids: t.lwr_ids,
+    lwr_codes: t.lwr_codes,
   };
 }
 
@@ -75,6 +80,8 @@ function thongTinFromStored(raw: Record<string, string> | undefined): RfiThongTi
     nt_hinh_hoc: t.nt_hinh_hoc == null ? true : t.nt_hinh_hoc === "1",
     nt_sieu_am: t.nt_sieu_am == null ? true : t.nt_sieu_am === "1",
     cong_viec: t.cong_viec ?? "",
+    lwr_ids: t.lwr_ids ?? "",
+    lwr_codes: t.lwr_codes ?? "",
   };
 }
 
@@ -437,7 +444,35 @@ function RfiPanel({
   });
   const set = (k: keyof RfiCandidateFilter) => (e: React.ChangeEvent<HTMLInputElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
 
-  const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
+  const gtus = monitoring && thongTin.cong_viec === "gtus";
+  // Phiếu GTUS: tìm các thanh LWR đã hoàn thành (đã đưa lên track map) thay cho nhập tay tuyến / nội dung.
+  const [gtusCandidates, setGtusCandidates] = useState<GtusCandidate[]>([]);
+  const [gtusError, setGtusError] = useState("");
+  useEffect(() => {
+    if (!gtus || !projectId) return;
+    let active = true;
+    loadGtusCandidates(projectId).then((r) => { if (active) { setGtusCandidates(r.candidates); setGtusError(""); } })
+      .catch((e) => { if (active) setGtusError(e instanceof Error ? e.message : "Không tải được danh sách thanh LWR."); });
+    return () => { active = false; };
+  }, [gtus, projectId]);
+  const gtusSelected = new Set(thongTin.lwr_ids.split(",").filter(Boolean));
+  const kmText = (m: number) => `Km${Math.floor(m / 1000)}+${String(Math.round((m % 1000) * 100) / 100).padStart(3, "0")}`;
+  function toggleGtus(id: string, on: boolean) {
+    const next = new Set(gtusSelected);
+    if (on) next.add(id); else next.delete(id);
+    const chosen = gtusCandidates.filter((c) => next.has(c.id));
+    const from = chosen.length ? Math.min(...chosen.map((c) => c.startMetres)) : 0;
+    const to = chosen.length ? Math.max(...chosen.map((c) => c.endMetres)) : 0;
+    setThongTin((t) => ({
+      ...t,
+      lwr_ids: chosen.map((c) => c.id).join(","),
+      lwr_codes: chosen.map((c) => c.code).join(", "),
+      tuyen_thuong: chosen.some((c) => c.route === "thuong"),
+      tuyen_ha: chosen.some((c) => c.route === "ha"),
+      giam_sat: chosen.length ? `${chosen.map((c) => c.code).join(", ")} (${kmText(from)} – ${kmText(to)})` : "",
+    }));
+  }
+  const routeMissing = gtus ? !thongTin.lwr_ids : monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
   const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
   const activeStep = editingId ? "details" : publishStep;
@@ -512,7 +547,7 @@ function RfiPanel({
         <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
       </div>
-      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn tuyến (thượng / hạ), phát ngay không cần chọn mối. Biên bản GTUS in theo đúng tuyến này." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
+      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh LWR đã hoàn thành (đã đưa lên track map) ở bước Thông tin phiếu; tuyến và lý trình tự lấy theo thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
       <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
@@ -596,7 +631,32 @@ function RfiPanel({
       </div>
 
       <div role="tabpanel" id="rfi-step-panel-details" aria-labelledby="rfi-step-details" hidden={activeStep !== "details"} className="space-y-3">
-      {monitoring && !editingId && (
+      {gtus && !editingId && (
+        <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Chọn thanh LWR đã hoàn thành (đã đưa lên track map)</h3>
+          {gtusError && <p role="alert" className="text-xs text-red-700">{gtusError}</p>}
+          {!gtusError && gtusCandidates.length === 0 && <p className="text-xs text-slate-600">Chưa có thanh LWR nào đủ điều kiện. Đưa thanh LWR lên track map (có lý trình đầu–cuối) rồi quay lại.</p>}
+          {("thuong,ha".split(",") as ("thuong" | "ha")[]).map((route) => {
+            const list = gtusCandidates.filter((c) => c.route === route);
+            if (!list.length) return null;
+            return (
+              <fieldset key={route} className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <legend className="px-1 text-xs font-semibold text-slate-700">{route === "ha" ? "Tuyến hạ" : "Tuyến thượng"}</legend>
+                {list.map((c) => (
+                  <label key={c.id} className={`flex min-h-9 items-center gap-2 text-sm ${c.used ? "opacity-50" : "cursor-pointer"}`}>
+                    <input type="checkbox" disabled={Boolean(c.used)} checked={gtusSelected.has(c.id)} onChange={(e) => toggleGtus(c.id, e.target.checked)} />
+                    <span className="font-mono font-semibold">{c.code}</span>
+                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {Math.round(c.endMetres - c.startMetres)} m</span>
+                    {c.used ? <span className="text-xs text-amber-800">đã có phiếu {c.used}</span> : null}
+                  </label>
+                ))}
+              </fieldset>
+            );
+          })}
+          {thongTin.lwr_codes && <p className="text-xs text-slate-700">Đã chọn: <b>{thongTin.lwr_codes}</b> → {thongTin.giam_sat}</p>}
+        </div>
+      )}
+      {monitoring && !gtus && !editingId && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 p-3">
           <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
           <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
@@ -623,7 +683,7 @@ function RfiPanel({
           <label className="flex flex-col gap-0.5 text-[10px] font-semibold text-slate-500">Giờ yêu cầu NT
             <input className={input} type="time" value={thongTin.gio_bat_dau} onChange={(e) => setThongTin({ ...thongTin, gio_bat_dau: e.target.value })} />
           </label>
-          <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+          {!gtus && <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
             <legend className="px-1">Tuyến {monitoring ? "(bắt buộc)" : ""}</legend>
             <label className="inline-flex min-h-11 items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={thongTin.tuyen_thuong} onChange={(e) => setThongTin({ ...thongTin, tuyen_thuong: e.target.checked })} />
@@ -633,7 +693,7 @@ function RfiPanel({
               <input type="checkbox" checked={thongTin.tuyen_ha} onChange={(e) => setThongTin({ ...thongTin, tuyen_ha: e.target.checked })} />
               Tuyến hạ
             </label>
-          </fieldset>
+          </fieldset>}
           <button
             type="button"
             className={primary}
@@ -652,7 +712,7 @@ function RfiPanel({
           </button>
           {editingId ? <button type="button" className={secondary} disabled={busy} onClick={cancelEdit}>Hủy sửa — phát phiếu mới</button> : null}
         </div>
-        {routeMissing && <p className="text-xs text-amber-800">Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi.</p>}
+        {routeMissing && <p className="text-xs text-amber-800">{gtus ? "Chọn ít nhất một thanh LWR đã hoàn thành trước khi phát phiếu giải toả ứng suất." : "Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi."}</p>}
         {!editingId && !monitoring && !selected.size && (
           <p className="text-xs text-amber-800">Mở tab <b>2. Chọn mối</b> để tìm và chọn các mối trước khi phát phiếu.</p>
         )}

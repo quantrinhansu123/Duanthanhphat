@@ -397,8 +397,7 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["ngay_nt", "Ngày nghiệm thu (mục 2)", "date", ""],
   ["gio", "Giờ nghiệm thu (mặc định 8h00)", "time", ""],
   ["ngay_nhan", "Ngày nhận (TVGS)", "date", ""],
-  ["km_dau", "Km đầu", "text", "4+486.85"],
-  ["km_cuoi", "Km cuối", "text", "4+486.85"],
+  ["km_dau", "Lý trình", "text", "4+486.85"],
   ["noi_dung", "Nội dung tại vị trí (mục 2) — nhập một lần, tự nhớ", "text", "Giám sát thi công hàn ray"],
   ["dia_diem", "Địa điểm", "text", ""],
   ["hang_muc", "Hạng mục", "text", ""],
@@ -481,7 +480,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       </>}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => fieldWeldCode(w.ma_lich_su)).join(", ")}</p>}
       <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
-      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}{o.noi_dung?.trim() ? <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {o.noi_dung.trim()}</> : null}</p>
+      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}{o.noi_dung?.trim() ? <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {o.noi_dung.trim()}</> : null}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
