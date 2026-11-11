@@ -80,13 +80,13 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign .auto-sign { display: block; margin-top: auto; }
 .acceptance-page .work-sign .auto-sign + .auto-sign { margin-top: 0; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 120px; margin-top: 10px; }
+.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 64px; margin-top: 4px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
 .acceptance-page .conclude-table { margin: 8px 0 14px; }
 .acceptance-page .conclude-table td { padding: 6px 8px; vertical-align: middle; }
-.acceptance-page .sign-roster { margin-top: 14px; }
-.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 52px; padding: 4px 6px; vertical-align: middle; }
+.acceptance-page .sign-roster { margin-top: 6px; }
+.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 40px; padding: 2px 6px; vertical-align: middle; }
 .acceptance-page .sign-roster th { height: 28px; }
 @media print {
   body > *:not(.acceptance-print-root) { display: none !important; }
