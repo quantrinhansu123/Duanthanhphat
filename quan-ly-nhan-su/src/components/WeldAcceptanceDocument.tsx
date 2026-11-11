@@ -475,7 +475,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
       <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
       {lines(o.doi_tuong).length > 0 ? lines(o.doi_tuong).map((x) => <p key={x}>- {x.replace(/^-\s*/, "")}</p>) : <>
-      {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
+      {(monitoring || t.loai_rfi === "ca-hai") && <p>- {t.cong_viec === "gtus" ? "Giám sát và nghiệm thu giải toả ứng suất ray" : "Giám sát thi công hàn ray"} {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
       {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
         return <>{s.geometry && <p>- Nghiệm thu kích thước hình học, trực quan mối hàn {codes}{pv}</p>}{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}</>; })()}
       </>}

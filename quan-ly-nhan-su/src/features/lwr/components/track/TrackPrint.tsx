@@ -21,6 +21,7 @@ import {
 import { calculateStressRelease, ceilAbs, DEFAULT_STRESS_INPUT, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
+import { DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
 import { RailGrid } from "./RailGrid";
 import { StructureLegend } from "./StructureLegend";
 
@@ -98,10 +99,180 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
 
 /** A4 ngang chia 2 trang (sơ đồ / tổng hợp) hoặc A3 đứng gọn một trang.
  *  `px` ≈ bề rộng in hữu ích (A4 ngang trừ lề) — dùng để phóng to/thu nhỏ sơ đồ cho đầy giấy. */
-const FORMATS = {
+const FORMATS: Record<string, { label: string; size: string; width: string; px: number; split: boolean; bbnt?: boolean }> = {
   A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1000, split: true },
   A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1000, split: false },
+  BBNT: { label: "BBNT - GTUS (A4 dọc, 1 trang / tuyến)", size: "210mm 297mm", width: "210mm", px: 660, split: false, bbnt: true },
 };
+
+type LwrPrintRow = {
+  code: string;
+  railLabel: string;
+  span: { startMetres: number; endMetres: number };
+  summary: LwrPrintSummary;
+  neutralTemp: string;
+  completed: string;
+};
+
+/** Giờ hiện trường tách 2 dòng (giờ / ngày) để vừa cột hẹp của bảng A4 dọc. */
+function splitTimeLabel(label: string) {
+  const [time, date] = label.split(" ");
+  return date ? <>{time}<br />{date}</> : label;
+}
+
+/**
+ * Một trang «Phụ lục nghiệm thu giải toả ứng suất» (BBNT - GTUS): hai thanh trái / phải của MỘT tuyến
+ * trong một lần khoá đường (đoạn Km đã chọn), sơ đồ phóng to cân đối trang, bảng thông tin đủ một trang,
+ * tổng chiều dài giải toả (km) và khung ký.
+ */
+function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows }: {
+  line: string;
+  layout: TrackLayout;
+  printRange: { start: number; end: number };
+  joints: RailJoint[];
+  symbols: StructureSymbol[];
+  projectName?: string;
+  rows: LwrPrintRow[];
+}) {
+  const isLower = /hạ/i.test(line);
+  const lineLabel = isLower ? "Tuyến hạ" : "Tuyến thượng";
+  const lineLayout = useMemo<TrackLayout>(() => {
+    const lineRows = layout.rows.filter((row) => row.line === line);
+    const keys = new Set(lineRows.map(railRowKey));
+    return {
+      ...layout,
+      rows: lineRows,
+      longRails: layout.longRails.filter((rail) => keys.has(rail.rowKey)),
+      placements: layout.placements.filter((placement) => getPlacementSpan(layout.rows, placement)?.row.line === line),
+      installed: layout.installed && layout.installed[line] ? { [line]: layout.installed[line] } : {},
+    };
+  }, [layout, line]);
+  const lineJoints = useMemo(() => joints.filter((joint) => joint.metres >= printRange.start && joint.metres <= printRange.end), [joints, printRange]);
+  const extentLine = trackExtent(lineLayout.rows);
+  const metres = Math.max(extentLine.endMetres - extentLine.startMetres, printRange.end - printRange.start);
+  const contentPx = 150 + 56 + 48 + Math.max(200, metres * TRACK_PIXELS_PER_METRE);
+  const fitByWidth = Math.min(3, Math.max(0.35, FORMATS.BBNT.px / contentPx));
+  const ref = useRef<HTMLDivElement>(null);
+  const [naturalH, setNaturalH] = useState(0);
+  // Chiều cao còn lại cho sơ đồ = A4 (297mm) trừ đầu trang, tiêu đề, chú thích, bảng (theo số dòng), tổng và khung ký.
+  const reservedMm = 150 + Math.max(2, rows.length) * 6.5;
+  const availHeightPx = Math.max(160, (297 - reservedMm) * 3.7795);
+  const fit = naturalH > 0 ? Math.min(fitByWidth, Math.max(0.3, availHeightPx / naturalH)) : fitByWidth;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const previous = el.style.zoom;
+    el.style.zoom = "1";
+    const height = el.getBoundingClientRect().height;
+    el.style.zoom = previous;
+    if (height > 0) setNaturalH(height);
+  }, [lineLayout, printRange]);
+
+  const pq = /phú quốc/i.test(projectName ?? "");
+  const totalMetres = rows.reduce((sum, row) => sum + Math.max(0, row.span.endMetres - row.span.startMetres), 0);
+  const defaults = loadSignerDefaults();
+  const signerName = (party: string) => defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "";
+  const today = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
+
+  return (
+    <article className="gtus-page">
+      <PrintFrame top="8mm" bottom="8mm" left="12mm" right="10mm">
+        <table className="gtus-head">
+          <tbody>
+            <tr>
+              <td className="gtus-head-left">
+                DỰ ÁN: {(projectName ?? "………").toUpperCase()}<br />
+                {pq ? "GÓI THẦU XL-03: CUNG CẤP VÀ THI CÔNG LẮP ĐẶT HỆ THỐNG RAY" : "GÓI THẦU: ………"}<br />
+                HẠNG MỤC: THI CÔNG HÀN RAY
+              </td>
+              <td className="gtus-head-right"><b>Địa điểm:</b><br />{pq ? "Phú Quốc - An Giang" : "………"}</td>
+            </tr>
+          </tbody>
+        </table>
+        <h1 className="gtus-title">PHỤ LỤC NGHIỆM THU GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
+        <p className="gtus-sub">
+          {lineLabel} · Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)} · {(printRange.end - printRange.start) / 1000} km
+        </p>
+
+        <h2 className="section-title">1. Sơ đồ giải toả ứng suất — {lineLabel}: ray trái và ray phải</h2>
+        <div className="diagram-frame">
+          <div ref={ref} className="diagram-scale" style={{ zoom: fit, fontFamily: "system-ui, sans-serif", ["--fit" as string]: fit }}>
+            <RailGrid
+              rows={lineLayout.rows}
+              longRails={lineLayout.longRails}
+              joints={lineJoints}
+              installed={lineLayout.installed}
+              selectedId=""
+              onSelect={noop}
+              embedded
+              compact
+              structures={{ placements: lineLayout.placements, symbols, editingPlacementId: null, onEditPlacement: noop, onRemovePlacement: noop }}
+            />
+          </div>
+        </div>
+        <StructureLegend layout={lineLayout} symbols={symbols} compact />
+
+        <h2 className="section-title">2. Tổng hợp thông tin giải toả ứng suất</h2>
+        <table className="lwr-summary gtus-table">
+          <thead>
+            <tr>
+              <th>Mã LWR</th>
+              <th>Ray</th>
+              <th>Lý trình đầu</th>
+              <th>Lý trình cuối</th>
+              <th>Dài (m)</th>
+              <th>T giải toả TB (°C)</th>
+              <th>T khoá TK 35±5 (°C)</th>
+              <th>Phương pháp</th>
+              <th>Kéo TK (mm)</th>
+              <th>Kéo TT (mm)</th>
+              <th>Bắt đầu</th>
+              <th>Kết thúc</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.code}-${row.span.startMetres}-${row.span.endMetres}`}>
+                <td className="c-code">{row.code}</td>
+                <td>{row.railLabel.split(" ")[0]}</td>
+                <td>Km{formatChainage(row.span.startMetres)}</td>
+                <td>Km{formatChainage(row.span.endMetres)}</td>
+                <td>{row.span.endMetres - row.span.startMetres}</td>
+                <td>{row.summary.tempLabel}</td>
+                <td>{row.neutralTemp}</td>
+                <td>{row.summary.methodLabel}</td>
+                <td>{row.summary.designPullMm}</td>
+                <td>{row.summary.actualPullMm}</td>
+                <td>{splitTimeLabel(row.summary.startTimeLabel)}</td>
+                <td>{splitTimeLabel(row.summary.endTimeLabel)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? <tr><td colSpan={12}>Chưa có đoạn LWR / thanh đã rải trong đoạn đã chọn.</td></tr> : null}
+            <tr className="gtus-total">
+              <td colSpan={4}>Tổng chiều dài giải toả ({rows.length} đoạn)</td>
+              <td>{totalMetres.toLocaleString("vi-VN")}</td>
+              <td colSpan={7}>= {(totalMetres / 1000).toLocaleString("vi-VN", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} km</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table className="gtus-sign">
+          <thead>
+            <tr><th>TƯ VẤN GIÁM SÁT</th><th>NHÀ THẦU CHÍNH</th><th>NHÀ THẦU PHỤ</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              {(["tvgs", "ntc", "ntp"] as const).map((party) => (
+                <td key={party}>HỌ VÀ TÊN: {signerName(party)}<br /><br />NGÀY: {today}<br /><br />CHỮ KÝ:</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </PrintFrame>
+    </article>
+  );
+}
+
 
 const RANGE_PRESETS_KM = [1, 2, 3, 5] as const;
 
@@ -120,9 +291,23 @@ export function TrackPrint({
 }) {
   const extent = trackExtent(layout.rows);
   const defaultSpanM = Math.min(2000, Math.max(500, extent.endMetres - extent.startMetres));
-  const [format, setFormat] = useState<keyof typeof FORMATS>("A4");
-  const [fromDraft, setFromDraft] = useState(formatChainage(extent.startMetres));
-  const [toDraft, setToDraft] = useState(formatChainage(Math.min(extent.endMetres, extent.startMetres + defaultSpanM)));
+  // Điểm bắt đầu mặc định = đầu đoạn LWR / thanh đã rải đầu tiên (không phải Km0 khi dự án thi công ở đoạn sau), để bản in có dữ liệu ngay.
+  const dataStart = (() => {
+    const starts: number[] = [];
+    for (const rail of layout.longRails) {
+      const span = getPlacementSpan(layout.rows, rail) ?? visibleLongRailSpan(layout.rows, rail);
+      if (span) starts.push(span.startMetres);
+    }
+    for (const row of layout.rows) for (const cell of row.cells) {
+      if (!cell.placed) continue;
+      const from = parseChainage(cell.from);
+      if (from !== null) starts.push(from);
+    }
+    return starts.length ? Math.max(extent.startMetres, Math.floor(Math.min(...starts) / 1000) * 1000) : extent.startMetres;
+  })();
+  const [format, setFormat] = useState<string>("A4");
+  const [fromDraft, setFromDraft] = useState(formatChainage(dataStart));
+  const [toDraft, setToDraft] = useState(formatChainage(Math.min(extent.endMetres, dataStart + defaultSpanM)));
   const [rangeError, setRangeError] = useState<string | null>(null);
 
   const printRange = useMemo(() => {
@@ -234,7 +419,7 @@ export function TrackPrint({
   // Sơ đồ phải nằm gọn trong MỘT trang: thu nhỏ thêm theo chiều cao còn lại (trừ lề, tiêu đề, legend).
   const diagramRef = useRef<HTMLDivElement>(null);
   const [naturalH, setNaturalH] = useState(0);
-  const pageHeightMm = format === "A4" ? 210 : 420;
+  const pageHeightMm = format === "A4" ? 210 : format === "BBNT" ? 297 : 420;
   const reservedMm = config.split ? 92 : 150; // lề trên+dưới 32 + đầu trang, tiêu đề mục, legend (và bảng tổng hợp nếu in 1 trang)
   const availHeightPx = Math.max(150, (pageHeightMm - reservedMm) * 3.7795);
   const fit = naturalH > 0 ? Math.min(fitByWidth, Math.max(0.3, availHeightPx / naturalH)) : fitByWidth;
@@ -284,6 +469,21 @@ export function TrackPrint({
       #lwr-track-print table.lwr-summary col.c-done { width:5%; }
       #lwr-track-print table.lwr-summary td.c-code { text-align:left; font-weight:600; }
       #lwr-track-print tr { break-inside:avoid; }
+      #lwr-track-print article.gtus-page { padding:0; font:9.5pt 'Times New Roman',serif; }
+      #lwr-track-print table.gtus-head { width:100%; border-collapse:collapse; margin-bottom:3mm; }
+      #lwr-track-print table.gtus-head td { border:1.2pt solid #000; padding:2mm 3mm; vertical-align:top; font-size:9pt; line-height:1.4; }
+      #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:78%; }
+      #lwr-track-print .gtus-title { font-size:13pt; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
+      #lwr-track-print .gtus-sub { text-align:center; font-size:10pt; margin:0 0 2mm; }
+      #lwr-track-print table.gtus-table { font-size:7pt; }
+      #lwr-track-print table.gtus-table th { font-size:6.5pt; }
+      #lwr-track-print table.gtus-table td.c-code { white-space:nowrap; }
+      #lwr-track-print table.gtus-table td { white-space:normal; line-height:1.15; }
+      #lwr-track-print table.gtus-table tr.gtus-total td { font-weight:bold; background:#eef2f7; text-align:left; }
+      #lwr-track-print table.gtus-sign { width:100%; border-collapse:collapse; margin-top:4mm; break-inside:avoid; }
+      #lwr-track-print table.gtus-sign th, #lwr-track-print table.gtus-sign td { border:1.2pt solid #000; padding:2mm 3mm; text-align:left; vertical-align:top; font-size:9pt; }
+      #lwr-track-print table.gtus-sign th { text-align:center; font-weight:bold; }
+      #lwr-track-print table.gtus-sign td { height:26mm; }
       @media print {
         @page { size:${config.size}; margin:0; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }
@@ -297,7 +497,7 @@ export function TrackPrint({
             }
     `}</style>
       <div className="toolbar">
-        <select aria-label="Khổ giấy" value={format} onChange={(e) => setFormat(e.target.value as keyof typeof FORMATS)}>
+        <select aria-label="Khổ giấy" value={format} onChange={(e) => setFormat(e.target.value)}>
           {Object.entries(FORMATS).map(([id, item]) => (
             <option key={id} value={id}>{item.label}</option>
           ))}
@@ -354,6 +554,21 @@ export function TrackPrint({
         <article>
           <p>Nhập đoạn Km hợp lệ để xem trước bản in.</p>
         </article>
+      ) : config.bbnt ? (
+        <>
+          {["TUYẾN THƯỢNG", "TUYẾN HẠ"].filter((line) => layout.rows.some((row) => row.line === line)).map((line) => (
+            <GtusPage
+              key={line}
+              line={line}
+              layout={sliced}
+              printRange={printRange}
+              joints={joints}
+              symbols={symbols}
+              projectName={projectName}
+              rows={lwrRows.filter((row) => /hạ/i.test(row.railLabel) === /hạ/i.test(line))}
+            />
+          ))}
+        </>
       ) : (
         <article>
 <PrintFrame>

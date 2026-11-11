@@ -31,7 +31,7 @@ function formatDate(iso: string) {
 }
 
 function loaiPhieu(r: RfiSummary) {
-  return r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi công việc hàn" : "Yêu cầu nghiệm thu";
+  return r.thong_tin?.loai_rfi === "theo-doi" ? (r.thong_tin?.cong_viec === "gtus" ? "Giám sát và nghiệm thu giải toả ứng suất" : "Theo dõi công việc hàn") : "Yêu cầu nghiệm thu";
 }
 
 function phamVi(r: RfiSummary) {

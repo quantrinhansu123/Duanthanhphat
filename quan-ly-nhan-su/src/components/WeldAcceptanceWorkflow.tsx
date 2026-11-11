@@ -35,12 +35,14 @@ type RfiThongTin = {
   gio_bat_dau: string;
   nt_hinh_hoc: boolean;
   nt_sieu_am: boolean;
+  /** "gtus" = phiếu giám sát và nghiệm thu giải toả ứng suất ray (theo tuyến, không cần chọn mối). */
+  cong_viec: string;
 };
 
 const emptyThongTin = (): RfiThongTin => ({
   dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", giam_sat: "",
   // Giờ nghiệm thu gợi ý sẵn 8h00 cho mọi loại phiếu (nghiệm thu / theo dõi / cả giám sát và nghiệm thu).
-  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true,
+  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true, cong_viec: "",
 });
 
 function thongTinToPayload(t: RfiThongTin): Record<string, string> {
@@ -55,6 +57,7 @@ function thongTinToPayload(t: RfiThongTin): Record<string, string> {
     gio_bat_dau: t.gio_bat_dau,
     nt_hinh_hoc: t.nt_hinh_hoc ? "1" : "",
     nt_sieu_am: t.nt_sieu_am ? "1" : "",
+    cong_viec: t.cong_viec,
   };
 }
 
@@ -71,6 +74,7 @@ function thongTinFromStored(raw: Record<string, string> | undefined): RfiThongTi
     gio_bat_dau: t.gio_bat_dau ?? "",
     nt_hinh_hoc: t.nt_hinh_hoc == null ? true : t.nt_hinh_hoc === "1",
     nt_sieu_am: t.nt_sieu_am == null ? true : t.nt_sieu_am === "1",
+    cong_viec: t.cong_viec ?? "",
   };
 }
 
@@ -88,7 +92,7 @@ function saveRfiDraft(projectId: string, t: RfiThongTin) {
     window.localStorage.setItem(rfiDraftKey(projectId), JSON.stringify({
       dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.giam_sat,
       tuyen_thuong: t.tuyen_thuong, tuyen_ha: t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
-      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am,
+      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am, cong_viec: t.cong_viec,
     }));
   } catch { /* ignore */ }
 }
@@ -503,11 +507,12 @@ function RfiPanel({
       </div>
       <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
       <div role="group" aria-label="Loại phiếu" className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => setKind("nghiem-thu")} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring} onClick={() => setKind("theo-doi")} className={monitoring ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => setKind("ca-hai")} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
       </div>
-      {monitoring && <p className="text-sm text-slate-600">Phiếu theo dõi có thể phát ngay mà không cần chọn mối.</p>}
+      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn tuyến (thượng / hạ), phát ngay không cần chọn mối. Biên bản GTUS in theo đúng tuyến này." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
       <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
@@ -693,7 +698,7 @@ function RfiPanel({
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
                 <td className="p-2">{r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi" : rfiAcceptanceTitle(r.thong_tin)}</td>
+                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? (r.thong_tin?.cong_viec === "gtus" ? "Giải toả ứng suất" : "Theo dõi") : rfiAcceptanceTitle(r.thong_tin)}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
                 <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
