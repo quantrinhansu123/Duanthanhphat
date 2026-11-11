@@ -126,9 +126,9 @@ export async function publishRfi(input: { id: string; du_an_id: string; so_phieu
 }
 /** Lưu nội dung in nhập tay của phiếu yêu cầu (đối tượng, nội dung vị trí, ngày giờ, Km). */
 export const saveRfiPrintInfo = (id: string, values: Record<string, string>) => qualityRequest<{ id: string }>({ action: "rfi-print-save", id, values });
-export type GtusCandidate = { id: string; code: string; route: "ha" | "thuong"; rail: "trai" | "phai"; startMetres: number; endMetres: number;
-  releaseDate: string | null; completedAt: string | null; used: string | null };
-/** Thanh LWR đã đưa lên track map, đủ điều kiện phát RFI giải toả ứng suất. */
+export type GtusCandidate = { id: string; code: string; lwr: string | null; route: "ha" | "thuong"; rail: "trai" | "phai"; startMetres: number; endMetres: number;
+  from: string; to: string; used: string | null };
+/** Thanh ray màu xám trên track map (đã rải, chưa giải toả), đủ điều kiện phát RFI giải toả ứng suất. */
 export const loadGtusCandidates = (du_an_id: string) => qualityRequest<{ candidates: GtusCandidate[] }>({ action: "gtus-candidates", du_an_id });
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
 export async function deleteRfi(id: string) {

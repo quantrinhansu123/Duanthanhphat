@@ -285,7 +285,7 @@ export function TrackPrint({
   projectName,
   initialFormat,
   initialRange,
-  onlyLongRailIds,
+  onlyCellIds,
 }: {
   layout: TrackLayout;
   joints: RailJoint[];
@@ -295,8 +295,8 @@ export function TrackPrint({
   /** In từ RFI GTUS: mở sẵn mẫu BBNT - GTUS, đúng đoạn Km của phiếu. */
   initialFormat?: string;
   initialRange?: { start: number; end: number };
-  /** Chỉ liệt kê các thanh LWR này (RFI GTUS đã chọn) trong bảng và tổng chiều dài. */
-  onlyLongRailIds?: string[];
+  /** Chỉ liệt kê các thanh ray (cell) này — RFI GTUS đã chọn — trong bảng và tổng chiều dài. */
+  onlyCellIds?: string[];
 }) {
   const extent = trackExtent(layout.rows);
   const defaultSpanM = Math.min(2000, Math.max(500, extent.endMetres - extent.startMetres));
@@ -354,13 +354,12 @@ export function TrackPrint({
         completed: isLongRailReleased(sliced.rows, rail) ? "Đạt" : "Chưa",
       }];
     });
-    const onlyIds = onlyLongRailIds ? new Set(onlyLongRailIds) : null;
-    if (onlyIds) return fromLongRails.filter((row) => row.id && onlyIds.has(row.id));
-    if (fromLongRails.length) return fromLongRails;
+    if (!onlyCellIds && fromLongRails.length) return fromLongRails;
 
     // Dự án chỉ tô thanh ngắn (chưa tạo đoạn LWR): gom từng thanh đã rải thành dòng tổng hợp.
     return sliced.rows.flatMap((row) => row.cells.flatMap((cell) => {
       if (!cell.placed) return [];
+      if (onlyCellIds && !onlyCellIds.includes(cell.id)) return [];
       const startMetres = parseChainage(cell.from);
       const endMetres = parseChainage(cell.to);
       if (startMetres === null || endMetres === null || endMetres <= startMetres) return [];

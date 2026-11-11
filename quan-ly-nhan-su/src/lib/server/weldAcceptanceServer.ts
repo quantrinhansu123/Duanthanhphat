@@ -370,12 +370,18 @@ export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   return { id };
 }
 
-/** Thanh LWR đủ điều kiện phát RFI giải toả ứng suất: đã đưa lên track map của DỰ ÁN (sơ đồ lwr_track_layouts, có lý trình đầu–cuối) và chưa nằm trong RFI GTUS nào. */
+/**
+ * Thanh ray đủ điều kiện phát RFI giải toả ứng suất = thanh MÀU XÁM trên track map của dự án (sơ đồ lwr_track_layouts):
+ * đã rải (placed) và chưa giải toả (released). Lý trình đầu / cuối lấy đúng từ thanh (cell.from → cell.to).
+ * Thanh nằm trong RFI GTUS khác thì đánh dấu "used".
+ */
 export async function listGtusCandidates(body: Record<string, unknown>) {
   const projectId = qualityUuid(body.du_an_id);
   const layoutRow = await db().from("lwr_track_layouts").select("layout").eq("project_id", projectId).maybeSingle();
   if (layoutRow.error) throw layoutRow.error;
-  const mapRails = ((layoutRow.data?.layout as { longRails?: Record<string, unknown>[] } | null)?.longRails ?? []);
+  type Cell = { id?: unknown; from?: unknown; to?: unknown; placed?: unknown; released?: unknown };
+  type Row = { line?: unknown; rail?: unknown; cells?: Cell[] };
+  const layout = (layoutRow.data?.layout ?? {}) as { rows?: Row[]; longRails?: Record<string, unknown>[] };
   const used = new Map<string, string>();
   const rfis = await db().from("phieu_yeu_cau_nghiem_thu").select("id,so_phieu,thong_tin").eq("du_an_id", projectId).limit(2000);
   if (rfis.error) throw rfis.error;
@@ -384,17 +390,33 @@ export async function listGtusCandidates(body: Record<string, unknown>) {
     if (info.cong_viec !== "gtus" || rfi.id === body.exclude_rfi_id) continue; // phát lại cùng yêu cầu (retry) không tự chặn chính nó
     for (const id of String(info.lwr_ids ?? "").split(",").filter(Boolean)) used.set(id, String(rfi.so_phieu));
   }
-  const lines: Record<string, { route: "ha" | "thuong"; rail: "trai" | "phai" }> = {
-    DT: { route: "ha", rail: "trai" }, DP: { route: "ha", rail: "phai" }, UT: { route: "thuong", rail: "trai" }, UP: { route: "thuong", rail: "phai" },
+  const metres = (value: unknown) => {
+    const m = /(\d+)\+(\d+(?:[.,]\d+)?)/.exec(String(value ?? ""));
+    return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : NaN;
   };
-  const candidates = mapRails.flatMap((rail) => {
-    const line = lines[String(rail.rowKey)];
-    const start = Number(rail.startMetres), end = Number(rail.endMetres);
-    if (!line || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
-    return [{ id: String(rail.id), code: String(rail.code ?? ""), ...line, startMetres: start, endMetres: end,
-      releaseDate: typeof rail.releaseDate === "string" ? rail.releaseDate : null,
-      completedAt: typeof rail.completedAt === "string" ? rail.completedAt : null,
-      used: used.get(String(rail.id)) ?? null }];
+  const display = (id: string) => id.replace(/^(UT|UP|DT|DP)/i, (p) => ({ UT: "TT", UP: "TP", DT: "HT", DP: "HP" } as Record<string, string>)[p.toUpperCase()] ?? p);
+  const prefixOf = (row: Row) => {
+    const line = String(row.line ?? ""), rail = String(row.rail ?? "");
+    return /hạ/i.test(line) ? (/phải/i.test(rail) ? "DP" : "DT") : (/phải/i.test(rail) ? "UP" : "UT");
+  };
+  const candidates = (layout.rows ?? []).flatMap((row) => {
+    const prefix = prefixOf(row);
+    return (row.cells ?? []).flatMap((cell) => {
+      if (!cell.placed || cell.released) return [];
+      const start = metres(cell.from), end = metres(cell.to);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+      const id = String(cell.id ?? "");
+      if (!id) return [];
+      const lwr = (layout.longRails ?? []).find((rail) =>
+        String(rail.rowKey) === prefix && Number(rail.startMetres) < end && Number(rail.endMetres) > start);
+      return [{
+        id, code: display(id), lwr: lwr ? String(lwr.code ?? "") : null,
+        route: /hạ/i.test(String(row.line ?? "")) ? "ha" as const : "thuong" as const,
+        rail: /phải/i.test(String(row.rail ?? "")) ? "phai" as const : "trai" as const,
+        startMetres: start, endMetres: end, from: String(cell.from), to: String(cell.to),
+        used: used.get(id) ?? null,
+      }];
+    });
   });
   candidates.sort((a, b) => Number(a.route === "thuong") - Number(b.route === "thuong") || a.startMetres - b.startMetres || a.rail.localeCompare(b.rail));
   return { candidates };

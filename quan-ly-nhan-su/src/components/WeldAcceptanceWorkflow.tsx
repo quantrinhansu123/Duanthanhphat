@@ -458,7 +458,7 @@ function RfiPanel({
     return () => { active = false; };
   }, [gtus, projectId]);
   const gtusSelected = new Set(thongTin.lwr_ids.split(",").filter(Boolean));
-  const kmText = (m: number) => `Km${Math.floor(m / 1000)}+${String(Math.round((m % 1000) * 100) / 100).padStart(3, "0")}`;
+  const kmText = (m: number) => `Km${Math.floor(m / 1000)}+${(Math.round((m % 1000) * 100) / 100).toFixed(2).padStart(6, "0")}`;
   function toggleGtus(id: string, on: boolean) {
     const next = new Set(gtusSelected);
     if (on) next.add(id); else next.delete(id);
@@ -549,7 +549,7 @@ function RfiPanel({
         <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
       </div>
-      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh LWR đã hoàn thành (đã đưa lên track map) ở bước Thông tin phiếu; tuyến và lý trình tự lấy theo thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
+      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh ray màu xám trên track map ở bước Thông tin phiếu; tuyến và lý trình tự lấy đúng theo từng thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
       <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
@@ -635,9 +635,9 @@ function RfiPanel({
       <div role="tabpanel" id="rfi-step-panel-details" aria-labelledby="rfi-step-details" hidden={activeStep !== "details"} className="space-y-3">
       {gtus && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Chọn thanh LWR đã hoàn thành (đã đưa lên track map)</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Chọn thanh ray màu xám trên track map (đã rải, chưa giải toả)</h3>
           {gtusError && <p role="alert" className="text-xs text-red-700">{gtusError}</p>}
-          {!gtusError && gtusCandidates.length === 0 && <p className="text-xs text-slate-600">Chưa có thanh LWR nào đủ điều kiện. Đưa thanh LWR lên track map (có lý trình đầu–cuối) rồi quay lại.</p>}
+          {!gtusError && gtusCandidates.length === 0 && <p className="text-xs text-slate-600">Chưa có thanh ray xám nào trên track map của dự án này. Rải thanh ray lên track map rồi quay lại.</p>}
           {("thuong,ha".split(",") as ("thuong" | "ha")[]).map((route) => {
             const list = gtusCandidates.filter((c) => c.route === route);
             if (!list.length) return null;
@@ -648,7 +648,7 @@ function RfiPanel({
                   <label key={c.id} className={`flex min-h-9 items-center gap-2 text-sm ${c.used ? "opacity-50" : "cursor-pointer"}`}>
                     <input type="checkbox" disabled={Boolean(c.used)} checked={gtusSelected.has(c.id)} onChange={(e) => toggleGtus(c.id, e.target.checked)} />
                     <span className="font-mono font-semibold">{c.code}</span>
-                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {Math.round(c.endMetres - c.startMetres)} m</span>
+                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{c.lwr ? ` · LWR ${c.lwr}` : ""} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round((c.endMetres - c.startMetres) * 100) / 100).toLocaleString("vi-VN")} m</span>
                     {c.used ? <span className="text-xs text-amber-800">đã có phiếu {c.used}</span> : null}
                   </label>
                 ))}
@@ -714,7 +714,7 @@ function RfiPanel({
           </button>
           {editingId ? <button type="button" className={secondary} disabled={busy} onClick={cancelEdit}>Hủy sửa — phát phiếu mới</button> : null}
         </div>
-        {routeMissing && <p className="text-xs text-amber-800">{gtus ? "Chọn ít nhất một thanh LWR đã hoàn thành trước khi phát phiếu giải toả ứng suất." : "Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi."}</p>}
+        {routeMissing && <p className="text-xs text-amber-800">{gtus ? "Chọn ít nhất một thanh ray xám trước khi phát phiếu giải toả ứng suất." : "Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi."}</p>}
         {!editingId && !monitoring && !selected.size && (
           <p className="text-xs text-amber-800">Mở tab <b>2. Chọn mối</b> để tìm và chọn các mối trước khi phát phiếu.</p>
         )}
@@ -802,7 +802,7 @@ function RfiPanel({
         <GtusBbntPrintDialog
           projectId={projectId}
           projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
-          lwrIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
+          cellIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
           onClose={() => setGtusPrint(null)}
         />
       )}

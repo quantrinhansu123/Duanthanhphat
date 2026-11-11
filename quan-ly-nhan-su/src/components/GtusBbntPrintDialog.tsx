@@ -6,7 +6,7 @@ import { loadTrackLayout } from "@lwr/lib/track-layout-storage";
 import { loadStructureSymbols } from "@lwr/lib/structure-storage";
 import { loadJournalWelds } from "@lwr/lib/weld-journal";
 import { buildRailJoints } from "@lwr/lib/weld-track-map";
-import type { TrackLayout } from "@lwr/lib/track-editor";
+import { parseChainage, type TrackLayout } from "@lwr/lib/track-editor";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -14,12 +14,13 @@ type Loaded = { layout: TrackLayout; symbols: StructureSymbol[]; joints: RailJoi
 
 /**
  * In «Phụ lục nghiệm thu giải toả ứng suất» (BBNT - GTUS) theo một RFI GTUS:
- * nạp sơ đồ track map của dự án, chỉ lấy các thanh LWR đã chọn trong RFI và in đúng đoạn Km của chúng.
+ * nạp sơ đồ track map của dự án, chỉ lấy các thanh ray đã chọn trong RFI và in đúng đoạn Km của chúng.
  */
-export default function GtusBbntPrintDialog({ projectId, projectName, lwrIds, onClose }: {
+export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, onClose }: {
   projectId: string;
   projectName: string;
-  lwrIds: string[];
+  /** Mã các thanh ray (cell) đã chọn trong RFI. */
+  cellIds: string[];
   onClose: () => void;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
@@ -61,9 +62,12 @@ export default function GtusBbntPrintDialog({ projectId, projectName, lwrIds, on
       </div>
     );
   }
-  const rails = data.layout.longRails.filter((rail) => lwrIds.includes(rail.id) && Number.isFinite(rail.startMetres) && Number.isFinite(rail.endMetres));
-  const start = rails.length ? Math.min(...rails.map((rail) => rail.startMetres as number)) : undefined;
-  const end = rails.length ? Math.max(...rails.map((rail) => rail.endMetres as number)) : undefined;
+  const spans = data.layout.rows.flatMap((row) => row.cells.filter((cell) => cellIds.includes(cell.id)).flatMap((cell) => {
+    const from = parseChainage(cell.from), to = parseChainage(cell.to);
+    return from !== null && to !== null && to > from ? [{ from, to }] : [];
+  }));
+  const start = spans.length ? Math.min(...spans.map((x) => x.from)) : undefined;
+  const end = spans.length ? Math.max(...spans.map((x) => x.to)) : undefined;
   return (
     <TrackPrint
       layout={data.layout}
@@ -72,7 +76,7 @@ export default function GtusBbntPrintDialog({ projectId, projectName, lwrIds, on
       projectName={projectName}
       initialFormat="BBNT"
       initialRange={start !== undefined && end !== undefined ? { start, end } : undefined}
-      onlyLongRailIds={lwrIds}
+      onlyCellIds={cellIds}
       onClose={onClose}
     />
   );
