@@ -712,6 +712,8 @@ export type RailCellPatch = {
   from?: string;
   to?: string;
   lengthMetres?: number;
+  /** Lượng điều chỉnh chiều dài (m, +/−); 0 để xoá. */
+  lengthAdjust?: number;
   /** Ghi đè T khóa trực tiếp (hiếm); ưu tiên leftTemp/rightTemp → temp = trung bình. */
   temp?: number;
   leftTemp?: number;
@@ -733,11 +735,19 @@ export function sanitizeRailReport(value: unknown): RailReport | undefined {
   return rows.length ? { rows } : undefined;
 }
 
-export function railCellLengthMetres(cell: RailCell): number | null {
+/** Chênh lý trình đầu–cuối của thanh (hình học trên tuyến), chưa tính lượng điều chỉnh. */
+export function railCellSpanMetres(cell: RailCell): number | null {
   const from = parseChainage(cell.from);
   const to = parseChainage(cell.to);
   if (from === null || to === null) return null;
   return Math.round((to - from) * 1000) / 1000;
+}
+
+/** Chiều dài ray = lý trình cuối − lý trình đầu + lượng điều chỉnh (+/−). */
+export function railCellLengthMetres(cell: RailCell): number | null {
+  const span = railCellSpanMetres(cell);
+  if (span === null) return null;
+  return Math.round((span + (Number.isFinite(cell.lengthAdjust) ? (cell.lengthAdjust as number) : 0)) * 1000) / 1000;
 }
 
 /** T khóa = (T trái + T phải) / 2. */
@@ -791,6 +801,14 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
     if (patch.released) cell.released = true;
     else delete cell.released;
   }
+  if (patch.lengthAdjust !== undefined) {
+    if (!Number.isFinite(patch.lengthAdjust) || Math.abs(patch.lengthAdjust) > 1000) {
+      throw new RangeError("Lượng điều chỉnh phải là số mét trong khoảng ±1000.");
+    }
+    const adjust = Math.round(patch.lengthAdjust * 1000) / 1000;
+    if (adjust === 0) delete cell.lengthAdjust;
+    else cell.lengthAdjust = adjust;
+  }
   if (patch.report !== undefined) {
     const report = sanitizeRailReport(patch.report);
     if (report) cell.report = report;
@@ -799,7 +817,7 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
 
   const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
   if (!hasGeometry) {
-    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined && patch.report === undefined) {
+    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined && patch.report === undefined && patch.lengthAdjust === undefined) {
       throw new RangeError("Không có thông số để cập nhật.");
     }
     return next;
@@ -852,7 +870,7 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   cell.to = formatChainage(newTo);
 
   for (let i = index + 1; i < row.cells.length; i += 1) {
-    const length = railCellLengthMetres(row.cells[i]);
+    const length = railCellSpanMetres(row.cells[i]);
     const start = parseChainage(row.cells[i - 1].to);
     if (length === null || length < 1 || start === null) {
       throw new RangeError("Không dồn được các thanh phía sau.");
@@ -883,7 +901,9 @@ export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailC
   const longRails = layout.longRails.map((item) => {
     const span = getPlacementSpan(rows, item);
     if (!span) return item;
-    const length = span.endMetres - span.startMetres;
+    // Chiều dài LWR = chênh lý trình + tổng lượng điều chỉnh của các thanh ngắn trong đoạn.
+    const adjust = span.row.cells.slice(span.startIndex, span.endIndex + 1).reduce((sum, c) => sum + (Number.isFinite(c.lengthAdjust) ? (c.lengthAdjust as number) : 0), 0);
+    const length = span.endMetres - span.startMetres + adjust;
     const rightLength = Math.min(item.params.rightLength, length);
     const nextParams = { ...item.params, leftLength: length - rightLength, rightLength };
     const tempChanged =
@@ -1017,6 +1037,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         || (rawCell.rightTemp !== undefined && (typeof rawCell.rightTemp !== "number" || !Number.isFinite(rawCell.rightTemp)))
         || (rawCell.placed !== undefined && typeof rawCell.placed !== "boolean")
         || (rawCell.released !== undefined && typeof rawCell.released !== "boolean")
+        || (rawCell.lengthAdjust !== undefined && (typeof rawCell.lengthAdjust !== "number" || !Number.isFinite(rawCell.lengthAdjust)))
         || cellIds.has(rawCell.id)) return null;
       const start = parseChainage(rawCell.from);
       const end = parseChainage(rawCell.to);
@@ -1037,6 +1058,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         ...(rightTemp !== undefined ? { rightTemp } : {}),
         ...(rawCell.placed ? { placed: true } : {}),
         ...(rawCell.released ? { released: true } : {}),
+        ...(typeof rawCell.lengthAdjust === "number" && rawCell.lengthAdjust !== 0 ? { lengthAdjust: rawCell.lengthAdjust } : {}),
         ...(sanitizeRailReport(rawCell.report) ? { report: sanitizeRailReport(rawCell.report) } : {}),
       });
       cellIds.add(rawCell.id);

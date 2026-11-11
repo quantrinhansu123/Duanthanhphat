@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
+import GtusRfiDialog from "@/components/GtusRfiDialog";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
@@ -251,6 +252,7 @@ function RfiPanel({
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
   const [gtusPrint, setGtusPrint] = useState<RfiSummary | null>(null);
+  const [gtusManage, setGtusManage] = useState<RfiSummary | null>(null);
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
@@ -648,7 +650,7 @@ function RfiPanel({
                   <label key={c.id} className={`flex min-h-9 items-center gap-2 text-sm ${c.used ? "opacity-50" : "cursor-pointer"}`}>
                     <input type="checkbox" disabled={Boolean(c.used)} checked={gtusSelected.has(c.id)} onChange={(e) => toggleGtus(c.id, e.target.checked)} />
                     <span className="font-mono font-semibold">{c.code}</span>
-                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{c.lwr ? ` · LWR ${c.lwr}` : ""} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round((c.endMetres - c.startMetres) * 100) / 100).toLocaleString("vi-VN")} m</span>
+                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{c.lwr ? ` · LWR ${c.lwr}` : ""} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round(c.lengthMetres * 100) / 100).toLocaleString("vi-VN")} m</span>
                     {c.used ? <span className="text-xs text-amber-800">đã có phiếu {c.used}</span> : null}
                   </label>
                 ))}
@@ -771,7 +773,10 @@ function RfiPanel({
                     label={`Thao tác phiếu ${r.so_phieu}`}
                     actions={[
                       { label: "Sửa", disabled: busy, onSelect: () => beginEdit(r) },
-                      ...(r.thong_tin?.cong_viec === "gtus" && r.thong_tin?.lwr_ids ? [{ label: "In BBNT - GTUS", onSelect: () => setGtusPrint(r) }] : []),
+                      ...(r.thong_tin?.cong_viec === "gtus" && r.thong_tin?.lwr_ids ? [
+                        { label: "Nghiệm thu / thanh toán GTUS", onSelect: () => setGtusManage(r) },
+                        { label: "In BBNT - GTUS", onSelect: () => setGtusPrint(r) },
+                      ] : []),
                       { label: "Xem / In", onSelect: () => { void Promise.resolve(onOpen(r)).catch((e) => setError(message(e))); } },
                       ...(r.child_signing ? [{
                         label: r.child_signing.allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký",
@@ -798,6 +803,9 @@ function RfiPanel({
         </table>
       </div>
       </div>
+      {gtusManage && (
+        <GtusRfiDialog rfiId={gtusManage.id} onClose={() => setGtusManage(null)} onPrint={() => setGtusPrint(gtusManage)} />
+      )}
       {gtusPrint && (
         <GtusBbntPrintDialog
           projectId={projectId}

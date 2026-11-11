@@ -9,6 +9,7 @@ import {
   lockTempFromSides,
   parseChainage,
   railCellLengthMetres,
+  railCellSpanMetres,
   railCellLockTemp,
   type RailCellPatch,
 } from "@lwr/lib/track-editor";
@@ -103,7 +104,8 @@ export function RailDetailPanel({
   const lengthLocked = Boolean(cell.released);
   const [fromDraft, setFromDraft] = useState(cell.from);
   const [toDraft, setToDraft] = useState(cell.to);
-  const [lengthDraft, setLengthDraft] = useState(String(length));
+  const span = railCellSpanMetres(cell) ?? 0;
+  const [adjustDraft, setAdjustDraft] = useState(String(cell.lengthAdjust ?? 0));
   const [leftTempDraft, setLeftTempDraft] = useState(String(sideTempOf(cell, "left")));
   const [rightTempDraft, setRightTempDraft] = useState(String(sideTempOf(cell, "right")));
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -125,18 +127,18 @@ export function RailDetailPanel({
   useEffect(() => {
     setFromDraft(cell.from);
     setToDraft(cell.to);
-    setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
+    setAdjustDraft(String(cell.lengthAdjust ?? 0));
     setLeftTempDraft(String(sideTempOf(cell, "left")));
     setRightTempDraft(String(sideTempOf(cell, "right")));
     setFieldError(null);
-  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp]);
+  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp, cell.lengthAdjust]);
 
   function apply(patch: RailCellPatch): boolean {
     const ok = onChange(patch);
     if (!ok) {
       setFromDraft(cell.from);
       setToDraft(cell.to);
-      setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       setLeftTempDraft(String(sideTempOf(cell, "left")));
       setRightTempDraft(String(sideTempOf(cell, "right")));
       return false;
@@ -161,23 +163,24 @@ export function RailDetailPanel({
     apply({ to: toDraft });
   }
 
-  function commitLength() {
+  function commitAdjust() {
     if (lengthLocked) {
-      setLengthDraft(String(length));
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       setFieldError("Chiều dài đã khóa vì thanh đã giải toả. Bỏ Đạt nếu cần sửa tiếp.");
       return;
     }
-    const next = Number(lengthDraft.trim().replace(",", "."));
-    if (Number.isFinite(next) && next === length) {
-      setLengthDraft(String(length));
+    const raw = adjustDraft.trim().replace(",", ".");
+    const next = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(next) || Math.abs(next) > 1000) {
+      setFieldError("Lượng điều chỉnh phải là số mét trong khoảng ±1000 (nhập âm nếu ngắn hơn lý trình).");
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       return;
     }
-    if (!Number.isFinite(next) || next < 1) {
-      setFieldError("Chiều dài đoạn phải là số mét dương.");
-      setLengthDraft(String(length));
+    if (next === (cell.lengthAdjust ?? 0)) {
+      setAdjustDraft(String(next));
       return;
     }
-    apply({ lengthMetres: next });
+    apply({ lengthAdjust: next });
   }
 
   function parseSideTemp(draft: string, fallback: number) {
@@ -345,22 +348,31 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0 col-span-2">
-              <span className="text-slate-600">Chiều dài đoạn {lengthLocked ? "(đã khóa)" : "(sửa hàng ngày)"}</span>
+              <span className="text-slate-600">Lượng điều chỉnh {lengthLocked ? "(đã khóa)" : "(+/−, sửa khi cần)"}</span>
               <span className="flex items-center gap-1">
                 <input
                   className={inputClass}
-                  inputMode="numeric"
-                  value={lengthDraft}
-                  aria-label="Chiều dài đoạn"
+                  inputMode="decimal"
+                  value={adjustDraft}
+                  aria-label="Lượng điều chỉnh chiều dài"
                   disabled={lengthLocked}
                   readOnly={lengthLocked}
-                  onChange={(event) => setLengthDraft(event.target.value)}
-                  onBlur={commitLength}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLength(); } }}
+                  onChange={(event) => setAdjustDraft(event.target.value)}
+                  onBlur={commitAdjust}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitAdjust(); } }}
                 />
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">m</span>
               </span>
             </label>
+            <div className="col-span-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm">
+              <p className="text-xs font-semibold text-sky-900">Chiều dài ray (tự tính)</p>
+              <p className="mt-1 font-bold text-sky-800">
+                {length.toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m
+                <span className="ml-2 text-xs font-medium text-sky-700">
+                  = lý trình cuối − lý trình đầu ({span.toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m) {(cell.lengthAdjust ?? 0) >= 0 ? "+" : "−"} điều chỉnh ({Math.abs(cell.lengthAdjust ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m)
+                </span>
+              </p>
+            </div>
           </div>
           <StressReleaseCalculator
             compact

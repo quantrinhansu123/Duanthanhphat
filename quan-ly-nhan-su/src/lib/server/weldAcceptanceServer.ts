@@ -6,6 +6,7 @@ import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQuality
 import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { fieldWeldCode } from "@/lib/weldCode";
+import { deleteGtusThanh, snapshotGtusThanh } from "@/lib/server/gtusServer";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
@@ -237,7 +238,9 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   if (body.loai_rfi === "theo-doi") {
     const range = object(body.filters ?? {});
     const fields = { nameFrom: str(range.nameFrom, 100), nameTo: str(range.nameTo, 100), kmFrom: str(range.kmFrom, 40), kmTo: str(range.kmTo, 40) };
-    try { validateMonitoringRange(fields); } catch (error) { throw new QualityApiError((error as Error).message); }
+    // Phiếu GTUS chọn theo thanh ray trên track map: không cần khoảng mối / Km.
+    const isGtus = object(body.thong_tin ?? {}).cong_viec === "gtus";
+    if (!isGtus) { try { validateMonitoringRange(fields); } catch (error) { throw new QualityApiError((error as Error).message); } }
     const date = qualityDate(body.ngay_moi), number = str(body.so_phieu, 80);
     if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
     const info = object(body.thong_tin ?? {});
@@ -256,6 +259,11 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
       const bad = ids.find((id) => !eligible.has(id) || eligible.get(id)!.used);
       if (bad) throw new QualityApiError("Có thanh LWR chưa đủ điều kiện hoặc đã nằm trong phiếu giải toả ứng suất khác. Bấm Tải lại để cập nhật danh sách.", 409);
       Object.assign(payload.thong_tin, { lwr_ids: ids.join(","), lwr_codes: ids.map((id) => eligible.get(id)!.code).join(", ") });
+      // Lưu danh sách thanh của phiếu (chụp lý trình, chiều dài) để nghiệm thu và thanh toán từng thanh — như mối hàn của RFI nghiệm thu.
+      await snapshotGtusThanh(payload.id, ids.map((thanhId) => {
+        const c = eligible.get(thanhId)!;
+        return { thanh_id: c.id, ma_thanh: c.code, route: c.route, ray: c.rail, ly_trinh_dau: c.from, ly_trinh_cuoi: c.to, chieu_dai: c.lengthMetres, ma_lwr: c.lwr };
+      }));
     }
     const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
     if (error) {
@@ -409,8 +417,10 @@ export async function listGtusCandidates(body: Record<string, unknown>) {
       if (!id) return [];
       const lwr = (layout.longRails ?? []).find((rail) =>
         String(rail.rowKey) === prefix && Number(rail.startMetres) < end && Number(rail.endMetres) > start);
+      const adjust = Number.isFinite(Number((cell as { lengthAdjust?: unknown }).lengthAdjust)) ? Number((cell as { lengthAdjust?: unknown }).lengthAdjust) : 0;
       return [{
         id, code: display(id), lwr: lwr ? String(lwr.code ?? "") : null,
+        lengthMetres: Math.round((end - start + adjust) * 1000) / 1000, // chiều dài ray = lý trình cuối − đầu + điều chỉnh
         route: /hạ/i.test(String(row.line ?? "")) ? "ha" as const : "thuong" as const,
         rail: /phải/i.test(String(row.rail ?? "")) ? "phai" as const : "trai" as const,
         startMetres: start, endMetres: end, from: String(cell.from), to: String(cell.to),
@@ -498,6 +508,7 @@ export async function deleteRfi(body: Record<string, unknown>) {
     if (error.code === "P0001") throw new QualityApiError(error.message, 409);
     throw error;
   }
+  await deleteGtusThanh(id); // phiếu GTUS: xoá luôn nghiệm thu / thanh toán từng thanh
   return { id };
 }
 

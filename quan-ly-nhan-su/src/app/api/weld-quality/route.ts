@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
+import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
 import { listGtusCandidates, loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (["split-list", "split-detail", "split-publish", "split-complete", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
     if (body.action === "rfi-overview") return NextResponse.json(await loadRfiOverview(body));
+    if (body.action === "gtus-detail") return NextResponse.json(await gtusDetail(body));
+    if (body.action === "gtus-save") return NextResponse.json(await gtusSave(body, actor));
     if (body.action === "gtus-candidates") return NextResponse.json(await listGtusCandidates(body));
     if (body.action === "rfi-candidates") return NextResponse.json(await loadRfiCandidates(body));
     if (body.action === "rfi-number") return NextResponse.json({ so_phieu: await nextRfiNumber(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" || body.loai === "sieu-am" ? body.loai : undefined) });

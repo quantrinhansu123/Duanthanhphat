@@ -9,6 +9,7 @@ import {
   getPlacementSpan,
   isLongRailReleased,
   parseChainage,
+  railCellLengthMetres,
   railDisplayLabel,
   railRowKey,
   sliceLayoutForPrint,
@@ -107,6 +108,8 @@ const FORMATS: Record<string, { label: string; size: string; width: string; px: 
 
 type LwrPrintRow = {
   id?: string;
+  /** Chiều dài ray (m) = lý trình cuối − đầu + điều chỉnh. */
+  lengthM?: number;
   code: string;
   railLabel: string;
   span: { startMetres: number; endMetres: number };
@@ -114,6 +117,9 @@ type LwrPrintRow = {
   neutralTemp: string;
   completed: string;
 };
+
+const rowLength = (row: { lengthM?: number; span: { startMetres: number; endMetres: number } }) =>
+  Math.round((row.lengthM ?? row.span.endMetres - row.span.startMetres) * 1000) / 1000;
 
 /** Giờ hiện trường tách 2 dòng (giờ / ngày) để vừa cột hẹp của bảng A4 dọc. */
 function splitTimeLabel(label: string) {
@@ -170,7 +176,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   }, [lineLayout, printRange]);
 
   const pq = /phú quốc/i.test(projectName ?? "");
-  const totalMetres = rows.reduce((sum, row) => sum + Math.max(0, row.span.endMetres - row.span.startMetres), 0);
+  const totalMetres = rows.reduce((sum, row) => sum + Math.max(0, rowLength(row)), 0);
   const defaults = loadSignerDefaults();
   const signerName = (party: string) => defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "";
   const today = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -238,7 +244,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
                 <td>{row.railLabel.split(" ")[0]}</td>
                 <td>Km{formatChainage(row.span.startMetres)}</td>
                 <td>Km{formatChainage(row.span.endMetres)}</td>
-                <td>{row.span.endMetres - row.span.startMetres}</td>
+                <td>{rowLength(row)}</td>
                 <td>{row.summary.tempLabel}</td>
                 <td>{row.neutralTemp}</td>
                 <td>{row.summary.methodLabel}</td>
@@ -346,6 +352,7 @@ export function TrackPrint({
       const row = sliced.rows.find((item) => railRowKey(item) === rail.rowKey);
       return [{
         id: rail.id,
+        lengthM: rail.params.leftLength + rail.params.rightLength,
         code: displayRailCode(rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code),
         railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
         span,
@@ -367,7 +374,7 @@ export function TrackPrint({
       const rightTemp = Number.isFinite(cell.rightTemp) ? Number(cell.rightTemp) : cell.temp;
       const params: StressInput = {
         ...DEFAULT_STRESS_INPUT,
-        leftLength: endMetres - startMetres,
+        leftLength: railCellLengthMetres(cell) ?? endMetres - startMetres,
         rightLength: 0,
         leftTemp,
         rightTemp,
@@ -387,6 +394,7 @@ export function TrackPrint({
         updatedAt: "",
       };
       return [{
+        lengthM: railCellLengthMetres(cell) ?? undefined,
         code: displayRailCode(cell.id),
         railLabel: railDisplayLabel(row.line, row.rail),
         span: { startMetres, endMetres },
@@ -395,7 +403,7 @@ export function TrackPrint({
         completed: cell.released || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
       }];
     }));
-  }, [sliced]);
+  }, [sliced, onlyCellIds]);
 
   function applyPresetKm(km: number) {
     const start = parseChainage(fromDraft) ?? extent.startMetres;
@@ -670,7 +678,7 @@ export function TrackPrint({
                   <td>{row.railLabel.split(" ")[0]}</td>
                   <td>Km{formatChainage(row.span.startMetres)}</td>
                   <td>Km{formatChainage(row.span.endMetres)}</td>
-                  <td>{row.span.endMetres - row.span.startMetres}</td>
+                  <td>{rowLength(row)}</td>
                   <td>{row.summary.tempLabel}</td>
                   <td>{row.neutralTemp}</td>
                   <td>{row.summary.methodLabel}</td>
