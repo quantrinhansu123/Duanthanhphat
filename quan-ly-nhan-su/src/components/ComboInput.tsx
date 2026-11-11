@@ -10,13 +10,15 @@ export default function ComboInput({ value, onChange, options, className }: {
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const q = value.trim().toLowerCase();
+  // Chỉ lọc sau khi người dùng gõ: mở ô đã có giá trị vẫn thấy đủ danh sách.
+  const [typed, setTyped] = useState(false);
+  const q = typed ? value.trim().toLowerCase() : "";
   const shown = options.filter((o) => !q || o.value.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q)).slice(0, 50);
   return (
     <span className="relative block">
       <input className={className} value={value} autoComplete="off"
-        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
-        onChange={(e) => { setOpen(true); onChange(e.target.value, options.find((o) => o.value === e.target.value)); }} />
+        onFocus={() => { setTyped(false); setOpen(true); }} onBlur={() => setOpen(false)}
+        onChange={(e) => { setTyped(true); setOpen(true); onChange(e.target.value, options.find((o) => o.value === e.target.value)); }} />
       {open && shown.length > 0 && (
         <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 text-sm font-normal shadow-lg">
           {shown.map((o) => (

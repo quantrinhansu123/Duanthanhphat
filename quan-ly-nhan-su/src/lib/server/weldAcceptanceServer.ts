@@ -655,7 +655,13 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
     where.set(p.lich_su_moi_han_id, { ma_diem: cur?.ma_diem || p.ma_diem, ly_trinh: cur?.ly_trinh || p.ly_trinh });
   }
   // Phiếu siêu âm: kèm số phiếu hình học đã nghiệm thu của các mối.
-  const geometryNos = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu))].join(", ") : ticket.so_phieu;
+  // RFI tách làm 2 phiếu con (hình học + siêu âm): phụ lục của phiếu nào cũng ghi đủ cả hai số.
+  const siblings = ticket.phieu_rfi_id
+    ? ((await db().from("phieu_nt_tach").select("so_phieu,loai").eq("phieu_rfi_id", ticket.phieu_rfi_id)).data ?? []) as { so_phieu: string; loai: string }[] : [];
+  const siblingNos = (loai: string) => siblings.filter((s) => s.loai === loai).map((s) => s.so_phieu);
+  const geometryList = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu).concat(siblingNos("hinh-hoc")))] : [ticket.so_phieu];
+  const geometryNos = geometryList.join(", ");
+  const ultrasoundNos = ultrasound ? ticket.so_phieu : siblingNos("sieu-am").join(", ");
   const rfi = (rfiRes.data ?? { id: ticket.id, so_phieu: ticket.so_phieu, ngay_moi: ticket.ngay_moi, thong_tin: ticket.thong_tin ?? {} }) as Record<string, unknown>;
   const rfiInfo = (rfi.thong_tin ?? {}) as Record<string, unknown>;
   const moi = rows.map((r) => {
@@ -670,7 +676,7 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
   const docs = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   return {
     dot: { id: ticket.id, ngay_nghiem_thu: ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
-      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasound ? ticket.so_phieu : "" },
+      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasoundNos },
       phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
     ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: ticket.da_ky ? "Đã ký" : "Chờ ký", du_lieu_chot: null })),
     moi,
@@ -817,11 +823,12 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   const t = object(body.thong_tin);
   const thong_tin: Record<string, string> = { dia_diem: str(t.dia_diem, 300), thanh_phan: str(t.thanh_phan, 1000) };
   // Nội dung tự nhập của BB nghiệm thu hoàn thành (mục 5 a–g).
-  for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac"]) {
+  for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac", "ten_moi_han"]) {
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
-  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS]) {
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", "pyc_so", "goi_thau", "ket_luan", ...SIGNER_KEYS,
+    ...["cdt", "tvtk"].flatMap((p) => [1, 2].flatMap((i) => [`nguoi_${p}_${i}_ten`, `nguoi_${p}_${i}_cv`]))]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;
   }

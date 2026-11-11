@@ -14,9 +14,23 @@ const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_
 const input = "mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal";
 const label = "block text-xs font-semibold text-slate-700";
 
-export default function WeldAcceptancePrintPack({ record: initial, onClose, autoPrint = true }: {
+export default function WeldAcceptancePrintPack({ record: initial, onClose: closeNow, autoPrint = true }: {
   record: RecordSet; onClose: () => void; autoPrint?: boolean;
 }) {
+  // Sửa trực tiếp trên bản xem trước: các ô đã gõ nằm trong `draft` cho tới khi bấm «Lưu chỉnh sửa» (áp dụng cho cả bộ 3 biên bản).
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const draftCount = Object.keys(draft).length;
+  const onClose = () => {
+    if (draftCount > 0 && !window.confirm(`Còn ${draftCount} chỉnh sửa chưa lưu. Đóng và bỏ các chỉnh sửa này?`)) return;
+    closeNow();
+  };
+  // Tải lại / đóng tab khi còn chỉnh sửa chưa lưu → trình duyệt hỏi lại.
+  useEffect(() => {
+    if (!draftCount) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draftCount]);
   const [record, setRecord] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -78,6 +92,19 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
   }
 
+  async function saveDraft() {
+    setBusy(true); setError("");
+    try {
+      saveSignerDefaults(draft);
+      for (const hoSo of record.ho_so) {
+        const current = (latestOf(hoSo.id)?.thong_tin ?? {}) as Record<string, string>;
+        await reviseRecord(hoSo.id, { ...current, ...draft }, "Sửa trực tiếp trên bản xem trước");
+      }
+      setRecord(await reloadRecordSet(record));
+      setDraft({});
+    } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
+  }
+
   const set = (key: string, value: string) => setForm((cur) => ({ ...cur, [key]: value }));
   const text = (key: string, text: string, placeholder = "", listId?: string) => (
     <label className={label}>{text}
@@ -91,6 +118,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
       <p className="text-sm">Bộ hồ sơ: <b>(1) Phụ lục</b> · <b>(2) Nghiệm thu công việc</b> · <b>(3) Hoàn thành công việc</b>
         {missing.length > 0 && <span role="alert" className="text-amber-800"> — Thiếu {missing.length} biên bản. Hãy tải lại hồ sơ.</span>}</p>
       <div className="flex gap-2">
+        {draftCount > 0 && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
         <button type="button" disabled={missing.length > 0} onClick={() => window.print()} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold">Thoát</button>
@@ -155,6 +183,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose, auto
         </div>
       </div>
     )}
-    <WeldAcceptanceRecordPages record={record} />
+    <p className="weld-print-pack-actions mx-auto mb-2 max-w-4xl text-xs text-white/90">Bấm trực tiếp vào các ô trống / ô có viền xanh trên mẫu để điền hoặc sửa, rồi bấm «Lưu chỉnh sửa».</p>
+    <WeldAcceptanceRecordPages record={record} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />
   </div>;
 }

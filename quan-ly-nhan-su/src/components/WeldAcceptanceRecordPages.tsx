@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, FocusEvent } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
 import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
@@ -80,15 +80,21 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign .auto-sign { display: block; margin-top: auto; }
 .acceptance-page .work-sign .auto-sign + .auto-sign { margin-top: 0; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 76px; margin-top: 6px; }
+.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 110px; margin-top: 8px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
 .acceptance-page .conclude-table { margin: 8px 0 14px; }
 .acceptance-page .conclude-table td { padding: 6px 8px; vertical-align: middle; }
-.acceptance-page .sign-roster { margin-top: 6px; }
+.acceptance-page .sign-roster { margin-top: 30px; }
 .acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 40px; padding: 2px 6px; vertical-align: middle; }
 .acceptance-page .sign-roster th { height: 28px; }
+/* Ô sửa trực tiếp trên bản xem trước: chỉ có viền gợi ý trên màn hình, khi in chỉ còn chữ. */
+.acceptance-page .ed-field { outline: none; cursor: text; border-bottom: 1px dashed #60a5fa; background: rgba(96, 165, 250, 0.10); min-width: 1.5em; }
+.acceptance-page .ed-field:focus { background: #fef9c3; }
+.acceptance-page .ed-field:empty::before { content: attr(data-ph); }
+.acceptance-page .ed-block { display: block; white-space: pre-wrap; min-height: 1.4em; }
 @media print {
+  .acceptance-page .ed-field { border-bottom: 0; background: none; }
   body > *:not(.acceptance-print-root) { display: none !important; }
   .acceptance-print-root { position: static !important; overflow: visible !important; padding: 0 !important; background: white !important; }
   .acceptance-print-root .weld-doc-actions, .acceptance-print-root .weld-print-pack-actions { display: none !important; }
@@ -107,7 +113,9 @@ export const acceptancePrintCss = `
   .acceptance-page .annex-sign { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
-  /* Bảng thành phần ký (BB hoàn thành) không tách đôi: cả bảng chuyển sang trang sau cùng nhau. */
+  /* Mục 7 (BB hoàn thành): các ô ký và bảng thành phần luôn cùng một trang riêng, không bị cắt giữa chừng. */
+  .acceptance-page .sign-block { break-before: page; page-break-before: always; break-inside: avoid; page-break-inside: avoid; }
+  .acceptance-page .sign-block h3 { margin-top: 0; }
   .acceptance-page .sign-roster { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
   @page { size: A4 portrait; margin: 0; }
@@ -130,6 +138,56 @@ const PARTY_KEYS = SIGNER_PARTIES.map(([key]) => key);
 /** Số phiếu như in trên phiếu YCNT: bỏ chữ «RFI-» ở đầu, giữ đuôi -HH / -SA (vd 004-HH). */
 function pycNumber(rfi: Record<string, unknown>) {
   return String(rfi.so_phieu ?? "").replace(/^RFI-/i, "");
+}
+/** Chỉnh sửa trực tiếp trên bản xem trước: `draft` là các ô đã sửa chưa lưu, `set` ghi một ô. Không truyền = chỉ xem/in. */
+export type RecordEditor = { draft: Record<string, string>; set: (key: string, value: string) => void };
+/** Một ô điền được: có `editor` thì gõ trực tiếp (lưu khi rời ô), không thì chỉ in giá trị / dấu chấm. */
+function Ed({ k, v, editor, ph = "……………………", block, date }: { k: string; v: string; editor?: RecordEditor; ph?: string; block?: boolean; date?: boolean }) {
+  // date: giá trị lưu dạng ISO yyyy-mm-dd, hiển thị và gõ dạng dd/mm/yyyy.
+  const shown = date && v ? v.slice(0, 10).split("-").reverse().join("/") : v;
+  if (!editor) return <>{shown || ph}</>;
+  return (
+    <span className={block ? "ed-field ed-block" : "ed-field"} contentEditable suppressContentEditableWarning spellCheck={false} data-ph={ph}
+      onKeyDown={(e) => { if (e.key === "Enter" && !block) { e.preventDefault(); e.currentTarget.blur(); } }}
+      onBlur={(e) => {
+        const raw = (e.currentTarget.innerText ?? "").replace(/ /g, " ").trim();
+        if (!date) { if (raw !== v) editor.set(k, raw); return; }
+        const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(raw);
+        if (raw && !m) { e.currentTarget.textContent = shown; return; } // không đúng dd/mm/yyyy → trả về giá trị cũ
+        const iso = m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
+        if (iso !== v.slice(0, 10)) editor.set(k, iso);
+      }}>{shown}</span>
+  );
+}
+/** «ngày dd tháng mm năm yyyy» có ba ô gõ riêng; đủ hợp lệ thì ghi lại thành một ngày ISO vào `k`. */
+function EdViDate({ k, iso, fallback, editor }: { k: string; iso: string; fallback: { d: string; m: string; y: string }; editor?: RecordEditor }) {
+  const [y, m, d] = iso ? iso.slice(0, 10).split("-") : [fallback.y, fallback.m, fallback.d];
+  if (!editor) return <>ngày {d} tháng {m} năm {y}</>;
+  const commit = (e: FocusEvent<HTMLElement>) => {
+    const spans = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[data-part]") ?? [])];
+    const [dd, mm, yy] = spans.map((s) => (s.innerText ?? "").trim());
+    if (/^\d{1,2}$/.test(dd) && /^\d{1,2}$/.test(mm) && /^\d{4}$/.test(yy)) {
+      const next = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+      if (next !== iso.slice(0, 10)) editor.set(k, next);
+    } else spans.forEach((s, i) => { s.textContent = [d, m, y][i]; }); // sai định dạng → trả về giá trị cũ
+  };
+  const part = (text: string, ph: string) => <span className="ed-field" data-part contentEditable suppressContentEditableWarning spellCheck={false} data-ph={ph} onBlur={commit}
+    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}>{text}</span>;
+  return <span>ngày {part(d, "……")} tháng {part(m, "……")} năm {part(y, "……")}</span>;
+}
+/** Ô nhập nhiều dòng (đánh giá, kết luận…): chưa có chữ thì in sẵn các dòng chấm, ô gõ phủ lên trên. */
+function EdLines({ k, v, lines, editor }: { k: string; v: string; lines: number; editor?: RecordEditor }) {
+  if (!editor) return v ? <p style={{ whiteSpace: "pre-wrap", margin: "2px 0 4px" }}>{v}</p> : <>{Array.from({ length: lines }, (_, i) => <div className="dots" key={i} />)}</>;
+  return (
+    <div style={{ position: "relative" }}>
+      {!v && Array.from({ length: lines }, (_, i) => <div className="dots" key={i} />)}
+      <div style={v ? { whiteSpace: "pre-wrap", margin: "2px 0 4px" } : { position: "absolute", inset: 0 }}><Ed k={k} v={v} editor={editor} ph="" block /></div>
+    </div>
+  );
+}
+/** «004-HH, 004-SA»: gộp số phiếu con hình học + siêu âm (bỏ chữ RFI-, không lặp). */
+function pycList(values: string[]) {
+  return [...new Set(values.flatMap((v) => v.split(",")).map((v) => v.trim().replace(/^RFI-/i, "")).filter(Boolean))].join(", ");
 }
 
 /** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. */
@@ -154,6 +212,9 @@ const kmText = (v: unknown) => {
   if (!raw) return "…………";
   return raw.replace(/^\s*km\s*/i, "");
 };
+
+/** kmText trả dấu chấm khi trống; ô sửa cần chuỗi rỗng thật. */
+const kmRaw = (v: string) => (v.startsWith("…") ? "" : v);
 
 /** "Km5+407.01" → mét; null nếu không đọc được. */
 function chainageMetres(v: string) {
@@ -189,7 +250,7 @@ function isNightShift(ca: string) {
   return /ca\s*[23]|đêm|toi|tối|night/.test(v);
 }
 
-export default function WeldAcceptanceRecordPages({ record, kind }: { record: RecordSet; kind?: RecordKind }) {
+export default function WeldAcceptanceRecordPages({ record, kind, editor }: { record: RecordSet; kind?: RecordKind; editor?: RecordEditor }) {
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
@@ -200,7 +261,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
   return <>{ACCEPTANCE_DOCS.filter((d) => !kind || d.kind === kind).map((doc) => {
     const hoSo = record.ho_so.find((h) => h.loai === doc.loai);
     const revision = record.sua_doi?.filter((r) => r.ho_so_id === hoSo?.id).sort((a, b) => a.phien_ban - b.phien_ban).at(-1);
-    const t = { ...base, ...(revision?.thong_tin ?? {}) };
+    const t = { ...base, ...(revision?.thong_tin ?? {}), ...(editor?.draft ?? {}) };
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
     const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
@@ -252,7 +313,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                   {show(packageName).replace(/^Gói thầu\s*/i, "GÓI THẦU ").toUpperCase()}<br />
                   HẠNG MỤC: THI CÔNG HÀN RAY
                 </td>
-                <td className="head-right"><b>Địa điểm:</b><br />{show(location)}</td>
+                <td className="head-right"><b>Địa điểm:</b><br /><Ed k="dia_diem" v={location} editor={editor} /></td>
               </tr>
               <tr>
                 <td className="title-cell" colSpan={2}>{doc.title}</td>
@@ -271,23 +332,23 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>PYC số:</b> {show(pycNumber(rfi))}</td>
+                        <td colSpan={2}><b>PYC số:</b> <Ed k="pyc_so" v={t.pyc_so?.trim() || pycList([geometryRfi, ultrasoundRfi]) || pycNumber(rfi)} editor={editor} /></td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>
-                        <td><b>NGÀY NGHIỆM THU:</b> {day}</td>
+                        <td><b>NGÀY NGHIỆM THU:</b> <Ed date k="ngay_nghiem_thu" v={acceptanceDate.slice(0, 10)} editor={editor} ph="……/……/……" /></td>
                         <td colSpan={2}>
-                          <b>TÊN THỢ HÀN:</b> {welders.join(", ") || "………………"} &nbsp;
-                          <b>ID:</b> {welderIds.join(", ") || "…………"}
+                          <b>TÊN THỢ HÀN:</b> <Ed k="ten_tho_han" v={welders.join(", ")} editor={editor} ph="………………" /> &nbsp;
+                          <b>ID:</b> <Ed k="id_tho_han" v={welderIds.join(", ")} editor={editor} ph="…………" />
                         </td>
                       </tr>
                       <tr>
-                        <td><b>VỊ TRÍ:</b> {sortedChainage.length || t.kmFrom || t.kmTo ? `Km${kmFrom} – Km${kmTo}` : show(t.pham_vi)}</td>
+                        <td><b>VỊ TRÍ:</b> {sortedChainage.length || t.kmFrom || t.kmTo || editor ? <>Km<Ed k="kmFrom" v={kmRaw(kmFrom)} editor={editor} ph="…………" /> – Km<Ed k="kmTo" v={kmRaw(kmTo)} editor={editor} ph="…………" /></> : show(t.pham_vi)}</td>
                         <td><b>TUYẾN:</b><br />{mark(upper)} Tuyến thượng<br />{mark(lower)} Tuyến hạ</td>
                         <td>
-                          {machines.map(machinePrintName).join(", ") || "Máy hàn chảy giáp mép UN5-150ZC2-C6"}
+                          <Ed k="may_han" v={machines.map(machinePrintName).join(", ") || "Máy hàn chảy giáp mép UN5-150ZC2-C6"} editor={editor} />
                           <br />
-                          Goòng phẳng: {show(t.goong || t.goong_phang || "KPS25-L8")}
+                          Goòng phẳng: <Ed k="goong" v={t.goong || t.goong_phang || "KPS25-L8"} editor={editor} />
                         </td>
                       </tr>
                     </tbody>
@@ -440,8 +501,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
                           const signer = resolveSigner(t, loadSignerDefaults(), party, 1);
                           return (
                             <td key={party}>
-                              HỌ VÀ TÊN: {signer.ten}<br /><br />
-                              NGÀY: {signDate(t, party)}<br /><br />
+                              HỌ VÀ TÊN: <Ed k={`nguoi_${party}_1_ten`} v={signer.ten} editor={editor} ph="" /><br /><br />
+                              NGÀY: <Ed date k={`ngay_ky_${party}`} v={(t[`ngay_ky_${party}`] || acceptanceDate).slice(0, 10)} editor={editor} ph="" /><br /><br />
                               CHỮ KÝ:
                             </td>
                           );
@@ -473,7 +534,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
       // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "……………………";
+      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -486,27 +547,27 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             <div className="ornament">----------- ✦ -----------</div>
           </div>
           <p className="place-date">
-            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, ngày {wp.d} tháng {wp.m} năm {wp.y}
+            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, <EdViDate k="ngay_nghiem_thu" iso={acceptanceDate.slice(0, 10)} fallback={wp} editor={editor} />
           </p>
           <h2>{doc.title}</h2>
           <p className="doc-no">Số: {bbNo}</p>
           <p>RFI hình học: {rfiRange(geometryRfi)} · RFI siêu âm: {rfiRange(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
-          <p className="field-row"><span className="field-label">Gói thầu</span>: {show(packageName)}</p>
+          <p className="field-row"><span className="field-label">Gói thầu</span>: <Ed k="goi_thau" v={packageName} editor={editor} /></p>
           <p className="field-row"><span className="field-label">Hạng mục</span>: Thi công hàn ray</p>
-          <p className="field-row"><span className="field-label">Địa điểm</span>: {show(location)}</p>
+          <p className="field-row"><span className="field-label">Địa điểm</span>: <Ed k="dia_diem" v={location} editor={editor} /></p>
 
           <h3>1. Đối tượng nghiệm thu:</h3>
           <p>- {objectText}</p>
 
           <h3>2. Thời gian nghiệm thu:</h3>
-          <p>Bắt đầu&nbsp;&nbsp;: {timeText(t.gio_bat_dau)} ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
-          <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
+          <p>Bắt đầu&nbsp;&nbsp;: <Ed k="gio_bat_dau" v={t.gio_bat_dau?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
+          <p>Kết thúc&nbsp;: <Ed k="gio_ket_thuc" v={t.gio_ket_thuc?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
-          <p>Lý trình: Từ : Km {kmFrom} đến Km {kmTo}.</p>
-          <p>Tên mối hàn: {weldNames}</p>
+          <p>Lý trình: Từ : Km <Ed k="kmFrom" v={kmRaw(kmFrom)} editor={editor} ph="…………" /> đến Km <Ed k="kmTo" v={kmRaw(kmTo)} editor={editor} ph="…………" />.</p>
+          <p>Tên mối hàn: <Ed k="ten_moi_han" v={t.ten_moi_han?.trim() || (codes.length ? weldNames : "")} editor={editor} /></p>
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
           {([
@@ -517,7 +578,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             <div className="party" key={role}>
               <p><b>{role}:</b> {company}</p>
               {[1, 2].map((i) => (
-                <p className="person" key={i}>Ông: {signer(`nguoi_${party}_${i}_ten`)} &nbsp; Chức vụ: {signer(`nguoi_${party}_${i}_cv`)}</p>
+                <p className="person" key={i}>Ông: <Ed k={`nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} /> &nbsp; Chức vụ: <Ed k={`nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} /></p>
               ))}
             </div>
           ))}
@@ -525,8 +586,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <h3>5. Kết luận:</h3>
           <p className="conclude-line">{mark(true)} Chấp thuận nghiệm thu, đồng ý cho triển khai các công việc xây dựng tiếp theo.</p>
           <p className="conclude-line">{BOX} Không đồng ý nghiệm thu.</p>
-          <div className="dots" />
-          <div className="dots" />
+          <EdLines k="ket_luan" v={t.ket_luan?.trim() ?? ""} lines={2} editor={editor} />
 
           <h3>6. Các thành phần trực tiếp tham gia nghiệm thu:</h3>
           <div className="work-sign">
@@ -565,23 +625,25 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     );
     // Các thành phần tham gia: dùng chung cho mục 4, chữ ký và bảng chức vụ để luôn khớp nhau.
     const parties = [
-      { no: "4.1", label: "Chủ đầu tư", stamp: "CHỦ ĐẦU TƯ", org: cdt, role: "Trưởng ban QLDA" },
-      { no: "4.2", label: "Tư vấn Giám sát", stamp: "TƯ VẤN GIÁM SÁT", org: tvgsHt, role: "Giám sát trưởng" },
-      { no: "4.3", label: "Tư vấn thiết kế", stamp: "TƯ VẤN THIẾT KẾ", org: "", role: "Chủ trì thiết kế" },
-      { no: "4.4", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng" },
-      { no: "4.5", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng" },
+      { no: "4.1", code: "cdt", label: "Chủ đầu tư", stamp: "CHỦ ĐẦU TƯ", org: cdt, role: "Trưởng ban QLDA" },
+      { no: "4.2", code: "tvgs", label: "Tư vấn Giám sát", stamp: "TƯ VẤN GIÁM SÁT", org: tvgsHt, role: "Giám sát trưởng" },
+      { no: "4.3", code: "tvtk", label: "Tư vấn thiết kế", stamp: "TƯ VẤN THIẾT KẾ", org: "", role: "Chủ trì thiết kế" },
+      { no: "4.4", code: "ntc", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng" },
+      { no: "4.5", code: "ntp", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng" },
     ];
-    // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
-    const field = (key: string, lines: number) => {
-      const text = str((t as Record<string, unknown>)[key]).trim();
-      return text
-        ? <p style={{ whiteSpace: "pre-wrap", margin: "2px 0 4px" }}>{text}</p>
-        : <>{Array.from({ length: lines }, (_, i) => <div className="dots" key={i} />)}</>;
+    // Người ký: bản sửa → người đã nhớ → mặc định; dùng chung cho mục 4 và bảng chữ ký để luôn khớp nhau.
+    const signerDefaultsHt = loadSignerDefaults();
+    const who = (code: string, i: number, field: "ten" | "cv") => {
+      const key = `nguoi_${code}_${i}_${field}`;
+      return t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "";
     };
-    const personBlock = () => (
+    // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
+    const field = (key: string, lines: number) => <EdLines k={key} v={str((t as Record<string, unknown>)[key]).trim()} lines={lines} editor={editor} />;
+    const personBlock = (code: string) => (
       <>
-        <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
-        <p className="person">Ông: …………………… &nbsp; Chức vụ: ……………………</p>
+        {[1, 2].map((i) => (
+          <p className="person" key={i}>Ông: <Ed k={`nguoi_${code}_${i}_ten`} v={who(code, i, "ten")} editor={editor} /> &nbsp; Chức vụ: <Ed k={`nguoi_${code}_${i}_cv`} v={who(code, i, "cv")} editor={editor} /></p>
+        ))}
       </>
     );
 
@@ -595,32 +657,32 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             <div className="ornament">----------- ✦ -----------</div>
           </div>
           <p className="place-date">
-            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, ngày {parts.d} tháng {parts.m} năm {parts.y}
+            {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, <EdViDate k="ngay_nghiem_thu" iso={acceptanceDate.slice(0, 10)} fallback={parts} editor={editor} />
           </p>
           <h2>{doc.title}</h2>
           <p className="doc-no">Số: {show(rfi.so_phieu)}/BBNTHT</p>
           <p>RFI hình học: {show(geometryRfi)} · RFI siêu âm: {show(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
-          <p className="field-row"><span className="field-label">Gói thầu</span>: {show(packageName)}</p>
+          <p className="field-row"><span className="field-label">Gói thầu</span>: <Ed k="goi_thau" v={packageName} editor={editor} /></p>
           <p className="field-row"><span className="field-label">Hạng mục</span>: Thi công hàn ray</p>
-          <p className="field-row"><span className="field-label">Địa điểm</span>: {show(location)}</p>
+          <p className="field-row"><span className="field-label">Địa điểm</span>: <Ed k="dia_diem" v={location} editor={editor} /></p>
 
           <h3>1. Đối tượng nghiệm thu:</h3>
           <p>- Nghiệm thu mối hàn ray</p>
 
           <h3>2. Thời gian nghiệm thu:</h3>
-          <p>Bắt đầu&nbsp;&nbsp;: {timeText(t.gio_bat_dau)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
-          <p>Kết thúc&nbsp;: {timeText(t.gio_ket_thuc)} ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
+          <p>Bắt đầu&nbsp;&nbsp;: <Ed k="gio_bat_dau" v={t.gio_bat_dau?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
+          <p>Kết thúc&nbsp;: <Ed k="gio_ket_thuc" v={t.gio_ket_thuc?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {parts.d} tháng {parts.m} năm {parts.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
-          <p>Lý trình : Từ: Km {kmFrom} đến Km {kmTo}</p>
+          <p>Lý trình : Từ: Km <Ed k="kmFrom" v={kmRaw(kmFrom)} editor={editor} ph="…………" /> đến Km <Ed k="kmTo" v={kmRaw(kmTo)} editor={editor} ph="…………" /></p>
 
           <h3>4. Thành phần trực tiếp tham gia nghiệm thu:</h3>
           {parties.map((pt) => (
             <div className="party" key={pt.no}>
               <p><b>{pt.no}. {pt.label}:</b> {pt.org}</p>
-              {personBlock()}
+              {personBlock(pt.code)}
             </div>
           ))}
 
@@ -637,8 +699,8 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
           <p><b>c) Những điều chỉnh và thay đổi bổ sung trong quá trình thi công so với thiết kế được phê duyệt ( có phụ lục đính kèm):</b></p>
           {field("dieu_chinh", 2)}
           <p><b>d) Đánh giá chất lượng hạng mục công trình:</b></p>
-          <p>- So với thiết kế, chỉ dẫn kỹ thuật: {show(t.so_voi_thiet_ke)}</p>
-          <p>- So với hợp đồng: {show(t.so_voi_hop_dong)}</p>
+          <p>- So với thiết kế, chỉ dẫn kỹ thuật: <Ed k="so_voi_thiet_ke" v={str(t.so_voi_thiet_ke)} editor={editor} ph="………………" /></p>
+          <p>- So với hợp đồng: <Ed k="so_voi_hop_dong" v={str(t.so_voi_hop_dong)} editor={editor} ph="………………" /></p>
           <p><b>e) Kết quả thí nghiệm, kiểm tra, kiểm định, thử nghiệm, chạy thử theo các yêu cầu kỹ thuật theo quy định của thiết kế xây dựng:</b></p>
           {field("ket_qua_thi_nghiem", 2)}
           <p><b>f) Tuân thủ các quy định của pháp luật về phòng cháy và chữa cháy, bảo vệ môi trường trong thi công xây dựng công trình và quy định của pháp luật chuyên ngành khác có liên quan</b></p>
@@ -662,6 +724,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
             </tbody>
           </table>
 
+          <div className="sign-block">
           <h3>7. Chữ ký các thành phần trực tiếp tham gia nghiệm thu:</h3>
           <div style={{ display: "grid", justifyItems: "center" }}>{stamp(parties[0].stamp)}</div>
           <div className="complete-sign-row">
@@ -683,21 +746,20 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
             </thead>
             <tbody>
-              {parties.map((pt, idx) => {
+              {parties.map((pt) => {
                 // Họ tên / chức vụ lấy theo người ký đã nhập ở «Sửa thông tin in»; chủ đầu tư và tư vấn thiết kế không có dữ liệu nên để trống.
-                const party = ({ 1: "tvgs", 3: "ntc", 4: "ntp" } as Record<number, string>)[idx];
-                const who = party ? resolveSigner(t, loadSignerDefaults(), party, 1) : { ten: "", cv: "" };
                 return (
                   <tr key={pt.no}>
                     <td>{pt.label}{pt.org ? <><br /><small>{pt.org}</small></> : null}</td>
-                    <td>{who.cv || pt.role}</td>
-                    <td>{who.ten}</td>
+                    <td><Ed k={`nguoi_${pt.code}_1_cv`} v={who(pt.code, 1, "cv") || pt.role} editor={editor} /></td>
+                    <td><Ed k={`nguoi_${pt.code}_1_ten`} v={who(pt.code, 1, "ten")} editor={editor} ph="" /></td>
                     <td />{/* chữ ký tươi: để trống cho ký tay */}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          </div>
         </PrintFrame>
 </article>
       </>
