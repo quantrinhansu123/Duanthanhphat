@@ -89,7 +89,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     }
     return { doi_tuong: remembered.doi_tuong, noi_dung: remembered.noi_dung, ...local, ...saved };
   });
-  function persistOverrides(next: RfiOverrides) {
+  function persistOverrides(next: RfiOverrides, immediate = false) {
     try { window.localStorage.setItem(rfiKey, JSON.stringify(next)); } catch { /* bỏ qua khi không lưu được */ }
     // Nhớ đối tượng + nội dung vị trí để tự điền cho các phiếu sau (khi đổi thì sửa lại).
     try { window.localStorage.setItem(RFI_PRINT_DEFAULTS, JSON.stringify({ doi_tuong: next.doi_tuong ?? "", noi_dung: next.noi_dung ?? "" })); } catch { /* bỏ qua */ }
@@ -98,7 +98,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     printSaveTimer.current = window.setTimeout(() => {
       const values = Object.fromEntries(RFI_PRINT_SAVED_KEYS.map((k) => [k, next[k] ?? ""]));
       saveRfiPrintInfo(view.rfi!.rfi.id, values).then(() => setPrintSaved("Đã lưu cho phiếu này")).catch(() => setPrintSaved("Chưa lưu được lên máy chủ (vẫn nhớ trên máy này)"));
-    }, 700);
+    }, immediate ? 0 : 700);
   }
   function setOverride(key: keyof RfiOverrides, value: string) {
     const next = { ...rfiOverrides, [key]: value };
@@ -220,6 +220,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => persistOverrides(rfiOverrides, true)} className="h-9 rounded-lg bg-[#0047AB] px-4 text-xs font-semibold text-white cursor-pointer hover:bg-[#00388A]">Lưu</button>
             <button type="button" onClick={resetOverrides} className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold cursor-pointer hover:bg-slate-50">Về mặc định</button>
             {printSaved && <span className="text-xs text-slate-500">{printSaved}</span>}
           </div>

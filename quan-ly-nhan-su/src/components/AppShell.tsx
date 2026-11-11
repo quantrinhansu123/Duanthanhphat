@@ -16,6 +16,7 @@ import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 import UserMenu from "@/components/UserMenu";
+import ChatBot from "@/components/ChatBot";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { canReceiveOilAlert } from "@/lib/viewerAccess";
 
@@ -511,6 +512,7 @@ export default function AppShell({ tab }: AppShellProps) {
           </div>
         </nav>
       </div>
+      <ChatBot />
     </div>
     </ReportFilterProvider>
   );
