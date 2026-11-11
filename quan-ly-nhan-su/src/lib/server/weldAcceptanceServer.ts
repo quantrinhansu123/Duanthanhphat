@@ -370,11 +370,12 @@ export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   return { id };
 }
 
-/** Thanh LWR đủ điều kiện phát RFI giải toả ứng suất: đã đưa lên track map (có vị trí lý trình đầu–cuối) và chưa nằm trong RFI GTUS nào. */
+/** Thanh LWR đủ điều kiện phát RFI giải toả ứng suất: đã đưa lên track map của DỰ ÁN (sơ đồ lwr_track_layouts, có lý trình đầu–cuối) và chưa nằm trong RFI GTUS nào. */
 export async function listGtusCandidates(body: Record<string, unknown>) {
   const projectId = qualityUuid(body.du_an_id);
-  const { data, error } = await db().from("lwr_long_rails").select("id,code,label,row_key,params").limit(1000);
-  if (error) throw error;
+  const layoutRow = await db().from("lwr_track_layouts").select("layout").eq("project_id", projectId).maybeSingle();
+  if (layoutRow.error) throw layoutRow.error;
+  const mapRails = ((layoutRow.data?.layout as { longRails?: Record<string, unknown>[] } | null)?.longRails ?? []);
   const used = new Map<string, string>();
   const rfis = await db().from("phieu_yeu_cau_nghiem_thu").select("id,so_phieu,thong_tin").eq("du_an_id", projectId).limit(2000);
   if (rfis.error) throw rfis.error;
@@ -386,18 +387,14 @@ export async function listGtusCandidates(body: Record<string, unknown>) {
   const lines: Record<string, { route: "ha" | "thuong"; rail: "trai" | "phai" }> = {
     DT: { route: "ha", rail: "trai" }, DP: { route: "ha", rail: "phai" }, UT: { route: "thuong", rail: "trai" }, UP: { route: "thuong", rail: "phai" },
   };
-  const candidates = data.flatMap((row) => {
-    const line = lines[String(row.row_key)];
-    const params = (row.params ?? {}) as Record<string, unknown>;
-    const placement = (params.placement ?? {}) as Record<string, unknown>;
-    const start = Number(placement.startMetres), end = Number(placement.endMetres);
+  const candidates = mapRails.flatMap((rail) => {
+    const line = lines[String(rail.rowKey)];
+    const start = Number(rail.startMetres), end = Number(rail.endMetres);
     if (!line || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
-    if (typeof placement.projectId === "string" && placement.projectId && placement.projectId !== projectId) return [];
-    const code = String(row.code ?? "").replace(/^[0-9a-f-]{36}:/i, "");
-    return [{ id: String(row.id), code, ...line, startMetres: start, endMetres: end,
-      releaseDate: typeof placement.releaseDate === "string" ? placement.releaseDate : null,
-      completedAt: typeof placement.completedAt === "string" ? placement.completedAt : null,
-      used: used.get(String(row.id)) ?? null }];
+    return [{ id: String(rail.id), code: String(rail.code ?? ""), ...line, startMetres: start, endMetres: end,
+      releaseDate: typeof rail.releaseDate === "string" ? rail.releaseDate : null,
+      completedAt: typeof rail.completedAt === "string" ? rail.completedAt : null,
+      used: used.get(String(rail.id)) ?? null }];
   });
   candidates.sort((a, b) => Number(a.route === "thuong") - Number(b.route === "thuong") || a.startMetres - b.startMetres || a.rail.localeCompare(b.rail));
   return { candidates };

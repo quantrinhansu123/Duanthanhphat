@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
+import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
@@ -249,6 +250,7 @@ function RfiPanel({
   onOpenIssuedList: (list: { rfis: RfiSummary[]; unassigned: RfiCandidate[] }) => void;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
+  const [gtusPrint, setGtusPrint] = useState<RfiSummary | null>(null);
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
@@ -769,6 +771,7 @@ function RfiPanel({
                     label={`Thao tác phiếu ${r.so_phieu}`}
                     actions={[
                       { label: "Sửa", disabled: busy, onSelect: () => beginEdit(r) },
+                      ...(r.thong_tin?.cong_viec === "gtus" && r.thong_tin?.lwr_ids ? [{ label: "In BBNT - GTUS", onSelect: () => setGtusPrint(r) }] : []),
                       { label: "Xem / In", onSelect: () => { void Promise.resolve(onOpen(r)).catch((e) => setError(message(e))); } },
                       ...(r.child_signing ? [{
                         label: r.child_signing.allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký",
@@ -795,6 +798,14 @@ function RfiPanel({
         </table>
       </div>
       </div>
+      {gtusPrint && (
+        <GtusBbntPrintDialog
+          projectId={projectId}
+          projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
+          lwrIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
+          onClose={() => setGtusPrint(null)}
+        />
+      )}
     </section>
   );
 }

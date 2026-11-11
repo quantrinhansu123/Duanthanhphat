@@ -106,6 +106,7 @@ const FORMATS: Record<string, { label: string; size: string; width: string; px: 
 };
 
 type LwrPrintRow = {
+  id?: string;
   code: string;
   railLabel: string;
   span: { startMetres: number; endMetres: number };
@@ -282,12 +283,20 @@ export function TrackPrint({
   symbols,
   onClose,
   projectName,
+  initialFormat,
+  initialRange,
+  onlyLongRailIds,
 }: {
   layout: TrackLayout;
   joints: RailJoint[];
   symbols: StructureSymbol[];
   onClose: () => void;
   projectName?: string;
+  /** In từ RFI GTUS: mở sẵn mẫu BBNT - GTUS, đúng đoạn Km của phiếu. */
+  initialFormat?: string;
+  initialRange?: { start: number; end: number };
+  /** Chỉ liệt kê các thanh LWR này (RFI GTUS đã chọn) trong bảng và tổng chiều dài. */
+  onlyLongRailIds?: string[];
 }) {
   const extent = trackExtent(layout.rows);
   const defaultSpanM = Math.min(2000, Math.max(500, extent.endMetres - extent.startMetres));
@@ -305,9 +314,9 @@ export function TrackPrint({
     }
     return starts.length ? Math.max(extent.startMetres, Math.floor(Math.min(...starts) / 1000) * 1000) : extent.startMetres;
   })();
-  const [format, setFormat] = useState<string>("A4");
-  const [fromDraft, setFromDraft] = useState(formatChainage(dataStart));
-  const [toDraft, setToDraft] = useState(formatChainage(Math.min(extent.endMetres, dataStart + defaultSpanM)));
+  const [format, setFormat] = useState<string>(initialFormat ?? "A4");
+  const [fromDraft, setFromDraft] = useState(formatChainage(initialRange?.start ?? dataStart));
+  const [toDraft, setToDraft] = useState(formatChainage(initialRange?.end ?? Math.min(extent.endMetres, dataStart + defaultSpanM)));
   const [rangeError, setRangeError] = useState<string | null>(null);
 
   const printRange = useMemo(() => {
@@ -336,6 +345,7 @@ export function TrackPrint({
       if (!span) return [];
       const row = sliced.rows.find((item) => railRowKey(item) === rail.rowKey);
       return [{
+        id: rail.id,
         code: displayRailCode(rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code),
         railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
         span,
@@ -344,6 +354,8 @@ export function TrackPrint({
         completed: isLongRailReleased(sliced.rows, rail) ? "Đạt" : "Chưa",
       }];
     });
+    const onlyIds = onlyLongRailIds ? new Set(onlyLongRailIds) : null;
+    if (onlyIds) return fromLongRails.filter((row) => row.id && onlyIds.has(row.id));
     if (fromLongRails.length) return fromLongRails;
 
     // Dự án chỉ tô thanh ngắn (chưa tạo đoạn LWR): gom từng thanh đã rải thành dòng tổng hợp.
