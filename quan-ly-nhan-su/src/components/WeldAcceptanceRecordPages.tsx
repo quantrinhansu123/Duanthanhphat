@@ -565,11 +565,11 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
     );
     // Các thành phần tham gia: dùng chung cho mục 4, chữ ký và bảng chức vụ để luôn khớp nhau.
     const parties = [
-      { no: "4.1", label: "Chủ đầu tư", stamp: "CHỦ ĐẦU TƯ", org: cdt, role: "Trưởng ban Ban QLDA" },
+      { no: "4.1", label: "Chủ đầu tư", stamp: "CHỦ ĐẦU TƯ", org: cdt, role: "Trưởng ban QLDA" },
       { no: "4.2", label: "Tư vấn Giám sát", stamp: "TƯ VẤN GIÁM SÁT", org: tvgsHt, role: "Giám sát trưởng" },
       { no: "4.3", label: "Tư vấn thiết kế", stamp: "TƯ VẤN THIẾT KẾ", org: "", role: "Chủ trì thiết kế" },
-      { no: "4.4", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng nhà thầu chính" },
-      { no: "4.5", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng nhà thầu phụ" },
+      { no: "4.4", label: "Nhà thầu chính", stamp: "NHÀ THẦU CHÍNH", org: ntcHt, role: "Chỉ huy trưởng" },
+      { no: "4.5", label: "Nhà thầu phụ", stamp: "NHÀ THẦU PHỤ", org: ntpHt, role: "Chỉ huy trưởng" },
     ];
     // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
     const field = (key: string, lines: number) => {
