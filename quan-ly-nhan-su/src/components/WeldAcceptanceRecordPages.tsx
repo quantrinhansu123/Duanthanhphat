@@ -473,7 +473,7 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
       // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || "……………………";
+      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "……………………";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
