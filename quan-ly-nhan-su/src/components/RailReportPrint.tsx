@@ -71,7 +71,14 @@ export default function RailReportPrint({ payload, onClose }: {
       <article className="sheet">
         <PrintFrame top="12mm" bottom="12mm" left="12mm" right="12mm">
           <header className="doc-header">
-            <p className="company">CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
+            <div className="brand-row">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="Thành Phát" className="brand-logo" />
+              <div className="brand-text">
+                <p className="company">CÔNG TY CỔ PHẦN CÔNG TRÌNH THÀNH PHÁT</p>
+                <p className="company-en">THANH PHAT CONSTRUCTION WORK JOINT STOCK COMPANY</p>
+              </div>
+            </div>
             <h1>{title}</h1>
             <p className="meta">Dự án: {projectLabel}</p>
           </header>
@@ -133,8 +140,12 @@ const PRINT_CSS = `
 #rail-report-print .summary p { margin: 1px 0; }
 #rail-report-print .sheet { width: 210mm; box-sizing: border-box; margin: 16px auto; padding: 0; background: #fff; font-family: 'Times New Roman', serif; }
 #rail-report-print .doc-header { text-align: center; margin-bottom: 6px; }
-#rail-report-print .company { font-size: 11pt; font-weight: 700; margin: 0 0 2px; text-transform: uppercase; }
-#rail-report-print h1 { font-size: 14pt; font-weight: 700; margin: 0 0 2px; text-transform: uppercase; }
+#rail-report-print .brand-row { display: flex; align-items: center; gap: 4mm; padding-bottom: 3mm; margin-bottom: 3mm; border-bottom: 1.2pt solid #0047AB; text-align: left; }
+#rail-report-print .brand-logo { width: 17mm; height: 17mm; object-fit: contain; flex: none; }
+#rail-report-print .brand-text { min-width: 0; }
+#rail-report-print .company-en { font-size: 7.5pt; font-weight: 700; letter-spacing: 0.03em; color: #0047AB; margin: 0; }
+#rail-report-print .company { font-size: 12pt; font-weight: 700; margin: 0 0 1px; text-transform: uppercase; color: #0047AB; }
+#rail-report-print h1 { font-size: 15pt; font-weight: 700; margin: 2mm 0 2px; text-transform: uppercase; }
 #rail-report-print .meta { font-size: 9.5pt; margin: 0 0 6px; font-style: italic; }
 #rail-report-print table.rail-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; table-layout: fixed; }
 #rail-report-print table.rail-table th, #rail-report-print table.rail-table td { border: 0.4pt solid #444; padding: 2.4pt 3pt; vertical-align: middle; overflow-wrap: anywhere; }

@@ -142,8 +142,8 @@ export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so
   return ["1. Máy hàn", "2. Máy và thiết bị khác", "3. Vật tư"].map((title, i) => {
     const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
       .map((r) => `- ${i === 0 ? diaryMachineName((r.ten_thiet_bi ?? "").trim()) : (r.ten_thiet_bi ?? "").trim().replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m)}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
-    // Máy hàn giữ mỗi dòng một máy; nhóm 2 và 3 gộp một dòng, ngăn bằng "; " (theo bản mẫu).
-    if (i === 0) return `${title}:\n${lines.join("\n")}`;
+    // Máy hàn và máy / thiết bị khác: mỗi dòng một loại; vật tư gộp một dòng, ngăn bằng "; " (theo bản mẫu).
+    if (i !== 2) return `${title}:\n${lines.join("\n")}`;
     return `${title}: ${lines.map((l) => l.slice(2)).join("; ")}`;
   }).join("\n");
 }

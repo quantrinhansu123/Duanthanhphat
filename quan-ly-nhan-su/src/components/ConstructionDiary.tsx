@@ -102,6 +102,15 @@ export default function ConstructionDiaryForm() {
         const defaults = await loadDefaults(projectId, date);
         diary = { ...diary, ...defaults.values };
         warning = defaults.warning;
+      } else if (/\(\+\d+\)/.test(diary.noiDungCongViec)) {
+        // Nhật ký lưu từ bản cũ bị cắt «… (+N)»: tự điền lại mục 3 để hiển thị đủ mã mối hàn (bấm Lưu để lưu bản đủ).
+        try {
+          const defaults = await loadDefaults(projectId, date);
+          if (defaults.values.noiDungCongViec) {
+            diary = { ...diary, noiDungCongViec: defaults.values.noiDungCongViec };
+            warning = "Mục 3 đã được điền lại đủ nội dung (bỏ «+N»); bấm Lưu để lưu bản mới.";
+          }
+        } catch { /* giữ nội dung đã lưu */ }
       }
       if (!live) return;
       setD(diary);

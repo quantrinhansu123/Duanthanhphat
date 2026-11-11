@@ -76,8 +76,9 @@ export const acceptancePrintCss = `
 .acceptance-page .party .person { margin: 1px 0 1px 1.2rem; }
 .acceptance-page .conclude-line { margin: 3px 0 3px 0.5rem; }
 .acceptance-page .work-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 22px; text-align: center; font-weight: bold; text-transform: uppercase; }
-.acceptance-page .work-sign div { min-height: 96px; }
-.acceptance-page .work-sign .auto-sign { display: block; margin-top: 4px; }
+.acceptance-page .work-sign div { display: flex; flex-direction: column; min-height: 120px; }
+.acceptance-page .work-sign .auto-sign { display: block; margin-top: auto; }
+.acceptance-page .work-sign .auto-sign + .auto-sign { margin-top: 0; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 120px; margin-top: 10px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
@@ -106,6 +107,8 @@ export const acceptancePrintCss = `
   .acceptance-page .annex-sign { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
+  /* Bảng thành phần ký (BB hoàn thành) không tách đôi: cả bảng chuyển sang trang sau cùng nhau. */
+  .acceptance-page .sign-roster { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
   @page { size: A4 portrait; margin: 0; }
 }`;
