@@ -80,7 +80,7 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign .auto-sign { display: block; margin-top: auto; }
 .acceptance-page .work-sign .auto-sign + .auto-sign { margin-top: 0; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 64px; margin-top: 4px; }
+.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 76px; margin-top: 6px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
 .acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
 .acceptance-page .conclude-table { margin: 8px 0 14px; }
@@ -683,14 +683,19 @@ export default function WeldAcceptanceRecordPages({ record, kind }: { record: Re
               </tr>
             </thead>
             <tbody>
-              {parties.map((pt) => (
-                <tr key={pt.no}>
-                  <td>{pt.label}{pt.org ? <><br /><small>{pt.org}</small></> : null}</td>
-                  <td>{pt.role}</td>
-                  <td />
-                  <td />
-                </tr>
-              ))}
+              {parties.map((pt, idx) => {
+                // Họ tên / chức vụ lấy theo người ký đã nhập ở «Sửa thông tin in»; chủ đầu tư và tư vấn thiết kế không có dữ liệu nên để trống.
+                const party = ({ 1: "tvgs", 3: "ntc", 4: "ntp" } as Record<number, string>)[idx];
+                const who = party ? resolveSigner(t, loadSignerDefaults(), party, 1) : { ten: "", cv: "" };
+                return (
+                  <tr key={pt.no}>
+                    <td>{pt.label}{pt.org ? <><br /><small>{pt.org}</small></> : null}</td>
+                    <td>{who.cv || pt.role}</td>
+                    <td>{who.ten}</td>
+                    <td />{/* chữ ký tươi: để trống cho ký tay */}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </PrintFrame>
