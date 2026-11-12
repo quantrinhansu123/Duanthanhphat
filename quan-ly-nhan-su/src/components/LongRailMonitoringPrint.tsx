@@ -31,10 +31,12 @@ export default function LongRailMonitoringPrint({ layout, cells, project, onClos
     {cells.map(cell => {
       const row = layout.rows.find(r => r.cells.some(c => c.id === cell.id));
       const from = parseChainage(cell.from), to = parseChainage(cell.to);
-      const params = row ? layout.longRails.filter(rail => {
+      const longRail = row ? layout.longRails.filter(rail => {
         const span = getPlacementSpan(layout.rows, rail);
         return rail.rowKey === railRowKey(row) && span && from !== null && to !== null && span.startMetres < to && span.endMetres > from;
-      }).sort((a,b) => ((a.endMetres ?? 0)-(a.startMetres ?? 0))-((b.endMetres ?? 0)-(b.startMetres ?? 0)))[0]?.params : undefined;
+      }).sort((a,b) => ((a.endMetres ?? 0)-(a.startMetres ?? 0))-((b.endMetres ?? 0)-(b.startMetres ?? 0)))[0] : undefined;
+      const params = longRail?.params;
+      const name = displayRailCode(longRail ? longRail.code : cell.id); // cùng tên với sơ đồ / bảng GTUS
       const lock = railCellLockTemp(cell);
       return <article key={cell.id}>
         <header className="doc-head">
@@ -49,11 +51,11 @@ export default function LongRailMonitoringPrint({ layout, cells, project, onClos
           </div>
           <div className="head-meta">
             <div>Mẫu theo dõi ray hàn dài</div>
-            <div>Thanh ray: {displayRailCode(cell.id)}</div>
+            <div>Thanh ray: {name}</div>
           </div>
         </header>
         <h1>THEO DÕI RAY HÀN DÀI</h1>
-        <p><b>Dự án:</b> {project}</p><p><b>Thanh ray:</b> {displayRailCode(cell.id)} · {row?.line} · {row?.rail} · Km{cell.from} → Km{cell.to}</p>
+        <p><b>Dự án:</b> {project}</p><p><b>Thanh ray:</b> {name} · {row?.line} · {row?.rail} · Km{cell.from} → Km{cell.to}</p>
         <p>1. Hãy đánh dấu ngay sau khi hoàn thành giải tỏa ứng suất (mốc 0).</p>
         <p>2. Hãy đo đạc chuyển vị của ray hàn dài tại các thời điểm nhiệt độ khác nhau.</p>
         <table><thead><tr><th rowSpan={2}>TT</th><th rowSpan={2}>Tên thanh ray</th><th rowSpan={2}>Ngày giờ đo</th><th rowSpan={2}>Không khí<br/>°C</th><th rowSpan={2}>Nhiệt độ khóa<br/>°C</th><th rowSpan={2}>Nhiệt độ đo<br/>°C</th><th rowSpan={2}>Chênh nhiệt độ<br/>°C</th><th colSpan={2}>Điểm M</th><th colSpan={2}>Điểm E</th><th rowSpan={2}>Ghi chú</th></tr><tr><th>Thiết kế¹<br/>(mm)</th><th>Thực tế<br/>(mm)</th><th>Thiết kế²<br/>(mm)</th><th>Thực tế<br/>(mm)</th></tr></thead>
@@ -63,7 +65,7 @@ export default function LongRailMonitoringPrint({ layout, cells, project, onClos
             const e = params && diff !== null ? reportEndMovement(params,diff) : null;
             const format = (n:number|null) => n === null ? "—" : String(Math.round(n*1000)/1000);
             const date = report.measuredAt?.split("T");
-            return <tr key={index} className={diff !== null && diff < 0 ? "cool" : "warm"}><td>{index+1}</td><td style={{whiteSpace:"nowrap"}}>{displayRailCode(cell.id)}</td><td>{date?.[0] ? `${date[0].split("-").reverse().join("/")} ${date[1]??""}`:"—"}</td><td>{report.airTemp||"—"}</td><td>{lock}</td><td>{report.temp||"—"}</td><td>{format(diff)}</td><td>5</td><td>{report.mActual||"—"}</td><td>{format(e)}</td><td>{report.eActual||"—"}</td><td style={{textAlign:"left",whiteSpace:"pre-wrap"}}>{report.note}</td></tr>;
+            return <tr key={index} className={diff !== null && diff < 0 ? "cool" : "warm"}><td>{index+1}</td><td style={{whiteSpace:"nowrap"}}>{name}</td><td>{date?.[0] ? `${date[0].split("-").reverse().join("/")} ${date[1]??""}`:"—"}</td><td>{report.airTemp||"—"}</td><td>{lock}</td><td>{report.temp||"—"}</td><td>{format(diff)}</td><td>5</td><td>{report.mActual||"—"}</td><td>{format(e)}</td><td>{report.eActual||"—"}</td><td style={{textAlign:"left",whiteSpace:"pre-wrap"}}>{report.note}</td></tr>;
           })}</tbody></table>
         <p style={{marginTop:12}}>(1) Là giá trị cho phép 5 mm theo quy trình.</p><p>(2) Δ = (Pmax − Pj)² / (2EFr); Pmax = EFα × |T đo − T khóa|; Pj = 0. Đổi từ m sang mm.</p><p>Dấu âm thể hiện giảm nhiệt. E, F, α, r lấy từ thông số Giải tỏa của đoạn ray.</p>
       </article>;

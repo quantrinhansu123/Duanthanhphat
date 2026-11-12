@@ -6,11 +6,14 @@ import LongRailMonitoringPrint from "@/components/LongRailMonitoringPrint";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { reportEndMovement } from "@lwr/lib/stress-release";
 import {
+  coveringLongRail,
+  displayRailCode,
   getPlacementSpan,
   parseChainage,
   patchTrackCell,
   railCellLockTemp,
   railRowKey,
+  visibleLongRailSpan,
   TRACK_LAYOUT_STORAGE_KEY,
   type TrackLayout,
 } from "@lwr/lib/track-editor";
@@ -27,13 +30,23 @@ function measurementNow() {
 const inputCls =
   "mt-1 w-full min-w-0 rounded-md border border-amber-400 bg-white px-2 py-2 text-sm font-semibold focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600";
 
-type CellOption = { cell: RailCell; line: string; rail: string };
+type CellOption = { cell: RailCell; line: string; rail: string; name: string };
 
+/** Chỉ thanh đã khoá (đã giải toả) mới theo dõi; tên = mã đang hiện trên sơ đồ (HT001…), không phải id nội bộ (DT-41). */
 function cellOptions(layout: TrackLayout | null): CellOption[] {
   if (!layout) return [];
-  const all = layout.rows.flatMap((row) => row.cells.map((cell) => ({ cell, line: row.line, rail: row.rail })));
-  const placed = all.filter((item) => item.cell.placed || item.cell.released);
-  return placed.length ? placed : all;
+  return layout.rows.flatMap((row) => {
+    const rails = layout.longRails.filter((item) => item.rowKey === railRowKey(row)).flatMap((item) => {
+      const span = visibleLongRailSpan(layout.rows, item);
+      return span ? [{ rail: item, span }] : [];
+    });
+    return row.cells.filter((cell) => cell.released).map((cell) => {
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      const rail = from !== null && to !== null ? coveringLongRail(rails, from, to)?.rail : undefined;
+      return { cell, line: row.line, rail: row.rail, name: displayRailCode(rail ? rail.code : cell.id) };
+    });
+  });
 }
 
 /** Trang «Theo dõi ray hàn dài»: chọn dự án + tên thanh ray rồi điền báo cáo chuyển vị điểm M / điểm E. */
@@ -45,6 +58,8 @@ export default function RailReportEntry() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [cellId, setCellId] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [rowIndex, setRowIndex] = useState<number | null>(null); // null = lần đo mới; số = đang sửa lần đo đó
   const [report, setReport] = useState<RailReportRow>({ ...EMPTY_ROW });
   const [saving, setSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -105,9 +120,10 @@ export default function RailReportEntry() {
   const cell = selected?.cell ?? null;
 
   useEffect(() => {
-    const stored = cell?.report?.rows[0];
+    const stored = rowIndex === null ? undefined : cell?.report?.rows[rowIndex];
     setReport({ ...EMPTY_ROW, ...stored, measuredAt: stored?.measuredAt || measurementNow() });
-  }, [cell?.id, cell?.report]);
+    setConfirmDelete(false);
+  }, [cell?.id, cell?.report, rowIndex]);
 
   const projectOptions = useMemo(
     () => [
@@ -117,10 +133,10 @@ export default function RailReportEntry() {
     [projects],
   );
   const railOptions = useMemo(
-    () => options.map(({ cell: c, line, rail }) => ({
+    () => options.map(({ cell: c, line, rail, name }) => ({
       value: c.id,
-      label: `${c.id} · ${line} – ${rail}`,
-      hint: `Km${c.from} → Km${c.to}${c.released ? " · đã giải tỏa" : ""}`,
+      label: `${name} · ${line} – ${rail}`,
+      hint: `Km${c.from} → Km${c.to} · đã giải tỏa`,
     })),
     [options],
   );
@@ -142,13 +158,17 @@ export default function RailReportEntry() {
       .sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0]?.params;
   }, [layout, cell, selected]);
 
-  async function commit(next: RailReportRow) {
+  async function commit(next: RailReportRow, remove = false) {
     if (!layout || !cell) return;
-    const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim() && !next.measuredAt?.trim() && !next.airTemp?.trim();
+    const empty = remove || !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim() && !next.measuredAt?.trim() && !next.airTemp?.trim();
     setSaving(true);
     setMessage("");
     try {
-      const updated = patchTrackCell(layout, cell.id, { report: empty ? null : { rows: [next] } });
+      // Mỗi thanh có nhiều lần đo: thêm lần mới hoặc ghi đè đúng lần đang sửa (không xoá các lần khác).
+      const rows = [...(cell.report?.rows ?? [])];
+      if (rowIndex !== null && rowIndex < rows.length) { if (empty) rows.splice(rowIndex, 1); else rows[rowIndex] = next; }
+      else if (!empty) rows.push(next);
+      const updated = patchTrackCell(layout, cell.id, { report: rows.length ? { rows } : null });
       const savedAt = new Date().toISOString();
       const result = await upsertTrackLayout(projectId || undefined, updated, savedAt);
       if (!result.ok) { setMessage(result.error ?? "Không lưu được báo cáo lên Supabase."); return; }
@@ -158,7 +178,8 @@ export default function RailReportEntry() {
       } catch { /* bản lưu trên trình duyệt chỉ là dự phòng */ }
       setLayout(updated);
       setEditorOpen(false);
-      setMessage(result.skipped && result.error ? result.error : `Đã lưu báo cáo ${cell.id}.`);
+      setRowIndex(null);
+      setMessage(result.skipped && result.error ? result.error : `Đã lưu báo cáo ${selected?.name ?? cell.id}.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : "Không lưu được báo cáo.");
     } finally {
@@ -185,13 +206,13 @@ export default function RailReportEntry() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-slate-900">Theo dõi ray hàn dài</h1>
         <button type="button" disabled={saving} onClick={() => {
-          setCellId(""); setReport({ ...EMPTY_ROW, measuredAt: measurementNow() }); setMessage(""); setEditorOpen(true);
+          setCellId(""); setRowIndex(null); setReport({ ...EMPTY_ROW, measuredAt: measurementNow() }); setMessage(""); setEditorOpen(true);
         }} className="min-h-11 rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white disabled:opacity-50">+ Thêm mới</button>
       </div>
       {message && <p role="status" className="text-sm text-slate-600">{message}</p>}
       <dialog ref={editorRef} aria-labelledby="rail-editor-title" onClose={() => setEditorOpen(false)} onCancel={event => { if (saving) event.preventDefault(); }} className="m-auto max-h-[92dvh] w-[calc(100%_-_1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border-0 bg-white p-4 text-slate-900 shadow-xl backdrop:bg-slate-900/50 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="rail-editor-title" className="text-lg font-bold">Theo dõi ray hàn dài — {cell ? cell.id : "Thêm mới"}</h2>
+        <h2 id="rail-editor-title" className="text-lg font-bold">Theo dõi ray hàn dài — {selected ? selected.name : "Thêm mới"}</h2>
         <button type="button" disabled={saving} onClick={() => setEditorOpen(false)} className="min-h-11 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Đóng</button>
       </div>
       {message && <p role="status" className="mb-3 text-sm text-slate-600">{message}</p>}
@@ -220,7 +241,7 @@ export default function RailReportEntry() {
               <SelectMenu
                 searchable
                 value={cellId}
-                onChange={setCellId}
+                onChange={(v) => { setCellId(v); setRowIndex(null); }}
                 options={railOptions}
                 disabled={loading || railOptions.length === 0}
                 placeholder={loading ? "Đang tải sơ đồ…" : railOptions.length ? "Chọn thanh ray (vd DT-41)" : "Chưa có thanh ray"}
@@ -236,10 +257,20 @@ export default function RailReportEntry() {
       {cell && lock !== null ? (
         <section className="space-y-3 rounded-xl border border-slate-300 bg-white p-4 text-sm">
           <div>
-            <h2 className="font-bold text-slate-900">Báo cáo chuyển vị điểm M / điểm E — {cell.id}</h2>
+            <h2 className="font-bold text-slate-900">Báo cáo chuyển vị điểm M / điểm E — {selected?.name ?? cell.id}</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               {selected?.line} – {selected?.rail} · Km{cell.from} → Km{cell.to}. Thông số tính toán lấy từ tab Giải tỏa; nhập thông tin quan trắc và chuyển vị thực tế.
             </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">Đã đo {cell.report?.rows.length ?? 0} lần:</span>
+            {(cell.report?.rows ?? []).map((row, index) => (
+              <button key={index} type="button" disabled={saving} onClick={() => setRowIndex(index)} className={`rounded-md border px-2 py-1 text-xs font-semibold ${rowIndex === index ? "border-blue-600 bg-blue-600 text-white" : "border-blue-200 text-blue-700"}`}>
+                Lần {index + 1}{row.measuredAt ? ` · ${row.measuredAt.replace("T", " ").slice(5)}` : ""}
+              </button>
+            ))}
+            <button type="button" disabled={saving} onClick={() => setRowIndex(null)} className={`rounded-md border px-2 py-1 text-xs font-semibold ${rowIndex === null ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-300 text-emerald-700"}`}>+ Lần đo mới</button>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -303,7 +334,15 @@ export default function RailReportEntry() {
             <span className="font-semibold text-slate-700">Ghi chú</span>
             <textarea aria-label="Ghi chú" rows={3} className="mt-1 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600" value={report.note} onChange={(e) => set({ note: e.target.value })} />
           </label>
-          <button type="button" disabled={saving || loading} onClick={() => void commit(report)} className="min-h-11 w-full rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white hover:bg-[#00388A] disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu báo cáo"}</button>
+          {rowIndex !== null && (confirmDelete ? (
+            <div className="flex gap-2">
+              <button type="button" disabled={saving} onClick={() => { setConfirmDelete(false); void commit(report, true); }} className="min-h-11 flex-1 rounded-lg bg-red-600 px-4 py-2 font-semibold text-white disabled:opacity-50">Xác nhận xoá lần đo {rowIndex + 1}</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="min-h-11 rounded-lg border border-slate-300 px-4 font-semibold">Không xoá</button>
+            </div>
+          ) : (
+            <button type="button" disabled={saving} onClick={() => setConfirmDelete(true)} className="min-h-11 w-full rounded-lg border border-red-300 px-4 py-2 font-semibold text-red-700 disabled:opacity-50">Xoá lần đo {rowIndex + 1}</button>
+          ))}
+          <button type="button" disabled={saving || loading} onClick={() => void commit(report)} className="min-h-11 w-full rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white hover:bg-[#00388A] disabled:opacity-50">{saving ? "Đang lưu…" : rowIndex === null ? "Lưu lần đo mới" : `Lưu lần đo ${rowIndex + 1}`}</button>
         </section>
       ) : (
         !loading && <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">Chọn tên thanh ray để hiện form nhập báo cáo.</p>
@@ -320,14 +359,15 @@ export default function RailReportEntry() {
               <th className="p-2">Thanh ray</th><th className="p-2">Ngày giờ đo</th><th className="p-2">Không khí (°C)</th><th className="p-2">Nhiệt độ đo (°C)</th><th className="p-2">M thực tế (mm)</th><th className="p-2">E thực tế (mm)</th><th className="p-2">Thao tác</th>
             </tr></thead>
             <tbody>{options.filter(item => item.cell.report?.rows.length).map(item => {
-              const saved = item.cell.report!.rows[0];
+              const count = item.cell.report!.rows.length;
+              const saved = item.cell.report!.rows[count - 1];
               const date = saved.measuredAt?.split("T");
               const displayDate = date?.[0] ? `${date[0].split("-").reverse().join("/")} ${date[1] ?? ""}` : "—";
               return <tr key={item.cell.id} className="border-t border-slate-100">
-                <td className="p-2"><input type="checkbox" aria-label={`Chọn báo cáo ${item.cell.id}`} checked={checked.includes(item.cell.id)} onChange={e => setChecked(previous => e.target.checked ? [...previous,item.cell.id] : previous.filter(id => id !== item.cell.id))} /></td>
-                <td className="p-2 font-semibold">{item.cell.id}<span className="block text-xs font-normal text-slate-500">{item.line} · {item.rail}</span></td>
+                <td className="p-2"><input type="checkbox" aria-label={`Chọn báo cáo ${item.name}`} checked={checked.includes(item.cell.id)} onChange={e => setChecked(previous => e.target.checked ? [...previous,item.cell.id] : previous.filter(id => id !== item.cell.id))} /></td>
+                <td className="p-2 font-semibold">{item.name}<span className="block text-xs font-normal text-slate-500">{item.line} · {item.rail} · {count} lần đo (hiện lần mới nhất)</span></td>
                 <td className="p-2">{displayDate}</td><td className="p-2">{saved.airTemp || "—"}</td><td className="p-2">{saved.temp || "—"}</td><td className="p-2">{saved.mActual || "—"}</td><td className="p-2">{saved.eActual || "—"}</td>
-                <td className="p-2"><button type="button" disabled={saving} onClick={() => { setCellId(item.cell.id); setEditorOpen(true); }} className="min-h-10 rounded-lg border border-blue-200 px-3 font-semibold text-blue-700 disabled:opacity-50">Xem / Sửa</button></td>
+                <td className="p-2"><button type="button" disabled={saving} onClick={() => { setCellId(item.cell.id); setRowIndex(count - 1); setEditorOpen(true); }} className="min-h-10 rounded-lg border border-blue-200 px-3 font-semibold text-blue-700 disabled:opacity-50">Xem / Sửa</button></td>
               </tr>;
             })}</tbody>
           </table>
