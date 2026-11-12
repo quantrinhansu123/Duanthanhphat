@@ -90,7 +90,10 @@ function thongTinFromStored(raw: Record<string, string> | undefined): RfiThongTi
 function loadRfiDraft(projectId: string): Partial<RfiThongTin> | null {
   try {
     const raw = window.localStorage.getItem(rfiDraftKey(projectId));
-    return raw ? (JSON.parse(raw) as Partial<RfiThongTin>) : null;
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Partial<RfiThongTin>;
+    const gtusLeft = /^\s*[HT][TP]\d{4}/.test(String(draft.giam_sat ?? ""));
+    return { ...draft, cong_viec: "", lwr_ids: "", lwr_codes: "", ...(gtusLeft ? { giam_sat: "", tuyen_thuong: false, tuyen_ha: false } : {}) };
   } catch {
     return null;
   }
@@ -99,9 +102,10 @@ function loadRfiDraft(projectId: string): Partial<RfiThongTin> | null {
 function saveRfiDraft(projectId: string, t: RfiThongTin) {
   try {
     window.localStorage.setItem(rfiDraftKey(projectId), JSON.stringify({
-      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.giam_sat,
-      tuyen_thuong: t.tuyen_thuong, tuyen_ha: t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
-      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am, cong_viec: t.cong_viec,
+      // Lựa chọn thanh của phiếu GTUS (giám sát, tuyến, LWR) chỉ thuộc phiếu GTUS đó, không nhớ sang phiếu khác.
+      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.cong_viec === "gtus" ? "" : t.giam_sat,
+      tuyen_thuong: t.cong_viec === "gtus" ? false : t.tuyen_thuong, tuyen_ha: t.cong_viec === "gtus" ? false : t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
+      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am, cong_viec: "",
     }));
   } catch { /* ignore */ }
 }
@@ -547,9 +551,9 @@ function RfiPanel({
       </div>
       <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
       <div role="group" aria-label="Loại phiếu" className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => ({ ...t, cong_viec: "" })); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
         <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
       </div>
       {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh ray màu xám trên track map ở bước Thông tin phiếu; tuyến và lý trình tự lấy đúng theo từng thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
