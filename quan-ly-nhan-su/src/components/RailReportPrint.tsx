@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Printer, X } from "@/components/icons";
 import PrintFrame from "@/components/PrintFrame";
@@ -37,6 +37,9 @@ export default function RailReportPrint({ payload, onClose }: {
   payload: RailReportPrintPayload | null;
   onClose: () => void;
 }) {
+  // Ngày báo cáo in trên đầu mẫu: mặc định hôm nay, sửa được ở ô «Ngày báo cáo» trên thanh công cụ.
+  const [reportDate, setReportDate] = useState(() => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }));
+  const reportDateLabel = reportDate ? reportDate.split("-").reverse().join("/") : "……/……/…………";
   useEffect(() => {
     if (!payload) return;
     function onKey(event: KeyboardEvent) {
@@ -61,6 +64,9 @@ export default function RailReportPrint({ payload, onClose }: {
           </div>
         </div>
         <div className="toolbar-actions">
+          <label className="report-date-edit">Ngày báo cáo
+            <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} aria-label="Ngày báo cáo (sửa)" />
+          </label>
           <button type="button" onClick={() => window.print()} className="btn-print">
             <Printer size={16} weight="bold" aria-hidden />
             In / Lưu PDF
@@ -85,6 +91,7 @@ export default function RailReportPrint({ payload, onClose }: {
             </div>
             <h1>{title}</h1>
             <p className="meta">Dự án: {projectLabel}</p>
+            <p className="meta report-date">Ngày báo cáo: <b>{reportDateLabel}</b></p>
           </header>
           <div className="summary">{summary.map((line) => <p key={line}>{line}</p>)}</div>
 
@@ -136,7 +143,10 @@ const PRINT_CSS = `
 #rail-report-print .print-toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #cbd5e1; padding: 10px 14px; }
 #rail-report-print .toolbar-title { font-size: 14px; font-weight: 700; color: #0f172a; }
 #rail-report-print .toolbar-sub { font-size: 12px; color: #475569; margin-top: 2px; }
-#rail-report-print .toolbar-actions { display: flex; gap: 8px; }
+#rail-report-print .toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#rail-report-print .report-date-edit { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #334155; }
+#rail-report-print .report-date-edit input { height: 38px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 8px; font-size: 13px; background: #fff; }
+#rail-report-print .report-date { font-style: normal; font-size: 10pt; margin: 0 0 4px; }
 #rail-report-print .btn-print, #rail-report-print .btn-close { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
 #rail-report-print .btn-print { background: #0047AB; color: #fff; border: 0; }
 #rail-report-print .btn-close { background: #fff; color: #334155; border: 1px solid #cbd5e1; }

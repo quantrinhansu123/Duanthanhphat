@@ -62,55 +62,16 @@ export function diaryStressReleaseText(layout: TrackLayout | null, projectId: st
   }).join("\n");
 }
 
-/** Báo cáo ngày ghi số lượng; nếu chưa nhập thì dùng nhân sự đã gán dự án. */
-export function diaryManpowerDefaults(reports: Record<string, unknown>[], personnel: {
-  employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null;
-}[], managerId: string | null, journalWelders = 0, journalPeople: typeof personnel = []) {
-  const roster = { cht: [] as string[], ky_su: [] as string[], workers: [] as string[] };
-  // Báo cáo ngày chưa ghi nhân lực mà Nhật ký hàn có thợ hàn → chỉ tính những người làm việc trong ngày, không lấy cả danh sách dự án.
-  const hasReportPeople = reports.some((row) => { const bag = row.nhan_luc as Record<string, unknown> | null; return bag && Object.values(bag).some((v) => Array.isArray(v) && v.length > 0); });
-  const useJournalPeople = !hasReportPeople && journalPeople.length > 0;
-  for (const person of new Map((useJournalPeople ? journalPeople : personnel).map((p) => [p.employee_id, p])).values()) {
-    if (person.trang_thai === "Khóa") continue;
-    const role = (person.chuc_vu ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    if (person.employee_id === managerId || /\bcht\b|chi huy/.test(role)) roster.cht.push(person.ho_ten);
-    else if (/ky su|ki su|ky thuat|engineer/.test(role)) roster.ky_su.push(person.ho_ten);
-    else roster.workers.push(person.ho_ten);
-  }
-  const count = (role: string): number | null => {
-    const names = new Set<string>();
-    let quantity: number | null = null;
-    for (const row of reports) {
-      const bag = row.nhan_luc as Record<string, unknown> | null;
-      const people = bag && Array.isArray(bag[role]) ? bag[role] as { id?: string; ten?: string }[] : [];
-      const legacy = row[`${role}_ten`] ?? row[`so_${role}`];
-      const values = people.length ? people : legacy != null ? [{ ten: String(legacy), id: String(row[`${role}_id`] ?? "") }] : [];
-      for (const person of values) {
-        if (!person || typeof person !== "object") continue;
-        const name = String(person.ten ?? "").trim();
-        if (!person.id && /^-?\d+(\.\d+)?$/.test(name)) {
-          // shortcut: số lượng không có danh tính lấy mức cao nhất giữa các hạng mục; dùng chấm công khi cần tổng người khác nhau.
-          if (Number.isSafeInteger(Number(name)) && Number(name) >= 0) quantity = Math.max(quantity ?? 0, Number(name));
-        } else if (person.id) names.add(person.id);
-        else for (const part of name.split(/\s*[,;·|/]\s*/).filter(Boolean)) names.add(part.toLocaleLowerCase("vi"));
-      }
-    }
-    return names.size > 0 || quantity !== null ? Math.max(names.size, quantity ?? 0) : null;
-  };
-  const cht = count("cht"), engineer = count("ky_su");
-  const workers = ["lai_may", "tho_van_hanh", "cong_nhan", "vnr"].map(count);
-  const fromReports = cht != null || engineer != null || workers.some((n) => n != null);
+/**
+ * Nhân lực mặc định của nhật ký thi công: Ban chỉ huy 4 · Cán bộ kỹ thuật 3 · Công nhân 12 (người), sửa được từng ngày.
+ * Không còn tự tính theo báo cáo ngày / nhật ký hàn / nhân sự dự án.
+ */
+export const DIARY_DEFAULT_MANPOWER = { banChiHuy: "4", canBoKyThuat: "3", congNhan: "12" } as const;
+
+export function diaryManpowerDefaults() {
   return {
-    banChiHuy: String(cht ?? roster.cht.length),
-    canBoKyThuat: String(engineer ?? roster.ky_su.length),
-    congNhan: String(Math.max(useJournalPeople ? 0 : journalWelders, workers.some((n) => n != null) ? workers.reduce<number>((sum, n) => sum + (n ?? 0), 0) : roster.workers.length)),
-    nhanLucNguon: useJournalPeople
-      ? `Theo những người làm việc trong ngày từ nhật ký hàn (${journalPeople.map((p) => p.ho_ten).join(", ")}); xếp nhóm theo chức vụ.`
-      : journalWelders > 0
-      ? `Công nhân tính từ nhật ký hàn trong ngày (${journalWelders} thợ hàn); lấy số lớn hơn giữa nhật ký và báo cáo ngày.`
-      : fromReports
-      ? "Theo báo cáo ngày của dự án; vai trò chưa nhập dùng nhân sự được gán. Số lượng lặp giữa hạng mục lấy mức cao nhất từng vai trò."
-      : `Theo nhân sự được gán dự án. Ban chỉ huy: ${roster.cht.join(", ") || "chưa gán"}. Kỹ sư: ${roster.ky_su.join(", ") || "chưa gán"}. Mỗi người chỉ tính một nhóm.`,
+    ...DIARY_DEFAULT_MANPOWER,
+    nhanLucNguon: "Mặc định: Ban chỉ huy 4, Cán bộ kỹ thuật 3, Công nhân 12 (người) — sửa được từng ngày.",
   };
 }
 

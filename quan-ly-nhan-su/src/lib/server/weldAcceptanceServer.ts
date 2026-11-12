@@ -131,7 +131,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   const journalPeople = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(welderIds,
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
   return {
-    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
+    ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
     // Mục hàn lấy theo báo cáo ngày nếu có; mài ray, RFI báo trong ngày và giải tỏa ứng suất luôn được ghép thêm (không bị báo cáo ngày che mất).
     noiDungCongViec: [

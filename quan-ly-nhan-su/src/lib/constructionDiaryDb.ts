@@ -21,9 +21,12 @@ export type ConstructionDiary = {
   chtTiepThu: string;
 };
 
+/** Nhân lực mặc định của nhật ký thi công (người): sửa được từng ngày. */
+export const DEFAULT_MANPOWER = { banChiHuy: "4", canBoKyThuat: "3", congNhan: "12" } as const;
+
 export const EMPTY_DIARY: ConstructionDiary = {
-  thoiTiet: "", nhietDo: "", sang: "", chieu: "", toi: "", banChiHuy: "", canBoKyThuat: "", congNhan: "", thietBi: "",
-  nhanLucNguon: "", noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
+  thoiTiet: "", nhietDo: "", sang: "", chieu: "", toi: "", ...DEFAULT_MANPOWER, thietBi: "",
+  nhanLucNguon: "Mặc định: Ban chỉ huy 4, Cán bộ kỹ thuật 3, Công nhân 12 (người) — sửa được từng ngày.", noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
 };
 
 const localKey = (projectId: string, date: string) => `nhat-ky-thi-cong-ngay:${projectId}:${date}`;
