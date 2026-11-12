@@ -111,6 +111,12 @@ export default function ConstructionDiaryForm() {
         try {
           const defaults = await loadDefaults(projectId, date);
           const notes: string[] = [];
+          // Dòng «Báo RFI số …» (bản cũ ghi vào mục 3) không thuộc nhật ký thi công: nội dung RFI chỉ nằm ở mục 3.2.
+          const withoutRfi = diary.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n");
+          if (withoutRfi !== diary.noiDungCongViec) {
+            diary = { ...diary, noiDungCongViec: withoutRfi };
+            notes.push("Đã bỏ dòng «Báo RFI số …» khỏi mục 3.");
+          }
           if (/\(\+\d+\)/.test(diary.noiDungCongViec) && defaults.values.noiDungCongViec) {
             diary = { ...diary, noiDungCongViec: defaults.values.noiDungCongViec };
             notes.push("Mục 3 đã được điền lại đủ nội dung (bỏ «+N»).");
@@ -167,10 +173,16 @@ export default function ConstructionDiaryForm() {
     return [String(first), String(first + 1)];
   })();
 
-  /** Nội dung mục 3 khi in: gộp công việc + nghiệm thu hàng ngày (biểu mẫu không có mục 3.2 riêng). */
+  /** Nội dung mục 3 khi in: 3.1 Công việc thực hiện trong ngày, rồi 3.2 Nghiệm thu công việc xây dựng hàng ngày (để trống nếu không có RFI trong ngày). */
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
-  const section3Print = [noAcceptance(d.noiDungCongViec) ? "" : d.noiDungCongViec.trim(), noAcceptance(d.nghiemThuHangNgay) ? "" : `Nghiệm thu công việc xây dựng hàng ngày:\n${d.nghiemThuHangNgay.trim()}`]
-    .filter(Boolean).join("\n\n");
+  // Dòng «Báo RFI số …» của bản cũ không thuộc nhật ký thi công (bỏ cả khi in thẳng từ danh sách).
+  const workToday = d.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim();
+  const section3Print = [
+    "3.1 Công việc thực hiện trong ngày",
+    workToday,
+    "3.2 Nghiệm thu công việc xây dựng hàng ngày",
+    noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
+  ].join("\n");
 
   async function autofill() {
     setBusy(true);
@@ -321,7 +333,7 @@ export default function ConstructionDiaryForm() {
           <Card title="3. Nội dung công việc thực hiện" wide>
             <textarea aria-label="Nội dung công việc thực hiện" className={inp} rows={6} value={d.noiDungCongViec} onChange={set("noiDungCongViec")} />
             <label className={lbl}>Nghiệm thu công việc xây dựng hàng ngày
-              <span className="font-normal text-slate-500"> (gộp vào mục 3 khi in — biểu mẫu dự án không có mục 3.2 riêng)</span>
+              <span className="font-normal text-slate-500"> (in thành mục 3.2, dưới mục 3.1; lấy theo RFI phát trong ngày, không có thì để trống)</span>
               <textarea aria-label="Nghiệm thu công việc xây dựng hàng ngày" className={inp} rows={4} value={d.nghiemThuHangNgay} onChange={set("nghiemThuHangNgay")} />
             </label>
           </Card>
