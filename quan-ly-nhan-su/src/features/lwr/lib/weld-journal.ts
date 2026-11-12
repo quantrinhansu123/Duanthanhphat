@@ -3,6 +3,7 @@ import { parseChainage } from "@lwr/lib/track-editor";
 import type { JournalWeld, WeldTestStatus } from "@lwr/types/weld";
 
 type GpsRow = {
+  ma_diem?: string | null;
   lich_su_moi_han_id?: string | null;
   ma_lich_su?: string | null;
   ly_trinh?: string | null;
@@ -90,6 +91,7 @@ function fromGpsRow(row: GpsRow): JournalWeld | null {
     machineId: row.may_id?.trim() || null,
     machineCode: row.ma_may?.trim() || null,
     machineName: row.ten_may?.trim() || null,
+    pointCode: row.ma_diem?.trim() || null,
   };
 }
 
@@ -126,6 +128,7 @@ function enrichHours(target: JournalWeld, source: JournalWeld) {
   if (target.lunchHours == null && source.lunchHours != null) target.lunchHours = source.lunchHours;
   if (!target.fieldCode && source.fieldCode) target.fieldCode = source.fieldCode;
   if (!target.weldName && source.weldName) target.weldName = source.weldName;
+  if (!target.pointCode && source.pointCode) target.pointCode = source.pointCode;
   if (!target.machineId && source.machineId) target.machineId = source.machineId;
   if (!target.machineCode && source.machineCode) target.machineCode = source.machineCode;
   if (!target.machineName && source.machineName) target.machineName = source.machineName;
@@ -147,9 +150,9 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
   {
     const pageSize = 1000;
     const selectGps =
-      "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
+      "lich_su_moi_han_id,ma_lich_su,ma_diem,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
     const selectGpsNoWelderId =
-      "lich_su_moi_han_id,ma_lich_su,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
+      "lich_su_moi_han_id,ma_lich_su,ma_diem,ly_trinh_toa_do,ngay_thuc_hien,ten_du_an,cong_nghe_han,loai_moi_han,ten_tho_han,ket_qua_moi_han,so_luong_loi,may_id,ma_may,ten_may";
     let selectCols = selectGps;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase

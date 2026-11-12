@@ -33,7 +33,7 @@ export function projectEquipmentText(equipment: ProjectEquipment[]): string {
   return ([ ["welding", "1. Máy hàn"], ["other", "2. Máy và thiết bị khác"], ["materials", "3. Vật tư"] ] as const).map(([group, title]) => {
     const rows = equipment.filter((m) => m.group === group && !m.missing); // mã chưa liên kết danh mục không in ra mẫu
     const items = rows.map((m) => m.missing ? `${m.name}; cần gán lại trong dự án` : `${equipmentLabel(m)}: ${m.quantity} bộ`);
-    // Máy hàn và máy / thiết bị khác: mỗi dòng một loại; vật tư gộp một dòng, ngăn bằng "; " (theo bản mẫu).
-    return group !== "materials" ?`${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : `${title}: ${items.join("; ")}`;
+    // Máy hàn: mỗi máy một dòng; máy / thiết bị khác và vật tư viết liền một dòng, ngăn bằng "; " cho gọn (theo bản mẫu).
+    return group === "welding" ?`${title}:\n${items.map((t) => `- ${t}`).join("\n")}` : `${title}: ${items.join("; ")}`;
   }).join("\n");
 }

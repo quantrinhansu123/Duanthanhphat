@@ -87,6 +87,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
       .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
   ]);
+  void [accepted, splitRfis, splitRfiWelds, splitDone]; // nhật ký chỉ lấy RFI chính phát trong ngày
   const located = new Map(all.map((w) => {
     const point = points.find((p) => p.lich_su_moi_han_id === w.id);
     // Lý trình ưu tiên điểm GPS; dự án không có tọa độ thì lấy lý trình ghi trong nhật ký hàn.
@@ -134,29 +135,25 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
     // Mục hàn lấy theo báo cáo ngày nếu có; mài ray, RFI báo trong ngày và giải tỏa ứng suất luôn được ghép thêm (không bị báo cáo ngày che mất).
+    // 3.1 Công việc thực hiện trong ngày (theo Nhật ký hàn): Hàn ray · Mài ray · Giải toả ứng suất (chỉ khi có RFI GTUS phát trong ngày).
     noiDungCongViec: [
       diaryReportWorkText(reports, select(welds.map((w) => w.id))) || diaryWorkText(select(welds.map((w) => w.id)), "weld"),
       diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
-      ...mainRfis.map((r) => {
-        const scope = rfiScope(r.thong_tin ?? {});
-        const what = scope.geometry && scope.ultrasound ? "hình học và siêu âm" : scope.ultrasound ? "siêu âm" : "hình học";
-        return diaryWorkText(select(mainRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${what}`);
-      }),
-      // Phiếu hình học/siêu âm sinh ra từ RFI chính trong cùng ngày đã nằm trong dòng RFI chính → không ghi lặp.
-      ...splitRfis.filter((r) => { const own = splitRfiWelds.filter((w) => w.phieu_id === r.id); return !own.length || !own.every((w) => mainRfiWelds.some((m) => m.moi_han_id === w.moi_han_id)); }).map((r) => diaryWorkText(select(splitRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${r.loai === "sieu-am" ? "siêu âm" : "hình học"}`)),
-      diaryStressReleaseText(layout, projectId, date),
+      ...mainRfis.filter((r) => r.thong_tin?.cong_viec === "gtus").map((r) =>
+        `- Giải toả ứng suất ray ${String(r.thong_tin?.giam_sat ?? "").trim() || String(r.thong_tin?.lwr_codes ?? "")}.`),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
-    nghiemThuHangNgay: [
-      ...["Đạt", "Không đạt"].map((result) => {
-        const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
-        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
-      }),
-      // Nghiệm thu phiếu tách (hình học / siêu âm) chốt trong ngày.
-      ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
-        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "hình học"} mối hàn`);
-        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
-      })),
-    ].filter(Boolean).join("\n") || "Không có công tác nghiệm thu",
+    // 3.2 Nghiệm thu công việc xây dựng hàng ngày = nội dung công việc của các RFI phát trong ngày; không có RFI thì để trống.
+    nghiemThuHangNgay: mainRfis.flatMap((r) => {
+      const info = r.thong_tin ?? {};
+      if (info.cong_viec === "gtus") return [`- Nghiệm thu giải toả ứng suất ray ${String(info.giam_sat ?? "").trim() || String(info.lwr_codes ?? "")}.`];
+      if (info.loai_rfi === "theo-doi") return []; // phiếu theo dõi (giám sát) không phải nghiệm thu
+      const scope = rfiScope(info);
+      const rfiWelds = select(mainRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id));
+      return [
+        scope.geometry ? diaryWorkText(rfiWelds, "accept", "Nghiệm thu kích thước hình học, trực quan mối hàn") : "",
+        scope.ultrasound ? diaryWorkText(rfiWelds, "accept", "Nghiệm thu siêu âm mối hàn") : "",
+      ].filter(Boolean);
+    }).join("\n"),
   };
 }
 
@@ -258,7 +255,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
       const eligible = new Map(candidates.map((c) => [c.id, c]));
       const bad = ids.find((id) => !eligible.has(id) || eligible.get(id)!.used);
       if (bad) throw new QualityApiError("Có thanh LWR chưa đủ điều kiện hoặc đã nằm trong phiếu giải toả ứng suất khác. Bấm Tải lại để cập nhật danh sách.", 409);
-      Object.assign(payload.thong_tin, { lwr_ids: ids.join(","), lwr_codes: ids.map((id) => eligible.get(id)!.code).join(", ") });
+      Object.assign(payload.thong_tin, { lwr_ids: ids.join(","), lwr_codes: ids.map((id) => eligible.get(id)!.lwr).join(", ") });
       // Lưu danh sách thanh của phiếu (chụp lý trình, chiều dài) để nghiệm thu và thanh toán từng thanh — như mối hàn của RFI nghiệm thu.
       await snapshotGtusThanh(payload.id, ids.map((thanhId) => {
         const c = eligible.get(thanhId)!;

@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { loadProjects } from "@/lib/projectsDb";
-import { EMPTY_DIARY, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
+import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
 
 type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi" | "banChiHuy" | "canBoKyThuat" | "congNhan" | "nhanLucNguon">;
@@ -11,8 +11,11 @@ async function loadDefaults(projectId: string, date: string) {
     qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date }),
     loadReportWeather(projectId, date),
   ]);
+  const values: Partial<ConstructionDiary> = { ...(work.status === "fulfilled" ? work.value : {}), ...(weather.status === "fulfilled" ? weather.value : {}) };
+  const avg = averageDayTemperature(values.sang ?? "", values.chieu ?? "", values.toi ?? "");
+  if (avg) values.nhietDo = avg;
   return {
-    values: { ...(work.status === "fulfilled" ? work.value : {}), ...(weather.status === "fulfilled" ? weather.value : {}) },
+    values,
     warning: [work, weather].flatMap((r) => r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : "Chưa tải được dữ liệu tự điền; có thể nhập tay."] : []).join(" "),
   };
 }
@@ -52,7 +55,7 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-ruled { line-height: ${LINE}px; background-image: ${DOT}; background-size: 3px ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
-#diary-print .diary-sig-hint { font-weight: normal; font-style: italic; margin-top: 2pt; }
+#diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
 #diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 #diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
 @media print {
@@ -102,14 +105,23 @@ export default function ConstructionDiaryForm() {
         const defaults = await loadDefaults(projectId, date);
         diary = { ...diary, ...defaults.values };
         warning = defaults.warning;
-      } else if (/\(\+\d+\)/.test(diary.noiDungCongViec)) {
-        // Nhật ký lưu từ bản cũ bị cắt «… (+N)»: tự điền lại mục 3 để hiển thị đủ mã mối hàn (bấm Lưu để lưu bản đủ).
+      } else {
+        // Nhật ký đã lưu: (1) bản cũ bị cắt «… (+N)» → điền lại mục 3; (2) danh sách thiết bị đã lưu thiếu máy / vật tư đang gán cho dự án → cập nhật mục 2.2 cho đủ.
+        // Bấm Lưu để lưu bản mới; sửa tay vẫn giữ nếu danh sách đã đủ.
         try {
           const defaults = await loadDefaults(projectId, date);
-          if (defaults.values.noiDungCongViec) {
+          const notes: string[] = [];
+          if (/\(\+\d+\)/.test(diary.noiDungCongViec) && defaults.values.noiDungCongViec) {
             diary = { ...diary, noiDungCongViec: defaults.values.noiDungCongViec };
-            warning = "Mục 3 đã được điền lại đủ nội dung (bỏ «+N»); bấm Lưu để lưu bản mới.";
+            notes.push("Mục 3 đã được điền lại đủ nội dung (bỏ «+N»).");
           }
+          const wanted = (defaults.values.thietBi ?? "").split(/[\n;]/).map((x) => x.trim()).filter((x) => / bộ\s*$/.test(x))
+            .map((x) => x.replace(/^-\s*/, "").replace(/^\d\.\s*[^:]+:\s*/, "").split(":")[0].trim()).filter(Boolean);
+          if (wanted.some((name) => !diary.thietBi.includes(name))) {
+            diary = { ...diary, thietBi: defaults.values.thietBi ?? diary.thietBi };
+            notes.push("Danh sách thiết bị (2.2) đã được cập nhật đủ máy / vật tư gán cho dự án.");
+          }
+          if (notes.length) warning = notes.join(" ") + " Bấm Lưu để lưu bản mới.";
         } catch { /* giữ nội dung đã lưu */ }
       }
       if (!live) return;
@@ -148,14 +160,10 @@ export default function ConstructionDiaryForm() {
    * luỹ tiến 7–8, 9–10… Không có ngày bắt đầu dự án thì để trống (điền tay).
    */
   const [pageStart, pageEnd] = (() => {
-    const project = projects.find((p) => p.id === projectId);
-    const start = project?.startDate?.slice(0, 10);
-    if (!start || !date) return ["……", "……"];
-    const startMs = Date.parse(`${start}T00:00:00`);
-    const curMs = Date.parse(`${date}T00:00:00`);
-    if (!Number.isFinite(startMs) || !Number.isFinite(curMs)) return ["……", "……"];
-    const days = Math.max(0, Math.round((curMs - startMs) / 86400000));
-    const first = 5 + days * 2;
+    // Bắt đầu từ trang 6; mỗi nhật ký 2 trang, chạy liên tiếp theo thứ tự các ngày đã lập của dự án (không để trống trang).
+    if (!projectId || !date) return ["……", "……"];
+    const earlier = new Set(saved.filter((row) => row.projectId === projectId && row.date < date).map((row) => row.date)).size;
+    const first = 6 + earlier * 2;
     return [String(first), String(first + 1)];
   })();
 
@@ -194,13 +202,37 @@ export default function ConstructionDiaryForm() {
     window.print();
   }
 
+  const formTop = useRef<HTMLDivElement>(null);
+  // Tên người ký cuối nhật ký: nhập một lần, nhớ cho các lần sau (trên trình duyệt này); để trống thì bản in để trống.
+  const [signers, setSigners] = useState({ tvgs: "", ntc: "", ntp: "" });
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("nhat-ky-thi-cong-nguoi-ky");
+      if (raw) setSigners((cur) => ({ ...cur, ...(JSON.parse(raw) as Partial<typeof cur>) }));
+    } catch { /* bỏ qua */ }
+  }, []);
+  function setSigner(key: "tvgs" | "ntc" | "ntp", value: string) {
+    setSigners((cur) => {
+      const next = { ...cur, [key]: value };
+      try { window.localStorage.setItem("nhat-ky-thi-cong-nguoi-ky", JSON.stringify(next)); } catch { /* bỏ qua */ }
+      return next;
+    });
+  }
+  /** Cuộn tới đầu form: trang nằm trong khung cuộn riêng của ứng dụng nên window.scrollTo không đủ. */
+  function scrollToForm() {
+    window.setTimeout(() => {
+      formTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 50);
+  }
+
   /** Mở một nhật ký đã lưu vào form (dùng cho nút Xem / Sửa). */
   function openSaved(row: DiarySummary) {
     setProjectId(row.projectId);
     setDate(row.date);
     setD(row.diary);
     setStatus(`Đang mở nhật ký ngày ${row.date.split("-").reverse().join("/")}.`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToForm();
   }
 
   /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
@@ -228,6 +260,7 @@ export default function ConstructionDiaryForm() {
   return (
     <div className="px-4 sm:px-6 pb-8">
       <style>{css}</style>
+      <div ref={formTop} aria-hidden />
       <div className="no-print divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-800 shadow-sm">
         <div className="flex flex-wrap items-end gap-3 pb-5">
           <label className={`${lbl} min-w-[16rem] flex-1`}>Dự án
@@ -264,7 +297,7 @@ export default function ConstructionDiaryForm() {
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-4">
-              <label className={lbl}>Nhiệt độ (°C)<input className={inp} inputMode="decimal" value={d.nhietDo} onChange={set("nhietDo")} /></label>
+              <label className={lbl}>Nhiệt độ (°C) — trung bình sáng / chiều / tối<input className={inp} inputMode="decimal" value={averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} onChange={set("nhietDo")} /></label>
               {(["sang", "chieu", "toi"] as const).map((k) => (
                 <label key={k} className={lbl}>{{ sang: "Sáng", chieu: "Chiều", toi: "Tối" }[k]}<input className={inp} value={d[k]} onChange={set(k)} placeholder="Ví dụ: Nắng, 27°C" /></label>
               ))}
@@ -297,6 +330,13 @@ export default function ConstructionDiaryForm() {
               <textarea aria-label={title} className={inp} rows={Math.max(rows, 3)} value={d[k]} onChange={set(k)} />
             </Card>
           ))}
+          <Card title="Người ký cuối nhật ký" hint="Nhập một lần, phần mềm nhớ cho các lần sau; để trống thì bản in để trống." wide>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {([["tvgs", "Tư vấn giám sát"], ["ntc", "Nhà thầu chính"], ["ntp", "Nhà thầu phụ"]] as const).map(([key, label]) => (
+                <label key={key} className={lbl}>{label}<input className={inp} value={signers[key]} onChange={(e) => setSigner(key, e.target.value)} placeholder="Họ và tên" /></label>
+              ))}
+            </div>
+          </Card>
         </fieldset>
 
         <section className="pt-5">
@@ -385,7 +425,7 @@ export default function ConstructionDiaryForm() {
             Bình thường: <Check checked={mark === "Bình thường"} />&nbsp;&nbsp;&nbsp;&nbsp;
             Mưa <Check checked={mark === "Mưa"} />&nbsp;&nbsp;&nbsp;&nbsp;
             Nắng <Check checked={mark === "Nắng"} />&nbsp;&nbsp;&nbsp;&nbsp;
-            Nhiệt độ : {d.nhietDo ? `${d.nhietDo} °C` : ".........."}
+            Nhiệt độ : {(averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo) ? `${averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} °C` : ".........."}
           </p>
           <p className="diary-indent">Sáng {d.sang || "…………."}&nbsp;&nbsp;&nbsp;&nbsp;Chiều {d.chieu || "……...."}&nbsp;&nbsp;&nbsp;&nbsp;Tối {d.toi || "………….."}</p>
 
@@ -415,9 +455,9 @@ export default function ConstructionDiaryForm() {
           ))}
 
           <div className="diary-sig-row">
-            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
-            <div>NHÀ THẦU CHÍNH<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
-            <div>NHÀ THẦU PHỤ<div className="diary-sig-hint">(Ký, ghi rõ họ tên)</div><div className="diary-sig-box" /></div>
+            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{signers.tvgs}</div></div>
+            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{signers.ntc}</div></div>
+            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{signers.ntp}</div></div>
           </div>
           <p className="diary-foot">Trang {pageEnd}</p>
         </section>

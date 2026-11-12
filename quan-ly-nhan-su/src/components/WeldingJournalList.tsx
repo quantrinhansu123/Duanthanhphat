@@ -3440,9 +3440,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                     {(() => {
                       const manual = paymentByWeld.get(w.id);
                       if (!manual && !ultrasoundRates) return <span className="text-xs text-slate-400">—</span>;
-                      const rate = manual?.ty_le ?? ultrasoundRates?.[w.id] ?? 0;
+                      // Chỉ hiện tỷ lệ đã nhập khi thanh toán theo phiếu; nghiệm thu xong không tự có 70% / 100%.
+                      const rate = manual?.ty_le ?? 0;
                       return (
-                        <span title={manual ? "Tỷ lệ đã chỉnh tay" : "Tỷ lệ theo phiếu siêu âm"} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${rate === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                        <span title={manual ? "Tỷ lệ thanh toán đã nhập" : "Chưa thanh toán"} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${rate === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
                           {rate}%
                         </span>
                       );
@@ -3487,7 +3488,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                           setPaymentError("");
                           setPaymentEdit({
                             id: w.id, projectId: raw.du_an_id, name: w.weldName,
-                            rate: saved?.ty_le ?? ultrasoundRates?.[w.id] ?? 100,
+                            rate: saved?.ty_le ?? 100,
                             note: saved?.ghi_chu ?? "",
                             date: saved?.ngay_thanh_toan ?? new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date()),
                           });

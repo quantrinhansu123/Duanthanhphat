@@ -28,6 +28,8 @@ export interface JournalWeld {
   fieldCode?: string | null;
   /** Tên mối hàn theo máy hàn, vd 11-11-26-0001. */
   weldName?: string | null;
+  /** Tên Lisp (mã vị trí / điểm tọa độ), vd HT0150 — tên chuẩn của mối hàn trên tuyến. */
+  pointCode?: string | null;
 }
 
 /** Khớp mối hàn tại ranh giới giữa hai thanh ray. */

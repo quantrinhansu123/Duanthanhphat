@@ -17,7 +17,8 @@ export function diaryCode(r: Pick<DiaryWork, "ma_hien_truong" | "ma_diem">): str
 export function diaryMachineName(name: string): string {
   const cleaned = name.replace(/\s+/g, " ").trim();
   const model = /(?:^|[\s(])((?:UN5|KCM|K922)[A-Z0-9./-]*)/i.exec(cleaned)?.[1];
-  if (model) return `Máy hàn chảy giáp mép ${model}`;
+  // UN5 là máy hàn di động (lưu động trên ray).
+  if (model) return `Máy hàn chảy giáp mép${/^UN5/i.test(model) ? " di động" : ""} ${model}`;
   if (/máy hàn tiếp xúc|flash\s*butt|đối đầu/i.test(cleaned)) return "Máy hàn chảy giáp mép";
   return cleaned.replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m);
 }
@@ -105,8 +106,8 @@ export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so
     const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
       .sort((x, y) => (x.ten_thiet_bi ?? "").trim().localeCompare((y.ten_thiet_bi ?? "").trim(), "vi", { numeric: true }))
       .map((r) => `- ${i === 0 ? diaryMachineName((r.ten_thiet_bi ?? "").trim()) : (r.ten_thiet_bi ?? "").trim().replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m)}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
-    // Máy hàn và máy / thiết bị khác: mỗi dòng một loại; vật tư gộp một dòng, ngăn bằng "; " (theo bản mẫu).
-    if (i !== 2) return `${title}:\n${lines.join("\n")}`;
+    // Máy hàn: mỗi máy một dòng; máy / thiết bị khác và vật tư viết liền một dòng, ngăn bằng "; " cho gọn (theo bản mẫu).
+    if (i === 0) return `${title}:\n${lines.join("\n")}`;
     return `${title}: ${lines.map((l) => l.slice(2)).join("; ")}`;
   }).join("\n");
 }

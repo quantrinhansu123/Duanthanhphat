@@ -470,10 +470,11 @@ function RfiPanel({
     setThongTin((t) => ({
       ...t,
       lwr_ids: chosen.map((c) => c.id).join(","),
-      lwr_codes: chosen.map((c) => c.code).join(", "),
+      // Phiếu GTUS ghi theo TÊN LWR của thanh (HT0001, HP0001, HT0002…), không dùng mã ô thanh (HT-41…).
+      lwr_codes: chosen.map((c) => c.lwr).join(", "),
       tuyen_thuong: chosen.some((c) => c.route === "thuong"),
       tuyen_ha: chosen.some((c) => c.route === "ha"),
-      giam_sat: chosen.length ? `${chosen.map((c) => c.code).join(", ")} (${kmText(from)} – ${kmText(to)})` : "",
+      giam_sat: chosen.length ? `${chosen.map((c) => c.lwr).join(", ")} (${kmText(from)} – ${kmText(to)})` : "",
     }));
   }
   const routeMissing = gtus ? !thongTin.lwr_ids : monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
