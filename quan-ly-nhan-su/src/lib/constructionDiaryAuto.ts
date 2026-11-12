@@ -101,7 +101,9 @@ export function diaryReportEquipmentText(rows: { ten_thiet_bi: string | null; so
   if (rows.length === 0) return "";
   const group = (r: { bo_phan: string | null }) => { const p = (r.bo_phan ?? "").trim(); return p.startsWith("1") ? 0 : p.startsWith("3") ? 2 : 1; };
   return ["1. Máy hàn", "2. Máy và thiết bị khác", "3. Vật tư"].map((title, i) => {
+    // Thiết bị trong báo cáo ngày được đọc không có thứ tự cố định từ CSDL → sắp theo tên để mỗi lần tải ra cùng một danh sách.
     const lines = rows.filter((r) => group(r) === i && (r.ten_thiet_bi ?? "").trim())
+      .sort((x, y) => (x.ten_thiet_bi ?? "").trim().localeCompare((y.ten_thiet_bi ?? "").trim(), "vi", { numeric: true }))
       .map((r) => `- ${i === 0 ? diaryMachineName((r.ten_thiet_bi ?? "").trim()) : (r.ten_thiet_bi ?? "").trim().replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m)}${r.so_luong !== null && r.so_luong !== "" ? `: ${r.so_luong} bộ` : ""}`);
     // Máy hàn và máy / thiết bị khác: mỗi dòng một loại; vật tư gộp một dòng, ngăn bằng "; " (theo bản mẫu).
     if (i !== 2) return `${title}:\n${lines.join("\n")}`;

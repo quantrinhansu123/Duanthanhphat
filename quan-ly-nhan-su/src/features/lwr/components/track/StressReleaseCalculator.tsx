@@ -212,10 +212,18 @@ export function StressReleaseCalculator({
   const from = parseChainage(startChainage);
   const to = parseChainage(endChainage);
   const joint = jointChainage.trim() ? parseChainage(jointChainage) : to;
+  // Chiều dài giải toả = lý trình cuối − lý trình đầu + lượng điều chỉnh (nhập ở form lý trình của thanh trên track map).
+  const adjust = Number.isFinite(Number(initialInput.lengthAdjust)) ? Number(initialInput.lengthAdjust) : 0;
   if (!buffer && (startChainage.trim() || endChainage.trim() || jointChainage.trim())) {
     if (from === null || to === null || to <= from) chainErrors.push("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
     else if (joint === null || joint < from || joint > to) chainErrors.push("Vị trí kéo phải nằm trong đoạn giải toả.");
-    else { input.leftLength = joint - from; input.rightLength = to - joint; }
+    else {
+      input.leftLength = joint - from;
+      input.rightLength = to - joint;
+      // Phần điều chỉnh cộng vào phía chứa lý trình cuối (kéo ở cuối đoạn → L₁; kéo giữa đoạn → L₂).
+      if (joint < to) input.rightLength += adjust; else input.leftLength += adjust;
+      input.lengthAdjust = adjust;
+    }
   }
   // Legacy manually entered deformations must never override the thermal calculation.
   delete input.bufferDeformations;
@@ -280,6 +288,7 @@ export function StressReleaseCalculator({
       ["Ray của tuyến", trackSide === "LEFT" ? "Ray trái" : "Ray phải", ""],
       ["Lý trình đầu", startChainage || "Chưa nhập", ""],
       ["Lý trình cuối", endChainage || "Chưa nhập", ""],
+      ...(adjust !== 0 ? [["Lượng điều chỉnh chiều dài", `${adjust > 0 ? "+" : "−"}${formatStressNumber(Math.abs(adjust))}`, "m"]] as StressPrintRow[] : []),
       ["Lý trình vị trí kéo", jointChainage || endChainage || "Chưa nhập", ""],
       ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
     ] as StressPrintRow[] : []),
@@ -401,8 +410,8 @@ export function StressReleaseCalculator({
           </div>
           {chainageLocked
             ? <p className="text-xs text-emerald-800">Lý trình đã khóa vì đoạn đã giải toả xong. Cập nhật lý trình chỉ khi đang thi công (form lý trình phía trên).</p>
-            : <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Theo dõi tiến độ hàn bằng cách cập nhật lý trình cuối trên form lý trình.</p>}
-          {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
+            : <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu + lượng điều chỉnh. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Theo dõi tiến độ hàn bằng cách cập nhật lý trình cuối trên form lý trình.</p>}
+          {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from + adjust)} m{adjust !== 0 ? ` (= ${formatStressNumber(to - from)} m ${adjust > 0 ? "+" : "−"} điều chỉnh ${formatStressNumber(Math.abs(adjust))} m)` : ""}</p>}
         </>}
         <div className="grid grid-cols-2 gap-3">
           {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => {

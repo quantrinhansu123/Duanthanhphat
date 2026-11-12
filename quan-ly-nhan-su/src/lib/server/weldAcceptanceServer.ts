@@ -407,6 +407,14 @@ export async function listGtusCandidates(body: Record<string, unknown>) {
     const line = String(row.line ?? ""), rail = String(row.rail ?? "");
     return /hạ/i.test(line) ? (/phải/i.test(rail) ? "DP" : "DT") : (/phải/i.test(rail) ? "UP" : "UT");
   };
+  // Tên LWR: thanh nằm trong đoạn LWR đã lập thì dùng mã đó; thanh chưa có đoạn LWR được đặt tên dự kiến chạy liên tiếp 1→n riêng từng ray
+  // (HT0002, HT0003… tiếp theo mã lớn nhất đã dùng của ray đó) để mọi thanh đều có tên.
+  const nextNumber = new Map<string, number>();
+  for (const rail of layout.longRails ?? []) {
+    const m = /^(?:HT|HP|TT|TP)(\d+)$/i.exec(String(rail.code ?? "").trim());
+    const key = String(rail.rowKey);
+    if (m) nextNumber.set(key, Math.max(nextNumber.get(key) ?? 0, Number(m[1])));
+  }
   const candidates = (layout.rows ?? []).flatMap((row) => {
     const prefix = prefixOf(row);
     return (row.cells ?? []).flatMap((cell) => {
@@ -417,9 +425,15 @@ export async function listGtusCandidates(body: Record<string, unknown>) {
       if (!id) return [];
       const lwr = (layout.longRails ?? []).find((rail) =>
         String(rail.rowKey) === prefix && Number(rail.startMetres) < end && Number(rail.endMetres) > start);
+      let lwrName = lwr ? String(lwr.code ?? "") : "";
+      if (!lwrName) {
+        const n = (nextNumber.get(prefix) ?? 0) + 1;
+        nextNumber.set(prefix, n);
+        lwrName = `${display(prefix)}${String(n).padStart(4, "0")}`;
+      }
       const adjust = Number.isFinite(Number((cell as { lengthAdjust?: unknown }).lengthAdjust)) ? Number((cell as { lengthAdjust?: unknown }).lengthAdjust) : 0;
       return [{
-        id, code: display(id), lwr: lwr ? String(lwr.code ?? "") : null,
+        id, code: display(id), lwr: lwrName, lwrPlanned: !lwr,
         lengthMetres: Math.round((end - start + adjust) * 1000) / 1000, // chiều dài ray = lý trình cuối − đầu + điều chỉnh
         route: /hạ/i.test(String(row.line ?? "")) ? "ha" as const : "thuong" as const,
         rail: /phải/i.test(String(row.rail ?? "")) ? "phai" as const : "trai" as const,

@@ -650,7 +650,7 @@ function RfiPanel({
                   <label key={c.id} className={`flex min-h-9 items-center gap-2 text-sm ${c.used ? "opacity-50" : "cursor-pointer"}`}>
                     <input type="checkbox" disabled={Boolean(c.used)} checked={gtusSelected.has(c.id)} onChange={(e) => toggleGtus(c.id, e.target.checked)} />
                     <span className="font-mono font-semibold">{c.code}</span>
-                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{c.lwr ? ` · LWR ${c.lwr}` : ""} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round(c.lengthMetres * 100) / 100).toLocaleString("vi-VN")} m</span>
+                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{` · LWR ${c.lwr}${c.lwrPlanned ? " (dự kiến)" : ""}`} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round(c.lengthMetres * 100) / 100).toLocaleString("vi-VN")} m</span>
                     {c.used ? <span className="text-xs text-amber-800">đã có phiếu {c.used}</span> : null}
                   </label>
                 ))}

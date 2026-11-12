@@ -390,6 +390,7 @@ export function RailDetailPanel({
               rightLength: 0,
               startChainage: cell.from,
               endChainage: cell.to,
+              lengthAdjust: cell.lengthAdjust ?? 0,
               leftTemp: sideTempOf(cell, "left"),
               rightTemp: sideTempOf(cell, "right"),
             }}

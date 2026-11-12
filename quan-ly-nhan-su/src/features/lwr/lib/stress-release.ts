@@ -21,6 +21,8 @@ export interface StressInput {
   startChainage?: string;
   endChainage?: string;
   jointChainage?: string;
+  /** Lượng điều chỉnh chiều dài (m, +/−): chiều dài giải toả = lý trình cuối − lý trình đầu + lengthAdjust. */
+  lengthAdjust?: number;
   /** Thời điểm bấm Bắt đầu / Kết thúc tại hiện trường (ISO). */
   startTime?: string;
   endTime?: string;

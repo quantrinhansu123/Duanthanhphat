@@ -126,7 +126,7 @@ export async function publishRfi(input: { id: string; du_an_id: string; so_phieu
 }
 /** Lưu nội dung in nhập tay của phiếu yêu cầu (đối tượng, nội dung vị trí, ngày giờ, Km). */
 export const saveRfiPrintInfo = (id: string, values: Record<string, string>) => qualityRequest<{ id: string }>({ action: "rfi-print-save", id, values });
-export type GtusCandidate = { id: string; code: string; lwr: string | null; route: "ha" | "thuong"; rail: "trai" | "phai"; startMetres: number; endMetres: number;
+export type GtusCandidate = { id: string; code: string; lwr: string; lwrPlanned: boolean; route: "ha" | "thuong"; rail: "trai" | "phai"; startMetres: number; endMetres: number;
   /** Chiều dài ray = lý trình cuối − lý trình đầu + lượng điều chỉnh. */
   lengthMetres: number;
   from: string; to: string; used: string | null };
