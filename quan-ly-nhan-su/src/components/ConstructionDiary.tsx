@@ -82,6 +82,14 @@ export default function ConstructionDiaryForm() {
   const [d, setD] = useState<ConstructionDiary>(EMPTY_DIARY);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Nhật ký đang xem nhanh trong hộp thoại (nút Xem ở danh sách). */
+  const [viewRow, setViewRow] = useState<DiarySummary | null>(null);
+  useEffect(() => {
+    if (!viewRow) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setViewRow(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewRow]);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState<DiarySummary[]>([]);
   const reloadSaved = () => { void listDiaries().then((r) => setSaved(r.rows)); };
@@ -377,8 +385,8 @@ export default function ConstructionDiaryForm() {
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => openSaved(row)}
-                              title="Mở nhật ký này để xem"
+                              onClick={() => setViewRow(row)}
+                              title="Xem nhanh nội dung nhật ký này"
                               className="h-8 rounded-md border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                             >
                               Xem
@@ -474,6 +482,64 @@ export default function ConstructionDiaryForm() {
           <p className="diary-foot">Trang {pageEnd}</p>
         </section>
       </article>
+      {viewRow && (
+        <DiaryViewModal
+          row={viewRow}
+          projectName={projects.find((p) => p.id === viewRow.projectId)?.name ?? "—"}
+          signers={signers}
+          onClose={() => setViewRow(null)}
+          onEdit={() => { const row = viewRow; setViewRow(null); openSaved(row); }}
+          onPrint={() => { const row = viewRow; setViewRow(null); printSaved(row); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ViewBlock({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="space-y-1">
+      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h3>
+      <p className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm leading-relaxed text-slate-800">{text.trim() || "—"}</p>
+    </section>
+  );
+}
+
+/** Xem nhanh một nhật ký đã lưu: nội dung theo từng mục, đọc được ngay mà không phải nạp lên form. */
+function DiaryViewModal({ row, projectName, signers, onClose, onEdit, onPrint }: {
+  row: DiarySummary; projectName: string; signers: { tvgs: string; ntc: string; ntp: string };
+  onClose: () => void; onEdit: () => void; onPrint: () => void;
+}) {
+  const dd = row.diary;
+  const label = row.date.split("-").reverse().join("/");
+  const temp = averageDayTemperature(dd.sang, dd.chieu, dd.toi) ?? dd.nhietDo;
+  const work = dd.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim();
+  const accept = !dd.nghiemThuHangNgay.trim() || dd.nghiemThuHangNgay.trim() === "Không có công tác nghiệm thu" ? "" : dd.nghiemThuHangNgay.trim();
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Nhật ký thi công ngày ${label}`} className="no-print fixed inset-0 z-[1500] flex items-start justify-center overflow-auto bg-slate-900/60 p-3 sm:p-6" onClick={onClose}>
+      <div className="w-full max-w-3xl space-y-4 rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Nhật ký thi công ngày {label}</h2>
+            <p className="text-xs text-slate-500">{projectName}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={onEdit} className="h-9 rounded-lg border border-[#0047AB]/40 bg-[#0047AB]/5 px-3 text-sm font-semibold text-[#0047AB]">Sửa</button>
+            <button type="button" onClick={onPrint} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700">In</button>
+            <button type="button" onClick={onClose} className="h-9 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white">Đóng</button>
+          </div>
+        </div>
+        <ViewBlock title="1. Thời tiết" text={`${dd.thoiTiet || "—"} · Nhiệt độ ${temp ? `${temp} °C` : "—"}\nSáng: ${dd.sang || "—"} · Chiều: ${dd.chieu || "—"} · Tối: ${dd.toi || "—"}`} />
+        <ViewBlock title="2.1 Nhân lực" text={`Ban chỉ huy: ${dd.banChiHuy || "—"} người · Cán bộ kỹ thuật: ${dd.canBoKyThuat || "—"} người · Công nhân: ${dd.congNhan || "—"} người`} />
+        <ViewBlock title="2.2 Thiết bị" text={dd.thietBi} />
+        <ViewBlock title="3.1 Công việc thực hiện trong ngày" text={work} />
+        <ViewBlock title="3.2 Nghiệm thu công việc xây dựng hàng ngày" text={accept} />
+        <ViewBlock title="4. Sự cố, hư hỏng, tai nạn lao động và vấn đề phát sinh" text={dd.suCo} />
+        <ViewBlock title="5. Kiến nghị và ý kiến chỉ đạo" text={dd.kienNghi} />
+        <ViewBlock title="6. Nhận xét của kỹ sư giám sát" text={dd.nhanXetGiamSat} />
+        <ViewBlock title="7. Chỉ huy trưởng tiếp thu" text={dd.chtTiepThu} />
+        <ViewBlock title="Người ký" text={`Tư vấn giám sát: ${signers.tvgs || "—"} · Nhà thầu chính: ${signers.ntc || "—"} · Nhà thầu phụ: ${signers.ntp || "—"}`} />
+      </div>
     </div>
   );
 }
