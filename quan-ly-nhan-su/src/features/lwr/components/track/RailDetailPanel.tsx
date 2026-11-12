@@ -470,7 +470,7 @@ export function RailDetailPanel({
                   <div className="mt-1 grid grid-cols-2 gap-3">
                     <div className="min-w-0">
                       <span className="text-slate-600">Thiết kế (mm)</span>
-                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{eDesign === null ? "Chờ thông số / nhiệt độ đo" : Math.round(eDesign * 1000) / 1000}</div>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{eDesign === null ? "Chờ thông số / nhiệt độ đo" : eDesign}</div>
                     </div>
                     <label className="block min-w-0">
                       <span className="font-semibold text-amber-900">Thực tế (mm)</span>

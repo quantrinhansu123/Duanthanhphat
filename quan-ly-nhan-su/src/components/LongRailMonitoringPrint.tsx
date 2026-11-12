@@ -65,7 +65,7 @@ export default function LongRailMonitoringPrint({ layout, cells, project, onClos
             const e = params && diff !== null ? reportEndMovement(params,diff) : null;
             const format = (n:number|null) => n === null ? "—" : String(Math.round(n*1000)/1000);
             const date = report.measuredAt?.split("T");
-            return <tr key={index} className={diff !== null && diff < 0 ? "cool" : "warm"}><td>{index+1}</td><td style={{whiteSpace:"nowrap"}}>{name}</td><td>{date?.[0] ? `${date[0].split("-").reverse().join("/")} ${date[1]??""}`:"—"}</td><td>{report.airTemp||"—"}</td><td>{lock}</td><td>{report.temp||"—"}</td><td>{format(diff)}</td><td>5</td><td>{report.mActual||"—"}</td><td>{format(e)}</td><td>{report.eActual||"—"}</td><td style={{textAlign:"left",whiteSpace:"pre-wrap"}}>{report.note}</td></tr>;
+            return <tr key={index} className={diff !== null && diff < 0 ? "cool" : "warm"}><td>{index+1}</td><td style={{whiteSpace:"nowrap"}}>{name}</td><td>{date?.[0] ? `${date[0].split("-").reverse().join("/")} ${date[1]??""}`:"—"}</td><td>{report.airTemp||"—"}</td><td>{lock}</td><td>{report.temp||"—"}</td><td>{format(diff)}</td><td>5</td><td>{report.mActual||"—"}</td><td>{e === null ? "—" : Math.round(e)}</td><td>{report.eActual||"—"}</td><td style={{textAlign:"left",whiteSpace:"pre-wrap"}}>{report.note}</td></tr>;
           })}</tbody></table>
         <p style={{marginTop:12}}>(1) Là giá trị cho phép 5 mm theo quy trình.</p><p>(2) Δ = (Pmax − Pj)² / (2EFr); Pmax = EFα × |T đo − T khóa|; Pj = 0. Đổi từ m sang mm.</p><p>Dấu âm thể hiện giảm nhiệt. E, F, α, r lấy từ thông số Giải tỏa của đoạn ray.</p>
       </article>;

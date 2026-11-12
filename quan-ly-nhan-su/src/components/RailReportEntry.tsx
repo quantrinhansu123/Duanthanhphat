@@ -320,7 +320,7 @@ export default function RailReportEntry() {
               <div className="min-w-0">
                 <span className="text-slate-600">Thiết kế (mm)</span>
                 <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">
-                  {eDesign === null ? (params ? "Chờ nhiệt độ đo" : "Chờ thông số Giải tỏa") : Math.round(eDesign * 1000) / 1000}
+                  {eDesign === null ? (params ? "Chờ nhiệt độ đo" : "Chờ thông số Giải tỏa") : Math.round(eDesign)}
                 </div>
               </div>
               <label className="block min-w-0">
