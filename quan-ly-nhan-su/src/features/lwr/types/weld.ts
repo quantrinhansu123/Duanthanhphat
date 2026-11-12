@@ -24,6 +24,10 @@ export interface JournalWeld {
   startTime?: string | null;
   endTime?: string | null;
   lunchHours?: number | null;
+  /** Mã hiện trường (sơn bụng ray), vd FBW-11-11-26-0096. */
+  fieldCode?: string | null;
+  /** Tên mối hàn theo máy hàn, vd 11-11-26-0001. */
+  weldName?: string | null;
 }
 
 /** Khớp mối hàn tại ranh giới giữa hai thanh ray. */

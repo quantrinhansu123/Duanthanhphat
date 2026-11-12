@@ -37,6 +37,8 @@ type JournalRow = {
   ma_may?: string | null;
   ten_may?: string | null;
   gio_bat_dau?: string | null;
+  ma_hien_truong?: string | null;
+  ten_moi_han_theo_may?: string | null;
   gio_ket_thuc?: string | null;
   gio_nghi_trua?: number | string | null;
 };
@@ -113,6 +115,8 @@ function fromJournalRow(row: JournalRow): JournalWeld {
     startTime: normalizeTime(row.gio_bat_dau),
     endTime: normalizeTime(row.gio_ket_thuc),
     lunchHours: Number.isFinite(lunch) && lunch > 0 ? lunch : null,
+    fieldCode: row.ma_hien_truong?.trim() || null,
+    weldName: row.ten_moi_han_theo_may?.trim() || null,
   };
 }
 
@@ -120,6 +124,8 @@ function enrichHours(target: JournalWeld, source: JournalWeld) {
   if (!target.startTime && source.startTime) target.startTime = source.startTime;
   if (!target.endTime && source.endTime) target.endTime = source.endTime;
   if (target.lunchHours == null && source.lunchHours != null) target.lunchHours = source.lunchHours;
+  if (!target.fieldCode && source.fieldCode) target.fieldCode = source.fieldCode;
+  if (!target.weldName && source.weldName) target.weldName = source.weldName;
   if (!target.machineId && source.machineId) target.machineId = source.machineId;
   if (!target.machineCode && source.machineCode) target.machineCode = source.machineCode;
   if (!target.machineName && source.machineName) target.machineName = source.machineName;
@@ -174,11 +180,11 @@ export async function loadJournalWelds(): Promise<{ welds: JournalWeld[]; source
   {
     const pageSize = 1000;
     const selectFull =
-      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_nghi_trua";
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,gio_nghi_trua,ma_hien_truong,ten_moi_han_theo_may";
     const selectBasic =
-      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc";
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,tho_han_id,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,ma_hien_truong,ten_moi_han_theo_may";
     const selectNoWelderId =
-      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc";
+      "id,ma_lich_su,ngay_thuc_hien,du_an,cong_nghe_han,loai_moi_han,ten_tho_han,tinh_trang_thi_nghiem,so_luong_loi,may_id,ma_may,ten_may,gio_bat_dau,gio_ket_thuc,ma_hien_truong,ten_moi_han_theo_may";
     let selectCols = selectFull;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase

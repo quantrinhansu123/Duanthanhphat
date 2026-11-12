@@ -41,7 +41,7 @@ export function WeldJointPanel({ joint, onClose, journalWelds = [], onLink }: We
           <label className="text-xs">Nhật ký hàn đã thực hiện
             <select aria-label="Nhật ký hàn đã thực hiện" className="mt-1 w-full rounded border p-2 text-sm" value={weldId} onChange={e => setWeldId(e.target.value)}>
               <option value="">Chưa hàn / tháo liên kết</option>
-              {journalWelds.map(weld => <option key={weld.id} value={weld.id}>{weld.code} · {weld.method} · {weld.project} · {weld.chainage ?? "Chưa có lý trình"} · {weld.date}</option>)}
+              {journalWelds.map(weld => <option key={weld.id} value={weld.id}>{weld.weldName ? `${weld.weldName} · ` : ""}{weld.fieldCode || weld.code}</option>)}
             </select>
           </label>
           <button type="button" onClick={() => onLink(weldId)} className="rounded bg-blue-700 px-3 py-2 text-sm text-white">Lưu liên kết · tự điền số mối hàn</button>
