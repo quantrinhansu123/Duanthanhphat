@@ -524,7 +524,7 @@ export const RailGrid = memo(function RailGrid({
                   style={{ left: (joint.metres - extent.startMetres) * TRACK_PIXELS_PER_METRE, top: 20 }}
                 >
                   <span className={`block size-4 rounded-full border-2 shadow-md ${tone}`} />
-                  {weld && <span className="absolute bottom-full left-1/2 mb-0.5 max-w-24 -translate-x-1/2 truncate whitespace-nowrap text-[9px] font-medium text-slate-800">{weld.code}</span>}
+                  {weld && <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-slate-800">{weld.code}</span>}
                 </button>
               );
             })}

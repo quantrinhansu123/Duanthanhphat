@@ -1,5 +1,6 @@
 "use client";
 
+import type { RailCell } from "@lwr/types/track";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
@@ -123,6 +124,17 @@ const rowLength = (row: { lengthM?: number; span: { startMetres: number; endMetr
   Math.round((row.lengthM ?? row.span.endMetres - row.span.startMetres) * 1000) / 1000;
 
 /** Giờ hiện trường tách 2 dòng (giờ / ngày) để vừa cột hẹp của bảng A4 dọc. */
+/** Chưa nhập giờ bắt đầu/kết thúc ở máy tính giải toả → lấy giờ đo sớm nhất / muộn nhất trong báo cáo của thanh (giờ VN). */
+function withReportTimes(summary: LwrPrintSummary, cell: RailCell): LwrPrintSummary {
+  const times = (cell.report?.rows ?? []).map((r) => r.measuredAt).filter((m): m is string => Boolean(m)).sort();
+  const label = (m?: string) => (m ? formatFieldTime(`${m}${/[zZ]|[+-]\d\d:?\d\d$/.test(m) ? "" : "+07:00"}`) : "—");
+  return {
+    ...summary,
+    startTimeLabel: summary.startTimeLabel === "—" ? label(times[0]) : summary.startTimeLabel,
+    endTimeLabel: summary.endTimeLabel === "—" ? label(times.length > 1 ? times[times.length - 1] : undefined) : summary.endTimeLabel,
+  };
+}
+
 function splitTimeLabel(label: string) {
   const [time, date] = label.split(" ");
   return date ? <>{time}<br />{date}</> : label;
@@ -398,7 +410,7 @@ export function TrackPrint({
         code: displayRailCode(rail ? rail.code : cell.id),
         railLabel: railDisplayLabel(row.line, row.rail),
         span: { startMetres, endMetres },
-        summary: lwrPrintSummary(params),
+        summary: withReportTimes(lwrPrintSummary(params), cell),
         neutralTemp: formatStressNumber(params.neutralTemp),
         completed: cell.released || rail?.completedAt || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
       }];
