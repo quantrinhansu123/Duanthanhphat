@@ -3,7 +3,7 @@
 import type { CSSProperties, FocusEvent } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
-import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, fixSignerName } from "@/lib/weldAcceptance";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
@@ -80,14 +80,14 @@ export const acceptancePrintCss = `
 .acceptance-page .work-sign .auto-sign { display: block; margin-top: auto; }
 .acceptance-page .work-sign .auto-sign + .auto-sign { margin-top: 0; }
 .acceptance-page .work-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 110px; margin-top: 8px; }
+.acceptance-page .complete-sign { text-align: center; font-weight: bold; text-transform: uppercase; min-height: 88px; margin-top: 4px; }
 .acceptance-page .complete-sign small { display: block; margin-top: 4px; font-weight: normal; font-style: italic; text-transform: none; }
-.acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
+.acceptance-page .complete-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 4px; }
 .acceptance-page .conclude-table { margin: 8px 0 14px; }
 .acceptance-page .conclude-table td { padding: 6px 8px; vertical-align: middle; }
-.acceptance-page .sign-roster { margin-top: 30px; }
-.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 40px; padding: 2px 6px; vertical-align: middle; }
-.acceptance-page .sign-roster th { height: 28px; }
+.acceptance-page .sign-roster { margin-top: 12px; }
+.acceptance-page .sign-roster th, .acceptance-page .sign-roster td { height: 32px; padding: 2px 6px; vertical-align: middle; }
+.acceptance-page .sign-roster th { height: 24px; }
 /* Ô sửa trực tiếp trên bản xem trước: chỉ có viền gợi ý trên màn hình, khi in chỉ còn chữ. */
 .acceptance-page .ed-field { outline: none; cursor: text; border-bottom: 1px dashed #60a5fa; background: rgba(96, 165, 250, 0.10); min-width: 1.5em; }
 .acceptance-page .ed-field:focus { background: #fef9c3; }
@@ -113,8 +113,8 @@ export const acceptancePrintCss = `
   .acceptance-page .annex-sign { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .annex td.weld-name { white-space: nowrap; }
   .acceptance-page tr { break-inside: avoid; page-break-inside: avoid; }
-  /* Mục 7 (BB hoàn thành): các ô ký và bảng thành phần luôn cùng một trang riêng, không bị cắt giữa chừng. */
-  .acceptance-page .sign-block { break-before: page; page-break-before: always; break-inside: avoid; page-break-inside: avoid; }
+  /* Mục 7 (BB hoàn thành): khoảng ký gọn để cả biên bản chỉ 2 trang; khối ký không bị cắt giữa chừng. */
+  .acceptance-page .sign-block { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page .sign-block h3 { margin-top: 0; }
   .acceptance-page .sign-roster { break-inside: avoid; page-break-inside: avoid; }
   .acceptance-page thead { display: table-header-group; }
@@ -204,7 +204,7 @@ function pycList(values: string[]) {
 function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number) {
   const pick = (field: "ten" | "cv") => {
     const key = `nguoi_${party}_${i}_${field}`;
-    return t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || "";
+    return fixSignerName(t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || "");
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
@@ -544,7 +544,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
       // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "";
+      const signer = (key: string) => fixSignerName(t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "");
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -645,7 +645,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
     const signerDefaultsHt = loadSignerDefaults();
     const who = (code: string, i: number, field: "ten" | "cv") => {
       const key = `nguoi_${code}_${i}_${field}`;
-      return t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "";
+      return fixSignerName(t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "");
     };
     // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
     const field = (key: string, lines: number) => <EdLines k={key} v={str((t as Record<string, unknown>)[key]).trim()} lines={lines} editor={editor} />;
@@ -701,16 +701,16 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
           {field("tai_lieu_can_cu", 2)}
           <p><b>b) Đánh giá về chất lượng về chất lượng công trình xây dựng so với thiết kế được phê duyệt:</b></p>
           {field("danh_gia_chat_luong", 2)}
-        </PrintFrame>
-</article>
-
-        <article key={`${doc.kind}-2`} className="acceptance-page work-page">
-<PrintFrame>
           <p><b>c) Những điều chỉnh và thay đổi bổ sung trong quá trình thi công so với thiết kế được phê duyệt ( có phụ lục đính kèm):</b></p>
           {field("dieu_chinh", 2)}
           <p><b>d) Đánh giá chất lượng hạng mục công trình:</b></p>
           <p>- So với thiết kế, chỉ dẫn kỹ thuật: <Ed k="so_voi_thiet_ke" v={str(t.so_voi_thiet_ke)} editor={editor} ph="………………" /></p>
           <p>- So với hợp đồng: <Ed k="so_voi_hop_dong" v={str(t.so_voi_hop_dong)} editor={editor} ph="………………" /></p>
+        </PrintFrame>
+</article>
+
+        <article key={`${doc.kind}-2`} className="acceptance-page work-page">
+<PrintFrame>
           <p><b>e) Kết quả thí nghiệm, kiểm tra, kiểm định, thử nghiệm, chạy thử theo các yêu cầu kỹ thuật theo quy định của thiết kế xây dựng:</b></p>
           {field("ket_qua_thi_nghiem", 2)}
           <p><b>f) Tuân thủ các quy định của pháp luật về phòng cháy và chữa cháy, bảo vệ môi trường trong thi công xây dựng công trình và quy định của pháp luật chuyên ngành khác có liên quan</b></p>
