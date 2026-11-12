@@ -584,8 +584,8 @@ select:not([multiple]):focus {
   .print-frame > thead { display: table-header-group; }
   .print-frame > tfoot { display: table-footer-group; }
   .print-frame-space.top { height: var(--pf-top, 15mm); }
-  .print-frame-space.bottom { height: var(--pf-bottom, 15mm); }
-  .print-frame > tbody > tr > td.print-frame-body { padding: 0 var(--pf-right, 15mm) 0 var(--pf-left, 20mm) !important; }
+  .print-frame-space.bottom { height: var(--pf-bottom, 10mm); }
+  .print-frame > tbody > tr > td.print-frame-body { padding: 0 var(--pf-right, 10mm) 0 var(--pf-left, 20mm) !important; }
 }
 
 /* Ô nhập liệu: viền focus mỏng (1px), không vòng sáng dày. */

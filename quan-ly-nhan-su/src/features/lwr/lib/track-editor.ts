@@ -149,7 +149,10 @@ const LONG_RAIL_CODE_PREFIX: Record<string, string> = { UT: "TT", UP: "TP", DT: 
  * VD UT-40 → TT-40, UP0001 → TP0001, DT-01 → HT-01, DP-01 → HP-01.
  */
 export function displayRailCode(code: string): string {
-  return code.replace(/^(UT|UP|DT|DP)(?=[-_]|\d|$)/i, (prefix) => LONG_RAIL_CODE_PREFIX[prefix.toUpperCase()] ?? prefix);
+  return code
+    .replace(/^(UT|UP|DT|DP)(?=[-_]|\d|$)/i, (prefix) => LONG_RAIL_CODE_PREFIX[prefix.toUpperCase()] ?? prefix)
+    // Mã lưu 4 chữ số (HT0001) nhưng hiển thị 3 chữ số (HT001) cho gọn — tuyến 100 km ≈ 800 thanh. ponytail: ≥1000 thanh/dải thì hiện 4 chữ số.
+    .replace(/^([A-Z]{2})0(\d{3})$/, "$1$2");
 }
 
 /** Nhãn dải ray cho báo cáo/sơ đồ: mã Autolisp + tên, VD "TT · Thượng trái". */

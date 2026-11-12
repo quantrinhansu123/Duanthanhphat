@@ -16,11 +16,13 @@ type Loaded = { layout: TrackLayout; symbols: StructureSymbol[]; joints: RailJoi
  * In «Phụ lục nghiệm thu giải toả ứng suất» (BBNT - GTUS) theo một RFI GTUS:
  * nạp sơ đồ track map của dự án, chỉ lấy các thanh ray đã chọn trong RFI và in đúng đoạn Km của chúng.
  */
-export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, onClose }: {
+export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, pycSo, onClose }: {
   projectId: string;
   projectName: string;
   /** Mã các thanh ray (cell) đã chọn trong RFI. */
   cellIds: string[];
+  /** Số phiếu yêu cầu (PYC) của RFI, in ở đầu phụ lục. */
+  pycSo?: string;
   onClose: () => void;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
@@ -75,6 +77,7 @@ export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, o
       symbols={data.symbols}
       projectName={projectName}
       initialFormat="BBNT"
+      pycSo={pycSo}
       initialRange={start !== undefined && end !== undefined ? { start, end } : undefined}
       onlyCellIds={cellIds}
       onClose={onClose}

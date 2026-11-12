@@ -39,7 +39,7 @@ const css = `/* Ô sửa trực tiếp trên mẫu: viền gợi ý chỉ có tr
   #weld-doc-print thead { display: table-header-group; }
   /* Phiếu YCNT 1 trang: lề trang = 0 để trình duyệt tự bỏ đầu trang / cuối trang (ngày giờ, tiêu đề); lề thật đặt bằng padding. */
   @page { size: A4; margin: 0; }
-  #weld-doc-print { box-sizing: border-box; padding: 15mm 15mm 15mm 20mm !important; max-width: none !important; }
+  #weld-doc-print { box-sizing: border-box; padding: 15mm 10mm 10mm 20mm !important; max-width: none !important; }
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };

@@ -79,7 +79,7 @@ export default function RailReportPrint({ payload, onClose }: {
       </div>
 
       <article className="sheet">
-        <PrintFrame top="10mm" bottom="10mm" left="10mm" right="10mm">
+        <PrintFrame>
           <header className="doc-header">
             <div className="brand-row">
               {/* eslint-disable-next-line @next/next/no-img-element */}

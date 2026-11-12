@@ -811,6 +811,7 @@ function RfiPanel({
           projectId={projectId}
           projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
           cellIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
+          pycSo={String(gtusPrint.so_phieu ?? "").replace(/^RFI-/i, "")}
           onClose={() => setGtusPrint(null)}
         />
       )}

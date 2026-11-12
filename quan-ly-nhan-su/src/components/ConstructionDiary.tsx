@@ -41,7 +41,7 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print { width: 210mm; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black; }
 #diary-print p { margin: 0; }
 #diary-print h2 { margin: 0 0 6pt; font-size: 13.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
-#diary-print .diary-sheet { width: 210mm; height: 296mm; box-sizing: border-box; padding: 16mm 15mm 18mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; break-after: page; page-break-after: always; }
+#diary-print .diary-sheet { width: 210mm; height: 296mm; box-sizing: border-box; padding: 15mm 10mm 10mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; break-after: page; page-break-after: always; }
 #diary-print .diary-sheet:last-child { break-after: auto; page-break-after: auto; }
 #diary-print .diary-foot { position: absolute; right: 15mm; bottom: 9mm; font-size: 11pt; }
 #diary-print .diary-date { text-align: right; margin: 0 0 6pt; }

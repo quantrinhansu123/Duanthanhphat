@@ -50,7 +50,7 @@ function longRailTone(rail: LongRail, cellReleased?: boolean, cellTemp?: number)
 
 /** Mã trên thanh ngắn: TT-40-500m (500 = chiều dài đoạn; UT/UP/DT/DP → TT/TP/HT/HP). Nhiệt độ giải toả hiện ở dòng dưới. */
 function shortRailChipLabel(code: string, lengthMetres: number) {
-  return `${displayRailCode(code)}-${lengthMetres}m`;
+  return `${displayRailCode(code)}-${Math.round(lengthMetres * 100) / 100}m`;
 }
 
 /** Nền phân biệt 2 tuyến trên sơ đồ. */
@@ -370,7 +370,7 @@ export const RailGrid = memo(function RailGrid({
             <p className="px-1 text-[10px] font-semibold text-slate-600">
               {group.line}
               {groupHasSpan
-                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${(groupExtent.endMetres - groupExtent.startMetres) / 1000} km`
+                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${Number(((groupExtent.endMetres - groupExtent.startMetres) / 1000).toFixed(3))} km`
                 : " · chưa rải"}
             </p>
             {group.rows.map((row, indexInGroup) => {
@@ -468,11 +468,11 @@ export const RailGrid = memo(function RailGrid({
                       onClick={() => { onSelect(cell.id); onSelectLongRail?.(cover.rail.id); }}
                       title={`${label} · ${cell.id} · ${cover.rail.params.railType} · Km ${cell.from} – ${cell.to} · ${statusNote}`}
                       aria-label={`${label}: thanh ngắn của ${cover.rail.code}`}
-                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
+                      className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${compact ? "px-0.5 text-[10px]" : "pr-7 px-1 text-[10px]"} font-semibold leading-tight ${selected ? "ring-2 ring-offset-1" : ""}`}
                       style={{ ...box, width: Math.max(1, box.width - 4), backgroundColor: selected ? `${tone}e6` : done ? tone : `${tone}c7`, borderColor: tone, color: contrastText(tone), outlineColor: tone }}
                     >
-                      <span className="block truncate">{label}</span>
-                      {done ? <span className="block truncate text-[9px] font-medium opacity-90">{tempC} độ</span> : null}
+                      <span className={compact ? "block whitespace-nowrap" : "block truncate"}>{label}</span>
+                      {done ? <span className={`block ${compact ? "whitespace-nowrap" : "truncate"} text-[9px] font-medium opacity-90`}>{tempC} độ</span> : null}
                     </button>
                     {chipDeleteButton(cell.id, box, onRemove)}
                   </span>
@@ -489,7 +489,7 @@ export const RailGrid = memo(function RailGrid({
                   type="button"
                   onClick={() => { onSelect(cell.id); onSelectLongRail?.(null); }}
                   title={`${bareLabel} · Km ${cell.from} – ${cell.to} · ${statusNote}`}
-                  className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border pr-7 px-1 text-[10px] font-semibold leading-tight ${selectedId === cell.id ? "ring-2 ring-offset-1" : ""}`}
+                  className={`absolute top-5 z-[1] h-8 overflow-hidden rounded border ${compact ? "px-0.5 text-[10px]" : "pr-7 px-1 text-[10px]"} font-semibold leading-tight ${selectedId === cell.id ? "ring-2 ring-offset-1" : ""}`}
                   style={{
                     ...box,
                     width: Math.max(1, box.width - 4),
@@ -499,8 +499,8 @@ export const RailGrid = memo(function RailGrid({
                     outlineColor: tone,
                   }}
                 >
-                  <span className="block truncate">{bareLabel}</span>
-                  {done ? <span className="block truncate text-[9px] font-medium opacity-90">{tempC} độ</span> : null}
+                  <span className={compact ? "block whitespace-nowrap" : "block truncate"}>{bareLabel}</span>
+                  {done ? <span className={`block ${compact ? "whitespace-nowrap" : "truncate"} text-[9px] font-medium opacity-90`}>{tempC} độ</span> : null}
                 </button>
                 {chipDeleteButton(cell.id, box, onRemove)}
               </span>;

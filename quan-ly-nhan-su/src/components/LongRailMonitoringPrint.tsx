@@ -25,7 +25,7 @@ export default function LongRailMonitoringPrint({ layout, cells, project, onClos
       .long-rail-monitor-print .warm{background:#ffe699}.long-rail-monitor-print .cool{background:#ddebf7}
       .long-rail-monitor-print .toolbar{display:flex;justify-content:center;gap:12px;position:sticky;top:0}
       .long-rail-monitor-print button{padding:10px 20px;background:#0047ab;color:white;border-radius:8px}
-      @media print{@page{size:A4 portrait;margin:10mm}body > :not(.long-rail-monitor-print){display:none!important}.long-rail-monitor-print{position:static;padding:0;background:white;overflow:visible}.long-rail-monitor-print .toolbar{display:none}.long-rail-monitor-print article{width:auto;max-width:none;padding:0;margin:0;break-after:page}.long-rail-monitor-print article:last-child{break-after:auto}.long-rail-monitor-print *{print-color-adjust:exact;-webkit-print-color-adjust:exact}.long-rail-monitor-print tr{break-inside:avoid}}
+      @media print{@page{size:A4 portrait;margin:15mm 10mm 10mm 20mm}body > :not(.long-rail-monitor-print){display:none!important}.long-rail-monitor-print{position:static;padding:0;background:white;overflow:visible}.long-rail-monitor-print .toolbar{display:none}.long-rail-monitor-print article{width:auto;max-width:none;padding:0;margin:0;break-after:page}.long-rail-monitor-print article:last-child{break-after:auto}.long-rail-monitor-print *{print-color-adjust:exact;-webkit-print-color-adjust:exact}.long-rail-monitor-print tr{break-inside:avoid}}
     `}</style>
     <div className="toolbar"><button onClick={() => window.print()}>In / Lưu PDF</button><button onClick={onClose}>Đóng</button></div>
     {cells.map(cell => {

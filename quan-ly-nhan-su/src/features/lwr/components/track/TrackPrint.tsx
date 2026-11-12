@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import PrintFrame from "@/components/PrintFrame";
 import { createPortal } from "react-dom";
 import {
+  coveringLongRail,
   displayRailCode,
   formatChainage,
   getPlacementSpan,
@@ -103,7 +104,7 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
 const FORMATS: Record<string, { label: string; size: string; width: string; px: number; split: boolean; bbnt?: boolean }> = {
   A4: { label: "A4 ngang (2 trang)", size: "297mm 210mm", width: "297mm", px: 1000, split: true },
   A3: { label: "A3 đứng (1 trang)", size: "297mm 420mm", width: "297mm", px: 1000, split: false },
-  BBNT: { label: "BBNT - GTUS (A4 dọc, 1 trang / tuyến)", size: "210mm 297mm", width: "210mm", px: 660, split: false, bbnt: true },
+  BBNT: { label: "BBNT - GTUS (A4 dọc, 1 trang / tuyến)", size: "210mm 297mm", width: "210mm", px: 680, split: false, bbnt: true },
 };
 
 type LwrPrintRow = {
@@ -132,7 +133,7 @@ function splitTimeLabel(label: string) {
  * trong một lần khoá đường (đoạn Km đã chọn), sơ đồ phóng to cân đối trang, bảng thông tin đủ một trang,
  * tổng chiều dài giải toả (km) và khung ký.
  */
-function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows }: {
+function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows, pycSo }: {
   line: string;
   layout: TrackLayout;
   printRange: { start: number; end: number };
@@ -140,6 +141,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   symbols: StructureSymbol[];
   projectName?: string;
   rows: LwrPrintRow[];
+  pycSo?: string;
 }) {
   const isLower = /hạ/i.test(line);
   const lineLabel = isLower ? "Tuyến hạ" : "Tuyến thượng";
@@ -162,7 +164,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   const ref = useRef<HTMLDivElement>(null);
   const [naturalH, setNaturalH] = useState(0);
   // Chiều cao còn lại cho sơ đồ = A4 (297mm) trừ đầu trang, tiêu đề, chú thích, bảng (theo số dòng), tổng và khung ký.
-  const reservedMm = 150 + Math.max(2, rows.length) * 6.5;
+  const reservedMm = 159 + Math.max(2, rows.length) * 6.5;
   const availHeightPx = Math.max(160, (297 - reservedMm) * 3.7795);
   const fit = naturalH > 0 ? Math.min(fitByWidth, Math.max(0.3, availHeightPx / naturalH)) : fitByWidth;
   useLayoutEffect(() => {
@@ -183,7 +185,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
 
   return (
     <article className="gtus-page">
-      <PrintFrame top="8mm" bottom="8mm" left="12mm" right="10mm">
+      <PrintFrame>
         <table className="gtus-head">
           <tbody>
             <tr>
@@ -198,7 +200,8 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
         </table>
         <h1 className="gtus-title">PHỤ LỤC NGHIỆM THU GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
         <p className="gtus-sub">
-          {lineLabel} · Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)} · {(printRange.end - printRange.start) / 1000} km
+          <span className="gtus-pyc">PYC số: {pycSo || "………"}</span>
+          {lineLabel} · Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)} · {Number(((printRange.end - printRange.start) / 1000).toFixed(3))} km
         </p>
 
         <h2 className="section-title">1. Sơ đồ giải toả ứng suất — {lineLabel}: ray trái và ray phải</h2>
@@ -213,11 +216,9 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
               onSelect={noop}
               embedded
               compact
-              structures={{ placements: lineLayout.placements, symbols, editingPlacementId: null, onEditPlacement: noop, onRemovePlacement: noop }}
             />
           </div>
         </div>
-        <StructureLegend layout={lineLayout} symbols={symbols} compact />
 
         <h2 className="section-title">2. Tổng hợp thông tin giải toả ứng suất</h2>
         <table className="lwr-summary gtus-table">
@@ -238,22 +239,26 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const ok = row.completed === "Đạt"; // chưa bấm hoàn thành giải toả → chưa có thông tin: "—"
+              const v = (x: string) => (ok ? x : "—");
+              return (
               <tr key={`${row.code}-${row.span.startMetres}-${row.span.endMetres}`}>
                 <td className="c-code">{row.code}</td>
-                <td>{row.railLabel.split(" ")[0]}</td>
+                <td>{/phải/i.test(row.railLabel) ? "Phải" : "Trái"}</td>
                 <td>Km{formatChainage(row.span.startMetres)}</td>
                 <td>Km{formatChainage(row.span.endMetres)}</td>
                 <td>{rowLength(row)}</td>
-                <td>{row.summary.tempLabel}</td>
-                <td>{row.neutralTemp}</td>
-                <td>{row.summary.methodLabel}</td>
-                <td>{row.summary.designPullMm}</td>
-                <td>{row.summary.actualPullMm}</td>
+                <td>{v(row.summary.tempLabel)}</td>
+                <td>{v(row.neutralTemp)}</td>
+                <td>{v(row.summary.methodLabel)}</td>
+                <td>{v(row.summary.designPullMm)}</td>
+                <td>{v(row.summary.actualPullMm)}</td>
                 <td>{splitTimeLabel(row.summary.startTimeLabel)}</td>
                 <td>{splitTimeLabel(row.summary.endTimeLabel)}</td>
               </tr>
-            ))}
+              );
+            })}
             {rows.length === 0 ? <tr><td colSpan={12}>Chưa có đoạn LWR / thanh đã rải trong đoạn đã chọn.</td></tr> : null}
             <tr className="gtus-total">
               <td colSpan={4}>Tổng chiều dài giải toả ({rows.length} đoạn)</td>
@@ -292,6 +297,7 @@ export function TrackPrint({
   initialFormat,
   initialRange,
   onlyCellIds,
+  pycSo,
 }: {
   layout: TrackLayout;
   joints: RailJoint[];
@@ -303,6 +309,8 @@ export function TrackPrint({
   initialRange?: { start: number; end: number };
   /** Chỉ liệt kê các thanh ray (cell) này — RFI GTUS đã chọn — trong bảng và tổng chiều dài. */
   onlyCellIds?: string[];
+  /** Số PYC của RFI GTUS (in ở đầu phụ lục BBNT). */
+  pycSo?: string;
 }) {
   const extent = trackExtent(layout.rows);
   const defaultSpanM = Math.min(2000, Math.max(500, extent.endMetres - extent.startMetres));
@@ -346,24 +354,7 @@ export function TrackPrint({
 
   const lwrRows = useMemo(() => {
     if (!sliced) return [];
-    const fromLongRails = sliced.longRails.flatMap((rail) => {
-      const span = getPlacementSpan(sliced.rows, rail) ?? visibleLongRailSpan(sliced.rows, rail);
-      if (!span) return [];
-      const row = sliced.rows.find((item) => railRowKey(item) === rail.rowKey);
-      return [{
-        id: rail.id,
-        lengthM: rail.params.leftLength + rail.params.rightLength,
-        code: displayRailCode(rail.label && rail.label !== rail.code ? `${rail.code} · ${rail.label}` : rail.code),
-        railLabel: row ? railDisplayLabel(row.line, row.rail) : "—",
-        span,
-        summary: lwrPrintSummary(rail.params),
-        neutralTemp: formatStressNumber(rail.params.neutralTemp),
-        completed: isLongRailReleased(sliced.rows, rail) ? "Đạt" : "Chưa",
-      }];
-    });
-    if (!onlyCellIds && fromLongRails.length) return fromLongRails;
-
-    // Dự án chỉ tô thanh ngắn (chưa tạo đoạn LWR): gom từng thanh đã rải thành dòng tổng hợp.
+    // Mỗi dòng bảng = một thanh vẽ trên sơ đồ (cùng mã, chiều dài); thanh nằm trong đoạn LWR thì lấy mã + thông số của LWR đó.
     return sliced.rows.flatMap((row) => row.cells.flatMap((cell) => {
       if (!cell.placed) return [];
       if (onlyCellIds && !onlyCellIds.includes(cell.id)) return [];
@@ -372,7 +363,16 @@ export function TrackPrint({
       if (startMetres === null || endMetres === null || endMetres <= startMetres) return [];
       const leftTemp = Number.isFinite(cell.leftTemp) ? Number(cell.leftTemp) : cell.temp;
       const rightTemp = Number.isFinite(cell.rightTemp) ? Number(cell.rightTemp) : cell.temp;
-      const params: StressInput = {
+      const rail = coveringLongRail(
+        sliced.longRails.flatMap((item) => {
+          if (item.rowKey !== railRowKey(row)) return [];
+          const span = visibleLongRailSpan(sliced.rows, item);
+          return span ? [{ rail: item, span }] : [];
+        }),
+        startMetres,
+        endMetres,
+      )?.rail;
+      const params: StressInput = rail ? rail.params : {
         ...DEFAULT_STRESS_INPUT,
         leftLength: railCellLengthMetres(cell) ?? endMetres - startMetres,
         rightLength: 0,
@@ -395,12 +395,12 @@ export function TrackPrint({
       };
       return [{
         lengthM: railCellLengthMetres(cell) ?? undefined,
-        code: displayRailCode(cell.id),
+        code: displayRailCode(rail ? rail.code : cell.id),
         railLabel: railDisplayLabel(row.line, row.rail),
         span: { startMetres, endMetres },
         summary: lwrPrintSummary(params),
         neutralTemp: formatStressNumber(params.neutralTemp),
-        completed: cell.released || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
+        completed: cell.released || rail?.completedAt || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
       }];
     }));
   }, [sliced, onlyCellIds]);
@@ -470,7 +470,7 @@ export function TrackPrint({
       #lwr-track-print h1 { font-size:16pt; text-align:center; font-weight:bold; margin:6px 0 4px; text-transform:uppercase; }
       #lwr-track-print .print-header .meta { margin:2px 0; font-size:10pt; }
       #lwr-track-print h2.section-title { font-size:12pt; font-weight:bold; margin:10px 0 6px; text-align:left; border-bottom:1px solid #333; padding-bottom:2px; }
-      #lwr-track-print .diagram-frame { width:100%; overflow:hidden; }
+      #lwr-track-print .diagram-frame { width:100%; overflow:hidden; display:flex; justify-content:center; }
       #lwr-track-print .diagram-scale { transform-origin:top left; width:max-content; max-width:none; }
       #lwr-track-print p { margin:3px 0; }
       #lwr-track-print table.lwr-summary { border-collapse:collapse; width:100%; table-layout:fixed; margin-top:6px; font-size:8pt; }
@@ -491,15 +491,18 @@ export function TrackPrint({
       #lwr-track-print article.gtus-page { padding:0; font:9.5pt 'Times New Roman',serif; }
       #lwr-track-print table.gtus-head { width:100%; border-collapse:collapse; margin-bottom:3mm; }
       #lwr-track-print table.gtus-head td { border:1.2pt solid #000; padding:2mm 3mm; vertical-align:top; font-size:9pt; line-height:1.4; }
+      #lwr-track-print table.gtus-head td.gtus-head-left { border-right:0; }
+      #lwr-track-print table.gtus-head td.gtus-head-right { border-left:0; }
       #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:78%; }
       #lwr-track-print .gtus-title { font-size:13pt; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
-      #lwr-track-print .gtus-sub { text-align:center; font-size:10pt; margin:0 0 2mm; }
+      #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:10pt; margin:0 0 2mm; }
+      #lwr-track-print .gtus-pyc { position:absolute; left:0; font-weight:bold; }
       #lwr-track-print table.gtus-table { font-size:7pt; }
       #lwr-track-print table.gtus-table th { font-size:6.5pt; }
       #lwr-track-print table.gtus-table td.c-code { white-space:nowrap; }
       #lwr-track-print table.gtus-table td { white-space:normal; line-height:1.15; }
       #lwr-track-print table.gtus-table tr.gtus-total td { font-weight:bold; background:#eef2f7; text-align:left; }
-      #lwr-track-print table.gtus-sign { width:100%; border-collapse:collapse; margin-top:4mm; break-inside:avoid; }
+      #lwr-track-print table.gtus-sign { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:4mm; break-inside:avoid; }
       #lwr-track-print table.gtus-sign th, #lwr-track-print table.gtus-sign td { border:1.2pt solid #000; padding:2mm 3mm; text-align:left; vertical-align:top; font-size:9pt; }
       #lwr-track-print table.gtus-sign th { text-align:center; font-weight:bold; }
       #lwr-track-print table.gtus-sign td { height:26mm; }
@@ -575,7 +578,12 @@ export function TrackPrint({
         </article>
       ) : config.bbnt ? (
         <>
-          {["TUYẾN THƯỢNG", "TUYẾN HẠ"].filter((line) => layout.rows.some((row) => row.line === line)).map((line) => (
+          {(() => {
+            const lines = ["TUYẾN THƯỢNG", "TUYẾN HẠ"].filter((line) => layout.rows.some((row) => row.line === line));
+            const hasRows = (line: string) => lwrRows.some((row) => /hạ/i.test(row.railLabel) === /hạ/i.test(line));
+            const withData = lines.filter(hasRows);
+            return withData.length ? withData : lines;
+          })().map((line) => (
             <GtusPage
               key={line}
               line={line}
@@ -584,6 +592,7 @@ export function TrackPrint({
               joints={joints}
               symbols={symbols}
               projectName={projectName}
+              pycSo={pycSo}
               rows={lwrRows.filter((row) => /hạ/i.test(row.railLabel) === /hạ/i.test(line))}
             />
           ))}

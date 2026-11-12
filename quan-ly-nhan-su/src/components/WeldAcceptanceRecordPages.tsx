@@ -314,7 +314,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
 
       return pages.map((page, pageIndex) => (
         <article className="acceptance-page annex-page" key={`${doc.kind}-${pageIndex}`}>
-<PrintFrame right="5mm" bottom="5mm">
+<PrintFrame>
           <table className="annex-sheet">
             <tbody>
               <tr>
