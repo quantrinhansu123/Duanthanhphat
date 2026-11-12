@@ -124,9 +124,9 @@ const rowLength = (row: { lengthM?: number; span: { startMetres: number; endMetr
   Math.round((row.lengthM ?? row.span.endMetres - row.span.startMetres) * 1000) / 1000;
 
 /** Giờ hiện trường tách 2 dòng (giờ / ngày) để vừa cột hẹp của bảng A4 dọc. */
-/** Chưa nhập giờ bắt đầu/kết thúc ở máy tính giải toả → lấy giờ đo sớm nhất / muộn nhất trong báo cáo của thanh (giờ VN). */
+/** Chưa nhập giờ bắt đầu/kết thúc ở máy tính giải toả → Bắt đầu = giờ lần đo đầu tiên (mốc 0), Kết thúc = lần đo cuối (giờ VN). */
 function withReportTimes(summary: LwrPrintSummary, cell: RailCell): LwrPrintSummary {
-  const times = (cell.report?.rows ?? []).map((r) => r.measuredAt).filter((m): m is string => Boolean(m)).sort();
+  const times = (cell.report?.rows ?? []).map((r) => r.measuredAt).filter((m): m is string => Boolean(m));
   const label = (m?: string) => (m ? formatFieldTime(`${m}${/[zZ]|[+-]\d\d:?\d\d$/.test(m) ? "" : "+07:00"}`) : "—");
   return {
     ...summary,

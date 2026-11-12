@@ -111,13 +111,16 @@ export function RailDetailPanel({
   const [fieldError, setFieldError] = useState<string | null>(null);
   // Hai tab: «Giải tỏa» (nhập nhiệt độ, lý trình, tính toán) và «Báo cáo» (bảng chuyển vị điểm M / E).
   const [view, setView] = useState<"giai-toa" | "bao-cao">("giai-toa");
-  // Báo cáo chỉ có 1 dòng cho đoạn ray này; nhiệt độ lấy từ tab Giải tỏa, chỉ nhập chuyển vị thực tế M / E + ghi chú.
+  // Phiếu chỉ hiện lần đo đầu tiên của đoạn ray này; nhiệt độ lấy từ tab Giải tỏa, chỉ nhập chuyển vị thực tế M / E + ghi chú.
   const [report, setReport] = useState<RailReportRow>(() => cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW });
   useEffect(() => { setReport(cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW }); }, [cell.id, cell.report]);
 
   function commitReport(next: RailReportRow) {
     const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim() && !next.measuredAt?.trim() && !next.airTemp?.trim();
-    apply({ report: empty ? null : { rows: [next] } });
+    // Phiếu này chỉ ghi lần đo đầu tiên (mốc 0); các lần đo sau (nhập ở Theo dõi ray hàn dài) giữ nguyên.
+    const rest = cell.report?.rows.slice(1) ?? [];
+    const rows = empty ? rest : [next, ...rest];
+    apply({ report: rows.length ? { rows } : null });
   }
 
   useEffect(() => {
