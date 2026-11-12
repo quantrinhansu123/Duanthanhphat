@@ -152,7 +152,9 @@ export function displayRailCode(code: string): string {
   return code
     .replace(/^(UT|UP|DT|DP)(?=[-_]|\d|$)/i, (prefix) => LONG_RAIL_CODE_PREFIX[prefix.toUpperCase()] ?? prefix)
     // Mã lưu 4 chữ số (HT0001) nhưng hiển thị 3 chữ số (HT001) cho gọn — tuyến 100 km ≈ 800 thanh. ponytail: ≥1000 thanh/dải thì hiện 4 chữ số.
-    .replace(/^([A-Z]{2})0(\d{3})$/, "$1$2");
+    .replace(/^([A-Z]{2})0(\d{3})$/, "$1$2")
+    // Thanh chưa gán LWR có id kiểu HT-43 → HT043 (3 chữ số như các thanh khác).
+    .replace(/^([A-Z]{2})-(\d{1,3})$/, (_, p, n) => p + n.padStart(3, "0"));
 }
 
 /** Nhãn dải ray cho báo cáo/sơ đồ: mã Autolisp + tên, VD "TT · Thượng trái". */

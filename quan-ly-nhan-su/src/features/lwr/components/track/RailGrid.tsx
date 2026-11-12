@@ -6,7 +6,7 @@ import type { StructureSymbol } from "@lwr/types/structure";
 import { latestMachinePositions, type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, displayRailCode, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, displayRailCode, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLengthMetres, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -370,7 +370,7 @@ export const RailGrid = memo(function RailGrid({
             <p className="px-1 text-[10px] font-semibold text-slate-600">
               {group.line}
               {groupHasSpan
-                ? ` · Km ${formatChainage(groupExtent.startMetres)} – ${formatChainage(groupExtent.endMetres)} · ${Number(((groupExtent.endMetres - groupExtent.startMetres) / 1000).toFixed(3))} km`
+                ? ` · Km${formatChainage(groupExtent.startMetres)} – Km${formatChainage(groupExtent.endMetres)}`
                 : " · chưa rải"}
             </p>
             {group.rows.map((row, indexInGroup) => {
@@ -457,7 +457,7 @@ export const RailGrid = memo(function RailGrid({
                 const tone = longRailTone(cover.rail, cell.released, tempC);
                 const done = Boolean(cover.rail.completedAt) || Boolean(cell.released);
                 const selected = selectedId === cell.id || selectedLongRailId === cover.rail.id;
-                const lengthM = Math.max(0, to - from);
+                const lengthM = railCellLengthMetres(cell) ?? Math.max(0, to - from);
                 const label = shortRailChipLabel(cover.rail.code, lengthM);
                 const statusNote = done ? "Giải toả" : "Chưa giải toả";
                 return (
@@ -478,7 +478,7 @@ export const RailGrid = memo(function RailGrid({
                   </span>
                 );
               }
-              const lengthM = Math.max(0, to - from);
+              const lengthM = railCellLengthMetres(cell) ?? Math.max(0, to - from);
               const tempC = railCellLockTemp(cell);
               const bareLabel = shortRailChipLabel(cell.id, lengthM);
               const done = Boolean(cell.released);

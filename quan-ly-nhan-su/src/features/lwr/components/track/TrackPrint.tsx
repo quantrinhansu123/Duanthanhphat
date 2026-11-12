@@ -201,7 +201,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
         <h1 className="gtus-title">PHỤ LỤC NGHIỆM THU GIẢI TOẢ ỨNG SUẤT RAY HÀN DÀI</h1>
         <p className="gtus-sub">
           <span className="gtus-pyc">PYC số: {pycSo || "………"}</span>
-          {lineLabel} · Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)} · {Number(((printRange.end - printRange.start) / 1000).toFixed(3))} km
+          {lineLabel} · Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
         </p>
 
         <h2 className="section-title">1. Sơ đồ giải toả ứng suất — {lineLabel}: ray trái và ray phải</h2>
@@ -250,7 +250,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
                 <td>Km{formatChainage(row.span.endMetres)}</td>
                 <td>{rowLength(row)}</td>
                 <td>{v(row.summary.tempLabel)}</td>
-                <td>{v(row.neutralTemp)}</td>
+                <td>{row.neutralTemp}</td>
                 <td>{v(row.summary.methodLabel)}</td>
                 <td>{v(row.summary.designPullMm)}</td>
                 <td>{v(row.summary.actualPullMm)}</td>
@@ -490,7 +490,7 @@ export function TrackPrint({
       #lwr-track-print tr { break-inside:avoid; }
       #lwr-track-print article.gtus-page { padding:0; font:9.5pt 'Times New Roman',serif; }
       #lwr-track-print table.gtus-head { width:100%; border-collapse:collapse; margin-bottom:3mm; }
-      #lwr-track-print table.gtus-head td { border:1.2pt solid #000; padding:2mm 3mm; vertical-align:top; font-size:9pt; line-height:1.4; }
+      #lwr-track-print table.gtus-head td { border:0; padding:2mm 3mm; vertical-align:top; font-size:9pt; line-height:1.4; }
       #lwr-track-print table.gtus-head td.gtus-head-left { border-right:0; }
       #lwr-track-print table.gtus-head td.gtus-head-right { border-left:0; }
       #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:78%; }
