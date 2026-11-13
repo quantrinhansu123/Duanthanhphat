@@ -245,7 +245,7 @@ export function RailDetailPanel({
       <div className="flex h-full flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
           <div>
-            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {displayRailCode(cell.id)}</h2>
+            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {displayRailCode(longRailCode || cell.id)}</h2>
             <p className="text-sm text-slate-500">{detail.title}{longRailCode ? ` · Thanh LWR ${displayRailCode(longRailCode)}` : ""}</p>
           </div>
           <div className="flex gap-2">
@@ -380,7 +380,7 @@ export function RailDetailPanel({
           <StressReleaseCalculator
             compact
             key={`${cell.id}-${lockTemp}`}
-            segmentId={displayRailCode(cell.id)}
+            segmentId={displayRailCode(longRailCode || cell.id)}
             statusSlot={
               <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => {
                 // Bấm Đạt: lưu luôn thông số bảng tính (giờ, nhiệt độ…) trước khi chốt trạng thái.
