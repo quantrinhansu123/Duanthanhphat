@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
@@ -46,9 +47,9 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print { width: 210mm; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black; }
 #diary-print p { margin: 0; }
 #diary-print h2 { margin: 0 0 6pt; font-size: 13.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
-#diary-print .diary-sheet { width: 210mm; height: 296mm; box-sizing: border-box; padding: 15mm 10mm 10mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; break-after: page; page-break-after: always; }
+#diary-print .diary-sheet { width: 210mm; height: 296mm; box-sizing: border-box; padding: 15mm 10mm 20mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; break-after: page; page-break-after: always; }
 #diary-print .diary-sheet:last-child { break-after: auto; page-break-after: auto; }
-#diary-print .diary-foot { position: absolute; right: 15mm; bottom: 9mm; font-size: 11pt; }
+#diary-print .diary-foot { position: absolute; right: 15mm; bottom: 8mm; font-size: 11pt; }
 #diary-print .diary-date { text-align: right; margin: 0 0 6pt; }
 #diary-print .diary-heading { margin-top: 6pt; font-weight: bold; }
 #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
@@ -59,6 +60,7 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
 #diary-print .diary-sig-input { width: 90%; border: 0; background: transparent; font: inherit; font-weight: normal; font-style: italic; text-align: center; color: inherit; outline: none; padding: 0; }
+@media print { #diary-print .diary-sig-input::placeholder { color: transparent; } }
 @media screen { #diary-print .diary-sig-input { border-bottom: 1px dashed #64748b; background: #fffbea; } }
 #diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 #diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
@@ -195,17 +197,8 @@ export default function ConstructionDiaryForm() {
   const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
 
-  /**
-   * Số trang nhật ký: bắt đầu 5–6 cho ngày đầu dự án, mỗi ngày thi công dùng 2 trang,
-   * luỹ tiến 7–8, 9–10… Không có ngày bắt đầu dự án thì để trống (điền tay).
-   */
-  const [pageStart, pageEnd] = (() => {
-    // Bắt đầu từ trang 6; mỗi nhật ký 2 trang, chạy liên tiếp theo thứ tự các ngày đã lập của dự án (không để trống trang).
-    if (!projectId || !date) return ["……", "……"];
-    const earlier = new Set(saved.filter((row) => row.projectId === projectId && row.date < date).map((row) => row.date)).size;
-    const first = 6 + earlier * 2;
-    return [String(first), String(first + 1)];
-  })();
+  // Mỗi nhật ký in là một phiếu 2 trang: Trang 1, Trang 2 (không đánh luỹ tiến theo ngày).
+  const [pageStart, pageEnd] = ["1", "2"];
 
   /** Nội dung mục 3 khi in: 3.1 Công việc thực hiện trong ngày, rồi 3.2 Nghiệm thu công việc xây dựng hàng ngày (để trống nếu không có RFI trong ngày). */
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
@@ -232,7 +225,7 @@ export default function ConstructionDiaryForm() {
   async function save() {
     setBusy(true);
     try {
-      const r = await saveDiary(projectId, date, d);
+      const r = await saveDiary(projectId, date, { ...d, kyTvgs: signers.tvgs, kyNtc: signers.ntc, kyNtp: signers.ntp });
       reloadSaved();
       setStatus(r.source === "supabase" ? "Đã lưu." : `Đã lưu trên máy này — chưa lên Supabase${r.error ? `: ${r.error}` : ""}.`);
     } catch { setStatus("Không lưu được nhật ký. Nội dung đang nhập được giữ nguyên; vui lòng thử lại."); }
@@ -249,20 +242,27 @@ export default function ConstructionDiaryForm() {
   }
 
   const formTop = useRef<HTMLDivElement>(null);
-  // Tên người ký cuối nhật ký: nhập một lần, nhớ cho các lần sau (trên trình duyệt này); để trống thì bản in để trống.
-  const [signers, setSigners] = useState({ tvgs: "", ntc: "", ntp: "" });
+  // Tên người ký cuối nhật ký: lưu cùng nhật ký trên Supabase (máy nào cũng thấy); ngày chưa có thì lấy của nhật ký mới nhất cùng dự án, rồi tới bản nhớ trên máy này.
+  const [localSigners, setLocalSigners] = useState({ tvgs: "", ntc: "", ntp: "" });
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem("nhat-ky-thi-cong-nguoi-ky");
-      if (raw) setSigners((cur) => ({ ...cur, ...(JSON.parse(raw) as Partial<typeof cur>) }));
+      if (raw) setLocalSigners((cur) => ({ ...cur, ...(JSON.parse(raw) as Partial<typeof cur>) }));
     } catch { /* bỏ qua */ }
   }, []);
+  const lastRow = saved.find((r) => r.projectId === projectId && r.date !== date && (r.diary.kyTvgs || r.diary.kyNtc || r.diary.kyNtp));
+  const fallback = lastRow ? { tvgs: lastRow.diary.kyTvgs ?? "", ntc: lastRow.diary.kyNtc ?? "", ntp: lastRow.diary.kyNtp ?? "" } : localSigners;
+  const signers = { tvgs: d.kyTvgs ?? fallback.tvgs, ntc: d.kyNtc ?? fallback.ntc, ntp: d.kyNtp ?? fallback.ntp };
   function setSigner(key: "tvgs" | "ntc" | "ntp", value: string) {
-    setSigners((cur) => {
-      const next = { ...cur, [key]: value };
-      try { window.localStorage.setItem("nhat-ky-thi-cong-nguoi-ky", JSON.stringify(next)); } catch { /* bỏ qua */ }
-      return next;
-    });
+    const next = { ...signers, [key]: value };
+    try { window.localStorage.setItem("nhat-ky-thi-cong-nguoi-ky", JSON.stringify(next)); } catch { /* bỏ qua */ }
+    setLocalSigners(next);
+    setD((cur) => ({ ...cur, kyTvgs: next.tvgs, kyNtc: next.ntc, kyNtp: next.ntp }));
+  }
+  /** Gõ tên ở khung xem trước: nhật ký ngày này đã lưu thì lưu luôn tên người ký lên Supabase. */
+  function persistSigners() {
+    if (!saved.some((r) => r.projectId === projectId && r.date === date)) return;
+    void saveDiary(projectId, date, { ...d, kyTvgs: signers.tvgs, kyNtc: signers.ntc, kyNtp: signers.ntp }).then(reloadSaved);
   }
   /** Cuộn tới đầu form: trang nằm trong khung cuộn riêng của ứng dụng nên window.scrollTo không đủ. */
   function scrollToForm() {
@@ -378,7 +378,7 @@ export default function ConstructionDiaryForm() {
           <Card title="Người ký cuối nhật ký" hint="Nhập một lần, phần mềm nhớ cho các lần sau; để trống thì bản in để trống." wide>
             <div className="grid gap-3 sm:grid-cols-3">
               {([["tvgs", "Tư vấn giám sát"], ["ntc", "Nhà thầu chính"], ["ntp", "Nhà thầu phụ"]] as const).map(([key, label]) => (
-                <label key={key} className={lbl}>{label}<input className={inp} value={signers[key]} onChange={(e) => setSigner(key, e.target.value)} placeholder="Họ và tên" /></label>
+                <label key={key} className={lbl}>{label}<input className={inp} value={signers[key]} onBlur={persistSigners} onChange={(e) => setSigner(key, e.target.value)} placeholder="Họ và tên" /></label>
               ))}
             </div>
           </Card>
@@ -460,6 +460,8 @@ export default function ConstructionDiaryForm() {
         </section>
       </div>
 
+      {/* Đưa ra body để khung xem trước nằm trên header của ứng dụng (không bị che nút In). */}
+      {createPortal(<>
       {previewOpen && (
         <div className="no-print fixed left-0 right-0 top-0 z-[1500] flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-white px-4 py-3 shadow">
           <div>
@@ -512,18 +514,19 @@ export default function ConstructionDiaryForm() {
           ))}
 
           <div className="diary-sig-row">
-            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký tư vấn giám sát" placeholder="Gõ tên người ký" value={signers.tvgs} onChange={(e) => setSigner("tvgs", e.target.value)} /> : signers.tvgs}</div></div>
-            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onChange={(e) => setSigner("ntc", e.target.value)} /> : signers.ntc}</div></div>
-            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onChange={(e) => setSigner("ntp", e.target.value)} /> : signers.ntp}</div></div>
+            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký tư vấn giám sát" placeholder="Gõ tên người ký" value={signers.tvgs} onBlur={persistSigners} onChange={(e) => setSigner("tvgs", e.target.value)} /> : signers.tvgs}</div></div>
+            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onBlur={persistSigners} onChange={(e) => setSigner("ntc", e.target.value)} /> : signers.ntc}</div></div>
+            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onBlur={persistSigners} onChange={(e) => setSigner("ntp", e.target.value)} /> : signers.ntp}</div></div>
           </div>
           <p className="diary-foot">Trang {pageEnd}</p>
         </section>
       </article>
+      </>, document.body)}
       {viewRow && (
         <DiaryViewModal
           row={viewRow}
           projectName={projects.find((p) => p.id === viewRow.projectId)?.name ?? "—"}
-          signers={signers}
+          signers={{ tvgs: viewRow.diary.kyTvgs ?? fallback.tvgs, ntc: viewRow.diary.kyNtc ?? fallback.ntc, ntp: viewRow.diary.kyNtp ?? fallback.ntp }}
           onClose={() => setViewRow(null)}
           onEdit={() => { const row = viewRow; setViewRow(null); openSaved(row); }}
           onPrint={() => { const row = viewRow; setViewRow(null); printSaved(row); }}

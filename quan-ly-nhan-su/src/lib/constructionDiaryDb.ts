@@ -19,6 +19,10 @@ export type ConstructionDiary = {
   kienNghi: string;
   nhanXetGiamSat: string;
   chtTiepThu: string;
+  /** Tên người ký cuối nhật ký (lưu cùng nhật ký để các máy cùng thấy). */
+  kyTvgs?: string;
+  kyNtc?: string;
+  kyNtp?: string;
 };
 
 /** Nhân lực mặc định của nhật ký thi công (người): sửa được từng ngày. */
