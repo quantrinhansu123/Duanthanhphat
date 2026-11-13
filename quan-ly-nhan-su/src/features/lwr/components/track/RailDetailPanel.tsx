@@ -382,7 +382,11 @@ export function RailDetailPanel({
             key={`${cell.id}-${lockTemp}`}
             segmentId={displayRailCode(cell.id)}
             statusSlot={
-              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
+              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => {
+                // Bấm Đạt: lưu luôn thông số bảng tính (giờ, nhiệt độ…) trước khi chốt trạng thái.
+                if (passed && calculatorInput?.cellId === cell.id && onSaveParams) onSaveParams(calculatorInput.input);
+                apply({ released: passed });
+              }} />
             }
             initialInput={{
               ...DEFAULT_STRESS_INPUT,

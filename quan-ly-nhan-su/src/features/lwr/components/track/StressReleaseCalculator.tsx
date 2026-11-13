@@ -421,7 +421,17 @@ export function StressReleaseCalculator({
               <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
                 <button
                   type="button"
-                  onClick={() => set(new Date().toISOString())}
+                  onClick={() => {
+                    const now = new Date().toISOString();
+                    set(now);
+                    // Ghi giờ xong là lưu luôn vào đoạn LWR để bảng tính in có đủ giờ bắt đầu / kết thúc.
+                    if (onSave) {
+                      const saved = onSave({ ...input, ...(label === "Bắt đầu" ? { startTime: now } : { endTime: now }) });
+                      const ok = saved === undefined || saved === true || (typeof saved === "object" && saved.ok);
+                      setSaveOk(ok);
+                      setSaveNotice(typeof saved === "object" ? saved.message : ok ? `Đã ghi giờ ${label.toLowerCase()} và lưu vào đoạn LWR.` : "Đã ghi giờ nhưng chưa lưu được vào đoạn LWR — bấm Lưu thông số để xem lý do.");
+                    }
+                  }}
                   className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
                 >
                   {label}

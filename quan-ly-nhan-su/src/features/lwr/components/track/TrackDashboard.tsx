@@ -133,6 +133,9 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   const [selectedLongRailId, setSelectedLongRailId] = useState<string | null>(null);
   const detailContainer = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState(createInitialTrackLayout);
+  // Bản sơ đồ mới nhất: hai thao tác lưu liên tiếp (lưu thông số rồi bấm Đạt) không ghi đè lên nhau.
+  const layoutLive = useRef(layout);
+  useEffect(() => { layoutLive.current = layout; }, [layout]);
   const [symbols, setSymbols] = useState<StructureSymbol[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -445,6 +448,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       setError("Không lưu được sơ đồ trên trình duyệt. Kiểm tra dung lượng hoặc quyền lưu dữ liệu trang web.");
       return false;
     }
+    layoutLive.current = next;
     setLayout(next);
     setError(null);
     void enqueueLayoutSave(next, savedAt).then((result) => noteLayoutSave(result, savedAt));
@@ -761,7 +765,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   function saveCellPatch(patch: RailCellPatch) {
     if (!cell) return false;
     try {
-      let next = patchTrackCell(layout, cell.id, patch);
+      let next = patchTrackCell(layoutLive.current, cell.id, patch);
       // Đồng bộ completedAt với nút Đạt bên dưới — thẻ “Đoạn LWR đã giải toả” đếm theo sơ đồ.
       if (patch.released !== undefined) {
         const before = new Map(next.longRails.map((rail) => [rail.id, rail.completedAt]));
