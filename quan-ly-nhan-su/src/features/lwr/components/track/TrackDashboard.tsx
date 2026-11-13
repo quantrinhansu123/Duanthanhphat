@@ -698,7 +698,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
         : layout.longRails.map((item) => (item.id === target.id ? target : item)),
     };
     try {
-      nextLayout = patchTrackCell(nextLayout, cell.id, { leftTemp, rightTemp });
+      nextLayout = patchTrackCell(nextLayout, cell.id, { leftTemp, rightTemp, stress: params }); // mỗi thanh một bảng tính riêng
     } catch (cause) {
       return { ok: false, message: cause instanceof Error ? cause.message : "Không cập nhật được nhiệt độ thanh." };
     }
@@ -1171,7 +1171,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             {detailOpen && cell ? (
               <RailDetailPanel
                 cell={cell}
-                savedParams={coveringRail?.params}
+                savedParams={cell.stress ?? coveringRail?.params}
                 longRailCode={coveringRail?.code}
                 trackSide={layout.rows.find(row => row.cells.some(item => item.id === cell.id))?.rail === "Ray phải" ? "RIGHT" : "LEFT"}
                 onClose={() => setDetailOpen(false)}

@@ -1,3 +1,4 @@
+import type { StressInput } from "../lib/stress-release";
 /** Domain types for the LWR/CWR rail-welding tracker.
  *  Kept UI-agnostic so data logic stays separate from presentation. */
 
@@ -51,6 +52,8 @@ export interface RailCell {
   released?: boolean;
   /** Bảng báo cáo chuyển vị điểm M / E của đoạn ray. */
   report?: RailReport;
+  /** Bảng tính giải toả ứng suất riêng của thanh này (thông số đã nhập, giờ bắt đầu/kết thúc…). */
+  stress?: StressInput;
 }
 
 export interface RailRow {

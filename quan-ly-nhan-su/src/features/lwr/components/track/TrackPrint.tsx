@@ -384,7 +384,7 @@ export function TrackPrint({
         startMetres,
         endMetres,
       )?.rail;
-      const params: StressInput = rail ? rail.params : {
+      const params: StressInput = cell.stress ? { ...cell.stress, startChainage: cell.from, endChainage: cell.to } : rail ? rail.params : {
         ...DEFAULT_STRESS_INPUT,
         leftLength: railCellLengthMetres(cell) ?? endMetres - startMetres,
         rightLength: 0,

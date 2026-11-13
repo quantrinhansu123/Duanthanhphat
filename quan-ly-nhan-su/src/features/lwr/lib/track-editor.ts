@@ -726,7 +726,19 @@ export type RailCellPatch = {
   released?: boolean;
   /** Bảng báo cáo chuyển vị M/E; null để xóa. */
   report?: RailReport | null;
+  /** Bảng tính giải toả ứng suất của thanh; null để xóa. */
+  stress?: StressInput | null;
 };
+
+/** Bảng tính giải toả của thanh: chỉ giữ số hữu hạn / chuỗi / boolean (đọc từ JSON hoặc từ form). */
+export function sanitizeStress(value: unknown): StressInput | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value)) {
+    if (typeof v === "number" ? Number.isFinite(v) : typeof v === "boolean" || (typeof v === "string" && v.length <= 200)) out[key] = v;
+  }
+  return Object.keys(out).length ? (out as unknown as StressInput) : undefined;
+}
 
 /** Làm sạch dữ liệu báo cáo đọc từ JSON: bỏ dòng trống, giới hạn độ dài chuỗi. */
 export function sanitizeRailReport(value: unknown): RailReport | undefined {
@@ -819,10 +831,15 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
     if (report) cell.report = report;
     else delete cell.report;
   }
+  if (patch.stress !== undefined) {
+    const stress = sanitizeStress(patch.stress);
+    if (stress) cell.stress = stress;
+    else delete cell.stress;
+  }
 
   const hasGeometry = patch.from !== undefined || patch.to !== undefined || patch.lengthMetres !== undefined;
   if (!hasGeometry) {
-    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined && patch.report === undefined && patch.lengthAdjust === undefined) {
+    if (patch.temp === undefined && !hasSideTemps && patch.released === undefined && patch.report === undefined && patch.stress === undefined && patch.lengthAdjust === undefined) {
       throw new RangeError("Không có thông số để cập nhật.");
     }
     return next;
@@ -1065,6 +1082,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         ...(rawCell.released ? { released: true } : {}),
         ...(typeof rawCell.lengthAdjust === "number" && rawCell.lengthAdjust !== 0 ? { lengthAdjust: rawCell.lengthAdjust } : {}),
         ...(sanitizeRailReport(rawCell.report) ? { report: sanitizeRailReport(rawCell.report) } : {}),
+        ...(sanitizeStress(rawCell.stress) ? { stress: sanitizeStress(rawCell.stress) } : {}),
       });
       cellIds.add(rawCell.id);
       previousEnd = end;

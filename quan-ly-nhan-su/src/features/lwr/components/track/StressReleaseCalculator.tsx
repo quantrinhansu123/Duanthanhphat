@@ -367,6 +367,7 @@ export function StressReleaseCalculator({
       >
         Lưu thông số
       </button>
+      <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-900 disabled:opacity-40">Xem</button>
       <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
     </div>
   );
