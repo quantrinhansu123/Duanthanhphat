@@ -58,6 +58,8 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
+#diary-print .diary-sig-input { width: 90%; border: 0; background: transparent; font: inherit; font-weight: normal; font-style: italic; text-align: center; color: inherit; outline: none; padding: 0; }
+@media screen { #diary-print .diary-sig-input { border-bottom: 1px dashed #64748b; background: #fffbea; } }
 #diary-print .diary-sig-box { height: 16mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 #diary-print .diary-sig-box img { max-height: 15mm; max-width: 90%; width: auto; height: auto; object-fit: contain; }
 @media print {
@@ -448,7 +450,7 @@ export default function ConstructionDiaryForm() {
         <div className="no-print fixed left-0 right-0 top-0 z-[1500] flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-white px-4 py-3 shadow">
           <div>
             <p className="text-sm font-bold text-slate-900">Xem trước bản in — Nhật ký thi công ngày {date.split("-").reverse().join("/")}</p>
-            <p className="text-xs text-slate-500">Kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
+            <p className="text-xs text-slate-500">Gõ tên người ký ngay dưới tên các bên ở cuối nhật ký (được nhớ cho lần sau), kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
@@ -496,9 +498,9 @@ export default function ConstructionDiaryForm() {
           ))}
 
           <div className="diary-sig-row">
-            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{signers.tvgs}</div></div>
-            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{signers.ntc}</div></div>
-            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{signers.ntp}</div></div>
+            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký tư vấn giám sát" placeholder="Gõ tên người ký" value={signers.tvgs} onChange={(e) => setSigner("tvgs", e.target.value)} /> : signers.tvgs}</div></div>
+            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onChange={(e) => setSigner("ntc", e.target.value)} /> : signers.ntc}</div></div>
+            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onChange={(e) => setSigner("ntp", e.target.value)} /> : signers.ntp}</div></div>
           </div>
           <p className="diary-foot">Trang {pageEnd}</p>
         </section>
