@@ -284,6 +284,9 @@ export function RailDetailPanel({
         </div>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
           {view === "giai-toa" && (<>
+          <StressReleaseCalculator
+            compact
+            headSlot={(
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="font-semibold text-amber-900">Nhiệt độ ray trái (°C)</span>
@@ -322,6 +325,10 @@ export function RailDetailPanel({
                 <span className="ml-2 text-xs font-medium text-emerald-700">= (T trái + T phải) / 2</span>
               </p>
             </div>
+            </div>
+            )}
+            tailSlot={(
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
               <span className="flex items-center gap-1">
@@ -377,8 +384,7 @@ export function RailDetailPanel({
               </p>
             </div>
           </div>
-          <StressReleaseCalculator
-            compact
+            )}
             key={`${cell.id}-${lockTemp}`}
             segmentId={displayRailCode(longRailCode || cell.id)}
             statusSlot={
