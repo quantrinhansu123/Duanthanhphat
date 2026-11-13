@@ -274,7 +274,9 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
     const t = { ...base, ...(revision?.thong_tin ?? {}), ...(editor?.draft ?? {}) };
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
-    const ultrasoundRfi = t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "");
+    // Biên bản chỉ nghiệm thu HÌNH HỌC (chưa có kết quả siêu âm): PYC chỉ hiện số phiếu hình học, không kèm số phiếu siêu âm.
+    const hasUltrasound = rows.some((row) => Boolean(String(((row.du_lieu_chot.kiem_tra ?? row.du_lieu_chot) as Record<string, unknown>).ket_qua_ndt ?? "").trim()));
+    const ultrasoundRfi = hasUltrasound ? (t.rfi_sieu_am_so || (scope.ultrasound ? String(rfi.so_phieu ?? "") : "")) : "";
     // Ngày nghiệm thu: ưu tiên bản sửa đổi in → ngày nghiệm thu của phiếu YCNT (đợt nghiệm thu).
     const acceptanceDate = t.ngay_nghiem_thu || String(record.dot.ngay_nghiem_thu ?? "");
     const parts = dateParts(acceptanceDate || null);
@@ -429,7 +431,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                             <td>{right}</td>
                             {/* Biên bản chỉ hình học: chưa nghiệm thu siêu âm → để trống cột siêu âm. */}
                             <td>{str(kt.truc_quan) || (passed ? "Đạt" : "")}</td>
-                            <td>{scope.ultrasound ? str(kt.ket_qua_ndt) || (passed ? "Đạt" : "") : ""}</td>
+                            <td>{scope.ultrasound ? str(kt.ket_qua_ndt) : ""}</td>
                             {GEOMETRY_CRITERIA.map((k) => (
                               <td key={k}>{hasMeasure ? cellOf(k) : passed ? "Đạt" : ""}</td>
                             ))}
