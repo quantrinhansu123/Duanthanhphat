@@ -7,7 +7,7 @@ import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import GtusRfiDialog from "@/components/GtusRfiDialog";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
+import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
@@ -746,17 +746,17 @@ function RfiPanel({
         Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
       </p>}
       <div className="overflow-auto rounded-lg border border-slate-200">
-        <table className="w-full text-xs sm:text-sm">
+        <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th className="p-2 w-10 text-left">STT</th>
               <th className="p-2 text-left">Số phiếu</th>
               <th className="p-2 text-left">Ngày phát</th>
               <th className="p-2 text-left">Loại</th>
-              <th className="p-2 text-left">Mối trong RFI</th>
-              <th className="p-2 text-left">Nghiệm thu đạt / chờ ký / đã ký</th>
-              <th className="p-2 text-left">Chưa NT / Không đạt</th>
-              <th className="p-2 text-left">KM nghiệm thu đạt</th>
+              <th className="p-2 text-center" title="Số mối trong RFI">Mối</th>
+              <th className="p-2 text-center" title="Nghiệm thu đạt / chờ ký / đã ký">Đạt / Chờ ký / Đã ký</th>
+              <th className="p-2 text-center" title="Chưa nghiệm thu / Không đạt">Chưa NT / K.đạt</th>
+              <th className="p-2 text-left" title="Lý trình các mối nghiệm thu đạt">KM đạt</th>
               <th className="p-2 text-left">Trạng thái</th>
               <th className="p-2 w-40" />
             </tr>
@@ -767,11 +767,11 @@ function RfiPanel({
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
                 <td className="p-2">{r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? (r.thong_tin?.cong_viec === "gtus" ? "Giải toả ứng suất" : "Theo dõi") : rfiAcceptanceTitle(r.thong_tin)}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
-                <td className="p-2 min-w-48">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
+                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? (r.thong_tin?.cong_viec === "gtus" ? "Giải toả ứng suất" : "Theo dõi") : (() => { const sc = rfiScope(r.thong_tin ?? {}); return sc.geometry && sc.ultrasound ? "Hình học + siêu âm" : sc.geometry ? "Nghiệm thu hình học" : "Nghiệm thu siêu âm"; })()}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
+                <td className="p-2">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
                 <td className="p-2">{r.child_signing?.status ?? r.trang_thai}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <RowActionsMenu

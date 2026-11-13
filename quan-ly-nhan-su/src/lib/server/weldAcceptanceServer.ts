@@ -87,7 +87,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
       .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
   ]);
-  void [accepted, splitRfis, splitRfiWelds, splitDone]; // nhật ký chỉ lấy RFI chính phát trong ngày
+  void [accepted, splitRfis, splitRfiWelds]; // nhật ký lấy RFI chính phát trong ngày và nghiệm thu đã chốt trong ngày
   const located = new Map(all.map((w) => {
     const point = points.find((p) => p.lich_su_moi_han_id === w.id);
     // Lý trình ưu tiên điểm GPS; dự án không có tọa độ thì lấy lý trình ghi trong nhật ký hàn.
@@ -131,6 +131,29 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   const welderIds = [...new Set(welds.map((w) => w.tho_han_id).filter((id): id is string => Boolean(id)))];
   const journalPeople = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(welderIds,
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
+  // Giải toả ứng suất (GTUS) chỉ vào nhật ký vào NGÀY NGHIỆM THU từng thanh; phát phiếu không vào nhật ký.
+  type GtusDone = { phieu_id: string; ma_thanh: string; ma_lwr: string | null; ket_qua: string | null; ly_trinh_dau: string; ly_trinh_cuoi: string };
+  const gtusRaw = await db().from("gtus_thanh_rfi").select("phieu_id,ma_thanh,ma_lwr,ket_qua,ly_trinh_dau,ly_trinh_cuoi")
+    .eq("ngay_nghiem_thu", date).not("ket_qua", "is", null);
+  let gtusDone: GtusDone[] = gtusRaw.error ? [] : (gtusRaw.data as GtusDone[]); // chưa có bảng → không có dữ liệu GTUS
+  if (gtusDone.length) {
+    const owners = await chunked<{ id: string; du_an_id: string }>([...new Set(gtusDone.map((g) => g.phieu_id))], (p) =>
+      db().from("phieu_yeu_cau_nghiem_thu").select("id,du_an_id").in("id", p));
+    const mine = new Set(owners.filter((o) => o.du_an_id === projectId).map((o) => o.id));
+    gtusDone = gtusDone.filter((g) => mine.has(g.phieu_id));
+  }
+  const kmMetres = (v: string) => { const m = /(\d+)\+(\d+(?:[.,]\d+)?)/.exec(v); return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : Number.NaN; };
+  /** Mỗi phiếu / kết quả một dòng: tên LWR của các thanh và đoạn Km. */
+  const gtusLines = (withResult: boolean) => [...new Set(gtusDone.map((g) => g.phieu_id))].flatMap((phieu) =>
+    (withResult ? ["Đạt", "Không đạt"] : [null]).flatMap((result) => {
+      const rows = gtusDone.filter((g) => g.phieu_id === phieu && (result === null || g.ket_qua === result));
+      if (!rows.length) return [];
+      const names = [...new Set(rows.map((g) => g.ma_lwr || g.ma_thanh))].join(", ");
+      const starts = rows.map((g) => kmMetres(g.ly_trinh_dau)).filter(Number.isFinite), ends = rows.map((g) => kmMetres(g.ly_trinh_cuoi)).filter(Number.isFinite);
+      const from = rows.find((g) => kmMetres(g.ly_trinh_dau) === Math.min(...starts))?.ly_trinh_dau, to = rows.find((g) => kmMetres(g.ly_trinh_cuoi) === Math.max(...ends))?.ly_trinh_cuoi;
+      const range = from && to ? ` (Km${from} – Km${to})` : "";
+      return [withResult ? `- Nghiệm thu giải toả ứng suất ray ${names}${range}. Kết quả: ${result}.` : `- Giải toả ứng suất ray ${names}${range}.`];
+    }));
   return {
     ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
@@ -139,21 +162,16 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     noiDungCongViec: [
       diaryReportWorkText(reports, select(welds.map((w) => w.id))) || diaryWorkText(select(welds.map((w) => w.id)), "weld"),
       diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
-      ...mainRfis.filter((r) => r.thong_tin?.cong_viec === "gtus").map((r) =>
-        `- Giải toả ứng suất ray ${String(r.thong_tin?.giam_sat ?? "").trim() || String(r.thong_tin?.lwr_codes ?? "")}.`),
+      ...gtusLines(false),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
-    // 3.2 Nghiệm thu công việc xây dựng hàng ngày = nội dung công việc của các RFI phát trong ngày; không có RFI thì để trống.
-    nghiemThuHangNgay: mainRfis.flatMap((r) => {
-      const info = r.thong_tin ?? {};
-      if (info.cong_viec === "gtus") return [`- Nghiệm thu giải toả ứng suất ray ${String(info.giam_sat ?? "").trim() || String(info.lwr_codes ?? "")}.`];
-      if (info.loai_rfi === "theo-doi") return []; // phiếu theo dõi (giám sát) không phải nghiệm thu
-      const scope = rfiScope(info);
-      const rfiWelds = select(mainRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id));
-      return [
-        scope.geometry ? diaryWorkText(rfiWelds, "accept", "Nghiệm thu kích thước hình học, trực quan mối hàn") : "",
-        scope.ultrasound ? diaryWorkText(rfiWelds, "accept", "Nghiệm thu siêu âm mối hàn") : "",
-      ].filter(Boolean);
-    }).join("\n"),
+    // 3.2 Nghiệm thu công việc xây dựng hàng ngày = nghiệm thu đã chốt trong ngày (hình học / siêu âm, kể cả của RFI phát ngày trước); không có thì để trống.
+    nghiemThuHangNgay: [
+      ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
+        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
+        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
+      })),
+      ...gtusLines(true),
+    ].filter(Boolean).join("\n"),
   };
 }
 

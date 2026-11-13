@@ -147,6 +147,20 @@ export default function ConstructionDiaryForm() {
             diary = { ...diary, thietBi: defaults.values.thietBi ?? diary.thietBi };
             notes.push("Danh sách thiết bị (2.2) đã được cập nhật đủ máy / vật tư gán cho dự án.");
           }
+          // Giải toả ứng suất chỉ ghi vào ngày nghiệm thu (phát phiếu không vào nhật ký): đồng bộ dòng GTUS của mục 3.1 theo dữ liệu hiện tại.
+          const isGtusLine = (line: string) => /Giải toả ứng suất/i.test(line);
+          const savedGtus = diary.noiDungCongViec.split("\n").filter(isGtusLine);
+          const wantedGtus = (defaults.values.noiDungCongViec ?? "").split("\n").filter(isGtusLine);
+          if (savedGtus.join("\n") !== wantedGtus.join("\n")) {
+            diary = { ...diary, noiDungCongViec: [...diary.noiDungCongViec.split("\n").filter((line) => !isGtusLine(line)), ...wantedGtus].filter((line) => line.trim()).join("\n") };
+            notes.push("Dòng giải toả ứng suất ở mục 3.1 đã được đồng bộ theo ngày nghiệm thu.");
+          }
+          // Mục 3.2 theo nghiệm thu đã chốt / RFI phát trong ngày: thiếu dòng nào so với dữ liệu hiện tại thì cập nhật.
+          const wantedAccept = (defaults.values.nghiemThuHangNgay ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+          if (wantedAccept.some((line) => !diary.nghiemThuHangNgay.includes(line.slice(0, 60)))) {
+            diary = { ...diary, nghiemThuHangNgay: defaults.values.nghiemThuHangNgay ?? diary.nghiemThuHangNgay };
+            notes.push("Mục 3.2 đã được cập nhật theo các nghiệm thu trong ngày.");
+          }
           if (notes.length) warning = notes.join(" ") + " Bấm Lưu để lưu bản mới.";
         } catch { /* giữ nội dung đã lưu */ }
       }
@@ -352,7 +366,7 @@ export default function ConstructionDiaryForm() {
           <Card title="3. Nội dung công việc thực hiện" wide>
             <textarea aria-label="Nội dung công việc thực hiện" className={inp} rows={6} value={d.noiDungCongViec} onChange={set("noiDungCongViec")} />
             <label className={lbl}>Nghiệm thu công việc xây dựng hàng ngày
-              <span className="font-normal text-slate-500"> (in thành mục 3.2, dưới mục 3.1; lấy theo RFI phát trong ngày, không có thì để trống)</span>
+              <span className="font-normal text-slate-500"> (in thành mục 3.2, dưới mục 3.1; lấy theo nghiệm thu đã chốt trong ngày, không có thì để trống)</span>
               <textarea aria-label="Nghiệm thu công việc xây dựng hàng ngày" className={inp} rows={4} value={d.nghiemThuHangNgay} onChange={set("nghiemThuHangNgay")} />
             </label>
           </Card>
