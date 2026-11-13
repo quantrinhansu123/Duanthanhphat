@@ -80,6 +80,15 @@ const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { lo
 
 /** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
 const HOME_TAB = "home";
+const NAV_STACK_KEY = "app-nav-stack";
+function readNavStack(): string[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(NAV_STACK_KEY) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
 
 const viewRenderers: Record<string, () => React.ReactNode> = {
   "ho-so-tho-han": () => <WelderManagement />,
@@ -262,6 +271,12 @@ export default function AppShell({ tab }: AppShellProps) {
     if (typeof window !== "undefined") {
       const nested = new CustomEvent("app-back", { cancelable: true });
       if (!window.dispatchEvent(nested)) return;
+      // Ngăn xếp trang đã xem (sessionStorage, sống qua reload): còn trang trước thì lùi về đó, không về trang chủ.
+      const stack = readNavStack();
+      if (stack.length > 1) {
+        router.back();
+        return;
+      }
       if (window.history.length > 1) {
         router.back();
         return;
@@ -269,6 +284,16 @@ export default function AppShell({ tab }: AppShellProps) {
     }
     go(HOME_TAB);
   }
+
+  // Ghi nhớ mỗi lần đổi trang; về đúng trang liền trước (nút Back app/trình duyệt) thì bỏ trang hiện tại khỏi ngăn xếp.
+  useEffect(() => {
+    const stack = readNavStack();
+    const last = stack[stack.length - 1];
+    if (last === pathname) return;
+    if (stack[stack.length - 2] === pathname) stack.pop();
+    else stack.push(pathname);
+    sessionStorage.setItem(NAV_STACK_KEY, JSON.stringify(stack.slice(-30)));
+  }, [pathname]);
 
   return (
     <ReportFilterProvider>
