@@ -176,7 +176,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   const ref = useRef<HTMLDivElement>(null);
   const [naturalH, setNaturalH] = useState(0);
   // Chiều cao còn lại cho sơ đồ = A4 (297mm) trừ đầu trang, tiêu đề, chú thích, bảng (theo số dòng), tổng và khung ký.
-  const reservedMm = 159 + Math.max(2, rows.length) * 6.5;
+  const reservedMm = 200 + Math.max(2, rows.length) * 11;
   const availHeightPx = Math.max(160, (297 - reservedMm) * 3.7795);
   const fit = naturalH > 0 ? Math.min(fitByWidth, Math.max(0.3, availHeightPx / naturalH)) : fitByWidth;
   useLayoutEffect(() => {
@@ -500,24 +500,29 @@ export function TrackPrint({
       #lwr-track-print table.lwr-summary col.c-done { width:5%; }
       #lwr-track-print table.lwr-summary td.c-code { text-align:left; font-weight:600; }
       #lwr-track-print tr { break-inside:avoid; }
-      #lwr-track-print article.gtus-page { padding:0; font:9.5pt 'Times New Roman',serif; }
+      #lwr-track-print article.gtus-page { padding:0; font:12.5pt 'Times New Roman',serif; }
+      #lwr-track-print .gtus-page .section-title { font-size:15pt; margin:5mm 0 2mm; }
       #lwr-track-print table.gtus-head { width:100%; border-collapse:collapse; margin-bottom:3mm; }
-      #lwr-track-print table.gtus-head td { border:0; padding:2mm 3mm; vertical-align:top; font-size:9pt; line-height:1.4; }
+      #lwr-track-print table.gtus-head td { border:0; padding:2mm 3mm; vertical-align:top; font-size:12pt; line-height:1.4; }
       #lwr-track-print table.gtus-head td.gtus-head-left { border-right:0; }
       #lwr-track-print table.gtus-head td.gtus-head-right { border-left:0; }
       #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:78%; }
-      #lwr-track-print .gtus-title { font-size:13pt; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
-      #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:10pt; margin:0 0 2mm; }
+      #lwr-track-print .gtus-title { font-size:19pt; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
+      #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:14pt; margin:0 0 2mm; }
       #lwr-track-print .gtus-pyc { position:absolute; left:0; font-weight:bold; }
-      #lwr-track-print table.gtus-table { font-size:7pt; }
-      #lwr-track-print table.gtus-table th { font-size:6.5pt; }
+      /* Trang GTUS: giữ nguyên khung sơ đồ, thu nhỏ riêng thanh ray (thấp hơn, chữ nhỏ hơn) cho cân đối. */
+      #lwr-track-print .gtus-page .diagram-scale button[data-testid='rail-grid-short'], #lwr-track-print .gtus-page .diagram-scale button.absolute.top-5 { top:22px !important; height:30px !important; font-size:13px !important; line-height:1.1 !important; display:flex; flex-direction:column; justify-content:center; }
+      #lwr-track-print .gtus-page .diagram-scale button.absolute.top-5 span { font-size:13px !important; }
+      #lwr-track-print table.gtus-table { font-size:11.5pt; }
+      #lwr-track-print table.gtus-table th { font-size:10pt; }
+      #lwr-track-print table.gtus-table td, #lwr-track-print table.gtus-table th { padding:5px 3px; }
       #lwr-track-print table.gtus-table td.c-code { white-space:nowrap; }
       #lwr-track-print table.gtus-table td { white-space:normal; line-height:1.15; }
       #lwr-track-print table.gtus-table tr.gtus-total td { font-weight:bold; background:#eef2f7; text-align:left; }
       #lwr-track-print table.gtus-sign { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:4mm; break-inside:avoid; }
-      #lwr-track-print table.gtus-sign th, #lwr-track-print table.gtus-sign td { border:1.2pt solid #000; padding:2mm 3mm; text-align:left; vertical-align:top; font-size:9pt; }
+      #lwr-track-print table.gtus-sign th, #lwr-track-print table.gtus-sign td { border:1.2pt solid #000; padding:2mm 3mm; text-align:left; vertical-align:top; font-size:13pt; }
       #lwr-track-print table.gtus-sign th { text-align:center; font-weight:bold; }
-      #lwr-track-print table.gtus-sign td { height:26mm; }
+      #lwr-track-print table.gtus-sign td { height:40mm; }
       @media print {
         @page { size:${config.size}; margin:0; }
         body:has(#lwr-track-print) > :not(#lwr-track-print) { display:none!important; }

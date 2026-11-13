@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import GtusRfiDialog from "@/components/GtusRfiDialog";
+import GtusAcceptanceTab, { gtusTicketNo } from "@/components/GtusAcceptanceTab";
 import { loadProjectOptions } from "@/lib/projectsDb";
 import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
@@ -121,7 +122,7 @@ function inferRoutes(welds: { ma_diem?: string | null }[]): { upper: boolean; lo
 export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  type Mode = "rfi" | SplitKind;
+  type Mode = "rfi" | SplitKind | "gtus";
   const [mode, setMode] = useState<Mode>("rfi");
   // Modal «Duyệt siêu âm luôn?» → Có: sang tab siêu âm và mở sẵn phiếu vừa chuyển.
   const [openUltrasoundId, setOpenUltrasoundId] = useState<string | null>(null);
@@ -179,6 +180,7 @@ export default function WeldAcceptanceWorkflow() {
           ["rfi", "Phát phiếu RFI"],
           ["hinh-hoc", "Nghiệm thu Hình Học"],
           ["sieu-am", "Nghiệm thu Siêu âm"],
+          ["gtus", "Giải toả ứng suất"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
             className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
@@ -190,7 +192,8 @@ export default function WeldAcceptanceWorkflow() {
       </div>
       <div className="rounded-b-xl rounded-tr-xl border-2 border-[#0047AB] bg-white p-3 sm:p-4">
         {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
-        {mode !== "rfi" && (
+        {mode === "gtus" && <GtusAcceptanceTab key={projectId} projectId={projectId} projectName={projectName} />}
+        {mode !== "rfi" && mode !== "gtus" && (
           <div className="mb-4">
             {/* Phiếu được phát trong tab RFI; hai tab chuyên môn dùng để duyệt và xem hồ sơ. */}
             <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName}
@@ -816,7 +819,7 @@ function RfiPanel({
           projectId={projectId}
           projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
           cellIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
-          pycSo={String(gtusPrint.so_phieu ?? "").replace(/^RFI-/i, "")}
+          pycSo={gtusTicketNo(String(gtusPrint.so_phieu ?? "")).replace(/^RFI-/i, "")}
           onClose={() => setGtusPrint(null)}
         />
       )}

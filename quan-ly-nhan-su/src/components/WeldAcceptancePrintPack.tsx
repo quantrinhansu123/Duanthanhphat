@@ -115,7 +115,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   // Ẩn / hiện cột «Lý trình mối hàn» của phụ lục: bản nháp > bản sửa đổi mới nhất > dữ liệu phiếu.
   const lyTrinhHidden = (draft.an_ly_trinh
     ?? [...(record.sua_doi ?? [])].sort((a, b) => b.phien_ban - a.phien_ban).map((r) => (r.thong_tin as Record<string, string> | null)?.an_ly_trinh).find((v) => v !== undefined)
-    ?? (record.dot.thong_tin as Record<string, string> | null)?.an_ly_trinh) === "1";
+    ?? (record.dot.thong_tin as Record<string, string> | null)?.an_ly_trinh) !== "0"; // mặc định ẩn cột lý trình; tick «Cột lý trình» mới hiện
 
   return <div className="acceptance-print-root fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="In bộ biên bản nghiệm thu">
     <style>{acceptancePrintCss}</style>

@@ -240,7 +240,7 @@ export async function nextRfiNumber(projectId: string, kind?: "hinh-hoc" | "sieu
       return (kind ? q.eq("loai", kind) : q).order("id").range(a, b);
     }),
   ]);
-  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-\d+)?$/i;
+  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-(?:\d+|GTUS))?$/i;
   let highest = 0;
   for (const row of [...main, ...split]) {
     const match = pattern.exec((row.so_phieu ?? "").trim());
