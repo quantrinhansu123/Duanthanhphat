@@ -112,12 +112,21 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
     </label>
   );
 
+  // Ẩn / hiện cột «Lý trình mối hàn» của phụ lục: bản nháp > bản sửa đổi mới nhất > dữ liệu phiếu.
+  const lyTrinhHidden = (draft.an_ly_trinh
+    ?? [...(record.sua_doi ?? [])].sort((a, b) => b.phien_ban - a.phien_ban).map((r) => (r.thong_tin as Record<string, string> | null)?.an_ly_trinh).find((v) => v !== undefined)
+    ?? (record.dot.thong_tin as Record<string, string> | null)?.an_ly_trinh) === "1";
+
   return <div className="acceptance-print-root fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="In bộ biên bản nghiệm thu">
     <style>{acceptancePrintCss}</style>
     <div className="weld-print-pack-actions mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
       <p className="text-sm">Bộ hồ sơ: <b>(1) Phụ lục</b> · <b>(2) Nghiệm thu công việc</b> · <b>(3) Hoàn thành công việc</b>
         {missing.length > 0 && <span role="alert" className="text-amber-800"> — Thiếu {missing.length} biên bản. Hãy tải lại hồ sơ.</span>}</p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold" title="Ẩn / hiện cột Lý trình mối hàn trên phụ lục">
+          <input type="checkbox" checked={!lyTrinhHidden} onChange={(e) => setDraft((cur) => ({ ...cur, an_ly_trinh: e.target.checked ? "0" : "1" }))} />
+          Cột lý trình
+        </label>
         {draftCount > 0 && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
         <button type="button" disabled={missing.length > 0} onClick={() => window.print()} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>

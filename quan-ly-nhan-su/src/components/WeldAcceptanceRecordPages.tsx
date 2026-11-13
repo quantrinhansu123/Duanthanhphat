@@ -371,7 +371,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                 <td colSpan={2} style={{ padding: 0 }}>
                   <table className="annex" style={annexSizing(Math.max(page.length, MIN_BLANK_ROWS))}>
                     <colgroup>
-                      {[3, 15, 7, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12].map((w, i) => (
+                      {(t.an_ly_trinh === "1" ? [3, 24, 7, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12] : [3, 15, 7, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12]).map((w, i) => (
                         <col key={i} style={{ width: `${w}%` }} />
                       ))}
                     </colgroup>
@@ -380,7 +380,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                         <th rowSpan={3} className="serial-heading">STT</th>
                         <th rowSpan={3}>TÊN MỐI HÀN</th>
                         <th rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th>
-                        <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>
+                        {t.an_ly_trinh !== "1" && <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>}
                         <th colSpan={2} rowSpan={2}>RAY</th>
                         <th colSpan={8}>NGHIỆM THU<br />(ĐẠT/KHÔNG ĐẠT)</th>
                         <th rowSpan={3}>GHI CHÚ</th>
@@ -426,7 +426,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                             <td>{pageIndex * ROWS_PER_PAGE + i + 1}</td>
                             <td className="weld-name">{fieldWeldCode(str(w.ma_lich_su), w.ma_hien_truong as string | null | undefined)}</td>
                             <td>{str(w.loai_ray)}</td>
-                            <td>{str(w.ly_trinh)}</td>
+                            {t.an_ly_trinh !== "1" && <td>{str(w.ly_trinh)}</td>}
                             <td>{left}</td>
                             <td>{right}</td>
                             {/* Biên bản chỉ hình học: chưa nghiệm thu siêu âm → để trống cột siêu âm. */}
