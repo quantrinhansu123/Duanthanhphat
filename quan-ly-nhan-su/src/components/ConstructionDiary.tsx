@@ -96,6 +96,18 @@ export default function ConstructionDiaryForm() {
   const [range, setRange] = useState({ from: "", to: "" });
   const [rangeRows, setRangeRows] = useState<DiarySummary[] | null>(null);
   const closePreview = () => { setPreviewOpen(false); setRangeRows(null); };
+  /** Các nhật ký đã lưu được tick trong danh sách để in ghép (khoá "dự án:ngày"). */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  /** Trang bắt đầu: phần đầu nhật ký có vài trang thông tin nên số trang nhật ký tiếp nối (PQ nhập từ trang 6). Nhớ cho lần sau. */
+  const [startPage, setStartPage] = useState(1);
+  useEffect(() => {
+    try { const v = Number(window.localStorage.getItem("nhat-ky-thi-cong-trang-bat-dau")); if (Number.isInteger(v) && v >= 1) setStartPage(v); } catch { /* bỏ qua */ }
+  }, []);
+  const changeStartPage = (value: number) => {
+    const v = Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 9999) : 1;
+    setStartPage(v);
+    try { window.localStorage.setItem("nhat-ky-thi-cong-trang-bat-dau", String(v)); } catch { /* bỏ qua */ }
+  };
   useEffect(() => {
     if (!previewOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closePreview(); };
@@ -265,6 +277,14 @@ export default function ConstructionDiaryForm() {
     setPreviewOpen(true);
   }
 
+  /** In ghép các nhật ký đã tick (theo thứ tự ngày). */
+  function printPicked() {
+    const rows = saved.filter((r) => picked.has(`${r.projectId}:${r.date}`)).sort((a, b) => a.date.localeCompare(b.date));
+    if (!rows.length) { setStatus("Chưa tick nhật ký nào trong danh sách."); return; }
+    setRangeRows(rows);
+    setPreviewOpen(true);
+  }
+
   /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
   function printSaved(row: DiarySummary) {
     setProjectId(row.projectId);
@@ -374,20 +394,24 @@ export default function ConstructionDiaryForm() {
         </fieldset>
 
         <section className="pt-5">
-          <h2 className="mb-2 text-sm font-bold text-slate-800">Nhật ký đã lưu <span className="font-mono text-xs font-semibold text-slate-500">{saved.length}</span></h2>
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-bold text-slate-800">Nhật ký đã lưu <span className="font-mono text-xs font-semibold text-slate-500">{saved.length}</span></h2>
+            <button type="button" disabled={busy || picked.size === 0} onClick={printPicked} title="Ghép các nhật ký đã tick thành một bản in / một file PDF" className="h-8 cursor-pointer rounded-md border border-[#0047AB]/40 bg-[#0047AB]/5 px-3 text-xs font-semibold text-[#0047AB] hover:bg-[#0047AB]/10 disabled:cursor-not-allowed disabled:opacity-50">In các nhật ký đã chọn{picked.size ? ` (${picked.size})` : ""}</button>
+          </div>
           {saved.length === 0 ? (
             <p className="rounded-lg border border-slate-200 px-4 py-6 text-center text-xs text-slate-500">Chưa có nhật ký nào được lưu.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full min-w-[40rem] text-left text-xs">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                  <tr><th className="px-3 py-2">Ngày</th><th className="px-3 py-2">Dự án</th><th className="px-3 py-2 text-right">BCH</th><th className="px-3 py-2 text-right">KT</th><th className="px-3 py-2 text-right">CN</th><th className="px-3 py-2">Công việc</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+                  <tr><th className="w-8 px-3 py-2"><input type="checkbox" aria-label="Chọn tất cả" checked={saved.length > 0 && saved.every((x) => picked.has(`${x.projectId}:${x.date}`))} onChange={(e) => setPicked(e.target.checked ? new Set(saved.map((x) => `${x.projectId}:${x.date}`)) : new Set())} /></th><th className="px-3 py-2">Ngày</th><th className="px-3 py-2">Dự án</th><th className="px-3 py-2 text-right">BCH</th><th className="px-3 py-2 text-right">KT</th><th className="px-3 py-2 text-right">CN</th><th className="px-3 py-2">Công việc</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {saved.map((row) => {
                     const active = row.projectId === projectId && row.date === date;
                     return (
                       <tr key={`${row.projectId}:${row.date}`} className={active ? "bg-blue-50/60" : "hover:bg-slate-50"}>
+                        <td className="px-3 py-2"><input type="checkbox" aria-label={`Chọn nhật ký ngày ${row.date}`} checked={picked.has(`${row.projectId}:${row.date}`)} onChange={(e) => setPicked((cur) => { const next = new Set(cur); const k = `${row.projectId}:${row.date}`; if (e.target.checked) next.add(k); else next.delete(k); return next; })} /></td>
                         <td className="whitespace-nowrap px-3 py-2 font-mono font-semibold text-[#0047AB]">{row.date.split("-").reverse().join("/")}</td>
                         <td className="max-w-[16rem] truncate px-3 py-2">{projects.find((p) => p.id === row.projectId)?.name ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono">{row.diary.banChiHuy || "—"}</td>
@@ -459,7 +483,11 @@ export default function ConstructionDiaryForm() {
               : `Xem trước bản in — Nhật ký thi công ngày ${date.split("-").reverse().join("/")}`}</p>
             <p className="text-xs text-slate-500">Gõ tên người ký ngay dưới tên các bên ở cuối nhật ký (được nhớ cho lần sau), kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700" title="Số trang của nhật ký đầu tiên (các trang thông tin đầu nhật ký đã chiếm số trang trước đó)">
+              Trang bắt đầu
+              <input type="number" min={1} max={9999} value={startPage} onChange={(e) => changeStartPage(Number(e.target.value))} className="h-10 w-20 rounded-lg border border-slate-300 px-2 text-center" />
+            </label>
             <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
             <button type="button" onClick={closePreview} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
           </div>
@@ -467,8 +495,8 @@ export default function ConstructionDiaryForm() {
       )}
       <article id="diary-print" className={previewOpen ? "diary-preview" : undefined}>
         {rangeRows
-          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={i * 2 + 1} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
-          : <DiaryPages d={d} date={date} pageStart={1} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
+          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={startPage + i * 2} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
+          : <DiaryPages d={d} date={date} pageStart={startPage} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
       </article>
       </>, document.body)}
       {viewRow && (
