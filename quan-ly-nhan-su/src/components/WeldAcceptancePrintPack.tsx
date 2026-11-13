@@ -14,7 +14,7 @@ const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_
 const input = "mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal";
 const label = "block text-xs font-semibold text-slate-700";
 
-export default function WeldAcceptancePrintPack({ record: initial, onClose: closeNow, autoPrint = true }: {
+export default function WeldAcceptancePrintPack({ record: initial, onClose: closeNow, autoPrint = false }: {
   record: RecordSet; onClose: () => void; autoPrint?: boolean;
 }) {
   // Sửa trực tiếp trên bản xem trước: các ô đã gõ nằm trong `draft` cho tới khi bấm «Lưu chỉnh sửa» (áp dụng cho cả bộ 3 biên bản).
