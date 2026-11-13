@@ -358,7 +358,16 @@ export function StressReleaseCalculator({
                     <>
                       <p className="font-mono text-[12px] font-bold leading-tight text-amber-950">{stamped}</p>
                       {duration ? <p className="mt-0.5 text-[10px] font-semibold text-amber-800">Thời lượng: {duration}</p> : null}
-                      <button type="button" onClick={() => set("")} className="mt-0.5 text-[11px] underline">
+                      <button type="button" onClick={() => {
+                        set("");
+                        // Xóa giờ cũng lưu luôn vào đoạn LWR, để bảng tính in không còn giờ đã gỡ.
+                        if (onSave) {
+                          const saved = onSave({ ...input, ...(label === "Bắt đầu" ? { startTime: "" } : { endTime: "" }) });
+                          const ok = saved === undefined || saved === true || (typeof saved === "object" && saved.ok);
+                          setSaveOk(ok);
+                          setSaveNotice(typeof saved === "object" ? saved.message : ok ? `Đã xóa giờ ${label.toLowerCase()} và lưu vào đoạn LWR.` : "Đã xóa giờ nhưng chưa lưu được — bấm Lưu thông số để xem lý do.");
+                        }
+                      }} className="mt-0.5 text-[11px] underline">
                         Xóa
                       </button>
                     </>

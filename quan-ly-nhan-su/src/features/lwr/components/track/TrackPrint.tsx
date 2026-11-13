@@ -234,6 +234,9 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
 
         <h2 className="section-title">2. Tổng hợp thông tin giải toả ứng suất</h2>
         <table className="lwr-summary gtus-table">
+          <colgroup>
+            {[7, 5, 9.5, 9.5, 7, 8, 8, 8.5, 6.5, 6.5, 12.5, 12].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+          </colgroup>
           <thead>
             <tr>
               <th>Mã LWR</th>
@@ -507,6 +510,7 @@ export function TrackPrint({
       #lwr-track-print table.gtus-head td.gtus-head-left { border-right:0; }
       #lwr-track-print table.gtus-head td.gtus-head-right { border-left:0; }
       #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:80%; }
+      #lwr-track-print .gtus-head-right { text-align:left; padding-left:4mm; }
       #lwr-track-print .gtus-title { font-size:15pt; white-space:nowrap; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
       #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:11.5pt; margin:0 0 2mm; }
       #lwr-track-print .gtus-pyc { position:absolute; left:0; font-weight:bold; }
@@ -517,11 +521,18 @@ export function TrackPrint({
       #lwr-track-print table.gtus-table th { font-size:10pt; }
       #lwr-track-print table.gtus-table td, #lwr-track-print table.gtus-table th { padding:5px 3px; }
       #lwr-track-print table.gtus-table td.c-code { white-space:nowrap; }
+      /* Cột Bắt đầu / Kết thúc đủ rộng để hiện trọn giờ và ngày (hh:mm:ss / dd/mm/yyyy), cột lý trình hẹp lại. */
+      #lwr-track-print table.gtus-table { border:1.2pt solid #000; }
+      #lwr-track-print table.gtus-table th, #lwr-track-print table.gtus-table td { border:0.8pt solid #000; text-align:center; vertical-align:middle; }
+      #lwr-track-print table.gtus-table th { background:#eef2f7; font-weight:bold; }
+      #lwr-track-print table.gtus-table td.c-code { font-weight:bold; }
+      #lwr-track-print table.gtus-table tbody tr:not(.gtus-total) td { height:9mm; }
+      #lwr-track-print table.gtus-table td:nth-child(n+11) { font-size:10pt; white-space:nowrap; }
       #lwr-track-print table.gtus-table td { white-space:normal; line-height:1.15; }
-      #lwr-track-print table.gtus-table tr.gtus-total td { font-weight:bold; background:#eef2f7; text-align:left; }
+      #lwr-track-print table.gtus-table tr.gtus-total td { font-weight:bold; background:#eef2f7; text-align:left; padding:6px 8px; }
       #lwr-track-print table.gtus-sign { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:4mm; break-inside:avoid; }
       #lwr-track-print table.gtus-sign th, #lwr-track-print table.gtus-sign td { border:1.2pt solid #000; padding:2mm 3mm; text-align:left; vertical-align:top; font-size:13pt; }
-      #lwr-track-print table.gtus-sign th { text-align:center; font-weight:bold; }
+      #lwr-track-print table.gtus-sign th { text-align:center; font-weight:bold; background:#eef2f7; }
       #lwr-track-print table.gtus-sign td { height:40mm; }
       @media print {
         @page { size:${config.size}; margin:0; }
