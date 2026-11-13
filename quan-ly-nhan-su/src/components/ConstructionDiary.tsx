@@ -41,6 +41,8 @@ const today = () => new Date().toLocaleDateString("sv-SE");
 const LINE = 27; // px, khoảng cách dòng chấm theo bản mẫu
 const DOT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='27'%3E%3Crect y='26' width='1' height='1'/%3E%3C/svg%3E\")";
 const css = `@media screen { #diary-print { position: absolute; left: -10000px; top: 0; visibility: hidden; pointer-events: none; } }
+@media screen { #diary-print.diary-preview { position: fixed; left: 0; top: 0; right: 0; bottom: 0; width: auto; visibility: visible; pointer-events: auto; overflow: auto; background: #cbd5e1; z-index: 1400; padding: 72px 12px 28px; }
+  #diary-print.diary-preview .diary-sheet { margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.28); } }
 #diary-print { width: 210mm; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black; }
 #diary-print p { margin: 0; }
 #diary-print h2 { margin: 0 0 6pt; font-size: 13.5pt; line-height: 18pt; text-align: center; font-weight: bold; }
@@ -84,6 +86,14 @@ export default function ConstructionDiaryForm() {
   const [busy, setBusy] = useState(false);
   /** Nhật ký đang xem nhanh trong hộp thoại (nút Xem ở danh sách). */
   const [viewRow, setViewRow] = useState<DiarySummary | null>(null);
+  /** Xem trước mẫu in nhật ký (nút In / Lưu PDF) — bấm In trong khung xem trước mới mở hộp thoại in. */
+  const [previewOpen, setPreviewOpen] = useState(false);
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPreviewOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewOpen]);
   useEffect(() => {
     if (!viewRow) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setViewRow(null); };
@@ -260,8 +270,7 @@ export default function ConstructionDiaryForm() {
     setProjectId(row.projectId);
     setDate(row.date);
     setD(row.diary);
-    // Chờ React render xong nội dung #diary-print rồi mới in.
-    window.setTimeout(printDiary, 120);
+    setPreviewOpen(true);
   }
 
   async function removeSaved(row: DiarySummary) {
@@ -294,7 +303,7 @@ export default function ConstructionDiaryForm() {
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={autofill} title="Điền lại thiết bị (2.2) và công việc (mục 3) theo ngày đang chọn; không đổi thời tiết, nhân lực" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại</button>
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang xử lý…" : "Lưu"}</button>
-            <button type="button" disabled={busy || loading || !projectId || !date} onClick={printDiary} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
+            <button type="button" disabled={busy || loading || !projectId || !date} onClick={() => setPreviewOpen(true)} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
           </div>
           {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
           <p className="basis-full text-xs text-slate-500">Bản in theo biểu mẫu dự án phần B (NKTC). Khi in PDF, tắt “Headers and footers” / “Đầu trang và chân trang” trong hộp thoại in nếu trình duyệt vẫn hiện ngày giờ hoặc tên hệ thống.</p>
@@ -435,7 +444,19 @@ export default function ConstructionDiaryForm() {
         </section>
       </div>
 
-      <article id="diary-print">
+      {previewOpen && (
+        <div className="no-print fixed left-0 right-0 top-0 z-[1500] flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-white px-4 py-3 shadow">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Xem trước bản in — Nhật ký thi công ngày {date.split("-").reverse().join("/")}</p>
+            <p className="text-xs text-slate-500">Kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
+            <button type="button" onClick={() => setPreviewOpen(false)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
+          </div>
+        </div>
+      )}
+      <article id="diary-print" className={previewOpen ? "diary-preview" : undefined}>
         <section className="diary-sheet">
           <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
           <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "202…."}</p>
