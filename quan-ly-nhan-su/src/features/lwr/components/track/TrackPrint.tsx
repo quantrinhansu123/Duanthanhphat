@@ -503,12 +503,12 @@ export function TrackPrint({
       #lwr-track-print article.gtus-page { padding:0; font:12.5pt 'Times New Roman',serif; }
       #lwr-track-print .gtus-page .section-title { font-size:15pt; margin:5mm 0 2mm; }
       #lwr-track-print table.gtus-head { width:100%; border-collapse:collapse; margin-bottom:3mm; }
-      #lwr-track-print table.gtus-head td { border:0; padding:2mm 3mm; vertical-align:top; font-size:12pt; line-height:1.4; }
+      #lwr-track-print table.gtus-head td { border:0; padding:2mm 3mm; vertical-align:top; font-size:9.5pt; line-height:1.4; }
       #lwr-track-print table.gtus-head td.gtus-head-left { border-right:0; }
       #lwr-track-print table.gtus-head td.gtus-head-right { border-left:0; }
-      #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:78%; }
-      #lwr-track-print .gtus-title { font-size:19pt; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
-      #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:14pt; margin:0 0 2mm; }
+      #lwr-track-print .gtus-head-left { font-weight:bold; text-transform:uppercase; width:80%; }
+      #lwr-track-print .gtus-title { font-size:15pt; white-space:nowrap; text-align:center; font-weight:bold; margin:3mm 0 1mm; text-transform:uppercase; }
+      #lwr-track-print .gtus-sub { position:relative; text-align:center; font-size:11.5pt; margin:0 0 2mm; }
       #lwr-track-print .gtus-pyc { position:absolute; left:0; font-weight:bold; }
       /* Trang GTUS: giữ nguyên khung sơ đồ, thu nhỏ riêng thanh ray (thấp hơn, chữ nhỏ hơn) cho cân đối. */
       #lwr-track-print .gtus-page .diagram-scale button[data-testid='rail-grid-short'], #lwr-track-print .gtus-page .diagram-scale button.absolute.top-5 { top:22px !important; height:30px !important; font-size:13px !important; line-height:1.1 !important; display:flex; flex-direction:column; justify-content:center; }
