@@ -92,9 +92,13 @@ export default function ConstructionDiaryForm() {
   const [viewRow, setViewRow] = useState<DiarySummary | null>(null);
   /** Xem trước mẫu in nhật ký (nút In / Lưu PDF) — bấm In trong khung xem trước mới mở hộp thoại in. */
   const [previewOpen, setPreviewOpen] = useState(false);
+  /** In ghép nhiều ngày: khoảng ngày chọn + danh sách nhật ký đã lưu trong khoảng (null = đang in một ngày). */
+  const [range, setRange] = useState({ from: "", to: "" });
+  const [rangeRows, setRangeRows] = useState<DiarySummary[] | null>(null);
+  const closePreview = () => { setPreviewOpen(false); setRangeRows(null); };
   useEffect(() => {
     if (!previewOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPreviewOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closePreview(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [previewOpen]);
@@ -179,37 +183,8 @@ export default function ConstructionDiaryForm() {
     return () => { live = false; };
   }, [projectId, date]);
 
-  const set = (k: keyof ConstructionDiary) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD((cur) => ({ ...cur, [k]: e.target.value }));
-  const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null);
-  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang 2, đo theo chỗ còn trống
-  useLayoutEffect(() => {
-    const measure = () => {
-      const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight;
-      if (a == null || b == null) return;
-      const next: [number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE))];
-      setLines((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    for (const el of [fill1.current, fill2.current]) if (el) ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
-
-  // Mỗi nhật ký in là một phiếu 2 trang: Trang 1, Trang 2 (không đánh luỹ tiến theo ngày).
-  const [pageStart, pageEnd] = ["1", "2"];
-
-  /** Nội dung mục 3 khi in: 3.1 Công việc thực hiện trong ngày, rồi 3.2 Nghiệm thu công việc xây dựng hàng ngày (để trống nếu không có RFI trong ngày). */
-  const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
-  // Dòng «Báo RFI số …» của bản cũ không thuộc nhật ký thi công (bỏ cả khi in thẳng từ danh sách).
-  const workToday = d.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim();
-  const section3Print = [
-    "3.1 Công việc thực hiện trong ngày",
-    workToday,
-    "3.2 Nghiệm thu công việc xây dựng hàng ngày",
-    noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
-  ].join("\n");
+  const set = (k: keyof ConstructionDiary) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD((cur) => ({ ...cur, [k]: e.target.value }));
 
   async function autofill() {
     setBusy(true);
@@ -281,6 +256,15 @@ export default function ConstructionDiaryForm() {
     scrollToForm();
   }
 
+  /** Ghép các nhật ký đã lưu của dự án trong khoảng ngày thành một bản in (số trang đánh liên tục từ 1). */
+  function printRange() {
+    const rows = saved.filter((r) => r.projectId === projectId && r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date));
+    if (!rows.length) { setStatus("Không có nhật ký đã lưu nào của dự án này trong khoảng ngày đã chọn."); return; }
+    setStatus(`Ghép ${rows.length} nhật ký đã lưu (các ngày chưa lập nhật ký được bỏ qua).`);
+    setRangeRows(rows);
+    setPreviewOpen(true);
+  }
+
   /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
   function printSaved(row: DiarySummary) {
     setProjectId(row.projectId);
@@ -320,6 +304,11 @@ export default function ConstructionDiaryForm() {
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={autofill} title="Điền lại thiết bị (2.2) và công việc (mục 3) theo ngày đang chọn; không đổi thời tiết, nhân lực" className="h-10 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Tự điền lại</button>
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={save} className="h-10 min-w-20 cursor-pointer rounded-lg bg-[#0047AB] px-5 font-semibold text-white transition-colors hover:bg-[#00388A] disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Đang xử lý…" : "Lưu"}</button>
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={() => setPreviewOpen(true)} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
+          </div>
+          <div className="flex basis-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+            <label className={lbl}>In từ ngày<input className={inp} type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
+            <label className={lbl}>đến ngày<input className={inp} type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+            <button type="button" disabled={busy || !projectId || !range.from || !range.to} onClick={printRange} title="Ghép các nhật ký đã lưu trong khoảng ngày thành một bản in / một file PDF" className="h-10 cursor-pointer rounded-lg border border-[#0047AB]/40 bg-[#0047AB]/5 px-4 font-semibold text-[#0047AB] transition-colors hover:bg-[#0047AB]/10 disabled:cursor-not-allowed disabled:opacity-50">In nhiều ngày (ghép PDF)</button>
           </div>
           {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}
           <p className="basis-full text-xs text-slate-500">Bản in theo biểu mẫu dự án phần B (NKTC). Khi in PDF, tắt “Headers and footers” / “Đầu trang và chân trang” trong hộp thoại in nếu trình duyệt vẫn hiện ngày giờ hoặc tên hệ thống.</p>
@@ -465,16 +454,68 @@ export default function ConstructionDiaryForm() {
       {previewOpen && (
         <div className="no-print fixed left-0 right-0 top-0 z-[1500] flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-white px-4 py-3 shadow">
           <div>
-            <p className="text-sm font-bold text-slate-900">Xem trước bản in — Nhật ký thi công ngày {date.split("-").reverse().join("/")}</p>
+            <p className="text-sm font-bold text-slate-900">{rangeRows
+              ? `Xem trước bản in — ${rangeRows.length} nhật ký, từ ${rangeRows[0].date.split("-").reverse().join("/")} đến ${rangeRows[rangeRows.length - 1].date.split("-").reverse().join("/")}`
+              : `Xem trước bản in — Nhật ký thi công ngày ${date.split("-").reverse().join("/")}`}</p>
             <p className="text-xs text-slate-500">Gõ tên người ký ngay dưới tên các bên ở cuối nhật ký (được nhớ cho lần sau), kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
-            <button type="button" onClick={() => setPreviewOpen(false)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
+            <button type="button" onClick={closePreview} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
           </div>
         </div>
       )}
       <article id="diary-print" className={previewOpen ? "diary-preview" : undefined}>
+        {rangeRows
+          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={i * 2 + 1} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
+          : <DiaryPages d={d} date={date} pageStart={1} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
+      </article>
+      </>, document.body)}
+      {viewRow && (
+        <DiaryViewModal
+          row={viewRow}
+          projectName={projects.find((p) => p.id === viewRow.projectId)?.name ?? "—"}
+          signers={{ tvgs: viewRow.diary.kyTvgs ?? fallback.tvgs, ntc: viewRow.diary.kyNtc ?? fallback.ntc, ntp: viewRow.diary.kyNtp ?? fallback.ntp }}
+          onClose={() => setViewRow(null)}
+          onEdit={() => { const row = viewRow; setViewRow(null); openSaved(row); }}
+          onPrint={() => { const row = viewRow; setViewRow(null); printSaved(row); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Hai trang in của một nhật ký (dùng cho bản in một ngày và bản ghép nhiều ngày). */
+function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, onSignerBlur }: {
+  d: ConstructionDiary; date: string; pageStart: number; signers: { tvgs: string; ntc: string; ntp: string };
+  editable?: boolean; onSigner?: (key: "tvgs" | "ntc" | "ntp", value: string) => void; onSignerBlur?: () => void;
+}) {
+  const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null);
+  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang 2, đo theo chỗ còn trống
+  useLayoutEffect(() => {
+    const measure = () => {
+      const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight;
+      if (a == null || b == null) return;
+      const next: [number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE))];
+      setLines((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const el of [fill1.current, fill2.current]) if (el) ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const [y, m, day] = date.split("-");
+  const mark = weatherMark(d.thoiTiet);
+  const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
+  // Dòng «Báo RFI số …» của bản cũ không thuộc nhật ký thi công.
+  const workToday = d.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim();
+  const section3Print = [
+    "3.1 Công việc thực hiện trong ngày",
+    workToday,
+    "3.2 Nghiệm thu công việc xây dựng hàng ngày",
+    noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
+  ].join("\n");
+  return <>
         <section className="diary-sheet">
           <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
           <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "202…."}</p>
@@ -514,26 +555,13 @@ export default function ConstructionDiaryForm() {
           ))}
 
           <div className="diary-sig-row">
-            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký tư vấn giám sát" placeholder="Gõ tên người ký" value={signers.tvgs} onBlur={persistSigners} onChange={(e) => setSigner("tvgs", e.target.value)} /> : signers.tvgs}</div></div>
-            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onBlur={persistSigners} onChange={(e) => setSigner("ntc", e.target.value)} /> : signers.ntc}</div></div>
-            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{previewOpen ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onBlur={persistSigners} onChange={(e) => setSigner("ntp", e.target.value)} /> : signers.ntp}</div></div>
+            <div>TƯ VẤN GIÁM SÁT<div className="diary-sig-box" /><div className="diary-sig-name">{editable ? <input className="diary-sig-input" aria-label="Tên người ký tư vấn giám sát" placeholder="Gõ tên người ký" value={signers.tvgs} onBlur={onSignerBlur} onChange={(e) => onSigner?.("tvgs", e.target.value)} /> : signers.tvgs}</div></div>
+            <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{editable ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onBlur={onSignerBlur} onChange={(e) => onSigner?.("ntc", e.target.value)} /> : signers.ntc}</div></div>
+            <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{editable ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onBlur={onSignerBlur} onChange={(e) => onSigner?.("ntp", e.target.value)} /> : signers.ntp}</div></div>
           </div>
-          <p className="diary-foot">Trang {pageEnd}</p>
+          <p className="diary-foot">Trang {pageStart + 1}</p>
         </section>
-      </article>
-      </>, document.body)}
-      {viewRow && (
-        <DiaryViewModal
-          row={viewRow}
-          projectName={projects.find((p) => p.id === viewRow.projectId)?.name ?? "—"}
-          signers={{ tvgs: viewRow.diary.kyTvgs ?? fallback.tvgs, ntc: viewRow.diary.kyNtc ?? fallback.ntc, ntp: viewRow.diary.kyNtp ?? fallback.ntp }}
-          onClose={() => setViewRow(null)}
-          onEdit={() => { const row = viewRow; setViewRow(null); openSaved(row); }}
-          onPrint={() => { const row = viewRow; setViewRow(null); printSaved(row); }}
-        />
-      )}
-    </div>
-  );
+  </>;
 }
 
 function ViewBlock({ title, text }: { title: string; text: string }) {
