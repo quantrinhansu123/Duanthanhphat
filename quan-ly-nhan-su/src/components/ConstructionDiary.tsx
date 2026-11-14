@@ -95,32 +95,34 @@ export default function ConstructionDiaryForm() {
   /** In ghép nhiều ngày: khoảng ngày chọn + danh sách nhật ký đã lưu trong khoảng (null = đang in một ngày). */
   const [range, setRange] = useState({ from: "", to: "" });
   const [rangeRows, setRangeRows] = useState<DiarySummary[] | null>(null);
-  const closePreview = () => { setPreviewOpen(false); setRangeRows(null); };
+  /** Trang đầu của bản in: một ngày luôn từ trang 1; bản in ghép (tick / khoảng ngày) được hỏi trước khi in. */
+  const [printStart, setPrintStart] = useState(1);
+  /** Hộp thoại hỏi «trang đầu tiên từ trang mấy» trước khi mở bản in ghép. */
+  const [pageAsk, setPageAsk] = useState<{ rows: DiarySummary[] } | null>(null);
+  const [pageAskText, setPageAskText] = useState("1");
+  const closePreview = () => { setPreviewOpen(false); setRangeRows(null); setPrintStart(1); };
+  /** Mở hộp thoại hỏi trang đầu (nhớ số lần trước). */
+  function askStartPage(rows: DiarySummary[]) {
+    let last = "1";
+    try { last = window.localStorage.getItem("nhat-ky-thi-cong-trang-bat-dau") || "1"; } catch { /* bỏ qua */ }
+    setPageAskText(/^\d+$/.test(last) && Number(last) >= 1 ? last : "1");
+    setPageAsk({ rows });
+  }
+  function confirmStartPage() {
+    const n = Number(pageAskText);
+    if (!pageAsk || !Number.isInteger(n) || n < 1 || n > 9999) return;
+    try { window.localStorage.setItem("nhat-ky-thi-cong-trang-bat-dau", String(n)); } catch { /* bỏ qua */ }
+    setPrintStart(n);
+    setRangeRows(pageAsk.rows);
+    setPreviewOpen(true);
+    setPageAsk(null);
+  }
+  /** Lọc danh sách «Nhật ký đã lưu» theo khoảng ngày (trống = không giới hạn). */
+  const [listFilter, setListFilter] = useState({ from: "", to: "" });
   /** Các nhật ký đã lưu được tick trong danh sách để in ghép (khoá "dự án:ngày"). */
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  /** Trang bắt đầu: phần đầu nhật ký có vài trang thông tin nên số trang nhật ký tiếp nối (PQ nhập từ trang 6). Nhớ cho lần sau. */
-  const [startPage, setStartPage] = useState(1);
-  useEffect(() => {
-    try { const v = Number(window.localStorage.getItem("nhat-ky-thi-cong-trang-bat-dau")); if (Number.isInteger(v) && v >= 1) setStartPage(v); } catch { /* bỏ qua */ }
-  }, []);
-  /** Ngày của trang bắt đầu (vd 4/11 = trang 6): các ngày sau đánh số liên tiếp, mỗi nhật ký đã lưu 2 trang. Trống = cách cũ. */
-  const [startDate, setStartDate] = useState("");
-  useEffect(() => {
-    try { setStartDate(window.localStorage.getItem("nhat-ky-thi-cong-ngay-bat-dau") ?? ""); } catch { /* bỏ qua */ }
-  }, []);
-  const changeStartDate = (v: string) => {
-    setStartDate(v);
-    try { window.localStorage.setItem("nhat-ky-thi-cong-ngay-bat-dau", v); } catch { /* bỏ qua */ }
-  };
-  const pageOf = (pid: string, dt: string, fallbackIndex = 0) =>
-    startDate && dt >= startDate
-      ? startPage + 2 * saved.filter((r) => r.projectId === pid && r.date >= startDate && r.date < dt).length
-      : startPage + fallbackIndex * 2;
-  const changeStartPage = (value: number) => {
-    const v = Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 9999) : 1;
-    setStartPage(v);
-    try { window.localStorage.setItem("nhat-ky-thi-cong-trang-bat-dau", String(v)); } catch { /* bỏ qua */ }
-  };
+  /** Đánh số trang tự động từ trang 1: mỗi nhật ký 2 trang, bản in nhiều ngày nối tiếp theo thứ tự. */
+  const pageOf = (_pid: string, _dt: string, index = 0) => printStart + index * 2;
   useEffect(() => {
     if (!previewOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closePreview(); };
@@ -135,6 +137,7 @@ export default function ConstructionDiaryForm() {
   }, [viewRow]);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState<DiarySummary[]>([]);
+  const visibleSaved = saved.filter((r) => (!listFilter.from || r.date >= listFilter.from) && (!listFilter.to || r.date <= listFilter.to));
   const reloadSaved = () => { void listDiaries().then((r) => setSaved(r.rows)); };
   useEffect(reloadSaved, []);
   useEffect(() => {
@@ -286,16 +289,14 @@ export default function ConstructionDiaryForm() {
     const rows = saved.filter((r) => r.projectId === projectId && r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) { setStatus("Không có nhật ký đã lưu nào của dự án này trong khoảng ngày đã chọn."); return; }
     setStatus(`Ghép ${rows.length} nhật ký đã lưu (các ngày chưa lập nhật ký được bỏ qua).`);
-    setRangeRows(rows);
-    setPreviewOpen(true);
+    askStartPage(rows);
   }
 
   /** In ghép các nhật ký đã tick (theo thứ tự ngày). */
   function printPicked() {
     const rows = saved.filter((r) => picked.has(`${r.projectId}:${r.date}`)).sort((a, b) => a.date.localeCompare(b.date));
     if (!rows.length) { setStatus("Chưa tick nhật ký nào trong danh sách."); return; }
-    setRangeRows(rows);
-    setPreviewOpen(true);
+    askStartPage(rows);
   }
 
   /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
@@ -408,19 +409,22 @@ export default function ConstructionDiaryForm() {
 
         <section className="pt-5">
           <div className="mb-2 flex flex-wrap items-center gap-3">
-            <h2 className="text-sm font-bold text-slate-800">Nhật ký đã lưu <span className="font-mono text-xs font-semibold text-slate-500">{saved.length}</span></h2>
+            <h2 className="text-sm font-bold text-slate-800">Nhật ký đã lưu <span className="font-mono text-xs font-semibold text-slate-500">{visibleSaved.length === saved.length ? saved.length : `${visibleSaved.length}/${saved.length}`}</span></h2>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">Từ ngày<input type="date" value={listFilter.from} max={listFilter.to || undefined} onChange={(e) => setListFilter((c) => ({ ...c, from: e.target.value }))} className="h-8 rounded-md border border-slate-300 px-2 text-xs font-normal" /></label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">đến ngày<input type="date" value={listFilter.to} min={listFilter.from || undefined} onChange={(e) => setListFilter((c) => ({ ...c, to: e.target.value }))} className="h-8 rounded-md border border-slate-300 px-2 text-xs font-normal" /></label>
+            {(listFilter.from || listFilter.to) && <button type="button" onClick={() => setListFilter({ from: "", to: "" })} className="h-8 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Bỏ lọc</button>}
             <button type="button" disabled={busy || picked.size === 0} onClick={printPicked} title="Ghép các nhật ký đã tick thành một bản in / một file PDF" className="h-8 cursor-pointer rounded-md border border-[#0047AB]/40 bg-[#0047AB]/5 px-3 text-xs font-semibold text-[#0047AB] hover:bg-[#0047AB]/10 disabled:cursor-not-allowed disabled:opacity-50">In các nhật ký đã chọn{picked.size ? ` (${picked.size})` : ""}</button>
           </div>
-          {saved.length === 0 ? (
-            <p className="rounded-lg border border-slate-200 px-4 py-6 text-center text-xs text-slate-500">Chưa có nhật ký nào được lưu.</p>
+          {visibleSaved.length === 0 ? (
+            <p className="rounded-lg border border-slate-200 px-4 py-6 text-center text-xs text-slate-500">{saved.length === 0 ? "Chưa có nhật ký nào được lưu." : "Không có nhật ký nào trong khoảng ngày đã chọn."}</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full min-w-[40rem] text-left text-xs">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                  <tr><th className="w-8 px-3 py-2"><input type="checkbox" aria-label="Chọn tất cả" checked={saved.length > 0 && saved.every((x) => picked.has(`${x.projectId}:${x.date}`))} onChange={(e) => setPicked(e.target.checked ? new Set(saved.map((x) => `${x.projectId}:${x.date}`)) : new Set())} /></th><th className="px-3 py-2">Ngày</th><th className="px-3 py-2">Dự án</th><th className="px-3 py-2 text-right">BCH</th><th className="px-3 py-2 text-right">KT</th><th className="px-3 py-2 text-right">CN</th><th className="px-3 py-2">Công việc</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+                  <tr><th className="w-8 px-3 py-2"><input type="checkbox" aria-label="Chọn tất cả" checked={visibleSaved.length > 0 && visibleSaved.every((x) => picked.has(`${x.projectId}:${x.date}`))} onChange={(e) => setPicked((cur) => { const next = new Set(cur); for (const x of visibleSaved) { const k = `${x.projectId}:${x.date}`; if (e.target.checked) next.add(k); else next.delete(k); } return next; })} /></th><th className="px-3 py-2">Ngày</th><th className="px-3 py-2">Dự án</th><th className="px-3 py-2 text-right">BCH</th><th className="px-3 py-2 text-right">KT</th><th className="px-3 py-2 text-right">CN</th><th className="px-3 py-2">Công việc</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {saved.map((row) => {
+                  {visibleSaved.map((row) => {
                     const active = row.projectId === projectId && row.date === date;
                     return (
                       <tr key={`${row.projectId}:${row.date}`} className={active ? "bg-blue-50/60" : "hover:bg-slate-50"}>
@@ -497,12 +501,6 @@ export default function ConstructionDiaryForm() {
             <p className="text-xs text-slate-500">Gõ tên người ký ngay dưới tên các bên ở cuối nhật ký (được nhớ cho lần sau), kiểm tra nội dung rồi bấm In / Lưu PDF. Khi in PDF, tắt “Headers and footers” (Đầu trang và chân trang) trong hộp thoại in.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700" title="Số trang của nhật ký đầu tiên (các trang thông tin đầu nhật ký đã chiếm số trang trước đó)">
-              Trang
-              <input type="number" min={1} max={9999} value={startPage} onChange={(e) => changeStartPage(Number(e.target.value))} className="h-10 w-20 rounded-lg border border-slate-300 px-2 text-center" />
-              cho ngày
-              <input type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2" />
-            </label>
             <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
             <button type="button" onClick={closePreview} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
           </div>
@@ -514,6 +512,26 @@ export default function ConstructionDiaryForm() {
           : <DiaryPages d={d} date={date} pageStart={pageOf(projectId, date)} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
       </article>
       </>, document.body)}
+      {pageAsk && createPortal(
+        <div className="no-print fixed inset-0 z-[1700] flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-label="Trang đầu tiên của bản in"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setPageAsk(null); }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-lg font-extrabold text-slate-900">In {pageAsk.rows.length} nhật ký</h2>
+            <p className="mt-1 text-sm text-slate-600">Trang đầu tiên của bản in bắt đầu từ trang số mấy? Mỗi nhật ký chiếm 2 trang, các ngày sau đánh số nối tiếp.</p>
+            <label className="mt-4 block text-sm font-semibold text-slate-700">Trang đầu tiên
+              <input autoFocus inputMode="numeric" value={pageAskText} placeholder="1"
+                onChange={(e) => setPageAskText(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                onFocus={(e) => e.currentTarget.select()}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmStartPage(); if (e.key === "Escape") setPageAsk(null); }}
+                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-center text-lg font-bold" />
+            </label>
+            {!(Number(pageAskText) >= 1) && <p className="mt-1 text-xs text-amber-700">Nhập số trang từ 1 trở lên.</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setPageAsk(null)} className="h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Huỷ</button>
+              <button type="button" disabled={!(Number(pageAskText) >= 1)} onClick={confirmStartPage} className="h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-bold text-white hover:bg-[#00388A] disabled:opacity-50">Xem trước bản in</button>
+            </div>
+          </div>
+        </div>, document.body)}
       {viewRow && (
         <DiaryViewModal
           row={viewRow}

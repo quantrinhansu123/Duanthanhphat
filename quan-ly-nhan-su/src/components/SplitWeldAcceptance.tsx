@@ -6,6 +6,7 @@ import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments,
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
+import { useActorNames } from "@/lib/useActorNames";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { filterRfiCandidates, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
@@ -84,6 +85,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [picked, setPicked] = useState<string[]>([]);
   const [bulkReason, setBulkReason] = useState("");
   const [ticketQuery, setTicketQuery] = useState("");
+  const actorName = useActorNames();
   const [pendingDlg, setPendingDlg] = useState<Ticket | null>(null);
   const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong" | "pending">("");
   // 3 mục con như RFI chính: Phát phiếu YCNT · Nghiệm thu · Hồ sơ nghiệm thu.
@@ -188,7 +190,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     const q = ticketQuery.trim().toLowerCase();
     return (list?.tickets ?? [])
       .filter((t) => (ticketStatus === "pending" ? Boolean(rfiPendingInfo(t.thong_tin)) : (ticketStatus === "" || (ticketStatus === "xong") === Boolean(t.ngay_nghiem_thu)))
-        && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), t.nguoi_lap, t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
+        && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), actorName(t.nguoi_lap), t.nguoi_lap, actorName(t.nguoi_nghiem_thu), t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
       .sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   }, [list, ticketQuery, ticketStatus]);
   const shownStep = editingId && step === "chon" ? "thong-tin" : step;
@@ -257,18 +259,22 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="px-3 py-2 font-bold">{t.so_phieu}</td>
               {kind === "hinh-hoc" && <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>}
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
-              <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
+              <td className="px-3 py-2">{actorName(t.nguoi_lap) || "—"}</td>
               <td className="px-3 py-2">
                 {pend && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800" title={pend.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span>}
-                {signedScan && <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan</a>}
                 <span hidden={Boolean(pend)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                {!done ? <span className="text-xs text-slate-400">—</span>
+                  : signedScan
+                    ? <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan, lưu</a>
+                    : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800" title="Chưa có bản scan biên bản đã ký — cần scan và tải lên">Chờ hồ sơ lưu</span>}
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 {t.payment_rates?.some(rate => rate > 0)
                   ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{t.payment_rates.filter(rate => rate > 0).map(rate => `${rate}%`).join(" / ")}</span>
                   : <span className="text-xs text-slate-400">{done ? "Chưa thanh toán" : "—"}</span>}
               </td>
-              <td className="max-w-[16rem] px-3 py-2 text-xs text-slate-700" title={t.payment_notes?.join(" · ")}>{t.payment_notes?.length ? <span className="line-clamp-2">{t.payment_notes.join(" · ")}</span> : "—"}</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">
                 <span className="inline-flex items-center gap-1">
                   <button type="button" disabled={busy} className={button} onClick={primaryAction.onClick}>{primaryAction.label}</button>

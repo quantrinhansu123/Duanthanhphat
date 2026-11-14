@@ -6,6 +6,7 @@ import type { RfiSummary } from "@/lib/weldQualityClient";
 import type { RfiCandidate } from "@/lib/weldAcceptance";
 import { weldRoute } from "@/lib/rfiTracking";
 import PrintFrame from "@/components/PrintFrame";
+import { useActorNames } from "@/lib/useActorNames";
 
 const css = `@media print {
   body * { visibility: hidden !important; }
@@ -51,6 +52,7 @@ export default function RfiIssuedListDocument({
   unassigned?: RfiCandidate[];
   onClose: () => void;
 }) {
+  const actorName = useActorNames();
   const [showDetails, setShowDetails] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -119,7 +121,7 @@ export default function RfiIssuedListDocument({
                   {!!r.tracking?.thieu_ly_trinh && <p className="font-semibold text-amber-800">Thiếu KM: {r.tracking.thieu_ly_trinh} mối</p>}
                 </td>
                 <td className="border border-slate-400 px-2 py-1.5">{r.trang_thai}</td>
-                <td className="border border-slate-400 px-2 py-1.5">{r.nguoi_lap || "—"}</td>
+                <td className="border border-slate-400 px-2 py-1.5">{actorName(r.nguoi_lap) || "—"}</td>
               </tr>
             ))}
             {!rfis.length && (
