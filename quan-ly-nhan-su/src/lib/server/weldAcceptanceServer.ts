@@ -762,11 +762,16 @@ export async function completeRfiGeometry(body: Record<string, unknown>, actor: 
 }
 
 /** Bộ biên bản của phiếu tách (hình học / siêu âm). Phiếu chưa nghiệm thu → mẫu trống kết quả để in mang ra hiện trường. */
-export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}) {
+/**
+ * Bộ biên bản của phiếu tách (hình học / siêu âm). `draft` = bản NHÁP của phiếu chưa nghiệm thu: tạm ghi Đạt cho mọi mối,
+ * ngày nghiệm thu tạm lấy theo ngày mời — chỉ để in cho các bên ký; không chốt nghiệm thu nên Nhật ký thi công chưa ghi gì.
+ */
+export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}, draft = false) {
   const { data: ticket, error } = await db().from("phieu_nt_tach").select("*").eq("id", ticketId).single();
   const ultrasound = ticket?.loai === "sieu-am";
   if (error) throw error;
   const pending = !ticket.ngay_nghiem_thu;
+  const isDraft = draft && pending;
   const [rfiRes, projectRes, rows] = await Promise.all([
     ticket.phieu_rfi_id ? db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", ticket.phieu_rfi_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     db().from("du_an").select("*").eq("id", ticket.du_an_id).maybeSingle(),
@@ -808,13 +813,13 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
     const mh: Record<string, unknown> = { ma_lich_su: r.ma_lich_su, ...(weldInfo.get(r.moi_han_id) ?? {}), ...(reportInfo.get(r.moi_han_id) ?? {}), ...((d.moi_han as Record<string, unknown>) ?? {}) };
     if (!mh.ma_diem && pt?.ma_diem) mh.ma_diem = pt.ma_diem;
     if (!mh.ly_trinh && pt?.ly_trinh) mh.ly_trinh = pt.ly_trinh;
-    return { moi_han_id: r.moi_han_id, ket_qua: pending ? "" : r.ket_qua ?? "Đạt", ly_do: r.ly_do,
-      du_lieu_chot: { moi_han: mh, kiem_tra: pending ? {} : (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
+    return { moi_han_id: r.moi_han_id, ket_qua: isDraft ? "Đạt" : pending ? "" : r.ket_qua ?? "Đạt", ly_do: r.ly_do,
+      du_lieu_chot: { moi_han: mh, kiem_tra: isDraft ? (ultrasound ? { ket_qua_ndt: "Đạt" } : { truc_quan: "Đạt" }) : pending ? {} : (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
   });
   const docs = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   return {
-    dot: { id: ticket.id, ngay_nghiem_thu: ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
-      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasoundNos },
+    dot: { id: ticket.id, ngay_nghiem_thu: isDraft ? String(ticket.ngay_moi ?? "").slice(0, 10) : ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
+      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasoundNos, ...(isDraft ? { ban_nhap: "1" } : {}) },
       phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
     ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: ticket.da_ky ? "Đã ký" : "Chờ ký", du_lieu_chot: null })),
     moi,

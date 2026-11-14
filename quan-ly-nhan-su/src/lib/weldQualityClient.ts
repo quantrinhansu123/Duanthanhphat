@@ -201,12 +201,13 @@ export const loadSplitRecords = (du_an_id: string, loai: "hinh-hoc" | "sieu-am" 
 export async function signSplitRecord(id: string, da_ky: boolean) {
   try { return await qualityRequest<{ ok: boolean }>({ action: "split-record-sign", id, da_ky }); } finally { notifyWeldQualityChanged(); }
 }
-export const loadGeometryRecord = (id: string) => qualityRequest<RecordSet>({ action: "geometry-record", id });
+/** `nhap` = bản NHÁP của phiếu chưa nghiệm thu (tạm ghi Đạt, chưa chốt nghiệm thu, chưa vào Nhật ký thi công). */
+export const loadGeometryRecord = (id: string, nhap = false) => qualityRequest<RecordSet>({ action: "geometry-record", id, ...(nhap ? { nhap: true } : {}) });
 export const loadRecords = (du_an_id: string) => qualityRequest<{ records: RecordSummary[] }>({ action: "record-list", du_an_id });
 export const loadRecordSet = (id: string) => qualityRequest<RecordSet>({ action: "record-set", id });
 /** Tải lại bộ biên bản sau khi sửa: phiếu tách (id hồ sơ ảo `<uuid>-<n>`) đọc qua geometry-record. */
 export const reloadRecordSet = (record: RecordSet) =>
-  /^.{36}-\d$/.test(record.ho_so[0]?.id ?? "") ? loadGeometryRecord(String(record.dot.id)) : loadRecordSet(String(record.dot.id));
+  /^.{36}-\d$/.test(record.ho_so[0]?.id ?? "") ? loadGeometryRecord(String(record.dot.id), (record.dot.thong_tin as Record<string, unknown> | undefined)?.ban_nhap === "1") : loadRecordSet(String(record.dot.id));
 export const setRecordSign = (id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") => qualityRequest<{ ok: true }>({ action: "record-sign", id, tinh_trang_ky });
 /** Ký / bỏ ký đồng bộ cả bộ 3 biên bản của một đợt. */
 export async function setRecordSetSign(dot_id: string, tinh_trang_ky: "Chờ ký" | "Đã ký") {

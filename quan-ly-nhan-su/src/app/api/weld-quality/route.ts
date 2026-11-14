@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     if (body.action === "rfi-pending") return NextResponse.json(await setRfiPending(body, actor));
     if (body.action === "accept-complete") return NextResponse.json(await completeRfi(body, actor));
     if (body.action === "accept-complete-geometry") return NextResponse.json(await completeRfiGeometry(body, actor));
-    if (body.action === "geometry-record") return NextResponse.json(await loadGeometryRecord(qualityUuid(body.id)));
+    if (body.action === "geometry-record") return NextResponse.json(await loadGeometryRecord(qualityUuid(body.id), {}, body.nhap === true));
     if (body.action === "accepted-on-date") return NextResponse.json(await acceptedOnDate(body));
     if (body.action === "record-list") return NextResponse.json({ records: await listRecords(qualityUuid(body.du_an_id)) });
     if (body.action === "split-record-list") return NextResponse.json({ records: await listSplitRecords(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am") });

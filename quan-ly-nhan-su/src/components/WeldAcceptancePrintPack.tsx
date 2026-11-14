@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { reloadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss } from "@/components/WeldAcceptanceRecordPages";
-import { SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
+import { SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import ComboInput from "@/components/ComboInput";
@@ -73,7 +73,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
       // Địa điểm cũ nhập «Lý trình …» đã có ở mục Vị trí nên không nạp lại vào ô này.
       if (saved && !(k === "dia_diem" && /^s*lý trình/i.test(String(saved)))) return [k, String(saved)];
       if (k === "ngay_nghiem_thu") return [k, String(record.dot.ngay_nghiem_thu ?? "").slice(0, 10)];
-      return [k, String(defaults[k] ?? "")];
+      return [k, String(defaults[k] || DEFAULT_SIGNERS[k] || "")];
     })));
     setError("");
     setEditing(true);
@@ -82,12 +82,13 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   async function save() {
     setBusy(true); setError("");
     try {
-      saveSignerDefaults(form);
+      saveSignerDefaults(formView);
       for (const hoSo of record.ho_so) {
         const current = (latestOf(hoSo.id)?.thong_tin ?? {}) as Record<string, string>;
-        await reviseRecord(hoSo.id, { ...current, ...form }, "Sửa thông tin in cả bộ hồ sơ");
+        await reviseRecord(hoSo.id, { ...current, ...formView }, "Sửa thông tin in cả bộ hồ sơ");
       }
       setRecord(await reloadRecordSet(record));
+      setDraft({});
       setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
   }
@@ -105,10 +106,12 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
   }
 
-  const set = (key: string, value: string) => setForm((cur) => ({ ...cur, [key]: value }));
+  // Giá trị đang hiển thị trong form = bản chụp lúc mở form, bị đè bởi mọi chỉnh sửa chưa lưu (cả ở form lẫn gõ trực tiếp trên mẫu).
+  const formView: Record<string, string> = { ...form, ...draft };
+  const set = (key: string, value: string) => setDraft((cur) => ({ ...cur, [key]: value }));
   const text = (key: string, text: string, placeholder = "", listId?: string) => (
     <label className={label}>{text}
-      <input className={input} list={listId} placeholder={placeholder} value={form[key] ?? ""} onChange={(e) => set(key, e.target.value)} />
+      <input className={input} list={listId} placeholder={placeholder} value={formView[key] ?? ""} onChange={(e) => set(key, e.target.value)} />
     </label>
   );
 
@@ -144,32 +147,32 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <label className={label}>Ngày nghiệm thu
-            <input type="date" className={input} value={form.ngay_nghiem_thu ?? ""} onChange={(e) => set("ngay_nghiem_thu", e.target.value)} />
+            <input type="date" className={input} value={formView.ngay_nghiem_thu ?? ""} onChange={(e) => set("ngay_nghiem_thu", e.target.value)} />
           </label>
           <label className={label}>Ca hàn
-            <select className={input} value={form.ca_han ?? ""} onChange={(e) => set("ca_han", e.target.value)}>
+            <select className={input} value={formView.ca_han ?? ""} onChange={(e) => set("ca_han", e.target.value)}>
               <option value="">Tự động theo nhật ký</option><option value="ngay">Ngày</option><option value="dem">Đêm</option><option value="ngay-dem">Ngày và đêm</option>
             </select>
           </label>
           <label className={label}>Biện pháp hàn
-            <select className={input} value={form.bien_phap ?? ""} onChange={(e) => set("bien_phap", e.target.value)}>
+            <select className={input} value={formView.bien_phap ?? ""} onChange={(e) => set("bien_phap", e.target.value)}>
               <option value="">Tự động theo máy</option><option value="co-dinh">Hàn cố định</option><option value="di-dong">Hàn di động</option>
             </select>
           </label>
           <label className={label}>Tuyến
-            <select className={input} value={form.tuyen ?? ""} onChange={(e) => set("tuyen", e.target.value)}>
+            <select className={input} value={formView.tuyen ?? ""} onChange={(e) => set("tuyen", e.target.value)}>
               <option value="">Tự động theo mã mối hàn</option><option value="thuong">Tuyến thượng</option><option value="ha">Tuyến hạ</option><option value="ca-hai">Tuyến thượng và tuyến hạ</option>
             </select>
           </label>
           {text("goong", "Goòng phẳng", "KPS25-L8")}
           {text("so_bb", "Số biên bản", "FBW/01/BBNTCV")}
           <label className={label}>Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
-            <ComboInput className={input} value={form.ten_tho_han ?? ""} options={people.map((p) => ({ value: p.name, hint: p.code }))}
-              onChange={(name, match) => setForm((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
+            <ComboInput className={input} value={formView.ten_tho_han ?? ""} options={people.map((p) => ({ value: p.name, hint: p.code }))}
+              onChange={(name, match) => setDraft((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
           </label>
           {text("id_tho_han", "ID thợ hàn")}
           <label className={label}>Máy hàn (chọn hoặc nhập)
-            <ComboInput className={input} value={form.may_han ?? ""} options={machines.map((m) => ({ value: m }))} onChange={(v) => set("may_han", v)} />
+            <ComboInput className={input} value={formView.may_han ?? ""} options={machines.map((m) => ({ value: m }))} onChange={(v) => set("may_han", v)} />
           </label>
           {text("kmFrom", "Vị trí: Km đầu", "3+862.74")}
           {text("kmTo", "Vị trí: Km cuối", "4+087.42")}
@@ -179,18 +182,21 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           {SIGNER_PARTIES.map(([party, name]) => (
             <div key={party} className="space-y-1 rounded-lg border border-slate-200 p-2">
               <p className="text-xs font-semibold text-slate-600">{name}</p>
-              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" value={form[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
-              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" value={form[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
-              <input aria-label={`${name}: ngày`} type="date" className={input} value={form[`ngay_ky_${party}`] ?? ""} onChange={(e) => set(`ngay_ky_${party}`, e.target.value)} />
+              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" value={formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
+              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
+              <input aria-label={`${name}: ngày`} type="date" className={input} value={formView[`ngay_ky_${party}`] ?? ""} onChange={(e) => set(`ngay_ky_${party}`, e.target.value)} />
             </div>
           ))}
         </div>
         {error && <p role="alert" className="text-red-600">{error}</p>}
         <div className="flex gap-2">
           <button type="button" disabled={busy} onClick={() => void save()} className="min-h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer">{busy ? "Đang lưu…" : "Lưu"}</button>
-          <button type="button" disabled={busy} onClick={() => setEditing(false)} className="min-h-10 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold cursor-pointer">Hủy</button>
+          <button type="button" disabled={busy} onClick={() => { setDraft({}); setEditing(false); }} className="min-h-10 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold cursor-pointer">Hủy</button>
         </div>
       </div>
+    )}
+    {(record.dot.thong_tin as Record<string, unknown> | undefined)?.ban_nhap === "1" && (
+      <p role="status" className="weld-print-pack-actions mx-auto mb-2 max-w-4xl rounded-lg bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">BẢN NHÁP: kết quả đang tạm ghi Đạt, chưa chốt nghiệm thu nên Nhật ký thi công chưa ghi. In để các bên ký; đến đúng ngày nghiệm thu mới bấm «Nghiệm thu» trong hệ thống.</p>
     )}
     <p className="weld-print-pack-actions mx-auto mb-2 max-w-4xl text-xs text-white/90">Bấm trực tiếp vào các ô trống / ô có viền xanh trên mẫu để điền hoặc sửa, rồi bấm «Lưu chỉnh sửa».</p>
     <WeldAcceptanceRecordPages record={record} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />

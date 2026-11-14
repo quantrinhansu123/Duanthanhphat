@@ -236,7 +236,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setOkMsg(t.da_ky ? `Đã đặt lại phiếu ${t.so_phieu} về Chờ ký.` : `Đã đánh dấu phiếu ${t.so_phieu} đã ký.`);
     await refresh();
   }
-  const printRecord = (t: Ticket) => run(async () => { if (onPrintRecord) onPrintRecord(await loadGeometryRecord(t.id)); });
+  const printRecord = (t: Ticket, draft = false) => run(async () => { if (onPrintRecord) onPrintRecord(await loadGeometryRecord(t.id, draft)); });
 
   function renderTicketTable(rows: Ticket[], mode: "rfi" | "accept" | "records") {
     if (!rows.length) return null;
@@ -283,6 +283,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     { label: done ? "Xem chi tiết" : "Mở / nghiệm thu", disabled: busy, onSelect: () => void run(() => openTicket(t.id)) },
                     { label: "In phiếu YCNT", disabled: busy, onSelect: () => void run(async () => { await openTicket(t.id); setDoc("invite"); }) },
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
+                    // Chưa nghiệm thu: in bản NHÁP tạm ghi Đạt để các bên ký trước; bấm Nghiệm thu đúng ngày sau để Nhật ký thi công ghi đúng ngày.
+                    ...(onPrintRecord && !done ? [{ label: "In biên bản nháp (tạm ghi Đạt)", disabled: busy, onSelect: () => void printRecord(t, true) }] : []),
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
                     ...(done && t.da_ky ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
@@ -504,6 +506,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           })}>Mở hoặc tạo phiếu siêu âm</button>}
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
+        {onPrintRecord && !detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} title="In bản nháp tạm ghi Đạt để các bên ký; chưa chốt nghiệm thu nên Nhật ký thi công chưa ghi" onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id, true)))}>In biên bản nháp (tạm Đạt)</button>}
         {detail.ticket.ngay_nghiem_thu && (() => {
           const saved = bbntScans(detail.ticket.thong_tin);
           return <>
