@@ -6,9 +6,10 @@ import RowActionsMenu from "@/components/RowActionsMenu";
 import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import GtusRfiDialog from "@/components/GtusRfiDialog";
 import PendingDialog from "@/components/PendingDialog";
+import { useBbntScan } from "@/components/useBbntScan";
 import GtusAcceptanceTab, { gtusTicketNo } from "@/components/GtusAcceptanceTab";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, bbntScanInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -300,6 +301,7 @@ function RfiPanel({
     setUnassigned(candidates.rows);
     if (!keepSoPhieu) setSoPhieu(so_phieu);
   }, [projectId]);
+  const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(true); }, onError: setError });
 
   async function toggleChildSigning(rfi: RfiSummary) {
     setBusy(true); setError("");
@@ -761,6 +763,7 @@ function RfiPanel({
         Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
       </p>}
       <div className="overflow-auto rounded-lg border border-slate-200">
+        {scan.node}
         <label className="flex items-center gap-2 p-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />Chỉ hiện phiếu Pending ({rfis.filter((r) => rfiPendingInfo(r.thong_tin)).length})</label>
         <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
@@ -788,7 +791,7 @@ function RfiPanel({
                 <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
                 <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
                 <td className="p-2">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
-                <td className="p-2">{rfiPendingInfo(r.thong_tin) ? <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-800" title={rfiPendingInfo(r.thong_tin)?.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span> : (r.child_signing?.status ?? r.trang_thai)}</td>
+                <td className="p-2">{rfiPendingInfo(r.thong_tin) ? <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-800" title={rfiPendingInfo(r.thong_tin)?.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span> : (r.child_signing?.status ?? r.trang_thai)}{(() => { const sc = bbntScanInfo(r.thong_tin); return sc ? <a href={sc.url} target="_blank" rel="noopener" title={"Biên bản đã ký: " + (sc.ten ?? "")} className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 hover:underline">📎 Đã scan</a> : null; })()}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <RowActionsMenu
                     label={`Thao tác phiếu ${r.so_phieu}`}
@@ -811,6 +814,7 @@ function RfiPanel({
                           onSelect: () => { setError(""); setOkMsg(""); setPayment({ rfi: r, ids: paidIds, rate: "", note: "" }); },
                         };
                       })(),
+                      ...scan.actions({ id: r.id, kind: "rfi", so_phieu: r.so_phieu, thong_tin: r.thong_tin }, busy),
                       { label: rfiPendingInfo(r.thong_tin) ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => void togglePending(r) },
                       { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
                     ]}

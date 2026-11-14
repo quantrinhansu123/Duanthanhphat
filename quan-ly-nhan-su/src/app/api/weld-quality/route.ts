@@ -3,7 +3,7 @@ import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQuali
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
-import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     if (body.action === "rfi-update") return NextResponse.json(await updateRfi(body));
     if (body.action === "rfi-print-save") return NextResponse.json(await saveRfiPrintInfo(body));
     if (body.action === "rfi-delete") return NextResponse.json(await deleteRfi(body));
+    if (body.action === "bbnt-scan") return NextResponse.json(await saveBbntScan(body, actor));
     if (body.action === "rfi-pending") return NextResponse.json(await setRfiPending(body, actor));
     if (body.action === "accept-complete") return NextResponse.json(await completeRfi(body, actor));
     if (body.action === "accept-complete-geometry") return NextResponse.json(await completeRfiGeometry(body, actor));

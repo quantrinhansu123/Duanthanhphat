@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScanInfo, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
+import { useBbntScan } from "@/components/useBbntScan";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { filterRfiCandidates, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
@@ -217,6 +218,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setOkMsg(pend ? `Đã phát lại phiếu ${t.so_phieu} (ngày mời ${input.ngay_moi}).` : `Phiếu ${t.so_phieu} chuyển sang Pending.`);
     await refresh();
   }
+  const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(); if (detail) await openTicket(detail.ticket.id); }, onError: setError });
   async function removeTicket(t: Ticket) {
     const message = t.ngay_nghiem_thu
       ? `Xoá phiếu ${t.so_phieu} ĐÃ NGHIỆM THU?\n\nKết quả nghiệm thu của phiếu bị xoá; các mối trở về trạng thái trước nghiệm thu (dữ liệu kiểm tra giữ nguyên). Không thể hoàn tác.`
@@ -237,6 +239,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   function renderTicketTable(rows: Ticket[], mode: "rfi" | "accept" | "records") {
     if (!rows.length) return null;
     return <div className="overflow-x-auto rounded-lg border border-slate-200">
+      {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
@@ -245,6 +248,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           {rows.map((t, i) => {
             const done = Boolean(t.ngay_nghiem_thu);
             const pend = rfiPendingInfo(t.thong_tin);
+            const signedScan = bbntScanInfo(t.thong_tin);
             const primaryAction = mode === "records"
               ? { label: "In biên bản", onClick: () => printRecord(t) }
               : { label: done ? "Xem" : "Nghiệm thu", onClick: () => run(() => openTicket(t.id)) };
@@ -256,6 +260,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
               <td className="px-3 py-2">
                 {pend && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800" title={pend.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span>}
+                {signedScan && <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan</a>}
                 <span hidden={Boolean(pend)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
               </td>
               <td className="whitespace-nowrap px-3 py-2">
@@ -273,6 +278,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
+                    ...(done ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
                     // Thanh toán tính theo các mối Đạt của phiếu → phiếu chưa nghiệm thu thì chưa dùng được (hiện mờ để biết có chức năng).
                     { label: done ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)", disabled: busy || !done, onSelect: () => {
@@ -490,6 +496,14 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           })}>Mở hoặc tạo phiếu siêu âm</button>}
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
+        {detail.ticket.ngay_nghiem_thu && (() => {
+          const saved = bbntScanInfo(detail.ticket.thong_tin);
+          return <>
+            {scan.node}
+            {saved && <button className={button} onClick={() => window.open(saved.url, "_blank", "noopener")} title={saved.ten}>Xem biên bản đã lưu</button>}
+            <button className={button} disabled={busy} onClick={() => scan.pick({ id: detail.ticket.id, kind: "tach", so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin })}>{saved ? "Thay biên bản đã ký" : "Tải lên biên bản đã ký"}</button>
+          </>;
+        })()}
       </div>
       <h3 className="text-lg font-extrabold text-slate-900">{detail.ticket.so_phieu} · Nghiệm thu {kindName(kind)}</h3>
       <form className="space-y-3" onSubmit={e => {

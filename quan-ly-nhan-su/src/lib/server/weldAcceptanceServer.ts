@@ -567,6 +567,25 @@ export async function setRfiPending(body: Record<string, unknown>, actor: string
   return { id, pending: action === "hoan" };
 }
 
+/** Gắn / gỡ bản scan biên bản đã ký (file PDF nằm trong kho Tài liệu) vào phiếu. Chỉ ghi vào thong_tin nên không cần migration. */
+export async function saveBbntScan(body: Record<string, unknown>, actor: string) {
+  const id = qualityUuid(body.id);
+  const table = body.kind === "tach" ? "phieu_nt_tach" : "phieu_yeu_cau_nghiem_thu";
+  const { data: row, error } = await db().from(table).select("id,thong_tin").eq("id", id).single();
+  if (error || !row) throw new QualityApiError("Không tìm thấy phiếu.", 404);
+  const info = { ...((row.thong_tin ?? {}) as Record<string, unknown>) };
+  if (body.scan === null) delete info.bbnt_scan;
+  else {
+    const scan = object(body.scan);
+    const url = str(scan.url, 500);
+    if (!url.startsWith("/api/documents/") && !url.startsWith("https://drive.google.com/")) throw new QualityApiError("Liên kết biên bản không hợp lệ.");
+    info.bbnt_scan = { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), ngay: new Date().toISOString(), nguoi: actor };
+  }
+  const { error: saveError } = await db().from(table).update({ thong_tin: info }).eq("id", id);
+  if (saveError) throw saveError;
+  return { id };
+}
+
 export async function deleteRfi(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const { error } = await db().rpc("xoa_phieu_rfi", { p_id: id });

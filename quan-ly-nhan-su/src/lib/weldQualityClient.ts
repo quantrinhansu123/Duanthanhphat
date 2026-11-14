@@ -148,6 +148,25 @@ export async function saveGtus(phieu_id: string, items: GtusSaveItem[]) {
 export async function setRfiPending(input: { id: string; kind: "rfi" | "tach"; hanh_dong: "hoan" | "phat-lai"; ly_do?: string; ngay_moi?: string }) {
   try { return await qualityRequest<{ id: string; pending: boolean }>({ action: "rfi-pending", ...input }); } finally { notifyWeldQualityChanged(); }
 }
+/** Bản scan biên bản đã ký gắn với phiếu (lưu trong thong_tin.bbnt_scan). */
+export const bbntScanInfo = (info?: Record<string, unknown> | null) => (info?.bbnt_scan ?? null) as { doc_id?: string; url: string; ten?: string; ngay?: string; nguoi?: string } | null;
+/** Tải PDF scan lên thư mục Google Drive của hệ thống (/api/weld-quality/scan) và gắn liên kết vào phiếu. */
+export async function uploadBbntScan(file: File, target: { id: string; kind: "rfi" | "tach"; so_phieu: string }) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("id", target.id);
+  form.append("kind", target.kind);
+  form.append("so_phieu", target.so_phieu);
+  try {
+    const response = await fetch("/api/weld-quality/scan", { method: "POST", body: form });
+    const data = await response.json().catch(() => ({})) as { id?: string; error?: string };
+    if (!response.ok) throw new Error(data.error || "Không tải được biên bản lên Google Drive.");
+    return data;
+  } finally { notifyWeldQualityChanged(); }
+}
+export async function removeBbntScan(target: { id: string; kind: "rfi" | "tach" }) {
+  try { return await qualityRequest<{ id: string }>({ action: "bbnt-scan", id: target.id, kind: target.kind, scan: null }); } finally { notifyWeldQualityChanged(); }
+}
 /** Thông tin pending lưu trong thong_tin của phiếu. */
 export const rfiPendingInfo = (info?: Record<string, unknown> | null) => (info?.pending ?? null) as { ngay?: string; ly_do?: string; nguoi?: string } | null;
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
