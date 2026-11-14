@@ -574,13 +574,22 @@ export async function saveBbntScan(body: Record<string, unknown>, actor: string)
   const { data: row, error } = await db().from(table).select("id,thong_tin").eq("id", id).single();
   if (error || !row) throw new QualityApiError("Không tìm thấy phiếu.", 404);
   const info = { ...((row.thong_tin ?? {}) as Record<string, unknown>) };
-  if (body.scan === null) delete info.bbnt_scan;
-  else {
+  type ScanEntry = Record<string, unknown>;
+  const list: ScanEntry[] = Array.isArray(info.bbnt_scans) ? [...(info.bbnt_scans as ScanEntry[])] : [];
+  if (info.bbnt_scan) { list.unshift(info.bbnt_scan as ScanEntry); delete info.bbnt_scan; } // bản cũ chỉ một file
+  let next = list;
+  if (body.scan === null) {
+    // Gỡ một file (theo mã tài liệu / đường dẫn) hoặc gỡ tất cả khi không chỉ rõ.
+    const key = str(body.go_doc, 300);
+    next = key ? list.filter((entry) => String(entry.doc_id || entry.url) !== key) : [];
+  } else {
     const scan = object(body.scan);
     const url = str(scan.url, 500);
     if (!url.startsWith("/api/documents/") && !url.startsWith("https://drive.google.com/")) throw new QualityApiError("Liên kết biên bản không hợp lệ.");
-    info.bbnt_scan = { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), appsheet_path: str(scan.appsheet_path, 300), appsheet_url: str(scan.appsheet_url, 600), ngay: new Date().toISOString(), nguoi: actor };
+    if (list.length >= 30) throw new QualityApiError("Mỗi phiếu lưu tối đa 30 file biên bản.");
+    next = [...list, { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), appsheet_path: str(scan.appsheet_path, 300), appsheet_url: str(scan.appsheet_url, 600), ngay: new Date().toISOString(), nguoi: actor }];
   }
+  if (next.length) info.bbnt_scans = next; else delete info.bbnt_scans;
   const { error: saveError } = await db().from(table).update({ thong_tin: info }).eq("id", id);
   if (saveError) throw saveError;
   return { id };

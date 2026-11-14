@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScanInfo, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
@@ -250,7 +250,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           {rows.map((t, i) => {
             const done = Boolean(t.ngay_nghiem_thu);
             const pend = rfiPendingInfo(t.thong_tin);
-            const signedScan = bbntScanInfo(t.thong_tin);
+            const signedScans = bbntScans(t.thong_tin);
+            const signedScan = signedScans[0];
             const primaryAction = mode === "records"
               ? { label: "In biên bản", onClick: () => printRecord(t) }
               : { label: done ? "Xem" : "Nghiệm thu", onClick: () => run(() => openTicket(t.id)) };
@@ -267,7 +268,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="whitespace-nowrap px-3 py-2">
                 {!done ? <span className="text-xs text-slate-400">—</span>
                   : signedScan
-                    ? <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan, lưu</a>
+                    ? <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan, lưu{signedScans.length > 1 ? ` (${signedScans.length} file)` : ""}</a>
                     : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800" title="Chưa có bản scan biên bản đã ký — cần scan và tải lên">Chờ hồ sơ lưu</span>}
               </td>
               <td className="whitespace-nowrap px-3 py-2">
@@ -284,7 +285,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
-                    ...(done ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
+                    ...(done && t.da_ky ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
                     // Thanh toán tính theo các mối Đạt của phiếu → phiếu chưa nghiệm thu thì chưa dùng được (hiện mờ để biết có chức năng).
                     { label: done ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)", disabled: busy || !done, onSelect: () => {
@@ -503,11 +504,11 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
         {detail.ticket.ngay_nghiem_thu && (() => {
-          const saved = bbntScanInfo(detail.ticket.thong_tin);
+          const saved = bbntScans(detail.ticket.thong_tin);
           return <>
             {scan.node}
-            {saved && <button className={button} onClick={() => window.open(saved.url, "_blank", "noopener")} title={saved.ten}>Xem biên bản đã lưu</button>}
-            <button className={button} disabled={busy} onClick={() => scan.pick({ id: detail.ticket.id, kind: "tach", so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin })}>{saved ? "Thay biên bản đã ký" : "Tải lên biên bản đã ký"}</button>
+            {saved.map((file, i) => <button key={file.url + i} className={button} onClick={() => window.open(file.url, "_blank", "noopener")} title={file.ten}>{saved.length > 1 ? `Xem biên bản ${i + 1}` : "Xem biên bản đã lưu"}</button>)}
+            {detail.ticket.da_ky && <button className={button} disabled={busy} onClick={() => scan.pick({ id: detail.ticket.id, kind: "tach", so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin })}>{saved.length ? "Tải thêm biên bản đã ký" : "Tải lên biên bản đã ký"}</button>}
           </>;
         })()}
       </div>

@@ -33,7 +33,8 @@ export async function POST(request: Request) {
     if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-") throw new QualityApiError("File không phải PDF hợp lệ.");
     if (!isDocumentStorageConfigured()) throw new QualityApiError("Chưa cấu hình Supabase để lưu bản xem biên bản.", 503);
 
-    const name = `BBNT đã ký ${soPhieu}.pdf`;
+    const originalName = String(form.get("ten_goc") ?? file.name).replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, " ").trim().slice(0, 80);
+    const name = originalName ? `BBNT đã ký ${soPhieu} - ${originalName}.pdf` : `BBNT đã ký ${soPhieu}.pdf`;
     let appSheetPath = "";
     let warning = "";
     if (isAppSheetConfigured()) {

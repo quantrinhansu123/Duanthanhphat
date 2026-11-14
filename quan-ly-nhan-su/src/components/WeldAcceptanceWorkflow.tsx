@@ -814,7 +814,7 @@ function RfiPanel({
                           onSelect: () => { setError(""); setOkMsg(""); setPayment({ rfi: r, ids: paidIds, rate: "", note: "" }); },
                         };
                       })(),
-                      ...scan.actions({ id: r.id, kind: "rfi", so_phieu: r.so_phieu, thong_tin: r.thong_tin }, busy),
+                      ...(r.child_signing?.allSigned || bbntScanInfo(r.thong_tin) ? scan.actions({ id: r.id, kind: "rfi", so_phieu: r.so_phieu, thong_tin: r.thong_tin }, busy) : []),
                       { label: rfiPendingInfo(r.thong_tin) ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => void togglePending(r) },
                       { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
                     ]}

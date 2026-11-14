@@ -149,7 +149,15 @@ export async function setRfiPending(input: { id: string; kind: "rfi" | "tach"; h
   try { return await qualityRequest<{ id: string; pending: boolean }>({ action: "rfi-pending", ...input }); } finally { notifyWeldQualityChanged(); }
 }
 /** Bản scan biên bản đã ký gắn với phiếu (lưu trong thong_tin.bbnt_scan). */
-export const bbntScanInfo = (info?: Record<string, unknown> | null) => (info?.bbnt_scan ?? null) as { doc_id?: string; url: string; ten?: string; appsheet_path?: string; appsheet_url?: string; ngay?: string; nguoi?: string } | null;
+export type BbntScan = { doc_id?: string; url: string; ten?: string; appsheet_path?: string; appsheet_url?: string; ngay?: string; nguoi?: string };
+/** Danh sách file scan của phiếu (đọc cả bản cũ chỉ một file ở thong_tin.bbnt_scan). */
+export const bbntScans = (info?: Record<string, unknown> | null): BbntScan[] => {
+  const list = Array.isArray(info?.bbnt_scans) ? (info.bbnt_scans as BbntScan[]) : [];
+  const legacy = info?.bbnt_scan as BbntScan | undefined;
+  return legacy && !list.some((x) => x.url === legacy.url) ? [legacy, ...list] : list;
+};
+/** File scan đầu tiên (nếu có) — dùng cho nhãn «Đã scan». */
+export const bbntScanInfo = (info?: Record<string, unknown> | null) => bbntScans(info)[0] ?? null;
 /** Tải PDF scan lên (/api/weld-quality/scan): đẩy vào bảng «Lưu trữ» của AppSheet + giữ bản xem trong hệ thống, gắn liên kết vào phiếu. */
 export async function uploadBbntScan(file: File, target: { id: string; kind: "rfi" | "tach"; so_phieu: string }) {
   const form = new FormData();
@@ -157,6 +165,7 @@ export async function uploadBbntScan(file: File, target: { id: string; kind: "rf
   form.append("id", target.id);
   form.append("kind", target.kind);
   form.append("so_phieu", target.so_phieu);
+  form.append("ten_goc", file.name);
   try {
     const response = await fetch("/api/weld-quality/scan", { method: "POST", body: form });
     const data = await response.json().catch(() => ({})) as { id?: string; appsheet?: boolean; warning?: string; error?: string };
@@ -164,8 +173,9 @@ export async function uploadBbntScan(file: File, target: { id: string; kind: "rf
     return data;
   } finally { notifyWeldQualityChanged(); }
 }
-export async function removeBbntScan(target: { id: string; kind: "rfi" | "tach" }) {
-  try { return await qualityRequest<{ id: string }>({ action: "bbnt-scan", id: target.id, kind: target.kind, scan: null }); } finally { notifyWeldQualityChanged(); }
+/** Gỡ một file scan (theo mã tài liệu / đường dẫn) hoặc tất cả khi không truyền `key`. */
+export async function removeBbntScan(target: { id: string; kind: "rfi" | "tach" }, key?: string) {
+  try { return await qualityRequest<{ id: string }>({ action: "bbnt-scan", id: target.id, kind: target.kind, scan: null, go_doc: key ?? "" }); } finally { notifyWeldQualityChanged(); }
 }
 /** Thông tin pending lưu trong thong_tin của phiếu. */
 export const rfiPendingInfo = (info?: Record<string, unknown> | null) => (info?.pending ?? null) as { ngay?: string; ly_do?: string; nguoi?: string } | null;
