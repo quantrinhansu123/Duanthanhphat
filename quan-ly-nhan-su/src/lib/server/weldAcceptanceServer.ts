@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
-import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
+import { completeWeldAcceptance, publishWeldRfi, loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { fieldWeldCode } from "@/lib/weldCode";
@@ -595,15 +595,59 @@ export async function saveBbntScan(body: Record<string, unknown>, actor: string)
   return { id };
 }
 
-export async function deleteRfi(body: Record<string, unknown>) {
+/**
+ * Mối rời khỏi phiếu (xoá phiếu): mối không còn nằm trong phiếu nào và chưa thanh toán thì trở về «Mài xong»
+ * — giữ ngày mài, bỏ kết quả trực quan / siêu âm do nghiệm thu để lại. Lỗi ở một mối không làm hỏng việc xoá phiếu.
+ */
+async function revertWeldsToGround(weldIds: string[], actor: string): Promise<number> {
+  const ids = [...new Set(weldIds)];
+  if (!ids.length) return 0;
+  const still = new Set<string>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const part = ids.slice(i, i + 80);
+    const [tach, main, pay] = await Promise.all([
+      db().from("phieu_nt_tach_moi").select("moi_han_id").in("moi_han_id", part).limit(2000),
+      db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id").in("moi_han_id", part).limit(2000),
+      db().from("thanh_toan_moi_han").select("moi_han_id").in("moi_han_id", part).limit(2000),
+    ]);
+    for (const result of [tach, main, pay]) for (const row of (result.data ?? []) as { moi_han_id: string }[]) still.add(row.moi_han_id);
+  }
+  let reverted = 0;
+  for (const weldId of ids) {
+    if (still.has(weldId)) continue; // vẫn thuộc phiếu khác / đã thanh toán → giữ nguyên
+    try {
+      const { inspection } = await loadWeldQuality(weldId);
+      if (!inspection || !inspection.ngay_mai) continue; // chưa mài: không có gì để trả về
+      if (!inspection.truc_quan && !inspection.ket_qua_ndt) continue; // đã là Mài xong
+      const { updated_at: _updatedAt, ...rest } = inspection;
+      void _updatedAt;
+      await saveWeldQualityInspection({ ...rest, truc_quan: null, ket_qua_ndt: null, ngay_ndt: null, xu_ly_truc_quan: null, ly_do_loai_nghiem_thu: null, nguoi_ghi_nhan: actor });
+      reverted += 1;
+    } catch { /* bỏ qua mối lỗi; việc xoá phiếu đã xong */ }
+  }
+  return reverted;
+}
+
+export async function deleteRfi(body: Record<string, unknown>, actor = "") {
   const id = qualityUuid(body.id);
+  // Gom các mối của phiếu (RFI chính + phiếu con hình học / siêu âm) trước khi xoá để trả về Mài xong sau đó.
+  const weldIds: string[] = [];
+  const mainRows = await db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id").eq("phieu_id", id).limit(5000);
+  for (const row of (mainRows.data ?? []) as { moi_han_id: string }[]) weldIds.push(row.moi_han_id);
+  const children = await db().from("phieu_nt_tach").select("id").eq("phieu_rfi_id", id).limit(200);
+  const childIds = ((children.data ?? []) as { id: string }[]).map((c) => c.id);
+  if (childIds.length) {
+    const childRows = await db().from("phieu_nt_tach_moi").select("moi_han_id").in("phieu_id", childIds).limit(5000);
+    for (const row of (childRows.data ?? []) as { moi_han_id: string }[]) weldIds.push(row.moi_han_id);
+  }
   const { error } = await db().rpc("xoa_phieu_rfi", { p_id: id });
   if (error) {
     if (error.code === "P0001") throw new QualityApiError(error.message, 409);
     throw error;
   }
   await deleteGtusThanh(id); // phiếu GTUS: xoá luôn nghiệm thu / thanh toán từng thanh
-  return { id };
+  const reverted = await revertWeldsToGround(weldIds, actor || "Hệ thống");
+  return { id, reverted };
 }
 
 export async function updateRfi(body: Record<string, unknown>) {
@@ -1182,11 +1226,14 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       if (forwarded.error) throw forwarded.error;
       if ((forwarded.count ?? 0) > 0) throw new QualityApiError(`Phiếu ${current.so_phieu} đã chuyển sang siêu âm. Xoá phiếu siêu âm ở tab 2 trước.`, 409);
     }
+    const ticketWelds = await db().from("phieu_nt_tach_moi").select("moi_han_id").eq("phieu_id", id).limit(5000);
     const rows = await db().from("phieu_nt_tach_moi").delete().eq("phieu_id", id);
     if (rows.error) throw rows.error;
     const del = await db().from("phieu_nt_tach").delete().eq("id", id);
     if (del.error) throw del.error;
-    return { id };
+    // Xoá phiếu thì mối trở về «Mài xong» (nếu không còn ở phiếu nào khác).
+    const reverted = await revertWeldsToGround(((ticketWelds.data ?? []) as { moi_han_id: string }[]).map((w) => w.moi_han_id), actor);
+    return { id, reverted };
   }
   const ticket = await db().from("phieu_nt_tach").select("*").eq("id",id).eq("du_an_id",project).eq("loai",kind).single();
   if (ticket.error) throw ticket.error;

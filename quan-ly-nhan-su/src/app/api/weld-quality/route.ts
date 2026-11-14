@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
+import { authenticateWeldQuality, authenticateWeldQualityLimited, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
@@ -20,19 +20,23 @@ function failure(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    await authenticateWeldQuality(request);
+    await authenticateWeldQualityLimited(request); // thợ hàn (hạn chế) được xem chi tiết
     return NextResponse.json(await loadQualityDetail(qualityUuid(new URL(request.url).searchParams.get("id"))), { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return failure(error); }
 }
 
 export async function POST(request: Request) {
   try {
-    const actor = await authenticateWeldQuality(request);
+    const { email: actor, limited } = await authenticateWeldQualityLimited(request);
     const raw = await request.text();
     if (raw.length > 1_000_000) throw new QualityApiError("Yêu cầu quá lớn; tối đa 100 mối mỗi lượt.", 413);
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new QualityApiError("JSON không hợp lệ."); }
     const body = object(value);
+    // Thợ hàn / thợ vận hành (hạn chế): chỉ xem danh sách chất lượng, «Chờ mài» và «Mài xong».
+    if (limited && !(body.action === "list" || body.action === "export" || body.action === "selection" || body.action === "reset-grind" || (body.action === "mark-pass" && body.kind === "grind"))) {
+      throw new QualityApiError("Tài khoản này chỉ được xem danh sách và bấm Chờ mài / Mài xong.", 403);
+    }
     if (body.action === "report-weather") return NextResponse.json(await loadProjectWeather(body));
     if (body.action === "diary-defaults") return NextResponse.json(await loadDiaryDefaults(body));
     if (body.action === "list") return NextResponse.json(await loadQualityJournalPage(parseQualityFilters(body.filters)));
@@ -88,7 +92,7 @@ export async function POST(request: Request) {
     if (body.action === "rfi-detail") return NextResponse.json(await loadRfiDetail(qualityUuid(body.id)));
     if (body.action === "rfi-update") return NextResponse.json(await updateRfi(body));
     if (body.action === "rfi-print-save") return NextResponse.json(await saveRfiPrintInfo(body));
-    if (body.action === "rfi-delete") return NextResponse.json(await deleteRfi(body));
+    if (body.action === "rfi-delete") return NextResponse.json(await deleteRfi(body, actor));
     if (body.action === "bbnt-scan") return NextResponse.json(await saveBbntScan(body, actor));
     if (body.action === "rfi-pending") return NextResponse.json(await setRfiPending(body, actor));
     if (body.action === "accept-complete") return NextResponse.json(await completeRfi(body, actor));

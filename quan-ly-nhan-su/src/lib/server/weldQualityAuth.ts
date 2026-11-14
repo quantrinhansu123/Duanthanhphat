@@ -36,10 +36,22 @@ function guardWrite(request: Request, allowForm = false) {
 // Kết quả xác thực theo token được nhớ 60 giây: trang Biên bản mối hàn gọi API hàng chục lần,
 // mỗi lần xác thực lại tốn 2–3 vòng truy vấn Supabase. Thu hồi quyền có hiệu lực chậm nhất sau 60 giây.
 const AUTH_CACHE_MS = 60_000;
-const authCache = new Map<string, { email: string; until: number }>();
+const authCache = new Map<string, { email: string; limited: boolean; until: number }>();
 
 /** Đăng nhập Supabase Auth (token trong header riêng) + danh sách email được phép; không có token thì dùng Basic Auth nếu đã cấu hình. */
+/**
+ * Như authenticateWeldQuality nhưng cho phép thêm tài khoản thợ hàn / thợ vận hành ở chế độ HẠN CHẾ (limited = true):
+ * chỉ được xem danh sách chất lượng và bấm «Chờ mài» / «Mài xong». Nơi gọi phải kiểm tra `limited` trước mọi thao tác khác.
+ */
+export async function authenticateWeldQualityLimited(request: Request, allowForm = false): Promise<{ email: string; limited: boolean }> {
+  return authenticate(request, allowForm, true);
+}
+
 export async function authenticateWeldQuality(request: Request, allowForm = false): Promise<string> {
+  return (await authenticate(request, allowForm, false)).email;
+}
+
+async function authenticate(request: Request, allowForm: boolean, allowWorker: boolean): Promise<{ email: string; limited: boolean }> {
   let token = request.headers.get("x-supabase-token");
   if (!token) {
     // Dùng luôn phiên đăng nhập của ứng dụng (cookie), không bắt đăng nhập lần nữa.
@@ -49,22 +61,32 @@ export async function authenticateWeldQuality(request: Request, allowForm = fals
     } catch { /* không có phiên cookie */ }
   }
   if (!token) {
-    if (process.env.APP_BASIC_AUTH_USER?.trim() && process.env.APP_BASIC_AUTH_PASSWORD) return requireWeldQualityAuth(request, allowForm);
+    if (process.env.APP_BASIC_AUTH_USER?.trim() && process.env.APP_BASIC_AUTH_PASSWORD) return { email: requireWeldQualityAuth(request, allowForm), limited: false };
     throw new QualityApiError("Phiên đăng nhập hết hạn; hãy tải lại trang và đăng nhập lại.", 401);
   }
   guardWrite(request, allowForm);
   const cached = authCache.get(token);
-  if (cached && cached.until > Date.now()) return cached.email;
+  if (cached && cached.until > Date.now() && (allowWorker || !cached.limited)) return { email: cached.email, limited: cached.limited };
+  if (cached && cached.until > Date.now() && cached.limited && !allowWorker) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
   const db = createAdminClient();
   const { data, error } = await db.auth.getUser(token);
   const email = data.user?.email?.toLowerCase();
   if (error || !email) throw new QualityApiError("Phiên đăng nhập hết hạn; hãy đăng nhập lại.", 401);
   const allowed = await db.from("nguoi_dung_nghiem_thu").select("email").eq("email", email).maybeSingle();
   if (allowed.error) throw allowed.error;
-  if (!allowed.data && !(await hasJournalEditRole(db, email))) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
+  const full = Boolean(allowed.data) || (await hasJournalEditRole(db, email));
+  const worker = !full && allowWorker && (await hasWorkerRole(db, email));
+  if (!full && !worker) throw new QualityApiError("Tài khoản này chưa được phép ghi nhận chất lượng.", 403);
   if (authCache.size > 200) authCache.clear();
-  authCache.set(token, { email, until: Date.now() + AUTH_CACHE_MS });
-  return email;
+  authCache.set(token, { email, limited: worker, until: Date.now() + AUTH_CACHE_MS });
+  return { email, limited: worker };
+}
+
+/** Thợ hàn / thợ vận hành (tài khoản đang hoạt động): dùng được nút «Chờ mài» / «Mài xong» ở Nhật ký hàn (chế độ hạn chế). */
+async function hasWorkerRole(db: ReturnType<typeof createAdminClient>, email: string) {
+  const acc = await db.from("tai_khoan_phan_quyen").select("role,status").ilike("email", email).maybeSingle();
+  if (acc.error) throw acc.error;
+  return Boolean(acc.data && acc.data.status !== "Khóa" && acc.data.role === "Thợ hàn / thợ vận hành");
 }
 
 /** Role được tick "Sửa" ở Nhật ký hàn (Cấu hình → Phân quyền) cũng được ghi nhận chất lượng. */
