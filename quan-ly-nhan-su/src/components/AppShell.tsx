@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { List, CaretRight, ArrowLeft, House, ArrowClockwise } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
+import { useOverlayBack } from "@/lib/useBackClose";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -265,6 +266,8 @@ export default function AppShell({ tab }: AppShellProps) {
     return () => window.removeEventListener("app-navigate", onNavigate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useOverlayBack();
 
   function goBack() {
     // Overlay/drawer nội bộ (hồ sơ NS, chi tiết máy…) được ưu tiên đóng trước.
