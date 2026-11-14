@@ -22,8 +22,8 @@ export function useBbntScan({ onDone, onError }: { onDone: (message: string) => 
     if (!file || !t) return;
     if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") { onError("Chỉ tải lên được file PDF (scan biên bản đã ký)."); return; }
     try {
-      await uploadBbntScan(file, t);
-      await onDone(`Đã lưu biên bản đã ký của phiếu ${t.so_phieu}.`);
+      const result = await uploadBbntScan(file, t);
+      await onDone(`Đã lưu biên bản đã ký của phiếu ${t.so_phieu}${result.appsheet ? " và đẩy sang AppSheet (bảng Lưu trữ)" : ""}.${result.warning ? ` Cảnh báo AppSheet: ${result.warning}` : ""}`);
     } catch (e) { onError(e instanceof Error ? e.message : "Không tải được biên bản lên."); }
   }
 
@@ -40,6 +40,7 @@ export function useBbntScan({ onDone, onError }: { onDone: (message: string) => 
       { label: scan ? "Thay BBNT đã ký (PDF)" : "Tải lên BBNT đã ký (PDF)", disabled, onSelect: () => pick(t) },
       ...(scan ? [
         { label: "Xem BBNT đã ký", disabled, onSelect: () => { window.open(scan.url, "_blank", "noopener"); } },
+        ...(scan.appsheet_url ? [{ label: "Mở bản trên AppSheet", disabled, onSelect: () => { window.open(scan.appsheet_url, "_blank", "noopener"); } }] : []),
         { label: "Gỡ BBNT đã ký", danger: true, disabled, onSelect: () => void remove(t) },
       ] : []),
     ];

@@ -7,7 +7,7 @@ export class QualityApiError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 
-export function requireWeldQualityAuth(request: Request): string {
+export function requireWeldQualityAuth(request: Request, allowForm = false): string {
   const user = process.env.APP_BASIC_AUTH_USER?.trim();
   const password = process.env.APP_BASIC_AUTH_PASSWORD;
   if (!user || !password) throw new QualityApiError("Chức năng kiểm tra chất lượng chưa được cấu hình đăng nhập. Vui lòng liên hệ quản trị để kích hoạt.", 503);
@@ -18,17 +18,19 @@ export function requireWeldQualityAuth(request: Request): string {
   if (!timingSafeEqual(hash(credentials), hash(`${user}:${password}`))) {
     throw new QualityApiError("Cần đăng nhập để kiểm tra chất lượng.", 401);
   }
-  guardWrite(request);
+  guardWrite(request, allowForm);
   return user;
 }
 
-function guardWrite(request: Request) {
+function guardWrite(request: Request, allowForm = false) {
   if (request.method === "GET") return;
   const origin = request.headers.get("origin");
   if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
     throw new QualityApiError("Không chấp nhận yêu cầu từ website khác.", 403);
   }
-  if (!request.headers.get("content-type")?.startsWith("application/json")) throw new QualityApiError("Yêu cầu phải là JSON.", 415);
+  const type = request.headers.get("content-type") ?? "";
+  // Tải file (multipart) chỉ cho đường dẫn tải scan; vẫn chặn yêu cầu từ website khác ở trên.
+  if (!type.startsWith("application/json") && !(allowForm && type.startsWith("multipart/form-data"))) throw new QualityApiError("Yêu cầu phải là JSON.", 415);
 }
 
 // Kết quả xác thực theo token được nhớ 60 giây: trang Biên bản mối hàn gọi API hàng chục lần,
@@ -37,7 +39,7 @@ const AUTH_CACHE_MS = 60_000;
 const authCache = new Map<string, { email: string; until: number }>();
 
 /** Đăng nhập Supabase Auth (token trong header riêng) + danh sách email được phép; không có token thì dùng Basic Auth nếu đã cấu hình. */
-export async function authenticateWeldQuality(request: Request): Promise<string> {
+export async function authenticateWeldQuality(request: Request, allowForm = false): Promise<string> {
   let token = request.headers.get("x-supabase-token");
   if (!token) {
     // Dùng luôn phiên đăng nhập của ứng dụng (cookie), không bắt đăng nhập lần nữa.
@@ -47,10 +49,10 @@ export async function authenticateWeldQuality(request: Request): Promise<string>
     } catch { /* không có phiên cookie */ }
   }
   if (!token) {
-    if (process.env.APP_BASIC_AUTH_USER?.trim() && process.env.APP_BASIC_AUTH_PASSWORD) return requireWeldQualityAuth(request);
+    if (process.env.APP_BASIC_AUTH_USER?.trim() && process.env.APP_BASIC_AUTH_PASSWORD) return requireWeldQualityAuth(request, allowForm);
     throw new QualityApiError("Phiên đăng nhập hết hạn; hãy tải lại trang và đăng nhập lại.", 401);
   }
-  guardWrite(request);
+  guardWrite(request, allowForm);
   const cached = authCache.get(token);
   if (cached && cached.until > Date.now()) return cached.email;
   const db = createAdminClient();

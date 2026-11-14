@@ -149,8 +149,8 @@ export async function setRfiPending(input: { id: string; kind: "rfi" | "tach"; h
   try { return await qualityRequest<{ id: string; pending: boolean }>({ action: "rfi-pending", ...input }); } finally { notifyWeldQualityChanged(); }
 }
 /** Bản scan biên bản đã ký gắn với phiếu (lưu trong thong_tin.bbnt_scan). */
-export const bbntScanInfo = (info?: Record<string, unknown> | null) => (info?.bbnt_scan ?? null) as { doc_id?: string; url: string; ten?: string; ngay?: string; nguoi?: string } | null;
-/** Tải PDF scan lên thư mục Google Drive của hệ thống (/api/weld-quality/scan) và gắn liên kết vào phiếu. */
+export const bbntScanInfo = (info?: Record<string, unknown> | null) => (info?.bbnt_scan ?? null) as { doc_id?: string; url: string; ten?: string; appsheet_path?: string; appsheet_url?: string; ngay?: string; nguoi?: string } | null;
+/** Tải PDF scan lên (/api/weld-quality/scan): đẩy vào bảng «Lưu trữ» của AppSheet + giữ bản xem trong hệ thống, gắn liên kết vào phiếu. */
 export async function uploadBbntScan(file: File, target: { id: string; kind: "rfi" | "tach"; so_phieu: string }) {
   const form = new FormData();
   form.append("file", file);
@@ -159,8 +159,8 @@ export async function uploadBbntScan(file: File, target: { id: string; kind: "rf
   form.append("so_phieu", target.so_phieu);
   try {
     const response = await fetch("/api/weld-quality/scan", { method: "POST", body: form });
-    const data = await response.json().catch(() => ({})) as { id?: string; error?: string };
-    if (!response.ok) throw new Error(data.error || "Không tải được biên bản lên Google Drive.");
+    const data = await response.json().catch(() => ({})) as { id?: string; appsheet?: boolean; warning?: string; error?: string };
+    if (!response.ok) throw new Error(data.error || "Không tải được biên bản lên.");
     return data;
   } finally { notifyWeldQualityChanged(); }
 }

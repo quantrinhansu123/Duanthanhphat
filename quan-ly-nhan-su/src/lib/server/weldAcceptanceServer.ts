@@ -579,7 +579,7 @@ export async function saveBbntScan(body: Record<string, unknown>, actor: string)
     const scan = object(body.scan);
     const url = str(scan.url, 500);
     if (!url.startsWith("/api/documents/") && !url.startsWith("https://drive.google.com/")) throw new QualityApiError("Liên kết biên bản không hợp lệ.");
-    info.bbnt_scan = { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), ngay: new Date().toISOString(), nguoi: actor };
+    info.bbnt_scan = { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), appsheet_path: str(scan.appsheet_path, 300), appsheet_url: str(scan.appsheet_url, 600), ngay: new Date().toISOString(), nguoi: actor };
   }
   const { error: saveError } = await db().from(table).update({ thong_tin: info }).eq("id", id);
   if (saveError) throw saveError;
