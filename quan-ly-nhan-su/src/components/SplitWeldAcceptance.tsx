@@ -16,7 +16,7 @@ export type SplitKind = "hinh-hoc" | "sieu-am";
 type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean; truc_quan?: string | null; ly_trinh?: string | null };
 type TicketInfo = { dia_diem: string; ben_moi: string; ben_nhan: string; pham_vi: string; tuyen_thuong: boolean; tuyen_ha: boolean; gio_bat_dau: string };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null;
-  thong_tin?: Record<string, string> | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
+  thong_tin?: Record<string, string> | null; phieu_rfi_id?: string | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
 // Giờ nghiệm thu gợi ý sẵn 8h00 như RFI chính.
 const emptyInfo = (): TicketInfo => ({ dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00" });
 const infoFromTicket = (t: Ticket): TicketInfo => {
@@ -293,7 +293,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                       setPayment({ ticket: t, rate: t.payment_rates?.length === 1 && t.payment_rates[0] ? String(t.payment_rates[0]) : "", note: "" });
                     } },
                     ...(!done || pend ? [{ label: pend ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => setPendingDlg(t) }] : []),
-                    { label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) },
+                    // Phiếu con của RFI chính không xoá lẻ — xoá cả RFI ở tab «Phát phiếu RFI» rồi lập lại.
+                    ...(t.phieu_rfi_id ? [] : [{ label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) }]),
                   ]} />
                 </span>
               </td>

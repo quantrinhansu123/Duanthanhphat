@@ -1219,6 +1219,8 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     // Xoá phiếu (chưa ký): các mối quay lại trạng thái trước nghiệm thu / danh sách chờ phát phiếu. Phiếu đã ký phải đặt lại «Chờ ký» trước.
     const { data: current, error: curError } = await db().from("phieu_nt_tach").select("*").eq("id", id).eq("du_an_id", project).eq("loai", kind).single();
     if (curError) throw curError;
+    // Phiếu con (hình học / siêu âm) của một RFI chính không xoá lẻ: muốn xoá phải xoá cả RFI (kéo theo mọi phiếu con) rồi lập lại.
+    if (current.phieu_rfi_id) throw new QualityApiError(`Phiếu ${current.so_phieu} là phiếu con của một RFI nên không xoá lẻ. Hãy xoá cả RFI ở tab «Phát phiếu RFI» (xoá toàn bộ phiếu con) rồi lập lại.`, 409);
     if (current.da_ky) throw new QualityApiError("Phiếu đã ký, hãy đặt lại «Chờ ký» trước khi xoá.", 409);
     if (kind === "hinh-hoc" && current.ngay_nghiem_thu) {
       const forwarded = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
