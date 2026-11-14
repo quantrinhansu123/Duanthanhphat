@@ -496,7 +496,7 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi:
       <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
         <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
         <dt>Hạng mục</dt><dd className="font-normal">: <Ed k="hang_muc" v={o.hang_muc?.trim() || pq?.goiThau || ""} editor={editor} ph={DOTS} /></dd>
-        <dt>Địa điểm</dt><dd className="font-normal">: <Ed k="dia_diem" v={o.dia_diem?.trim() || t.dia_diem || pq?.diaDiem || ""} editor={editor} ph={DOTS} /></dd>
+        <dt>Địa điểm</dt><dd className="font-normal">: <Ed k="dia_diem" v={[o.dia_diem?.trim(), t.dia_diem?.trim()].find((x) => x && !/^\s*lý trình/i.test(x)) || pq?.diaDiem || ""} editor={editor} ph={DOTS} /></dd>
       </dl>
       <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b>
         {editor
