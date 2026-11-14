@@ -103,6 +103,19 @@ export default function ConstructionDiaryForm() {
   useEffect(() => {
     try { const v = Number(window.localStorage.getItem("nhat-ky-thi-cong-trang-bat-dau")); if (Number.isInteger(v) && v >= 1) setStartPage(v); } catch { /* bỏ qua */ }
   }, []);
+  /** Ngày của trang bắt đầu (vd 4/11 = trang 6): các ngày sau đánh số liên tiếp, mỗi nhật ký đã lưu 2 trang. Trống = cách cũ. */
+  const [startDate, setStartDate] = useState("");
+  useEffect(() => {
+    try { setStartDate(window.localStorage.getItem("nhat-ky-thi-cong-ngay-bat-dau") ?? ""); } catch { /* bỏ qua */ }
+  }, []);
+  const changeStartDate = (v: string) => {
+    setStartDate(v);
+    try { window.localStorage.setItem("nhat-ky-thi-cong-ngay-bat-dau", v); } catch { /* bỏ qua */ }
+  };
+  const pageOf = (pid: string, dt: string, fallbackIndex = 0) =>
+    startDate && dt >= startDate
+      ? startPage + 2 * saved.filter((r) => r.projectId === pid && r.date >= startDate && r.date < dt).length
+      : startPage + fallbackIndex * 2;
   const changeStartPage = (value: number) => {
     const v = Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 1), 9999) : 1;
     setStartPage(v);
@@ -485,8 +498,10 @@ export default function ConstructionDiaryForm() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700" title="Số trang của nhật ký đầu tiên (các trang thông tin đầu nhật ký đã chiếm số trang trước đó)">
-              Trang bắt đầu
+              Trang
               <input type="number" min={1} max={9999} value={startPage} onChange={(e) => changeStartPage(Number(e.target.value))} className="h-10 w-20 rounded-lg border border-slate-300 px-2 text-center" />
+              cho ngày
+              <input type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2" />
             </label>
             <button type="button" onClick={printDiary} className="h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white">In / Lưu PDF</button>
             <button type="button" onClick={closePreview} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
@@ -495,8 +510,8 @@ export default function ConstructionDiaryForm() {
       )}
       <article id="diary-print" className={previewOpen ? "diary-preview" : undefined}>
         {rangeRows
-          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={startPage + i * 2} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
-          : <DiaryPages d={d} date={date} pageStart={startPage} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
+          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={pageOf(row.projectId, row.date, i)} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
+          : <DiaryPages d={d} date={date} pageStart={pageOf(projectId, date)} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
       </article>
       </>, document.body)}
       {viewRow && (
