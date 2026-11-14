@@ -5,9 +5,10 @@ import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import GtusRfiDialog from "@/components/GtusRfiDialog";
+import PendingDialog from "@/components/PendingDialog";
 import GtusAcceptanceTab, { gtusTicketNo } from "@/components/GtusAcceptanceTab";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -259,6 +260,8 @@ function RfiPanel({
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
   const [gtusPrint, setGtusPrint] = useState<RfiSummary | null>(null);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [pendingDlg, setPendingDlg] = useState<RfiSummary | null>(null);
   const [gtusManage, setGtusManage] = useState<RfiSummary | null>(null);
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
@@ -432,6 +435,15 @@ function RfiPanel({
     refresh().catch((e) => setError(message(e)));
   }
 
+  /** Mở hộp thoại Pending (huỷ / không thực hiện) hoặc Phát lại với ngày mới; số phiếu giữ nguyên. */
+  function togglePending(r: RfiSummary) { if (!busy) setPendingDlg(r); }
+  async function submitPending(r: RfiSummary, input: { ly_do?: string; ngay_moi?: string }) {
+    const pend = rfiPendingInfo(r.thong_tin);
+    await setRfiPending({ id: r.id, kind: "rfi", hanh_dong: pend ? "phat-lai" : "hoan", ...input });
+    setError("");
+    setOkMsg(pend ? `Đã phát lại phiếu ${r.so_phieu} (ngày mời ${input.ngay_moi}).` : `Phiếu ${r.so_phieu} chuyển sang Pending.`);
+    await refresh(true);
+  }
   async function removeRfi(r: RfiSummary) {
     if (busy || !window.confirm(`Xóa phiếu ${r.so_phieu}?\n\nHồ sơ nháp liên quan sẽ bị xóa. Các mối hàn được giữ lại để phát phiếu mới. Không thể hoàn tác.`)) return;
     setBusy(true); setError(""); setOkMsg("");
@@ -749,6 +761,7 @@ function RfiPanel({
         Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
       </p>}
       <div className="overflow-auto rounded-lg border border-slate-200">
+        <label className="flex items-center gap-2 p-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />Chỉ hiện phiếu Pending ({rfis.filter((r) => rfiPendingInfo(r.thong_tin)).length})</label>
         <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
             <tr>
@@ -765,7 +778,7 @@ function RfiPanel({
             </tr>
           </thead>
           <tbody>
-            {rfis.map((r, i) => (
+            {rfis.filter((r) => !pendingOnly || rfiPendingInfo(r.thong_tin)).map((r, i) => (
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
@@ -775,7 +788,7 @@ function RfiPanel({
                 <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
                 <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
                 <td className="p-2">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
-                <td className="p-2">{r.child_signing?.status ?? r.trang_thai}</td>
+                <td className="p-2">{rfiPendingInfo(r.thong_tin) ? <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-800" title={rfiPendingInfo(r.thong_tin)?.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span> : (r.child_signing?.status ?? r.trang_thai)}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <RowActionsMenu
                     label={`Thao tác phiếu ${r.so_phieu}`}
@@ -798,6 +811,7 @@ function RfiPanel({
                           onSelect: () => { setError(""); setOkMsg(""); setPayment({ rfi: r, ids: paidIds, rate: "", note: "" }); },
                         };
                       })(),
+                      { label: rfiPendingInfo(r.thong_tin) ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => void togglePending(r) },
                       { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
                     ]}
                   />
@@ -811,6 +825,16 @@ function RfiPanel({
         </table>
       </div>
       </div>
+      {pendingDlg && (
+        <PendingDialog
+          mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
+          soPhieu={pendingDlg.so_phieu}
+          oldDate={pendingDlg.ngay_moi}
+          reason={rfiPendingInfo(pendingDlg.thong_tin)?.ly_do}
+          onSubmit={(input) => submitPending(pendingDlg, input)}
+          onClose={() => setPendingDlg(null)}
+        />
+      )}
       {gtusManage && (
         <GtusRfiDialog rfiId={gtusManage.id} onClose={() => setGtusManage(null)} onPrint={() => setGtusPrint(gtusManage)} />
       )}

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
+import PendingDialog from "@/components/PendingDialog";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { filterRfiCandidates, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
@@ -82,7 +83,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [picked, setPicked] = useState<string[]>([]);
   const [bulkReason, setBulkReason] = useState("");
   const [ticketQuery, setTicketQuery] = useState("");
-  const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong">("");
+  const [pendingDlg, setPendingDlg] = useState<Ticket | null>(null);
+  const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong" | "pending">("");
   // 3 mục con như RFI chính: Phát phiếu YCNT · Nghiệm thu · Hồ sơ nghiệm thu.
   const [sub, setSub] = useState<"rfi" | "accept" | "records">(stage === "tao" ? "rfi" : "accept");
   // Mục «Phát phiếu» chia 3 bước dạng tab: Chọn mối · Thông tin phiếu · Phiếu đã phát.
@@ -184,7 +186,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const tickets = useMemo(() => {
     const q = ticketQuery.trim().toLowerCase();
     return (list?.tickets ?? [])
-      .filter((t) => (ticketStatus === "" || (ticketStatus === "xong") === Boolean(t.ngay_nghiem_thu))
+      .filter((t) => (ticketStatus === "pending" ? Boolean(rfiPendingInfo(t.thong_tin)) : (ticketStatus === "" || (ticketStatus === "xong") === Boolean(t.ngay_nghiem_thu)))
         && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), t.nguoi_lap, t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
       .sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   }, [list, ticketQuery, ticketStatus]);
@@ -207,6 +209,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   function cancelEdit() {
     setEditingId(null); setInfo(emptyInfo()); setNumber("");
     void loadRfiNumber(project, kind).then(r => setNumber(r.so_phieu)).catch(() => undefined);
+  }
+  /** Mở hộp thoại Pending (huỷ / không thực hiện) hoặc Phát lại với ngày mới; số phiếu giữ nguyên. */
+  async function submitPending(t: Ticket, input: { ly_do?: string; ngay_moi?: string }) {
+    const pend = rfiPendingInfo(t.thong_tin);
+    await setRfiPending({ id: t.id, kind: "tach", hanh_dong: pend ? "phat-lai" : "hoan", ...input });
+    setOkMsg(pend ? `Đã phát lại phiếu ${t.so_phieu} (ngày mời ${input.ngay_moi}).` : `Phiếu ${t.so_phieu} chuyển sang Pending.`);
+    await refresh();
   }
   async function removeTicket(t: Ticket) {
     const message = t.ngay_nghiem_thu
@@ -235,6 +244,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
             const done = Boolean(t.ngay_nghiem_thu);
+            const pend = rfiPendingInfo(t.thong_tin);
             const primaryAction = mode === "records"
               ? { label: "In biên bản", onClick: () => printRecord(t) }
               : { label: done ? "Xem" : "Nghiệm thu", onClick: () => run(() => openTicket(t.id)) };
@@ -245,7 +255,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
               <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
               <td className="px-3 py-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
+                {pend && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800" title={pend.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span>}
+                <span hidden={Boolean(pend)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 {t.payment_rates?.some(rate => rate > 0)
@@ -268,6 +279,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                       setError(""); setOkMsg("");
                       setPayment({ ticket: t, rate: t.payment_rates?.length === 1 && t.payment_rates[0] ? String(t.payment_rates[0]) : "", note: "" });
                     } },
+                    ...(!done || pend ? [{ label: pend ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => setPendingDlg(t) }] : []),
                     { label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) },
                   ]} />
                 </span>
@@ -429,10 +441,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <div className="flex flex-wrap gap-2">
           <input aria-label="Tìm phiếu" placeholder="Tìm số phiếu, ngày, người lập / nghiệm thu…" className={field + " min-w-0 flex-1"} value={ticketQuery} onChange={e => setTicketQuery(e.target.value)} />
           <select aria-label="Lọc trạng thái phiếu" className={field} value={ticketStatus} onChange={e => setTicketStatus(e.target.value as typeof ticketStatus)}>
-            <option value="">Tất cả trạng thái</option><option value="cho">Chờ nghiệm thu</option><option value="xong">Đã nghiệm thu</option>
+            <option value="">Tất cả trạng thái</option><option value="cho">Chờ nghiệm thu</option><option value="xong">Đã nghiệm thu</option><option value="pending">Pending</option>
           </select>
         </div>
         {renderTicketTable(tickets, "rfi")}
+        {pendingDlg && (
+          <PendingDialog
+            mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
+            soPhieu={pendingDlg.so_phieu}
+            oldDate={pendingDlg.ngay_moi}
+            reason={rfiPendingInfo(pendingDlg.thong_tin)?.ly_do}
+            onSubmit={(input) => submitPending(pendingDlg, input)}
+            onClose={() => setPendingDlg(null)}
+          />
+        )}
         {list?.tickets.length === 0 && <p className="text-sm text-slate-500">Chưa có phiếu {prefix} trong nhánh này.</p>}
       </div>
     </>}

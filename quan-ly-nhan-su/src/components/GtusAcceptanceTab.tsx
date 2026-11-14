@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
 import GtusRfiDialog from "@/components/GtusRfiDialog";
-import { loadGtusDetail, loadRfiOverview, type GtusThanh, type RfiSummary } from "@/lib/weldQualityClient";
+import PendingDialog from "@/components/PendingDialog";
+import { loadGtusDetail, loadRfiOverview, rfiPendingInfo, setRfiPending, type GtusThanh, type RfiSummary } from "@/lib/weldQualityClient";
 
 type Row = { rfi: RfiSummary; items: GtusThanh[] };
 
@@ -21,6 +22,7 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
   const [error, setError] = useState("");
   const [manage, setManage] = useState<RfiSummary | null>(null);
   const [print, setPrint] = useState<RfiSummary | null>(null);
+  const [pendingDlg, setPendingDlg] = useState<RfiSummary | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -34,6 +36,13 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
   }, [projectId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /** Pending (huỷ / không thực hiện) hoặc phát lại phiếu với ngày mới; số phiếu giữ nguyên. */
+  async function submitPending(rfi: RfiSummary, input: { ly_do?: string; ngay_moi?: string }) {
+    const pend = rfiPendingInfo(rfi.thong_tin);
+    await setRfiPending({ id: rfi.id, kind: "rfi", hanh_dong: pend ? "phat-lai" : "hoan", ...input });
+    await load();
+  }
 
   return (
     <section className="space-y-3">
@@ -68,7 +77,8 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
                 const fail = items.filter((t) => t.ket_qua === "Không đạt").length;
                 const paid = items.filter((t) => t.ty_le != null).length;
                 const pending = items.length - pass - fail;
-                const status = items.length && pending === 0 ? (fail ? "Có thanh không đạt" : "Đã nghiệm thu") : items.some((t) => t.ket_qua) ? "Đang nghiệm thu" : "Chờ nghiệm thu";
+                const pend = rfiPendingInfo(rfi.thong_tin);
+                const status = pend ? "Pending" : items.length && pending === 0 ? (fail ? "Có thanh không đạt" : "Đã nghiệm thu") : items.some((t) => t.ket_qua) ? "Đang nghiệm thu" : "Chờ nghiệm thu";
                 return (
                   <tr key={rfi.id}>
                     <td className="p-2">{i + 1}</td>
@@ -80,10 +90,11 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
                     <td className="p-2 text-center">{fail}</td>
                     <td className="p-2 text-center">{pending}</td>
                     <td className="p-2 text-center">{paid}</td>
-                    <td className="p-2">{status}</td>
+                    <td className="p-2">{pend ? <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-800" title={pend.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span> : status}</td>
                     <td className="p-2 text-right">
                       <div className="inline-flex gap-1">
                         <button type="button" onClick={() => setManage(rfi)} className="h-8 rounded-md border border-[#0047AB]/40 bg-[#0047AB]/5 px-2.5 font-semibold text-[#0047AB] hover:bg-[#0047AB]/10">Nghiệm thu / thanh toán</button>
+                        <button type="button" onClick={() => setPendingDlg(rfi)} className="h-8 rounded-md border border-orange-300 bg-orange-50 px-2.5 font-semibold text-orange-800 hover:bg-orange-100">{pend ? "Phát lại" : "Pending"}</button>
                         <button type="button" onClick={() => setPrint(rfi)} className="h-8 rounded-md border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-50">In BBNT</button>
                       </div>
                     </td>
@@ -93,6 +104,16 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
           </tbody>
         </table>
       </div>
+      {pendingDlg && (
+        <PendingDialog
+          mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
+          soPhieu={pendingDlg.so_phieu}
+          oldDate={pendingDlg.ngay_moi}
+          reason={rfiPendingInfo(pendingDlg.thong_tin)?.ly_do}
+          onSubmit={(input) => submitPending(pendingDlg, input)}
+          onClose={() => setPendingDlg(null)}
+        />
+      )}
       {manage && <GtusRfiDialog rfiId={manage.id} onClose={() => { setManage(null); void load(); }} onPrint={() => setPrint(manage)} />}
       {print && (
         <GtusBbntPrintDialog

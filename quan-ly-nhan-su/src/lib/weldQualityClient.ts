@@ -144,6 +144,12 @@ export async function saveGtus(phieu_id: string, items: GtusSaveItem[]) {
   try { return await qualityRequest<{ ok: true; released: number }>({ action: "gtus-save", phieu_id, items }); }
   finally { notifyWeldQualityChanged(); announcePaymentChange(); }
 }
+/** Pending (hoãn / không thực hiện) hoặc phát lại phiếu: kind "rfi" = RFI chính / GTUS, "tach" = phiếu tách hình học / siêu âm. */
+export async function setRfiPending(input: { id: string; kind: "rfi" | "tach"; hanh_dong: "hoan" | "phat-lai"; ly_do?: string; ngay_moi?: string }) {
+  try { return await qualityRequest<{ id: string; pending: boolean }>({ action: "rfi-pending", ...input }); } finally { notifyWeldQualityChanged(); }
+}
+/** Thông tin pending lưu trong thong_tin của phiếu. */
+export const rfiPendingInfo = (info?: Record<string, unknown> | null) => (info?.pending ?? null) as { ngay?: string; ly_do?: string; nguoi?: string } | null;
 export const loadRfis = (du_an_id: string) => qualityRequest<{ rfis: RfiSummary[] }>({ action: "rfi-list", du_an_id });
 export async function deleteRfi(id: string) {
   const result = await qualityRequest<{ id: string }>({ action: "rfi-delete", id });

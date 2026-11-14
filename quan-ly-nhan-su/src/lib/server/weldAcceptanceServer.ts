@@ -70,7 +70,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   // RFI báo trong ngày (phiếu chính + phiếu tách hình học/siêu âm) và kết quả nghiệm thu phiếu tách trong ngày → vào nhật ký thi công.
   const [mainRfis, splitRfis, splitDone] = await Promise.all([
     fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
-      .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)),
+      .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)).then((rows) => rows.filter((r) => !(r.thong_tin as Record<string, unknown> | null)?.pending)),
     fetchAll<{ id: string; so_phieu: string; loai: string }>((a, b) => db().from("phieu_nt_tach")
       .select("id,so_phieu,loai").eq("du_an_id", projectId).eq("ngay_moi", date).order("so_phieu").range(a, b)),
     fetchAll<{ moi_han_id: string; loai: string; ket_qua: string | null; phieu_nt_tach: { du_an_id: string; ngay_nghiem_thu: string | null } | { du_an_id: string; ngay_nghiem_thu: string | null }[] }>((a, b) => db().from("phieu_nt_tach_moi")
@@ -530,6 +530,43 @@ export async function listRfis(projectId: string) {
 }
 
 /** Sửa thông tin phiếu YCNT/RFI đã phát (không đổi danh sách mối đã chốt). */
+/**
+ * Pending / phát lại phiếu (RFI chính, GTUS, phiếu tách hình học / siêu âm).
+ * - "hoan": huỷ hoặc không thực hiện nghiệm thu → phiếu giữ nguyên số, mối vẫn gắn phiếu (không bị phát sang phiếu khác), chờ phát lại.
+ * - "phat-lai": đặt ngày mời mới (số phiếu giữ nguyên), bỏ trạng thái pending; ngày cũ + lý do được lưu vào lịch sử phát.
+ * Chỉ ghi trong thong_tin (và ngay_moi khi phát lại) nên không cần migration.
+ */
+export async function setRfiPending(body: Record<string, unknown>, actor: string) {
+  const id = qualityUuid(body.id);
+  const table = body.kind === "tach" ? "phieu_nt_tach" : "phieu_yeu_cau_nghiem_thu";
+  const action = body.hanh_dong === "phat-lai" ? "phat-lai" : body.hanh_dong === "hoan" ? "hoan" : "";
+  if (!action) throw new QualityApiError("Hành động không hợp lệ.");
+  const cols = table === "phieu_nt_tach" ? "id,so_phieu,ngay_moi,ngay_nghiem_thu,thong_tin" : "id,so_phieu,ngay_moi,thong_tin";
+  const { data: row, error } = await db().from(table).select(cols).eq("id", id).single();
+  if (error || !row) throw new QualityApiError("Không tìm thấy phiếu.", 404);
+  const current = row as unknown as { so_phieu: string; ngay_moi: string; ngay_nghiem_thu?: string | null; thong_tin: Record<string, unknown> | null };
+  const info = { ...(current.thong_tin ?? {}) } as Record<string, unknown>;
+  const pending = info.pending as { ngay?: string; ly_do?: string } | undefined;
+  const history = Array.isArray(info.lich_su_phat) ? [...(info.lich_su_phat as unknown[])] : [];
+  const update: Record<string, unknown> = {};
+  if (action === "hoan") {
+    if (pending) throw new QualityApiError("Phiếu đã ở trạng thái pending.", 409);
+    if (current.ngay_nghiem_thu) throw new QualityApiError("Phiếu đã nghiệm thu, không thể chuyển pending.", 409);
+    info.pending = { ngay: new Date().toISOString(), ly_do: str(body.ly_do, 300), nguoi: actor };
+  } else {
+    if (!pending) throw new QualityApiError("Phiếu không ở trạng thái pending.", 409);
+    const ngay = qualityDate(body.ngay_moi);
+    if (!ngay) throw new QualityApiError("Nhập ngày mời nghiệm thu mới.");
+    history.push({ ngay_moi: current.ngay_moi, ngay_hoan: pending.ngay ?? null, ly_do: pending.ly_do ?? "", ngay_phat_lai: new Date().toISOString(), nguoi: actor });
+    delete info.pending;
+    info.lich_su_phat = history;
+    update.ngay_moi = ngay;
+  }
+  const { error: saveError } = await db().from(table).update({ ...update, thong_tin: info }).eq("id", id);
+  if (saveError) throw saveError;
+  return { id, pending: action === "hoan" };
+}
+
 export async function deleteRfi(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const { error } = await db().rpc("xoa_phieu_rfi", { p_id: id });
