@@ -204,7 +204,7 @@ function pycList(values: string[]) {
 function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number) {
   const pick = (field: "ten" | "cv") => {
     const key = `nguoi_${party}_${i}_${field}`;
-    return fixSignerName(t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || "");
+    return t[key]?.trim() || fixSignerName(defaults[key] || DEFAULT_SIGNERS[key] || ""); // tên gõ tay giữ nguyên, chỉ tên nhớ sẵn mới được chuẩn hoá
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
@@ -546,7 +546,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
       // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => fixSignerName(t[key]?.trim() || signerDefaults[key] || DEFAULT_SIGNERS[key] || "");
+      const signer = (key: string) => t[key]?.trim() || fixSignerName(signerDefaults[key] || DEFAULT_SIGNERS[key] || "");
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -647,7 +647,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
     const signerDefaultsHt = loadSignerDefaults();
     const who = (code: string, i: number, field: "ten" | "cv") => {
       const key = `nguoi_${code}_${i}_${field}`;
-      return fixSignerName(t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "");
+      return t[key]?.trim() || fixSignerName(signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "");
     };
     // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
     const field = (key: string, lines: number) => <EdLines k={key} v={str((t as Record<string, unknown>)[key]).trim()} lines={lines} editor={editor} />;
