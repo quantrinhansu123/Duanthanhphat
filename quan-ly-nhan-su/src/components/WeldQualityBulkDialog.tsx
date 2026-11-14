@@ -57,6 +57,14 @@ export default function WeldQualityBulkDialog({
     ref.current?.showModal();
   }, []);
 
+  // Nhấn «Mài xong» chỉ là Mài xong: ghi ngay với ngày hôm nay, không hiện lựa chọn nào.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (initialKind !== "grind" || autoRan.current) return;
+    autoRan.current = true;
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+  }, [initialKind]);
+
   const summary = useMemo(() => {
     let pass = 0;
     let fail = 0;
@@ -91,7 +99,7 @@ export default function WeldQualityBulkDialog({
         Thao tác hàng loạt · {entries.length.toLocaleString("vi-VN")} mối đã chọn
       </h2>
       <p className="mt-2 text-sm text-slate-600">
-        {grind ? <>Ghi <b>ngày hoàn thành mài</b> cho các mối đã chọn → trạng thái <b>Mài xong</b>, phát RFI được. Trực quan / sai số ghi khi nghiệm thu.</> : <>Mặc định <b>{kind === "visual" ? "Hình học / trực quan đạt" : "Siêu âm đạt"}</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.</>}
+        {grind ? <>Đang chuyển các mối đã chọn sang <b>Mài xong</b> (ngày hôm nay), phát RFI được.</> : <>Mặc định <b>{kind === "visual" ? "Hình học / trực quan đạt" : "Siêu âm đạt"}</b>. Chỉ chỉnh tay mối <b>Không đạt</b>. Khi xác nhận trực quan Đạt, các ô sai số còn trống được điền mức tối đa cho phép theo tiêu chí của từng mối. Chiều dài mài nhập theo thực tế.</>}
       </p>
 
       <form
@@ -140,22 +148,30 @@ export default function WeldQualityBulkDialog({
             setErrors(failures);
             setBusy(false);
             onDone(saved);
+            if (grind && failures.length === 0 && !stop.current) onClose(); // Mài xong ghi trọn vẹn → đóng luôn
           }
         }}
       >
-        <fieldset disabled={busy || successCount !== null} className="grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm font-semibold sm:col-span-1">
-            Tiêu chí
-            <select
-              className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-blue-500"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as typeof kind)}
-            >
-              <option value="grind">Mài xong</option>
-              <option value="ndt">Siêu âm / NDT</option>
-              <option value="visual">Hình học / trực quan sau mài</option>
-            </select>
-          </label>
+        <fieldset disabled={busy || successCount !== null} className={grind ? "hidden" : "grid gap-3 sm:grid-cols-3"}>
+          {initialKind === "grind" ? (
+            // Nút «Mài xong» chỉ ghi ngày mài xong — không có lựa chọn tiêu chí khác.
+            <div className="block text-sm font-semibold sm:col-span-1">
+              Tiêu chí
+              <div className="mt-1 flex min-h-11 w-full items-center rounded-lg border border-slate-200 bg-slate-50 px-3 font-bold text-slate-800">Mài xong</div>
+            </div>
+          ) : (
+            <label className="block text-sm font-semibold sm:col-span-1">
+              Tiêu chí
+              <select
+                className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 p-2 focus:ring-2 focus:ring-blue-500"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as typeof kind)}
+              >
+                <option value="ndt">Siêu âm / NDT</option>
+                <option value="visual">Hình học / trực quan sau mài</option>
+              </select>
+            </label>
+          )}
           <label className="block text-sm font-semibold sm:col-span-1">
             {grind ? "Ngày hoàn thành mài" : kind === "visual" ? "Ngày duyệt hình học / trực quan" : "Ngày thí nghiệm"}
             <input
@@ -227,7 +243,7 @@ export default function WeldQualityBulkDialog({
           </button>
         </div>}
 
-        <div className="max-h-[42vh] overflow-auto rounded-xl border border-slate-200">
+        <div className={grind ? "hidden" : "max-h-[42vh] overflow-auto rounded-xl border border-slate-200"}>
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="sticky top-0 bg-slate-50 text-slate-600">
               <tr>
