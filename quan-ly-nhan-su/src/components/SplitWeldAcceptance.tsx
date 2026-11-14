@@ -244,7 +244,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
