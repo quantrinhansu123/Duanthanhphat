@@ -8,7 +8,7 @@ import type { ChatModel } from "@/lib/chatModels";
 
 type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form" | "contract-done"; data?: ContractData; modelLabel?: string; elapsedMs?: number };
 
-type Attached = { name: string; path: string; image: boolean };
+type Attached = { name: string; path: string; image: boolean; previewUrl?: string };
 
 const contractComplete = (d: ContractData) => CONTRACT_FIELDS.every((f) => f.optional || d[f.key]?.trim());
 
@@ -22,12 +22,31 @@ export default function ChatBot() {
   const [preview, setPreview] = useState<ContractData | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [files, setFiles] = useState<Attached[]>([]);
+  const previewUrls = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const sessionId = useRef(crypto.randomUUID()); // phiên CLI riêng cho mỗi cuộc chat/model
   const [models, setModels] = useState<ChatModel[]>([]);
   const [modelId, setModelId] = useState("");
   const [modelsLoading, setModelsLoading] = useState(false);
+
+  function releasePreviews(attachments: Attached[]) {
+    for (const file of attachments) {
+      if (!file.previewUrl) continue;
+      URL.revokeObjectURL(file.previewUrl);
+      previewUrls.current.delete(file.previewUrl);
+    }
+  }
+
+  function removeFile(file: Attached) {
+    releasePreviews([file]);
+    setFiles((current) => current.filter((item) => item.path !== file.path));
+  }
+
+  useEffect(() => () => {
+    for (const url of previewUrls.current) URL.revokeObjectURL(url);
+    previewUrls.current.clear();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +75,7 @@ export default function ChatBot() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, loading, open]);
 
-  async function upload(list: FileList | null) {
+  async function upload(list: FileList | File[] | null) {
     if (!list?.length || loading || uploading) return;
     setUploading(true);
     setError("");
@@ -70,7 +89,9 @@ export default function ChatBot() {
         const res = await fetch("/api/chat/upload", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as (Attached & { error?: string }) | null;
         if (!res.ok || !data?.path) throw new Error(data?.error || `Không tải được ${file.name}.`);
-        setFiles((fs) => [...fs, { name: data.name, path: data.path, image: data.image }]);
+        const previewUrl = data.image ? URL.createObjectURL(file) : undefined;
+        if (previewUrl) previewUrls.current.add(previewUrl);
+        setFiles((fs) => [...fs, { name: data.name, path: data.path, image: data.image, previewUrl }]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tải được tệp.");
@@ -109,6 +130,7 @@ export default function ChatBot() {
       } else {
         setMessages([...next, { ...meta, role: "model", text: data.text, kind: form ? "contract-form" : undefined, data: data.data }]);
       }
+      releasePreviews(attachments);
     } catch (e) {
       setMessages(messages);
       setFiles(attachments);
@@ -156,7 +178,7 @@ export default function ChatBot() {
             </select>
             <button
               type="button"
-              onClick={() => { sessionId.current = crypto.randomUUID(); setFiles([]); setMessages([]); setInput(""); setError(""); setPreview(null); }}
+              onClick={() => { sessionId.current = crypto.randomUUID(); releasePreviews(files); setFiles([]); setMessages([]); setInput(""); setError(""); setPreview(null); }}
               disabled={loading || uploading || (messages.length === 0 && files.length === 0 && !input.trim())}
               className="h-9 shrink-0 rounded-lg border border-white/40 px-3 text-xs font-semibold hover:bg-white/15 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer disabled:cursor-default disabled:opacity-40"
             >
@@ -221,12 +243,22 @@ export default function ChatBot() {
             {files.length > 0 && (
               <ul className="flex w-full flex-wrap gap-1.5">
                 {files.map((f) => (
-                  <li key={f.path} className="flex max-w-full items-center gap-1 rounded-lg bg-slate-100 py-1 pl-2.5 pr-1 text-xs text-slate-700">
-                    <span className="truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles((fs) => fs.filter((x) => x.path !== f.path))} aria-label={`Bỏ tệp ${f.name}`} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200 cursor-pointer">
-                      <X size={12} weight="bold" aria-hidden />
-                    </button>
-                  </li>
+                  f.image && f.previewUrl ? (
+                    <li key={f.path} className="relative h-36 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={f.previewUrl} alt={f.name} className="h-full w-full object-contain" />
+                      <button type="button" onClick={() => removeFile(f)} aria-label={`Bỏ tệp ${f.name}`} className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black text-white hover:bg-slate-800 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white cursor-pointer">
+                        <X size={12} weight="bold" aria-hidden />
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={f.path} className="flex max-w-full items-center gap-1 rounded-lg bg-slate-100 py-1 pl-2.5 pr-1 text-xs text-slate-700">
+                      <span className="truncate">{f.name}</span>
+                      <button type="button" onClick={() => removeFile(f)} aria-label={`Bỏ tệp ${f.name}`} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200 cursor-pointer">
+                        <X size={12} weight="bold" aria-hidden />
+                      </button>
+                    </li>
+                  )
                 ))}
               </ul>
             )}
@@ -243,6 +275,20 @@ export default function ChatBot() {
             </button>
             <textarea
               value={input}
+              onPaste={(e) => {
+                const imageItems = Array.from(e.clipboardData.items).filter((item) => item.type.startsWith("image/"));
+                if (!imageItems.length) return;
+                e.preventDefault();
+                if (files.length >= 5) { setError("Chat chỉ nhận tối đa 5 tệp."); return; }
+                const items = imageItems.filter((item) => /^image\/(png|jpe?g|gif|webp)$/i.test(item.type));
+                if (!items.length) { setError("Ảnh dán chỉ hỗ trợ PNG, JPG, GIF hoặc WebP."); return; }
+                const images = items.map((item, i) => {
+                  const file = item.getAsFile();
+                  return file && (file.name ? file : new File([file], `clipboard-${Date.now()}-${i + 1}.${file.type.split("/")[1] || "png"}`, { type: file.type }));
+                }).filter((file): file is File => Boolean(file));
+                if (images.length) void upload(images);
+                else setError("Không đọc được ảnh trong clipboard.");
+              }}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
