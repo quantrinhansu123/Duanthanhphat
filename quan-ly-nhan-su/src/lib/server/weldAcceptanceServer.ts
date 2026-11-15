@@ -240,13 +240,31 @@ export async function nextRfiNumber(projectId: string, kind?: "hinh-hoc" | "sieu
       return (kind ? q.eq("loai", kind) : q).order("id").range(a, b);
     }),
   ]);
-  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-(?:\d+|GTUS))?$/i;
+  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-(?:\d+|GTUS|HH|SA))?$/i;
   let highest = 0;
   for (const row of [...main, ...split]) {
     const match = pattern.exec((row.so_phieu ?? "").trim());
     if (match) highest = Math.max(highest, Number(match[1]));
   }
   return `${prefix}${String(highest + 1).padStart(3, "0")}`;
+}
+
+function isDuplicateRfiNumber(error: unknown) {
+  return error instanceof Error && /phieu_nt_tach_du_an_id_loai_so_phieu_key|phieu_yeu_cau_nghiem_thu_du_an_id_so_phieu_key/.test(error.message);
+}
+
+async function publishWeldRfiWithNextNumber(input: Parameters<typeof publishWeldRfi>[0]) {
+  let soPhieu = input.so_phieu;
+  for (;;) {
+    try {
+      return await publishWeldRfi({ ...input, so_phieu: soPhieu });
+    } catch (error) {
+      if (!isDuplicateRfiNumber(error)) throw error;
+      const next = await nextRfiNumber(input.du_an_id);
+      if (next === soPhieu) throw error;
+      soPhieu = next;
+    }
+  }
 }
 
 export async function publishRfi(body: Record<string, unknown>, actor: string) {
@@ -326,7 +344,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     loai_rfi: body.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu",
     nt_hinh_hoc: geometry, nt_sieu_am: ultrasound,
   };
-  const parentId = qualityUuid(body.id), weldIds = ids.map(qualityUuid);
+  const parentId = qualityUuid(body.id), projectId = qualityUuid(body.du_an_id), weldIds = ids.map(qualityUuid);
   // Mỗi mối chỉ nằm trong một phiếu hình học / siêu âm đang xử lý: báo rõ phiếu nào đang giữ mối thay vì lỗi ràng buộc của CSDL.
   const kinds = [geometry ? "hinh-hoc" : "", ultrasound ? "sieu-am" : ""].filter(Boolean);
   const held = await chunkedPages<{ moi_han_id: string; ma_lich_su: string; phieu_id: string; loai: string; ket_qua: string | null }>(weldIds, (part, from, to) => db()
@@ -346,7 +364,7 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   }
   let id: string;
   try {
-    id = await publishWeldRfi({ id: parentId, du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
+    id = await publishWeldRfiWithNextNumber({ id: parentId, du_an_id: projectId, so_phieu: soPhieu, ngay_moi: ngay,
       moi_han_ids: weldIds, nguoi_lap: actor, thong_tin });
   } catch (error) {
     if (error instanceof Error && /nt_tach_moi_dang_xu_ly/.test(error.message)) throw new QualityApiError("Có mối đã nằm trong một phiếu hình học hoặc siêu âm khác đang xử lý. Bấm Tải lại để cập nhật danh sách mối.", 409);
