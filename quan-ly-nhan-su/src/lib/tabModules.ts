@@ -34,6 +34,8 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "bc-moi-han-theo-nam": () => import("@/components/YearlyWeldReport"),
   "ban-do": () => import("@/components/MapView"),
   "tai-lieu": () => import("@/components/DocumentLibrary"),
+  "file-tri-thuc": () => import("@/components/KnowledgeLibrary"),
+  "hoso-ai-qs": () => import("@/components/AiQsLibrary"),
   "trien-khai": () => import("@/components/DeploymentHandoverList"),
   "cau-hinh": () => import("@/components/SystemConfiguration"),
 };

@@ -47,6 +47,14 @@ export const acceptancePrintCss = `
 .acceptance-page .annex { font-size: var(--annex-font, 10px); table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
 .acceptance-page .annex th.serial-heading { white-space: nowrap; }
+.acceptance-page .annex th.rail-code-heading {
+  text-align: center; vertical-align: middle; padding: 2px 1px; line-height: 1.15;
+  overflow: hidden; overflow-wrap: break-word; word-break: break-word;
+}
+.acceptance-page .annex th.rail-code-heading .rail-code-sub {
+  display: block; font-size: 0.82em; letter-spacing: -0.03em; line-height: 1.1;
+  white-space: normal;
+}
 .acceptance-page .annex td { height: var(--annex-row, 16px); text-align: center; padding: 0 1px; vertical-align: middle; }
 .acceptance-page .annex td.weld-name { white-space: nowrap; }
 .acceptance-page .annex-meta-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
@@ -371,7 +379,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                 <td colSpan={2} style={{ padding: 0 }}>
                   <table className="annex" style={annexSizing(Math.max(page.length, MIN_BLANK_ROWS))}>
                     <colgroup>
-                      {(t.an_ly_trinh !== "0" ? [3, 22, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12] : [3, 13, 9, 9, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12]).map((w, i) => (
+                      {(t.an_ly_trinh !== "0" ? [3, 19, 12, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12] : [3, 11, 12, 8, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12]).map((w, i) => (
                         <col key={i} style={{ width: `${w}%` }} />
                       ))}
                     </colgroup>
@@ -379,7 +387,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                       <tr>
                         <th rowSpan={3} className="serial-heading">STT</th>
                         <th rowSpan={3}>TÊN MỐI HÀN</th>
-                        <th rowSpan={3}>MÃ HIỆU<br />RAY<br /><span style={{ whiteSpace: "nowrap" }}>(60R2 - U75V)</span></th>
+                        <th rowSpan={3} className="rail-code-heading">MÃ HIỆU<br />RAY<br /><span className="rail-code-sub">(60R2<br />-U75V)</span></th>
                         {t.an_ly_trinh === "0" && <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>}
                         <th colSpan={2} rowSpan={2}>RAY</th>
                         <th colSpan={8}>NGHIỆM THU<br />(ĐẠT/KHÔNG ĐẠT)</th>

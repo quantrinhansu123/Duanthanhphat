@@ -78,7 +78,7 @@ export default function WeldBbntDocument({ record, onClose }: { record: RecordSe
               <thead>
                 <tr>
                   <th className={th} rowSpan={3}>STT</th><th className={th} rowSpan={3}>TÊN MỐI HÀN</th>
-                  <th className={th} rowSpan={3}>MÃ HIỆU RAY<br />(60R2 - U75V)</th><th className={th} rowSpan={3}>LÝ TRÌNH MỐI HÀN</th>
+                  <th className={th} rowSpan={3} style={{ textAlign: "center", verticalAlign: "middle", padding: "2px 1px", lineHeight: 1.15, overflow: "hidden" }}>MÃ HIỆU<br />RAY<br /><span style={{ display: "block", fontSize: "0.82em", lineHeight: 1.1 }}>(60R2<br />-U75V)</span></th><th className={th} rowSpan={3}>LÝ TRÌNH MỐI HÀN</th>
                   <th className={th} colSpan={2} rowSpan={2}>RAY</th>
                   <th className={th} colSpan={8}>NGHIỆM THU KÍCH THƯỚC HÌNH HỌC (ĐẠT/KHÔNG ĐẠT)</th>
                   <th className={th} rowSpan={3}>GHI CHÚ</th>

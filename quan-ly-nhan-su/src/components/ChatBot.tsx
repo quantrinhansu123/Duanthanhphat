@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Paperclip, X } from "@/components/icons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { DownloadSimple, FileText, Paperclip, X } from "@/components/icons";
 import ContractForm, { CONTRACT_FIELDS, type ContractData } from "@/components/ContractForm";
 import ContractDocument, { downloadContractDoc } from "@/components/ContractDocument";
 import type { ChatModel } from "@/lib/chatModels";
@@ -11,6 +11,99 @@ type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form
 type Attached = { name: string; path: string; image: boolean; previewUrl?: string };
 
 const contractComplete = (d: ContractData) => CONTRACT_FIELDS.every((f) => f.optional || d[f.key]?.trim());
+
+const FILE_EXT = String.raw`(?:pdf|docx?|xlsx?|pptx?|txt|md|csv|zip|png|jpe?g|gif|webp|json)`;
+/** [nhãn](path) hoặc [nhãn](<path>) — path Windows/Unix có đuôi tệp. */
+const MD_FILE_LINK = new RegExp(
+  String.raw`\[([^\]]+)\]\(\s*<?((?:[A-Za-z]:[\\/]|\\\\|\/)[^>\n]*?\.${FILE_EXT})>?\s*\)`,
+  "gi",
+);
+/** Đường dẫn tuyệt đối tới tệp (không nằm trong markdown link). */
+const BARE_FILE_PATH = new RegExp(
+  String.raw`(?<![\w:])((?:[A-Za-z]:[\\/]|\\\\)[^\n<>"|?*]+?\.${FILE_EXT})\b`,
+  "gi",
+);
+
+function fileBaseName(path: string) {
+  const cleaned = path.replace(/^<|>$/g, "").trim();
+  const parts = cleaned.split(/[\\/]/);
+  return parts[parts.length - 1] || cleaned;
+}
+
+function knowledgeDownloadUrl(path: string) {
+  return `/api/knowledge/download?path=${encodeURIComponent(path.replace(/^<|>$/g, "").trim())}`;
+}
+
+function FileDownloadChip({ path, label }: { path: string; label?: string }) {
+  const name = fileBaseName(path);
+  const title = label && label !== name ? label : name;
+  return (
+    <a
+      href={knowledgeDownloadUrl(path)}
+      download={name}
+      title={path}
+      className="my-1.5 flex max-w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-slate-800 no-underline shadow-2xs transition hover:border-[#0047AB]/40 hover:bg-blue-50"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0047AB] text-white">
+        <FileText size={18} weight="bold" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">{title}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-slate-500">{name}</span>
+      </span>
+      <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#0047AB] px-2.5 text-xs font-semibold text-white">
+        <DownloadSimple size={14} weight="bold" aria-hidden />
+        Tải về
+      </span>
+    </a>
+  );
+}
+
+/** Hiện icon/nút tải khi tin nhắn có đường dẫn tệp hoặc markdown link tới file. */
+function ChatRichText({ text, asUser }: { text: string; asUser?: boolean }) {
+  const parts: ReactNode[] = [];
+  const consumed = new Set<string>();
+  type Hit = { start: number; end: number; path: string; label?: string };
+  const hits: Hit[] = [];
+
+  for (const re of [MD_FILE_LINK, BARE_FILE_PATH]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const path = (m[2] || m[1] || "").trim();
+      if (!path) continue;
+      const key = `${m.index}:${path.toLowerCase()}`;
+      if (consumed.has(key)) continue;
+      // Bỏ bare path trùng vùng đã khớp markdown link.
+      if (hits.some((h) => m!.index >= h.start && m!.index < h.end)) continue;
+      consumed.add(key);
+      hits.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        path,
+        label: m[2] ? m[1] : undefined,
+      });
+    }
+  }
+
+  hits.sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  hits.forEach((hit, i) => {
+    if (hit.start > cursor) {
+      parts.push(<span key={`t-${i}`}>{text.slice(cursor, hit.start)}</span>);
+    }
+    parts.push(
+      <FileDownloadChip
+        key={`f-${i}-${hit.path}`}
+        path={hit.path}
+        label={asUser ? undefined : hit.label}
+      />,
+    );
+    cursor = hit.end;
+  });
+  if (cursor < text.length) parts.push(<span key="t-end">{text.slice(cursor)}</span>);
+  return <>{parts.length ? parts : text}</>;
+}
 
 /** Chatbot nổi góc phải dưới, dùng CLI/model được chọn qua /api/chat. */
 export default function ChatBot() {
@@ -213,7 +306,7 @@ export default function ChatBot() {
                       m.role === "user" ? "bg-[#0047AB] text-white" : "bg-white text-slate-800"
                     }`}
                   >
-                    {m.text}
+                    <ChatRichText text={m.text} asUser={m.role === "user"} />
                     {m.kind === "contract-done" && m.data && (
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button type="button" onClick={() => downloadContractDoc(m.data!)} className="h-9 rounded-lg bg-[#0047AB] text-sm font-semibold text-white hover:bg-[#003d94] cursor-pointer">

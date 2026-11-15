@@ -79,6 +79,13 @@ const groupThemes: Record<
     ring: "hover:border-cyan-300 hover:ring-cyan-100",
     soft: "group-hover/card:bg-cyan-50",
   },
+  "quan-ly-ai": {
+    iconBg: "bg-violet-600",
+    iconShadow: "shadow-[0_8px_16px_-6px_rgba(124,58,237,0.5)]",
+    badge: "bg-violet-50 text-violet-700",
+    ring: "hover:border-violet-300 hover:ring-violet-100",
+    soft: "group-hover/card:bg-violet-50",
+  },
   "bao-cao": {
     iconBg: "bg-emerald-600",
     iconShadow: "shadow-[0_8px_16px_-6px_rgba(5,150,105,0.5)]",
