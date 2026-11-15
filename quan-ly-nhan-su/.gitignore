@@ -46,3 +46,4 @@ next-env.d.ts
 
 # chu ky nha thau (khong dua len GitHub)
 /public/chu-ky/
+.codex-chat/

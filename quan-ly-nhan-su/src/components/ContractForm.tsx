@@ -28,8 +28,8 @@ export const CONTRACT_FIELDS: Field[] = [
 const INITIAL: ContractData = { bTen: "Công ty Cổ phần Công trình Thành Phát" };
 
 /** Form tạo hợp đồng nằm trong khung chat. Thiếu trường bắt buộc thì báo đỏ và liệt kê trường còn thiếu. */
-export default function ContractForm({ onSubmit }: { onSubmit: (data: ContractData) => void }) {
-  const [values, setValues] = useState<ContractData>(INITIAL);
+export default function ContractForm({ onSubmit, initial }: { onSubmit: (data: ContractData) => void; initial?: ContractData }) {
+  const [values, setValues] = useState<ContractData>({ ...INITIAL, ...initial });
   const [missing, setMissing] = useState<string[]>([]);
 
   function submit(e: React.FormEvent) {

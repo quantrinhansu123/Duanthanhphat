@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "@/components/icons";
-import ContractForm, { type ContractData } from "@/components/ContractForm";
-import ContractDocument from "@/components/ContractDocument";
+import { Paperclip, X } from "@/components/icons";
+import ContractForm, { CONTRACT_FIELDS, type ContractData } from "@/components/ContractForm";
+import ContractDocument, { downloadContractDoc } from "@/components/ContractDocument";
+import type { ChatModel } from "@/lib/chatModels";
 
-type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form" | "contract-done"; data?: ContractData };
+type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form" | "contract-done"; data?: ContractData; modelLabel?: string; elapsedMs?: number };
 
-/** Chatbot nổi góc phải dưới: bấm logo Thành Phát để mở cửa sổ chat (Gemini qua /api/chat). */
+type Attached = { name: string; path: string; image: boolean };
+
+const contractComplete = (d: ContractData) => CONTRACT_FIELDS.every((f) => f.optional || d[f.key]?.trim());
+
+/** Chatbot nổi góc phải dưới, dùng CLI/model được chọn qua /api/chat. */
 export default function ChatBot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -16,10 +21,34 @@ export default function ChatBot() {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ContractData | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [files, setFiles] = useState<Attached[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const sessionId = useRef(crypto.randomUUID()); // phiên CLI riêng cho mỗi cuộc chat/model
+  const [models, setModels] = useState<ChatModel[]>([]);
+  const [modelId, setModelId] = useState("");
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setModelsLoading(true);
+    void fetch("/api/chat/models").then(async (response) => {
+      const data = await response.json() as { models?: ChatModel[]; defaultId?: string; antiError?: string; error?: string };
+      if (!response.ok || !data.models?.length) throw new Error(data.error || "Không tải được danh sách model.");
+      if (!active) return;
+      setModels(data.models);
+      setModelId((current) => data.models!.some((m) => m.id === current) ? current : data.defaultId || "");
+      if (data.antiError) setError(data.antiError);
+    }).catch((e: unknown) => {
+      if (active) setError(e instanceof Error ? e.message : "Không tải được danh sách model.");
+    }).finally(() => { if (active) setModelsLoading(false); });
+    return () => { active = false; };
+  }, [open]);
 
   function finishContract(index: number, data: ContractData) {
     setMessages((ms) => ms.map((m, i) => (i === index
-      ? { role: "model", kind: "contract-done", data, text: "Đã tạo hợp đồng thành công. Bạn có muốn in không?" }
+      ? { ...m, role: "model", kind: "contract-done", data, text: "Đã tạo hợp đồng thành công. Tải file Word hoặc mở bản in bên dưới." }
       : m)));
   }
 
@@ -27,25 +56,64 @@ export default function ChatBot() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [messages, loading, open]);
 
+  async function upload(list: FileList | null) {
+    if (!list?.length || loading || uploading) return;
+    setUploading(true);
+    setError("");
+    try {
+      for (const file of Array.from(list).slice(0, 5 - files.length)) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("sessionId", sessionId.current);
+        const provider = models.find((m) => m.id === modelId)?.provider;
+        if (provider) form.append("provider", provider);
+        const res = await fetch("/api/chat/upload", { method: "POST", body: form });
+        const data = (await res.json().catch(() => null)) as (Attached & { error?: string }) | null;
+        if (!res.ok || !data?.path) throw new Error(data?.error || `Không tải được ${file.name}.`);
+        setFiles((fs) => [...fs, { name: data.name, path: data.path, image: data.image }]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không tải được tệp.");
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
   async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
-    const next: ChatMessage[] = [...messages, { role: "user", text }];
+    const text = input.trim() || (files.length ? "Hãy đọc tệp đính kèm và tóm tắt nội dung chính." : "");
+    if (!text || loading || uploading) return;
+    const attachments = files;
+    const shown = attachments.length ? `${text}\n${attachments.map((f) => `📎 ${f.name}`).join("\n")}` : text;
+    const next: ChatMessage[] = [...messages, { role: "user", text: shown }];
     setMessages(next);
+    setFiles([]);
     setInput("");
     setError("");
     setLoading(true);
+    const started = performance.now();
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next.map(({ role, text }) => ({ role, text })) }),
+        body: JSON.stringify({ sessionId: sessionId.current, modelId: modelId || undefined, attachments, messages: next.map(({ role, text }) => ({ role, text })) }),
+        signal: AbortSignal.timeout(120_000),
       });
-      const data = (await response.json().catch(() => null)) as { text?: string; error?: string; action?: string } | null;
+      const data = (await response.json().catch(() => null)) as { text?: string; error?: string; action?: string; data?: ContractData; modelLabel?: string } | null;
       if (!response.ok || !data?.text) throw new Error(data?.error || "Không nhận được phản hồi.");
-      setMessages([...next, { role: "model", text: data.text, kind: data.action === "contract_form" ? "contract-form" : undefined }]);
+      const meta = { modelLabel: data.modelLabel || models.find((m) => m.id === modelId)?.label || "Mặc định hệ thống", elapsedMs: Math.round(performance.now() - started) };
+      const form = data.action === "contract_form";
+      // Đủ thông tin từ hồ sơ → tạo luôn; thiếu → hiện form đã điền sẵn để bổ sung.
+      if (form && data.data && contractComplete(data.data)) {
+        setMessages([...next, { ...meta, role: "model", kind: "contract-done", data: data.data, text: "Đã tạo hợp đồng thành công. Tải file Word hoặc mở bản in bên dưới." }]);
+      } else {
+        setMessages([...next, { ...meta, role: "model", text: data.text, kind: form ? "contract-form" : undefined, data: data.data }]);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Có lỗi xảy ra.");
+      setMessages(messages);
+      setFiles(attachments);
+      setInput(input);
+      setError(e instanceof Error && e.name === "TimeoutError" ? "Chưa nhận được kết quả sau 2 phút. Kiểm tra trạng thái tác vụ trước khi gửi lại." : e instanceof Error ? e.message : "Có lỗi xảy ra.");
     } finally {
       setLoading(false);
     }
@@ -60,18 +128,37 @@ export default function ChatBot() {
           aria-label="Trợ lý AI Thành Phát"
           className="flex h-[min(32rem,calc(100dvh-10rem))] w-[min(32rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         >
-          <header className="flex items-center gap-3 bg-[#0047AB] px-4 py-3 text-white">
+          <header className="flex shrink-0 items-center gap-2 bg-[#0047AB] px-4 py-3 text-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" className="h-9 w-9 rounded-full bg-white object-contain" />
+            <img src="/logo.png" alt="" className="h-9 w-9 shrink-0 rounded-full bg-white object-contain" />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold">Trợ lý AI Thành Phát</div>
-              <div className="text-xs text-blue-100">Hỏi đáp nhanh về hệ thống</div>
+              <div className="truncate text-sm font-bold">Trợ lý AI Thành Phát</div>
+              <div className="truncate text-xs text-blue-100">Hỏi đáp nhanh về hệ thống</div>
             </div>
+            <select
+              aria-label="Chọn CLI và model"
+              title={models.find((m) => m.id === modelId)?.label || "Chọn CLI và model"}
+              value={modelId}
+              disabled={loading || uploading || modelsLoading}
+              onChange={(e) => {
+                setModelId(e.target.value);
+                sessionId.current = crypto.randomUUID();
+                setError("");
+              }}
+              className="h-9 w-24 shrink-0 truncate rounded-lg border border-white/40 bg-[#0047AB] px-2 text-xs text-white outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50 sm:w-28"
+            >
+              <option value="" className="bg-white text-slate-800">{modelsLoading ? "Đang tải…" : "Mặc định"}</option>
+              {(["codex", "anti", "gemini"] as const).map((provider) => models.some((m) => m.provider === provider) && (
+                <optgroup key={provider} label={provider === "anti" ? "Anti CLI" : provider === "codex" ? "Codex CLI" : "Gemini API"} className="bg-white text-slate-800">
+                  {models.filter((m) => m.provider === provider).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
             <button
               type="button"
-              onClick={() => { setMessages([]); setInput(""); setError(""); setPreview(null); }}
-              disabled={loading || messages.length === 0}
-              className="h-9 rounded-lg border border-white/40 px-3 text-xs font-semibold hover:bg-white/15 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer disabled:cursor-default disabled:opacity-40"
+              onClick={() => { sessionId.current = crypto.randomUUID(); setFiles([]); setMessages([]); setInput(""); setError(""); setPreview(null); }}
+              disabled={loading || uploading || (messages.length === 0 && files.length === 0 && !input.trim())}
+              className="h-9 shrink-0 rounded-lg border border-white/40 px-3 text-xs font-semibold hover:bg-white/15 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer disabled:cursor-default disabled:opacity-40"
             >
               Chat mới
             </button>
@@ -79,7 +166,7 @@ export default function ChatBot() {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Đóng cửa sổ chat"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/15 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-white/15 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer"
             >
               <X size={18} weight="bold" aria-hidden />
             </button>
@@ -92,11 +179,11 @@ export default function ChatBot() {
               </p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                 {m.kind === "contract-form" ? (
                   <div className="w-full space-y-2">
                     <p className="text-sm text-slate-700">{m.text}</p>
-                    <ContractForm onSubmit={(d) => finishContract(i, d)} />
+                    <ContractForm initial={m.data} onSubmit={(d) => finishContract(i, d)} />
                   </div>
                 ) : (
                   <div
@@ -106,12 +193,18 @@ export default function ChatBot() {
                   >
                     {m.text}
                     {m.kind === "contract-done" && m.data && (
-                      <button type="button" onClick={() => setPreview(m.data!)} className="mt-2 block h-9 w-full rounded-lg bg-[#0047AB] text-sm font-semibold text-white hover:bg-[#003d94] cursor-pointer">
-                        In / Lưu PDF
-                      </button>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => downloadContractDoc(m.data!)} className="h-9 rounded-lg bg-[#0047AB] text-sm font-semibold text-white hover:bg-[#003d94] cursor-pointer">
+                          Tải file Word
+                        </button>
+                        <button type="button" onClick={() => setPreview(m.data!)} className="h-9 rounded-lg border border-[#0047AB] text-sm font-semibold text-[#0047AB] hover:bg-blue-50 cursor-pointer">
+                          Xem / In
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
+                {m.elapsedMs !== undefined && <p className="mt-1 text-[10px] text-slate-500">{m.modelLabel?.replace(/^(Anti CLI|Codex|Gemini API) · /, "")} · {(m.elapsedMs / 1000).toFixed(1)} giây</p>}
               </div>
             ))}
             {loading && <p className="text-xs text-slate-500">Đang trả lời…</p>}
@@ -123,20 +216,52 @@ export default function ChatBot() {
               e.preventDefault();
               void send();
             }}
-            className="flex gap-2 border-t border-slate-200 bg-white p-3"
+            className="flex shrink-0 flex-wrap items-end gap-2 border-t border-slate-200 bg-white p-3"
           >
-            <input
+            {files.length > 0 && (
+              <ul className="flex w-full flex-wrap gap-1.5">
+                {files.map((f) => (
+                  <li key={f.path} className="flex max-w-full items-center gap-1 rounded-lg bg-slate-100 py-1 pl-2.5 pr-1 text-xs text-slate-700">
+                    <span className="truncate">{f.name}</span>
+                    <button type="button" onClick={() => setFiles((fs) => fs.filter((x) => x.path !== f.path))} aria-label={`Bỏ tệp ${f.name}`} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200 cursor-pointer">
+                      <X size={12} weight="bold" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <input ref={fileInput} type="file" multiple hidden onChange={(e) => void upload(e.target.files)} />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={loading || uploading || files.length >= 5}
+              aria-label="Đính kèm tệp"
+              title="Đính kèm tệp (tối đa 5 tệp, 25 MB mỗi tệp)"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer disabled:cursor-default disabled:opacity-40"
+            >
+              <Paperclip size={20} aria-hidden />
+            </button>
+            <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Nhập câu hỏi…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={uploading ? "Đang tải tệp…" : "Nhập câu hỏi…"}
               aria-label="Nội dung câu hỏi"
+              aria-keyshortcuts="Enter"
+              title="Enter để gửi; Shift+Enter để xuống dòng"
               maxLength={4000}
+              rows={1}
               autoFocus
-              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 px-3.5 text-sm outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
+              className="h-11 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm leading-5 outline-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
             />
             <button
               type="submit"
-              disabled={loading || !input.trim()}
+              disabled={loading || uploading || (!input.trim() && !files.length)}
               className="h-11 rounded-xl bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#003d94] cursor-pointer disabled:cursor-default disabled:opacity-40"
             >
               Gửi

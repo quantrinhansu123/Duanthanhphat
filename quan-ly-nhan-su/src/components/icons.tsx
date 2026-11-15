@@ -10,6 +10,7 @@ export {
   Bell,
   List,
   X,
+  Paperclip,
   CaretDown,
   CaretUp,
   CaretLeft,
