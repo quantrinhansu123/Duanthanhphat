@@ -7,6 +7,7 @@ import {
   resolveKnowledgePath,
 } from "@/lib/server/knowledgeFiles";
 import { requireAccess } from "@/lib/server/requireAccess";
+import { legacyKnowledgePathDenied } from '@/lib/server/documentKnowledgeWeb';
 
 const TAB = "file-tri-thuc";
 
@@ -40,6 +41,7 @@ export async function GET(_request: Request, ctx: Ctx) {
     const { name: raw } = await ctx.params;
     const decoded = decodeURIComponent(raw);
     const { path, name } = resolveKnowledgePath(decoded);
+    const blocked=await legacyKnowledgePathDenied(path);if(blocked)return blocked;
     const info = await stat(path);
     const { stream } = openKnowledgeFileStream(name);
     const type = CONTENT_TYPES[extname(name).toLowerCase()] || "application/octet-stream";
@@ -63,6 +65,7 @@ export async function DELETE(_request: Request, ctx: Ctx) {
 
   try {
     const { name: raw } = await ctx.params;
+    const blocked=await legacyKnowledgePathDenied(resolveKnowledgePath(decodeURIComponent(raw)).path);if(blocked)return blocked;
     await deleteKnowledgeFile(decodeURIComponent(raw));
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

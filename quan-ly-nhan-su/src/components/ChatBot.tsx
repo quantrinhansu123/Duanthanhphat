@@ -6,7 +6,8 @@ import ContractForm, { CONTRACT_FIELDS, type ContractData } from "@/components/C
 import ContractDocument, { downloadContractDoc } from "@/components/ContractDocument";
 import type { ChatModel } from "@/lib/chatModels";
 
-type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form" | "contract-done"; data?: ContractData; modelLabel?: string; elapsedMs?: number };
+type Citation = { documentId: string; page: number; title: string; revision: number };
+type ChatMessage = { role: "user" | "model"; text: string; kind?: "contract-form" | "contract-done"; data?: ContractData; modelLabel?: string; elapsedMs?: number; citations?: Citation[] };
 
 type Attached = { name: string; path: string; image: boolean; previewUrl?: string };
 
@@ -122,6 +123,17 @@ export default function ChatBot() {
   const [models, setModels] = useState<ChatModel[]>([]);
   const [modelId, setModelId] = useState("");
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [knowledgeProjects, setKnowledgeProjects] = useState<{id:string;name:string}[]>([]);
+  const [knowledgeProjectId, setKnowledgeProjectId] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void fetch('/api/document-knowledge').then(r => r.json()).then(data => {
+      if (active && Array.isArray(data.projects)) setKnowledgeProjects(data.projects);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [open]);
 
   function releasePreviews(attachments: Attached[]) {
     for (const file of attachments) {
@@ -177,7 +189,7 @@ export default function ChatBot() {
         const form = new FormData();
         form.append("file", file);
         form.append("sessionId", sessionId.current);
-        const provider = models.find((m) => m.id === modelId)?.provider;
+        const provider = knowledgeProjectId ? 'codex' : models.find((m) => m.id === modelId)?.provider;
         if (provider) form.append("provider", provider);
         const res = await fetch("/api/chat/upload", { method: "POST", body: form });
         const data = (await res.json().catch(() => null)) as (Attached & { error?: string }) | null;
@@ -205,23 +217,25 @@ export default function ChatBot() {
     setInput("");
     setError("");
     setLoading(true);
+    // eslint-disable-next-line react-hooks/purity -- Timing runs only in the submit event handler.
     const started = performance.now();
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: sessionId.current, modelId: modelId || undefined, attachments, messages: next.map(({ role, text }) => ({ role, text })) }),
+        body: JSON.stringify({ sessionId: sessionId.current, modelId: modelId || undefined, knowledgeProjectId: knowledgeProjectId || undefined, attachments, messages: next.map(({ role, text }) => ({ role, text })) }),
         signal: AbortSignal.timeout(120_000),
       });
-      const data = (await response.json().catch(() => null)) as { text?: string; error?: string; action?: string; data?: ContractData; modelLabel?: string } | null;
+      const data = (await response.json().catch(() => null)) as { text?: string; error?: string; action?: string; data?: ContractData; modelLabel?: string; citations?: Citation[] } | null;
       if (!response.ok || !data?.text) throw new Error(data?.error || "Không nhận được phản hồi.");
+      // eslint-disable-next-line react-hooks/purity -- Timing runs only after the submitted request finishes.
       const meta = { modelLabel: data.modelLabel || models.find((m) => m.id === modelId)?.label || "Mặc định hệ thống", elapsedMs: Math.round(performance.now() - started) };
       const form = data.action === "contract_form";
       // Đủ thông tin từ hồ sơ → tạo luôn; thiếu → hiện form đã điền sẵn để bổ sung.
       if (form && data.data && contractComplete(data.data)) {
         setMessages([...next, { ...meta, role: "model", kind: "contract-done", data: data.data, text: "Đã tạo hợp đồng thành công. Tải file Word hoặc mở bản in bên dưới." }]);
       } else {
-        setMessages([...next, { ...meta, role: "model", text: data.text, kind: form ? "contract-form" : undefined, data: data.data }]);
+        setMessages([...next, { ...meta, role: "model", text: data.text, kind: form ? "contract-form" : undefined, data: data.data, citations: data.citations }]);
       }
       releasePreviews(attachments);
     } catch (e) {
@@ -252,9 +266,9 @@ export default function ChatBot() {
             </div>
             <select
               aria-label="Chọn CLI và model"
-              title={models.find((m) => m.id === modelId)?.label || "Chọn CLI và model"}
-              value={modelId}
-              disabled={loading || uploading || modelsLoading}
+              title={knowledgeProjectId ? 'Codex Standard · Kho hồ sơ' : models.find((m) => m.id === modelId)?.label || "Chọn CLI và model"}
+              value={knowledgeProjectId ? 'knowledge' : modelId}
+              disabled={loading || uploading || modelsLoading || Boolean(knowledgeProjectId)}
               onChange={(e) => {
                 setModelId(e.target.value);
                 sessionId.current = crypto.randomUUID();
@@ -263,6 +277,7 @@ export default function ChatBot() {
               className="h-9 w-24 shrink-0 truncate rounded-lg border border-white/40 bg-[#0047AB] px-2 text-xs text-white outline-hidden focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50 sm:w-28"
             >
               <option value="" className="bg-white text-slate-800">{modelsLoading ? "Đang tải…" : "Mặc định"}</option>
+              {knowledgeProjectId && <option value="knowledge" className="bg-white text-slate-800">Codex · Kho hồ sơ</option>}
               {(["codex", "anti", "gemini"] as const).map((provider) => models.some((m) => m.provider === provider) && (
                 <optgroup key={provider} label={provider === "anti" ? "Anti CLI" : provider === "codex" ? "Codex CLI" : "Gemini API"} className="bg-white text-slate-800">
                   {models.filter((m) => m.provider === provider).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
@@ -287,6 +302,16 @@ export default function ChatBot() {
             </button>
           </header>
 
+          {knowledgeProjects.length > 0 && <label className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+            Kho hồ sơ
+            <select aria-label="Chọn kho hồ sơ để tra cứu" value={knowledgeProjectId} disabled={loading || uploading}
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 focus-visible:outline-2 focus-visible:outline-[#0047AB]"
+              onChange={e => { setKnowledgeProjectId(e.target.value); setMessages([]); releasePreviews(files); setFiles([]); setError(''); setInput(''); setPreview(null); sessionId.current = crypto.randomUUID(); }}>
+              <option value="">Hệ thống chung</option>
+              {knowledgeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>}
+
           <div ref={listRef} aria-live="polite" className="flex-1 space-y-3 overflow-y-auto bg-[#f4f6fa] p-4">
             {messages.length === 0 && (
               <p className="rounded-xl bg-white px-3.5 py-2.5 text-sm text-slate-600 shadow-2xs">
@@ -307,6 +332,14 @@ export default function ChatBot() {
                     }`}
                   >
                     <ChatRichText text={m.text} asUser={m.role === "user"} />
+                    {m.citations?.length ? <ul className="mt-2 space-y-1 border-t border-slate-200 pt-2 text-xs">
+                      {m.citations.map(c => <li key={`${c.documentId}:${c.page}`}>
+                        <a className="text-[#0047AB] underline underline-offset-2 focus-visible:outline-2" target="_blank" rel="noopener noreferrer"
+                          href={`/api/document-knowledge/source?id=${encodeURIComponent(c.documentId)}&revision=${c.revision}#page=${c.page}`}>
+                          {c.title} · trang {c.page}
+                        </a>
+                      </li>)}
+                    </ul> : null}
                     {m.kind === "contract-done" && m.data && (
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button type="button" onClick={() => downloadContractDoc(m.data!)} className="h-9 rounded-lg bg-[#0047AB] text-sm font-semibold text-white hover:bg-[#003d94] cursor-pointer">

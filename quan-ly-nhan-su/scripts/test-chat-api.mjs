@@ -16,12 +16,17 @@ const antiCalls = [];
 let antiResponse = JSON.stringify({ action: "message", text: "Anti CLI reply" });
 let starts = 0;
 let contractContext = "";
-let authenticatedUser = { email: "test@example.com" };
+let authenticatedUser = { id:'11111111-1111-4111-8111-111111111111',email: "test@example.com" };
 let reportAccess = true;
 const dataCalls = [], geminiRequests = [];
 let geminiReplies = [];
 const env = { CHAT_PROVIDER: "codex", CHAT_CONTRACT_DIR: "D:/shared-contracts" };
 const imports = {
+  "@/lib/server/documentKnowledgeChat": {
+    handleKnowledgeChat:async()=>({status:200,body:{text:'scoped fixture'}}),
+    handleSafeGeneralChat:async()=>({status:200,body:{text:'bounded fixture'}}),
+    isLegacyChatAdmin:()=>env.CHAT_LEGACY_ADMIN_IDS===authenticatedUser?.id,
+  },
   "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
   "node:child_process": {
     spawn() {
@@ -88,17 +93,20 @@ const greeting = await exports.POST(request("Chào bạn!", "anti:gemini-3.8-fla
 assert.equal(greeting.body.modelLabel, "Hệ thống", "Local greeting must not pretend to be a model response");
 assert.equal(starts, 0, "Do not start a CLI for a first-message greeting");
 assert.equal(antiCalls.length, 0);
+assert.equal((await exports.POST(request('Hỏi chung'))).body.text,'bounded fixture','Ordinary users cannot enter unrestricted CLI');
+assert.equal(starts,0);
+env.CHAT_LEGACY_ADMIN_IDS=authenticatedUser.id;
 assert.equal((await exports.POST(request("a"))).body.text, "Bạn cần hỗ trợ gì?");
 assert.equal(starts, 1);
 const config = configs.find((file) => file.path.endsWith("config.toml")).text;
-assert.ok(config.includes("fast_mode = true"));
+assert.ok(config.includes("fast_mode = false"));
 assert.ok(config.includes("model_catalog_json = "), "Avoid online model-list timeouts when model is cached");
 for (const feature of ["plugins", "remote_plugin", "apps", "shell_snapshot"]) {
   assert.ok(config.includes(`${feature} = false`), `${feature} must not slow chatbot startup`);
 }
 const turn = calls.find((call) => call.method === "turn/start");
 assert.equal(turn.params.effort, "medium");
-assert.equal(turn.params.serviceTier, "priority", "Fast mode must preserve medium reasoning");
+assert.equal(turn.params.serviceTier, "default", "Use Standard service tier");
 assert.ok(turn.params.input[0].text.includes("không chạy lệnh hay kiểm tra môi trường"));
 assert.ok(turn.params.input[0].text.includes("hoso-index.json"), "First message must receive the initialized contract index path");
 env.CODEX_EFFORT = "high";
@@ -106,7 +114,7 @@ assert.equal((await exports.POST(request("Câu hỏi tiếp theo"))).status, 200
 assert.equal(starts, 1, "Reuse the running process");
 assert.equal(calls.filter((call) => call.method === "thread/start").length, 1, "Reuse conversation context");
 assert.equal(calls.filter((call) => call.method === "turn/start").at(-1).params.effort, "high");
-assert.equal(calls.filter((call) => call.method === "turn/start").at(-1).params.serviceTier, "priority");
+assert.equal(calls.filter((call) => call.method === "turn/start").at(-1).params.serviceTier, "default");
 contractContext = "Verified contract data fixture";
 await exports.POST(request("Tạo hợp đồng theo mẫu"));
 assert.ok(calls.filter((call) => call.method === "turn/start").at(-1).params.input[0].text.includes(contractContext), "Inject verified data without another tool round trip");
@@ -146,4 +154,4 @@ geminiReplies = [{ candidates: [{ content: { parts: [{ text: "Không có quyền
 await exports.POST(request("Tra cứu dữ liệu"));
 assert.ok(!geminiRequests.at(-1).tools[0].functionDeclarations.some((tool) => tool.name === "thong_ke_moi_han"));
 assert.equal(dataCalls.length, 1, "Do not expose data tools without report permission");
-console.log("PASS chat API: provider routing, model validation, shared contract output, Fast and context reuse");
+console.log("PASS chat API: provider routing, model validation, shared contract output, Standard and context reuse");

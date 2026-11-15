@@ -5,6 +5,7 @@ import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { resolveAiQsRoot } from "@/lib/server/aiQsFiles";
 import { requireAccess } from "@/lib/server/requireAccess";
+import { legacyKnowledgeRestricted } from '@/lib/server/documentKnowledgeWeb';
 
 const TAB = "hoso-ai-qs";
 
@@ -25,6 +26,7 @@ const CONTENT_TYPES: Record<string, string> = {
 export async function GET(request: Request) {
   const denied = await requireAccess(TAB, "view");
   if (denied) return denied;
+  if(await legacyKnowledgeRestricted()) return NextResponse.json({error:'Chọn tài liệu trong kho hồ sơ được chia sẻ để xem bản gốc.'},{status:403});
 
   const url = new URL(request.url);
   const path = (url.searchParams.get("path") || "").trim();

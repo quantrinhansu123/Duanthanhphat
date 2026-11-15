@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { listAiQsTree } from "@/lib/server/aiQsFiles";
 import { requireAccess } from "@/lib/server/requireAccess";
+import { legacyKnowledgeRestricted } from '@/lib/server/documentKnowledgeWeb';
 
 const TAB = "hoso-ai-qs";
 
 export async function GET() {
   const denied = await requireAccess(TAB, "view");
   if (denied) return denied;
+  if (await legacyKnowledgeRestricted()) return NextResponse.json({tree:[],totalFiles:0,totalFolders:0,legacyRestricted:true});
   try {
     const data = await listAiQsTree();
     return NextResponse.json(data);

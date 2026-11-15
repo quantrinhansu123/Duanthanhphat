@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { extname } from "node:path";
 import { stat } from "node:fs/promises";
-import { openKnowledgeAccessStream } from "@/lib/server/knowledgeFiles";
+import { openKnowledgeAccessStream,resolveKnowledgeAccessPath } from "@/lib/server/knowledgeFiles";
 import { requireAccess } from "@/lib/server/requireAccess";
+import { legacyKnowledgePathDenied } from '@/lib/server/documentKnowledgeWeb';
 
 const CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -37,6 +38,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    const blocked=await legacyKnowledgePathDenied(resolveKnowledgeAccessPath(path).path);
+    if(blocked)return blocked;
     const { stream, name, path: full } = openKnowledgeAccessStream(path);
     const info = await stat(full);
     const type = CONTENT_TYPES[extname(name).toLowerCase()] || "application/octet-stream";

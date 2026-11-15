@@ -9,7 +9,10 @@
     "build": "next build --webpack && node scripts/strip-chat-runtime-traces.mjs",
     "start": "next start",
     "lint": "eslint",
-    "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs"
+    "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs",
+    "knowledge:worker": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs",
+    "knowledge:scan": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs --scan-only",
+    "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -33,6 +36,8 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@electric-sql/pglite-pgvector": "0.0.17",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^20",

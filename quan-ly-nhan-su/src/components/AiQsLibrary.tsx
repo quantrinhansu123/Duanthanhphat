@@ -15,6 +15,7 @@ import {
   X,
 } from "@/components/icons";
 import { useAccess } from "@/lib/useAccess";
+import DocumentKnowledgePanel from './DocumentKnowledgePanel';
 
 type AiQsDocKind =
   | "Hợp đồng"
@@ -44,6 +45,7 @@ type AiQsNode = {
 };
 
 type TreeResponse = {
+  legacyRestricted?: boolean;
   rootName?: string;
   root?: string;
   knowledgeRelative?: string;
@@ -246,6 +248,7 @@ export default function AiQsLibrary() {
   }
 
   const byKind = data?.byKind ?? {};
+  if(data?.legacyRestricted) return <main className="w-full px-4 sm:px-6 pb-8"><DocumentKnowledgePanel /></main>;
   const previewExt = (preview?.ext || "").toLowerCase();
   const previewIsImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(previewExt);
   const previewIsPdf = previewExt === "pdf";
@@ -253,6 +256,7 @@ export default function AiQsLibrary() {
 
   return (
     <main className="w-full px-4 sm:px-6 pb-8">
+      <DocumentKnowledgePanel />
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-slate-600">
         <span>
           <strong className="font-semibold text-slate-900 font-mono tabular-nums">{data?.totalFolders ?? 0}</strong> thư mục

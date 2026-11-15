@@ -12,6 +12,7 @@ import { readChatContractContext } from "@/lib/server/chatContractContext";
 import { askAntiCli } from "@/lib/server/antiChat";
 import { ANTI_RESPONSE_SCHEMA, parseAntiResponse } from "@/lib/server/antiResponse";
 import { getChatModels } from "@/lib/server/chatModels";
+import { handleKnowledgeChat, handleSafeGeneralChat, isLegacyChatAdmin } from "@/lib/server/documentKnowledgeChat";
 import type { ChatModel } from "@/lib/chatModels";
 
 type ChatMessage = { role: "user" | "model"; text: string };
@@ -90,7 +91,7 @@ async function codexServer() {
     // shortcut: danh mục cục bộ cho model đã biết; model mới chưa có dùng khám phá online.
     if (catalog.models?.some((item: { slug?: string }) => item.slug === model)) catalogConfig = `model_catalog_json = ${JSON.stringify(catalogPath)}\n`;
   } catch { /* chưa có danh mục cục bộ → dùng cơ chế khám phá mặc định */ }
-  await writeFile(join(home, "config.toml"), `model = ${JSON.stringify(model)}\n${catalogConfig}[features]\nfast_mode = true\nplugins = false\nremote_plugin = false\napps = false\nshell_snapshot = false\n`);
+  await writeFile(join(home, "config.toml"), `model = ${JSON.stringify(model)}\nservice_tier = "default"\n${catalogConfig}[features]\nfast_mode = false\nplugins = false\nremote_plugin = false\napps = false\nshell_snapshot = false\n`);
   const child = spawn("codex", ["app-server"], { shell: true, env: { ...process.env, CODEX_HOME: home }, stdio: ["pipe", "pipe", "ignore"] });
   const kill = () => child.kill();
   const pending = new Map<number, (m: Rpc) => void>();
@@ -174,7 +175,7 @@ ${history}`;
       { type: "text", text: resumed ? nextPrompt : prompt + context, text_elements: [] },
       ...files.filter((f) => f.image).map((f) => ({ type: "localImage", path: f.path })),
     ];
-    const tr = await s.rpc("turn/start", { threadId, input, effort: process.env.CODEX_EFFORT?.trim() || "medium", serviceTier: "priority" });
+    const tr = await s.rpc("turn/start", { threadId, input, effort: process.env.CODEX_EFFORT?.trim() || "medium", serviceTier: "default" });
     if (tr.error) throw new Error(tr.error.message);
     await done;
     s.on.delete(threadId);
@@ -210,7 +211,9 @@ export async function POST(request: Request) {
   if (denied) return denied;
   if (!user) return NextResponse.json({ error: "Cần đăng nhập để sử dụng chức năng này." }, { status: 401 });
 
-  const body = (await request.json().catch(() => null)) as { messages?: ChatMessage[]; sessionId?: string; attachments?: Attachment[]; modelId?: string } | null;
+  const body = (await request.json().catch(() => null)) as { messages?: ChatMessage[]; sessionId?: string; attachments?: Attachment[]; modelId?: string; knowledgeProjectId?: string } | null;
+  // Project-scoped knowledge mode never enters the legacy unrestricted CLI workflow.
+  if (body?.knowledgeProjectId) return handleKnowledgeChat(request, body);
   if (Array.isArray(body?.messages) && body.messages.length === 1 && body.messages[0]?.role === "user" && typeof body.messages[0].text === "string" && !body.attachments?.length) {
     const greeting = body.messages[0].text.trim().toLowerCase().replace(/[!?.]+$/, "").trim();
     if (["chào", "chào bạn", "xin chào", "hi", "hello"].includes(greeting)) {
@@ -224,11 +227,13 @@ export async function POST(request: Request) {
     if (!choice) return NextResponse.json({ error: "Model không có trong danh sách được hỗ trợ. Tải lại danh sách model rồi thử lại." }, { status: 400 });
   }
   if (choice?.provider === "codex" || choice?.provider === "anti" || (!choice && process.env.CHAT_PROVIDER === "codex")) {
+    if (choice?.provider === "anti" && !isLegacyChatAdmin(user)) return NextResponse.json({error:'Luồng Anti CLI toàn quyền chỉ dành cho quản trị viên được cấu hình. Chọn Codex hoặc chọn kho hồ sơ.'},{status:403});
+    if (!isLegacyChatAdmin(user)) return handleSafeGeneralChat(request, body || {});
     const msgs = (Array.isArray(body?.messages) ? body.messages : []).filter((m) => (m?.role === "user" || m?.role === "model") && typeof m.text === "string" && m.text.trim());
     if (!msgs.length || msgs[msgs.length - 1].role !== "user") return NextResponse.json({ error: "Thiếu nội dung câu hỏi." }, { status: 400 });
     const email = user?.email ?? "";
     // Chỉ nhận tệp nằm trong thư mục upload (chặn đường dẫn tùy ý do client gửi lên).
-    const files = (Array.isArray(body?.attachments) ? body.attachments : []).filter((f) => typeof f?.path === "string" && typeof f.name === "string" && resolve(f.path).startsWith(UPLOAD_DIR + sep)).slice(0, 5);
+    const files = (Array.isArray(body?.attachments) ? body.attachments : []).filter((f) => typeof f?.path === "string" && typeof f.name === "string" && resolve(f.path).startsWith(join(UPLOAD_DIR, user.id) + sep)).slice(0, 5);
     return askCli(msgs, body?.sessionId ?? "", email, new URL(request.url).origin, files, choice, request.signal);
   }
 
