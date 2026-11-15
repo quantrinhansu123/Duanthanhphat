@@ -105,6 +105,14 @@ export function knowledgeErrorResponse(error: unknown) {
     DK_SOURCE_CHANGED:
       "Tệp gốc đã thay đổi. Quét lại thư mục để cập nhật phiên bản.",
     DK_GEMINI_NOT_CONFIGURED: "Chưa cấu hình dịch vụ xử lý và tìm kiếm hồ sơ.",
+    DK_PADDLE_UNAVAILABLE:
+      "Worker chưa khởi tạo được PaddleOCR. Kiểm tra môi trường và model trước khi thử lại.",
+    DK_OCR_TIMEOUT:
+      "OCR quá thời gian xử lý. Kiểm tra worker hoặc tài liệu rồi thử lại.",
+    DK_OCR_FALLBACK_LIMIT:
+      "Tài liệu vượt giới hạn trang OCR dự phòng. Cần người vận hành kiểm tra chất lượng.",
+    DK_OCR_NO_TEXT:
+      "Trang có nội dung nhưng chưa nhận dạng được chữ; cần kiểm tra bản gốc.",
     DK_CODEX_UNAVAILABLE:
       "Không kết nối được Codex. Kiểm tra đăng nhập trên máy chủ.",
     DK_CODEX_BINARY_REQUIRED:

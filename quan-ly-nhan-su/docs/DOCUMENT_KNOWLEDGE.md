@@ -1,14 +1,14 @@
 # Kho hồ sơ: nhập một lần, tính bằng SQL, hỏi điều khoản có nguồn
 
-Bản đầu tích hợp vào ứng dụng hiện tại, không cần WrenAI hay model local. Máy yếu dùng Gemini API để OCR/trích xuất/tạo embedding; Supabase lưu dữ liệu và chạy truy vấn; Codex đăng nhập hiện có dùng cho câu hỏi cần diễn giải.
+Bản đầu tích hợp vào ứng dụng hiện tại. Gemini API là OCR mặc định đã kiểm tra và tiếp tục phục vụ trích xuất JSON/embedding. PaddleOCR-VL là lựa chọn server có cấu hình riêng, cần nghiệm thu trước khi chuyển. Supabase lưu dữ liệu và chạy truy vấn; Codex đăng nhập hiện có dùng cho câu hỏi cần diễn giải. Máy dev không quyết định cấu hình server bàn giao.
 
-Số tệp và số hợp đồng được đếm riêng: nhiều chứng từ có thể thuộc cùng một hợp đồng. Ảnh/chữ dùng cho OCR, trích xuất và embedding được gửi tới Google; các đoạn dùng diễn giải được gửi tới Codex.
+Số tệp và số hợp đồng được đếm riêng: nhiều chứng từ có thể thuộc cùng một hợp đồng. Ảnh chỉ gửi Google khi chọn OCR API hoặc bật và phát sinh dự phòng; chữ dùng trích xuất/embedding vẫn gửi Google, các đoạn dùng diễn giải gửi Codex. Xem [cấu hình OCR và nghiệm thu](DOCUMENT_KNOWLEDGE_OCR.md).
 
 ## Vì sao chọn hướng này cho bản đầu
 
 - Tổng tiền do SQL tính trên dữ kiện đã xác minh, giữ quy tắc lũy kế và chống trùng nghiệp vụ. Chi phí đọc lại 83 tệp không đi theo mỗi câu hỏi; các truy vấn rõ nghĩa và nút Xem tổng không gọi model.
 - Tìm điều khoản dùng từ khóa cùng vector để lấy đúng phần liên quan, có nguồn trang. Đây là cách [hybrid search trên Supabase](https://supabase.com/docs/guides/ai/hybrid-search), tách khỏi phép tính tổng.
-- OCR/trích xuất/embedding qua API phù hợp máy ít RAM, không yêu cầu GPU local. `gemini-embedding-001` vẫn hỗ trợ trường hợp văn bản theo [tài liệu Google](https://ai.google.dev/gemini-api/docs/embeddings); đã thử API thật với vector 768 chiều.
+- OCR mặc định dùng API đã thử; Paddle trên server là tùy chọn chưa nghiệm thu. `gemini-embedding-001` tiếp tục phục vụ văn bản theo [tài liệu Google](https://ai.google.dev/gemini-api/docs/embeddings); đã thử API thật với vector 768 chiều.
 - Bản đầu dùng các hàm nghiệp vụ có schema, chưa cần thêm WrenAI để phục vụ vài chỉ tiêu đã định nghĩa. Khi có thêm nguồn dữ liệu và báo cáo linh hoạt, đánh giá WrenAI trên các chỉ tiêu và bộ ca kiểm chứng đang có.
 
 Đây là lựa chọn phù hợp cho phạm vi hiện tại, chưa phải kết luận model nào tốt nhất trên mọi bộ hồ sơ. Trước khi công bố hiệu quả vận hành, cần đo độ đúng OCR/dữ kiện, tìm điều khoản và usage trên mẫu đại diện rồi đủ 83 tệp thật. Các số đo Codex bên dưới cho thấy vẫn có overhead, không cam kết 400 token/câu.
@@ -63,6 +63,8 @@ GEMINI_API_KEY=<key riêng trên server>
 KNOWLEDGE_EXTRACT_MODEL=gemini-3.5-flash-lite
 KNOWLEDGE_EMBEDDING_MODEL=gemini-embedding-001
 KNOWLEDGE_OCR=gemini
+KNOWLEDGE_PADDLE_PROFILE=vl
+KNOWLEDGE_OCR_FALLBACK=gemini
 KNOWLEDGE_MAX_PAGES=250
 KNOWLEDGE_PYTHON=python
 KNOWLEDGE_CODEX_MODEL=gpt-6-luna
@@ -71,7 +73,7 @@ KNOWLEDGE_LOCAL_SCAN_USERS=<UUID hoặc email quản trị được phép nhập
 CHAT_LEGACY_ADMIN_IDS=
 ```
 
-Không cần GPU, Ollama, Qwen hay PaddleOCR với cấu hình này. `paddle` là adapter tùy chọn chưa được kiểm tra bằng model thực trong đợt triển khai này; không dùng làm cấu hình mặc định.
+Gemini mode không cài model local. Nếu muốn chuyển sang Paddle, cài dependencies riêng và chạy preflight/smoke trên server trước; adapter PaddleOCR-VL 1.6 có cấu hình CPU/GPU nhưng chưa được nghiệm thu model thật trong đợt này. Model classic nhỏ không đạt giữ dấu tiếng Việt trên mẫu đã thử. Chi tiết: [DOCUMENT_KNOWLEDGE_OCR.md](DOCUMENT_KNOWLEDGE_OCR.md).
 
 Trên Windows, nếu server không tìm được `codex.exe`, đặt `KNOWLEDGE_CODEX_BINARY` thành đường dẫn tuyệt đối tới executable. Không dùng `codex.cmd` cho biến này. Có thể tra executable bằng `(Get-Command codex.exe).Source`. `KNOWLEDGE_CODEX_HOME` trỏ tới thư mục đăng nhập Codex của tài khoản chạy server nếu cần; không đưa `auth.json` vào repository.
 
@@ -104,7 +106,7 @@ pnpm.cmd knowledge:scan -- --project <UUID-kho> --folder "Tong hop HD voi ben A"
 Tên thư mục thực tế có thể có dấu và khoảng trắng; luôn đặt trong dấu nháy. Worker quét mỗi 60 giây ở chế độ watch có project; không có project thì chỉ xử lý hàng đợi. Chạy worker dưới trình quản lý tiến trình có khởi động lại khi lỗi khi đưa vào vận hành lâu dài.
 
 - Tệp không đổi hash và phiên bản pipeline không tạo job mới. Khi đổi hash/model/pipeline, các dữ kiện cũ ngừng được tính và phiên bản mới phải được kiểm tra lại.
-- Đọc lớp chữ PDF trước; trang thiếu chữ được OCR bằng API. PDF hỗn hợp giữ đủ trang và số trang gốc. Stdout Python được đọc có backpressure để không giữ toàn bộ ảnh scan trong RAM.
+- Đọc lớp chữ PDF trước; trang scan/ảnh lớn có header vẫn qua engine OCR được chọn. Gemini là mặc định; nếu chọn Paddle thì có dự phòng Gemini theo trang và giới hạn. PDF hỗn hợp giữ đủ trang/số trang; stdout Python đọc có backpressure. Metadata/cảnh báo OCR không thay cho việc duyệt bản gốc.
 - OCR lưu từng trang thành checkpoint; embedding lưu từng nhóm 8 đoạn. Thử lại sau lỗi không gọi lại các bước đã hoàn thành và cache còn nguyên. Publish vào DB là một giao dịch: không công bố nửa tài liệu.
 - Job có lease, heartbeat, nhận lại khi worker bị dừng; worker cũ không thể ghi đè job phiên bản mới. Nếu mất lease thì ngừng yêu cầu AI đang chạy.
 - Tệp quá giới hạn hoặc định dạng không hỗ trợ được đánh dấu lỗi, vẫn hiện trong độ phủ. Hiện hỗ trợ PDF, PNG/JPEG/WebP, TXT/MD/CSV/JSON, XLS/XLSX. DOCX/ZIP chưa có adapter.

@@ -45,6 +45,7 @@ create table if not exists public.dk_pages (
   page integer not null check(page>0), text text not null, method text not null,
   primary key(document_id,revision,page)
 );
+alter table public.dk_pages add column if not exists ocr_meta jsonb not null default '{}';
 create table if not exists public.dk_chunks (
   id uuid primary key default gen_random_uuid(), document_id uuid not null references public.dk_documents(id),
   revision integer not null, page integer not null, ordinal integer not null,
@@ -217,7 +218,10 @@ declare j public.dk_jobs; d public.dk_documents; v jsonb; begin
      or (select max((x->>'page')::integer) from jsonb_array_elements(p_pages) x)<>jsonb_array_length(p_pages)
     then raise exception 'DK_INCOMPLETE_PAGES'; end if;
   for v in select * from jsonb_array_elements(p_pages) loop
-    insert into public.dk_pages values(d.id,d.revision,(v->>'page')::integer,v->>'text',v->>'method');
+    if jsonb_typeof(coalesce(v->'ocr_meta','{}'::jsonb)) is distinct from 'object'
+      or pg_column_size(v->'ocr_meta')>500000 then raise exception 'DK_INVALID_PAGE'; end if;
+    insert into public.dk_pages(document_id,revision,page,text,method,ocr_meta)
+      values(d.id,d.revision,(v->>'page')::integer,v->>'text',v->>'method',coalesce(v->'ocr_meta','{}'::jsonb));
   end loop;
   for v in select * from jsonb_array_elements(p_chunks) loop
     insert into public.dk_chunks(document_id,revision,page,ordinal,content,embedding,embedding_model)

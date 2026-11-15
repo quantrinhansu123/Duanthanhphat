@@ -1,0 +1,6 @@
+-r requirements-knowledge.txt
+paddleocr[doc-parser]==3.7.0
+paddlex==3.7.2
+# CPU baseline. GPU servers install the matching official paddlepaddle-gpu wheel instead.
+paddlepaddle==3.3.1
+numpy==2.3.5

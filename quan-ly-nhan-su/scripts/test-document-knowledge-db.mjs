@@ -73,7 +73,19 @@ try {
   );
   const text =
     "Hợp đồng 1000. Nghiệm thu đợt 1: 200. Nghiệm thu lũy kế đợt 2: 500. Thực chuyển 150. Đề nghị thanh toán 300.";
-  const pages = [{ page: 1, text, method: "fixture" }];
+  const pages = [
+    {
+      page: 1,
+      text,
+      method: "fixture",
+      ocr_meta: {
+        primary_engine: "paddle",
+        fallback_used: true,
+        warnings: ["DK_OCR_LOW_CONFIDENCE"],
+        mean_confidence: 0.7,
+      },
+    },
+  ];
   const facts = [
     ["contract_base", "1000", null, "Hợp đồng 1000."],
     ["accepted_increment", "200", 1, "Nghiệm thu đợt 1: 200."],
@@ -123,6 +135,14 @@ try {
     "Invalid extraction rolls back all staging rows",
   );
   await complete(claimed.job);
+  eq(
+    (await scalar("select ocr_meta from dk_pages limit 1")).fallback_used,
+    true,
+    "Page-level fallback provenance persisted",
+  );
+  eq((await scalar("select ocr_meta from dk_pages limit 1")).warnings, [
+    "DK_OCR_LOW_CONFIDENCE",
+  ]);
   const summary = async (metric = "accepted_total") =>
     scalar("select dk_financial_summary($1,$2,$3)", [
       project,

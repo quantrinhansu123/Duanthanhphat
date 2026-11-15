@@ -1,4 +1,4 @@
-// Node >=22.18, no model loaded in RAM. Run separately from the web process.
+// Node >=22.18. Paddle runs in a bounded Python child, separate from the web process.
 import {
   mkdtemp,
   mkdir,
@@ -6,6 +6,7 @@ import {
   readFile,
   rename,
   rm,
+  readdir,
 } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { resolve, join, extname } from "node:path";
@@ -30,6 +31,10 @@ import {
   readKnowledgeSource,
   scanKnowledgeDirectory,
 } from "../src/lib/server/documentKnowledgeStore.ts";
+import {
+  knowledgeOcrConfig,
+  knowledgeOcrEnvironment,
+} from "../src/lib/server/documentKnowledgeOcrConfig.ts";
 
 const scriptRoot = fileURLToPath(new URL(".", import.meta.url));
 const abort = new AbortController();
@@ -54,13 +59,53 @@ async function* boundedLines(stream) {
   buffered += decoder.end();
   if (buffered) yield buffered;
 }
-async function pdfPages(path, signal, checkpoints) {
+export async function resolveOcrPage(row, config, fallbackState, signal) {
+  if (
+    !row ||
+    !Number.isInteger(row.page) ||
+    !["native", "paddle", "gemini"].includes(row.method)
+  )
+    throw new Error("DK_INVALID_PAGE");
+  let text = row.text;
+  const metadata = row.ocr_meta || {};
+  const primaryText = typeof text === "string" ? text : "";
+  if (row.image) {
+    if (row.fallback_requested) {
+      if (config.mode !== "paddle" || config.fallback !== "gemini")
+        throw new Error("DK_INVALID_PAGE");
+      if (fallbackState.count >= config.maxFallbackPages)
+        throw new Error("DK_OCR_FALLBACK_LIMIT");
+      fallbackState.count++;
+    } else if (config.mode !== "gemini") throw new Error("DK_INVALID_PAGE");
+    text = await transcribeKnowledgeImage(row.image, "image/png", signal);
+    if (!text.trim()) throw new Error("DK_OCR_NO_TEXT");
+    if (
+      primaryText.trim() &&
+      text.trim().length < primaryText.trim().length * 0.5
+    )
+      throw new Error("DK_OCR_INCOMPLETE");
+    metadata.fallback_used = Boolean(row.fallback_requested);
+    if (row.fallback_requested) metadata.primary_text = primaryText;
+    row.method = "gemini";
+  }
+  if (typeof text !== "string" || text.length > 60000)
+    throw new Error("DK_INVALID_PAGE");
+  if (!text.trim() && metadata.warnings?.length)
+    throw new Error("DK_OCR_NO_TEXT");
+  return { page: row.page, text, method: row.method, ocr_meta: metadata };
+}
+async function ocrPages(path, signal, checkpoints) {
+  const config = knowledgeOcrConfig();
+  const skip = checkpoints?.getCompletedPageNumbers
+    ? await checkpoints.getCompletedPageNumbers()
+    : [];
+  const env = knowledgeOcrEnvironment(config, skip);
   const child = spawn(
     process.env.KNOWLEDGE_PYTHON || "python",
     [join(scriptRoot, "knowledge-extract.py"), path],
     {
       windowsHide: true,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      env,
       stdio: ["ignore", "pipe", "pipe"],
       signal,
     },
@@ -75,6 +120,13 @@ async function pdfPages(path, signal, checkpoints) {
   // Consume diagnostics without logging private paths or library output.
   child.stderr.on("data", () => {});
   const pages = [];
+  const fallbackState = { count: 0 };
+  let timedOut = false;
+  const stop = () => {
+    timedOut = true;
+    child.kill();
+  };
+  const timer = setTimeout(stop, config.timeoutSeconds * 1000);
   try {
     // Pull stdout with backpressure while OCR is pending; never buffer an entire scan.
     for await (const line of boundedLines(child.stdout)) {
@@ -82,24 +134,31 @@ async function pdfPages(path, signal, checkpoints) {
       if (line.length > 20 * 1024 * 1024)
         throw new Error("DK_PAGE_IMAGE_LIMIT");
       const row = JSON.parse(line);
+      if (row.error)
+        throw new Error(
+          /^DK_[A-Z_0-9]+$/.test(row.error)
+            ? row.error
+            : "DK_PDF_EXTRACT_FAILED",
+        );
+      timer.refresh();
       if (row.page !== pages.length + 1) throw new Error("DK_INCOMPLETE_PAGES");
       const previous = await checkpoints?.getPage(row.page);
-      const text =
-        previous?.text ??
-        (row.image
-          ? await transcribeKnowledgeImage(row.image, "image/png", signal)
-          : row.text);
-      if (typeof text !== "string") throw new Error("DK_INVALID_PAGE");
-      const page = { page: row.page, text, method: row.method };
+      if (row.cached && !previous) throw new Error("DK_OCR_CACHE_MISSING");
+      const page =
+        previous || (await resolveOcrPage(row, config, fallbackState, signal));
+      if (previous?.ocr_meta?.fallback_used) fallbackState.count++;
       if (!previous) await checkpoints?.putPage(page);
       pages.push(page);
     }
     const exitError = await exited;
+    if (timedOut) throw new Error("DK_OCR_TIMEOUT");
     if (exitError) throw exitError;
   } catch (error) {
     child.kill();
     await exited;
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
   if (!pages.length) throw new Error("DK_EMPTY_DOCUMENT");
   return pages;
@@ -136,27 +195,13 @@ export async function extractWorkerPages(bytes, name, signal, checkpoints) {
     }
     return pages;
   }
-  if ([".png", ".jpg", ".jpeg", ".webp"].includes(extension)) {
-    return [
-      {
-        page: 1,
-        text: await transcribeKnowledgeImage(
-          bytes.toString("base64"),
-          extension === ".jpg" || extension === ".jpeg"
-            ? "image/jpeg"
-            : "image/" + extension.slice(1),
-          signal,
-        ),
-        method: "gemini",
-      },
-    ];
-  }
-  if (extension !== ".pdf") throw new Error("DK_UNSUPPORTED_FORMAT");
+  if (![".pdf", ".png", ".jpg", ".jpeg", ".webp"].includes(extension))
+    throw new Error("DK_UNSUPPORTED_FORMAT");
   const temp = await mkdtemp(join(tmpdir(), "tcw-knowledge-"));
   try {
-    const path = join(temp, "source.pdf");
+    const path = join(temp, "source" + extension);
     await writeFile(path, bytes);
-    return await pdfPages(path, signal, checkpoints);
+    return await ocrPages(path, signal, checkpoints);
   } finally {
     // Check the exact resolved target before a recursive removal on Windows.
     const target = resolve(temp),
@@ -241,6 +286,19 @@ export async function runKnowledgeJob(admin, claimed, signal) {
     };
     const checkpoint = () => save(cachePath, cached);
     const checkpoints = {
+      async getCompletedPageNumbers() {
+        const found = [];
+        for (const file of await readdir(directory)) {
+          const match = /^page-([0-9]+)\.json$/.exec(file);
+          if (
+            match &&
+            Number(match[1]) <= knowledgeOcrConfig().maxPages &&
+            (await this.getPage(Number(match[1])))
+          )
+            found.push(Number(match[1]));
+        }
+        return found;
+      },
       async getPage(page) {
         try {
           const value = JSON.parse(

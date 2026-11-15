@@ -269,6 +269,12 @@ export default function DocumentKnowledgePanel() {
     [pageText, setPageText] = useState(""),
     [pageNext, setPageNext] = useState<number | null>(null),
     [textOpen, setTextOpen] = useState(false);
+  const [pageOcr, setPageOcr] = useState<{
+    method: string;
+    warnings: string[];
+    confidence: number | null;
+    fallback: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
@@ -339,6 +345,7 @@ export default function DocumentKnowledgePanel() {
     let active = true;
     pageRequest.current++;
     setPageText("Đang tải trang…");
+    setPageOcr(null);
     setPageNext(null);
     void api(
       `/api/document-knowledge/evidence?id=${detail.document.id}&page=${page}`,
@@ -346,6 +353,12 @@ export default function DocumentKnowledgePanel() {
       .then((d) => {
         if (active) {
           setPageText(d.text);
+          setPageOcr({
+            method: d.method,
+            warnings: d.ocr?.warnings || [],
+            confidence: d.ocr?.mean_confidence ?? null,
+            fallback: Boolean(d.ocr?.fallback_used),
+          });
           setPageNext(d.nextOffset);
         }
       })
@@ -758,6 +771,34 @@ export default function DocumentKnowledgePanel() {
                                 }
                               />
                             </label>
+                            {pageOcr && (
+                              <p className="mt-2 text-xs text-slate-600">
+                                Nguồn chữ:{" "}
+                                {pageOcr.method === "paddle"
+                                  ? "PaddleOCR"
+                                  : pageOcr.method === "gemini"
+                                    ? "Gemini API"
+                                    : "Lớp chữ trong tệp"}
+                                .
+                                {pageOcr.fallback
+                                  ? " Đã dùng OCR dự phòng."
+                                  : ""}
+                                {pageOcr.confidence !== null
+                                  ? ` Điểm nhận dạng Paddle: ${Math.round(pageOcr.confidence * 100)}%.`
+                                  : ""}
+                              </p>
+                            )}
+                            {Boolean(pageOcr?.warnings.length) && (
+                              <p
+                                role="status"
+                                className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"
+                              >
+                                Trang có tín hiệu chất lượng nhận dạng thấp hoặc
+                                đã cần xử lý dự phòng. Đối chiếu số tiền, mã và
+                                ngày với bản gốc; điểm nhận dạng không chứng
+                                minh dữ liệu đúng.
+                              </p>
+                            )}
                             <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-sans text-sm text-slate-700">
                               {pageText}
                             </pre>

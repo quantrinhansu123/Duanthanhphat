@@ -12,8 +12,10 @@
     "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs",
     "knowledge:worker": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs",
     "knowledge:scan": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs --scan-only",
+    "knowledge:ocr:check": "node --env-file-if-exists=.env.local scripts/check-knowledge-ocr.mjs",
+    "knowledge:ocr:smoke": "node --env-file-if-exists=.env.local scripts/smoke-knowledge-paddle.mjs",
     "knowledge:smoke": "node --env-file-if-exists=.env.local scripts/smoke-document-knowledge-ai.mjs",
-    "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs"
+    "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs && node scripts/test-document-knowledge-ocr.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

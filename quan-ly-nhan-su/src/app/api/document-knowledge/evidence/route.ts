@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const result = knowledgeResult(
       await client
         .from("dk_pages")
-        .select("text,method")
+        .select("text,method,ocr_meta")
         .eq("document_id", id)
         .eq("revision", document.revision)
         .eq("page", page)
@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       page,
       text: result.text.slice(offset, offset + 10000),
       method: result.method,
+      ocr: result.ocr_meta,
       nextOffset: offset + 10000 < result.text.length ? offset + 10000 : null,
     });
   } catch (error) {

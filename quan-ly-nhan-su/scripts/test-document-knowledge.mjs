@@ -38,6 +38,8 @@ const folder = await mkdtemp(join(tmpdir(), "tcw-knowledge-test-"));
 const originalFetch = globalThis.fetch;
 const previousEnv = { ...process.env };
 try {
+  // Default unit suite is offline; exercise Gemini with mock fetch, no Paddle install needed.
+  process.env.KNOWLEDGE_OCR='gemini';
   eq(isIsoDate("2026-02-30"), false, "Reject impossible dates");
   eq(
     knownKnowledgeMetricQuestion("Tổng giá trị nghiệm thu?"),

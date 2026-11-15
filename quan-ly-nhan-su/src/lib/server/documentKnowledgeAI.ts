@@ -5,11 +5,12 @@ import {
   validateExtractedFacts,
   type KnowledgePage,
 } from "../documentKnowledge.ts";
+import { knowledgeOcrConfig } from "./documentKnowledgeOcrConfig.ts";
 
 export function knowledgePipelineVersion() {
   return [
-    "dk-v1",
-    process.env.KNOWLEDGE_OCR || "gemini",
+    "dk-v2",
+    JSON.stringify(knowledgeOcrConfig()),
     process.env.KNOWLEDGE_EXTRACT_MODEL || "gemini-3.5-flash-lite",
     process.env.KNOWLEDGE_EMBEDDING_MODEL || "gemini-embedding-001",
     String(EMBEDDING_DIMENSIONS),

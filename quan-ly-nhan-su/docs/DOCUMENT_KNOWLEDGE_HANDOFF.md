@@ -6,6 +6,7 @@
 - Supabase Data API đã xác thực được; chưa có bảng `dk_*`. **Chưa chạy SQL trên database thật**, theo yêu cầu để đồng nghiệp quản lý Supabase triển khai sau.
 - Gemini đã chạy đạt embedding tài liệu/câu hỏi 768 chiều, trích xuất 3 dữ kiện và OCR ảnh mẫu. Tất cả là dữ liệu synthetic; chưa đưa hồ sơ công ty lên pipeline này.
 - Đã thử 3 planner Codex thật và các luồng UI với API giả lập. Xem [kết quả QA](DOCUMENT_KNOWLEDGE_QA.md).
+- OCR giữ Gemini làm mặc định theo kết quả thử và yêu cầu mới nhất; PaddleOCR-VL là tùy chọn cần nghiệm thu trên server, classic không đạt giữ dấu tiếng Việt. Xem [hướng dẫn OCR](DOCUMENT_KNOWLEDGE_OCR.md), dùng schema mới nhất có `dk_pages.ocr_meta`.
 - `.env.local` của máy anh Huy đã có cấu hình riêng, tính năng giữ **false**. File môi trường và khóa bí mật không nằm trong commit/gói mã. Khóa đã chia sẻ qua chat cần được thay trước khi đưa vào vận hành.
 
 ## Nhận mã
@@ -42,6 +43,8 @@ Nếu repo triển khai đã có thay đổi riêng, dùng nhánh tích hợp v�
 cd quan-ly-nhan-su
 pnpm.cmd install --frozen-lockfile
 python -m pip install -r scripts/requirements-knowledge.txt
+pnpm.cmd knowledge:ocr:check
+# Chỉ nghiệm thu Paddle nếu đã cài dependency/model riêng theo hướng dẫn OCR.
 pnpm.cmd test:knowledge
 # Tùy chọn, gọi Google bằng fixtures synthetic; có sử dụng hạn mức API.
 pnpm.cmd knowledge:smoke -- --live

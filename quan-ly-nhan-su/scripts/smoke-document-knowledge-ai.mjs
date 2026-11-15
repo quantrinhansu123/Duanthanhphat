@@ -1,6 +1,11 @@
 // Explicit opt-in only. Sends synthetic fixtures to Google, never business documents.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve, relative, isAbsolute } from "node:path";
+import { fileURLToPath } from "node:url";
+import { extractWorkerPages } from "./knowledge-worker.mjs";
 import {
   embedKnowledge,
   extractKnowledgeFacts,
@@ -13,6 +18,7 @@ if (!process.argv.includes("--live")) {
 }
 const calls = [];
 const previous = globalThis.fetch;
+let syntheticDirectory;
 globalThis.fetch = async (url, options) => {
   const started = Date.now();
   const response = await previous(url, options);
@@ -76,6 +82,38 @@ try {
   );
   assert.ok(ocr.includes("HD-TEST-01"));
   assert.ok(ocr.includes("1.000.000"));
+  // Exercise the real OCR upload/PDF path with Vietnamese names and financial fields.
+  process.env.KNOWLEDGE_OCR = "gemini";
+  syntheticDirectory = await mkdtemp(join(tmpdir(), "tcw-gemini-ocr-smoke-"));
+  execFileSync(
+    process.env.KNOWLEDGE_PYTHON || "python",
+    [
+      fileURLToPath(new URL("./knowledge-ocr-fixture.py", import.meta.url)),
+      syntheticDirectory,
+    ],
+    { windowsHide: true },
+  );
+  const expected = JSON.parse(
+    await readFile(join(syntheticDirectory, "manifest.json"), "utf8"),
+  ).must_contain;
+  const imagePages = await extractWorkerPages(
+    await readFile(join(syntheticDirectory, "vietnamese.png")),
+    "vietnamese.png",
+  );
+  const pdfPages = await extractWorkerPages(
+    await readFile(join(syntheticDirectory, "mixed.pdf")),
+    "mixed.pdf",
+  );
+  assert.equal(imagePages[0].method, "gemini");
+  assert.equal(pdfPages.length, 4);
+  assert.equal(pdfPages[0].method, "native");
+  assert.equal(pdfPages[3].text, "");
+  for (const page of [imagePages[0], pdfPages[1], pdfPages[2]])
+    for (const field of expected)
+      assert.ok(
+        page.text.includes(field),
+        "Vietnamese field was not preserved",
+      );
   console.log(
     JSON.stringify(
       {
@@ -85,6 +123,8 @@ try {
         financialFacts: 3,
         realPayments: 0,
         ocr: true,
+        vietnameseOcrFields: true,
+        mixedPdfPages: pdfPages.length,
         calls,
       },
       null,
@@ -106,4 +146,15 @@ try {
   process.exitCode = 1;
 } finally {
   globalThis.fetch = previous;
+  if (syntheticDirectory) {
+    const rel = relative(resolve(tmpdir()), resolve(syntheticDirectory));
+    if (
+      !rel ||
+      rel.startsWith("..") ||
+      isAbsolute(rel) ||
+      !rel.startsWith("tcw-gemini-ocr-smoke-")
+    )
+      throw new Error("Unsafe test cleanup");
+    await rm(syntheticDirectory, { recursive: true, force: true });
+  }
 }

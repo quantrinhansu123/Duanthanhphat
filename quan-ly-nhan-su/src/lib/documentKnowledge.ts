@@ -1,6 +1,6 @@
 /** Shared domain rules. No framework or credentials; also used by the Node background worker. */
 export const KNOWLEDGE_BUCKET = "document-knowledge";
-export const KNOWLEDGE_PIPELINE = "dk-v1";
+export const KNOWLEDGE_PIPELINE = "dk-v2";
 export const EMBEDDING_DIMENSIONS = 768;
 export const KNOWLEDGE_METRICS = {
   contract_total: "Giá trị hợp đồng và phần tăng/giảm theo phụ lục",
@@ -29,7 +29,12 @@ export const FACT_LABELS: Record<FactKind, string> = {
   payment_request: "Đề nghị thanh toán",
   advance: "Tạm ứng",
 };
-export type KnowledgePage = { page: number; text: string; method: string };
+export type KnowledgePage = {
+  page: number;
+  text: string;
+  method: string;
+  ocr_meta?: Record<string, unknown>;
+};
 export type ExtractedFact = {
   contract_code: string;
   kind: FactKind;
