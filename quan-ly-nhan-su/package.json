@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "dev:webpack": "next dev --webpack -p 3010",
-    "build": "next build --webpack",
+    "build": "next build --webpack && node scripts/strip-chat-runtime-traces.mjs",
     "start": "next start",
     "lint": "eslint",
     "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs"

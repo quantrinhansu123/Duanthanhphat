@@ -73,6 +73,8 @@ const WeldAcceptanceReport = dynamic(
 const YearlyWeldReport = dynamic(() => import("@/components/YearlyWeldReport"), { loading: TabLoading, ssr: false });
 const MapView = dynamic(() => import("@/components/MapView"), { loading: TabLoading, ssr: false });
 const DocumentLibrary = dynamic(() => import("@/components/DocumentLibrary"), { loading: TabLoading, ssr: false });
+const KnowledgeLibrary = dynamic(() => import("@/components/KnowledgeLibrary"), { loading: TabLoading, ssr: false });
+const AiQsLibrary = dynamic(() => import("@/components/AiQsLibrary"), { loading: TabLoading, ssr: false });
 const DeploymentHandoverList = dynamic(
   () => import("@/components/DeploymentHandoverList"), { loading: TabLoading, ssr: false });
 const SystemConfiguration = dynamic(
@@ -129,6 +131,8 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-moi-han-theo-nam": () => <YearlyWeldReport />,
   "ban-do": () => <MapView />,
   "tai-lieu": () => <DocumentLibrary />,
+  "file-tri-thuc": () => <KnowledgeLibrary />,
+  "hoso-ai-qs": () => <AiQsLibrary />,
   "trien-khai": () => <DeploymentHandoverList />,
   "cau-hinh": () => <SystemConfiguration />,
 };
