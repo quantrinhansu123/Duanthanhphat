@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { loadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import WeldAcceptanceRecordPages, { acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
+import ComboInput from "@/components/ComboInput";
+import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import WeldAcceptanceRecordPages, { acceptancePrintCss, Ed, EdViDate, type RecordEditor, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
@@ -20,7 +21,16 @@ const TITLES: Record<DocKind, string> = {
   "giai-doan": "BIÊN BẢN NGHIỆM THU CÔNG VIỆC XÂY DỰNG",
   "hoan-thanh": "BIÊN BẢN NGHIỆM THU HOÀN THÀNH GIAI ĐOẠN THI CÔNG",
 };
-const css = `@media print {
+const css = `/* Ô sửa trực tiếp trên mẫu: viền gợi ý chỉ có trên màn hình. */
+.weld-rfi .ed-field { outline: none; cursor: text; border-bottom: 1px dashed #60a5fa; background: rgba(96, 165, 250, 0.10); min-width: 1.5em; }
+.weld-rfi .ed-field:focus { background: #fef9c3; }
+.weld-rfi .ed-field:empty::before { content: attr(data-ph); }
+.weld-rfi .ed-block { display: block; white-space: pre-wrap; min-height: 1.4em; }
+@media print {
+  .weld-rfi .ed-field { border-bottom: 0 !important; background: none !important; }
+  .weld-rfi .sig-empty { display: none !important; }
+  /* Khối chữ ký và ô Tư vấn giám sát không bị cắt đôi giữa hai trang. */
+  .weld-rfi .rfi-sign { break-inside: avoid; page-break-inside: avoid; }
   body * { visibility: hidden !important; }
   #weld-doc-print, #weld-doc-print * { visibility: visible !important; }
   #weld-doc-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; }
@@ -29,7 +39,7 @@ const css = `@media print {
   #weld-doc-print thead { display: table-header-group; }
   /* Phiếu YCNT 1 trang: lề trang = 0 để trình duyệt tự bỏ đầu trang / cuối trang (ngày giờ, tiêu đề); lề thật đặt bằng padding. */
   @page { size: A4; margin: 0; }
-  #weld-doc-print { box-sizing: border-box; padding: 15mm 15mm 15mm 20mm !important; max-width: none !important; }
+  #weld-doc-print { box-sizing: border-box; padding: 15mm 10mm 10mm 20mm !important; max-width: none !important; }
 }`;
 
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
@@ -100,12 +110,16 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       saveRfiPrintInfo(view.rfi!.rfi.id, values).then(() => setPrintSaved("Đã lưu cho phiếu này")).catch(() => setPrintSaved("Chưa lưu được lên máy chủ (vẫn nhớ trên máy này)"));
     }, immediate ? 0 : 700);
   }
+  // Giữ bản mới nhất trong ref: nhiều ô sửa liên tiếp (chưa kịp vẽ lại) không ghi đè nhau bằng trạng thái cũ.
+  const overridesRef = useRef(rfiOverrides);
   function setOverride(key: keyof RfiOverrides, value: string) {
-    const next = { ...rfiOverrides, [key]: value };
+    const next = { ...overridesRef.current, [key]: value };
+    overridesRef.current = next;
     setRfiOverrides(next);
     persistOverrides(next);
   }
   function resetOverrides() {
+    overridesRef.current = {};
     setRfiOverrides({});
     persistOverrides({});
     try { window.localStorage.removeItem(rfiKey); } catch { /* bỏ qua */ }
@@ -165,7 +179,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       const { ly_do, ...thongTin } = form;
       saveSignerDefaults(thongTin); // nhớ người ký cho các lần in sau
       await reviseRecord(hoSo.id, thongTin, ly_do.trim() || "Cập nhật nội dung nhập tay");
-      setRecord(await loadRecordSet(String(record.dot.id)));
+      setRecord(await reloadRecordSet(record));
       setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được bản sửa đổi."); } finally { setBusy(false); }
   }
@@ -209,7 +223,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
       )}
       {kind === "rfi" && view.rfi && rfiEditOpen && (
         <div className="weld-doc-actions mx-auto mb-3 max-w-3xl space-y-2 rounded-xl bg-white p-4 text-sm">
-          <p className="text-xs text-slate-600">Sửa giá trị trên phiếu trước khi in. Để trống = tự lấy theo dữ liệu. Nội dung sửa được nhớ cho phiếu này trên máy này.</p>
+          <p className="text-xs text-slate-600">Sửa giá trị trên phiếu trước khi in. Để trống = tự lấy theo dữ liệu. Nội dung sửa được lưu vào hệ thống theo phiếu, dùng lâu dài trên mọi máy.</p>
           <div className="grid gap-2 sm:grid-cols-3">
             {RFI_OVERRIDE_FIELDS.map(([key, label, type, placeholder]) => (
               <label key={key} className={`block text-xs font-semibold text-slate-700 ${type === "textarea" ? "sm:col-span-3" : ""}`}>{label}
@@ -312,16 +326,14 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="KPS25-L8" value={form.goong ?? ""} onChange={(e) => setForm({ ...form, goong: e.target.value })} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
-                    <input list="rec-people" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ten_tho_han ?? ""}
-                      onChange={(e) => { const name = e.target.value; const match = pickers.people.find((p) => p.name === name); setForm({ ...form, ten_tho_han: name, ...(match?.code ? { id_tho_han: match.code } : {}) }); }} />
-                    <datalist id="rec-people">{pickers.people.map((p) => <option key={p.name + p.code} value={p.name}>{p.code}</option>)}</datalist>
+                    <ComboInput className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.ten_tho_han ?? ""} options={pickers.people.map((p) => ({ value: p.name, hint: p.code }))}
+                      onChange={(name, match) => setForm((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">ID thợ hàn
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.id_tho_han ?? ""} onChange={(e) => setForm({ ...form, id_tho_han: e.target.value })} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700 sm:col-span-2">Máy hàn (chọn từ danh sách hoặc nhập)
-                    <input list="rec-machines" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.may_han ?? ""} onChange={(e) => setForm({ ...form, may_han: e.target.value })} />
-                    <datalist id="rec-machines">{pickers.machines.map((m) => <option key={m} value={m} />)}</datalist>
+                    <ComboInput className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form.may_han ?? ""} options={pickers.machines.map((m) => ({ value: m }))} onChange={(v) => setForm((cur) => ({ ...cur, may_han: v }))} />
                   </label>
                   <label className="block text-xs font-semibold text-slate-700">Vị trí: Km đầu
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="3+862.74" value={form.kmFrom ?? ""} onChange={(e) => setForm({ ...form, kmFrom: e.target.value })} />
@@ -354,7 +366,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
           <button type="button" disabled={busy} onClick={() => void saveRevision()} className="h-9 rounded-lg bg-[#0047AB] px-4 font-semibold text-white disabled:opacity-50 cursor-pointer">Lưu bản sửa đổi</button>
         </div>
       )}
-      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} o={rfiOverrides} signatures={withSignatures ? signatures : { ...signatures, "chi-huy-truong": undefined, "nha-thau-phu": undefined }} /> : (
+      {kind === "rfi" && view.rfi ? <RfiForm {...view.rfi} o={rfiOverrides} editor={{ draft: {}, set: (k, v) => setOverride(k as keyof RfiOverrides, v) }} signatures={withSignatures ? signatures : { ...signatures, "chi-huy-truong": undefined, "nha-thau-phu": undefined }} /> : (
       record ? <WeldAcceptanceRecordPages record={record} kind={kind as RecordKind} /> : null)}
     </div>
   );
@@ -370,9 +382,23 @@ const DOTS = "……………";
 const SIG_LABELS: Record<SignatureKey, string> = { "chi-huy-truong": "Chữ ký Nhà thầu chính", "nha-thau-phu": "Chữ ký Nhà thầu phụ", "gach-trang-tri": "Gạch trang trí dưới tiêu đề" };
 
 /** Khối ký của nhà thầu: chữ ký ảnh dán sẵn (chỉ có cho dự án Phú Quốc), phần còn lại để trống cho nhà thầu khác. */
-function Signer({ title, org, who, ten, chucVu, signatures }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; ten?: string; chucVu?: string; signatures: SignatureStore }) {
+function Signer({ title, org, who, ten, chucVu, signatures, party, editor }: { title: string; org: string; who?: { ten: string; chucVu: string; chuKy: string; key: SignatureKey }; ten?: string; chucVu?: string; signatures: SignatureStore; party?: "ntp" | "ntc"; editor?: RecordEditor }) {
   // Ô nhập tay > mặc định của dự án (Phú Quốc) > không in.
   const name = ten?.trim() || who?.ten, role = chucVu?.trim() || who?.chucVu;
+  if (editor && party) {
+    // Sửa trực tiếp: luôn hiện dòng Tên / Chức vụ; khi in mà cả hai trống thì ẩn dòng (như mẫu cũ).
+    return (
+      <div className="text-center">
+        <p className="font-bold">{title}</p>
+        <p className="italic">({org})</p>
+        <div className="flex h-20 items-center justify-center overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {who && signatures[who.key] && <img key={signatures[who.key]} src={signatures[who.key]} alt="" className="block h-20 w-auto max-w-full object-contain" />}
+        </div>
+        <p className={`italic ${!name && !role ? "sig-empty" : ""}`}><b>Tên:</b> <Ed k={`${party}_ten`} v={name ?? ""} editor={editor} ph="" />&nbsp;<b>Chức vụ:</b> <Ed k={`${party}_chuc_vu`} v={role ?? ""} editor={editor} ph="" /></p>
+      </div>
+    );
+  }
   return (
     <div className="text-center">
       <p className="font-bold">{title}</p>
@@ -387,8 +413,8 @@ function Signer({ title, org, who, ten, chucVu, signatures }: { title: string; o
   );
 }
 
-/** Các mục nhập tay được lưu theo phiếu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km). */
-const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+/** Mọi mục sửa ở «Sửa nội dung in» được lưu vào CSDL theo phiếu (dùng lâu dài, mọi máy). */
+const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
 type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan" | "ntp_ten" | "ntp_chuc_vu" | "ntc_ten" | "ntc_chuc_vu", string>>;
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
@@ -398,8 +424,7 @@ const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time"
   ["ngay_nt", "Ngày nghiệm thu (mục 2)", "date", ""],
   ["gio", "Giờ nghiệm thu (mặc định 8h00)", "time", ""],
   ["ngay_nhan", "Ngày nhận (TVGS)", "date", ""],
-  ["km_dau", "Km đầu", "text", "4+486.85"],
-  ["km_cuoi", "Km cuối", "text", "4+486.85"],
+  ["km_dau", "Lý trình", "text", "4+486.85"],
   ["noi_dung", "Nội dung tại vị trí (mục 2) — nhập một lần, tự nhớ", "text", "Giám sát thi công hàn ray"],
   ["dia_diem", "Địa điểm", "text", ""],
   ["hang_muc", "Hạng mục", "text", ""],
@@ -418,20 +443,18 @@ function placeName(v?: string) {
   const p = (v ?? "").replace(/^\s*địa điểm\s*:?\s*/i, "").split(",")[0].trim();
   return /\d|lý trình/i.test(p) ? "" : p;
 }
-function viDate(iso?: string) {
-  const [y, m, d] = (iso ?? "").split("-");
-  return y && m && d ? `${d} tháng ${m} năm ${y}` : "";
-}
 
-function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore; o?: RfiOverrides }) {
+function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi: RfiSummary; welds: RfiWeld[]; projectName: string; signatures: SignatureStore; o?: RfiOverrides; editor?: RecordEditor }) {
   const t = rfi.thong_tin ?? {}, pq = /phú quốc/i.test(projectName) ? PQ : null;
   const monitoring = t.loai_rfi === "theo-doi";
+  const ultrasoundOnly = !monitoring && (() => { const sc = rfiScope(t); return sc.ultrasound && !sc.geometry; })();
   const lines = (v?: string) => (v ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
   const [y, m, d] = (o.ngay_lap?.trim() || rfi.ngay_moi).split("-");
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
-  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : t.ben_nhan ? [t.ben_nhan] : pq?.kinhGui ?? [DOTS];
+  const benNhanLines = lines((t.ben_nhan ?? "").replace(/;/g, "\n"));
+  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
   const autoUpper = routes.some((r) => r === "TT" || r === "TP");
   const autoLower = routes.some((r) => r === "HT" || r === "HP");
@@ -440,17 +463,21 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
   const lower = hasRouteOverride ? flagOn(t.tuyen_ha) : autoLower;
   const missingRoutes = welds.filter((_, i) => !routes[i]);
   const tuyen = upper && lower ? "tuyến thượng và tuyến hạ" : upper ? "tuyến thượng" : lower ? "tuyến hạ" : `tuyến ${DOTS}`;
-  const chainage = (value?: string) => value ? `Km${value.replace(/^\s*km\s*/i, "")}` : `Km ${DOTS}`;
   // Giờ nghiệm thu: chưa nhập thì gợi ý sẵn 8h00 (sửa được ở «Sửa nội dung in»).
   const gio = (o.gio?.trim() || t.gio_bat_dau || "08:00").trim();
-  const [hh, mm] = gio.includes(":") ? gio.split(":") : ["", ""];
-  const ngay = `${d ?? "……"} tháng ${m ?? "……"} năm ${y ?? "……"}`;
   // Ngày nghiệm thu (mục 2) = ngày phát phiếu + 1.
-  const ngayNghiemThu = viDate(o.ngay_nt?.trim()) || (() => {
+  const ntIso = o.ngay_nt?.trim() || (() => {
     const next = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d) + 1));
-    if (!y || !m || !d || Number.isNaN(next.getTime())) return ngay;
-    return `${String(next.getUTCDate()).padStart(2, "0")} tháng ${String(next.getUTCMonth() + 1).padStart(2, "0")} năm ${next.getUTCFullYear()}`;
+    return !y || !m || !d || Number.isNaN(next.getTime()) ? "" : next.toISOString().slice(0, 10);
   })();
+  const blankDate = { d: "……", m: "……", y: "……" };
+  // Mục 1: dòng tự sinh (hoặc dòng đã sửa) dạng chữ để vừa in vừa sửa trực tiếp được.
+  const doiTuongAuto: string[] = [
+    ...((monitoring || t.loai_rfi === "ca-hai") ? [`${t.cong_viec === "gtus" ? "Giám sát và nghiệm thu giải toả ứng suất ray" : "Giám sát thi công hàn ray"} ${t.giam_sat?.trim() || tuyen}${t.pham_vi ? ` (${t.pham_vi})` : ""}`] : []),
+    ...(!monitoring ? (() => { const s = rfiScope(t), codes = welds.map((w) => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
+      return [...(s.geometry ? [`Nghiệm thu kích thước hình học, trực quan mối hàn ${codes}${pv}`] : []), ...(s.ultrasound ? [`Nghiệm thu siêu âm mối hàn ${codes}${pv}`] : [])]; })() : []),
+  ];
+  const doiTuong = lines(o.doi_tuong).length ? lines(o.doi_tuong).map((x) => x.replace(/^-\s*/, "")) : doiTuongAuto;
   const heading = "mt-3 font-bold";
   return (
     <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[11pt] leading-[1.55] text-black" style={{ fontFamily: "'Times New Roman', serif" }}>
@@ -463,45 +490,47 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {} }: { rfi: RfiSumm
           ----------- ☙★❧ -----------
         </p>
       )}
-      <p className="mt-3 text-right italic">{o.noi_lap?.trim() || pq?.noiLap || placeName(o.dia_diem?.trim() || t.dia_diem) || DOTS}, ngày {ngay}</p>
+      <p className="mt-3 text-right italic"><Ed k="noi_lap" v={o.noi_lap?.trim() || pq?.noiLap || placeName(o.dia_diem?.trim() || t.dia_diem) || ""} editor={editor} ph={DOTS} />, <EdViDate k="ngay_lap" iso={o.ngay_lap?.trim() || rfi.ngay_moi || ""} fallback={blankDate} editor={editor} /></p>
       <h2 className="mt-3 text-center font-bold">PHIẾU YÊU CẦU NGHIỆM THU</h2>
-      <p className="text-center">Số: {o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-(?:HH-|SA-)?/i, "")}/PYC-HR`}</p>
+      <p className="text-center">Số: <Ed k="so_phieu" v={o.so_phieu?.trim() || `${rfi.so_phieu.replace(/^RFI-(?:HH-|SA-)?/i, "")}/PYC-HR`} editor={editor} ph={DOTS} /></p>
       <dl className="mt-3 grid grid-cols-[6rem_1fr] font-bold">
         <dt>Dự án</dt><dd className="font-normal">: {pq?.duAn ?? projectName ?? DOTS}</dd>
-        <dt>Hạng mục</dt><dd className="font-normal">: {o.hang_muc?.trim() || pq?.goiThau || DOTS}</dd>
-        <dt>Địa điểm</dt><dd className="font-normal">: {o.dia_diem?.trim() || t.dia_diem || pq?.diaDiem || DOTS}</dd>
+        <dt>Hạng mục</dt><dd className="font-normal">: <Ed k="hang_muc" v={o.hang_muc?.trim() || pq?.goiThau || ""} editor={editor} ph={DOTS} /></dd>
+        <dt>Địa điểm</dt><dd className="font-normal">: <Ed k="dia_diem" v={[o.dia_diem?.trim(), t.dia_diem?.trim()].find((x) => x && !/^\s*lý trình/i.test(x)) || pq?.diaDiem || ""} editor={editor} ph={DOTS} /></dd>
       </dl>
-      <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b><div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k}</p>)}</div></div>
+      <div className="mt-2 flex gap-2 pl-[6rem]"><b className="shrink-0 whitespace-nowrap italic">Kính gửi:</b>
+        {editor
+          ? <div className="min-w-0 flex-1 font-bold"><Ed block k="kinh_gui" v={kinhGui.map((k) => `- ${k.replace(/^-\s*/, "")}`).join("\n")} editor={editor} ph={DOTS} /></div>
+          : <div className="min-w-0 flex-1 font-bold">{kinhGui.map((k) => <p key={k}>- {k.replace(/^-\s*/, "")}</p>)}</div>}</div>
       <p className={heading}>1. Đối tượng nghiệm thu:</p>
-      {lines(o.doi_tuong).length > 0 ? lines(o.doi_tuong).map((x) => <p key={x}>- {x.replace(/^-\s*/, "")}</p>) : <>
-      {(monitoring || t.loai_rfi === "ca-hai") && <p>- Giám sát thi công hàn ray {t.giam_sat?.trim() || tuyen}{t.pham_vi ? ` (${t.pham_vi})` : ""}</p>}
-      {!monitoring && (() => { const s = rfiScope(t), codes = welds.map(w => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
-        return <>{s.geometry && <p>- Nghiệm thu kích thước hình học, trực quan mối hàn {codes}{pv}</p>}{s.ultrasound && <p>- Nghiệm thu siêu âm mối hàn {codes}{pv}</p>}</>; })()}
-      </>}
+      {editor
+        ? <Ed block k="doi_tuong" v={doiTuong.map((x) => `- ${x}`).join("\n")} editor={editor} ph={DOTS} />
+        : doiTuong.map((x) => <p key={x}>- {x}</p>)}
       {missingRoutes.length > 0 && !hasRouteOverride && <p className="weld-doc-actions text-red-600">Chưa xác định tuyến: {missingRoutes.map((w) => fieldWeldCode(w.ma_lich_su)).join(", ")}</p>}
-      <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: Ngày {ngayNghiemThu}</p>
-      <p className="pl-3">{hh ? String(Number(hh)) : "…. "}h{mm || "…"} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {chainage(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v))}-{chainage(o.km_cuoi?.trim() || (monitoring ? t.kmTo : km[km.length - 1]?.v))}{o.noi_dung?.trim() ? <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {o.noi_dung.trim()}</> : null}</p>
+      <p className={`${heading} mt-6`}>2. Thời gian và vị trí nghiệm thu: <EdViDate lead="Ngày" k="ngay_nt" iso={ntIso} fallback={blankDate} editor={editor} /></p>
+      <p className="pl-3"><Ed time k="gio" v={gio} editor={editor} ph="…h…" /> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Km<Ed k="km_dau" v={(o.km_dau?.trim() || (monitoring ? t.kmFrom : km[0]?.v) || "").replace(/^\s*km\s*/i, "")} editor={editor} ph={DOTS} />{(o.noi_dung?.trim() || editor) ? <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <Ed k="noi_dung" v={o.noi_dung?.trim() ?? ""} editor={editor} ph="" /></> : null}</p>
       <p className={`${heading} mt-6`}>3. Đánh giá công việc:</p>
         <p className="text-justify">- Nhà thầu cam kết hạng mục trên đã đáp ứng yêu cầu chất lượng theo hồ sơ thiết kế, chỉ dẫn kỹ thuật, Hợp đồng thi công xây dựng và các tài liệu có liên quan khác;</p>
         <p className="mt-2 text-justify">- Công việc chuẩn bị hồ sơ, thủ tục đã đầy đủ sẵn sàng để kiểm tra nghiệm thu;</p>
         <p className="mt-2 text-justify">- Đề nghị Tư vấn giám sát đến công trường kiểm tra, nghiệm thu các công việc đề nghị nêu trên để nhà thầu triển khai các công việc tiếp theo.</p>
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} ten={o.ntp_ten} chucVu={o.ntp_chuc_vu} signatures={signatures} />
-        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} ten={o.ntc_ten} chucVu={o.ntc_chuc_vu} signatures={signatures} />
+      <div className="rfi-sign mt-6 grid grid-cols-2 gap-4">
+        {/* Phiếu nghiệm thu siêu âm (không kèm hình học) chỉ có Nhà thầu chính ký; để trống bên trái giữ vị trí chữ ký bên phải. */}
+        {ultrasoundOnly ? <div aria-hidden /> : <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} ten={o.ntp_ten} chucVu={o.ntp_chuc_vu} signatures={signatures} party="ntp" editor={editor} />}
+        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} ten={o.ntc_ten} chucVu={o.ntc_chuc_vu} signatures={signatures} party="ntc" editor={editor} />
       </div>
-      <table className="mt-3 w-full border-collapse border border-black">
+      <table className="rfi-sign mt-3 w-full border-collapse border border-black">
         <tbody>
           <tr className="h-28">
             <td className="w-1/4 border border-black text-center font-bold">TƯ VẤN<br />GIÁM SÁT</td>
             <td className="w-[40%] border border-black p-1 align-top">
               <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
-                <span>Người nhận: {o.nguoi_nhan?.trim() || (pq ? "Trần Văn Thanh" : DOTS)}</span>
-                <span>Ngày nhận: {viDate(o.ngay_nhan?.trim()) || ngay}</span>
+                <span>Người nhận: <Ed k="nguoi_nhan" v={o.nguoi_nhan?.trim() || (pq ? "Trần Văn Thanh" : "")} editor={editor} ph={DOTS} /></span>
+                <span>Ngày nhận: <EdViDate lead="" k="ngay_nhan" iso={o.ngay_nhan?.trim() || o.ngay_lap?.trim() || rfi.ngay_moi || ""} fallback={blankDate} editor={editor} /></span>
               </div>
             </td>
             <td className="border border-black p-1 align-top">
               <div className="flex h-full min-h-[6.5rem] flex-col justify-between">
-                <span>Chức vụ: {o.chuc_vu_nhan?.trim() || "Tư vấn giám sát trưởng"}</span>
+                <span>Chức vụ: <Ed k="chuc_vu_nhan" v={o.chuc_vu_nhan?.trim() || "Tư vấn giám sát trưởng"} editor={editor} ph="" /></span>
                 <span>Chữ ký:..........................................</span>
               </div>
             </td>

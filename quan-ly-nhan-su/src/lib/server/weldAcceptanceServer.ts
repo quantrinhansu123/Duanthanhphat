@@ -2,9 +2,11 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
-import { completeWeldAcceptance, publishWeldRfi } from "@/lib/server/weldQualityDb";
+import { completeWeldAcceptance, publishWeldRfi, loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
+import { fieldWeldCode } from "@/lib/weldCode";
+import { deleteGtusThanh, snapshotGtusThanh } from "@/lib/server/gtusServer";
 import { acceptanceIssues, evaluateGeometry, hasRequiredGrindingLength, type SavedWeldInspection, type SavedWeldQualityRule } from "@/lib/weldQuality";
 import { diaryWorkText, diaryManpowerDefaults, diaryStressReleaseText, diaryReportWorkText, diaryReportEquipmentText, diaryMachineName, type DiaryWork } from "@/lib/constructionDiaryAuto";
 import { loadProjectEquipment } from "@/lib/server/projectEquipment";
@@ -68,7 +70,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   // RFI báo trong ngày (phiếu chính + phiếu tách hình học/siêu âm) và kết quả nghiệm thu phiếu tách trong ngày → vào nhật ký thi công.
   const [mainRfis, splitRfis, splitDone] = await Promise.all([
     fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
-      .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)),
+      .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)).then((rows) => rows.filter((r) => !(r.thong_tin as Record<string, unknown> | null)?.pending)),
     fetchAll<{ id: string; so_phieu: string; loai: string }>((a, b) => db().from("phieu_nt_tach")
       .select("id,so_phieu,loai").eq("du_an_id", projectId).eq("ngay_moi", date).order("so_phieu").range(a, b)),
     fetchAll<{ moi_han_id: string; loai: string; ket_qua: string | null; phieu_nt_tach: { du_an_id: string; ngay_nghiem_thu: string | null } | { du_an_id: string; ngay_nghiem_thu: string | null }[] }>((a, b) => db().from("phieu_nt_tach_moi")
@@ -85,6 +87,7 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
       .select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", p).order("id")),
   ]);
+  void [accepted, splitRfis, splitRfiWelds]; // nhật ký lấy RFI chính phát trong ngày và nghiệm thu đã chốt trong ngày
   const located = new Map(all.map((w) => {
     const point = points.find((p) => p.lich_su_moi_han_id === w.id);
     // Lý trình ưu tiên điểm GPS; dự án không có tọa độ thì lấy lý trình ghi trong nhật ký hàn.
@@ -128,33 +131,47 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   const welderIds = [...new Set(welds.map((w) => w.tho_han_id).filter((id): id is string => Boolean(id)))];
   const journalPeople = await chunked<{ employee_id: string; ho_ten: string; chuc_vu: string | null; trang_thai: string | null }>(welderIds,
     (part) => db().from("nhan_su").select("employee_id,ho_ten,chuc_vu,trang_thai").in("employee_id", part));
+  // Giải toả ứng suất (GTUS) chỉ vào nhật ký vào NGÀY NGHIỆM THU từng thanh; phát phiếu không vào nhật ký.
+  type GtusDone = { phieu_id: string; ma_thanh: string; ma_lwr: string | null; ket_qua: string | null; ly_trinh_dau: string; ly_trinh_cuoi: string };
+  const gtusRaw = await db().from("gtus_thanh_rfi").select("phieu_id,ma_thanh,ma_lwr,ket_qua,ly_trinh_dau,ly_trinh_cuoi")
+    .eq("ngay_nghiem_thu", date).not("ket_qua", "is", null);
+  let gtusDone: GtusDone[] = gtusRaw.error ? [] : (gtusRaw.data as GtusDone[]); // chưa có bảng → không có dữ liệu GTUS
+  if (gtusDone.length) {
+    const owners = await chunked<{ id: string; du_an_id: string }>([...new Set(gtusDone.map((g) => g.phieu_id))], (p) =>
+      db().from("phieu_yeu_cau_nghiem_thu").select("id,du_an_id").in("id", p));
+    const mine = new Set(owners.filter((o) => o.du_an_id === projectId).map((o) => o.id));
+    gtusDone = gtusDone.filter((g) => mine.has(g.phieu_id));
+  }
+  const kmMetres = (v: string) => { const m = /(\d+)\+(\d+(?:[.,]\d+)?)/.exec(v); return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : Number.NaN; };
+  /** Mỗi phiếu / kết quả một dòng: tên LWR của các thanh và đoạn Km. */
+  const gtusLines = (withResult: boolean) => [...new Set(gtusDone.map((g) => g.phieu_id))].flatMap((phieu) =>
+    (withResult ? ["Đạt", "Không đạt"] : [null]).flatMap((result) => {
+      const rows = gtusDone.filter((g) => g.phieu_id === phieu && (result === null || g.ket_qua === result));
+      if (!rows.length) return [];
+      const names = [...new Set(rows.map((g) => g.ma_lwr || g.ma_thanh))].join(", ");
+      const starts = rows.map((g) => kmMetres(g.ly_trinh_dau)).filter(Number.isFinite), ends = rows.map((g) => kmMetres(g.ly_trinh_cuoi)).filter(Number.isFinite);
+      const from = rows.find((g) => kmMetres(g.ly_trinh_dau) === Math.min(...starts))?.ly_trinh_dau, to = rows.find((g) => kmMetres(g.ly_trinh_cuoi) === Math.max(...ends))?.ly_trinh_cuoi;
+      const range = from && to ? ` (Km${from} – Km${to})` : "";
+      return [withResult ? `- Nghiệm thu giải toả ứng suất ray ${names}${range}. Kết quả: ${result}.` : `- Giải toả ứng suất ray ${names}${range}.`];
+    }));
   return {
-    ...diaryManpowerDefaults(reports, personnel, project.data.nguoi_phu_trach, welderIds.length, journalPeople),
+    ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
     // Mục hàn lấy theo báo cáo ngày nếu có; mài ray, RFI báo trong ngày và giải tỏa ứng suất luôn được ghép thêm (không bị báo cáo ngày che mất).
+    // 3.1 Công việc thực hiện trong ngày (theo Nhật ký hàn): Hàn ray · Mài ray · Giải toả ứng suất (chỉ khi có RFI GTUS phát trong ngày).
     noiDungCongViec: [
       diaryReportWorkText(reports, select(welds.map((w) => w.id))) || diaryWorkText(select(welds.map((w) => w.id)), "weld"),
       diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
-      ...mainRfis.map((r) => {
-        const scope = rfiScope(r.thong_tin ?? {});
-        const what = scope.geometry && scope.ultrasound ? "hình học và siêu âm" : scope.ultrasound ? "siêu âm" : "hình học";
-        return diaryWorkText(select(mainRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${what}`);
-      }),
-      // Phiếu hình học/siêu âm sinh ra từ RFI chính trong cùng ngày đã nằm trong dòng RFI chính → không ghi lặp.
-      ...splitRfis.filter((r) => { const own = splitRfiWelds.filter((w) => w.phieu_id === r.id); return !own.length || !own.every((w) => mainRfiWelds.some((m) => m.moi_han_id === w.moi_han_id)); }).map((r) => diaryWorkText(select(splitRfiWelds.filter((w) => w.phieu_id === r.id).map((w) => w.moi_han_id)), "accept", `Báo RFI số ${r.so_phieu} nghiệm thu ${r.loai === "sieu-am" ? "siêu âm" : "hình học"}`)),
-      diaryStressReleaseText(layout, projectId, date),
+      ...gtusLines(false),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
+    // 3.2 Nghiệm thu công việc xây dựng hàng ngày = nghiệm thu đã chốt trong ngày (hình học / siêu âm, kể cả của RFI phát ngày trước); không có thì để trống.
     nghiemThuHangNgay: [
-      ...["Đạt", "Không đạt"].map((result) => {
-        const text = diaryWorkText(select(accepted.filter((w) => w.ket_qua === result).map((w) => w.moi_han_id)), "accept");
-        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
-      }),
-      // Nghiệm thu phiếu tách (hình học / siêu âm) chốt trong ngày.
       ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
-        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "hình học"} mối hàn`);
+        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
         return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
       })),
-    ].filter(Boolean).join("\n") || "Không có công tác nghiệm thu",
+      ...gtusLines(true),
+    ].filter(Boolean).join("\n"),
   };
 }
 
@@ -223,7 +240,7 @@ export async function nextRfiNumber(projectId: string, kind?: "hinh-hoc" | "sieu
       return (kind ? q.eq("loai", kind) : q).order("id").range(a, b);
     }),
   ]);
-  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-\d+)?$/i;
+  const pattern = kind ? new RegExp(`^${prefix}(\\d+)$`, "i") : /^RFI-(\d+)(?:-(?:\d+|GTUS))?$/i;
   let highest = 0;
   for (const row of [...main, ...split]) {
     const match = pattern.exec((row.so_phieu ?? "").trim());
@@ -236,7 +253,9 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
   if (body.loai_rfi === "theo-doi") {
     const range = object(body.filters ?? {});
     const fields = { nameFrom: str(range.nameFrom, 100), nameTo: str(range.nameTo, 100), kmFrom: str(range.kmFrom, 40), kmTo: str(range.kmTo, 40) };
-    try { validateMonitoringRange(fields); } catch (error) { throw new QualityApiError((error as Error).message); }
+    // Phiếu GTUS chọn theo thanh ray trên track map: không cần khoảng mối / Km.
+    const isGtus = object(body.thong_tin ?? {}).cong_viec === "gtus";
+    if (!isGtus) { try { validateMonitoringRange(fields); } catch (error) { throw new QualityApiError((error as Error).message); } }
     const date = qualityDate(body.ngay_moi), number = str(body.so_phieu, 80);
     if (!date || !number) throw new QualityApiError("Nhập ngày mời và số phiếu RFI.");
     const info = object(body.thong_tin ?? {});
@@ -246,7 +265,21 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     const payload = { id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: number, ngay_moi: date, nguoi_lap: actor,
       thong_tin: { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi), giam_sat,
         tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha), gio_bat_dau: str(info.gio_bat_dau, 10),
-        loai_rfi: "theo-doi", ...fields } };
+        loai_rfi: "theo-doi", cong_viec: info.cong_viec === "gtus" ? "gtus" : "", ...fields } };
+    if (payload.thong_tin.cong_viec === "gtus") {
+      const ids = String(info.lwr_ids ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      if (!ids.length || ids.length > 50) throw new QualityApiError("Chọn 1–50 thanh LWR đã hoàn thành để phát phiếu giải toả ứng suất.");
+      const { candidates } = await listGtusCandidates({ du_an_id: payload.du_an_id, exclude_rfi_id: payload.id });
+      const eligible = new Map(candidates.map((c) => [c.id, c]));
+      const bad = ids.find((id) => !eligible.has(id) || eligible.get(id)!.used);
+      if (bad) throw new QualityApiError("Có thanh LWR chưa đủ điều kiện hoặc đã nằm trong phiếu giải toả ứng suất khác. Bấm Tải lại để cập nhật danh sách.", 409);
+      Object.assign(payload.thong_tin, { lwr_ids: ids.join(","), lwr_codes: ids.map((id) => eligible.get(id)!.lwr).join(", ") });
+      // Lưu danh sách thanh của phiếu (chụp lý trình, chiều dài) để nghiệm thu và thanh toán từng thanh — như mối hàn của RFI nghiệm thu.
+      await snapshotGtusThanh(payload.id, ids.map((thanhId) => {
+        const c = eligible.get(thanhId)!;
+        return { thanh_id: c.id, ma_thanh: c.code, route: c.route, ray: c.rail, ly_trinh_dau: c.from, ly_trinh_cuoi: c.to, chieu_dai: c.lengthMetres, ma_lwr: c.lwr };
+      }));
+    }
     const { error } = await db().from("phieu_yeu_cau_nghiem_thu").insert(payload);
     if (error) {
       if (error.code !== "23505") throw error;
@@ -293,8 +326,32 @@ export async function publishRfi(body: Record<string, unknown>, actor: string) {
     loai_rfi: body.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu",
     nt_hinh_hoc: geometry, nt_sieu_am: ultrasound,
   };
-  const id = await publishWeldRfi({ id: qualityUuid(body.id), du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
-    moi_han_ids: ids.map(qualityUuid), nguoi_lap: actor, thong_tin });
+  const parentId = qualityUuid(body.id), weldIds = ids.map(qualityUuid);
+  // Mỗi mối chỉ nằm trong một phiếu hình học / siêu âm đang xử lý: báo rõ phiếu nào đang giữ mối thay vì lỗi ràng buộc của CSDL.
+  const kinds = [geometry ? "hinh-hoc" : "", ultrasound ? "sieu-am" : ""].filter(Boolean);
+  const held = await chunkedPages<{ moi_han_id: string; ma_lich_su: string; phieu_id: string; loai: string; ket_qua: string | null }>(weldIds, (part, from, to) => db()
+    .from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,phieu_id,loai,ket_qua").in("moi_han_id", part).in("loai", kinds)
+    .order("moi_han_id").order("phieu_id").range(from, to));
+  const active = held.filter((row) => row.ket_qua !== "Không đạt");
+  if (active.length) {
+    const tickets = await db().from("phieu_nt_tach").select("id,so_phieu,phieu_rfi_id").in("id", [...new Set(active.map((row) => row.phieu_id))]);
+    if (tickets.error) throw tickets.error;
+    const info = new Map(tickets.data.map((t) => [t.id as string, t]));
+    const blocking = active.filter((row) => info.get(row.phieu_id)?.phieu_rfi_id !== parentId);
+    if (blocking.length) {
+      const numbers = [...new Set(blocking.map((row) => info.get(row.phieu_id)?.so_phieu ?? "?"))].join(", ");
+      const welds = blocking.slice(0, 3).map((row) => fieldWeldCode(row.ma_lich_su)).join(", ");
+      throw new QualityApiError(`${blocking.length} mối đã nằm trong phiếu đang xử lý (${numbers}), ví dụ ${welds}. Mở phiếu đó để nghiệm thu, hoặc xóa phiếu cũ trước khi phát phiếu mới.`, 409);
+    }
+  }
+  let id: string;
+  try {
+    id = await publishWeldRfi({ id: parentId, du_an_id: qualityUuid(body.du_an_id), so_phieu: soPhieu, ngay_moi: ngay,
+      moi_han_ids: weldIds, nguoi_lap: actor, thong_tin });
+  } catch (error) {
+    if (error instanceof Error && /nt_tach_moi_dang_xu_ly/.test(error.message)) throw new QualityApiError("Có mối đã nằm trong một phiếu hình học hoặc siêu âm khác đang xử lý. Bấm Tải lại để cập nhật danh sách mối.", 409);
+    throw error;
+  }
   return { id };
 }
 
@@ -312,20 +369,96 @@ async function childSigningByRfi(parentIds: string[]) {
 }
 
 /** Nội dung in nhập tay của phiếu yêu cầu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km) — lưu theo phiếu, dùng chung mọi máy. */
-const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi"] as const;
+const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const values = object(body.values ?? {});
-  const { data: existing, error } = await db().from("phieu_yeu_cau_nghiem_thu").select("thong_tin").eq("id", id).single();
-  if (error) throw error;
-  const thong_tin: Record<string, unknown> = { ...(existing.thong_tin ?? {}) };
+  // Phiếu in có thể là RFI cha (tab 1) hoặc phiếu hình học / siêu âm (tab 2, 3): lưu vào đúng bảng của phiếu.
+  let table: "phieu_yeu_cau_nghiem_thu" | "phieu_nt_tach" = "phieu_yeu_cau_nghiem_thu";
+  let found = await db().from(table).select("thong_tin").eq("id", id).maybeSingle();
+  if (found.error) throw found.error;
+  if (!found.data) {
+    table = "phieu_nt_tach";
+    found = await db().from(table).select("thong_tin").eq("id", id).maybeSingle();
+    if (found.error) throw found.error;
+    if (!found.data) throw new QualityApiError("Không tìm thấy phiếu để lưu.", 404);
+  }
+  const thong_tin: Record<string, unknown> = { ...(found.data.thong_tin ?? {}) };
   for (const key of PRINT_INFO_KEYS) {
     const value = str(values[key], 2000);
     if (value) thong_tin[`in_${key}`] = value; else delete thong_tin[`in_${key}`];
   }
-  const { error: updateError } = await db().from("phieu_yeu_cau_nghiem_thu").update({ thong_tin }).eq("id", id);
+  const { error: updateError } = await db().from(table).update({ thong_tin }).eq("id", id);
   if (updateError) throw updateError;
   return { id };
+}
+
+/**
+ * Thanh ray đủ điều kiện phát RFI giải toả ứng suất = thanh MÀU XÁM trên track map của dự án (sơ đồ lwr_track_layouts):
+ * đã rải (placed) và chưa giải toả (released). Lý trình đầu / cuối lấy đúng từ thanh (cell.from → cell.to).
+ * Thanh nằm trong RFI GTUS khác thì đánh dấu "used".
+ */
+export async function listGtusCandidates(body: Record<string, unknown>) {
+  const projectId = qualityUuid(body.du_an_id);
+  const layoutRow = await db().from("lwr_track_layouts").select("layout").eq("project_id", projectId).maybeSingle();
+  if (layoutRow.error) throw layoutRow.error;
+  type Cell = { id?: unknown; from?: unknown; to?: unknown; placed?: unknown; released?: unknown };
+  type Row = { line?: unknown; rail?: unknown; cells?: Cell[] };
+  const layout = (layoutRow.data?.layout ?? {}) as { rows?: Row[]; longRails?: Record<string, unknown>[] };
+  const used = new Map<string, string>();
+  const rfis = await db().from("phieu_yeu_cau_nghiem_thu").select("id,so_phieu,thong_tin").eq("du_an_id", projectId).limit(2000);
+  if (rfis.error) throw rfis.error;
+  for (const rfi of rfis.data) {
+    const info = (rfi.thong_tin ?? {}) as Record<string, unknown>;
+    if (info.cong_viec !== "gtus" || rfi.id === body.exclude_rfi_id) continue; // phát lại cùng yêu cầu (retry) không tự chặn chính nó
+    for (const id of String(info.lwr_ids ?? "").split(",").filter(Boolean)) used.set(id, String(rfi.so_phieu));
+  }
+  const metres = (value: unknown) => {
+    const m = /(\d+)\+(\d+(?:[.,]\d+)?)/.exec(String(value ?? ""));
+    return m ? Number(m[1]) * 1000 + Number(m[2].replace(",", ".")) : NaN;
+  };
+  const display = (id: string) => id.replace(/^(UT|UP|DT|DP)/i, (p) => ({ UT: "TT", UP: "TP", DT: "HT", DP: "HP" } as Record<string, string>)[p.toUpperCase()] ?? p);
+  const prefixOf = (row: Row) => {
+    const line = String(row.line ?? ""), rail = String(row.rail ?? "");
+    return /hạ/i.test(line) ? (/phải/i.test(rail) ? "DP" : "DT") : (/phải/i.test(rail) ? "UP" : "UT");
+  };
+  // Tên LWR: thanh nằm trong đoạn LWR đã lập thì dùng mã đó; thanh chưa có đoạn LWR được đặt tên dự kiến chạy liên tiếp 1→n riêng từng ray
+  // (HT0002, HT0003… tiếp theo mã lớn nhất đã dùng của ray đó) để mọi thanh đều có tên.
+  const nextNumber = new Map<string, number>();
+  for (const rail of layout.longRails ?? []) {
+    const m = /^(?:HT|HP|TT|TP)(\d+)$/i.exec(String(rail.code ?? "").trim());
+    const key = String(rail.rowKey);
+    if (m) nextNumber.set(key, Math.max(nextNumber.get(key) ?? 0, Number(m[1])));
+  }
+  const candidates = (layout.rows ?? []).flatMap((row) => {
+    const prefix = prefixOf(row);
+    return (row.cells ?? []).flatMap((cell) => {
+      if (!cell.placed || cell.released) return [];
+      const start = metres(cell.from), end = metres(cell.to);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+      const id = String(cell.id ?? "");
+      if (!id) return [];
+      const lwr = (layout.longRails ?? []).find((rail) =>
+        String(rail.rowKey) === prefix && Number(rail.startMetres) < end && Number(rail.endMetres) > start);
+      let lwrName = lwr ? String(lwr.code ?? "") : "";
+      if (!lwrName) {
+        const n = (nextNumber.get(prefix) ?? 0) + 1;
+        nextNumber.set(prefix, n);
+        lwrName = `${display(prefix)}${String(n).padStart(4, "0")}`;
+      }
+      const adjust = Number.isFinite(Number((cell as { lengthAdjust?: unknown }).lengthAdjust)) ? Number((cell as { lengthAdjust?: unknown }).lengthAdjust) : 0;
+      return [{
+        id, code: display(id), lwr: lwrName, lwrPlanned: !lwr,
+        lengthMetres: Math.round((end - start + adjust) * 1000) / 1000, // chiều dài ray = lý trình cuối − đầu + điều chỉnh
+        route: /hạ/i.test(String(row.line ?? "")) ? "ha" as const : "thuong" as const,
+        rail: /phải/i.test(String(row.rail ?? "")) ? "phai" as const : "trai" as const,
+        startMetres: start, endMetres: end, from: String(cell.from), to: String(cell.to),
+        used: used.get(id) ?? null,
+      }];
+    });
+  });
+  candidates.sort((a, b) => Number(a.route === "thuong") - Number(b.route === "thuong") || a.startMetres - b.startMetres || a.rail.localeCompare(b.rail));
+  return { candidates };
 }
 
 export async function listRfis(projectId: string) {
@@ -397,14 +530,124 @@ export async function listRfis(projectId: string) {
 }
 
 /** Sửa thông tin phiếu YCNT/RFI đã phát (không đổi danh sách mối đã chốt). */
-export async function deleteRfi(body: Record<string, unknown>) {
+/**
+ * Pending / phát lại phiếu (RFI chính, GTUS, phiếu tách hình học / siêu âm).
+ * - "hoan": huỷ hoặc không thực hiện nghiệm thu → phiếu giữ nguyên số, mối vẫn gắn phiếu (không bị phát sang phiếu khác), chờ phát lại.
+ * - "phat-lai": đặt ngày mời mới (số phiếu giữ nguyên), bỏ trạng thái pending; ngày cũ + lý do được lưu vào lịch sử phát.
+ * Chỉ ghi trong thong_tin (và ngay_moi khi phát lại) nên không cần migration.
+ */
+export async function setRfiPending(body: Record<string, unknown>, actor: string) {
   const id = qualityUuid(body.id);
+  const table = body.kind === "tach" ? "phieu_nt_tach" : "phieu_yeu_cau_nghiem_thu";
+  const action = body.hanh_dong === "phat-lai" ? "phat-lai" : body.hanh_dong === "hoan" ? "hoan" : "";
+  if (!action) throw new QualityApiError("Hành động không hợp lệ.");
+  const cols = table === "phieu_nt_tach" ? "id,so_phieu,ngay_moi,ngay_nghiem_thu,thong_tin" : "id,so_phieu,ngay_moi,thong_tin";
+  const { data: row, error } = await db().from(table).select(cols).eq("id", id).single();
+  if (error || !row) throw new QualityApiError("Không tìm thấy phiếu.", 404);
+  const current = row as unknown as { so_phieu: string; ngay_moi: string; ngay_nghiem_thu?: string | null; thong_tin: Record<string, unknown> | null };
+  const info = { ...(current.thong_tin ?? {}) } as Record<string, unknown>;
+  const pending = info.pending as { ngay?: string; ly_do?: string } | undefined;
+  const history = Array.isArray(info.lich_su_phat) ? [...(info.lich_su_phat as unknown[])] : [];
+  const update: Record<string, unknown> = {};
+  if (action === "hoan") {
+    if (pending) throw new QualityApiError("Phiếu đã ở trạng thái pending.", 409);
+    if (current.ngay_nghiem_thu) throw new QualityApiError("Phiếu đã nghiệm thu, không thể chuyển pending.", 409);
+    info.pending = { ngay: new Date().toISOString(), ly_do: str(body.ly_do, 300), nguoi: actor };
+  } else {
+    if (!pending) throw new QualityApiError("Phiếu không ở trạng thái pending.", 409);
+    const ngay = qualityDate(body.ngay_moi);
+    if (!ngay) throw new QualityApiError("Nhập ngày mời nghiệm thu mới.");
+    history.push({ ngay_moi: current.ngay_moi, ngay_hoan: pending.ngay ?? null, ly_do: pending.ly_do ?? "", ngay_phat_lai: new Date().toISOString(), nguoi: actor });
+    delete info.pending;
+    info.lich_su_phat = history;
+    update.ngay_moi = ngay;
+  }
+  const { error: saveError } = await db().from(table).update({ ...update, thong_tin: info }).eq("id", id);
+  if (saveError) throw saveError;
+  return { id, pending: action === "hoan" };
+}
+
+/** Gắn / gỡ bản scan biên bản đã ký (file PDF nằm trong kho Tài liệu) vào phiếu. Chỉ ghi vào thong_tin nên không cần migration. */
+export async function saveBbntScan(body: Record<string, unknown>, actor: string) {
+  const id = qualityUuid(body.id);
+  const table = body.kind === "tach" ? "phieu_nt_tach" : "phieu_yeu_cau_nghiem_thu";
+  const { data: row, error } = await db().from(table).select("id,thong_tin").eq("id", id).single();
+  if (error || !row) throw new QualityApiError("Không tìm thấy phiếu.", 404);
+  const info = { ...((row.thong_tin ?? {}) as Record<string, unknown>) };
+  type ScanEntry = Record<string, unknown>;
+  const list: ScanEntry[] = Array.isArray(info.bbnt_scans) ? [...(info.bbnt_scans as ScanEntry[])] : [];
+  if (info.bbnt_scan) { list.unshift(info.bbnt_scan as ScanEntry); delete info.bbnt_scan; } // bản cũ chỉ một file
+  let next = list;
+  if (body.scan === null) {
+    // Gỡ một file (theo mã tài liệu / đường dẫn) hoặc gỡ tất cả khi không chỉ rõ.
+    const key = str(body.go_doc, 300);
+    next = key ? list.filter((entry) => String(entry.doc_id || entry.url) !== key) : [];
+  } else {
+    const scan = object(body.scan);
+    const url = str(scan.url, 500);
+    if (!url.startsWith("/api/documents/") && !url.startsWith("https://drive.google.com/")) throw new QualityApiError("Liên kết biên bản không hợp lệ.");
+    if (list.length >= 30) throw new QualityApiError("Mỗi phiếu lưu tối đa 30 file biên bản.");
+    next = [...list, { doc_id: str(scan.doc_id, 80), url, ten: str(scan.ten, 200), appsheet_path: str(scan.appsheet_path, 300), appsheet_url: str(scan.appsheet_url, 600), ngay: new Date().toISOString(), nguoi: actor }];
+  }
+  if (next.length) info.bbnt_scans = next; else delete info.bbnt_scans;
+  const { error: saveError } = await db().from(table).update({ thong_tin: info }).eq("id", id);
+  if (saveError) throw saveError;
+  return { id };
+}
+
+/**
+ * Mối rời khỏi phiếu (xoá phiếu): mối không còn nằm trong phiếu nào và chưa thanh toán thì trở về «Mài xong»
+ * — giữ ngày mài, bỏ kết quả trực quan / siêu âm do nghiệm thu để lại. Lỗi ở một mối không làm hỏng việc xoá phiếu.
+ */
+async function revertWeldsToGround(weldIds: string[], actor: string): Promise<number> {
+  const ids = [...new Set(weldIds)];
+  if (!ids.length) return 0;
+  const still = new Set<string>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const part = ids.slice(i, i + 80);
+    const [tach, main, pay] = await Promise.all([
+      db().from("phieu_nt_tach_moi").select("moi_han_id").in("moi_han_id", part).limit(2000),
+      db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id").in("moi_han_id", part).limit(2000),
+      db().from("thanh_toan_moi_han").select("moi_han_id").in("moi_han_id", part).limit(2000),
+    ]);
+    for (const result of [tach, main, pay]) for (const row of (result.data ?? []) as { moi_han_id: string }[]) still.add(row.moi_han_id);
+  }
+  let reverted = 0;
+  for (const weldId of ids) {
+    if (still.has(weldId)) continue; // vẫn thuộc phiếu khác / đã thanh toán → giữ nguyên
+    try {
+      const { inspection } = await loadWeldQuality(weldId);
+      if (!inspection || !inspection.ngay_mai) continue; // chưa mài: không có gì để trả về
+      if (!inspection.truc_quan && !inspection.ket_qua_ndt) continue; // đã là Mài xong
+      const { updated_at: _updatedAt, ...rest } = inspection;
+      void _updatedAt;
+      await saveWeldQualityInspection({ ...rest, truc_quan: null, ket_qua_ndt: null, ngay_ndt: null, xu_ly_truc_quan: null, ly_do_loai_nghiem_thu: null, nguoi_ghi_nhan: actor });
+      reverted += 1;
+    } catch { /* bỏ qua mối lỗi; việc xoá phiếu đã xong */ }
+  }
+  return reverted;
+}
+
+export async function deleteRfi(body: Record<string, unknown>, actor = "") {
+  const id = qualityUuid(body.id);
+  // Gom các mối của phiếu (RFI chính + phiếu con hình học / siêu âm) trước khi xoá để trả về Mài xong sau đó.
+  const weldIds: string[] = [];
+  const mainRows = await db().from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id").eq("phieu_id", id).limit(5000);
+  for (const row of (mainRows.data ?? []) as { moi_han_id: string }[]) weldIds.push(row.moi_han_id);
+  const children = await db().from("phieu_nt_tach").select("id").eq("phieu_rfi_id", id).limit(200);
+  const childIds = ((children.data ?? []) as { id: string }[]).map((c) => c.id);
+  if (childIds.length) {
+    const childRows = await db().from("phieu_nt_tach_moi").select("moi_han_id").in("phieu_id", childIds).limit(5000);
+    for (const row of (childRows.data ?? []) as { moi_han_id: string }[]) weldIds.push(row.moi_han_id);
+  }
   const { error } = await db().rpc("xoa_phieu_rfi", { p_id: id });
   if (error) {
     if (error.code === "P0001") throw new QualityApiError(error.message, 409);
     throw error;
   }
-  return { id };
+  await deleteGtusThanh(id); // phiếu GTUS: xoá luôn nghiệm thu / thanh toán từng thanh
+  const reverted = await revertWeldsToGround(weldIds, actor || "Hệ thống");
+  return { id, reverted };
 }
 
 export async function updateRfi(body: Record<string, unknown>) {
@@ -428,6 +671,7 @@ export async function updateRfi(body: Record<string, unknown>) {
     tuyen_thuong: flag(info.tuyen_thuong ?? prev.tuyen_thuong),
     tuyen_ha: flag(info.tuyen_ha ?? prev.tuyen_ha),
     gio_bat_dau: str(info.gio_bat_dau ?? prev.gio_bat_dau, 10),
+    ...(prev.loai_rfi === "theo-doi" ? { cong_viec: (info.cong_viec ?? prev.cong_viec) === "gtus" ? "gtus" : "" } : {}),
   };
   if (prev.loai_rfi === "theo-doi" && !thong_tin.tuyen_thuong && !thong_tin.tuyen_ha && !thong_tin.giam_sat) throw new QualityApiError("Chọn tuyến hoặc nhập nội dung giám sát cho phiếu theo dõi.");
   const { error: upd } = await db().from("phieu_yeu_cau_nghiem_thu")
@@ -518,11 +762,16 @@ export async function completeRfiGeometry(body: Record<string, unknown>, actor: 
 }
 
 /** Bộ biên bản của phiếu tách (hình học / siêu âm). Phiếu chưa nghiệm thu → mẫu trống kết quả để in mang ra hiện trường. */
-export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}) {
+/**
+ * Bộ biên bản của phiếu tách (hình học / siêu âm). `draft` = bản NHÁP của phiếu chưa nghiệm thu: tạm ghi Đạt cho mọi mối,
+ * ngày nghiệm thu tạm lấy theo ngày mời — chỉ để in cho các bên ký; không chốt nghiệm thu nên Nhật ký thi công chưa ghi gì.
+ */
+export async function loadGeometryRecord(ticketId: string, extra: Record<string, string> = {}, draft = false) {
   const { data: ticket, error } = await db().from("phieu_nt_tach").select("*").eq("id", ticketId).single();
   const ultrasound = ticket?.loai === "sieu-am";
   if (error) throw error;
   const pending = !ticket.ngay_nghiem_thu;
+  const isDraft = draft && pending;
   const [rfiRes, projectRes, rows] = await Promise.all([
     ticket.phieu_rfi_id ? db().from("phieu_yeu_cau_nghiem_thu").select("*").eq("id", ticket.phieu_rfi_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     db().from("du_an").select("*").eq("id", ticket.du_an_id).maybeSingle(),
@@ -549,7 +798,13 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
     where.set(p.lich_su_moi_han_id, { ma_diem: cur?.ma_diem || p.ma_diem, ly_trinh: cur?.ly_trinh || p.ly_trinh });
   }
   // Phiếu siêu âm: kèm số phiếu hình học đã nghiệm thu của các mối.
-  const geometryNos = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu))].join(", ") : ticket.so_phieu;
+  // RFI tách làm 2 phiếu con (hình học + siêu âm): phụ lục của phiếu nào cũng ghi đủ cả hai số.
+  const siblings = ticket.phieu_rfi_id
+    ? ((await db().from("phieu_nt_tach").select("so_phieu,loai").eq("phieu_rfi_id", ticket.phieu_rfi_id)).data ?? []) as { so_phieu: string; loai: string }[] : [];
+  const siblingNos = (loai: string) => siblings.filter((s) => s.loai === loai).map((s) => s.so_phieu);
+  const geometryList = ultrasound ? [...new Set([...(await geometryAcceptedTickets(ticket.du_an_id, rows.map((r) => r.moi_han_id))).values()].map((t) => t.so_phieu).concat(siblingNos("hinh-hoc")))] : [ticket.so_phieu];
+  const geometryNos = geometryList.join(", ");
+  const ultrasoundNos = ultrasound ? ticket.so_phieu : siblingNos("sieu-am").join(", ");
   const rfi = (rfiRes.data ?? { id: ticket.id, so_phieu: ticket.so_phieu, ngay_moi: ticket.ngay_moi, thong_tin: ticket.thong_tin ?? {} }) as Record<string, unknown>;
   const rfiInfo = (rfi.thong_tin ?? {}) as Record<string, unknown>;
   const moi = rows.map((r) => {
@@ -558,16 +813,20 @@ export async function loadGeometryRecord(ticketId: string, extra: Record<string,
     const mh: Record<string, unknown> = { ma_lich_su: r.ma_lich_su, ...(weldInfo.get(r.moi_han_id) ?? {}), ...(reportInfo.get(r.moi_han_id) ?? {}), ...((d.moi_han as Record<string, unknown>) ?? {}) };
     if (!mh.ma_diem && pt?.ma_diem) mh.ma_diem = pt.ma_diem;
     if (!mh.ly_trinh && pt?.ly_trinh) mh.ly_trinh = pt.ly_trinh;
-    return { moi_han_id: r.moi_han_id, ket_qua: pending ? "" : r.ket_qua ?? "Đạt", ly_do: r.ly_do,
-      du_lieu_chot: { moi_han: mh, kiem_tra: pending ? {} : (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
+    return { moi_han_id: r.moi_han_id, ket_qua: isDraft ? "Đạt" : pending ? "" : r.ket_qua ?? "Đạt", ly_do: r.ly_do,
+      du_lieu_chot: { moi_han: mh, kiem_tra: isDraft ? (ultrasound ? { ket_qua_ndt: "Đạt" } : { truc_quan: "Đạt" }) : pending ? {} : (d.kiem_tra as Record<string, unknown>) ?? d, tieu_chuan: (d.tieu_chuan as Record<string, unknown>) ?? { dung_sai: d.dung_sai, ten: d.ten_tieu_chuan } } };
   });
   const docs = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   return {
-    dot: { id: ticket.id, ngay_nghiem_thu: ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
-      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasound ? ticket.so_phieu : "" },
+    dot: { id: ticket.id, ngay_nghiem_thu: isDraft ? String(ticket.ngay_moi ?? "").slice(0, 10) : ticket.ngay_nghiem_thu, nguoi_lap: ticket.nguoi_nghiem_thu,
+      thong_tin: { ...extra, rfi_hinh_hoc_so: geometryNos, rfi_sieu_am_so: ultrasoundNos, ...(isDraft ? { ban_nhap: "1" } : {}) },
       phieu_yeu_cau_nghiem_thu: { ...rfi, so_phieu: ticket.so_phieu, thong_tin: { ...rfiInfo, nt_hinh_hoc: ultrasound ? "" : "1", nt_sieu_am: ultrasound ? "1" : "" }, du_an: projectRes.data ?? {} } },
     ho_so: docs.map((loai, i) => ({ id: `${ticket.id}-${i}`, loai, tinh_trang_ky: ticket.da_ky ? "Đã ký" : "Chờ ký", du_lieu_chot: null })),
-    moi, sua_doi: [],
+    moi,
+    sua_doi: docs.flatMap((_, i) => {
+      const saved = (ticket.thong_tin?.in_ho_so as Record<string, { thong_tin: Record<string, string>; ly_do: string; nguoi_sua: string; created_at: string }> | undefined)?.[i];
+      return saved ? [{ id: `${ticket.id}-${i}-v1`, ho_so_id: `${ticket.id}-${i}`, phien_ban: 1, ...saved }] : [];
+    }),
   };
 }
 
@@ -699,19 +958,31 @@ export async function loadRecordSet(dotId: string) {
 
 /** Thêm bản sửa đổi thông tin in (địa điểm, thành phần…); không đụng tới dữ liệu chốt. */
 export async function reviseRecord(body: Record<string, unknown>, actor: string) {
-  const hoSoId = qualityUuid(body.ho_so_id);
+  // Bộ biên bản của phiếu tách (hình học / siêu âm) có id ảo `<uuid phiếu>-<0..2>`: lưu bản sửa vào phieu_nt_tach.thong_tin.
+  const virtual = typeof body.ho_so_id === "string" ? /^(.{36})-([0-2])$/.exec(body.ho_so_id) : null;
+  const hoSoId = virtual ? "" : qualityUuid(body.ho_so_id);
   const lyDo = str(body.ly_do, 1000);
   if (!lyDo) throw new QualityApiError("Cần nêu lý do sửa đổi.");
   const t = object(body.thong_tin);
   const thong_tin: Record<string, string> = { dia_diem: str(t.dia_diem, 300), thanh_phan: str(t.thanh_phan, 1000) };
   // Nội dung tự nhập của BB nghiệm thu hoàn thành (mục 5 a–g).
-  for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac"]) {
+  for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac", "ten_moi_han"]) {
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
-  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS]) {
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", "pyc_so", "goi_thau", "ket_luan", ...SIGNER_KEYS,
+    ...["cdt", "tvtk"].flatMap((p) => [1, 2].flatMap((i) => [`nguoi_${p}_${i}_ten`, `nguoi_${p}_${i}_cv`]))]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;
+  }
+  if (virtual) {
+    const ticketId = qualityUuid(virtual[1]);
+    const { data: ticket, error: ticketError } = await db().from("phieu_nt_tach").select("thong_tin").eq("id", ticketId).single();
+    if (ticketError) throw ticketError;
+    const prints = { ...((ticket.thong_tin?.in_ho_so as Record<string, unknown>) ?? {}), [virtual[2]]: { thong_tin, ly_do: lyDo, nguoi_sua: actor, created_at: new Date().toISOString() } };
+    const { error: saveError } = await db().from("phieu_nt_tach").update({ thong_tin: { ...(ticket.thong_tin ?? {}), in_ho_so: prints } }).eq("id", ticketId);
+    if (saveError) throw saveError;
+    return { ok: true };
   }
   const { data: last, error: lastError } = await db().from("ho_so_nghiem_thu_sua_doi").select("phien_ban")
     .eq("ho_so_id", hoSoId).order("phien_ban", { ascending: false }).limit(1);
@@ -796,7 +1067,10 @@ async function saveSplitInfo(id: string, value: unknown) {
   if (value == null) return;
   const info = object(value);
   const flag = (v: unknown) => (v === true || v === "1" || v === "true" ? "1" : "");
-  const thong_tin = { dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
+  // Giữ nội dung in đã sửa (in_*) khi cập nhật thông tin phiếu.
+  const current = await db().from("phieu_nt_tach").select("thong_tin").eq("id", id).maybeSingle();
+  const kept = Object.fromEntries(Object.entries(object(current.data?.thong_tin ?? {})).filter(([k]) => k.startsWith("in_")));
+  const thong_tin = { ...kept, dia_diem: str(info.dia_diem), ben_moi: str(info.ben_moi), ben_nhan: str(info.ben_nhan), pham_vi: str(info.pham_vi),
     gio_bat_dau: str(info.gio_bat_dau, 10),
     // Không chọn tuyến → bỏ khoá để phiếu tự xác định tuyến theo mã điểm của mối.
     ...(flag(info.tuyen_thuong) || flag(info.tuyen_ha) ? { tuyen_thuong: flag(info.tuyen_thuong), tuyen_ha: flag(info.tuyen_ha) } : {}) };
@@ -950,6 +1224,8 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     // Xoá phiếu (chưa ký): các mối quay lại trạng thái trước nghiệm thu / danh sách chờ phát phiếu. Phiếu đã ký phải đặt lại «Chờ ký» trước.
     const { data: current, error: curError } = await db().from("phieu_nt_tach").select("*").eq("id", id).eq("du_an_id", project).eq("loai", kind).single();
     if (curError) throw curError;
+    // Phiếu con (hình học / siêu âm) của một RFI chính không xoá lẻ: muốn xoá phải xoá cả RFI (kéo theo mọi phiếu con) rồi lập lại.
+    if (current.phieu_rfi_id) throw new QualityApiError(`Phiếu ${current.so_phieu} là phiếu con của một RFI nên không xoá lẻ. Hãy xoá cả RFI ở tab «Phát phiếu RFI» (xoá toàn bộ phiếu con) rồi lập lại.`, 409);
     if (current.da_ky) throw new QualityApiError("Phiếu đã ký, hãy đặt lại «Chờ ký» trước khi xoá.", 409);
     if (kind === "hinh-hoc" && current.ngay_nghiem_thu) {
       const forwarded = await db().from("phieu_nt_tach").select("id", { count: "exact", head: true })
@@ -957,11 +1233,14 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
       if (forwarded.error) throw forwarded.error;
       if ((forwarded.count ?? 0) > 0) throw new QualityApiError(`Phiếu ${current.so_phieu} đã chuyển sang siêu âm. Xoá phiếu siêu âm ở tab 2 trước.`, 409);
     }
+    const ticketWelds = await db().from("phieu_nt_tach_moi").select("moi_han_id").eq("phieu_id", id).limit(5000);
     const rows = await db().from("phieu_nt_tach_moi").delete().eq("phieu_id", id);
     if (rows.error) throw rows.error;
     const del = await db().from("phieu_nt_tach").delete().eq("id", id);
     if (del.error) throw del.error;
-    return { id };
+    // Xoá phiếu thì mối trở về «Mài xong» (nếu không còn ở phiếu nào khác).
+    const reverted = await revertWeldsToGround(((ticketWelds.data ?? []) as { moi_han_id: string }[]).map((w) => w.moi_han_id), actor);
+    return { id, reverted };
   }
   const ticket = await db().from("phieu_nt_tach").select("*").eq("id",id).eq("du_an_id",project).eq("loai",kind).single();
   if (ticket.error) throw ticket.error;

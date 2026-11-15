@@ -58,9 +58,10 @@ export function parseQualityFilters(value: unknown): WeldJournalPageQuery {
     !["Tất cả", "FBW", "ATW"].includes(weldMethodFilter)) throw new QualityApiError("Giá trị bộ lọc không hợp lệ.");
   const dateFrom = qualityDate(v.dateFrom), dateTo = qualityDate(v.dateTo);
   if (dateFrom && dateTo && dateFrom > dateTo) throw new QualityApiError("Từ ngày phải trước hoặc bằng đến ngày.");
+  const seq = (x: unknown) => { const n = Math.floor(Number(x)); return Number.isFinite(n) && n > 0 && n < 100000 ? String(n) : ""; };
   return { page, pageSize, qualityStatusFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter,
     welderName: text(v.welderName ?? "", 100).replace(/[(),%*]/g, " ").trim(),
-    query: text(v.query ?? "", 200).replace(/[(),]/g, " "), projects: (v.projects as unknown[] ?? []).map((p) => text(p, 300)), dateFrom: dateFrom ?? "", dateTo: dateTo ?? "" };
+    query: text(v.query ?? "", 200).replace(/[(),]/g, " "), projects: (v.projects as unknown[] ?? []).map((p) => text(p, 300)), dateFrom: dateFrom ?? "", dateTo: dateTo ?? "", seqFrom: seq(v.seqFrom), seqTo: seq(v.seqTo) };
 }
 
 function journalRequest(filters: WeldJournalPageQuery) {
@@ -190,6 +191,44 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
       results.push({ id: entry.id, phien_ban: saved.phien_ban });
     } catch (error) { results.push({ id: entry.id, error: error instanceof Error ? error.message : "Không lưu được kiểm tra." }); }
     }));
+  }
+  return results;
+}
+
+/** Đưa các mối về «Chờ mài»: xoá ngày mài và mọi kết quả kiểm tra. Mối đã nằm trong phiếu nghiệm thu hoặc đã có thanh toán thì từ chối (xoá phiếu / thanh toán trước). */
+export async function resetQualityToWaitingGrind(body: Record<string, unknown>, actor: string) {
+  if (!Array.isArray(body.entries) || !body.entries.length || body.entries.length > 100) throw new QualityApiError("Chọn 1–100 mối mỗi lượt.");
+  const entries = body.entries.map((v) => { const e = object(v); return { id: qualityUuid(e.id), phien_ban: version(e.phien_ban) }; });
+  if (new Set(entries.map((e) => e.id)).size !== entries.length) throw new QualityApiError("Danh sách mối bị trùng.");
+  const ids = entries.map((e) => e.id);
+  const db = createAdminClient();
+  const blocked = new Map<string, string>();
+  const tickets = await db.from("phieu_nt_tach_moi").select("moi_han_id,phieu_nt_tach!inner(so_phieu)").in("moi_han_id", ids).limit(2000);
+  if (tickets.error) throw tickets.error;
+  for (const row of tickets.data as unknown as { moi_han_id: string; phieu_nt_tach: { so_phieu: string } | { so_phieu: string }[] }[]) {
+    const t = Array.isArray(row.phieu_nt_tach) ? row.phieu_nt_tach[0] : row.phieu_nt_tach;
+    blocked.set(row.moi_han_id, `đã nằm trong phiếu ${t?.so_phieu ?? ""} — xoá phiếu trước`);
+  }
+  const rfis = await db.from("phieu_yeu_cau_nghiem_thu_moi").select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(so_phieu)").in("moi_han_id", ids).limit(2000);
+  if (rfis.error) throw rfis.error;
+  for (const row of rfis.data as unknown as { moi_han_id: string; phieu_yeu_cau_nghiem_thu: { so_phieu: string } | { so_phieu: string }[] }[]) {
+    const r = Array.isArray(row.phieu_yeu_cau_nghiem_thu) ? row.phieu_yeu_cau_nghiem_thu[0] : row.phieu_yeu_cau_nghiem_thu;
+    blocked.set(row.moi_han_id, `đã nằm trong RFI ${r?.so_phieu ?? ""} — xoá RFI trước`);
+  }
+  const pays = await db.from("thanh_toan_moi_han").select("moi_han_id").in("moi_han_id", ids).limit(2000);
+  if (pays.error) throw pays.error;
+  for (const row of pays.data) blocked.set(row.moi_han_id as string, "đã có thanh toán — xoá thanh toán trước");
+  const results: { id: string; error?: string; phien_ban?: number }[] = [];
+  for (const entry of entries) {
+    try {
+      const reason = blocked.get(entry.id);
+      if (reason) throw new QualityApiError(`Mối ${reason}.`, 409);
+      const { inspection } = await loadWeldQuality(entry.id);
+      const current = inspection ?? emptyWeldInspection(entry.id);
+      if (current.phien_ban !== entry.phien_ban) throw new QualityApiError("Dữ liệu đã thay đổi; hãy tải lại.", 409);
+      const saved = await saveWeldQualityInspection(parseQualityInspection({ ...emptyWeldInspection(entry.id), phien_ban: current.phien_ban }, actor));
+      results.push({ id: entry.id, phien_ban: saved.phien_ban });
+    } catch (error) { results.push({ id: entry.id, error: error instanceof Error ? error.message : "Không đưa về Chờ mài được." }); }
   }
   return results;
 }

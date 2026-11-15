@@ -1,3 +1,4 @@
+import type { StressInput } from "../lib/stress-release";
 /** Domain types for the LWR/CWR rail-welding tracker.
  *  Kept UI-agnostic so data logic stays separate from presentation. */
 
@@ -40,12 +41,19 @@ export interface RailCell {
   leftTemp?: number;
   /** Nhiệt độ ray phải đo tại hiện trường trước giải toả. */
   rightTemp?: number;
+  /**
+   * Lượng điều chỉnh chiều dài (m, +/−) so với chênh lý trình.
+   * Chiều dài ray = lý trình cuối − lý trình đầu + lengthAdjust.
+   */
+  lengthAdjust?: number;
   /** True after the user adds this short rail on the schematic. */
   placed?: boolean;
   /** True after stress release on this segment has passed. */
   released?: boolean;
   /** Bảng báo cáo chuyển vị điểm M / E của đoạn ray. */
   report?: RailReport;
+  /** Bảng tính giải toả ứng suất riêng của thanh này (thông số đã nhập, giờ bắt đầu/kết thúc…). */
+  stress?: StressInput;
 }
 
 export interface RailRow {

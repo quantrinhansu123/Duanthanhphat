@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
+import PendingDialog from "@/components/PendingDialog";
+import { useBbntScan } from "@/components/useBbntScan";
+import { useActorNames } from "@/lib/useActorNames";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { filterRfiCandidates, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import { GEOMETRY_CRITERIA, GEOMETRY_LABELS, type GeometryMeasurements } from "@/lib/weldQuality";
@@ -13,7 +16,7 @@ export type SplitKind = "hinh-hoc" | "sieu-am";
 type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean; truc_quan?: string | null; ly_trinh?: string | null };
 type TicketInfo = { dia_diem: string; ben_moi: string; ben_nhan: string; pham_vi: string; tuyen_thuong: boolean; tuyen_ha: boolean; gio_bat_dau: string };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null;
-  thong_tin?: Record<string, string> | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
+  thong_tin?: Record<string, string> | null; phieu_rfi_id?: string | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
 // Giờ nghiệm thu gợi ý sẵn 8h00 như RFI chính.
 const emptyInfo = (): TicketInfo => ({ dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00" });
 const infoFromTicket = (t: Ticket): TicketInfo => {
@@ -82,7 +85,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [picked, setPicked] = useState<string[]>([]);
   const [bulkReason, setBulkReason] = useState("");
   const [ticketQuery, setTicketQuery] = useState("");
-  const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong">("");
+  const actorName = useActorNames();
+  const [pendingDlg, setPendingDlg] = useState<Ticket | null>(null);
+  const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong" | "pending">("");
   // 3 mục con như RFI chính: Phát phiếu YCNT · Nghiệm thu · Hồ sơ nghiệm thu.
   const [sub, setSub] = useState<"rfi" | "accept" | "records">(stage === "tao" ? "rfi" : "accept");
   // Mục «Phát phiếu» chia 3 bước dạng tab: Chọn mối · Thông tin phiếu · Phiếu đã phát.
@@ -143,19 +148,25 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
     setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
   }
-  /** Trực quan Đạt hàng loạt cho các mối chưa đủ điều kiện của phiếu hình học (ô sai số trống tự điền mức tối đa). */
-  async function passVisual() {
+  /** «Đạt hàng loạt»: phiếu hình học tự ghi trực quan Đạt cho mối đã tick còn thiếu điều kiện (ô sai số trống tự điền mức tối đa), rồi đặt kết quả Đạt. */
+  async function passPicked() {
     if (!detail) return;
-    const targets = detail.items.filter((i) => !i.ket_qua && !i.current?.co_the_dat);
-    if (!targets.length) { setError("Các mối đã đủ điều kiện chọn Đạt."); return; }
-    if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối (ngày ${date})?\nÔ sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
-    const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
-    const failed = response.results.filter((r) => r.error);
-    const next = await request<Detail>("split-detail", { id: detail.ticket.id });
-    setDetail(next);
-    // Mối vừa đủ điều kiện → đặt sẵn Đạt.
-    setResults((prev) => { const out = { ...prev }; for (const i of next.items) if (!i.ket_qua && i.current?.co_the_dat && !out[i.moi_han_id]?.ket_qua) out[i.moi_han_id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
-    if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+    setError("");
+    const chosen = new Set(picked);
+    let items = detail.items;
+    const targets = kind === "hinh-hoc" ? items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !i.current?.co_the_dat) : [];
+    if (targets.length) {
+      if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
+Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
+      const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
+      const failed = response.results.filter((r) => r.error);
+      const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+      setDetail(next);
+      items = next.items;
+      if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
+    }
+    const ready = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && (kind !== "hinh-hoc" || i.current?.co_the_dat)).map((i) => i.moi_han_id);
+    setResults((prev) => { const out = { ...prev }; for (const id of ready) out[id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
   }
   /** Đặt kết quả cho các mối đã tick ("" = xoá kết quả). Không đạt cần lý do. */
   function bulkSet(value: "Đạt" | "Không đạt" | "") {
@@ -178,8 +189,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const tickets = useMemo(() => {
     const q = ticketQuery.trim().toLowerCase();
     return (list?.tickets ?? [])
-      .filter((t) => (ticketStatus === "" || (ticketStatus === "xong") === Boolean(t.ngay_nghiem_thu))
-        && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), t.nguoi_lap, t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
+      .filter((t) => (ticketStatus === "pending" ? Boolean(rfiPendingInfo(t.thong_tin)) : (ticketStatus === "" || (ticketStatus === "xong") === Boolean(t.ngay_nghiem_thu)))
+        && (!q || [t.so_phieu, dateLabel(t.ngay_moi), dateLabel(t.ngay_nghiem_thu), actorName(t.nguoi_lap), t.nguoi_lap, actorName(t.nguoi_nghiem_thu), t.nguoi_nghiem_thu ?? ""].some((v) => v.toLowerCase().includes(q))))
       .sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   }, [list, ticketQuery, ticketStatus]);
   const shownStep = editingId && step === "chon" ? "thong-tin" : step;
@@ -202,6 +213,14 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setEditingId(null); setInfo(emptyInfo()); setNumber("");
     void loadRfiNumber(project, kind).then(r => setNumber(r.so_phieu)).catch(() => undefined);
   }
+  /** Mở hộp thoại Pending (huỷ / không thực hiện) hoặc Phát lại với ngày mới; số phiếu giữ nguyên. */
+  async function submitPending(t: Ticket, input: { ly_do?: string; ngay_moi?: string }) {
+    const pend = rfiPendingInfo(t.thong_tin);
+    await setRfiPending({ id: t.id, kind: "tach", hanh_dong: pend ? "phat-lai" : "hoan", ...input });
+    setOkMsg(pend ? `Đã phát lại phiếu ${t.so_phieu} (ngày mời ${input.ngay_moi}).` : `Phiếu ${t.so_phieu} chuyển sang Pending.`);
+    await refresh();
+  }
+  const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(); if (detail) await openTicket(detail.ticket.id); }, onError: setError });
   async function removeTicket(t: Ticket) {
     const message = t.ngay_nghiem_thu
       ? `Xoá phiếu ${t.so_phieu} ĐÃ NGHIỆM THU?\n\nKết quả nghiệm thu của phiếu bị xoá; các mối trở về trạng thái trước nghiệm thu (dữ liệu kiểm tra giữ nguyên). Không thể hoàn tác.`
@@ -217,18 +236,22 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setOkMsg(t.da_ky ? `Đã đặt lại phiếu ${t.so_phieu} về Chờ ký.` : `Đã đánh dấu phiếu ${t.so_phieu} đã ký.`);
     await refresh();
   }
-  const printRecord = (t: Ticket) => run(async () => { if (onPrintRecord) onPrintRecord(await loadGeometryRecord(t.id)); });
+  const printRecord = (t: Ticket, draft = false) => run(async () => { if (onPrintRecord) onPrintRecord(await loadGeometryRecord(t.id, draft)); });
 
   function renderTicketTable(rows: Ticket[], mode: "rfi" | "accept" | "records") {
     if (!rows.length) return null;
     return <div className="overflow-x-auto rounded-lg border border-slate-200">
+      {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2">Ghi chú</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
             const done = Boolean(t.ngay_nghiem_thu);
+            const pend = rfiPendingInfo(t.thong_tin);
+            const signedScans = bbntScans(t.thong_tin);
+            const signedScan = signedScans[0];
             const primaryAction = mode === "records"
               ? { label: "In biên bản", onClick: () => printRecord(t) }
               : { label: done ? "Xem" : "Nghiệm thu", onClick: () => run(() => openTicket(t.id)) };
@@ -237,16 +260,22 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <td className="px-3 py-2 font-bold">{t.so_phieu}</td>
               {kind === "hinh-hoc" && <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>}
               <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_nghiem_thu)}</td>
-              <td className="px-3 py-2">{t.nguoi_lap || "—"}</td>
+              <td className="px-3 py-2">{actorName(t.nguoi_lap) || "—"}</td>
               <td className="px-3 py-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
+                {pend && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800" title={pend.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span>}
+                <span hidden={Boolean(pend)} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${!done ? "bg-amber-50 text-amber-800" : t.da_ky ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-800"}`}>{!done ? "Chờ nghiệm thu" : t.da_ky ? "Đã ký" : "Đã nghiệm thu · Chờ ký"}</span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                {!done ? <span className="text-xs text-slate-400">—</span>
+                  : signedScan
+                    ? <a href={signedScan.url} target="_blank" rel="noopener" title={`Biên bản đã ký: ${signedScan.ten ?? ""}`} className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 hover:underline">📎 Đã scan, lưu{signedScans.length > 1 ? ` (${signedScans.length} file)` : ""}</a>
+                    : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800" title="Chưa có bản scan biên bản đã ký — cần scan và tải lên">Chờ hồ sơ lưu</span>}
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 {t.payment_rates?.some(rate => rate > 0)
                   ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{t.payment_rates.filter(rate => rate > 0).map(rate => `${rate}%`).join(" / ")}</span>
                   : <span className="text-xs text-slate-400">{done ? "Chưa thanh toán" : "—"}</span>}
               </td>
-              <td className="max-w-[16rem] px-3 py-2 text-xs text-slate-700" title={t.payment_notes?.join(" · ")}>{t.payment_notes?.length ? <span className="line-clamp-2">{t.payment_notes.join(" · ")}</span> : "—"}</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">
                 <span className="inline-flex items-center gap-1">
                   <button type="button" disabled={busy} className={button} onClick={primaryAction.onClick}>{primaryAction.label}</button>
@@ -254,15 +283,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     { label: done ? "Xem chi tiết" : "Mở / nghiệm thu", disabled: busy, onSelect: () => void run(() => openTicket(t.id)) },
                     { label: "In phiếu YCNT", disabled: busy, onSelect: () => void run(async () => { await openTicket(t.id); setDoc("invite"); }) },
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
+                    // Chưa nghiệm thu: in bản NHÁP tạm ghi Đạt để các bên ký trước; bấm Nghiệm thu đúng ngày sau để Nhật ký thi công ghi đúng ngày.
+                    ...(onPrintRecord && !done ? [{ label: "In biên bản nháp (tạm ghi Đạt)", disabled: busy, onSelect: () => void printRecord(t, true) }] : []),
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
+                    ...(done && t.da_ky ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
                     // Thanh toán tính theo các mối Đạt của phiếu → phiếu chưa nghiệm thu thì chưa dùng được (hiện mờ để biết có chức năng).
                     { label: done ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)", disabled: busy || !done, onSelect: () => {
                       setError(""); setOkMsg("");
                       setPayment({ ticket: t, rate: t.payment_rates?.length === 1 && t.payment_rates[0] ? String(t.payment_rates[0]) : "", note: "" });
                     } },
-                    { label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) },
+                    ...(!done || pend ? [{ label: pend ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => setPendingDlg(t) }] : []),
+                    // Phiếu con của RFI chính không xoá lẻ — xoá cả RFI ở tab «Phát phiếu RFI» rồi lập lại.
+                    ...(t.phieu_rfi_id ? [] : [{ label: "Xoá phiếu", danger: true, disabled: busy || Boolean(t.da_ky), onSelect: () => void run(() => removeTicket(t)) }]),
                   ]} />
                 </span>
               </td>
@@ -423,10 +457,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <div className="flex flex-wrap gap-2">
           <input aria-label="Tìm phiếu" placeholder="Tìm số phiếu, ngày, người lập / nghiệm thu…" className={field + " min-w-0 flex-1"} value={ticketQuery} onChange={e => setTicketQuery(e.target.value)} />
           <select aria-label="Lọc trạng thái phiếu" className={field} value={ticketStatus} onChange={e => setTicketStatus(e.target.value as typeof ticketStatus)}>
-            <option value="">Tất cả trạng thái</option><option value="cho">Chờ nghiệm thu</option><option value="xong">Đã nghiệm thu</option>
+            <option value="">Tất cả trạng thái</option><option value="cho">Chờ nghiệm thu</option><option value="xong">Đã nghiệm thu</option><option value="pending">Pending</option>
           </select>
         </div>
         {renderTicketTable(tickets, "rfi")}
+        {pendingDlg && (
+          <PendingDialog
+            mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
+            soPhieu={pendingDlg.so_phieu}
+            oldDate={pendingDlg.ngay_moi}
+            reason={rfiPendingInfo(pendingDlg.thong_tin)?.ly_do}
+            onSubmit={(input) => submitPending(pendingDlg, input)}
+            onClose={() => setPendingDlg(null)}
+          />
+        )}
         {list?.tickets.length === 0 && <p className="text-sm text-slate-500">Chưa có phiếu {prefix} trong nhánh này.</p>}
       </div>
     </>}
@@ -462,6 +506,15 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           })}>Mở hoặc tạo phiếu siêu âm</button>}
         {!detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} onClick={() => run(() => openTicket(detail.ticket.id))}>Tải lại số đo</button>}
         {onPrintRecord && <button className={primary} disabled={busy} onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id)))}>In biên bản {kindName(kind)}</button>}
+        {onPrintRecord && !detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} title="In bản nháp tạm ghi Đạt để các bên ký; chưa chốt nghiệm thu nên Nhật ký thi công chưa ghi" onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id, true)))}>In biên bản nháp (tạm Đạt)</button>}
+        {detail.ticket.ngay_nghiem_thu && (() => {
+          const saved = bbntScans(detail.ticket.thong_tin);
+          return <>
+            {scan.node}
+            {saved.map((file, i) => <button key={file.url + i} className={button} onClick={() => window.open(file.url, "_blank", "noopener")} title={file.ten}>{saved.length > 1 ? `Xem biên bản ${i + 1}` : "Xem biên bản đã lưu"}</button>)}
+            {detail.ticket.da_ky && <button className={button} disabled={busy} onClick={() => scan.pick({ id: detail.ticket.id, kind: "tach", so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin })}>{saved.length ? "Tải thêm biên bản đã ký" : "Tải lên biên bản đã ký"}</button>}
+          </>;
+        })()}
       </div>
       <h3 className="text-lg font-extrabold text-slate-900">{detail.ticket.so_phieu} · Nghiệm thu {kindName(kind)}</h3>
       <form className="space-y-3" onSubmit={e => {
@@ -507,11 +560,10 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           <button type="button" className={button} disabled={busy} onClick={() => setPicked(pendingItems.map(i => i.moi_han_id))}>Tick tất cả</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => setPicked([])}>Bỏ tick</button>
           <span className="text-slate-600">Đã tick {picked.length}</span>
-          <button type="button" className={primary} disabled={busy || !picked.length} onClick={() => bulkSet("Đạt")} title="Đặt kết quả Đạt cho các mối đã tick (tự ghi kiểm tra khi chốt)">Đạt hàng loạt</button>
+          <button type="button" className={primary} disabled={busy || !picked.length} onClick={() => run(passPicked)} title="Đặt kết quả Đạt cho các mối đã tick; phiếu hình học tự ghi trực quan Đạt cho mối còn thiếu điều kiện">Đạt hàng loạt</button>
           <input aria-label="Lý do không đạt hàng loạt" placeholder="Lý do (cho Không đạt hàng loạt)" className={field + " min-w-0 flex-1"} value={bulkReason} onChange={e => setBulkReason(e.target.value)} />
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("Không đạt")}>Không đạt hàng loạt</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("")}>Xoá kết quả</button>
-          {kind === "hinh-hoc" && <button type="button" className={button} disabled={busy} onClick={() => run(passVisual)} title="Ghi trực quan Đạt ngay cho các mối chưa đủ điều kiện, ô sai số trống tự điền mức tối đa">Điền trực quan đạt</button>}
         </div>}
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-[640px] border-collapse text-left text-sm">
@@ -553,7 +605,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       projectName,
       rfi: { ...detail.ticket, trang_thai: detail.ticket.ngay_nghiem_thu ? "Đã hoàn thành" : "Đã phát hành", created_at: "",
         tong_moi: detail.items.length, con_lai: detail.ticket.ngay_nghiem_thu ? 0 : detail.items.length,
-        thong_tin: { ...(detail.ticket.thong_tin ?? {}), loai_rfi: "nghiem-thu", nt_hinh_hoc: kind === "hinh-hoc" ? "1" : "", nt_sieu_am: kind === "sieu-am" ? "1" : "" } },
+        thong_tin: { ...(detail.ticket.thong_tin ?? {}), loai_rfi: detail.ticket.thong_tin?.loai_rfi === "ca-hai" ? "ca-hai" : "nghiem-thu", nt_hinh_hoc: kind === "hinh-hoc" ? "1" : "", nt_sieu_am: kind === "sieu-am" ? "1" : "" } },
       welds: detail.items.map(i => ({ moi_han_id: i.moi_han_id, ma_lich_su: i.ma_lich_su, ly_trinh: i.ly_trinh ?? null, ma_diem: i.ma_diem ?? null,
         con_hieu_luc: !detail.ticket.ngay_nghiem_thu, ngay_thuc_hien: null, vi_do: null, kinh_do: null,
         phien_ban: i.version ?? 0, tinh_trang: i.ket_qua ?? "Chưa nghiệm thu", du_dieu_kien_nghiem_thu: Boolean(i.current?.co_the_dat) })),

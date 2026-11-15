@@ -18,14 +18,14 @@ const QUICK_DATA_ENTRY_IDS = [
   "kiem-tra-may-truoc-ca",
   "phan-cong-may",
   "nhat-ky-han",
-  "bc-bao-cao-ngay",
+  "lwr-track-map",
   "bien-ban-moi-han",
   "lwr-giai-toa-ung-suat",
 ] as const;
 
 const quickEntryShortLabel: Record<(typeof QUICK_DATA_ENTRY_IDS)[number], { vi: string; en: string }> = {
   "nhat-ky-han": { vi: "Nhật ký hàn", en: "Weld log" },
-  "bc-bao-cao-ngay": { vi: "Báo cáo ngày", en: "Daily report" },
+  "lwr-track-map": { vi: "Track Map", en: "Track Map" },
   "kiem-tra-may-truoc-ca": { vi: "Check List", en: "Checklist" },
   "bien-ban-moi-han": { vi: "Biên bản hàn", en: "Acceptance" },
   "phan-cong-may": { vi: "Nhiên liệu", en: "Fuel" },

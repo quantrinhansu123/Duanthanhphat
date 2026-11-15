@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Printer } from "@/components/icons";
-import RailReportPrint, { type RailReportPrintPayload } from "@/components/RailReportPrint";
+import RailReportPrint, { type RailReportPair, type RailReportPrintPayload, type RailReportPrintRow } from "@/components/RailReportPrint";
 import { useReportFilters } from "@/contexts/ReportFilterContext";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/lib/weldReportData";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { createClient } from "@/lib/supabase/client";
-import { clearWeldPayments, loadRfis, loadTicketWelds, loadWeldPayments, saveWeldPayments, type RfiSummary, type WeldPayment } from "@/lib/weldQualityClient";
+import { clearWeldPayments, exportQualityJournal, loadRfis, loadTicketWelds, loadWeldPayments, saveWeldPayments, type RfiSummary, type WeldPayment } from "@/lib/weldQualityClient";
 
 /** Một dòng trong mẫu "Báo cáo ray": mỗi mối hàn là một thanh ray. */
 type RailRow = {
@@ -26,6 +26,8 @@ type RailRow = {
   chieuDai: string;    // Chiều dài thanh ray (mm)
   tinhTrang: string;
   ghiChu: string;
+  iso: string;
+  route: string;
   daNghiemThu: boolean;
   thanhToan: string; // tỷ lệ đã thanh toán, VD "50%" ("—" nếu chưa)
   thanhToanGhiChu: string;
@@ -98,6 +100,24 @@ export default function RailReportDashboard() {
   // Bỏ bản ghi rác: không có mã hiện trường lẫn mã thiết kế thì không xác định được là thanh ray nào.
   const baseRows = useMemo(() => filterWeldReportRows(phuQuocRows, { ...appliedFilters, projects: [] })
     .filter((row) => (row.ma_hien_truong ?? "").trim() || (row.ma_diem ?? "").trim()), [phuQuocRows, appliedFilters]);
+
+  // Tình trạng theo đúng Nhật ký hàn («Tình trạng chất lượng»): bảng báo cáo chung không có cột này nên lấy từ Nhật ký hàn.
+  const [qualityById, setQualityById] = useState<Map<string, string>>(new Map());
+  const qualityProject = baseRows[0]?.du_an;
+  const [qualityReload, setQualityReload] = useState(0);
+  useEffect(() => {
+    const reload = () => setQualityReload((n) => n + 1);
+    window.addEventListener("weld-quality-changed", reload);
+    return () => window.removeEventListener("weld-quality-changed", reload);
+  }, []);
+  useEffect(() => {
+    if (!qualityProject) return;
+    let active = true;
+    exportQualityJournal({ page: 1, projects: [qualityProject], qualityStatusFilter: "Tất cả" })
+      .then((r) => { if (active) setQualityById(new Map(r.rows.filter((x) => x.tinh_trang_chat_luong).map((x) => [x.id, x.tinh_trang_chat_luong as string]))); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [qualityProject, qualityReload]);
 
   // Thanh toán theo mối hàn (chỉ mối đã nghiệm thu Đạt mới ghi được).
   const [payments, setPayments] = useState<Map<string, WeldPayment>>(new Map());
@@ -181,9 +201,9 @@ export default function RailReportDashboard() {
           lyTrinhCuoi,
           ngayHan: formatDateShortEn(getJournalRowDateIso(row)),
           chieuDai: lengthMm === null ? "—" : String(lengthMm),
-          tinhTrang: statusLabel(row),
+          tinhTrang: qualityById.get(row.id) ?? statusLabel(row),
           ghiChu: (row.ghi_chu ?? "").trim() || "—",
-          daNghiemThu: row.tinh_trang_chat_luong === "Đạt",
+          daNghiemThu: (qualityById.get(row.id) ?? row.tinh_trang_chat_luong) === "Đạt",
           thanhToan: payments.get(row.id) ? `${payments.get(row.id)!.ty_le}%` : "—",
           thanhToanGhiChu: payments.get(row.id)?.ghi_chu ?? "",
           route,
@@ -203,8 +223,8 @@ export default function RailReportDashboard() {
       // Thứ tự theo mã hiện trường (đúng thứ tự hàn): mối chưa có mã xuống cuối; cùng mã thì theo lý trình.
       .sort((a, b) => (a.seq === b.seq ? 0 : a.seq === Number.MAX_SAFE_INTEGER ? 1 : b.seq === Number.MAX_SAFE_INTEGER ? -1 : a.iso.localeCompare(b.iso) || a.seq - b.seq)
         || chainageSortKey(a.lyTrinh) - chainageSortKey(b.lyTrinh) || a.maLisp.localeCompare(b.maLisp, "vi"))
-      .map(({ iso: _iso, seq: _seq, ...rest }) => rest);
-  }, [baseRows, endChainages, search, routeFilter, payments]);
+      .map(({ seq: _seq, ...rest }) => rest);
+  }, [baseRows, endChainages, search, routeFilter, payments, qualityById]);
 
   const routeOptions = useMemo(() => {
     const found = new Set<string>();
@@ -227,15 +247,18 @@ export default function RailReportDashboard() {
   }, [projectId]);
   const summary = useMemo(() => {
     const welded = baseRows.filter((r) => r.loai_moi_han !== "Chấp thuận");
-    const accepted = welded.filter((r) => r.tinh_trang_chat_luong === "Đạt").length;
+    const accepted = welded.filter((r) => (qualityById.get(r.id) ?? r.tinh_trang_chat_luong) === "Đạt").length;
+    const weldDays = new Set(welded.map((r) => getJournalRowDateIso(r).slice(0, 10)).filter(Boolean)).size;
+    const perDay = weldDays > 0 ? (welded.length / weldDays).toLocaleString("vi-VN", { maximumFractionDigits: 1 }) : "0";
     const paid = welded.filter((r) => payments.get(r.id)?.ty_le === 100).length;
     const partial = welded.filter((r) => payments.has(r.id) && payments.get(r.id)!.ty_le < 100).length;
     return [
-      `Tổng số mối đã hàn: ${welded.length.toLocaleString("vi-VN")}${pct(welded.length, plannedTotal)} (không tính chấp thuận)`,
+      `Tổng số mối đã hàn: ${welded.length.toLocaleString("vi-VN")}${pct(welded.length, plannedTotal)}`,
       `Tổng số mối đã nghiệm thu: ${accepted.toLocaleString("vi-VN")}${pct(accepted, plannedTotal)}`,
       `Tổng số mối đã thanh toán: ${paid.toLocaleString("vi-VN")}${pct(paid, plannedTotal)}${partial ? ` · thanh toán một phần: ${partial}` : ""}`,
+      `Trung bình ngày: ${perDay} mối`,
     ];
-  }, [baseRows, plannedTotal, payments]);
+  }, [baseRows, plannedTotal, payments, qualityById]);
 
   async function applyPayment(clear: boolean) {
     if (!projectIdForPay || selected.size === 0) return;
@@ -252,27 +275,59 @@ export default function RailReportDashboard() {
 
   async function exportExcel() {
     const XLSX = await import("xlsx");
-    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình đầu", "Lý trình cuối", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán", "Ghi chú thanh toán"];
+    const head = ["Tên mối hàn theo thiết kế", "Tên mối hàn tại hiện trường", "Lý trình", "Ngày hàn", "Chiều dài thanh ray (mm)", "Tình trạng", "Thanh toán", "Ghi chú thanh toán"];
     const aoa = [["THEO DÕI CÔNG VIỆC HÀN RAY"], [`Dự án: ${baseRows[0]?.du_an || "Phú Quốc"}`], ...summary.map((l) => [l]), [], head,
-      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.lyTrinhCuoi, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan, r.thanhToanGhiChu])];
+      ...railRows.map((r) => [r.maLisp, r.maHienTruong, r.lyTrinh, r.ngayHan, r.chieuDai === "—" ? "" : Number(r.chieuDai), r.tinhTrang, r.thanhToan === "—" ? "" : r.thanhToan, r.thanhToanGhiChu])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [18, 24, 14, 14, 12, 14, 18, 12, 24].map((wch) => ({ wch }));
+    ws["!cols"] = [18, 24, 14, 12, 14, 18, 12, 24].map((wch) => ({ wch }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Theo doi han ray");
     XLSX.writeFile(wb, `Theo-doi-cong-viec-han-ray-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  /** Mở bản in với đúng dữ liệu đang xem. */
-  function openPrint() {
+  /** Mở bản in A4 ngang cho một tuyến (hạ hoặc thượng): ray trái bên trái, ray phải bên phải, cùng thứ tự thanh. */
+  function openPrint(line: "ha" | "thuong") {
+    const [leftPrefix, rightPrefix] = line === "ha" ? ["HT", "HP"] : ["TT", "TP"];
+    // Mối bổ sung sau: cùng ray, số nhỏ hơn nhưng hàn muộn hơn một mối có số lớn hơn → in đỏ.
+    const lateKeys = new Set<string>();
+    for (const prefix of [leftPrefix, rightPrefix]) {
+      const sameRail = railRows
+        .map((row) => ({ row, parsed: parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp) }))
+        .filter((x) => x.parsed?.prefix === prefix && x.row.iso)
+        .sort((a, b) => b.parsed!.seq - a.parsed!.seq);
+      let earliestHigher = "";
+      for (const { row, parsed } of sameRail) {
+        if (earliestHigher && row.iso > earliestHigher && parsed) lateKeys.add(row.key);
+        if (!earliestHigher || row.iso < earliestHigher) earliestHigher = row.iso;
+      }
+    }
+    const bySeq = new Map<number, { left: RailReportPrintRow[]; right: RailReportPrintRow[] }>();
+    for (const row of railRows) {
+      const parsed = parseCoordinateCode(row.maLisp === "—" ? "" : row.maLisp);
+      if (!parsed || (parsed.prefix !== leftPrefix && parsed.prefix !== rightPrefix)) continue;
+      const entry = bySeq.get(parsed.seq) ?? { left: [], right: [] };
+      const printRow: RailReportPrintRow = { key: row.key, maLisp: row.maLisp, maHienTruong: row.maHienTruong, lyTrinh: row.lyTrinh, ngayHan: row.ngayHan, tinhTrang: row.tinhTrang, late: lateKeys.has(row.key) };
+      (parsed.prefix === leftPrefix ? entry.left : entry.right).push(printRow);
+      bySeq.set(parsed.seq, entry);
+    }
+    const pairs: RailReportPair[] = [];
+    for (const [seq, entry] of [...bySeq].sort((a, b) => a[0] - b[0])) {
+      for (let k = 0; k < Math.max(entry.left.length, entry.right.length); k++) {
+        pairs.push({ key: `${seq}-${k}`, left: entry.left[k] ?? null, right: entry.right[k] ?? null });
+      }
+    }
+    const leftCount = pairs.filter((p) => p.left).length, rightCount = pairs.filter((p) => p.right).length;
     setPrintPayload({
-      rows: railRows,
+      pairs,
       title: "THEO DÕI CÔNG VIỆC HÀN RAY",
-      summary,
+      summary: [...summary, `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"}: ${leftCount.toLocaleString("vi-VN")} mối ray trái (${leftPrefix}) · ${rightCount.toLocaleString("vi-VN")} mối ray phải (${rightPrefix})`],
       projectLabel: baseRows[0]?.du_an || "Phú Quốc",
       dateLabel:
         appliedFilters.dateFrom || appliedFilters.dateTo
           ? `${formatDate(appliedFilters.dateFrom)} – ${formatDate(appliedFilters.dateTo)}`
           : "Toàn bộ kỳ",
+      leftLabel: `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"} · Ray trái (${leftPrefix})`,
+      rightLabel: `${line === "ha" ? "Tuyến hạ" : "Tuyến thượng"} · Ray phải (${rightPrefix})`,
     });
   }
 
@@ -313,12 +368,21 @@ export default function RailReportDashboard() {
         </label>
         <button
           type="button"
-          onClick={openPrint}
+          onClick={() => openPrint("ha")}
           disabled={!railRows.length}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
         >
           <Printer size={16} weight="bold" aria-hidden />
-          In báo cáo ray
+          In tuyến hạ
+        </button>
+        <button
+          type="button"
+          onClick={() => openPrint("thuong")}
+          disabled={!railRows.length}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50"
+        >
+          <Printer size={16} weight="bold" aria-hidden />
+          In tuyến thượng
         </button>
         <button type="button" onClick={exportExcel} disabled={!railRows.length}
           className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">
@@ -358,8 +422,7 @@ export default function RailReportDashboard() {
               <th className="w-8 px-3 py-2.5"></th>
               <th className="px-3 py-2.5">Tên mối hàn theo thiết kế</th>
               <th className="px-3 py-2.5">Tên mối hàn tại hiện trường</th>
-              <th className="px-3 py-2.5">Lý trình đầu</th>
-              <th className="px-3 py-2.5">Lý trình cuối</th>
+              <th className="px-3 py-2.5">Lý trình</th>
               <th className="px-3 py-2.5">Ngày hàn</th>
               <th className="px-3 py-2.5 text-right">Chiều dài thanh ray (mm)</th>
               <th className="px-3 py-2.5">Tình trạng</th>
@@ -369,9 +432,9 @@ export default function RailReportDashboard() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading && !railRows.length ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu…</td></tr>
             ) : railRows.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500">Không có mối hàn nào khớp bộ lọc.</td></tr>
             ) : (
               railRows.map((row) => (
                 <tr key={row.key} className="hover:bg-slate-50/80">
@@ -380,7 +443,6 @@ export default function RailReportDashboard() {
                   <td className="whitespace-nowrap px-3 py-2 font-mono font-semibold text-[#0047AB]">{row.maLisp}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">{row.maHienTruong}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinh}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-slate-800">{row.lyTrinhCuoi}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-slate-700">{row.ngayHan}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-slate-700">{row.chieuDai}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.tinhTrang}</td>

@@ -9,6 +9,7 @@ import {
   lockTempFromSides,
   parseChainage,
   railCellLengthMetres,
+  railCellSpanMetres,
   railCellLockTemp,
   type RailCellPatch,
 } from "@lwr/lib/track-editor";
@@ -103,19 +104,23 @@ export function RailDetailPanel({
   const lengthLocked = Boolean(cell.released);
   const [fromDraft, setFromDraft] = useState(cell.from);
   const [toDraft, setToDraft] = useState(cell.to);
-  const [lengthDraft, setLengthDraft] = useState(String(length));
+  const span = railCellSpanMetres(cell) ?? 0;
+  const [adjustDraft, setAdjustDraft] = useState(String(cell.lengthAdjust ?? 0));
   const [leftTempDraft, setLeftTempDraft] = useState(String(sideTempOf(cell, "left")));
   const [rightTempDraft, setRightTempDraft] = useState(String(sideTempOf(cell, "right")));
   const [fieldError, setFieldError] = useState<string | null>(null);
   // Hai tab: «Giải tỏa» (nhập nhiệt độ, lý trình, tính toán) và «Báo cáo» (bảng chuyển vị điểm M / E).
   const [view, setView] = useState<"giai-toa" | "bao-cao">("giai-toa");
-  // Báo cáo chỉ có 1 dòng cho đoạn ray này; nhiệt độ lấy từ tab Giải tỏa, chỉ nhập chuyển vị thực tế M / E + ghi chú.
+  // Phiếu chỉ hiện lần đo đầu tiên của đoạn ray này; nhiệt độ lấy từ tab Giải tỏa, chỉ nhập chuyển vị thực tế M / E + ghi chú.
   const [report, setReport] = useState<RailReportRow>(() => cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW });
   useEffect(() => { setReport(cell.report?.rows[0] ?? { ...EMPTY_REPORT_ROW }); }, [cell.id, cell.report]);
 
   function commitReport(next: RailReportRow) {
     const empty = !next.temp.trim() && !next.mActual.trim() && !next.eActual.trim() && !next.note.trim() && !next.measuredAt?.trim() && !next.airTemp?.trim();
-    apply({ report: empty ? null : { rows: [next] } });
+    // Phiếu này chỉ ghi lần đo đầu tiên (mốc 0); các lần đo sau (nhập ở Theo dõi ray hàn dài) giữ nguyên.
+    const rest = cell.report?.rows.slice(1) ?? [];
+    const rows = empty ? rest : [next, ...rest];
+    apply({ report: rows.length ? { rows } : null });
   }
 
   useEffect(() => {
@@ -125,18 +130,18 @@ export function RailDetailPanel({
   useEffect(() => {
     setFromDraft(cell.from);
     setToDraft(cell.to);
-    setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
+    setAdjustDraft(String(cell.lengthAdjust ?? 0));
     setLeftTempDraft(String(sideTempOf(cell, "left")));
     setRightTempDraft(String(sideTempOf(cell, "right")));
     setFieldError(null);
-  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp]);
+  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp, cell.lengthAdjust]);
 
   function apply(patch: RailCellPatch): boolean {
     const ok = onChange(patch);
     if (!ok) {
       setFromDraft(cell.from);
       setToDraft(cell.to);
-      setLengthDraft(String(railCellLengthMetres(cell) ?? 0));
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       setLeftTempDraft(String(sideTempOf(cell, "left")));
       setRightTempDraft(String(sideTempOf(cell, "right")));
       return false;
@@ -161,23 +166,24 @@ export function RailDetailPanel({
     apply({ to: toDraft });
   }
 
-  function commitLength() {
+  function commitAdjust() {
     if (lengthLocked) {
-      setLengthDraft(String(length));
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       setFieldError("Chiều dài đã khóa vì thanh đã giải toả. Bỏ Đạt nếu cần sửa tiếp.");
       return;
     }
-    const next = Number(lengthDraft.trim().replace(",", "."));
-    if (Number.isFinite(next) && next === length) {
-      setLengthDraft(String(length));
+    const raw = adjustDraft.trim().replace(",", ".");
+    const next = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(next) || Math.abs(next) > 1000) {
+      setFieldError("Lượng điều chỉnh phải là số mét trong khoảng ±1000 (nhập âm nếu ngắn hơn lý trình).");
+      setAdjustDraft(String(cell.lengthAdjust ?? 0));
       return;
     }
-    if (!Number.isFinite(next) || next < 1) {
-      setFieldError("Chiều dài đoạn phải là số mét dương.");
-      setLengthDraft(String(length));
+    if (next === (cell.lengthAdjust ?? 0)) {
+      setAdjustDraft(String(next));
       return;
     }
-    apply({ lengthMetres: next });
+    apply({ lengthAdjust: next });
   }
 
   function parseSideTemp(draft: string, fallback: number) {
@@ -239,7 +245,7 @@ export function RailDetailPanel({
       <div className="flex h-full flex-col">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-white px-4 py-3">
           <div>
-            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {displayRailCode(cell.id)}</h2>
+            <h2 id="rail-detail-title" className="text-lg font-bold">Chi tiết đoạn ray {displayRailCode(longRailCode || cell.id)}</h2>
             <p className="text-sm text-slate-500">{detail.title}{longRailCode ? ` · Thanh LWR ${displayRailCode(longRailCode)}` : ""}</p>
           </div>
           <div className="flex gap-2">
@@ -278,6 +284,9 @@ export function RailDetailPanel({
         </div>
         <div ref={content} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
           {view === "giai-toa" && (<>
+          <StressReleaseCalculator
+            compact
+            headSlot={(
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="font-semibold text-amber-900">Nhiệt độ ray trái (°C)</span>
@@ -316,6 +325,10 @@ export function RailDetailPanel({
                 <span className="ml-2 text-xs font-medium text-emerald-700">= (T trái + T phải) / 2</span>
               </p>
             </div>
+            </div>
+            )}
+            tailSlot={(
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
               <span className="text-slate-600">Lý trình đầu</span>
               <span className="flex items-center gap-1">
@@ -345,29 +358,41 @@ export function RailDetailPanel({
               </span>
             </label>
             <label className="block min-w-0 col-span-2">
-              <span className="text-slate-600">Chiều dài đoạn {lengthLocked ? "(đã khóa)" : "(sửa hàng ngày)"}</span>
+              <span className="text-slate-600">Lượng điều chỉnh {lengthLocked ? "(đã khóa)" : "(+/−, sửa khi cần)"}</span>
               <span className="flex items-center gap-1">
                 <input
                   className={inputClass}
-                  inputMode="numeric"
-                  value={lengthDraft}
-                  aria-label="Chiều dài đoạn"
+                  inputMode="decimal"
+                  value={adjustDraft}
+                  aria-label="Lượng điều chỉnh chiều dài"
                   disabled={lengthLocked}
                   readOnly={lengthLocked}
-                  onChange={(event) => setLengthDraft(event.target.value)}
-                  onBlur={commitLength}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLength(); } }}
+                  onChange={(event) => setAdjustDraft(event.target.value)}
+                  onBlur={commitAdjust}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitAdjust(); } }}
                 />
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">m</span>
               </span>
             </label>
+            <div className="col-span-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm">
+              <p className="text-xs font-semibold text-sky-900">Chiều dài ray (tự tính)</p>
+              <p className="mt-1 font-bold text-sky-800">
+                {length.toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m
+                <span className="ml-2 text-xs font-medium text-sky-700">
+                  = lý trình cuối − lý trình đầu ({span.toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m) {(cell.lengthAdjust ?? 0) >= 0 ? "+" : "−"} điều chỉnh ({Math.abs(cell.lengthAdjust ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 3 })} m)
+                </span>
+              </p>
+            </div>
           </div>
-          <StressReleaseCalculator
-            compact
+            )}
             key={`${cell.id}-${lockTemp}`}
-            segmentId={displayRailCode(cell.id)}
+            segmentId={displayRailCode(longRailCode || cell.id)}
             statusSlot={
-              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => apply({ released: passed })} />
+              <ReleaseStatusButtons passed={Boolean(cell.released)} onChange={(passed) => {
+                // Bấm Đạt: lưu luôn thông số bảng tính (giờ, nhiệt độ…) trước khi chốt trạng thái.
+                if (passed && calculatorInput?.cellId === cell.id && onSaveParams) onSaveParams(calculatorInput.input);
+                apply({ released: passed });
+              }} />
             }
             initialInput={{
               ...DEFAULT_STRESS_INPUT,
@@ -378,6 +403,7 @@ export function RailDetailPanel({
               rightLength: 0,
               startChainage: cell.from,
               endChainage: cell.to,
+              lengthAdjust: cell.lengthAdjust ?? 0,
               leftTemp: sideTempOf(cell, "left"),
               rightTemp: sideTempOf(cell, "right"),
             }}
@@ -454,7 +480,7 @@ export function RailDetailPanel({
                   <div className="mt-1 grid grid-cols-2 gap-3">
                     <div className="min-w-0">
                       <span className="text-slate-600">Thiết kế (mm)</span>
-                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{eDesign === null ? "Chờ thông số / nhiệt độ đo" : Math.round(eDesign * 1000) / 1000}</div>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-2 font-semibold text-slate-700">{eDesign === null ? "Chờ thông số / nhiệt độ đo" : eDesign}</div>
                     </div>
                     <label className="block min-w-0">
                       <span className="font-semibold text-amber-900">Thực tế (mm)</span>

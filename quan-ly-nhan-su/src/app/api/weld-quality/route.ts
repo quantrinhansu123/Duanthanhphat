@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { authenticateWeldQuality, QualityApiError } from "@/lib/server/weldQualityAuth";
+import { authenticateWeldQuality, authenticateWeldQualityLimited, QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
-  loadQualityJournalRows, loadQualityDetail, markQualityBatch, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
-import { loadRfiOverview, deleteRfi, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+  loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
+import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
+import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -19,19 +20,23 @@ function failure(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    await authenticateWeldQuality(request);
+    await authenticateWeldQualityLimited(request); // thợ hàn (hạn chế) được xem chi tiết
     return NextResponse.json(await loadQualityDetail(qualityUuid(new URL(request.url).searchParams.get("id"))), { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return failure(error); }
 }
 
 export async function POST(request: Request) {
   try {
-    const actor = await authenticateWeldQuality(request);
+    const { email: actor, limited } = await authenticateWeldQualityLimited(request);
     const raw = await request.text();
     if (raw.length > 1_000_000) throw new QualityApiError("Yêu cầu quá lớn; tối đa 100 mối mỗi lượt.", 413);
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new QualityApiError("JSON không hợp lệ."); }
     const body = object(value);
+    // Thợ hàn / thợ vận hành (hạn chế): chỉ xem danh sách chất lượng, «Chờ mài» và «Mài xong».
+    if (limited && !(body.action === "list" || body.action === "export" || body.action === "selection" || body.action === "reset-grind" || (body.action === "mark-pass" && body.kind === "grind"))) {
+      throw new QualityApiError("Tài khoản này chỉ được xem danh sách và bấm Chờ mài / Mài xong.", 403);
+    }
     if (body.action === "report-weather") return NextResponse.json(await loadProjectWeather(body));
     if (body.action === "diary-defaults") return NextResponse.json(await loadDiaryDefaults(body));
     if (body.action === "list") return NextResponse.json(await loadQualityJournalPage(parseQualityFilters(body.filters)));
@@ -42,6 +47,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "save") return NextResponse.json({ inspection: await saveWeldQualityInspection(parseQualityInspection(body.inspection, actor)) });
     if (body.action === "mark-pass") return NextResponse.json({ results: await markQualityBatch(body, actor) });
+    if (body.action === "reset-grind") return NextResponse.json({ results: await resetQualityToWaitingGrind(body, actor) });
     if (body.action === "import") return NextResponse.json({ results: await importQualityBatch(body, actor) });
     if (body.action === "rule") return NextResponse.json(await createQualityRuleForWeld(body, actor));
     if (body.action === "rule-sync") return NextResponse.json({ sync: await applyQualityRule(qualityUuid(body.id), actor) });
@@ -76,6 +82,9 @@ export async function POST(request: Request) {
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (["split-list", "split-detail", "split-publish", "split-complete", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
     if (body.action === "rfi-overview") return NextResponse.json(await loadRfiOverview(body));
+    if (body.action === "gtus-detail") return NextResponse.json(await gtusDetail(body));
+    if (body.action === "gtus-save") return NextResponse.json(await gtusSave(body, actor));
+    if (body.action === "gtus-candidates") return NextResponse.json(await listGtusCandidates(body));
     if (body.action === "rfi-candidates") return NextResponse.json(await loadRfiCandidates(body));
     if (body.action === "rfi-number") return NextResponse.json({ so_phieu: await nextRfiNumber(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" || body.loai === "sieu-am" ? body.loai : undefined) });
     if (body.action === "rfi-publish") return NextResponse.json(await publishRfi(body, actor));
@@ -83,10 +92,12 @@ export async function POST(request: Request) {
     if (body.action === "rfi-detail") return NextResponse.json(await loadRfiDetail(qualityUuid(body.id)));
     if (body.action === "rfi-update") return NextResponse.json(await updateRfi(body));
     if (body.action === "rfi-print-save") return NextResponse.json(await saveRfiPrintInfo(body));
-    if (body.action === "rfi-delete") return NextResponse.json(await deleteRfi(body));
+    if (body.action === "rfi-delete") return NextResponse.json(await deleteRfi(body, actor));
+    if (body.action === "bbnt-scan") return NextResponse.json(await saveBbntScan(body, actor));
+    if (body.action === "rfi-pending") return NextResponse.json(await setRfiPending(body, actor));
     if (body.action === "accept-complete") return NextResponse.json(await completeRfi(body, actor));
     if (body.action === "accept-complete-geometry") return NextResponse.json(await completeRfiGeometry(body, actor));
-    if (body.action === "geometry-record") return NextResponse.json(await loadGeometryRecord(qualityUuid(body.id)));
+    if (body.action === "geometry-record") return NextResponse.json(await loadGeometryRecord(qualityUuid(body.id), {}, body.nhap === true));
     if (body.action === "accepted-on-date") return NextResponse.json(await acceptedOnDate(body));
     if (body.action === "record-list") return NextResponse.json({ records: await listRecords(qualityUuid(body.du_an_id)) });
     if (body.action === "split-record-list") return NextResponse.json({ records: await listSplitRecords(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am") });

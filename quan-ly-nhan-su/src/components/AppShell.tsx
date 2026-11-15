@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { List, CaretRight, ArrowLeft, House, ArrowClockwise } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
+import { useOverlayBack } from "@/lib/useBackClose";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -80,6 +81,15 @@ const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { lo
 
 /** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
 const HOME_TAB = "home";
+const NAV_STACK_KEY = "app-nav-stack";
+function readNavStack(): string[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(NAV_STACK_KEY) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
 
 const viewRenderers: Record<string, () => React.ReactNode> = {
   "ho-so-tho-han": () => <WelderManagement />,
@@ -257,11 +267,19 @@ export default function AppShell({ tab }: AppShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useOverlayBack();
+
   function goBack() {
     // Overlay/drawer nội bộ (hồ sơ NS, chi tiết máy…) được ưu tiên đóng trước.
     if (typeof window !== "undefined") {
       const nested = new CustomEvent("app-back", { cancelable: true });
       if (!window.dispatchEvent(nested)) return;
+      // Ngăn xếp trang đã xem (sessionStorage, sống qua reload): còn trang trước thì lùi về đó, không về trang chủ.
+      const stack = readNavStack();
+      if (stack.length > 1) {
+        router.back();
+        return;
+      }
       if (window.history.length > 1) {
         router.back();
         return;
@@ -269,6 +287,16 @@ export default function AppShell({ tab }: AppShellProps) {
     }
     go(HOME_TAB);
   }
+
+  // Ghi nhớ mỗi lần đổi trang; về đúng trang liền trước (nút Back app/trình duyệt) thì bỏ trang hiện tại khỏi ngăn xếp.
+  useEffect(() => {
+    const stack = readNavStack();
+    const last = stack[stack.length - 1];
+    if (last === pathname) return;
+    if (stack[stack.length - 2] === pathname) stack.pop();
+    else stack.push(pathname);
+    sessionStorage.setItem(NAV_STACK_KEY, JSON.stringify(stack.slice(-30)));
+  }, [pathname]);
 
   return (
     <ReportFilterProvider>

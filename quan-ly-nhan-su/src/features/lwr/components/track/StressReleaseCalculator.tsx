@@ -116,6 +116,8 @@ export function StressReleaseCalculator({
   chainageLocked = false,
   onChainageCommit,
   statusSlot,
+  headSlot,
+  tailSlot,
   onInputChange,
 }: {
   initialInput?: StressInput;
@@ -130,6 +132,10 @@ export function StressReleaseCalculator({
   onChainageCommit?: (patch: { from?: string; to?: string }) => boolean | void;
   /** Nút Đạt / Không đạt — đặt ngay dưới Lưu thông số / In A4. */
   statusSlot?: ReactNode;
+  /** Khối nhập nhiệt độ ray trái/phải… của ô ray; có thì thứ tự nhập: nhiệt độ không khí + mục tính toán → khối này → Bắt đầu/Kết thúc → Đạt/Không đạt. */
+  headSlot?: ReactNode;
+  /** Khối lý trình / chiều dài ray: nằm trong khối vàng, ngay dưới nhiệt độ ray và trước Bắt đầu/Kết thúc. */
+  tailSlot?: ReactNode;
 }) {
   const { lang, t } = useLanguage();
   const [fields, setFields] = useState(() => initialFields(initialInput));
@@ -212,10 +218,18 @@ export function StressReleaseCalculator({
   const from = parseChainage(startChainage);
   const to = parseChainage(endChainage);
   const joint = jointChainage.trim() ? parseChainage(jointChainage) : to;
+  // Chiều dài giải toả = lý trình cuối − lý trình đầu + lượng điều chỉnh (nhập ở form lý trình của thanh trên track map).
+  const adjust = Number.isFinite(Number(initialInput.lengthAdjust)) ? Number(initialInput.lengthAdjust) : 0;
   if (!buffer && (startChainage.trim() || endChainage.trim() || jointChainage.trim())) {
     if (from === null || to === null || to <= from) chainErrors.push("Nhập lý trình đầu/cuối hợp lệ, cuối lớn hơn đầu.");
     else if (joint === null || joint < from || joint > to) chainErrors.push("Vị trí kéo phải nằm trong đoạn giải toả.");
-    else { input.leftLength = joint - from; input.rightLength = to - joint; }
+    else {
+      input.leftLength = joint - from;
+      input.rightLength = to - joint;
+      // Phần điều chỉnh cộng vào phía chứa lý trình cuối (kéo ở cuối đoạn → L₁; kéo giữa đoạn → L₂).
+      if (joint < to) input.rightLength += adjust; else input.leftLength += adjust;
+      input.lengthAdjust = adjust;
+    }
   }
   // Legacy manually entered deformations must never override the thermal calculation.
   delete input.bufferDeformations;
@@ -280,6 +294,7 @@ export function StressReleaseCalculator({
       ["Ray của tuyến", trackSide === "LEFT" ? "Ray trái" : "Ray phải", ""],
       ["Lý trình đầu", startChainage || "Chưa nhập", ""],
       ["Lý trình cuối", endChainage || "Chưa nhập", ""],
+      ...(adjust !== 0 ? [["Lượng điều chỉnh chiều dài", `${adjust > 0 ? "+" : "−"}${formatStressNumber(Math.abs(adjust))}`, "m"]] as StressPrintRow[] : []),
       ["Lý trình vị trí kéo", jointChainage || endChainage || "Chưa nhập", ""],
       ["Con lăn cạnh", rollers ? "Có" : "Không", ""],
     ] as StressPrintRow[] : []),
@@ -313,6 +328,61 @@ export function StressReleaseCalculator({
     ) : <ResultTable title="Kết quả giải toả" rows={rows} />}
     {notices.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">{notices.map(note => <p key={note}>{note}</p>)}</div>}
   </>;
+  const reorder = compact && Boolean(statusSlot) && Boolean(headSlot);
+  const timeButtons = (
+        <div className="grid grid-cols-2 gap-3">
+          {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => {
+            const stamped = formatTime(value);
+            const duration = label === "Kết thúc" && startTime && value ? formatDuration(startTime, value) : "";
+            return (
+              <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date().toISOString();
+                    set(now);
+                    // Ghi giờ xong là lưu luôn vào đoạn LWR để bảng tính in có đủ giờ bắt đầu / kết thúc.
+                    if (onSave) {
+                      const saved = onSave({ ...input, ...(label === "Bắt đầu" ? { startTime: now } : { endTime: now }) });
+                      const ok = saved === undefined || saved === true || (typeof saved === "object" && saved.ok);
+                      setSaveOk(ok);
+                      setSaveNotice(typeof saved === "object" ? saved.message : ok ? `Đã ghi giờ ${label.toLowerCase()} và lưu vào đoạn LWR.` : "Đã ghi giờ nhưng chưa lưu được vào đoạn LWR — bấm Lưu thông số để xem lý do.");
+                    }
+                  }}
+                  className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+                >
+                  {label}
+                </button>
+                <div className="mt-1.5 min-h-[2.5rem]">
+                  {stamped ? (
+                    <>
+                      <p className="font-mono text-[12px] font-bold leading-tight text-amber-950">{stamped}</p>
+                      {duration ? <p className="mt-0.5 text-[10px] font-semibold text-amber-800">Thời lượng: {duration}</p> : null}
+                      <button type="button" onClick={() => {
+                        set("");
+                        // Xóa giờ cũng lưu luôn vào đoạn LWR, để bảng tính in không còn giờ đã gỡ.
+                        if (onSave) {
+                          const saved = onSave({ ...input, ...(label === "Bắt đầu" ? { startTime: "" } : { endTime: "" }) });
+                          const ok = saved === undefined || saved === true || (typeof saved === "object" && saved.ok);
+                          setSaveOk(ok);
+                          setSaveNotice(typeof saved === "object" ? saved.message : ok ? `Đã xóa giờ ${label.toLowerCase()} và lưu vào đoạn LWR.` : "Đã xóa giờ nhưng chưa lưu được — bấm Lưu thông số để xem lý do.");
+                        }
+                      }} className="mt-0.5 text-[11px] underline">
+                        Xóa
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-amber-700/80">Nhấn để ghi giờ hiện trường</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+  );
+  const modeSelect = (
+    <label className="block text-sm font-semibold">Mục tính toán<select className={fieldClass} value={mode} onChange={e => { const next = e.target.value as Mode; setMode(next); onModeChange?.(next); }}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+  );
   const title = (
     <div>
         <h2 className={compact ? "text-base font-bold" : "text-2xl font-bold"}>Bảng tính toán giải tỏa ứng suất</h2>
@@ -358,11 +428,25 @@ export function StressReleaseCalculator({
       >
         Lưu thông số
       </button>
+      <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-900 disabled:opacity-40">Xem</button>
       <button type="button" disabled={!canExport} onClick={() => setPrintOpen(true)} className="rounded-lg bg-purple-700 px-3 py-2 text-sm text-white disabled:opacity-40">In A4</button>
     </div>
   );
   return <div className="mx-auto max-w-7xl space-y-4 text-slate-800">
-    {compact && statusSlot ? (
+    {reorder ? (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 items-end gap-3">
+          <label className="text-xs font-medium text-amber-800">Nhiệt độ không khí (°C)<input inputMode="decimal" value={fields.airTemp} onChange={e => setFields({ ...fields, airTemp: e.target.value })} className={siteClass} /></label>
+          {modeSelect}
+        </div>
+        {headSlot}
+        {tailSlot}
+        {timeButtons}
+        {statusSlot}
+        {title}
+        {actions}
+      </div>
+    ) : compact && statusSlot ? (
       <div className="space-y-3">
         {title}
         {actions}
@@ -382,7 +466,7 @@ export function StressReleaseCalculator({
         {saveNotice}
       </p>
     )}
-    <label className="block text-sm font-semibold">Mục tính toán<select className={fieldClass} value={mode} onChange={e => { const next = e.target.value as Mode; setMode(next); onModeChange?.(next); }}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    {!reorder && modeSelect}
     <div className={compact ? "grid gap-4" : "grid items-start gap-5 xl:grid-cols-[400px_1fr]"}>
       <section className="space-y-4 rounded-xl border bg-white p-4">
         <h3 className="font-semibold">Thông số đầu vào</h3>
@@ -401,39 +485,10 @@ export function StressReleaseCalculator({
           </div>
           {chainageLocked
             ? <p className="text-xs text-emerald-800">Lý trình đã khóa vì đoạn đã giải toả xong. Cập nhật lý trình chỉ khi đang thi công (form lý trình phía trên).</p>
-            : <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Theo dõi tiến độ hàn bằng cách cập nhật lý trình cuối trên form lý trình.</p>}
-          {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from)} m</p>}
+            : <p className="text-xs text-slate-500">Chiều dài giải toả = lý trình cuối − lý trình đầu + lượng điều chỉnh. L₁ = vị trí kéo − đầu; L₂ = cuối − vị trí kéo. Theo dõi tiến độ hàn bằng cách cập nhật lý trình cuối trên form lý trình.</p>}
+          {from !== null && to !== null && to > from && <p className="text-xs text-emerald-700">Chiều dài: {formatStressNumber(to - from + adjust)} m{adjust !== 0 ? ` (= ${formatStressNumber(to - from)} m ${adjust > 0 ? "+" : "−"} điều chỉnh ${formatStressNumber(Math.abs(adjust))} m)` : ""}</p>}
         </>}
-        <div className="grid grid-cols-2 gap-3">
-          {([["Bắt đầu", startTime, setStartTime], ["Kết thúc", endTime, setEndTime]] as const).map(([label, value, set]) => {
-            const stamped = formatTime(value);
-            const duration = label === "Kết thúc" && startTime && value ? formatDuration(startTime, value) : "";
-            return (
-              <div key={label} className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
-                <button
-                  type="button"
-                  onClick={() => set(new Date().toISOString())}
-                  className="w-full rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-                >
-                  {label}
-                </button>
-                <div className="mt-1.5 min-h-[2.5rem]">
-                  {stamped ? (
-                    <>
-                      <p className="font-mono text-[12px] font-bold leading-tight text-amber-950">{stamped}</p>
-                      {duration ? <p className="mt-0.5 text-[10px] font-semibold text-amber-800">Thời lượng: {duration}</p> : null}
-                      <button type="button" onClick={() => set("")} className="mt-0.5 text-[11px] underline">
-                        Xóa
-                      </button>
-                    </>
-                  ) : (
-                    <p className="text-[11px] text-amber-700/80">Nhấn để ghi giờ hiện trường</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {!reorder && timeButtons}
         <label className="block text-xs text-slate-600">Loại ray
           <select className={fieldClass} value={railType} onChange={e => applyRailType(e.target.value)}>
             {RAIL_TYPE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -447,7 +502,7 @@ export function StressReleaseCalculator({
           {group.title === "Kiểm tra mốc ngoài F khi kéo thử" && <p className="mb-2 text-xs text-slate-500">F (Fix) phải cố định, chuyển vị bằng 0. Nếu F dịch chuyển, phải tăng chiều dài neo hoặc áp dụng biện pháp tăng cường khác và kéo thử lại. Số đo F chỉ dùng kiểm tra neo, không cộng bù và không đưa vào bảng số liệu báo cáo cuối.</p>}
           {group.title === "Chiều dài và nhiệt độ" && <p className="mb-2 text-xs text-slate-500">Ray trái/phải của tuyến xác định khi nhìn theo chiều lý trình tăng. L₁/L₂ là hai phía Km giảm/Km tăng của vị trí kéo trên cùng một ray. Giới hạn khóa ray thiết kế = T ± biên độ (cộng/trừ).</p>}
           {group.title === "Thông số ray" && <p className="mb-2 text-xs text-slate-500">Lực cản dọc nhập theo từng dự án; dùng để tính lực kéo và lượng co/giãn theo biên độ nhiệt độ.</p>}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{group.fields.map(([key, label, unit]) => {
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{group.fields.filter(([key]) => !(reorder && key === "airTemp")).map(([key, label, unit]) => {
             const chainLength = !buffer && Boolean(startChainage || endChainage) && (key === "leftLength" || key === "rightLength");
             // compact = nằm trong ô ray: nhiệt độ hai đầu nhập ở "Nhiệt độ ray trái/phải" bên dưới, không nhập lại ở đây.
             const mirrored = compact && (key === "leftTemp" || key === "rightTemp");

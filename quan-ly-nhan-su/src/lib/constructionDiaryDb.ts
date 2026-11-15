@@ -19,11 +19,26 @@ export type ConstructionDiary = {
   kienNghi: string;
   nhanXetGiamSat: string;
   chtTiepThu: string;
+  /** Tên người ký cuối nhật ký (lưu cùng nhật ký để các máy cùng thấy). */
+  kyTvgs?: string;
+  kyNtc?: string;
+  kyNtp?: string;
 };
 
+/** Nhân lực mặc định của nhật ký thi công (người): sửa được từng ngày. */
+export const DEFAULT_MANPOWER = { banChiHuy: "4", canBoKyThuat: "3", congNhan: "12" } as const;
+
+/** Nhiệt độ ngày = trung bình cộng các nhiệt độ sáng / chiều / tối đã có (vd «Sáng Nắng, 32°C» → 32); không có số nào thì null. */
+export function averageDayTemperature(...parts: string[]): string | null {
+  const values = parts.map((p) => /(-?\d+(?:[.,]\d+)?)\s*°/.exec(p)?.[1]).filter((v): v is string => Boolean(v)).map((v) => Number(v.replace(",", ".")));
+  if (!values.length) return null;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  return String(Math.round(mean * 10) / 10);
+}
+
 export const EMPTY_DIARY: ConstructionDiary = {
-  thoiTiet: "", nhietDo: "", sang: "", chieu: "", toi: "", banChiHuy: "", canBoKyThuat: "", congNhan: "", thietBi: "",
-  nhanLucNguon: "", noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
+  thoiTiet: "", nhietDo: "", sang: "", chieu: "", toi: "", ...DEFAULT_MANPOWER, thietBi: "",
+  nhanLucNguon: "Mặc định: Ban chỉ huy 4, Cán bộ kỹ thuật 3, Công nhân 12 (người) — sửa được từng ngày.", noiDungCongViec: "", nghiemThuHangNgay: "", suCo: "", kienNghi: "", nhanXetGiamSat: "", chtTiepThu: "",
 };
 
 const localKey = (projectId: string, date: string) => `nhat-ky-thi-cong-ngay:${projectId}:${date}`;

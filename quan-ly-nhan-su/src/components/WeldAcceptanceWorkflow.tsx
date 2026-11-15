@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RowActionsMenu from "@/components/RowActionsMenu";
+import GtusBbntPrintDialog from "@/components/GtusBbntPrintDialog";
+import GtusRfiDialog from "@/components/GtusRfiDialog";
+import PendingDialog from "@/components/PendingDialog";
+import { useBbntScan } from "@/components/useBbntScan";
+import GtusAcceptanceTab, { gtusTicketNo } from "@/components/GtusAcceptanceTab";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
-import { rfiAcceptanceTitle, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
+import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, bbntScanInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
@@ -35,12 +40,17 @@ type RfiThongTin = {
   gio_bat_dau: string;
   nt_hinh_hoc: boolean;
   nt_sieu_am: boolean;
+  /** "gtus" = phiếu giám sát và nghiệm thu giải toả ứng suất ray (theo tuyến, không cần chọn mối). */
+  cong_viec: string;
+  /** Phiếu GTUS: id và mã các thanh LWR đã chọn (cách nhau bằng dấu phẩy). */
+  lwr_ids: string;
+  lwr_codes: string;
 };
 
 const emptyThongTin = (): RfiThongTin => ({
   dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", giam_sat: "",
   // Giờ nghiệm thu gợi ý sẵn 8h00 cho mọi loại phiếu (nghiệm thu / theo dõi / cả giám sát và nghiệm thu).
-  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true,
+  tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00", nt_hinh_hoc: true, nt_sieu_am: true, cong_viec: "", lwr_ids: "", lwr_codes: "",
 });
 
 function thongTinToPayload(t: RfiThongTin): Record<string, string> {
@@ -55,6 +65,9 @@ function thongTinToPayload(t: RfiThongTin): Record<string, string> {
     gio_bat_dau: t.gio_bat_dau,
     nt_hinh_hoc: t.nt_hinh_hoc ? "1" : "",
     nt_sieu_am: t.nt_sieu_am ? "1" : "",
+    cong_viec: t.cong_viec,
+    lwr_ids: t.lwr_ids,
+    lwr_codes: t.lwr_codes,
   };
 }
 
@@ -71,13 +84,19 @@ function thongTinFromStored(raw: Record<string, string> | undefined): RfiThongTi
     gio_bat_dau: t.gio_bat_dau ?? "",
     nt_hinh_hoc: t.nt_hinh_hoc == null ? true : t.nt_hinh_hoc === "1",
     nt_sieu_am: t.nt_sieu_am == null ? true : t.nt_sieu_am === "1",
+    cong_viec: t.cong_viec ?? "",
+    lwr_ids: t.lwr_ids ?? "",
+    lwr_codes: t.lwr_codes ?? "",
   };
 }
 
 function loadRfiDraft(projectId: string): Partial<RfiThongTin> | null {
   try {
     const raw = window.localStorage.getItem(rfiDraftKey(projectId));
-    return raw ? (JSON.parse(raw) as Partial<RfiThongTin>) : null;
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Partial<RfiThongTin>;
+    const gtusLeft = /^\s*[HT][TP]\d{4}/.test(String(draft.giam_sat ?? ""));
+    return { ...draft, cong_viec: "", lwr_ids: "", lwr_codes: "", ...(gtusLeft ? { giam_sat: "", tuyen_thuong: false, tuyen_ha: false } : {}) };
   } catch {
     return null;
   }
@@ -86,9 +105,10 @@ function loadRfiDraft(projectId: string): Partial<RfiThongTin> | null {
 function saveRfiDraft(projectId: string, t: RfiThongTin) {
   try {
     window.localStorage.setItem(rfiDraftKey(projectId), JSON.stringify({
-      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.giam_sat,
-      tuyen_thuong: t.tuyen_thuong, tuyen_ha: t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
-      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am,
+      // Lựa chọn thanh của phiếu GTUS (giám sát, tuyến, LWR) chỉ thuộc phiếu GTUS đó, không nhớ sang phiếu khác.
+      dia_diem: t.dia_diem, ben_moi: t.ben_moi, ben_nhan: t.ben_nhan, pham_vi: t.pham_vi, giam_sat: t.cong_viec === "gtus" ? "" : t.giam_sat,
+      tuyen_thuong: t.cong_viec === "gtus" ? false : t.tuyen_thuong, tuyen_ha: t.cong_viec === "gtus" ? false : t.tuyen_ha, gio_bat_dau: t.gio_bat_dau,
+      nt_hinh_hoc: t.nt_hinh_hoc, nt_sieu_am: t.nt_sieu_am, cong_viec: "",
     }));
   } catch { /* ignore */ }
 }
@@ -104,7 +124,7 @@ function inferRoutes(welds: { ma_diem?: string | null }[]): { upper: boolean; lo
 export default function WeldAcceptanceWorkflow() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  type Mode = "rfi" | SplitKind;
+  type Mode = "rfi" | SplitKind | "gtus";
   const [mode, setMode] = useState<Mode>("rfi");
   // Modal «Duyệt siêu âm luôn?» → Có: sang tab siêu âm và mở sẵn phiếu vừa chuyển.
   const [openUltrasoundId, setOpenUltrasoundId] = useState<string | null>(null);
@@ -162,6 +182,7 @@ export default function WeldAcceptanceWorkflow() {
           ["rfi", "Phát phiếu RFI"],
           ["hinh-hoc", "Nghiệm thu Hình Học"],
           ["sieu-am", "Nghiệm thu Siêu âm"],
+          ["gtus", "Giải toả ứng suất"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
             className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
@@ -173,7 +194,8 @@ export default function WeldAcceptanceWorkflow() {
       </div>
       <div className="rounded-b-xl rounded-tr-xl border-2 border-[#0047AB] bg-white p-3 sm:p-4">
         {!projectId ? <p className="text-sm text-slate-500">Chọn dự án.</p> : (<>
-        {mode !== "rfi" && (
+        {mode === "gtus" && <GtusAcceptanceTab key={projectId} projectId={projectId} projectName={projectName} />}
+        {mode !== "rfi" && mode !== "gtus" && (
           <div className="mb-4">
             {/* Phiếu được phát trong tab RFI; hai tab chuyên môn dùng để duyệt và xem hồ sơ. */}
             <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName}
@@ -238,6 +260,10 @@ function RfiPanel({
   onOpenIssuedList: (list: { rfis: RfiSummary[]; unassigned: RfiCandidate[] }) => void;
 }) {
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
+  const [gtusPrint, setGtusPrint] = useState<RfiSummary | null>(null);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [pendingDlg, setPendingDlg] = useState<RfiSummary | null>(null);
+  const [gtusManage, setGtusManage] = useState<RfiSummary | null>(null);
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
@@ -275,6 +301,7 @@ function RfiPanel({
     setUnassigned(candidates.rows);
     if (!keepSoPhieu) setSoPhieu(so_phieu);
   }, [projectId]);
+  const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(true); }, onError: setError });
 
   async function toggleChildSigning(rfi: RfiSummary) {
     setBusy(true); setError("");
@@ -410,6 +437,15 @@ function RfiPanel({
     refresh().catch((e) => setError(message(e)));
   }
 
+  /** Mở hộp thoại Pending (huỷ / không thực hiện) hoặc Phát lại với ngày mới; số phiếu giữ nguyên. */
+  function togglePending(r: RfiSummary) { if (!busy) setPendingDlg(r); }
+  async function submitPending(r: RfiSummary, input: { ly_do?: string; ngay_moi?: string }) {
+    const pend = rfiPendingInfo(r.thong_tin);
+    await setRfiPending({ id: r.id, kind: "rfi", hanh_dong: pend ? "phat-lai" : "hoan", ...input });
+    setError("");
+    setOkMsg(pend ? `Đã phát lại phiếu ${r.so_phieu} (ngày mời ${input.ngay_moi}).` : `Phiếu ${r.so_phieu} chuyển sang Pending.`);
+    await refresh(true);
+  }
   async function removeRfi(r: RfiSummary) {
     if (busy || !window.confirm(`Xóa phiếu ${r.so_phieu}?\n\nHồ sơ nháp liên quan sẽ bị xóa. Các mối hàn được giữ lại để phát phiếu mới. Không thể hoàn tác.`)) return;
     setBusy(true); setError(""); setOkMsg("");
@@ -433,7 +469,36 @@ function RfiPanel({
   });
   const set = (k: keyof RfiCandidateFilter) => (e: React.ChangeEvent<HTMLInputElement>) => setFilters((f) => ({ ...f, [k]: e.target.value }));
 
-  const routeMissing = monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
+  const gtus = monitoring && thongTin.cong_viec === "gtus";
+  // Phiếu GTUS: tìm các thanh LWR đã hoàn thành (đã đưa lên track map) thay cho nhập tay tuyến / nội dung.
+  const [gtusCandidates, setGtusCandidates] = useState<GtusCandidate[]>([]);
+  const [gtusError, setGtusError] = useState("");
+  useEffect(() => {
+    if (!gtus || !projectId) return;
+    let active = true;
+    loadGtusCandidates(projectId).then((r) => { if (active) { setGtusCandidates(r.candidates); setGtusError(""); } })
+      .catch((e) => { if (active) setGtusError(e instanceof Error ? e.message : "Không tải được danh sách thanh LWR."); });
+    return () => { active = false; };
+  }, [gtus, projectId]);
+  const gtusSelected = new Set(thongTin.lwr_ids.split(",").filter(Boolean));
+  const kmText = (m: number) => `Km${Math.floor(m / 1000)}+${(Math.round((m % 1000) * 100) / 100).toFixed(2).padStart(6, "0")}`;
+  function toggleGtus(id: string, on: boolean) {
+    const next = new Set(gtusSelected);
+    if (on) next.add(id); else next.delete(id);
+    const chosen = gtusCandidates.filter((c) => next.has(c.id));
+    const from = chosen.length ? Math.min(...chosen.map((c) => c.startMetres)) : 0;
+    const to = chosen.length ? Math.max(...chosen.map((c) => c.endMetres)) : 0;
+    setThongTin((t) => ({
+      ...t,
+      lwr_ids: chosen.map((c) => c.id).join(","),
+      // Phiếu GTUS ghi theo TÊN LWR của thanh (HT0001, HP0001, HT0002…), không dùng mã ô thanh (HT-41…).
+      lwr_codes: chosen.map((c) => c.lwr).join(", "),
+      tuyen_thuong: chosen.some((c) => c.route === "thuong"),
+      tuyen_ha: chosen.some((c) => c.route === "ha"),
+      giam_sat: chosen.length ? `${chosen.map((c) => c.lwr).join(", ")} (${kmText(from)} – ${kmText(to)})` : "",
+    }));
+  }
+  const routeMissing = gtus ? !thongTin.lwr_ids : monitoring && !thongTin.tuyen_thuong && !thongTin.tuyen_ha && !thongTin.giam_sat.trim();
   const canPublishNew = monitoring || selected.size > 0;
   const scopeMissing = !thongTin.nt_hinh_hoc && !thongTin.nt_sieu_am;
   const activeStep = editingId ? "details" : publishStep;
@@ -503,11 +568,12 @@ function RfiPanel({
       </div>
       <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
       <div role="group" aria-label="Loại phiếu" className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => setKind("nghiem-thu")} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring} onClick={() => setKind("theo-doi")} className={monitoring ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => setKind("ca-hai")} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
       </div>
-      {monitoring && <p className="text-sm text-slate-600">Phiếu theo dõi có thể phát ngay mà không cần chọn mối.</p>}
+      {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh ray màu xám trên track map ở bước Thông tin phiếu; tuyến và lý trình tự lấy đúng theo từng thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
       <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
@@ -591,7 +657,32 @@ function RfiPanel({
       </div>
 
       <div role="tabpanel" id="rfi-step-panel-details" aria-labelledby="rfi-step-details" hidden={activeStep !== "details"} className="space-y-3">
-      {monitoring && !editingId && (
+      {gtus && !editingId && (
+        <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Chọn thanh ray màu xám trên track map (đã rải, chưa giải toả)</h3>
+          {gtusError && <p role="alert" className="text-xs text-red-700">{gtusError}</p>}
+          {!gtusError && gtusCandidates.length === 0 && <p className="text-xs text-slate-600">Chưa có thanh ray xám nào trên track map của dự án này. Rải thanh ray lên track map rồi quay lại.</p>}
+          {("thuong,ha".split(",") as ("thuong" | "ha")[]).map((route) => {
+            const list = gtusCandidates.filter((c) => c.route === route);
+            if (!list.length) return null;
+            return (
+              <fieldset key={route} className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <legend className="px-1 text-xs font-semibold text-slate-700">{route === "ha" ? "Tuyến hạ" : "Tuyến thượng"}</legend>
+                {list.map((c) => (
+                  <label key={c.id} className={`flex min-h-9 items-center gap-2 text-sm ${c.used ? "opacity-50" : "cursor-pointer"}`}>
+                    <input type="checkbox" disabled={Boolean(c.used)} checked={gtusSelected.has(c.id)} onChange={(e) => toggleGtus(c.id, e.target.checked)} />
+                    <span className="font-mono font-semibold">{c.code}</span>
+                    <span>{c.rail === "trai" ? "Ray trái" : "Ray phải"}{` · LWR ${c.lwr}${c.lwrPlanned ? " (dự kiến)" : ""}`} · {kmText(c.startMetres)} – {kmText(c.endMetres)} · {(Math.round(c.lengthMetres * 100) / 100).toLocaleString("vi-VN")} m</span>
+                    {c.used ? <span className="text-xs text-amber-800">đã có phiếu {c.used}</span> : null}
+                  </label>
+                ))}
+              </fieldset>
+            );
+          })}
+          {thongTin.lwr_codes && <p className="text-xs text-slate-700">Đã chọn: <b>{thongTin.lwr_codes}</b> → {thongTin.giam_sat}</p>}
+        </div>
+      )}
+      {monitoring && !gtus && !editingId && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 p-3">
           <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
           <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
@@ -618,12 +709,7 @@ function RfiPanel({
           <label className="flex flex-col gap-0.5 text-[10px] font-semibold text-slate-500">Giờ yêu cầu NT
             <input className={input} type="time" value={thongTin.gio_bat_dau} onChange={(e) => setThongTin({ ...thongTin, gio_bat_dau: e.target.value })} />
           </label>
-          <input className={input} placeholder="Địa điểm" value={thongTin.dia_diem} onChange={(e) => setThongTin({ ...thongTin, dia_diem: e.target.value })} />
-          <input className={input} placeholder="Bên mời (nhà thầu)" value={thongTin.ben_moi} onChange={(e) => setThongTin({ ...thongTin, ben_moi: e.target.value })} />
-          <input className={input} placeholder="Bên nhận (TVGS/CĐT)" value={thongTin.ben_nhan} onChange={(e) => setThongTin({ ...thongTin, ben_nhan: e.target.value })} />
-          <input className={input} placeholder="Phạm vi" value={thongTin.pham_vi} onChange={(e) => setThongTin({ ...thongTin, pham_vi: e.target.value })} />
-          {kind !== "nghiem-thu" && <input className={input} placeholder="Giám sát: gõ tay lý trình (vd: tuyến hạ Km4+075-Km4+325)" aria-label="Nội dung giám sát" value={thongTin.giam_sat} onChange={(e) => setThongTin({ ...thongTin, giam_sat: e.target.value })} />}
-          <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+          {!gtus && <fieldset className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 text-xs font-semibold text-slate-700 ${routeMissing ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
             <legend className="px-1">Tuyến {monitoring ? "(bắt buộc)" : ""}</legend>
             <label className="inline-flex min-h-11 items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={thongTin.tuyen_thuong} onChange={(e) => setThongTin({ ...thongTin, tuyen_thuong: e.target.checked })} />
@@ -633,7 +719,7 @@ function RfiPanel({
               <input type="checkbox" checked={thongTin.tuyen_ha} onChange={(e) => setThongTin({ ...thongTin, tuyen_ha: e.target.checked })} />
               Tuyến hạ
             </label>
-          </fieldset>
+          </fieldset>}
           <button
             type="button"
             className={primary}
@@ -652,7 +738,7 @@ function RfiPanel({
           </button>
           {editingId ? <button type="button" className={secondary} disabled={busy} onClick={cancelEdit}>Hủy sửa — phát phiếu mới</button> : null}
         </div>
-        {routeMissing && <p className="text-xs text-amber-800">Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi.</p>}
+        {routeMissing && <p className="text-xs text-amber-800">{gtus ? "Chọn ít nhất một thanh ray xám trước khi phát phiếu giải toả ứng suất." : "Chọn tuyến hoặc nhập nội dung giám sát trước khi phát phiếu theo dõi."}</p>}
         {!editingId && !monitoring && !selected.size && (
           <p className="text-xs text-amber-800">Mở tab <b>2. Chọn mối</b> để tìm và chọn các mối trước khi phát phiếu.</p>
         )}
@@ -677,38 +763,44 @@ function RfiPanel({
         Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
       </p>}
       <div className="overflow-auto rounded-lg border border-slate-200">
-        <table className="w-full text-xs sm:text-sm">
+        {scan.node}
+        <label className="flex items-center gap-2 p-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />Chỉ hiện phiếu Pending ({rfis.filter((r) => rfiPendingInfo(r.thong_tin)).length})</label>
+        <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th className="p-2 w-10 text-left">STT</th>
               <th className="p-2 text-left">Số phiếu</th>
               <th className="p-2 text-left">Ngày phát</th>
               <th className="p-2 text-left">Loại</th>
-              <th className="p-2 text-left">Mối trong RFI</th>
-              <th className="p-2 text-left">Nghiệm thu đạt / chờ ký / đã ký</th>
-              <th className="p-2 text-left">Chưa NT / Không đạt</th>
-              <th className="p-2 text-left">KM nghiệm thu đạt</th>
+              <th className="p-2 text-center" title="Số mối trong RFI">Mối</th>
+              <th className="p-2 text-center" title="Nghiệm thu đạt / chờ ký / đã ký">Đạt / Chờ ký / Đã ký</th>
+              <th className="p-2 text-center" title="Chưa nghiệm thu / Không đạt">Chưa NT / K.đạt</th>
+              <th className="p-2 text-left" title="Lý trình các mối nghiệm thu đạt">KM đạt</th>
               <th className="p-2 text-left">Trạng thái</th>
               <th className="p-2 w-40" />
             </tr>
           </thead>
           <tbody>
-            {rfis.map((r, i) => (
+            {rfis.filter((r) => !pendingOnly || rfiPendingInfo(r.thong_tin)).map((r, i) => (
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
                 <td className="p-2">{r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "Theo dõi" : rfiAcceptanceTitle(r.thong_tin)}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
-                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
-                <td className="p-2 min-w-48">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
-                <td className="p-2">{r.child_signing?.status ?? r.trang_thai}</td>
+                <td className="p-2">{r.thong_tin?.loai_rfi === "theo-doi" ? (r.thong_tin?.cong_viec === "gtus" ? "Giải toả ứng suất" : "Theo dõi") : (() => { const sc = rfiScope(r.thong_tin ?? {}); return sc.geometry && sc.ultrasound ? "Hình học + siêu âm" : sc.geometry ? "Nghiệm thu hình học" : "Nghiệm thu siêu âm"; })()}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : r.tong_moi}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.da_nghiem_thu ?? 0} / ${r.tracking?.cho_ky ?? 0} / ${r.tracking?.da_ky ?? 0}`}</td>
+                <td className="p-2 text-center">{r.thong_tin?.loai_rfi === "theo-doi" ? "—" : `${r.tracking?.chua_nghiem_thu ?? r.con_lai} / ${r.tracking?.khong_dat ?? 0}`}</td>
+                <td className="p-2">{r.tracking?.km_nghiem_thu ?? "—"}{!!r.tracking?.thieu_ly_trinh && <p className="text-amber-800">{r.tracking.thieu_ly_trinh} mối thiếu KM</p>}</td>
+                <td className="p-2">{rfiPendingInfo(r.thong_tin) ? <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-800" title={rfiPendingInfo(r.thong_tin)?.ly_do || "Hoãn / không thực hiện — chờ phát lại"}>Pending</span> : (r.child_signing?.status ?? r.trang_thai)}{(() => { const sc = bbntScanInfo(r.thong_tin); return sc ? <a href={sc.url} target="_blank" rel="noopener" title={"Biên bản đã ký: " + (sc.ten ?? "")} className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 hover:underline">📎 Đã scan</a> : null; })()}</td>
                 <td className="whitespace-nowrap p-2 text-right">
                   <RowActionsMenu
                     label={`Thao tác phiếu ${r.so_phieu}`}
                     actions={[
                       { label: "Sửa", disabled: busy, onSelect: () => beginEdit(r) },
+                      ...(r.thong_tin?.cong_viec === "gtus" && r.thong_tin?.lwr_ids ? [
+                        { label: "Nghiệm thu / thanh toán GTUS", onSelect: () => setGtusManage(r) },
+                        { label: "In BBNT - GTUS", onSelect: () => setGtusPrint(r) },
+                      ] : []),
                       { label: "Xem / In", onSelect: () => { void Promise.resolve(onOpen(r)).catch((e) => setError(message(e))); } },
                       ...(r.child_signing ? [{
                         label: r.child_signing.allSigned ? "Đặt lại cả bộ: Chờ ký" : "Đánh dấu cả bộ: Đã ký",
@@ -722,6 +814,8 @@ function RfiPanel({
                           onSelect: () => { setError(""); setOkMsg(""); setPayment({ rfi: r, ids: paidIds, rate: "", note: "" }); },
                         };
                       })(),
+                      ...(r.child_signing?.allSigned || bbntScanInfo(r.thong_tin) ? scan.actions({ id: r.id, kind: "rfi", so_phieu: r.so_phieu, thong_tin: r.thong_tin }, busy) : []),
+                      { label: rfiPendingInfo(r.thong_tin) ? "Phát lại (ngày mới)" : "Pending (hoãn / không thực hiện)", disabled: busy, onSelect: () => void togglePending(r) },
                       { label: "Xóa", danger: true, disabled: busy, onSelect: () => removeRfi(r) },
                     ]}
                   />
@@ -735,6 +829,28 @@ function RfiPanel({
         </table>
       </div>
       </div>
+      {pendingDlg && (
+        <PendingDialog
+          mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
+          soPhieu={pendingDlg.so_phieu}
+          oldDate={pendingDlg.ngay_moi}
+          reason={rfiPendingInfo(pendingDlg.thong_tin)?.ly_do}
+          onSubmit={(input) => submitPending(pendingDlg, input)}
+          onClose={() => setPendingDlg(null)}
+        />
+      )}
+      {gtusManage && (
+        <GtusRfiDialog rfiId={gtusManage.id} onClose={() => setGtusManage(null)} onPrint={() => setGtusPrint(gtusManage)} />
+      )}
+      {gtusPrint && (
+        <GtusBbntPrintDialog
+          projectId={projectId}
+          projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
+          cellIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
+          pycSo={gtusTicketNo(String(gtusPrint.so_phieu ?? "")).replace(/^RFI-/i, "")}
+          onClose={() => setGtusPrint(null)}
+        />
+      )}
     </section>
   );
 }

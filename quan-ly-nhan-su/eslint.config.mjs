@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".codex-chat/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

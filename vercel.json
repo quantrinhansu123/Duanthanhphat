@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "feat/chatbot-tao-hop-dong": false
+    }
+  },
   "installCommand": "npm --prefix quan-ly-nhan-su install",
   "buildCommand": "npm --prefix quan-ly-nhan-su run build"
 }

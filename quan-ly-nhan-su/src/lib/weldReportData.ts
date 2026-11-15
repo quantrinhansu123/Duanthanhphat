@@ -1383,6 +1383,9 @@ export type WeldJournalPageQuery = {
   welderName?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** Lọc theo số đuôi của Mã hệ thống (vd 0039 → 39): từ mối … tới mối …. */
+  seqFrom?: string;
+  seqTo?: string;
 };
 
 export type WeldJournalExportQuery = Omit<WeldJournalPageQuery, "page" | "pageSize">;
@@ -1494,6 +1497,8 @@ type JournalListFilter = {
   welderName?: string;
   dateFrom?: string;
   dateTo?: string;
+  seqFrom?: string;
+  seqTo?: string;
 };
 
 function normalizeJournalDateFilter(value?: string) {
@@ -1553,6 +1558,15 @@ export function applyJournalListFilters<T>(
   else if (project && project !== "Tất cả dự án") next = next.eq("du_an", project);
   if (dateFrom) next = next.gte("ngay_thuc_hien", dateFrom);
   if (dateTo) next = next.lte("ngay_thuc_hien", dateTo);
+  // Từ mối … tới mối …: số đuôi (4 chữ số) của Mã hệ thống; một đầu trống thì lấy tối đa 500 mối từ đầu còn lại.
+  const seqA = Math.floor(Number(filters.seqFrom)), seqB = Math.floor(Number(filters.seqTo));
+  const seqStart = seqA > 0 ? seqA : seqB > 0 ? Math.max(1, seqB - 499) : 0;
+  const seqEnd = seqB > 0 ? seqB : seqA > 0 ? seqA + 499 : 0;
+  if (seqStart > 0 && seqEnd >= seqStart && seqEnd - seqStart < 1000) {
+    const terms: string[] = [];
+    for (let n = seqStart; n <= seqEnd; n++) terms.push(`ma_lich_su.like.*-${String(n).padStart(4, "0")}`);
+    next = next.or(terms.join(","));
+  }
   if (linkedWeldFilter === "Có liên kết") next = next.not("moi_han_lien_ket", "is", null);
   if (linkedWeldFilter === "Chưa liên kết") next = next.is("moi_han_lien_ket", null);
   if (weldTypeFilter && weldTypeFilter !== "Tất cả") next = next.eq("loai_moi_han", weldTypeFilter);
@@ -1605,6 +1619,8 @@ export async function loadWeldJournalPage({
   welderName = "",
   dateFrom = "",
   dateTo = "",
+  seqFrom = "",
+  seqTo = "",
 }: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
   if (!isSupabaseConfigured()) {
     throw new Error(
@@ -1627,6 +1643,8 @@ export async function loadWeldJournalPage({
     welderName,
     dateFrom,
     dateTo,
+    seqFrom,
+    seqTo,
   };
 
   const journalRequestUsedCreatedAt = journalHasCreatedAt;
@@ -1662,31 +1680,31 @@ export async function loadWeldJournalPage({
   if (error && journalRequestUsedCreatedAt && /created_at/.test(error.message ?? "")) {
     journalHasCreatedAt = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo,
     });
   }
   if (error && journalRequestUsedLinkedImages && /anh_moi_han_lien_ket/.test(error.message ?? "")) {
     journalHasLinkedImages = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo,
     });
   }
   if (error && journalRequestUsedCaHan && /ca_han/.test(error.message ?? "")) {
     journalHasCaHan = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo,
     });
   }
   if (error && journalRequestUsedExtras && isWeldExtrasColumnError(error.message)) {
     journalHasWeldExtras = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo,
     });
   }
   if (error && journalRequestUsedSiteExtras && isWeldSiteColumnError(error.message)) {
     journalHasSiteExtras = false;
     return loadWeldJournalPage({
-      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo,
+      page, pageSize, query, project, projects, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo,
     });
   }
   if (error) {
@@ -1770,6 +1788,8 @@ export async function exportFilteredWeldJournal({
   welderName = "",
   dateFrom = "",
   dateTo = "",
+  seqFrom = "",
+  seqTo = "",
 }: WeldJournalExportQuery): Promise<WeldReportRow[]> {
   if (!isSupabaseConfigured()) {
     throw new Error("Chưa cấu hình Supabase nên không thể xuất nhật ký hàn.");
@@ -1787,6 +1807,8 @@ export async function exportFilteredWeldJournal({
     welderName,
     dateFrom,
     dateTo,
+    seqFrom,
+    seqTo,
   };
   const pageSize = 1000;
   const rows: WeldReportRow[] = [];

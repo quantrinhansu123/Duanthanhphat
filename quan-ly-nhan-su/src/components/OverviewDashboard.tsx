@@ -428,13 +428,14 @@ export default function OverviewDashboard() {
   const chartDateRange = useMemo(() => {
     return resolveChartDateRange(
       isAllDates ? REPORT_PERIOD_START : filterFrom,
-      // Không chọn "đến ngày" thì kết thúc ở ngày có dữ liệu mới nhất (không vẽ ngày tương lai).
+      // Không chọn "đến ngày" thì kết thúc ở hôm nay (không vẽ ngày tương lai).
       isAllDates || !appliedFilters.dateTo ? "" : filterTo,
       // Không lọc ngày: cửa sổ 31 ngày gần nhất. Có lọc ngày: vẽ đủ khoảng đã chọn (cuộn / thu phóng ngang).
       isAllDates ? 31 : 400,
-      showFastCharts ? fastLatestDataDate : latestDataDate,
+      // Không chọn «đến ngày»: vẽ đủ đến hôm nay, ngày chưa có số liệu hiện 0 (không cắt ở ngày có dữ liệu mới nhất).
+      todayIso,
     );
-  }, [appliedFilters.dateTo, fastLatestDataDate, filterFrom, filterTo, isAllDates, latestDataDate, showFastCharts]);
+  }, [appliedFilters.dateTo, filterFrom, filterTo, isAllDates, todayIso]);
   const dailySeries = useMemo(
     () =>
       showFastCharts
@@ -1331,9 +1332,15 @@ export default function OverviewDashboard() {
     .map((b) => ({ x: b.x + b.w / 2, y: b.yellowH > 0 ? b.yellowY : b.blueY }));
   const trendPath = toPath(trendTops);
   // ...theo thực tế (đỉnh phần xanh)
+  // Từ ngày có số liệu đầu tiên đến hôm nay; ngày bằng 0 vẫn có điểm ở đáy để đường tụt xuống (không nối thẳng qua ngày trống).
+  const firstActualBar = stackBars.findIndex((b) => b.actual > 0);
+  const lastLineBar = chartViewMode === "daily"
+    ? dailySeries.reduce((acc, point, i) => (point.date <= todayIso ? i : acc), -1)
+    : stackBars.length - 1;
   const actualTops = stackBars
-    .filter((b) => b.actual > 0)
-    .map((b) => ({ x: b.x + b.w / 2, y: b.blueY }));
+    .map((b, i) => ({ b, i }))
+    .filter(({ i }) => firstActualBar >= 0 && i >= firstActualBar && i <= Math.max(lastLineBar, firstActualBar))
+    .map(({ b }) => ({ x: b.x + b.w / 2, y: b.blueY }));
   const actualTrendPath = toPath(actualTops);
   function stepZoom(dir: 1 | -1) {
     setChartZoom((current) =>

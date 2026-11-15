@@ -17,7 +17,10 @@ let antiResponse = JSON.stringify({ action: "message", text: "Anti CLI reply" })
 let starts = 0;
 let contractContext = "";
 let authenticatedUser = { email: "test@example.com" };
-const env = { CHAT_PROVIDER: "codex" };
+let reportAccess = true;
+const dataCalls = [], geminiRequests = [];
+let geminiReplies = [];
+const env = { CHAT_PROVIDER: "codex", CHAT_CONTRACT_DIR: "D:/shared-contracts" };
 const imports = {
   "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
   "node:child_process": {
@@ -48,12 +51,23 @@ const imports = {
     readFile: async () => JSON.stringify({ models: [{ slug: "gpt-6-luna" }] }),
   },
   xlsx: {},
-  "@/lib/server/requireAccess": { requireAuthenticatedUser: async () => ({ denied: null, user: authenticatedUser }) },
+  "@/lib/server/requireAccess": {
+    requireAuthenticatedUser: async () => ({ denied: null, user: authenticatedUser }),
+    requireAccess: async () => reportAccess ? null : { status: 403 },
+  },
   "@/lib/supabase/server": { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { email: "test@example.com" } } }) } }) },
   "@/lib/server/chatPdf": { readChatPdf: async () => null },
-  "@/lib/server/chatContractContext": { readChatContractContext: async () => contractContext },
+  "@/lib/server/chatContractContext": { readChatContractContext: async (_message, _home, root) => {
+    assert.equal(root, env.CHAT_CONTRACT_DIR, "Use each server's configured contract folder");
+    return contractContext;
+  } },
   "@/lib/server/antiChat": { askAntiCli: async (...args) => { antiCalls.push(args); return antiResponse; } },
   "@/lib/server/antiResponse": antiResponseModule,
+  "@/lib/server/chatDataTools": {
+    CHAT_DATA_DECLARATIONS: [{ name: "thong_ke_moi_han" }],
+    CHAT_DATA_TOOL_NAMES: new Set(["thong_ke_moi_han"]),
+    runChatDataTool: async (...args) => { dataCalls.push(args); return { tong_so: 2 }; },
+  },
   "@/lib/server/chatModels": { getChatModels: async () => ({ models: [
     { id: "codex:gpt-6-luna", provider: "codex", model: "gpt-6-luna" },
     { id: "codex:gpt-6-sol", provider: "codex", model: "gpt-6-sol" },
@@ -65,7 +79,8 @@ vm.runInNewContext(ts.transpileModule(await readFile(new URL("../src/app/api/cha
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, {
   exports, process: { env, cwd: () => process.cwd() },
-  setTimeout, clearTimeout, URL,
+  setTimeout, clearTimeout, URL, AbortSignal,
+  fetch: async (_url, options) => { geminiRequests.push(JSON.parse(options.body)); return { ok: true, json: async () => geminiReplies.shift() }; },
   require: (name) => imports[name] ?? require(name),
 });
 const request = (text, modelId) => ({ url: "http://localhost:3010/api/chat", json: async () => ({ sessionId: "test-session", modelId, messages: [{ role: "user", text }] }) });
@@ -115,4 +130,20 @@ await exports.POST(request("Đối chiếu rồi tạo hợp đồng", "anti:gem
 assert.equal(antiCalls.at(-1)[6], undefined, "Explicit source verification must keep normal file tools available");
 authenticatedUser = null;
 assert.equal((await exports.POST(request("Chào bạn!"))).status, 401, "Fast path must still require a verified account");
+authenticatedUser = { email: "test@example.com" };
+env.CHAT_PROVIDER = "";
+env.GEMINI_API_KEY = "test-only-key";
+geminiReplies = [
+  { candidates: [{ content: { parts: [{ functionCall: { name: "thong_ke_moi_han", args: { tu_ngay: "2026-11-15" } }, thoughtSignature: "signature" }] } }] },
+  { candidates: [{ content: { parts: [{ text: "Có 2 mối hàn." }] } }] },
+];
+assert.equal((await exports.POST(request("Hôm nay hàn bao nhiêu mối?"))).body.text, "Có 2 mối hàn.");
+assert.equal(dataCalls.length, 1, "Keep main branch's Gemini data tools");
+assert.equal(geminiRequests[1].contents[1].parts[0].thoughtSignature, "signature");
+assert.equal(geminiRequests[1].contents[2].parts[0].functionResponse.response.ket_qua.tong_so, 2);
+reportAccess = false;
+geminiReplies = [{ candidates: [{ content: { parts: [{ text: "Không có quyền tra cứu." }] } }] }];
+await exports.POST(request("Tra cứu dữ liệu"));
+assert.ok(!geminiRequests.at(-1).tools[0].functionDeclarations.some((tool) => tool.name === "thong_ke_moi_han"));
+assert.equal(dataCalls.length, 1, "Do not expose data tools without report permission");
 console.log("PASS chat API: provider routing, model validation, shared contract output, Fast and context reuse");

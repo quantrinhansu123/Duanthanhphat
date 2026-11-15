@@ -97,7 +97,7 @@ import WeldQualityBadge from "@/components/WeldQualityBadge";
 import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
 import { loadDayLispCodes } from "@/lib/dayLispCodes";
 import { nextLispCode } from "@/lib/lispSequence";
-import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, type WeldPayment } from "@/lib/weldQualityClient";
+import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, resetToWaitingGrind, type WeldPayment } from "@/lib/weldQualityClient";
 import { qualityExcelColumns } from "@/lib/weldQualityExcel";
 
 // Keep lazy dialogs from suspending the journal and resetting its selection effects.
@@ -108,7 +108,8 @@ const WeldQualityBulkDialog = dynamic(() => import("@/components/WeldQualityBulk
   loading: () => <p role="status">Đang mở kiểm tra hàng loạt…</p>,
 });
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+const PAGE_SIZE_KEY = "weld-journal-page-size";
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
@@ -1852,10 +1853,20 @@ export default function WeldingJournalList({
   // Lọc theo tên người hàn: gõ tên (một phần) là lọc, trễ ngắn để không gọi máy chủ mỗi phím.
   const [welderDraft, setWelderDraft] = useState("");
   const [welderName, setWelderName] = useState("");
-  useEffect(() => {
-    const timer = window.setTimeout(() => setWelderName(welderDraft.trim()), 350);
-    return () => window.clearTimeout(timer);
-  }, [welderDraft]);
+  // Từ mối … tới mối …: theo số đuôi của Mã hệ thống (vd …-0039 → 39).
+  const [seqFromDraft, setSeqFromDraft] = useState("");
+  const [seqToDraft, setSeqToDraft] = useState("");
+  const [seqFrom, setSeqFrom] = useState("");
+  const [seqTo, setSeqTo] = useState("");
+  // Bộ lọc chỉ chạy khi bấm «Lọc» (đỡ tải lại bảng mỗi lần chọn / gõ): «pending» = đã sửa bộ lọc nhưng chưa bấm Lọc.
+  const [pending, setPending] = useState(false);
+  const pend = <T,>(setter: (value: T) => void) => (value: T) => { setter(value); setPending(true); };
+  function applyFilters() {
+    setWelderName(welderDraft.trim());
+    setSeqFrom(seqFromDraft.replace(/\D/g, ""));
+    setSeqTo(seqToDraft.replace(/\D/g, ""));
+    setPending(false);
+  }
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [resultFilter, setResultFilter] = useState(lockedResultFilter ?? "Tất cả");
   const [qualityStatusSelect, setQualityStatusSelect] = useState("Tất cả");
@@ -1874,7 +1885,31 @@ export default function WeldingJournalList({
   const [weldMethodFilter, setWeldMethodFilter] = useState("Tất cả");
   const [dateFrom, setDateFrom] = useState("2026-11-04");
   const [dateTo, setDateTo] = useState("");
+  // Bộ lọc đang áp dụng cho bảng: theo dõi bộ lọc tức thời, trừ lúc đang chờ bấm «Lọc» (đóng băng đến khi bấm).
+  const liveFilters = { appliedQuery, projectKey: projectFilter.join("|"), resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter };
+  const [committed, setCommitted] = useState(() => ({ ...liveFilters, projects: projectFilter }));
+  useEffect(() => {
+    if (pending) return;
+    setCommitted((cur) => {
+      const same = (Object.keys(liveFilters) as (keyof typeof liveFilters)[]).every((k) => liveFilters[k] === cur[k]);
+      return same ? cur : { ...liveFilters, projects: projectFilter };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, seqFrom, seqTo, qualityStatusFilter]);
   const [page, setPage] = useState(1);
+  // Số mối hiện mỗi trang (nhớ theo trình duyệt): 50 / 100 / 200 / 500.
+  const [pageSize, setPageSizeState] = useState(50);
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(PAGE_SIZE_KEY));
+      if (PAGE_SIZE_OPTIONS.includes(saved)) setPageSizeState(saved);
+    } catch { /* bỏ qua */ }
+  }, []);
+  function changePageSize(value: number) {
+    setPageSizeState(value);
+    setPage(1);
+    try { window.localStorage.setItem(PAGE_SIZE_KEY, String(value)); } catch { /* bỏ qua */ }
+  }
   const [rows, setRows] = useState<WeldReportRow[]>([]);
   const [total, setTotal] = useState(0);
   const [passCount, setPassCount] = useState(0);
@@ -1905,6 +1940,7 @@ export default function WeldingJournalList({
   // Xóa hàng loạt các mối đã tick.
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkResetting, setBulkResetting] = useState(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [machineOptions, setMachineOptions] = useState<MachineOption[]>([]);
   const [machineError, setMachineError] = useState("");
@@ -1985,17 +2021,19 @@ export default function WeldingJournalList({
     setError("");
     const filters = {
       page,
-      pageSize: PAGE_SIZE,
-      query: appliedQuery,
-      projects: projectFilter,
-      resultFilter,
-      linkedWeldFilter,
-      weldTypeFilter,
-      weldMethodFilter,
-      welderName,
-      dateFrom,
-      dateTo,
-      qualityStatusFilter,
+      pageSize,
+      query: committed.appliedQuery,
+      projects: committed.projects,
+      resultFilter: committed.resultFilter,
+      linkedWeldFilter: committed.linkedWeldFilter,
+      weldTypeFilter: committed.weldTypeFilter,
+      weldMethodFilter: committed.weldMethodFilter,
+      welderName: committed.welderName,
+      dateFrom: committed.dateFrom,
+      dateTo: committed.dateTo,
+      seqFrom: committed.seqFrom,
+      seqTo: committed.seqTo,
+      qualityStatusFilter: committed.qualityStatusFilter,
     };
     setQualityReady(false);
     const loadPage = async () => {
@@ -2005,7 +2043,7 @@ export default function WeldingJournalList({
         return result;
       } catch (qualityLoadError) {
         if (active) setQualityError(qualityLoadError instanceof Error ? qualityLoadError.message : "Không tải được chất lượng.");
-        if (qualityStatusFilter !== "Tất cả") throw qualityLoadError;
+        if (committed.qualityStatusFilter !== "Tất cả") throw qualityLoadError;
         return loadWeldJournalPage(filters);
       }
     };
@@ -2035,12 +2073,12 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, [page, appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter, reloadToken]);
+  }, [page, committed, pageSize, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;
     setSelectedQuality(new Map());
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
+  }, [committed]);
 
   const welderOptions = personnelWelderOptions;
   const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
@@ -2216,14 +2254,14 @@ export default function WeldingJournalList({
   }, [pageIdsKey]);
   const detailView = detailId ? pageRows.find((w) => w.id === detailId) ?? null : null;
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pageFrom = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const pageTo = Math.min(currentPage * PAGE_SIZE, total);
+  const pageFrom = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageTo = Math.min(currentPage * pageSize, total);
 
   useEffect(() => {
     setPage(1);
-  }, [appliedQuery, projectFilter, resultFilter, linkedWeldFilter, weldTypeFilter, weldMethodFilter, welderName, dateFrom, dateTo, qualityStatusFilter]);
+  }, [committed]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -2303,6 +2341,29 @@ export default function WeldingJournalList({
     showToast(`Đã quét ${payload.lispCode}. Kiểm tra thông tin rồi bấm Lưu.`);
   }
 
+  /** Đưa các mối đã tick về «Chờ mài» (xoá ngày mài và kết quả kiểm tra); mối đã nằm trong phiếu hoặc có thanh toán bị từ chối. */
+  async function bulkResetToWaitingGrind() {
+    const entries = [...selectedQuality.values()];
+    if (!entries.length) return;
+    if (!window.confirm(`Đưa ${entries.length} mối về «Chờ mài»?\nNgày mài và mọi kết quả kiểm tra của các mối này sẽ bị xóa. Mối đã nằm trong phiếu nghiệm thu hoặc đã có thanh toán sẽ bị bỏ qua.`)) return;
+    setBulkResetting(true);
+    try {
+      const { results } = await resetToWaitingGrind(entries.map((e) => ({ id: e.id, ma_lich_su: e.ma_lich_su, phien_ban: e.phien_ban })));
+      const failed = results.filter((x) => x.error);
+      const done = new Set(results.filter((x) => !x.error).map((x) => x.id));
+      setSelectedQuality((current) => { const next = new Map(current); for (const id of done) next.delete(id); return next; });
+      refetch();
+      if (failed.length) {
+        const code = (id: string) => displayWeldCode(entries.find((e) => e.id === id)?.ma_lich_su ?? id);
+        window.alert(`${done.size} mối đã về «Chờ mài». ${failed.length} mối chưa đổi được:\n` + failed.slice(0, 5).map((x) => `${code(x.id)}: ${x.error}`).join("\n"));
+      } else showToast(`Đã đưa ${done.size} mối về «Chờ mài».`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không đưa về Chờ mài được.");
+    } finally {
+      setBulkResetting(false);
+    }
+  }
+
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2500);
@@ -2373,15 +2434,17 @@ export default function WeldingJournalList({
       const { fillAppendix5Fbw, APPENDIX5_MAX_ROWS } = await import("@/lib/fillAppendix5Fbw");
       const exportRows = (
         await exportFilteredWeldJournal({
-          query: appliedQuery,
-          projects: projectFilter,
-          resultFilter,
-          linkedWeldFilter,
-          weldTypeFilter,
+          query: committed.appliedQuery,
+          projects: committed.projects,
+          resultFilter: committed.resultFilter,
+          linkedWeldFilter: committed.linkedWeldFilter,
+          weldTypeFilter: committed.weldTypeFilter,
           weldMethodFilter: "FBW",
-          welderName,
-          dateFrom,
-          dateTo,
+          welderName: committed.welderName,
+          dateFrom: committed.dateFrom,
+          dateTo: committed.dateTo,
+          seqFrom: committed.seqFrom,
+          seqTo: committed.seqTo,
         })
       )
         .filter((row) => row.cong_nghe_han === "FBW" && row.ngay_thuc_hien)
@@ -2429,18 +2492,20 @@ export default function WeldingJournalList({
     setExporting(true);
     try {
       const exportFilters = {
-        query: appliedQuery,
-        projects: projectFilter,
-        resultFilter,
-        linkedWeldFilter,
-        weldTypeFilter,
-        weldMethodFilter,
-        welderName,
-        dateFrom,
-        dateTo,
+        query: committed.appliedQuery,
+        projects: committed.projects,
+        resultFilter: committed.resultFilter,
+        linkedWeldFilter: committed.linkedWeldFilter,
+        weldTypeFilter: committed.weldTypeFilter,
+        weldMethodFilter: committed.weldMethodFilter,
+        welderName: committed.welderName,
+        dateFrom: committed.dateFrom,
+        dateTo: committed.dateTo,
+        seqFrom: committed.seqFrom,
+        seqTo: committed.seqTo,
       };
-      const exportRows = qualityReady || qualityStatusFilter !== "Tất cả"
-        ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter })).rows
+      const exportRows = qualityReady || committed.qualityStatusFilter !== "Tất cả"
+        ? (await exportQualityJournal({ ...exportFilters, page: 1, qualityStatusFilter: committed.qualityStatusFilter })).rows
         : await exportFilteredWeldJournal(exportFilters);
 
       const gpsByWeldId = new Map(
@@ -3029,7 +3094,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
               role="tab"
               aria-selected={stage === s.id}
               title={s.hint}
-              onClick={() => { setStage(s.id); setPage(1); }}
+              onClick={() => { setStage(s.id); setPage(1); applyFilters(); }}
               className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition-colors cursor-pointer sm:min-h-10 sm:rounded-lg sm:px-4 sm:text-sm ${
                 stage === s.id ? "bg-[#0047AB] text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
               }`}
@@ -3089,7 +3154,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Dự án
           <MultiSelectMenu
             values={projectFilter}
-            onChange={setProjectFilter}
+            onChange={pend(setProjectFilter)}
             options={projects.map((p) => ({ value: p, label: p }))}
             allLabel="Tất cả dự án"
             closeOnSelect
@@ -3103,7 +3168,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             Kết quả NDT (lịch sử)
             <SelectMenu
               value={resultFilter}
-              onChange={setResultFilter}
+              onChange={pend(setResultFilter)}
               options={["Tất cả", "Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"].map((v) => ({ value: v, label: v }))}
               disabled={Boolean(lockedResultFilter)}
               className="mt-1"
@@ -3119,7 +3184,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Mối liên kết
           <SelectMenu
             value={linkedWeldFilter}
-            onChange={setLinkedWeldFilter}
+            onChange={pend(setLinkedWeldFilter)}
             options={["Tất cả", "Có liên kết", "Chưa liên kết"].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3129,7 +3194,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Loại mối hàn
           <SelectMenu
             value={weldTypeFilter}
-            onChange={setWeldTypeFilter}
+            onChange={pend(setWeldTypeFilter)}
             options={["Tất cả", ...WELD_TYPE_OPTIONS].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3139,7 +3204,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           Công nghệ hàn
           <SelectMenu
             value={weldMethodFilter}
-            onChange={setWeldMethodFilter}
+            onChange={pend(setWeldMethodFilter)}
             options={["Tất cả", "FBW", "ATW"].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"
@@ -3150,7 +3215,8 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <input
             list="journal-welder-names"
             value={welderDraft}
-            onChange={(event) => setWelderDraft(event.target.value)}
+            onChange={(event) => { setWelderDraft(event.target.value); setPending(true); }}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             placeholder="VD: Trần Công Tiến"
             className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20"
           />
@@ -3158,34 +3224,60 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             {[...new Set(rows.map((row) => row.ten_tho_han).filter(Boolean))].map((name) => <option key={name} value={name} />)}
           </datalist>
         </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
-          Từ ngày
-          <DateField
-            value={dateFrom}
-            onChange={(value) => setDateFrom(dateTo && value > dateTo ? dateTo : value)}
-            className="w-full"
-          />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
-          Đến ngày
-          <DateField
-            value={dateTo}
-            onChange={(value) => setDateTo(dateFrom && value < dateFrom ? dateFrom : value)}
-            className="w-full"
-          />
-        </label>
-        {(dateFrom || dateTo) && (
+        <div className="col-span-full grid grid-cols-2 items-end gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Từ mối (số đuôi mã)
+            <input inputMode="numeric" value={seqFromDraft} onChange={(e) => { setSeqFromDraft(e.target.value.replace(/\D/g, "").slice(0, 5)); setPending(true); }} onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }} placeholder="VD: 39"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Tới mối
+            <input inputMode="numeric" value={seqToDraft} onChange={(e) => { setSeqToDraft(e.target.value.replace(/\D/g, "").slice(0, 5)); setPending(true); }} onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }} placeholder="VD: 64"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-2xs outline-hidden focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/20" />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Từ ngày
+            <DateField
+              value={dateFrom}
+              onChange={(value) => { setDateFrom(dateTo && value > dateTo ? dateTo : value); setPending(true); }}
+              className="w-full"
+            />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">
+            Đến ngày
+            <DateField
+              value={dateTo}
+              onChange={(value) => { setDateTo(dateFrom && value < dateFrom ? dateFrom : value); setPending(true); }}
+              className="w-full"
+            />
+          </label>
+          {(dateFrom || dateTo || seqFromDraft || seqToDraft) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setSeqFromDraft("");
+                setSeqToDraft("");
+                setSeqFrom("");
+                setSeqTo("");
+                setPending(false);
+              }}
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50"
+            >
+              Xóa ngày / mối
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-            }}
-            className="col-span-2 lg:col-span-1 inline-flex h-10 w-full items-center justify-center self-end rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 shadow-2xs hover:bg-slate-50 cursor-pointer sm:text-sm"
+            onClick={applyFilters}
+            title="Áp dụng các bộ lọc đã chọn cho bảng"
+            className={`inline-flex h-10 w-full items-center justify-center rounded-lg px-3 text-sm font-semibold shadow-2xs ${pending ? "bg-[#0047AB] text-white hover:bg-[#003a8c]" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
           >
-            Xóa ngày
+            {pending ? "Lọc •" : "Lọc"}
           </button>
-        )}
+
+        </div>
        </div>
 
        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
@@ -3241,12 +3333,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <div className="font-semibold text-slate-800">Đã chọn {selectedQuality.size.toLocaleString("vi-VN")} mối</div>
           <button type="button" disabled={!selectedQuality.size} className="text-xs font-medium text-slate-600 underline-offset-2 hover:underline disabled:opacity-40" onClick={() => { selectionToken.current += 1; setSelectedQuality(new Map()); }}>Bỏ chọn tất cả</button>
         </div>
-        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Tick các mối rồi bấm Mài xong, Duyệt hình học, Siêu âm / NDT hoặc Xóa hàng loạt; kiểm tra và xác nhận trước khi lưu.</div>
+        <div className="mt-0.5 hidden text-xs text-slate-600 sm:block">Tick các mối rồi bấm Chờ mài hoặc Mài xong; kiểm tra và xác nhận trước khi lưu.</div>
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading || bulkResetting} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50" onClick={() => void bulkResetToWaitingGrind()} title="Xóa ngày mài và kết quả kiểm tra → Chờ mài (mối chưa vào phiếu / chưa thanh toán)">{bulkResetting ? "Đang đổi…" : "Chờ mài"}</button>
           <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50" onClick={() => { setBulkQualityKind("grind"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Ghi ngày hoàn thành mài → Mài xong (phát RFI được)">Mài xong</button>
-          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("visual"); setBulkQualityEntries([...selectedQuality.values()]); }}>Duyệt hình học hàng loạt</button>
-          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading} className="min-h-9 rounded-lg px-2.5 text-xs font-medium sm:min-h-10 sm:text-sm bg-blue-700 font-semibold text-white hover:bg-blue-800 disabled:opacity-50" onClick={() => { setBulkQualityKind("ndt"); setBulkQualityEntries([...selectedQuality.values()]); }} title="Mặc định Siêu âm đạt; chỉnh tay mối không đạt">Siêu âm / NDT hàng loạt</button>
-          <button type="button" disabled={!qualityReady || !selectedQuality.size || loading || bulkDeleting} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold sm:min-h-10 sm:text-sm bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50" onClick={() => setBulkDeleteOpen(true)} title="Xóa các nhật ký hàn đã tick">{`Xóa hàng loạt${selectedQuality.size ? ` (${selectedQuality.size.toLocaleString("vi-VN")})` : ""}`}</button>
         </div>
       </div>
       <div className="rounded-xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs min-w-0">
@@ -3255,7 +3345,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#0047AB]">
             {gpsLoading
               ? "Đang ghép GPS…"
-              : `${pageFrom}–${pageTo} / ${total.toLocaleString("vi-VN")} · ${PAGE_SIZE}/trang`}
+              : `${pageFrom}–${pageTo} / ${total.toLocaleString("vi-VN")} · ${pageSize}/trang`}
           </span>
         </div>
 
@@ -3350,9 +3440,10 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                     {(() => {
                       const manual = paymentByWeld.get(w.id);
                       if (!manual && !ultrasoundRates) return <span className="text-xs text-slate-400">—</span>;
-                      const rate = manual?.ty_le ?? ultrasoundRates?.[w.id] ?? 0;
+                      // Chỉ hiện tỷ lệ đã nhập khi thanh toán theo phiếu; nghiệm thu xong không tự có 70% / 100%.
+                      const rate = manual?.ty_le ?? 0;
                       return (
-                        <span title={manual ? "Tỷ lệ đã chỉnh tay" : "Tỷ lệ theo phiếu siêu âm"} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${rate === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                        <span title={manual ? "Tỷ lệ thanh toán đã nhập" : "Chưa thanh toán"} className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold ${rate === 100 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
                           {rate}%
                         </span>
                       );
@@ -3397,7 +3488,7 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
                           setPaymentError("");
                           setPaymentEdit({
                             id: w.id, projectId: raw.du_an_id, name: w.weldName,
-                            rate: saved?.ty_le ?? ultrasoundRates?.[w.id] ?? 100,
+                            rate: saved?.ty_le ?? 100,
                             note: saved?.ghi_chu ?? "",
                             date: saved?.ngay_thanh_toan ?? new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date()),
                           });
@@ -3428,6 +3519,13 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
             {" · "}
             Hiển thị <strong className="font-mono text-slate-800">{pageFrom}–{pageTo}</strong> trên{" "}
             <strong className="font-mono text-slate-800">{total.toLocaleString("vi-VN")}</strong>
+            {" · "}
+            <label className="inline-flex items-center gap-1">Hiện
+              <select aria-label="Số mối hiện mỗi trang" value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))} className="h-7 rounded-md border border-slate-300 bg-white px-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              mối
+            </label>
           </div>
           <div className="flex items-center gap-2">
             <button
