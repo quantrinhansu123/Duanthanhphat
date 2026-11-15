@@ -4,6 +4,15 @@ Bản đầu tích hợp vào ứng dụng hiện tại, không cần WrenAI hay
 
 Số tệp và số hợp đồng được đếm riêng: nhiều chứng từ có thể thuộc cùng một hợp đồng. Ảnh/chữ dùng cho OCR, trích xuất và embedding được gửi tới Google; các đoạn dùng diễn giải được gửi tới Codex.
 
+## Vì sao chọn hướng này cho bản đầu
+
+- Tổng tiền do SQL tính trên dữ kiện đã xác minh, giữ quy tắc lũy kế và chống trùng nghiệp vụ. Chi phí đọc lại 83 tệp không đi theo mỗi câu hỏi; các truy vấn rõ nghĩa và nút Xem tổng không gọi model.
+- Tìm điều khoản dùng từ khóa cùng vector để lấy đúng phần liên quan, có nguồn trang. Đây là cách [hybrid search trên Supabase](https://supabase.com/docs/guides/ai/hybrid-search), tách khỏi phép tính tổng.
+- OCR/trích xuất/embedding qua API phù hợp máy ít RAM, không yêu cầu GPU local. `gemini-embedding-001` vẫn hỗ trợ trường hợp văn bản theo [tài liệu Google](https://ai.google.dev/gemini-api/docs/embeddings); đã thử API thật với vector 768 chiều.
+- Bản đầu dùng các hàm nghiệp vụ có schema, chưa cần thêm WrenAI để phục vụ vài chỉ tiêu đã định nghĩa. Khi có thêm nguồn dữ liệu và báo cáo linh hoạt, đánh giá WrenAI trên các chỉ tiêu và bộ ca kiểm chứng đang có.
+
+Đây là lựa chọn phù hợp cho phạm vi hiện tại, chưa phải kết luận model nào tốt nhất trên mọi bộ hồ sơ. Trước khi công bố hiệu quả vận hành, cần đo độ đúng OCR/dữ kiện, tìm điều khoản và usage trên mẫu đại diện rồi đủ 83 tệp thật. Các số đo Codex bên dưới cho thấy vẫn có overhead, không cam kết 400 token/câu.
+
 ```mermaid
 flowchart LR
     A[Upload hoặc thư mục được phép] --> B[Hash và hàng đợi riêng]

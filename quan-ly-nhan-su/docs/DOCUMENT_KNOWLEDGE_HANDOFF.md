@@ -10,7 +10,14 @@
 
 ## Nhận mã
 
-Có thể nhận nhánh Git hoặc file `document-knowledge-etl.bundle` do anh Huy chuyển. Gói bundle chứa phần thay đổi kể từ main `1c56ac2b0261e261f058394b00d87b48035be622`; lấy base đó trước khi nhập bundle.
+Ưu tiên nhận trực tiếp từ [nhánh GitHub feat/document-knowledge-etl](https://github.com/quantrinhansu123/Duanthanhphat/tree/feat/document-knowledge-etl):
+
+```powershell
+git fetch origin feat/document-knowledge-etl
+git switch -c deploy/document-knowledge FETCH_HEAD
+```
+
+Cũng có thể dùng file `document-knowledge-etl.bundle` do anh Huy chuyển. Gói bundle chứa phần thay đổi kể từ main `1c56ac2b0261e261f058394b00d87b48035be622`; lấy base đó trước khi nhập bundle.
 
 ```powershell
 git fetch origin main

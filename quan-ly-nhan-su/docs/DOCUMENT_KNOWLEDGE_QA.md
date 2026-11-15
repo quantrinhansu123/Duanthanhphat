@@ -1,10 +1,10 @@
 # Kết quả kiểm tra bản đầu — 16/11/2026
 
-Nhánh `feat/document-knowledge-etl`, base `1c56ac2b0261e261f058394b00d87b48035be622`. Không push, deploy hoặc thay database thật trong đợt này.
+Nhánh `feat/document-knowledge-etl`, base `1c56ac2b0261e261f058394b00d87b48035be622`. Mã được bàn giao qua nhánh GitHub; chưa deploy hoặc chạy migration trên database thật theo yêu cầu để đồng nghiệp phụ trách Supabase triển khai sau.
 
 | Kiểm tra | Kết quả |
 | --- | --- |
-| `pnpm test:knowledge` | Đạt các ca core/worker, PostgreSQL/pgvector, API/chat và Codex gateway; số đếm được in khi chạy |
+| `pnpm test:knowledge` | Đạt 181 ca: core/worker 62, PostgreSQL/pgvector 57, API/chat 42, Codex gateway 20 |
 | Production build với Node heap 4 GB | Đạt compile, TypeScript, 77 trang static và trace cleanup |
 | ESLint các file thay đổi | Đạt; hai dòng đo thời gian trong callback submit được ghi rõ ngoại lệ cho rule purity |
 | Chat API, upload, client | Đạt, gồm Standard tier, tách người dùng/kho, gửi tệp và nguồn dẫn |
