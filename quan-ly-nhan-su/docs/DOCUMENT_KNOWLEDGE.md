@@ -19,7 +19,7 @@ flowchart LR
 
 - Node >= 22.18; đã kiểm tra với Node 24.14, Python 3.12, PyMuPDF 1.28.0.
 - Supabase hiện có, gồm URL, anon/publishable key theo cấu hình ứng dụng và **service role chỉ ở server/worker**.
-- Gemini API key có quyền gọi model đã chọn. Tên model có thể cấu hình; OCR/trích xuất thật với tài khoản của nhóm chưa được kiểm tra trong workspace này.
+- Gemini API key có quyền gọi model đã chọn. Đã kiểm tra thật embedding 768 chiều, trích xuất JSON và OCR ảnh synthetic với tài khoản được cung cấp; chưa đánh giá trên hồ sơ thật của nhóm.
 - Codex CLI trên máy chạy server, đăng nhập bằng tài khoản vận hành. Đã thử CLI `0.169.0-alpha.11.1`, model `gpt-6-luna`.
 - Tệp gốc giữ ngoài Git và ngoài thư mục public của ứng dụng. Không cấu hình thư mục cache thành thư mục Tri thức dùng chung.
 
@@ -144,13 +144,15 @@ pnpm.cmd test:knowledge
 node scripts/test-chat-api.mjs
 node scripts/test-chat-upload.mjs
 node scripts/test-chatbot.mjs
+# Tùy chọn, có gọi Google API và sử dụng hạn mức: chỉ gửi dữ liệu synthetic.
+pnpm.cmd knowledge:smoke -- --live
 $env:NODE_OPTIONS='--max-old-space-size=4096'
 pnpm.cmd build
 ```
 
 `test:knowledge` không gọi API thật hoặc database production. Nó dùng PostgreSQL/pgvector WASM thực (PGlite), PDF hỗn hợp tạo tại chỗ, Google/Codex giả lập. Bao gồm tính không trùng lũy kế, hơn 1.000 khoản, lọc hợp đồng/ngày, RLS, quyền viewer, thay phiên bản, lease, rollback, chữ/số lớn, dẫn nguồn giả, token routing và khôi phục OCR/embedding sau lỗi.
 
-Đã kiểm tra riêng ba planner bằng Codex đăng nhập thật và giao diện bằng Edge headless ở chiều rộng 1.440/390 px với API fixture. Chưa chạy migration trên Supabase thật, chưa đo OCR/embedding/trích xuất bằng Gemini thật, chưa chạy trên bộ 83 hồ sơ vì chưa có cấu hình riêng và bộ tài liệu ở workspace.
+Đã kiểm tra riêng ba planner bằng Codex đăng nhập thật, bốn lời gọi Gemini thật (embedding tài liệu/câu hỏi, trích xuất JSON, OCR ảnh synthetic) và giao diện bằng Edge headless ở chiều rộng 1.440/390 px với API fixture. Migration trên Supabase thật được để lại cho đồng nghiệp phụ trách theo yêu cầu của anh Huy; chưa chạy trên bộ 83 hồ sơ thật. Tính năng local được giữ `DOCUMENT_KNOWLEDGE_ENABLED=false` cho đến khi schema sẵn sàng. Xem [hướng dẫn bàn giao](DOCUMENT_KNOWLEDGE_HANDOFF.md).
 
 ## Điểm mở rộng
 

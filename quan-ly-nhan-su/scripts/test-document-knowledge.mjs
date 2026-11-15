@@ -14,6 +14,7 @@ import {
 import {
   embedKnowledge,
   generateKnowledgeJson,
+  extractKnowledgeFacts,
   normalizeKnowledgeVector,
   knowledgePipelineVersion,
 } from "../src/lib/server/documentKnowledgeAI.ts";
@@ -144,7 +145,8 @@ try {
   let mode = "embedding";
   let ocrCount = 0,
     failOcrAt = -1,
-    emptyFacts = false;
+    emptyFacts = false,
+    manyFacts = false;
   globalThis.fetch = async (url, options) => {
     const body = JSON.parse(options.body);
     requests.push({ url, body });
@@ -173,7 +175,13 @@ try {
       return { ok: false, status: 400, json: async () => ({}) };
     const value = isImage
       ? { text: "Trang scan: Nghiệm thu 200 đồng." }
-      : { facts: emptyFacts ? [] : [fact] };
+      : {
+          facts: manyFacts
+            ? new Array(101).fill(fact)
+            : emptyFacts
+              ? []
+              : [fact],
+        };
     return {
       ok: true,
       json: async () => ({
@@ -203,6 +211,15 @@ try {
     /^KnowledgeAIError: DK_AI_AUTH$/,
   );
   mode = "normal";
+  manyFacts = true;
+  await rejects(() => extractKnowledgeFacts(pages), /DK_EXTRACTION_LIMIT/);
+  eq(
+    "maxItems" in
+      requests.at(-1).body.generationConfig.responseJsonSchema.properties.facts,
+    false,
+    "Keep nested schema compatible with live Gemini",
+  );
+  manyFacts = false;
   await writeFile(join(folder, "fixture.txt"), text);
   eq(
     await extractWorkerPages(Buffer.from(text), "fixture.txt"),

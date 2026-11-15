@@ -12,6 +12,7 @@
     "google-drive:oauth": "node --env-file=.env.local scripts/google-drive-oauth.mjs",
     "knowledge:worker": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs",
     "knowledge:scan": "node --env-file-if-exists=.env.local scripts/knowledge-worker.mjs --scan-only",
+    "knowledge:smoke": "node --env-file-if-exists=.env.local scripts/smoke-document-knowledge-ai.mjs",
     "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs"
   },
   "dependencies": {

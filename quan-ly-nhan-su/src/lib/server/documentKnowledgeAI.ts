@@ -142,7 +142,6 @@ export async function extractKnowledgeFacts(
       properties: {
         facts: {
           type: "array",
-          maxItems: 100,
           items: {
             type: "object",
             properties: {
@@ -181,7 +180,12 @@ export async function extractKnowledgeFacts(
       undefined,
       signal,
     )) as { facts?: unknown };
-    facts.push(...validateExtractedFacts(result?.facts, batch));
+    // Gemini 3.5 Flash-Lite rejects maxItems in this nested response schema.
+    // Keep the limit in application validation rather than dropping the safeguard.
+    const extracted = validateExtractedFacts(result?.facts, batch);
+    if (extracted.length > 100)
+      throw new KnowledgeAIError("DK_EXTRACTION_LIMIT");
+    facts.push(...extracted);
     batch = [];
     size = 0;
   };
