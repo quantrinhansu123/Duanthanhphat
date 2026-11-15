@@ -469,7 +469,7 @@ export async function listRfis(projectId: string) {
   const [rfis, links, batches] = await Promise.all([
     fetchAll<Rfi>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
       .select("id,so_phieu,ngay_moi,trang_thai,nguoi_lap,thong_tin,created_at").eq("du_an_id", projectId)
-      .order("created_at", { ascending: false }).order("id").range(a, b)),
+      .order("ngay_moi", { ascending: false }).order("created_at", { ascending: false }).order("id").range(a, b)),
     fetchAll<Link>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
       .select("phieu_id,moi_han_id,con_hieu_luc,du_lieu_chot,phieu_yeu_cau_nghiem_thu!inner(du_an_id)")
       .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("phieu_id").order("moi_han_id").range(a, b)),
