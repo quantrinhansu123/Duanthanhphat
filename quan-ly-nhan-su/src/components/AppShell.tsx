@@ -17,7 +17,6 @@ import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 import UserMenu from "@/components/UserMenu";
-import ChatBot from "@/components/ChatBot";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { canReceiveOilAlert } from "@/lib/viewerAccess";
 
@@ -73,8 +72,6 @@ const WeldAcceptanceReport = dynamic(
 const YearlyWeldReport = dynamic(() => import("@/components/YearlyWeldReport"), { loading: TabLoading, ssr: false });
 const MapView = dynamic(() => import("@/components/MapView"), { loading: TabLoading, ssr: false });
 const DocumentLibrary = dynamic(() => import("@/components/DocumentLibrary"), { loading: TabLoading, ssr: false });
-const KnowledgeLibrary = dynamic(() => import("@/components/KnowledgeLibrary"), { loading: TabLoading, ssr: false });
-const AiQsLibrary = dynamic(() => import("@/components/AiQsLibrary"), { loading: TabLoading, ssr: false });
 const DeploymentHandoverList = dynamic(
   () => import("@/components/DeploymentHandoverList"), { loading: TabLoading, ssr: false });
 const SystemConfiguration = dynamic(
@@ -131,8 +128,6 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-moi-han-theo-nam": () => <YearlyWeldReport />,
   "ban-do": () => <MapView />,
   "tai-lieu": () => <DocumentLibrary />,
-  "file-tri-thuc": () => <KnowledgeLibrary />,
-  "hoso-ai-qs": () => <AiQsLibrary />,
   "trien-khai": () => <DeploymentHandoverList />,
   "cau-hinh": () => <SystemConfiguration />,
 };
@@ -544,7 +539,6 @@ export default function AppShell({ tab }: AppShellProps) {
           </div>
         </nav>
       </div>
-      <ChatBot />
     </div>
     </ReportFilterProvider>
   );

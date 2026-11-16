@@ -13,56 +13,6 @@ Mở `http://localhost:3010`.
 
 Sao chép `.env.example` thành `.env.local` và điền các biến cần dùng. Không commit `.env.local`.
 
-## Nhánh thử nghiệm chatbot tạo hợp đồng
-
-Nhánh `feat/chatbot-tao-hop-dong` dùng để chạy và thử nghiệm cục bộ. Cấu hình `vercel.json` ở gốc kho mã và thư mục ứng dụng đều tắt tự động triển khai riêng nhánh này.
-
-Máy mới cần Node.js 22, pnpm theo phiên bản trong `package.json`, kết nối Supabase và tài khoản đăng nhập ứng dụng đã được cấp quyền. Từ thư mục kho mã đã clone:
-
-```powershell
-git fetch origin
-git switch feat/chatbot-tao-hop-dong
-git pull --ff-only origin feat/chatbot-tao-hop-dong
-cd quan-ly-nhan-su
-if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
-npm install -g pnpm@11.5.2
-pnpm install --frozen-lockfile
-```
-
-Chỉ sao chép `.env.example` khi chưa có `.env.local`, tránh ghi đè cấu hình đang dùng. Điền `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` trong `.env.local`; nhận khóa qua kênh riêng của đội dự án. Các tích hợp Google Drive, Cloudinary, AppSheet, Zalo cần thông tin riêng nếu sử dụng các chức năng tương ứng. Không đưa khóa, phiên đăng nhập hay hồ sơ hợp đồng vào Git.
-
-Chọn một backend chatbot:
-
-- **Codex CLI:** cài CLI bằng `npm install -g @openai/codex`, đăng nhập tài khoản của chính mình bằng `codex -c 'cli_auth_credentials_store="file"' login`. Ứng dụng hiện đọc phiên từ `~/.codex/auth.json`. Đặt `CHAT_PROVIDER=codex`, `CODEX_MODEL=gpt-6-luna`, `CODEX_EFFORT=medium`.
-- **Anti CLI:** cài `agy` và làm theo [hướng dẫn Antigravity CLI](https://antigravity.google/docs/cli/headless), mở `agy` để đăng nhập một lần rồi kiểm tra bằng `agy models`. Đặt `CHAT_PROVIDER=anti` hoặc chọn model Anti trong combo box của chatbot.
-- **Gemini API:** để trống `CHAT_PROVIDER`, điền `GEMINI_API_KEY`, tùy chọn `GEMINI_MODEL`. Chế độ này giữ công cụ tra cứu dữ liệu hệ thống từ nhánh main; quyền tra cứu theo quyền xem Báo cáo tổng quan. Upload tệp hiện chỉ dành cho hai chế độ CLI.
-
-CLI phải được cài trên máy chạy server và có trong `PATH`; khởi động lại server sau khi cài CLI hoặc đổi `.env.local`. Chạy app bằng `pnpm dev`, mở `http://localhost:3010`, đăng nhập rồi chọn model ngay bên trái **Chat mới**.
-
-Để tạo hợp đồng từ hồ sơ riêng, đặt `CHAT_CONTRACT_DIR` thành đường dẫn thư mục hồ sơ trên máy server. Thư mục cần có workbook `Theo dõi Hợp đồng TCW- Các dự án khác-R3.xlsx` và các thư mục PDF hợp đồng tương ứng. Để trống biến này sẽ dùng đường dẫn tương thích máy cũ `E:\20. Hồ sơ phục vụ AI_QS`; dữ liệu riêng trong ổ E không được tải xuống cùng Git. Bảng tra/bản trích xuất được tạo cục bộ trong `.codex-chat/`, máy mới chưa có bản trích xuất có thể xử lý lần đầu lâu hơn.
-
-Đọc PDF trực tiếp cần Python 3 với PyMuPDF:
-
-```powershell
-python -m pip install PyMuPDF
-```
-
-Kiểm tra chatbot không ghi dữ liệu vào Supabase thật:
-
-```powershell
-node scripts/test-chat-api.mjs
-node scripts/test-chatbot.mjs
-node scripts/test-anti-chat.mjs
-node scripts/test-anti-response.mjs
-node scripts/test-chat-models.mjs
-node scripts/test-chat-upload.mjs
-node scripts/test-chat-contract-context.mjs
-node scripts/test-chat-pdf.mjs
-node scripts/test-require-access.mjs
-node scripts/test-chat-build-traces.mjs
-pnpm build
-```
-
 ## Triển khai database
 
 Migration đồng bộ nền trong Supabase SQL Editor:
