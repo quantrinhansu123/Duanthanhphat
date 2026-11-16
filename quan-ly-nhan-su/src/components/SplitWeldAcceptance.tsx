@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadRfiNumber, markQualityPass, removeBbntScan, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
@@ -287,7 +287,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                     ...(onPrintRecord && !done ? [{ label: "In biên bản nháp (tạm ghi Đạt)", disabled: busy, onSelect: () => void printRecord(t, true) }] : []),
                     // Số phiếu siêu âm đi theo phiếu hình học → chỉ sửa ở tab tạo phiếu.
                     ...(stage === "tao" ? [{ label: "Sửa phiếu", disabled: busy, onSelect: () => beginEdit(t) }] : []),
-                    ...(done && t.da_ky ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy) : []),
+                    // Có file scan thì luôn cho xem/gỡ; đã ký thì thêm mục tải lên.
+                    ...(done && (t.da_ky || signedScans.length) ? scan.actions({ id: t.id, kind: "tach", so_phieu: t.so_phieu, thong_tin: t.thong_tin }, busy).filter((a) => t.da_ky || !a.label.startsWith("Tải")) : []),
                     ...(done ? [{ label: t.da_ky ? "Đặt lại: Chờ ký" : "Đánh dấu: Đã ký", disabled: busy, onSelect: () => void run(() => toggleSign(t)) }] : []),
                     // Thanh toán tính theo các mối Đạt của phiếu → phiếu chưa nghiệm thu thì chưa dùng được (hiện mờ để biết có chức năng).
                     { label: done ? "Thanh toán" : "Thanh toán (sau khi nghiệm thu)", disabled: busy || !done, onSelect: () => {
@@ -509,10 +510,22 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         {onPrintRecord && !detail.ticket.ngay_nghiem_thu && <button className={button} disabled={busy} title="In bản nháp tạm ghi Đạt để các bên ký; chưa chốt nghiệm thu nên Nhật ký thi công chưa ghi" onClick={() => run(async () => onPrintRecord(await loadGeometryRecord(detail.ticket.id, true)))}>In biên bản nháp (tạm Đạt)</button>}
         {detail.ticket.ngay_nghiem_thu && (() => {
           const saved = bbntScans(detail.ticket.thong_tin);
+          const target = { id: detail.ticket.id, kind: "tach" as const, so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin };
           return <>
             {scan.node}
-            {saved.map((file, i) => <button key={file.url + i} className={button} onClick={() => window.open(file.url, "_blank", "noopener")} title={file.ten}>{saved.length > 1 ? `Xem biên bản ${i + 1}` : "Xem biên bản đã lưu"}</button>)}
-            {detail.ticket.da_ky && <button className={button} disabled={busy} onClick={() => scan.pick({ id: detail.ticket.id, kind: "tach", so_phieu: detail.ticket.so_phieu, thong_tin: detail.ticket.thong_tin })}>{saved.length ? "Tải thêm biên bản đã ký" : "Tải lên biên bản đã ký"}</button>}
+            {saved.map((file, i) => (
+              <span key={file.url + i} className="inline-flex items-center gap-1">
+                <button type="button" className={button} onClick={() => window.open(file.url, "_blank", "noopener")} title={file.ten}>{saved.length > 1 ? `Xem biên bản ${i + 1}` : "Xem biên bản đã lưu"}</button>
+                <button type="button" className={`${button} text-rose-700`} disabled={busy} title="Gỡ file scan khỏi phiếu" onClick={() => void run(async () => {
+                  if (!window.confirm(`Gỡ ${saved.length > 1 ? `file ${i + 1}` : "biên bản đã ký"} của phiếu ${detail.ticket.so_phieu}? File vẫn còn trong kho lưu trữ.`)) return;
+                  await removeBbntScan(target, String(file.doc_id || file.url));
+                  setOkMsg(`Đã gỡ ${saved.length > 1 ? `file ${i + 1}` : "biên bản đã ký"} của phiếu ${detail.ticket.so_phieu}.`);
+                  await refresh();
+                  await openTicket(detail.ticket.id);
+                })}>Gỡ</button>
+              </span>
+            ))}
+            {detail.ticket.da_ky && <button className={button} disabled={busy} onClick={() => scan.pick(target)}>{saved.length ? "Tải thêm biên bản đã ký" : "Tải lên biên bản đã ký"}</button>}
           </>;
         })()}
       </div>

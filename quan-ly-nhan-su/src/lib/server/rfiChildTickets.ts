@@ -40,6 +40,10 @@ export async function ensureRfiChildTickets(parent: Parent) {
   if (!links.data.length) return;
   if (links.data.length > 2000) throw new Error("RFI vượt giới hạn 2000 mối.");
   const scope = rfiScope(parent.thong_tin);
+  // Phiếu con HH/SA không kế thừa nội dung in của phiếu cha (in_doi_tuong, in_kinh_gui…) — tránh SA in nhầm chữ hình học.
+  const childInfo = Object.fromEntries(
+    Object.entries(parent.thong_tin ?? {}).filter(([key]) => !key.startsWith("in_")),
+  );
   for (const kind of ["hinh-hoc", "sieu-am"] as const) {
     if (!(kind === "hinh-hoc" ? scope.geometry : scope.ultrasound)) continue;
     const existing = await db.from("phieu_nt_tach").select("id,ngay_nghiem_thu").eq("phieu_rfi_id", parent.id).eq("loai", kind);
@@ -50,7 +54,11 @@ export async function ensureRfiChildTickets(parent: Parent) {
     if (existing.data.some((t) => t.id !== id || t.ngay_nghiem_thu)) continue;
     const header = await db.from("phieu_nt_tach").upsert({ id, du_an_id: parent.du_an_id, loai: kind,
       so_phieu: `${parent.so_phieu}-${kind === "hinh-hoc" ? "HH" : "SA"}`, ngay_moi: parent.ngay_moi,
-      nguoi_lap: parent.nguoi_lap, phieu_rfi_id: parent.id, thong_tin: parent.thong_tin,
+      nguoi_lap: parent.nguoi_lap, phieu_rfi_id: parent.id, thong_tin: {
+        ...childInfo,
+        nt_hinh_hoc: kind === "hinh-hoc" ? "1" : "",
+        nt_sieu_am: kind === "sieu-am" ? "1" : "",
+      },
     }, { onConflict: "id", ignoreDuplicates: true });
     if (header.error) throw header.error;
     // Stable IDs and insert-only upserts allow retries to finish an incomplete

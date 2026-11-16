@@ -237,28 +237,6 @@ export const navigation: NavItem[] = [
     ],
   },
   {
-    id: "quan-ly-ai",
-    code: "16",
-    label: "Quản lý AI",
-    labelEn: "AI Management",
-    children: [
-      {
-        id: "file-tri-thuc",
-        label: "File tri thức",
-        labelEn: "Knowledge Files",
-        description: "Thêm và quản lý tệp tri thức trong thư mục Tri thức",
-        descriptionEn: "Add and manage knowledge files in the Tri thức folder",
-      },
-      {
-        id: "hoso-ai-qs",
-        label: "Hồ sơ AI_QS",
-        labelEn: "AI_QS Documents",
-        description: "Quản lý full folder 20. Hồ sơ phục vụ AI_QS theo sơ đồ cây (Bên A/B → đối tác → tệp)",
-        descriptionEn: "Browse the full AI_QS contract folder as a scientific tree (Side A/B → partner → files)",
-      },
-    ],
-  },
-  {
     id: "bao-cao",
     code: "15",
     label: "Báo cáo & thống kê",

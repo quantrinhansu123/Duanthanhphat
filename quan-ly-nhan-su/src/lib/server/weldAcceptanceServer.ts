@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi, loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
-import { rfiScope, rfiChildSigning, SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { rfiScope, rfiChildSigning, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { deleteGtusThanh, snapshotGtusThanh } from "@/lib/server/gtusServer";
@@ -988,7 +988,7 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
-  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", "pyc_so", "goi_thau", "ket_luan", ...SIGNER_KEYS,
+  for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", "pyc_so", "goi_thau", "ket_luan", ...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS,
     ...["cdt", "tvtk"].flatMap((p) => [1, 2].flatMap((i) => [`nguoi_${p}_${i}_ten`, `nguoi_${p}_${i}_cv`]))]) {
     const value = str(t[key], 300);
     if (value) thong_tin[key] = value;

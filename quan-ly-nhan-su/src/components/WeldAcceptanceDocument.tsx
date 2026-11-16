@@ -6,7 +6,7 @@ import ComboInput from "@/components/ComboInput";
 import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, Ed, EdViDate, type RecordEditor, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
-import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
@@ -45,7 +45,7 @@ const css = `/* Ô sửa trực tiếp trên mẫu: viền gợi ý chỉ có tr
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
 /** Thông tin / thời gian trên mẫu — sửa được ở bản xem trước (để trống = tự lấy từ dữ liệu đã chốt). */
-const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS];
+const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS];
 
 /** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
 const FREE_TEXT_FIELDS: [string, string][] = [
@@ -86,23 +86,43 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   const [rfiEditOpen, setRfiEditOpen] = useState(false);
   const [printSaved, setPrintSaved] = useState("");
   const printSaveTimer = useRef<number | null>(null);
-  // Ưu tiên: nội dung đã lưu theo phiếu (dùng chung mọi máy) > bản nháp trên máy > giá trị nhập gần nhất (tự điền cho phiếu mới).
+  // Ưu tiên: nội dung đã lưu theo phiếu (dùng chung mọi máy) > bản nháp trên máy > nhớ theo loại HH/SA (không lẫn nhau).
   const [rfiOverrides, setRfiOverrides] = useState<RfiOverrides>(() => {
-    if (!rfiKey) return {};
-    let local: RfiOverrides = {}, remembered: RfiOverrides = {};
+    if (!rfiKey || !view.rfi) return {};
+    const info = (view.rfi.rfi.thong_tin ?? {}) as Record<string, unknown>;
+    const scopeKey = rfiPrintScopeKey(info);
+    let local: RfiOverrides = {}, remembered: RfiOverrides = {}, legacy: RfiOverrides = {};
     try { local = JSON.parse(window.localStorage.getItem(rfiKey) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
-    try { remembered = JSON.parse(window.localStorage.getItem(RFI_PRINT_DEFAULTS) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
+    try { remembered = JSON.parse(window.localStorage.getItem(rfiPrintDefaultsKey(scopeKey)) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
+    try { legacy = JSON.parse(window.localStorage.getItem(RFI_PRINT_DEFAULTS) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
     const saved: RfiOverrides = {};
     for (const key of RFI_PRINT_SAVED_KEYS) {
-      const value = view.rfi?.rfi.thong_tin?.[`in_${key}`];
+      const value = view.rfi.rfi.thong_tin?.[`in_${key}`];
       if (value) saved[key] = value;
     }
-    return { doi_tuong: remembered.doi_tuong, noi_dung: remembered.noi_dung, ...local, ...saved };
+    // doi_tuong nhớ chung cũ (không phân HH/SA) chỉ lấy khi khớp loại phiếu hiện tại.
+    const doiTuong = [saved.doi_tuong, local.doi_tuong, remembered.doi_tuong, legacy.doi_tuong]
+      .find((value) => doiTuongFitsScope(value, info));
+    const kinhGui = sanitizeKinhGui(saved.kinh_gui ?? local.kinh_gui, saved.nguoi_nhan ?? local.nguoi_nhan);
+    const merged: RfiOverrides = {
+      noi_dung: remembered.noi_dung || legacy.noi_dung,
+      ...local,
+      ...saved,
+      ...(doiTuong ? { doi_tuong: doiTuong } : { doi_tuong: "" }),
+      ...(kinhGui ? { kinh_gui: kinhGui } : { kinh_gui: "" }),
+    };
+    // Để trống = dùng nội dung tự sinh theo loại phiếu (không giữ bản HH lệch loại).
+    if (!doiTuong) delete merged.doi_tuong;
+    if (!kinhGui) delete merged.kinh_gui;
+    return merged;
   });
   function persistOverrides(next: RfiOverrides, immediate = false) {
     try { window.localStorage.setItem(rfiKey, JSON.stringify(next)); } catch { /* bỏ qua khi không lưu được */ }
-    // Nhớ đối tượng + nội dung vị trí để tự điền cho các phiếu sau (khi đổi thì sửa lại).
-    try { window.localStorage.setItem(RFI_PRINT_DEFAULTS, JSON.stringify({ doi_tuong: next.doi_tuong ?? "", noi_dung: next.noi_dung ?? "" })); } catch { /* bỏ qua */ }
+    // Nhớ theo loại HH/SA riêng — tránh phiếu SA tái dùng nội dung hình học.
+    try {
+      const scopeKey = rfiPrintScopeKey((view.rfi?.rfi.thong_tin ?? {}) as Record<string, unknown>);
+      window.localStorage.setItem(rfiPrintDefaultsKey(scopeKey), JSON.stringify({ doi_tuong: next.doi_tuong ?? "", noi_dung: next.noi_dung ?? "" }));
+    } catch { /* bỏ qua */ }
     if (printSaveTimer.current) window.clearTimeout(printSaveTimer.current);
     setPrintSaved("Đang lưu…");
     printSaveTimer.current = window.setTimeout(() => {
@@ -291,14 +311,14 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                   <label className="block text-xs font-semibold text-slate-700 sm:max-w-xs">Số biên bản (để trống = tự đặt FBW/số RFI/BBNTCV)
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="FBW/01/BBNTCV" value={form.so_bb ?? ""} onChange={(e) => setForm({ ...form, so_bb: e.target.value })} />
                   </label>
-                  <p className="text-xs font-semibold text-slate-700">Người trực tiếp tham gia nghiệm thu <span className="font-normal text-slate-500">— nhớ cho các lần in sau; lần nào người khác ký thì nhập lại.</span></p>
+                  <p className="text-xs font-semibold text-slate-700">Người ký BBNTCV <span className="font-normal text-slate-500">— khác Phụ lục; nhớ cho các lần in sau, đổi khi cần.</span></p>
                   {SIGNER_PARTIES.map(([party, label]) => (
                     <div key={party} className="rounded-lg border border-slate-200 bg-white p-2">
                       <p className="mb-1 text-xs font-semibold text-slate-600">{label}</p>
                       {[1, 2].map((i) => (
                         <div key={i} className="mb-1 grid gap-2 sm:grid-cols-2">
-                          <input aria-label={`${label} người ${i}: họ tên`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder={`Ông (người ${i})`} value={form[`nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_ten`]: e.target.value })} />
-                          <input aria-label={`${label} người ${i}: chức vụ`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder="Chức vụ" value={form[`nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_cv`]: e.target.value })} />
+                          <input aria-label={`BBNTCV ${label} người ${i}: họ tên`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder={`Ông (người ${i})`} value={form[`bbntcv_nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`bbntcv_nguoi_${party}_${i}_ten`]: e.target.value })} />
+                          <input aria-label={`BBNTCV ${label} người ${i}: chức vụ`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder="Chức vụ" value={form[`bbntcv_nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => setForm({ ...form, [`bbntcv_nguoi_${party}_${i}_cv`]: e.target.value })} />
                         </div>
                       ))}
                     </div>
@@ -417,6 +437,48 @@ function Signer({ title, org, who, ten, chucVu, signatures, party, editor }: { t
 const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
 type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan" | "ntp_ten" | "ntp_chuc_vu" | "ntc_ten" | "ntc_chuc_vu", string>>;
+
+/** Khóa nhớ theo loại phiếu — HH và SA không dùng chung nội dung đối tượng. */
+function rfiPrintScopeKey(info: Record<string, unknown> = {}) {
+  if (info.loai_rfi === "theo-doi") return "theo-doi";
+  const scope = rfiScope(info);
+  if (scope.geometry && !scope.ultrasound) return "hh";
+  if (scope.ultrasound && !scope.geometry) return "sa";
+  if (scope.geometry && scope.ultrasound) return "ca-hai";
+  return "khac";
+}
+function rfiPrintDefaultsKey(scopeKey: string) {
+  return `${RFI_PRINT_DEFAULTS}:${scopeKey}`;
+}
+/** Nội dung mục 1 phải khớp loại phiếu: SA không được mang chữ hình học; HH không được mang chữ siêu âm. */
+function doiTuongFitsScope(text: string | undefined, info: Record<string, unknown>) {
+  const raw = (text ?? "").trim();
+  if (!raw) return false;
+  if (info.loai_rfi === "theo-doi") return true;
+  const lower = raw.toLocaleLowerCase("vi");
+  const hasGeo = /hình học|truc quan|trực quan/.test(lower);
+  const hasUs = /siêu âm|sieu am/.test(lower);
+  const scope = rfiScope(info);
+  if (scope.ultrasound && !scope.geometry) return hasUs && !hasGeo;
+  if (scope.geometry && !scope.ultrasound) return hasGeo && !hasUs;
+  return true;
+}
+/** Kính gửi phải là tổ chức; tên người (vd Trần Văn Thanh) thuộc ô Người nhận. */
+function sanitizeKinhGui(text: string | undefined, nguoiNhan?: string) {
+  const raw = (text ?? "").trim();
+  if (!raw) return "";
+  const rows = raw.split("\n").map((line) => line.replace(/^-\s*/, "").replace(/;+\s*$/, "").trim()).filter(Boolean);
+  if (!rows.length) return "";
+  const looksPerson = (value: string) => {
+    const v = value.trim();
+    if (!v) return true;
+    if (nguoiNhan?.trim() && v.localeCompare(nguoiNhan.trim(), "vi", { sensitivity: "accent" }) === 0) return true;
+    if (/ban quản|công ty|tư vấn|liên danh|bot|tedi|vnr|crcc|ban qlda/i.test(v)) return false;
+    return !/\d/.test(v) && v.split(/\s+/).length <= 4 && v.length < 40;
+  };
+  if (rows.every(looksPerson)) return "";
+  return rows.map((row) => `- ${row}`).join("\n");
+}
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
   ["so_phieu", "Số phiếu", "text", "007/PYC-HR"],
   ["ngay_lap", "Ngày lập phiếu", "date", ""],
@@ -453,8 +515,10 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi:
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
-  const benNhanLines = lines((t.ben_nhan ?? "").replace(/;/g, "\n"));
-  const kinhGui = lines(o.kinh_gui).length ? lines(o.kinh_gui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
+  const benNhanRaw = sanitizeKinhGui((t.ben_nhan ?? "").replace(/;/g, "\n"), o.nguoi_nhan);
+  const benNhanLines = lines(benNhanRaw);
+  const overrideKinhGui = sanitizeKinhGui(o.kinh_gui, o.nguoi_nhan || (pq ? "Trần Văn Thanh" : undefined));
+  const kinhGui = lines(overrideKinhGui).length ? lines(overrideKinhGui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
   const autoUpper = routes.some((r) => r === "TT" || r === "TP");
   const autoLower = routes.some((r) => r === "HT" || r === "HP");
@@ -477,7 +541,10 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi:
     ...(!monitoring ? (() => { const s = rfiScope(t), codes = welds.map((w) => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
       return [...(s.geometry ? [`Nghiệm thu kích thước hình học, trực quan mối hàn ${codes}${pv}`] : []), ...(s.ultrasound ? [`Nghiệm thu siêu âm mối hàn ${codes}${pv}`] : [])]; })() : []),
   ];
-  const doiTuong = lines(o.doi_tuong).length ? lines(o.doi_tuong).map((x) => x.replace(/^-\s*/, "")) : doiTuongAuto;
+  // Chỉ dùng bản sửa khi khớp loại phiếu (SA không giữ chữ hình học từ phiếu HH).
+  const doiTuong = doiTuongFitsScope(o.doi_tuong, t)
+    ? lines(o.doi_tuong).map((x) => x.replace(/^-\s*/, ""))
+    : doiTuongAuto;
   const heading = "mt-3 font-bold";
   return (
     <article id="weld-doc-print" className="weld-rfi mx-auto max-w-3xl bg-white p-10 text-[11pt] leading-[1.55] text-black" style={{ fontFamily: "'Times New Roman', serif" }}>

@@ -211,18 +211,23 @@ function pycList(values: string[]) {
   return [...new Set(values.flatMap((v) => v.split(",")).map((v) => v.trim().replace(/^RFI-/i, "")).filter(Boolean))].join(", ");
 }
 
-/** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. */
-function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number) {
+/** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. prefix = "bbntcv_" cho tờ BBNTCV (tách khỏi Phụ lục). */
+function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number, prefix = "") {
   const pick = (field: "ten" | "cv") => {
-    const key = `nguoi_${party}_${i}_${field}`;
-    return t[key]?.trim() || fixSignerName(defaults[key] || DEFAULT_SIGNERS[key] || ""); // tên gõ tay giữ nguyên, chỉ tên nhớ sẵn mới được chuẩn hoá
+    const key = `${prefix}nguoi_${party}_${i}_${field}`;
+    return t[key]?.trim() || fixSignerName(defaults[key] || (!prefix ? DEFAULT_SIGNERS[key] : "") || ""); // tên gõ tay giữ nguyên, chỉ tên nhớ sẵn mới được chuẩn hoá
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
-/** Nhiều RFI → «RFI đầu đến RFI cuối» (chọn tới RFI cuối khi đã ký đủ hình học + siêu âm). */
+/** Bỏ tiền tố RFI- khi in số phiếu (vd RFI-004-HH → 004-HH). */
+function stripRfiPrefix(value: string) {
+  return value.replace(/^RFI-/i, "").trim();
+}
+/** Nhiều số phiếu → «đầu đến cuối» (đã bỏ RFI-); một số thì in như PYC. */
 function rfiRange(value: string) {
-  const list = value.split(/[,;]\s*/).map((x) => x.trim()).filter(Boolean);
-  if (list.length < 2) return show(value);
+  const list = value.split(/[,;]\s*/).map((x) => stripRfiPrefix(x)).filter(Boolean);
+  if (!list.length) return blank;
+  if (list.length < 2) return list[0];
   const sorted = [...list].sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
   return `${sorted[0]} đến ${sorted[sorted.length - 1]}`;
 }
@@ -271,7 +276,7 @@ function isNightShift(ca: string) {
   return /ca\s*[23]|đêm|toi|tối|night/.test(v);
 }
 
-export default function WeldAcceptanceRecordPages({ record, kind, editor }: { record: RecordSet; kind?: RecordKind; editor?: RecordEditor }) {
+export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor }: { record: RecordSet; kind?: RecordKind; kinds?: RecordKind[]; editor?: RecordEditor }) {
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
@@ -279,7 +284,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
   const base = { ...((rfi.thong_tin ?? {}) as Record<string, string>), ...((record.dot.thong_tin ?? {}) as Record<string, string>) };
   const rows = [...record.moi].sort((a, b) => String(a.du_lieu_chot.moi_han?.ma_lich_su ?? "").localeCompare(String(b.du_lieu_chot.moi_han?.ma_lich_su ?? ""), "vi", { numeric: true }));
 
-  return <>{ACCEPTANCE_DOCS.filter((d) => !kind || d.kind === kind).map((doc) => {
+  return <>{ACCEPTANCE_DOCS.filter((d) => (!kind || d.kind === kind) && (!kinds || kinds.includes(d.kind))).map((doc) => {
     const hoSo = record.ho_so.find((h) => h.loai === doc.loai);
     const revision = record.sua_doi?.filter((r) => r.ho_so_id === hoSo?.id).sort((a, b) => a.phien_ban - b.phien_ban).at(-1);
     const t = { ...base, ...(revision?.thong_tin ?? {}), ...(editor?.draft ?? {}) };
@@ -555,9 +560,9 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
       // Số biên bản: FBW/01/BBNTCV (01 = số thứ tự lấy từ số RFI; sửa được ở «Sửa thông tin in»).
       const seq = /(\d+)\s*$/.exec(String(rfi.so_phieu ?? ""))?.[1];
       const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
-      // Người ký: theo bản sửa của biên bản, chưa có thì lấy người ký gần nhất đã nhớ.
+      // Người ký BBNTCV: tách khỏi Phụ lục — bản sửa / đã nhớ (prefix bbntcv_), không dùng tên ký Phụ lục.
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[key]?.trim() || fixSignerName(signerDefaults[key] || DEFAULT_SIGNERS[key] || "");
+      const signer = (key: string) => t[`bbntcv_${key}`]?.trim() || fixSignerName(signerDefaults[`bbntcv_${key}`] || "");
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -574,7 +579,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
           </p>
           <h2>{doc.title}</h2>
           <p className="doc-no">Số: {bbNo}</p>
-          <p>RFI hình học: {rfiRange(geometryRfi)} · RFI siêu âm: {rfiRange(ultrasoundRfi)}</p>
+          <p>PYC hình học: {rfiRange(geometryRfi)} · PYC siêu âm: {rfiRange(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: <Ed k="goi_thau" v={packageName} editor={editor} /></p>
@@ -601,7 +606,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
             <div className="party" key={role}>
               <p><b>{role}:</b> {company}</p>
               {[1, 2].map((i) => (
-                <p className="person" key={i}>Ông: <Ed k={`nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} /> &nbsp; Chức vụ: <Ed k={`nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} /></p>
+                <p className="person" key={i}>Ông: <Ed k={`bbntcv_nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} /> &nbsp; Chức vụ: <Ed k={`bbntcv_nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} /></p>
               ))}
             </div>
           ))}
@@ -616,7 +621,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
             {labels.map((name, index) => {
               const party = PARTY_KEYS[index];
               // Không chèn ảnh chữ ký: để trống cho ký tay; chỉ ghi họ tên người đã nhập ở «Sửa thông tin in».
-              const signed = [1, 2].map((i) => resolveSigner(t, signerDefaults, party, i)).filter((s) => s.ten);
+              const signed = [1, 2].map((i) => resolveSigner(t, signerDefaults, party, i, "bbntcv_")).filter((s) => s.ten);
               return (
                 <div key={name}>
                   {name}
@@ -683,8 +688,8 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
             {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, <EdViDate k="ngay_nghiem_thu" iso={acceptanceDate.slice(0, 10)} fallback={parts} editor={editor} />
           </p>
           <h2>{doc.title}</h2>
-          <p className="doc-no">Số: {show(rfi.so_phieu)}/BBNTHT</p>
-          <p>RFI hình học: {show(geometryRfi)} · RFI siêu âm: {show(ultrasoundRfi)}</p>
+          <p className="doc-no">Số: {show(stripRfiPrefix(String(rfi.so_phieu ?? "")))}/BBNTHT</p>
+          <p>PYC hình học: {rfiRange(geometryRfi)} · PYC siêu âm: {rfiRange(ultrasoundRfi)}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: <Ed k="goi_thau" v={packageName} editor={editor} /></p>

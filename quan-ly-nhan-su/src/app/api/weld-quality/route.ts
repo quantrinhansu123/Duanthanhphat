@@ -63,9 +63,18 @@ export async function POST(request: Request) {
     if (body.action === "payment-clear") return NextResponse.json(await clearPayments(body));
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
-      const [accepted, waiting, acceptance, signing, ground, ultrasound] = await Promise.all(["Đạt", "Chờ mài", "Chờ nghiệm thu", "Chờ ký biên bản", "Mài xong", "Chờ siêu âm"].map((qualityStatusFilter) =>
-        loadQualityJournalRows(parseQualityFilters({ ...base, qualityStatusFilter, page: 1, pageSize: 1000 }))));
-      // Thanh toán tính trên mối đã nghiệm thu Đạt: đủ 100% / một phần (30·50·70) / chưa thanh toán.
+      // «Đã ký» (Đạt) chỉ đếm mối sản xuất — cùng quy ước với ô tiến độ / tỷ lệ đạt trên báo cáo tổng quát.
+      const [accepted, waiting, acceptance, signing, ground, ultrasound] = await Promise.all(
+        (["Đạt", "Chờ mài", "Chờ nghiệm thu", "Chờ ký biên bản", "Mài xong", "Chờ siêu âm"] as const).map((qualityStatusFilter) =>
+          loadQualityJournalRows(parseQualityFilters({
+            ...base,
+            qualityStatusFilter,
+            page: 1,
+            pageSize: 1000,
+            ...(qualityStatusFilter === "Đạt" ? { weldTypeFilter: "Sản xuất" } : {}),
+          }))),
+      );
+      // Thanh toán tính trên mối sản xuất đã nghiệm thu Đạt: đủ 100% / một phần (30·50·70) / chưa thanh toán.
       const payments = await paymentsOf(accepted.map((r) => r.id));
       const tyLeById = new Map(payments.map((p) => [p.moi_han_id, p.ty_le]));
       const paid: typeof accepted = [];

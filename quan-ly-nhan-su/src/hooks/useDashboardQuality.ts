@@ -27,15 +27,17 @@ export function useDashboardQuality(filters: WeldReportFilters) {
 
   return useMemo(() => {
     if (!data) return null;
-    const accepted = filterWeldReportRows(data.accepted, filters);
+    const isProduction = (row: WeldReportRow) => row.loai_moi_han === "Sản xuất";
+    // Đã ký / thanh toán gắn với Đạt: chỉ mối sản xuất (khớp mẫu số «tổng sản xuất»).
+    const accepted = filterWeldReportRows(data.accepted, filters).filter(isProduction);
     const waiting = filterWeldReportRows(data.waiting, filters);
     const acceptance = filterWeldReportRows(data.acceptance ?? [], filters);
     const signing = filterWeldReportRows(data.signing ?? [], filters);
     const ground = filterWeldReportRows(data.ground ?? [], filters);
     const ultrasound = filterWeldReportRows(data.ultrasound ?? [], filters);
-    const paid = filterWeldReportRows(data.paid ?? [], filters);
-    const partialPaid = filterWeldReportRows(data.partialPaid ?? [], filters);
-    const unpaid = filterWeldReportRows(data.unpaid ?? [], filters);
+    const paid = filterWeldReportRows(data.paid ?? [], filters).filter(isProduction);
+    const partialPaid = filterWeldReportRows(data.partialPaid ?? [], filters).filter(isProduction);
+    const unpaid = filterWeldReportRows(data.unpaid ?? [], filters).filter(isProduction);
     const sum = (rows: WeldReportRow[]) => rows.reduce((n, r) => n + r.so_luong_thuc_hien, 0);
     return { accepted, waiting, acceptance, signing, ground, ultrasound, paid, partialPaid, unpaid, acceptedCount: sum(accepted), waitingCount: sum(waiting), acceptanceCount: sum(acceptance), signingCount: sum(signing),
       groundCount: sum(ground), ultrasoundCount: sum(ultrasound), paidCount: sum(paid), partialPaidCount: sum(partialPaid), unpaidCount: sum(unpaid) };

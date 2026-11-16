@@ -2,15 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { reloadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
-import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss } from "@/components/WeldAcceptanceRecordPages";
-import { SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
+import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
+import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import ComboInput from "@/components/ComboInput";
 
 /** Các mục thông tin trên mẫu dùng chung cho cả bộ — sửa một lần, áp dụng cho 3 biên bản. */
 const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_thu", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
-  ...SIGNER_PARTIES.flatMap(([party]) => [`nguoi_${party}_1_ten`, `nguoi_${party}_1_cv`, `ngay_ky_${party}`])];
+  ...SIGNER_PARTIES.flatMap(([party]) => [`nguoi_${party}_1_ten`, `nguoi_${party}_1_cv`, `ngay_ky_${party}`]),
+  ...BBNTCV_SIGNER_KEYS];
+const PRINT_DOC_LABELS: Record<RecordKind, string> = {
+  "phu-luc": "(1) Phụ lục",
+  "giai-doan": "(2) BBNTCV",
+  "hoan-thanh": "(3) Hoàn thành",
+};
 const input = "mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal";
 const label = "block text-xs font-semibold text-slate-700";
 
@@ -38,6 +44,10 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   const [error, setError] = useState("");
   const [people, setPeople] = useState<{ name: string; code: string }[]>([]);
   const [machines, setMachines] = useState<string[]>([]);
+  // HH mặc định 1 tờ (Phụ lục); SA mặc định 2 tờ (Phụ lục + BBNTCV); tờ 3 vẫn tick được khi cần.
+  const [printKinds, setPrintKinds] = useState<RecordKind[]>(() =>
+    defaultAcceptancePrintKinds((initial.dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, unknown>),
+  );
   const missing = ACCEPTANCE_DOCS.filter((d) => !record.ho_so.some((h) => h.loai === d.loai));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !editing) onClose(); };
@@ -45,10 +55,10 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, editing]);
   useEffect(() => {
-    if (!autoPrint || missing.length) return;
+    if (!autoPrint || missing.length || !printKinds.length) return;
     const timer = window.setTimeout(() => window.print(), 350);
     return () => window.clearTimeout(timer);
-  }, [autoPrint, missing.length]);
+  }, [autoPrint, missing.length, printKinds.length]);
   useEffect(() => {
     if (!editing) return;
     let live = true;
@@ -62,10 +72,14 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
 
   const latestOf = (hoSoId: string) => (record.sua_doi ?? []).filter((r) => r.ho_so_id === hoSoId).sort((a, b) => a.phien_ban - b.phien_ban).at(-1);
 
+  function togglePrintKind(kind: RecordKind) {
+    setPrintKinds((cur) => cur.includes(kind) ? cur.filter((k) => k !== kind) : [...cur, kind]);
+  }
+
   function openEditor() {
     // Giá trị hiện hành: bản sửa mới nhất của biên bản đầu tiên có giá trị, rồi tới dữ liệu đợt.
-    const rfiInfo = (record.dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, string>;
-    const dot = { ...rfiInfo, ...((record.dot.thong_tin ?? {}) as Record<string, string>) };
+    const rfiInfoForm = (record.dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, string>;
+    const dot = { ...rfiInfoForm, ...((record.dot.thong_tin ?? {}) as Record<string, string>) };
     const infos = record.ho_so.map((h) => (latestOf(h.id)?.thong_tin ?? {}) as Record<string, string>);
     const defaults = loadSignerDefaults();
     setForm(Object.fromEntries(SHARED_KEYS.map((k) => {
@@ -123,8 +137,18 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   return <div className="acceptance-print-root fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="In bộ biên bản nghiệm thu">
     <style>{acceptancePrintCss}</style>
     <div className="weld-print-pack-actions mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-      <p className="text-sm">Bộ hồ sơ: <b>(1) Phụ lục</b> · <b>(2) Nghiệm thu công việc</b> · <b>(3) Hoàn thành công việc</b>
-        {missing.length > 0 && <span role="alert" className="text-amber-800"> — Thiếu {missing.length} biên bản. Hãy tải lại hồ sơ.</span>}</p>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p className="text-sm">Xuất tờ: chọn trước khi in (mặc định theo HH / SA).</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn tờ in">
+          {ACCEPTANCE_DOCS.map((d) => (
+            <label key={d.kind} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold">
+              <input type="checkbox" checked={printKinds.includes(d.kind)} onChange={() => togglePrintKind(d.kind)} />
+              {PRINT_DOC_LABELS[d.kind]}
+            </label>
+          ))}
+        </div>
+        {missing.length > 0 && <p role="alert" className="text-sm text-amber-800">Thiếu {missing.length} biên bản. Hãy tải lại hồ sơ.</p>}
+      </div>
       <div className="flex flex-wrap gap-2">
         <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold" title="Ẩn / hiện cột Lý trình mối hàn trên phụ lục">
           <input type="checkbox" checked={!lyTrinhHidden} onChange={(e) => setDraft((cur) => ({ ...cur, an_ly_trinh: e.target.checked ? "0" : "1" }))} />
@@ -132,7 +156,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
         </label>
         {draftCount > 0 && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
-        <button type="button" disabled={missing.length > 0} onClick={() => window.print()} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
+        <button type="button" disabled={missing.length > 0 || !printKinds.length} onClick={() => window.print()} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold">Thoát</button>
       </div>
     </div>
@@ -177,7 +201,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           {text("kmFrom", "Vị trí: Km đầu", "3+862.74")}
           {text("kmTo", "Vị trí: Km cuối", "4+087.42")}
         </div>
-        <p className="text-xs font-semibold text-slate-700">Khung chữ ký <span className="font-normal text-slate-500">— để trống ngày = lấy ngày nghiệm thu; người ký được nhớ cho lần in sau.</span></p>
+        <p className="text-xs font-semibold text-slate-700">Khung chữ ký Phụ lục <span className="font-normal text-slate-500">— để trống ngày = lấy ngày nghiệm thu; người ký được nhớ cho lần in sau.</span></p>
         <div className="grid gap-2 sm:grid-cols-3">
           {SIGNER_PARTIES.map(([party, name]) => (
             <div key={party} className="space-y-1 rounded-lg border border-slate-200 p-2">
@@ -185,6 +209,20 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
               <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" value={formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
               <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
               <input aria-label={`${name}: ngày`} type="date" className={input} value={formView[`ngay_ky_${party}`] ?? ""} onChange={(e) => set(`ngay_ky_${party}`, e.target.value)} />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs font-semibold text-slate-700">Người ký BBNTCV (tờ 2) <span className="font-normal text-slate-500">— khác Phụ lục; tự nhớ trên máy này, đổi khi cần.</span></p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {SIGNER_PARTIES.map(([party, name]) => (
+            <div key={`bbntcv-${party}`} className="space-y-1 rounded-lg border border-slate-200 p-2">
+              <p className="text-xs font-semibold text-slate-600">{name}</p>
+              {[1, 2].map((i) => (
+                <div key={i} className="grid gap-1">
+                  <input aria-label={`BBNTCV ${name} người ${i}: họ tên`} className={input} placeholder={`Ông (người ${i})`} value={formView[`bbntcv_nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_ten`, e.target.value)} />
+                  <input aria-label={`BBNTCV ${name} người ${i}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`bbntcv_nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_cv`, e.target.value)} />
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -199,6 +237,8 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
       <p role="status" className="weld-print-pack-actions mx-auto mb-2 max-w-4xl rounded-lg bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">BẢN NHÁP: kết quả đang tạm ghi Đạt, chưa chốt nghiệm thu nên Nhật ký thi công chưa ghi. In để các bên ký; đến đúng ngày nghiệm thu mới bấm «Nghiệm thu» trong hệ thống.</p>
     )}
     <p className="weld-print-pack-actions mx-auto mb-2 max-w-4xl text-xs text-white/90">Bấm trực tiếp vào các ô trống / ô có viền xanh trên mẫu để điền hoặc sửa, rồi bấm «Lưu chỉnh sửa».</p>
-    <WeldAcceptanceRecordPages record={record} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />
+    {!printKinds.length
+      ? <p role="status" className="weld-print-pack-actions mx-auto max-w-4xl rounded-lg bg-white px-3 py-2 text-sm text-slate-700">Chọn ít nhất một tờ ở trên để xem / in.</p>
+      : <WeldAcceptanceRecordPages record={record} kinds={printKinds} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />}
   </div>;
 }

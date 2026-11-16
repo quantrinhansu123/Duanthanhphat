@@ -95,8 +95,16 @@ const LOOKUP_TITLES: Record<ReportLookupKind, string> = {
   unpaid: "Chưa thanh toán",
 };
 
-function weldsForLookup(kind: ReportLookupKind, rows: WeldReportRow[], todayIso: string, latestDate: string) {
-  if (kind === "all") return rows;
+function weldsForLookup(
+  kind: ReportLookupKind,
+  rows: WeldReportRow[],
+  todayIso: string,
+  latestDate: string,
+  options?: { productionOnlyForAll?: boolean },
+) {
+  if (kind === "all") {
+    return options?.productionOnlyForAll ? rows.filter((row) => row.loai_moi_han === "Sản xuất") : rows;
+  }
   if (kind === "today") return rows.filter((row, index) => getJournalRowDateIso(row, index) === todayIso);
   if (kind === "latest") {
     return latestDate ? rows.filter((row, index) => getJournalRowDateIso(row, index) === latestDate) : [];
@@ -858,6 +866,8 @@ export default function OverviewDashboard() {
       ? fastSummary
       : summary;
   const total = visibleSummary.total;
+  // Ô tổng: chọn tất cả / nhiều dự án → đếm mọi loại; chọn đúng 1 dự án → chỉ sản xuất.
+  const singleProjectSelected = appliedFilters.projects.length === 1;
   const rework = showFastAggregate
     ? overviewAggregateSummary.rework
     : showFastDaily
@@ -875,6 +885,7 @@ export default function OverviewDashboard() {
     if (showFastDaily) return summarizeProductionRollup(fastRollupRows);
     return summarizeProductionWelds(selectedRows);
   }, [fastRollupRows, overviewAggregateSummary, selectedRows, showFastAggregate, showFastDaily]);
+  const totalPerformed = singleProjectSelected ? productionWelds.total : total;
 
   const doneBeforePlanYear = useMemo(
     () => showFastAggregate
@@ -1632,12 +1643,12 @@ export default function OverviewDashboard() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {fmt(total)}
+                {fmt(totalPerformed)}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              Toàn bộ các loại mối hàn
+              {singleProjectSelected ? "Chỉ mối hàn sản xuất (đã lọc 1 dự án)" : "Toàn bộ các loại mối hàn"}
             </div>
           </div>
           <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0047AB] border border-blue-200/80">
@@ -1657,7 +1668,7 @@ export default function OverviewDashboard() {
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && productionWelds.total > 0 ? pctComma(quality.acceptedCount, productionWelds.total) : "—"}</span> đạt / tổng sản xuất toàn bộ
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && productionWelds.total > 0 ? pctComma(quality.acceptedCount, productionWelds.total) : "—"}</span> đã ký SX / tổng sản xuất
             </div>
           </div>
           <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1721,24 +1732,6 @@ export default function OverviewDashboard() {
           <div className="mt-2.5 text-xs text-slate-500">Chưa mài hoặc chưa đủ trực quan/số đo</div>
         </button>
 
-        <button type="button" onClick={() => setLookup("pending")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-amber-700">CHỜ THÍ NGHIỆM</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{fmt(visibleSummary.pending)}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Không tính vào tỷ lệ đạt / lỗi</div>
-        </button>
-
-        <button type="button" onClick={() => setLookup("acceptance")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-sky-700">CHỜ NGHIỆM THU</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.acceptanceCount) : "—"}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Đã siêu âm đạt, chờ nghiệm thu hoàn tất</div>
-        </button>
-
         <button type="button" onClick={() => setLookup("groundDone")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="text-xs font-bold tracking-wider text-slate-600">MÀI XONG</div>
           <div className="mt-2 flex items-baseline gap-1.5">
@@ -1759,29 +1752,16 @@ export default function OverviewDashboard() {
 
         <button type="button" onClick={() => setLookup("paid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="text-xs font-bold tracking-wider text-emerald-700">ĐÃ THANH TOÁN</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.paidCount) : "—"}</span>
             <span className="text-xs text-slate-400">mối</span>
+            <span className="text-xs font-semibold text-emerald-700 font-mono tabular-nums">
+              {quality
+                ? `(% = ${fmt(quality.paidCount)}/${fmt(quality.acceptedCount)}${quality.acceptedCount > 0 ? ` · ${pctComma(quality.paidCount, quality.acceptedCount)}` : ""})`
+                : "(% = —/—)"}
+            </span>
           </div>
           <div className="mt-2.5 text-xs text-slate-500">Mối nghiệm thu Đạt đã thanh toán đủ 100%</div>
-        </button>
-
-        <button type="button" onClick={() => setLookup("partialPaid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-amber-700">THANH TOÁN MỘT PHẦN</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.partialPaidCount) : "—"}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu, thanh toán 30/50/70%</div>
-        </button>
-
-        <button type="button" onClick={() => setLookup("unpaid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-slate-600">CHƯA THANH TOÁN</div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.unpaidCount) : "—"}</span>
-            <span className="text-xs text-slate-400">mối</span>
-          </div>
-          <div className="mt-2.5 text-xs text-slate-500">Đã nghiệm thu Đạt, chưa ghi thanh toán</div>
         </button>
 
         <button type="button" onClick={() => setLookup("signing")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
@@ -2822,7 +2802,7 @@ export default function OverviewDashboard() {
         <ReportLookupDialog
           kind={lookup}
           loading={lookup !== "projects" && loading && selectedRows.length === 0}
-          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : lookup === "groundDone" ? (quality?.ground ?? []) : lookup === "ultrasound" ? (quality?.ultrasound ?? []) : lookup === "paid" ? (quality?.paid ?? []) : lookup === "partialPaid" ? (quality?.partialPaid ?? []) : lookup === "unpaid" ? (quality?.unpaid ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "")}
+          welds={lookup === "passed" ? (quality?.accepted ?? []) : lookup === "grind" ? (quality?.waiting ?? []) : lookup === "acceptance" ? (quality?.acceptance ?? []) : lookup === "signing" ? (quality?.signing ?? []) : lookup === "groundDone" ? (quality?.ground ?? []) : lookup === "ultrasound" ? (quality?.ultrasound ?? []) : lookup === "paid" ? (quality?.paid ?? []) : lookup === "partialPaid" ? (quality?.partialPaid ?? []) : lookup === "unpaid" ? (quality?.unpaid ?? []) : weldsForLookup(lookup, selectedRows, todayIso, latestDailyPoint?.date ?? "", { productionOnlyForAll: singleProjectSelected })}
           projects={selectedProjects.map((project) => ({
             id: project.id,
             name: project.name,

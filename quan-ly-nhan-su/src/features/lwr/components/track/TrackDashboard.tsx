@@ -1038,6 +1038,16 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
             }
             return commit({ ...layout, installed: addInstalledRange(layout.installed, lines, start, end) });
           }}
+          onReplaceInstalled={(line, index, from, to) => {
+            const start = parseChainage(from);
+            const end = parseChainage(to);
+            if (start === null || end === null || end <= start) {
+              setError("Nhập lý trình đã lắp dạng 0+000, cuối lớn hơn đầu.");
+              return false;
+            }
+            const without = removeInstalledRange(layout.installed, line, index);
+            return commit({ ...layout, installed: addInstalledRange(without, [line], start, end) });
+          }}
           onRemoveInstalled={(line, index) => {
             commit({ ...layout, installed: removeInstalledRange(layout.installed, line, index) });
           }}

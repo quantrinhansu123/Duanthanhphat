@@ -223,7 +223,16 @@ export default function MachineAssignmentList() {
     setPrintRows(rows);
     setPrintFrom(from);
     setPrintTo(to);
-    setPrintProjectLabel(projectOptions.find((item) => item.id === projectId)?.label || "");
+    const filteredProjectLabel = projectOptions.find((item) => item.id === projectId)?.label || "";
+    const rowProjectNames = [
+      ...new Set(rows.map((row) => row.projectName?.trim()).filter(Boolean) as string[]),
+    ];
+    setPrintProjectLabel(
+      filteredProjectLabel ||
+        (rowProjectNames.length <= 2
+          ? rowProjectNames.join("; ")
+          : `${rowProjectNames.slice(0, 2).join("; ")} (+${rowProjectNames.length - 2})`),
+    );
     setPrintAuto(autoPrint);
     setPrintOpen(true);
   }
