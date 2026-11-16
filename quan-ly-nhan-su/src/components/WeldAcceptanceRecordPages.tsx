@@ -46,14 +46,17 @@ export const acceptancePrintCss = `
 .acceptance-page .annex-sheet .head-right { width: 17%; font-size: 12px; }
 .acceptance-page .annex { font-size: var(--annex-font, 10px); table-layout: fixed; border-collapse: collapse; width: 100%; }
 .acceptance-page .annex th { text-align: center; vertical-align: middle; font-weight: bold; padding: 1px; line-height: 1.15; }
-.acceptance-page .annex th.serial-heading { white-space: nowrap; }
+.acceptance-page .annex th.serial-heading {
+  white-space: nowrap; text-align: center; padding: 2px 3px; box-sizing: border-box;
+}
 .acceptance-page .annex th.rail-code-heading {
-  text-align: center; vertical-align: middle; padding: 2px 1px; line-height: 1.15;
-  overflow: hidden; overflow-wrap: break-word; word-break: break-word;
+  text-align: center; vertical-align: middle; padding: 2px 2px; line-height: 1.1;
+  box-sizing: border-box; max-width: 0; overflow: hidden;
+  overflow-wrap: anywhere; word-break: break-word; hyphens: none;
 }
 .acceptance-page .annex th.rail-code-heading .rail-code-sub {
-  display: block; font-size: 0.82em; letter-spacing: -0.03em; line-height: 1.1;
-  white-space: normal;
+  display: block; font-size: 0.7em; letter-spacing: -0.04em; line-height: 1.05;
+  white-space: normal; max-width: 100%;
 }
 .acceptance-page .annex td { height: var(--annex-row, 16px); text-align: center; padding: 0 1px; vertical-align: middle; }
 .acceptance-page .annex td.weld-name { white-space: nowrap; }
@@ -379,7 +382,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                 <td colSpan={2} style={{ padding: 0 }}>
                   <table className="annex" style={annexSizing(Math.max(page.length, MIN_BLANK_ROWS))}>
                     <colgroup>
-                      {(t.an_ly_trinh !== "0" ? [3, 19, 12, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12] : [3, 11, 12, 8, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 12]).map((w, i) => (
+                      {(t.an_ly_trinh !== "0" ? [3.5, 17, 14, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 11.5] : [3.5, 10, 14, 7, 5, 5, 8, 7, 4, 4, 4, 4, 4, 9, 11.5]).map((w, i) => (
                         <col key={i} style={{ width: `${w}%` }} />
                       ))}
                     </colgroup>
@@ -387,7 +390,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, editor }: { re
                       <tr>
                         <th rowSpan={3} className="serial-heading">STT</th>
                         <th rowSpan={3}>TÊN MỐI HÀN</th>
-                        <th rowSpan={3} className="rail-code-heading">MÃ HIỆU<br />RAY<br /><span className="rail-code-sub">(60R2<br />-U75V)</span></th>
+                        <th rowSpan={3} className="rail-code-heading">MÃ HIỆU<br />RAY<br /><span className="rail-code-sub">60R2<br />U75V</span></th>
                         {t.an_ly_trinh === "0" && <th rowSpan={3}>LÝ TRÌNH<br />MỐI HÀN</th>}
                         <th colSpan={2} rowSpan={2}>RAY</th>
                         <th colSpan={8}>NGHIỆM THU<br />(ĐẠT/KHÔNG ĐẠT)</th>
