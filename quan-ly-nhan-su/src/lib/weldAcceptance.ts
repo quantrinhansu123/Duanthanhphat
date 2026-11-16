@@ -174,6 +174,9 @@ export function summarizeDecisions(d: AcceptanceDecision[]) {
 /** Thành phần ký trên biên bản nghiệm thu công việc: mỗi bên 2 người (họ tên + chức vụ). */
 export const SIGNER_PARTIES = [["tvgs", "Tư vấn Giám sát"], ["ntc", "Nhà thầu chính"], ["ntp", "Nhà thầu phụ"]] as const;
 export const SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].flatMap((i) => [`nguoi_${party}_${i}_ten`, `nguoi_${party}_${i}_cv`]));
+/** Người ký BBNTCV (tờ 2) — tách riêng khỏi khung ký Phụ lục; nhớ trên máy, đổi khi cần. */
+export const BBNTCV_SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].flatMap((i) => [`bbntcv_nguoi_${party}_${i}_ten`, `bbntcv_nguoi_${party}_${i}_cv`]));
+const ALL_SIGNER_KEYS = [...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS];
 /** Người ký mặc định khi chưa có bản sửa / chưa nhớ: nhà thầu phụ (Thành Phát) người 1 = Trần Công Tiến; nhà thầu chính người 1 = Nguyễn Tất Đạt. Sửa ở «Sửa thông tin in». */
 export const DEFAULT_SIGNERS: Record<string, string> = { nguoi_ntp_1_ten: "Trần Công Tiến", nguoi_ntc_1_ten: "Nguyễn Tất Đạt" };
 const SIGNER_STORAGE = "weld-acceptance-signers";
@@ -185,13 +188,20 @@ export function loadSignerDefaults(): Record<string, string> {
   try {
     if (typeof window === "undefined") return {};
     const raw = JSON.parse(window.localStorage.getItem(SIGNER_STORAGE) ?? "{}") as Record<string, unknown>;
-    return Object.fromEntries(SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, fixSignerName(raw[k] as string)]] : [])));
+    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, fixSignerName(raw[k] as string)]] : [])));
   } catch { return {}; }
 }
 export function saveSignerDefaults(values: Record<string, string | undefined>) {
   try {
     if (typeof window === "undefined") return;
-    const next = { ...loadSignerDefaults(), ...Object.fromEntries(SIGNER_KEYS.flatMap((k) => (values[k]?.trim() ? [[k, values[k]!.trim()]] : []))) };
+    const next = { ...loadSignerDefaults(), ...Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (values[k]?.trim() ? [[k, values[k]!.trim()]] : []))) };
     window.localStorage.setItem(SIGNER_STORAGE, JSON.stringify(next));
   } catch { /* bỏ qua khi không lưu được */ }
+}
+
+/** Tờ in mặc định hàn ray: HH → chỉ Phụ lục; SA → Phụ lục + BBNTCV. Tờ 3 (hoàn thành tổng hợp) không mặc định — vẫn chọn được khi cần. */
+export function defaultAcceptancePrintKinds(info: Record<string, unknown> = {}): ("phu-luc" | "giai-doan" | "hoan-thanh")[] {
+  const scope = rfiScope(info);
+  if (scope.geometry && !scope.ultrasound) return ["phu-luc"];
+  return ["phu-luc", "giai-doan"];
 }

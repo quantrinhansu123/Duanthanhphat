@@ -43,6 +43,18 @@ function toKey(y: number, m: number, d: number) {
   return `${y}-${pad(m + 1)}-${pad(d)}`;
 }
 
+function viDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+function monthBounds(y: number, m: number) {
+  return {
+    from: toKey(y, m, 1),
+    to: toKey(y, m, new Date(y, m + 1, 0).getDate()),
+  };
+}
+
 function AssigneeAvatars({ assignees, size = 28 }: { assignees: MaintenanceEvent["assignees"]; size?: number }) {
   const visible = assignees.slice(0, 3);
   const extra = assignees.length - visible.length;
@@ -98,6 +110,10 @@ export default function MaintenanceCalendar() {
   const [dataError, setDataError] = useState("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
+  const initialBounds = monthBounds(today.getFullYear(), today.getMonth());
+  const [printFrom, setPrintFrom] = useState(initialBounds.from);
+  const [printTo, setPrintTo] = useState(initialBounds.to);
+  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -116,6 +132,20 @@ export default function MaintenanceCalendar() {
   const month = cursor.getMonth();
 
   const monthLabel = cursor.toLocaleDateString("vi-VN", { month: "long", year: "numeric" });
+
+  useEffect(() => {
+    const bounds = monthBounds(year, month);
+    setPrintFrom(bounds.from);
+    setPrintTo(bounds.to);
+  }, [year, month]);
+
+  const rangeEvents = useMemo(() => {
+    const from = printFrom <= printTo ? printFrom : printTo;
+    const to = printFrom <= printTo ? printTo : printFrom;
+    return [...events]
+      .filter((e) => e.date >= from && e.date <= to)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  }, [events, printFrom, printTo]);
 
   const cells = useMemo(() => {
     const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
@@ -323,6 +353,22 @@ export default function MaintenanceCalendar() {
         <span className="ml-auto text-xs sm:text-sm text-slate-500">
           {loading ? "Đang tải..." : <><strong className="font-semibold text-slate-900 font-mono tabular-nums">{monthEvents.length}</strong> lịch trong tháng</>}
         </span>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          Từ
+          <input type="date" value={printFrom} onChange={(e) => setPrintFrom(e.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs" />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          Đến
+          <input type="date" value={printTo} onChange={(e) => setPrintTo(e.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs" />
+        </label>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => setPrintOpen(true)}
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+        >
+          In tổng hợp ({rangeEvents.length})
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -334,6 +380,79 @@ export default function MaintenanceCalendar() {
           <span className="text-base leading-none">+</span> Thêm mới
         </button>
       </div>
+
+      {printOpen && (
+        <div className="maintenance-print-root fixed inset-0 z-50 overflow-auto bg-slate-100/95 p-4 sm:p-6">
+          <style>{`
+            @media print {
+              @page { size: A4 portrait; margin: 12mm; }
+              body > :not(.maintenance-print-root) { display: none !important; }
+              .maintenance-print-root { position: static; inset: auto; background: white; padding: 0; overflow: visible; }
+              .maintenance-print-toolbar { display: none !important; }
+              .maintenance-print-sheet { box-shadow: none !important; border: none !important; }
+              .maintenance-print-sheet * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            }
+          `}</style>
+          <div className="maintenance-print-toolbar mx-auto mb-4 flex max-w-5xl flex-wrap items-center gap-2">
+            <p className="mr-auto text-sm text-slate-600">
+              Tổng hợp {rangeEvents.length} lần bảo trì · {viDate(printFrom <= printTo ? printFrom : printTo)} – {viDate(printFrom <= printTo ? printTo : printFrom)}
+            </p>
+            <button type="button" onClick={() => window.print()} className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A]">In / Lưu PDF</button>
+            <button type="button" onClick={() => setPrintOpen(false)} className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700">Đóng</button>
+          </div>
+          <article className="maintenance-print-sheet mx-auto max-w-5xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <header className="mb-4 border-b border-slate-200 pb-3">
+              <h1 className="text-lg font-bold text-slate-900">Tổng hợp lịch bảo trì</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Khoảng: <strong className="font-mono">{viDate(printFrom <= printTo ? printFrom : printTo)}</strong>
+                {" – "}
+                <strong className="font-mono">{viDate(printFrom <= printTo ? printTo : printFrom)}</strong>
+                {" · "}
+                <strong className="font-mono tabular-nums">{rangeEvents.length}</strong> lần
+              </p>
+              <p className="mt-1 text-xs text-slate-500">In ngày {new Date().toLocaleDateString("vi-VN")}</p>
+            </header>
+            {rangeEvents.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">Không có lịch bảo trì trong khoảng đã chọn.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-300 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                      <th className="px-2 py-2">STT</th>
+                      <th className="px-2 py-2">Ngày</th>
+                      <th className="px-2 py-2">Giờ</th>
+                      <th className="px-2 py-2">Máy</th>
+                      <th className="px-2 py-2">Loại</th>
+                      <th className="px-2 py-2">Công việc</th>
+                      <th className="px-2 py-2">Trạng thái</th>
+                      <th className="px-2 py-2">Kết quả</th>
+                      <th className="px-2 py-2">Người thực hiện</th>
+                      <th className="px-2 py-2">Ghi chú</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rangeEvents.map((event, index) => (
+                      <tr key={event.id} className="border-b border-slate-200 align-top">
+                        <td className="px-2 py-2 font-mono tabular-nums text-slate-500">{index + 1}</td>
+                        <td className="whitespace-nowrap px-2 py-2 font-mono">{viDate(event.date)}</td>
+                        <td className="whitespace-nowrap px-2 py-2 font-mono">{event.time}–{endTime(event.time, event.durationMin)}</td>
+                        <td className="px-2 py-2 font-semibold">{event.machine}</td>
+                        <td className="px-2 py-2">{event.type}</td>
+                        <td className="px-2 py-2">{event.title}</td>
+                        <td className="px-2 py-2">{event.status}</td>
+                        <td className="px-2 py-2">{event.result ?? "Chưa có"}</td>
+                        <td className="px-2 py-2">{event.assignees.map((a) => a.name).join(", ") || "—"}</td>
+                        <td className="px-2 py-2 text-slate-600">{event.note?.trim() || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </article>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">

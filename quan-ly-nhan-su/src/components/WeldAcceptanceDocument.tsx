@@ -6,7 +6,7 @@ import ComboInput from "@/components/ComboInput";
 import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, Ed, EdViDate, type RecordEditor, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
-import { rfiScope, SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
@@ -45,7 +45,7 @@ const css = `/* Ô sửa trực tiếp trên mẫu: viền gợi ý chỉ có tr
 const LOAI: Record<DocKind, string> = { rfi: "", "hoan-thanh": "Hoàn thành công việc", "phu-luc": "Phụ lục công việc", "giai-doan": "Giai đoạn xây dựng" };
 
 /** Thông tin / thời gian trên mẫu — sửa được ở bản xem trước (để trống = tự lấy từ dữ liệu đã chốt). */
-const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS];
+const PRINT_INFO_KEYS: string[] = ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", ...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS];
 
 /** Mục 5 (a–g) của BB nghiệm thu hoàn thành: nhập tay, lưu qua bản sửa đổi thông tin in. */
 const FREE_TEXT_FIELDS: [string, string][] = [
@@ -291,14 +291,14 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                   <label className="block text-xs font-semibold text-slate-700 sm:max-w-xs">Số biên bản (để trống = tự đặt FBW/số RFI/BBNTCV)
                     <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" placeholder="FBW/01/BBNTCV" value={form.so_bb ?? ""} onChange={(e) => setForm({ ...form, so_bb: e.target.value })} />
                   </label>
-                  <p className="text-xs font-semibold text-slate-700">Người trực tiếp tham gia nghiệm thu <span className="font-normal text-slate-500">— nhớ cho các lần in sau; lần nào người khác ký thì nhập lại.</span></p>
+                  <p className="text-xs font-semibold text-slate-700">Người ký BBNTCV <span className="font-normal text-slate-500">— khác Phụ lục; nhớ cho các lần in sau, đổi khi cần.</span></p>
                   {SIGNER_PARTIES.map(([party, label]) => (
                     <div key={party} className="rounded-lg border border-slate-200 bg-white p-2">
                       <p className="mb-1 text-xs font-semibold text-slate-600">{label}</p>
                       {[1, 2].map((i) => (
                         <div key={i} className="mb-1 grid gap-2 sm:grid-cols-2">
-                          <input aria-label={`${label} người ${i}: họ tên`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder={`Ông (người ${i})`} value={form[`nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_ten`]: e.target.value })} />
-                          <input aria-label={`${label} người ${i}: chức vụ`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder="Chức vụ" value={form[`nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_${i}_cv`]: e.target.value })} />
+                          <input aria-label={`BBNTCV ${label} người ${i}: họ tên`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder={`Ông (người ${i})`} value={form[`bbntcv_nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`bbntcv_nguoi_${party}_${i}_ten`]: e.target.value })} />
+                          <input aria-label={`BBNTCV ${label} người ${i}: chức vụ`} className="h-9 rounded-lg border border-slate-300 px-2 text-sm" placeholder="Chức vụ" value={form[`bbntcv_nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => setForm({ ...form, [`bbntcv_nguoi_${party}_${i}_cv`]: e.target.value })} />
                         </div>
                       ))}
                     </div>

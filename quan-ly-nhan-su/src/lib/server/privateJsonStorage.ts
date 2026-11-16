@@ -61,7 +61,14 @@ export async function readPrivateJson<T>(path: string): Promise<T | null> {
   const response = await fetch(`${signed.signedUrl}&cb=${Date.now()}`, { cache: "no-store" });
   if (response.status === 404 || response.status === 400) return null;
   if (!response.ok) throw new Error(`Không đọc được ${path}: HTTP ${response.status}`);
-  const value = JSON.parse(await response.text()) as T;
+  const text = (await response.text()).replace(/^\uFEFF/, "").trim();
+  if (!text) return null;
+  let value: T;
+  try {
+    value = JSON.parse(text) as T;
+  } catch (error) {
+    throw new Error(`JSON hỏng ở ${path}: ${error instanceof Error ? error.message : String(error)}`);
+  }
   jsonCache.set(path, { at: Date.now(), value });
   return value;
 }

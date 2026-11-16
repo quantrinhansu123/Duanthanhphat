@@ -35,6 +35,7 @@ interface TrackSchematicProps {
   onPlan: (line: string, start: string, end: string) => boolean;
   onClearPlan: (line: string) => boolean;
   onInstall: (lines: string[], from: string, to: string) => boolean;
+  onReplaceInstalled: (line: string, index: number, from: string, to: string) => boolean;
   onRemoveInstalled: (line: string, index: number) => void;
   children: (structures: StructureLayer) => ReactNode;
 }
@@ -65,6 +66,7 @@ export function TrackSchematic({
   onPlan,
   onClearPlan,
   onInstall,
+  onReplaceInstalled,
   onRemoveInstalled,
   children,
 }: TrackSchematicProps) {
@@ -84,8 +86,34 @@ export function TrackSchematic({
   const [installBoth, setInstallBoth] = useState(true);
   const [installFrom, setInstallFrom] = useState("0+000");
   const [installTo, setInstallTo] = useState("");
+  const [installEdit, setInstallEdit] = useState<{ line: string; index: number } | null>(null);
+  const [installViewOnly, setInstallViewOnly] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const clearInstallEditor = useCallback(() => {
+    setInstallEdit(null);
+    setInstallViewOnly(false);
+    setInstallBoth(true);
+    setInstallFrom("0+000");
+    setInstallTo("");
+  }, []);
+
+  const loadInstalledRange = useCallback((line: string, index: number, viewOnly: boolean) => {
+    const range = layout.installed?.[line]?.[index];
+    if (!range) return;
+    setInstallLine(line);
+    setInstallBoth(false);
+    setInstallFrom(formatChainage(range.from));
+    setInstallTo(formatChainage(range.to));
+    setInstallEdit(viewOnly ? null : { line, index });
+    setInstallViewOnly(viewOnly);
+    setNotice(
+      viewOnly
+        ? `Đang xem đoạn lắp ${line.replace(/^TUYẾN\s+/i, "")}: Km ${formatChainage(range.from)} – ${formatChainage(range.to)}.`
+        : `Đang sửa đoạn lắp ${line.replace(/^TUYẾN\s+/i, "")}. Đổi lý trình rồi bấm Lưu thay đổi.`,
+    );
+  }, [layout.installed]);
 
   const row = layout.rows.find((item) => railRowKey(item) === rowKey) ?? layout.rows[0];
   const currentSymbol = symbols.find((symbol) => symbol.id === symbolId) ?? (symbolId ? undefined : symbols[0]);
@@ -273,6 +301,14 @@ export function TrackSchematic({
         aria-label="Cập nhật lắp đặt ray"
         onSubmit={(e) => {
           e.preventDefault();
+          if (installViewOnly) return;
+          if (installEdit) {
+            if (onReplaceInstalled(installEdit.line, installEdit.index, installFrom, installTo)) {
+              setNotice(`Đã sửa đoạn lắp ${installEdit.line.replace(/^TUYẾN\s+/i, "")}: ${installFrom} – ${installTo}.`);
+              clearInstallEditor();
+            }
+            return;
+          }
           const lines = installBoth ? lineNames : [installLine];
           if (onInstall(lines, installFrom, installTo)) {
             setNotice(
@@ -290,23 +326,37 @@ export function TrackSchematic({
           </p>
         </div>
         <label className="w-full text-xs text-slate-600 sm:w-auto sm:flex-1">Tuyến lắp
-          <select className={inputClass} value={installLine} onChange={(e) => setInstallLine(e.target.value)} disabled={!ready || installBoth}>
+          <select className={inputClass} value={installLine} onChange={(e) => setInstallLine(e.target.value)} disabled={!ready || installBoth || installViewOnly || Boolean(installEdit)}>
             {lineNames.map((line) => <option key={line} value={line}>{line}</option>)}
           </select>
         </label>
-        <label className="flex h-10 items-center gap-2 text-xs text-slate-700">
-          <input type="checkbox" checked={installBoth} onChange={(e) => setInstallBoth(e.target.checked)} />
-          Cùng lúc cả Thượng + Hạ
-        </label>
-        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu<input className={inputClass} value={installFrom} onChange={(e) => setInstallFrom(e.target.value)} placeholder="Km0+000" /></label>
-        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình cuối<input className={inputClass} value={installTo} onChange={(e) => setInstallTo(e.target.value)} placeholder="Km3+500" required /></label>
-        <button disabled={!ready || !hasCells} className="h-10 rounded border bg-red-600 px-3 text-sm text-white disabled:opacity-40">Cập nhật lắp ray</button>
+        {!installEdit && !installViewOnly ? (
+          <label className="flex h-10 items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={installBoth} onChange={(e) => setInstallBoth(e.target.checked)} />
+            Cùng lúc cả Thượng + Hạ
+          </label>
+        ) : null}
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình đầu<input className={inputClass} value={installFrom} onChange={(e) => setInstallFrom(e.target.value)} placeholder="Km0+000" disabled={installViewOnly} /></label>
+        <label className="w-full text-xs sm:w-auto sm:flex-1">Lý trình cuối<input className={inputClass} value={installTo} onChange={(e) => setInstallTo(e.target.value)} placeholder="Km3+500" required disabled={installViewOnly} /></label>
+        {!installViewOnly ? (
+          <button disabled={!ready || !hasCells} className="h-10 rounded border bg-red-600 px-3 text-sm text-white disabled:opacity-40">
+            {installEdit ? "Lưu thay đổi" : "Cập nhật lắp ray"}
+          </button>
+        ) : null}
+        {(installEdit || installViewOnly) ? (
+          <button type="button" onClick={() => { clearInstallEditor(); setNotice(null); }} className="h-10 rounded border px-3 text-sm">Hủy</button>
+        ) : null}
+        {notice && (installEdit || installViewOnly) ? (
+          <p role="status" className="w-full text-sm text-emerald-700">{notice}</p>
+        ) : null}
         <ul className="w-full space-y-1 text-[11px] text-slate-600">
           {lineNames.map((line) => (layout.installed?.[line] ?? []).map((range, index) => (
-            <li key={`${line}-${index}`} className="flex items-center gap-2">
-              <span className="font-semibold text-red-600">{line.replace(/^TUYẾNs+/i, "")}</span>
+            <li key={`${line}-${index}`} className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-red-600">{line.replace(/^TUYẾN\s+/i, "")}</span>
               Km {formatChainage(range.from)} – {formatChainage(range.to)}
-              <button type="button" className="text-red-700 underline" onClick={() => onRemoveInstalled(line, index)}>Xóa</button>
+              <button type="button" className="text-blue-700 underline" onClick={() => loadInstalledRange(line, index, true)}>Xem</button>
+              <button type="button" className="text-amber-700 underline" onClick={() => loadInstalledRange(line, index, false)}>Sửa</button>
+              <button type="button" className="text-red-700 underline" onClick={() => { onRemoveInstalled(line, index); if (installEdit?.line === line && installEdit.index === index) clearInstallEditor(); }}>Xóa</button>
             </li>
           )))}
         </ul>

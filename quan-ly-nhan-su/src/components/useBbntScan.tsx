@@ -46,13 +46,12 @@ export function useBbntScan({ onDone, onError }: { onDone: (message: string) => 
     catch (e) { onError(e instanceof Error ? e.message : "Không gỡ được biên bản."); }
   }
 
-  /** Các mục menu thao tác: tải lên thêm file, xem / gỡ từng file đã lưu. */
+  /** Các mục menu thao tác: tải lên thêm file, mở AppSheet / gỡ từng file đã lưu. */
   function actions(t: BbntScanTarget, disabled = false) {
     const scans = bbntScans(t.thong_tin);
     const many = scans.length > 1;
     return [
       { label: scans.length ? "Tải thêm BBNT đã ký (PDF, chọn nhiều file)" : "Tải lên BBNT đã ký (PDF, chọn nhiều file)", disabled, onSelect: () => pick(t) },
-      ...scans.map((scan, i) => ({ label: many ? `Xem file ${i + 1}: ${scan.ten ?? "BBNT"}` : "Xem BBNT đã ký", disabled, onSelect: () => { window.open(scan.url, "_blank", "noopener"); } })),
       ...scans.flatMap((scan, i) => scan.appsheet_url ? [{ label: many ? `Mở file ${i + 1} trên AppSheet` : "Mở bản trên AppSheet", disabled, onSelect: () => { window.open(scan.appsheet_url, "_blank", "noopener"); } }] : []),
       ...scans.map((scan, i) => ({ label: many ? `Gỡ file ${i + 1}: ${scan.ten ?? "BBNT"}` : "Gỡ BBNT đã ký", danger: true, disabled, onSelect: () => void remove(t, String(scan.doc_id || scan.url), many ? `file ${i + 1}` : "biên bản đã ký") })),
     ];
