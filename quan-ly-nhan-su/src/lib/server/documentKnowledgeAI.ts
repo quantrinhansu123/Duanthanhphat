@@ -6,10 +6,12 @@ import {
   type KnowledgePage,
 } from "../documentKnowledge.ts";
 import { knowledgeOcrConfig } from "./documentKnowledgeOcrConfig.ts";
+import { AUTOMATIC_CHECK_VERSION } from "../documentKnowledgeAutomatic.ts";
 
 export function knowledgePipelineVersion() {
   return [
-    "dk-v2",
+    "dk-v3",
+    AUTOMATIC_CHECK_VERSION,
     JSON.stringify(knowledgeOcrConfig()),
     process.env.KNOWLEDGE_EXTRACT_MODEL || "gemini-3.5-flash-lite",
     process.env.KNOWLEDGE_EMBEDDING_MODEL || "gemini-embedding-001",
@@ -157,6 +159,7 @@ export async function extractKnowledgeFacts(
               period_index: { type: ["integer", "null"] },
               source_page: { type: "integer" },
               quote: { type: "string" },
+              event_ref: { type: ["string", "null"], description: "Mã giao dịch / số chứng từ / số phụ lục NGUYÊN VĂN nếu có; không tự tạo, không dùng tên tệp." },
             },
             required: [
               "contract_code",
@@ -166,6 +169,7 @@ export async function extractKnowledgeFacts(
               "period_index",
               "source_page",
               "quote",
+              "event_ref",
             ],
             additionalProperties: false,
           },
@@ -175,7 +179,7 @@ export async function extractKnowledgeFacts(
       additionalProperties: false,
     };
     const result = (await generateKnowledgeJson(
-      `Trích xuất các dữ kiện tiền VND có chứng cứ. Phân biệt hợp đồng gốc, phụ lục TĂNG/GIẢM, nghiệm thu riêng đợt, nghiệm thu LŨY KẾ, đề nghị thanh toán, THỰC CHUYỂN có chứng từ và tạm ứng. Đề nghị thanh toán không chứng minh đã chuyển tiền. Không biến tổng giá trị mới của phụ lục thành phần tăng thêm. Không có căn cứ thì bỏ qua hoặc để trường không rõ null. Ngày YYYY-MM-DD, số đợt nguyên dương nếu thấy. quote phải là đoạn NGUYÊN VĂN liên tiếp trên source_page. Không tự cộng các dòng thành tổng.\n` +
+      `Trích xuất các dữ kiện tiền VND có chứng cứ. Phân biệt hợp đồng gốc, phụ lục TĂNG/GIẢM, nghiệm thu riêng đợt, nghiệm thu LŨY KẾ, đề nghị thanh toán, THỰC CHUYỂN có chứng từ và tạm ứng. Đề nghị thanh toán không chứng minh đã chuyển tiền. Không biến tổng giá trị mới của phụ lục thành phần tăng thêm. Không có căn cứ thì bỏ qua hoặc để trường không rõ null. Ngày YYYY-MM-DD, số đợt nguyên dương nếu thấy. quote phải là đoạn NGUYÊN VĂN liên tiếp trên source_page, giữ đủ nhãn loại tiền, số tiền và đơn vị; giữ chữ LŨY KẾ/đợt nếu có. Với chuyển khoản/phụ lục/đề nghị, giữ cả mã giao dịch/số chứng từ và trạng thái trong quote để chống trùng; event_ref chép đúng mã đó, thiếu thì null. Không tự cộng các dòng thành tổng.\n` +
         JSON.stringify(batch.map((p) => ({ page: p.page, text: p.text }))),
       schema,
       undefined,
@@ -198,7 +202,7 @@ export async function extractKnowledgeFacts(
     size += page.text.length;
   }
   await flush();
-  // Identical facts in overlapping text are one suggestion; all suggestions still need review.
+  // Identical facts in overlapping text are one suggestion. Automatic checks are separate from human review.
   return [...new Map(facts.map((f) => [JSON.stringify(f), f])).values()];
 }
 export function normalizeKnowledgeVector(value: unknown): number[] {

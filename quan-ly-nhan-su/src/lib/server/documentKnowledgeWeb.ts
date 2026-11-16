@@ -113,6 +113,8 @@ export function knowledgeErrorResponse(error: unknown) {
       "Tài liệu vượt giới hạn trang OCR dự phòng. Cần người vận hành kiểm tra chất lượng.",
     DK_OCR_NO_TEXT:
       "Trang có nội dung nhưng chưa nhận dạng được chữ; cần kiểm tra bản gốc.",
+    DK_DOCUMENT_SCOPE_REQUIRED:
+      "Cần chọn rõ nhóm tệp muốn hỏi trong một kho; chưa thể tự chọn một phần tài liệu từ các số lượng khác nhau.",
     DK_CODEX_UNAVAILABLE:
       "Không kết nối được Codex. Kiểm tra đăng nhập trên máy chủ.",
     DK_CODEX_BINARY_REQUIRED:

@@ -2,11 +2,13 @@
 
 Bản đầu tích hợp vào ứng dụng hiện tại. Gemini API là OCR mặc định đã kiểm tra và tiếp tục phục vụ trích xuất JSON/embedding. PaddleOCR-VL là lựa chọn server có cấu hình riêng, cần nghiệm thu trước khi chuyển. Supabase lưu dữ liệu và chạy truy vấn; Codex đăng nhập hiện có dùng cho câu hỏi cần diễn giải. Máy dev không quyết định cấu hình server bàn giao.
 
+Mặc định mới **tự xử lý và trả lời, không chờ duyệt thủ công từng tệp**. Kết quả qua kiểm tra tự động được ghi nhãn riêng; người dùng vẫn có lựa chọn chỉ xem dữ liệu đã được người xác minh. Xem [luồng tự động và câu hỏi 83 tệp](DOCUMENT_KNOWLEDGE_AUTOMATIC.md).
+
 Số tệp và số hợp đồng được đếm riêng: nhiều chứng từ có thể thuộc cùng một hợp đồng. Ảnh chỉ gửi Google khi chọn OCR API hoặc bật và phát sinh dự phòng; chữ dùng trích xuất/embedding vẫn gửi Google, các đoạn dùng diễn giải gửi Codex. Xem [cấu hình OCR và nghiệm thu](DOCUMENT_KNOWLEDGE_OCR.md).
 
 ## Vì sao chọn hướng này cho bản đầu
 
-- Tổng tiền do SQL tính trên dữ kiện đã xác minh, giữ quy tắc lũy kế và chống trùng nghiệp vụ. Chi phí đọc lại 83 tệp không đi theo mỗi câu hỏi; các truy vấn rõ nghĩa và nút Xem tổng không gọi model.
+- Tổng tiền do SQL tính trên dữ kiện đủ căn cứ tự động hoặc đã xác minh, giữ quy tắc lũy kế và chống trùng nghiệp vụ. Thiếu/mâu thuẫn được báo rõ; số tự động không mang nhãn đã được người duyệt. Các truy vấn thông dụng và nút Xem tổng không gọi model.
 - Tìm điều khoản dùng từ khóa cùng vector để lấy đúng phần liên quan, có nguồn trang. Đây là cách [hybrid search trên Supabase](https://supabase.com/docs/guides/ai/hybrid-search), tách khỏi phép tính tổng.
 - OCR mặc định dùng API đã thử; Paddle trên server là tùy chọn chưa nghiệm thu. `gemini-embedding-001` tiếp tục phục vụ văn bản theo [tài liệu Google](https://ai.google.dev/gemini-api/docs/embeddings); đã thử API thật với vector 768 chiều.
 - Bản đầu dùng các hàm nghiệp vụ có schema, chưa cần thêm WrenAI để phục vụ vài chỉ tiêu đã định nghĩa. Khi có thêm nguồn dữ liệu và báo cáo linh hoạt, đánh giá WrenAI trên các chỉ tiêu và bộ ca kiểm chứng đang có.
@@ -18,8 +20,9 @@ flowchart LR
     A[Upload hoặc thư mục được phép] --> B[Hash và hàng đợi riêng]
     B --> C[Đọc chữ / OCR từng trang]
     C --> D[Dữ kiện chờ duyệt + đoạn văn + vector]
-    D --> E[Người kiểm tra với trang nguồn]
-    E --> F[Hàm SQL tính tiền]
+    D --> F[Kiểm tra tự động và SQL tính tiền]
+    D --> E[Người kiểm tra tùy chọn]
+    E --> F
     D --> G[Từ khóa + pgvector]
     G --> H[Codex đọc đoạn liên quan và dẫn nguồn]
 ```
@@ -114,9 +117,9 @@ Tên thư mục thực tế có thể có dấu và khoảng trắng; luôn đ�
 - Khi quét local hoàn tất mới đánh dấu các đường dẫn biến mất là ngừng sử dụng. Không xóa tệp gốc. Nguồn local cần tiếp tục khả dụng đúng hash; hệ thống chưa lưu lịch sử binary của mọi phiên bản local. Nếu cần phục hồi bản gốc lịch sử, giữ bản sao riêng hoặc dùng upload private bất biến theo hash. Trang trích xuất, dữ kiện cũ và audit vẫn lưu theo revision.
 - Với TXT/MD/CSV/JSON, trang là mỗi 12.000 ký tự; Excel là CSV theo sheet chia tương tự. Dẫn nguồn theo trang chỉ khớp trang vật lý đối với PDF/ảnh.
 
-## 4. Xác minh dữ kiện trước khi tính
+## 4. Xác minh thủ công khi cần
 
-Mỗi dữ kiện mới đều ở trạng thái **chờ kiểm tra**. Mở bản gốc đúng trang, sửa loại tiền, số hợp đồng, ngày, số đợt, tiền nguyên đồng và mã nghiệp vụ; ghi căn cứ rồi xác minh hoặc loại bỏ. Có thể bổ sung dữ kiện bị bỏ sót bằng đoạn trích thực sự có trên trang.
+Mỗi dữ kiện mới vẫn giữ trạng thái chưa được người duyệt, đồng thời có kết quả kiểm tra tự động riêng. Mặc định không cần xác minh thủ công để nhận tổng tự động. Muốn đối soát thêm, mở **Kiểm tra hoặc sửa số liệu (tùy chọn)**, xem bản gốc đúng trang, sửa loại tiền, số hợp đồng, ngày, số đợt, tiền nguyên đồng và mã nghiệp vụ; ghi căn cứ rồi xác minh hoặc loại bỏ. Có thể bổ sung dữ kiện bị bỏ sót bằng đoạn trích thực sự có trên trang.
 
 Một khoản xuất hiện ở nhiều chứng từ phải cùng mã nghiệp vụ. Mã nên chứa loại, hợp đồng và định danh thực tế, ví dụ `PAY:HD05:FT262345678`, `ACCEPT:HD05:4`, `AMEND:HD05:02`. Chọn một chứng từ đại diện để duyệt, loại các bản trùng; database chặn hai khoản cùng mã được duyệt. Không dùng tên tệp làm định danh giao dịch.
 
@@ -132,7 +135,7 @@ Sau khi kiểm tra đủ toàn bộ trang và dữ kiện, xác nhận **Hoàn t
 | `payment_requested_total` | Giá trị đề nghị thanh toán, không chứng minh tiền đã chuyển. |
 | `advance_total` | Tạm ứng được phân loại riêng. Không tự cộng vào `paid_total`; người duyệt phải thống nhất cách phân loại chứng từ tạm ứng thực chuyển. |
 
-Tiền hiện chỉ hỗ trợ VND nguyên đồng, lưu decimal trong PostgreSQL, truyền bằng chuỗi và hiển thị bằng BigInt. Không dùng số thực JavaScript để cộng tiền. `NULL` nghĩa là chưa có số liệu xác minh, không tự đổi thành 0. Database không thể tự chứng minh OCR/nghiệp vụ đúng; xác nhận của người kiểm tra vẫn là điều kiện cần.
+Tiền hiện chỉ hỗ trợ VND nguyên đồng, lưu decimal trong PostgreSQL, truyền bằng chuỗi và hiển thị bằng BigInt. Không dùng số thực JavaScript để cộng tiền. `NULL` nghĩa là chưa đủ căn cứ, không tự đổi thành 0. Kiểm tra tự động không chứng minh độ đúng nghiệp vụ 100%. Chế độ chỉ số đã được người duyệt vẫn yêu cầu xác minh; chọn trong **Cách tổng hợp**.
 
 ## Cách hỏi và mức sử dụng model
 
@@ -140,9 +143,9 @@ Tiền hiện chỉ hỗ trợ VND nguyên đồng, lưu decimal trong PostgreSQ
 2. Câu đầu của hội thoại đúng một ý thông dụng như **“Tổng giá trị nghiệm thu?”**, **“Tổng giá trị hợp đồng?”**, **“Tổng tiền thực chuyển?”**: dùng hàm SQL trực tiếp, trả usage 0. Không áp dụng shortcut cho câu có bộ lọc/ngày hoặc câu tiếp nối có thể kế thừa phạm vi trước đó.
 3. Câu tổng hợp khác: Codex tạo JSON chọn hàm, metric, mã hợp đồng tùy chọn và ngày chốt. Backend kiểm tra schema/quyền, gọi SQL viết sẵn và tự định dạng kết quả. Không gửi 83 tệp/dòng dữ liệu cho Codex, không chạy SQL tự do do model sinh.
 4. Câu điều khoản: một embedding cho câu hỏi ngắn, kết hợp từ khóa tiếng Việt không dấu với pgvector, lấy tối đa 6 đoạn mỗi lần tìm rồi Codex diễn giải phần được giới hạn. Nếu dịch vụ embedding gián đoạn, vẫn tìm bằng từ khóa. Nguồn dẫn chỉ chấp nhận ID/trang thực đã lấy và URL yêu cầu đăng nhập.
-5. Câu “tổng tiền” không rõ chỉ tiêu: hỏi lại. Bộ lọc tài chính hiện hỗ trợ toàn kho, đúng số hợp đồng và **đến ngày**; chưa hỗ trợ tùy ý đối tác, hạng mục hoặc khoảng từ ngày/đến ngày. Không thay bằng tổng toàn kho khi không đáp ứng được bộ lọc.
+5. Câu “tổng tiền”/“83 file này bao tiền”: trình bày riêng hợp đồng, nghiệm thu, thực chuyển, không cộng ba chỉ tiêu. Nếu số tệp không khớp kho thì chưa trả tổng cho nhóm đó. Bộ lọc tài chính hỗ trợ toàn kho, đúng số hợp đồng và **đến ngày**; chưa hỗ trợ tùy ý đối tác, hạng mục hoặc khoảng từ ngày/đến ngày. Không thay bằng tổng toàn kho khi không đáp ứng được bộ lọc.
 
-Kết quả tổng luôn kèm số tài liệu đã xử lý/kiểm tra, số dữ kiện chờ duyệt, xung đột và nguồn. Chưa kiểm tra đủ kho không được trình bày thành tổng đầy đủ. Các nguồn trong phản hồi giới hạn 20 để giữ kết quả gọn, có `sources_truncated`; phép tính vẫn chạy toàn bộ dữ liệu hợp lệ, không bị giới hạn 20/1.000 dòng.
+Kết quả tổng kèm số tài liệu đã xử lý, dữ kiện chưa đủ căn cứ, bản trùng, xung đột và nguồn. Số tự động được ghi rõ chưa xác minh nghiệp vụ; không biến thành số đã duyệt. Xử lý hoặc kiểm tra tự động chưa đủ thì không trình bày thành tổng đầy đủ. Các nguồn trong phản hồi giới hạn 20 mỗi chỉ tiêu, có `sources_truncated`; phép tính vẫn chạy toàn bộ dữ liệu hợp lệ.
 
 Đăng nhập Codex không đồng nghĩa input token bằng 0. Thử kết nối rất ngắn với CLI mặc định dùng 13.472–14.112 input token; cấu hình riêng cho truy vấn bounded còn 8.267 token. Ba phép thử planner thật dùng 8.700–8.711 input token/lượt, một lượt có 6.528 cached input token. Đây là **số đo synthetic ngày 16/11/2026 trên máy này**, không phải benchmark 83 tệp hay cam kết chi phí/quota tài khoản. Truy vấn điều khoản còn có lượt diễn giải thứ hai. Xem `dk_usage` để đo plan/answer thực tế; không ghi prompt/nội dung hồ sơ vào bảng usage.
 

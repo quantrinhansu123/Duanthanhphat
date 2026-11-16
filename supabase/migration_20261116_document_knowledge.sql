@@ -40,6 +40,7 @@ create table if not exists public.dk_jobs (
   error_code text, created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   unique(document_id,revision)
 );
+alter table public.dk_documents add column if not exists automatic_check jsonb not null default '{"issues":["not_assessed"]}';
 create table if not exists public.dk_pages (
   document_id uuid not null references public.dk_documents(id), revision integer not null,
   page integer not null check(page>0), text text not null, method text not null,
@@ -74,6 +75,7 @@ create table if not exists public.dk_facts (
   review_version integer not null default 0, reviewed_by uuid references auth.users(id), reviewed_at timestamptz,
   foreign key(document_id,revision,source_page) references public.dk_pages(document_id,revision,page)
 );
+alter table public.dk_facts add column if not exists automatic_check jsonb not null default '{"eligible":false,"issues":["not_assessed"]}';
 -- Business identifiers, not file names, prevent the same event being approved twice.
 create unique index if not exists dk_fact_business_identity on public.dk_facts(project_id,business_key) where status='approved';
 create unique index if not exists dk_one_contract_base on public.dk_facts(project_id,contract_code) where status='approved' and kind='contract_base';
@@ -161,7 +163,9 @@ declare j public.dk_jobs; d public.dk_documents; begin
     where state='running' and lease_until<now() and attempts>=4 returning document_id,revision)
   update public.dk_documents docrow set state='failed',error_code='DK_LEASE_EXHAUSTED',updated_at=now()
     from expired e where docrow.id=e.document_id and docrow.revision=e.revision and docrow.state='running';
-  select * into j from public.dk_jobs where (state='queued' or (state='running' and lease_until<now())) and attempts<4
+  select * into j from public.dk_jobs where (state='queued' or (state='running' and lease_until<now())
+    or (state='failed' and error_code in ('DK_AI_TIMEOUT','DK_AI_UNAVAILABLE','DK_AI_HTTP_429','DK_AI_HTTP_500','DK_AI_HTTP_502','DK_AI_HTTP_503','DK_AI_HTTP_504')
+      and updated_at<now()-interval '2 minutes'*power(2,least(greatest(attempts-1,0),3)))) and attempts<4
     order by created_at for update skip locked limit 1;
   if not found then return null; end if;
   select * into d from public.dk_documents where id=j.document_id for update;
@@ -203,9 +207,10 @@ declare j public.dk_jobs; begin
   if found then update public.dk_documents set state='failed',error_code=left(p_code,100),updated_at=now()
     where id=j.document_id and revision=j.revision; end if;
 end $$;
-create or replace function public.dk_complete_job(p_job uuid,p_token uuid,p_pages jsonb,p_chunks jsonb,p_facts jsonb,p_model text)
+drop function if exists public.dk_complete_job(uuid,uuid,jsonb,jsonb,jsonb,text);
+create or replace function public.dk_complete_job(p_job uuid,p_token uuid,p_pages jsonb,p_chunks jsonb,p_facts jsonb,p_model text,p_automatic jsonb default null)
 returns void language plpgsql security definer set search_path = '' as $$
-declare j public.dk_jobs; d public.dk_documents; v jsonb; begin
+declare j public.dk_jobs; d public.dk_documents; v jsonb; a jsonb; ai integer:=0; begin
   select * into j from public.dk_jobs where id=p_job for update;
   if j.id is null or j.state<>'running' or j.lease_token is distinct from p_token or j.lease_until<now() then raise exception 'DK_LEASE_LOST'; end if;
   select * into d from public.dk_documents where id=j.document_id for update;
@@ -217,6 +222,13 @@ declare j public.dk_jobs; d public.dk_documents; v jsonb; begin
      or (select min((x->>'page')::integer) from jsonb_array_elements(p_pages) x)<>1
      or (select max((x->>'page')::integer) from jsonb_array_elements(p_pages) x)<>jsonb_array_length(p_pages)
     then raise exception 'DK_INCOMPLETE_PAGES'; end if;
+  if p_automatic is not null and (jsonb_typeof(p_automatic) is distinct from 'object'
+    or jsonb_typeof(p_automatic->'facts') is distinct from 'array'
+    or jsonb_array_length(p_automatic->'facts')<>jsonb_array_length(p_facts)
+    or jsonb_typeof(p_automatic->'document') is distinct from 'object'
+    or p_automatic->'document'->>'version' is distinct from 'dk-auto-v1'
+    or jsonb_typeof(p_automatic->'document'->'issues') is distinct from 'array'
+    or pg_column_size(p_automatic)>1000000) then raise exception 'DK_INVALID_AUTOMATIC_CHECK'; end if;
   for v in select * from jsonb_array_elements(p_pages) loop
     if jsonb_typeof(coalesce(v->'ocr_meta','{}'::jsonb)) is distinct from 'object'
       or pg_column_size(v->'ocr_meta')>500000 then raise exception 'DK_INVALID_PAGE'; end if;
@@ -231,11 +243,19 @@ declare j public.dk_jobs; d public.dk_documents; v jsonb; begin
   for v in select * from jsonb_array_elements(p_facts) loop
     if not exists(select 1 from public.dk_pages where document_id=d.id and revision=d.revision and page=(v->>'source_page')::integer
       and position(v->>'quote' in text)>0) then raise exception 'DK_EVIDENCE_NOT_FOUND'; end if;
-    insert into public.dk_facts(project_id,document_id,revision,contract_code,kind,amount,event_date,period_index,source_page,quote)
-      values(d.project_id,d.id,d.revision,coalesce(v->>'contract_code',''),v->>'kind',nullif(v->>'amount','')::numeric,
-        nullif(v->>'event_date','')::date,nullif(v->>'period_index','')::integer,(v->>'source_page')::integer,v->>'quote');
+    a:=coalesce(p_automatic->'facts'->ai,'{"eligible":false,"issues":["not_assessed"]}'::jsonb);
+    if jsonb_typeof(a) is distinct from 'object' or jsonb_typeof(a->'eligible') is distinct from 'boolean'
+      or jsonb_typeof(a->'issues') is distinct from 'array'
+      or ((a->>'eligible')::boolean and (a->>'version' is distinct from 'dk-auto-v1'
+        or coalesce(length(a->>'identity'),0) not between 3 and 500 or jsonb_array_length(a->'issues')<>0))
+      then raise exception 'DK_INVALID_AUTOMATIC_CHECK'; end if;
+    insert into public.dk_facts(project_id,document_id,revision,contract_code,kind,amount,event_date,period_index,source_page,quote,automatic_check)
+      values(d.project_id,d.id,d.revision,upper(trim(coalesce(v->>'contract_code',''))),v->>'kind',nullif(v->>'amount','')::numeric,
+        nullif(v->>'event_date','')::date,nullif(v->>'period_index','')::integer,(v->>'source_page')::integer,v->>'quote',a);
+    ai:=ai+1;
   end loop;
-  update public.dk_documents set state='ready',page_count=jsonb_array_length(p_pages),review_state='pending',updated_at=now() where id=d.id;
+  update public.dk_documents set state='ready',page_count=jsonb_array_length(p_pages),review_state='pending',
+    automatic_check=coalesce(p_automatic->'document','{"issues":["not_assessed"]}'::jsonb),updated_at=now() where id=d.id;
   update public.dk_jobs set state='done',lease_token=null,lease_until=null,updated_at=now() where id=j.id;
 end $$;
 
@@ -290,7 +310,7 @@ declare d public.dk_documents; result jsonb; begin
   if p_offset<0 then raise exception 'DK_INVALID_QUERY'; end if;
   select jsonb_build_object('document',to_jsonb(d)-'source_ref','facts',coalesce(jsonb_agg(x),'[]'::jsonb),
     'facts_total',(select count(*) from public.dk_facts where document_id=d.id and revision=d.revision)) into result
-    from (select id,contract_code,kind,amount::text as amount,event_date,period_index,business_key,source_page,quote,status,review_version
+    from (select id,contract_code,kind,amount::text as amount,event_date,period_index,business_key,source_page,quote,status,review_version,automatic_check
       from public.dk_facts where document_id=d.id and revision=d.revision order by source_page,id offset p_offset limit 100) x;
   return result;
 end $$;
@@ -366,6 +386,90 @@ declare total numeric; conflicts integer; docs integer; ready integer; verified 
     'complete',docs>0 and docs=verified and conflicts=0,'sources',sources,'sources_truncated',events>20);
 end $$;
 
+-- Provisional automatic totals. Never change a fact into human-approved or mark a document verified.
+create or replace function public.dk_automatic_summary(p_project uuid,p_metric text,p_as_of date default current_date,p_contract text default null,p_expected_documents integer default null)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare result jsonb; docs integer; ready integer; verified integer; document_issues integer; begin
+  if not public.dk_access(p_project) then raise exception 'DK_FORBIDDEN'; end if;
+  if p_metric is null or p_metric not in ('contract_total','accepted_total','paid_total','payment_requested_total','advance_total') then raise exception 'DK_INVALID_METRIC'; end if;
+  if p_as_of is null then raise exception 'DK_INVALID_DATE'; end if;
+  if (p_contract is not null and length(trim(p_contract)) not between 1 and 200)
+    or (p_expected_documents is not null and p_expected_documents not between 1 and 1000000) then raise exception 'DK_INVALID_QUERY'; end if;
+  select count(*),count(*) filter(where state='ready'),count(*) filter(where state='ready' and review_state='verified'),
+    count(*) filter(where state='ready' and review_state<>'verified' and jsonb_array_length(coalesce(automatic_check->'issues','["not_assessed"]'::jsonb))>0)
+    into docs,ready,verified,document_issues from public.dk_documents where project_id=p_project and state<>'removed';
+  with raw as (
+    select f.*,d.name,
+      (f.status='approved' or (f.automatic_check->>'eligible'='true' and f.automatic_check->>'version'='dk-auto-v1'))
+        and f.amount is not null and f.event_date is not null and length(f.contract_code)>0 as eligible,
+      case when f.kind='contract_base' then 'CONTRACT:'||f.contract_code
+        when f.kind in ('accepted_increment','accepted_cumulative') then upper(f.kind)||':'||f.contract_code||':'||f.period_index::text
+        when coalesce(f.automatic_check->>'reference','')<>'' then
+          (case when f.kind in ('payment','advance') then 'TRANSFER' else upper(f.kind) end)||':'||f.contract_code||':'||(f.automatic_check->>'reference')
+        else coalesce(nullif(f.business_key,''),f.id::text) end as identity_key,
+      case p_metric when 'contract_total' then f.kind in ('contract_base','contract_adjustment')
+        when 'accepted_total' then f.kind in ('accepted_increment','accepted_cumulative')
+        when 'paid_total' then f.kind='payment' when 'payment_requested_total' then f.kind='payment_request'
+        when 'advance_total' then f.kind='advance' else false end as relevant
+    from public.dk_facts f join public.dk_documents d on d.id=f.document_id
+    where f.project_id=p_project and d.state='ready' and f.revision=d.revision and f.status in ('pending','approved')
+      and (f.event_date is null or f.event_date<=p_as_of)
+      and (p_contract is null or f.contract_code=upper(trim(p_contract)) or f.contract_code='')
+  ), groups as (
+    select identity_key,count(*) as copies,
+      count(distinct jsonb_build_array(kind,amount,event_date,period_index,contract_code)::text) as variants,
+      bool_or(relevant) as relevant from raw where eligible group by identity_key
+  ), ranked as (
+    select r.*,g.variants,row_number() over(partition by r.identity_key order by (r.status='approved') desc,r.document_id,r.source_page,r.id) as rn
+    from raw r join groups g using(identity_key) where r.eligible
+  ), unique_events as (select * from ranked where rn=1 and variants=1),
+  snapshots as (select distinct on(contract_code) * from unique_events where kind='accepted_cumulative' order by contract_code,period_index desc,event_date desc),
+  included as (select f.* from unique_events f where f.relevant and (
+    p_metric<>'accepted_total' or (f.kind='accepted_cumulative' and f.id in(select id from snapshots)) or
+      (f.kind='accepted_increment' and not exists(select 1 from snapshots s where s.contract_code=f.contract_code and s.period_index>=f.period_index))
+  )), logical_conflicts as (
+    select f.id from unique_events f join snapshots s using(contract_code)
+      where p_metric='accepted_total' and f.kind='accepted_increment' and f.period_index>s.period_index and f.event_date<s.event_date
+    union all
+    select f.id from unique_events f where p_metric='contract_total' and f.kind='contract_adjustment'
+      and not exists(select 1 from unique_events b where b.contract_code=f.contract_code and b.kind='contract_base')
+    union all
+    select f.id from unique_events f join unique_events other on f.contract_code=other.contract_code and f.kind=other.kind
+      and f.event_date=other.event_date and f.identity_key<>other.identity_key
+      where f.relevant and f.status='approved' and other.status='pending'
+        and f.kind in ('payment','advance','payment_request','contract_adjustment') and coalesce(f.automatic_check->>'reference','')=''
+    union all
+    select min(f.id::text)::uuid from unique_events f where f.relevant and f.kind in ('payment','advance')
+      and coalesce(f.automatic_check->>'reference','')<>'' group by f.automatic_check->>'reference'
+      having count(distinct f.contract_code)>1
+  ), counters as (
+    select (select count(*) from groups where relevant and variants>1)+(select count(*) from logical_conflicts) as conflicts,
+      (select count(*) from raw where relevant and not eligible) as blocked,
+      coalesce((select sum(copies-1) from groups where relevant and variants=1),0) as duplicate_copies,
+      (select count(*) from included where status<>'approved') as automatic_events
+  )
+  select jsonb_build_object('basis','automatic','metric',p_metric,'currency','VND','as_of_date',p_as_of,'contract_filter',p_contract,
+    'expected_documents',p_expected_documents,'selection_matches',p_expected_documents is null or p_expected_documents=docs,
+    'total_vnd',case when c.conflicts>0 or (p_expected_documents is not null and p_expected_documents<>docs) then null else (select sum(amount)::text from included) end,
+    'event_count',(select count(*) from included),'contract_count',(select count(distinct contract_code) from included),
+    'documents_total',docs,'documents_ready',ready,'documents_verified',verified,'documents_with_issues',document_issues,
+    'facts_pending',(select count(*) from raw where status='pending'),'facts_unresolved',c.blocked,'automatic_events',c.automatic_events,
+    'duplicates_ignored',c.duplicate_copies,'conflicts',c.conflicts,
+    'complete',docs>0 and docs=ready and document_issues=0 and c.blocked=0 and c.conflicts=0 and (p_expected_documents is null or p_expected_documents=docs),
+    'human_verified',docs>0 and docs=verified and c.automatic_events=0 and c.blocked=0 and c.conflicts=0,
+    'sources',coalesce((select jsonb_agg(x) from (select id,document_id,source_page,contract_code,kind,amount::text as amount_vnd from included order by contract_code,id limit 20) x),'[]'::jsonb),
+    'sources_truncated',(select count(*)>20 from included),
+    'issues',coalesce((select jsonb_agg(x) from (
+      select r.document_id,r.source_page,r.name,r.kind,
+        case when not r.eligible then 'insufficient_evidence' else 'conflicting_event' end as code,
+        r.automatic_check->'issues' as reasons
+      from raw r left join groups g using(identity_key) where r.relevant and (not r.eligible or g.variants>1)
+      order by r.document_id,r.source_page limit 20
+    ) x),'[]'::jsonb)
+  ) into result from counters c;
+  return result;
+end $$;
+
 create or replace function public.dk_search(p_project uuid,p_query text,p_vector extensions.vector(768) default null,p_model text default 'gemini-embedding-001',p_limit integer default 6)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare result jsonb; begin
@@ -389,7 +493,7 @@ do $$ declare f record; begin
   for f in select p.oid::regprocedure as signature,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'dk\_%' escape '\' loop
     execute format('revoke all on function %s from public,anon,authenticated',f.signature);
     execute format('grant execute on function %s to service_role',f.signature);
-    if f.proname in ('dk_fold','dk_access','dk_create_project','dk_grant_member','dk_review_fact','dk_add_fact','dk_document_detail','dk_document_action','dk_financial_summary','dk_search','dk_record_usage') then
+    if f.proname in ('dk_fold','dk_access','dk_create_project','dk_grant_member','dk_review_fact','dk_add_fact','dk_document_detail','dk_document_action','dk_financial_summary','dk_automatic_summary','dk_search','dk_record_usage') then
       execute format('grant execute on function %s to authenticated',f.signature);
     end if;
   end loop;

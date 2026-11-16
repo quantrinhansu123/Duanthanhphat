@@ -35,6 +35,7 @@ import {
   knowledgeOcrConfig,
   knowledgeOcrEnvironment,
 } from "../src/lib/server/documentKnowledgeOcrConfig.ts";
+import { assessAutomaticFact, assessAutomaticDocument } from "../src/lib/documentKnowledgeAutomatic.ts";
 
 const scriptRoot = fileURLToPath(new URL(".", import.meta.url));
 const abort = new AbortController();
@@ -370,6 +371,10 @@ export async function runKnowledgeJob(admin, claimed, signal) {
         p_pages: pages,
         p_chunks: chunks,
         p_facts: facts,
+        p_automatic: {
+          document: assessAutomaticDocument(pages, facts),
+          facts: facts.map(f => assessAutomaticFact(f, pages)),
+        },
         p_model:
           process.env.KNOWLEDGE_EMBEDDING_MODEL || "gemini-embedding-001",
       }),

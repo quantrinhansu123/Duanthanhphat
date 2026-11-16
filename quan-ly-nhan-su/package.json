@@ -15,7 +15,8 @@
     "knowledge:ocr:check": "node --env-file-if-exists=.env.local scripts/check-knowledge-ocr.mjs",
     "knowledge:ocr:smoke": "node --env-file-if-exists=.env.local scripts/smoke-knowledge-paddle.mjs",
     "knowledge:smoke": "node --env-file-if-exists=.env.local scripts/smoke-document-knowledge-ai.mjs",
-    "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs && node scripts/test-document-knowledge-ocr.mjs"
+    "knowledge:automatic:smoke": "node --env-file-if-exists=.env.local scripts/smoke-document-knowledge-automatic.mjs",
+    "test:knowledge": "node scripts/test-document-knowledge.mjs && node scripts/test-document-knowledge-db.mjs && node scripts/test-document-knowledge-api.mjs && node scripts/test-document-knowledge-codex.mjs && node scripts/test-document-knowledge-ocr.mjs && node scripts/test-document-knowledge-automatic.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

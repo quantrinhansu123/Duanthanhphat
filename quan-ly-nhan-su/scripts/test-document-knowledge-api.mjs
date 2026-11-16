@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 import ts from "typescript";
 import * as domain from "../src/lib/documentKnowledge.ts";
+import * as automatic from "../src/lib/documentKnowledgeAutomatic.ts";
 import { knowledgeResult } from "../src/lib/server/documentKnowledgeStore.ts";
 
 const require = createRequire(import.meta.url);
@@ -89,7 +90,7 @@ const client = {
   },
   async rpc(name, args) {
     rpcCalls.push({ name, args });
-    if (name === "dk_financial_summary")
+    if (["dk_financial_summary", "dk_automatic_summary"].includes(name))
       return {
         data: {
           metric: args.p_metric,
@@ -104,6 +105,7 @@ const client = {
           conflicts: 0,
           complete: false,
           sources: [{ document_id: docId, source_page: 1 }],
+          ...(name === "dk_automatic_summary" ? { basis: "automatic", human_verified: false, facts_unresolved: 1, documents_with_issues: 1, duplicates_ignored: 2, selection_matches: !args.p_expected_documents || args.p_expected_documents === 83, expected_documents: args.p_expected_documents } : {}),
         },
         error: null,
       };
@@ -128,6 +130,7 @@ const common = {
   "next/server": { NextResponse: { json } },
   "@/lib/documentKnowledge": domain,
   "../documentKnowledge": domain,
+  "../documentKnowledgeAutomatic": automatic,
 };
 async function load(file, imports = {}) {
   const exports = {};
@@ -237,7 +240,7 @@ try {
   eq(result.status, 200);
   assert.match(result.body.text, /17\.250\.605\.000 đồng/);
   checks++;
-  assert.match(result.body.text, /CHƯA ĐẦY ĐỦ/);
+  assert.match(result.body.text, /CHƯA ĐỦ DỮ LIỆU/);
   checks++;
   eq(embeddingCalls, 0, "Financial query does not embed documents or question");
   eq(prompts.length, 1, "SQL answer needs only planning call");
@@ -471,8 +474,27 @@ try {
   eq(
     ambiguous.body.usage.input_tokens,
     0,
-    "Ambiguous common total clarified without model",
+    "General financial overview runs without model",
   );
+  const beforeOverview = rpcCalls.length;
+  const overview = await chat.handleKnowledgeChat(req, { ...body, messages: [{ role: "user", text: "83 file này bao tiền?" }] });
+  eq(overview.status, 200);
+  eq(overview.body.usage.input_tokens, 0);
+  eq(rpcCalls.slice(beforeOverview).filter(c => c.name === "dk_automatic_summary").map(c => c.args.p_metric), ["contract_total", "accepted_total", "paid_total"]);
+  eq(rpcCalls.slice(beforeOverview).filter(c => c.name === "dk_automatic_summary").every(c => c.args.p_expected_documents === 83), true);
+  assert.match(overview.body.text, /KẾT QUẢ TỰ ĐỘNG/); checks++;
+  assert.match(overview.body.text, /không cộng chúng thành một tổng/); checks++;
+  const mismatch = await chat.handleKnowledgeChat(req, { ...body, messages: [{ role: "user", text: "15 file này bao tiền?" }] });
+  assert.match(mismatch.body.text, /Phạm vi chưa khớp/); checks++;
+  eq(mismatch.body.text.includes("17.250.605.000"), false);
+  const subset = await chat.handleKnowledgeChat(req, { ...body, messages: [{ role: "user", text: "2 file trong 83 file bao tiền?" }] });
+  eq(subset.body.code, "DK_DOCUMENT_SCOPE_REQUIRED");
+  const summaries = await load("app/api/document-knowledge/summary/route.ts", { "@/lib/server/documentKnowledgeStore": store, "@/lib/server/documentKnowledgeWeb": web });
+  await summaries.GET(new Request(`http://localhost/summary?project=${pid}`));
+  eq(rpcCalls.at(-1).name, "dk_automatic_summary", "UI defaults to automatic totals");
+  await summaries.GET(new Request(`http://localhost/summary?project=${pid}&mode=verified`));
+  eq(rpcCalls.at(-1).name, "dk_financial_summary", "Manual verified totals remain explicitly available");
+  eq((await summaries.GET(new Request(`http://localhost/summary?project=${pid}&mode=unsafe`))).body.code, "DK_INVALID_QUERY");
   delete process.env.CHAT_LEGACY_ADMIN_IDS;
   eq(
     await web.legacyKnowledgeRestricted(),

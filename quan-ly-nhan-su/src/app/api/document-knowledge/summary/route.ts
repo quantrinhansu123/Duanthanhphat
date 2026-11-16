@@ -14,6 +14,8 @@ export async function GET(request: Request) {
     );
     const metric = url.searchParams.get("metric") || "accepted_total";
     const contract=url.searchParams.get('contract');
+    const mode = url.searchParams.get("mode") || "automatic";
+    if (!["automatic", "verified"].includes(mode)) throw new Error("DK_INVALID_QUERY");
     if(contract!==null&&(!contract.trim()||contract.length>200))throw new Error('DK_INVALID_QUERY');
     const date =
       url.searchParams.get("asOf") ||
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
       throw new Error("DK_INVALID_QUERY");
     return NextResponse.json(
       knowledgeResult(
-        await client.rpc("dk_financial_summary", {
+        await client.rpc(mode === "verified" ? "dk_financial_summary" : "dk_automatic_summary", {
           p_project: project,
           p_metric: metric,
           p_as_of: date,

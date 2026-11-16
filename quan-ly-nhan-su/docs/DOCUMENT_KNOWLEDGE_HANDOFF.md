@@ -2,6 +2,8 @@
 
 ## Tình trạng
 
+- Mặc định mới tự đọc, kiểm tra và tính trên dữ liệu đủ căn cứ; không bắt duyệt mọi tệp. Số tự động và số được người duyệt có nhãn/chế độ riêng. Đọc [luồng tự động](DOCUMENT_KNOWLEDGE_AUTOMATIC.md), cài migration mới nhất có `automatic_check` và RPC `dk_automatic_summary`.
+
 - Mã ở nhánh `feat/document-knowledge-etl`, đã đồng bộ vào repo `E:\duanthanhphat` anh Huy đang mở. Nhánh `main` local được giữ nguyên.
 - Supabase Data API đã xác thực được; chưa có bảng `dk_*`. **Chưa chạy SQL trên database thật**, theo yêu cầu để đồng nghiệp quản lý Supabase triển khai sau.
 - Gemini đã chạy đạt embedding tài liệu/câu hỏi 768 chiều, trích xuất 3 dữ kiện và OCR ảnh mẫu. Tất cả là dữ liệu synthetic; chưa đưa hồ sơ công ty lên pipeline này.
@@ -37,7 +39,7 @@ Nếu repo triển khai đã có thay đổi riêng, dùng nhánh tích hợp v�
 4. Đăng nhập Codex bằng tài khoản vận hành trên máy server. Kiểm tra đường dẫn executable Windows nếu cần. Khóa Google Drive/Cloudinary không thay thế `GEMINI_API_KEY` cho OCR/embedding.
 5. Sau khi schema và cấu hình sẵn sàng, đặt `DOCUMENT_KNOWLEDGE_ENABLED=true`, build và khởi động lại web server; chạy worker riêng với chế độ watch. Bật giám sát/khởi động lại worker theo hạ tầng của nhóm.
 6. Người có quyền vào **Hồ sơ AI_QS → Kho hồ sơ hỏi đáp**, tạo kho, nhập 2–3 hồ sơ đại diện; đối soát số tiền, ngày, mã hợp đồng và lũy kế. Đạt rồi mới nhập đủ 83 tệp. Không tạo một hợp đồng/giá trị tiền cho mỗi tệp.
-7. Xác minh các dữ kiện và từng tài liệu, thử tổng SQL và câu hỏi điều khoản có dẫn trang. Đo usage thực tế trước/sau trên cùng câu hỏi; có độ phủ chưa đủ thì giữ trạng thái chưa đầy đủ.
+7. Thử tổng tự động và câu hỏi “83 file này bao tiền” có dẫn trang; không cần duyệt thủ công để ra số tự động. Kiểm tra các cảnh báo thiếu/mâu thuẫn, thử chế độ chỉ số đã xác minh khi cần. Đo usage trước/sau; chưa đủ độ phủ thì giữ nhãn chưa đầy đủ và chưa xác minh nghiệp vụ.
 
 ```powershell
 cd quan-ly-nhan-su
@@ -48,6 +50,8 @@ pnpm.cmd knowledge:ocr:check
 pnpm.cmd test:knowledge
 # Tùy chọn, gọi Google bằng fixtures synthetic; có sử dụng hạn mức API.
 pnpm.cmd knowledge:smoke -- --live
+# Chỉ thử trích xuất/kiểm tra tự động trên 3 trang chữ synthetic (có dùng API).
+pnpm.cmd knowledge:automatic:smoke -- --live
 $env:NODE_OPTIONS='--max-old-space-size=4096'
 pnpm.cmd build
 pnpm.cmd start
@@ -60,6 +64,14 @@ pnpm.cmd knowledge:worker -- --watch
 ```
 
 Các biến tối thiểu: Supabase URL/anon/service role theo cấu hình hiện tại, `GEMINI_API_KEY`, `DOCUMENT_KNOWLEDGE_ENABLED`, model/worker trong `.env.example`, Codex đã đăng nhập. Nhập từ thư mục local cần thêm `CHAT_CONTRACT_DIR` và tài khoản cho phép trong `KNOWLEDGE_LOCAL_SCAN_USERS`; upload qua UI không cần quyền quét thư mục. `CHAT_LEGACY_ADMIN_IDS` mặc định trống, chỉ cấu hình cho quản trị thật sự cần luồng CLI cũ toàn quyền.
+
+Để không yêu cầu người dùng nạp từng tệp, quản trị tạo kho một lần, đặt `CHAT_CONTRACT_DIR` tới thư mục hồ sơ trên máy worker rồi cấu hình tiến trình lâu dài:
+
+```powershell
+pnpm.cmd knowledge:worker -- --watch --project <UUID-kho> --folder "Tong hop HD voi ben A"
+```
+
+Worker quét đệ quy toàn bộ thư mục, tự xử lý tệp mới/thay đổi; không nhập lại bản không đổi. Đây là thư mục trên **server**, không phải đường dẫn trên máy khách. Hồ sơ ở Google Drive/nguồn khác cần người triển khai nối hoặc đồng bộ đúng thư mục nguồn; bản này chưa tự liên thông mọi kho Drive cũ.
 
 ## Nghiệm thu tối thiểu
 

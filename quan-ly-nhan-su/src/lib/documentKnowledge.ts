@@ -1,6 +1,6 @@
 /** Shared domain rules. No framework or credentials; also used by the Node background worker. */
 export const KNOWLEDGE_BUCKET = "document-knowledge";
-export const KNOWLEDGE_PIPELINE = "dk-v2";
+export const KNOWLEDGE_PIPELINE = "dk-v3";
 export const EMBEDDING_DIMENSIONS = 768;
 export const KNOWLEDGE_METRICS = {
   contract_total: "Giá trị hợp đồng và phần tăng/giảm theo phụ lục",
@@ -43,6 +43,7 @@ export type ExtractedFact = {
   period_index: number | null;
   source_page: number;
   quote: string;
+  event_ref?: string | null;
 };
 export type KnowledgeChunk = {
   page: number;
@@ -76,7 +77,7 @@ export function normalizeKnowledgeText(value: string) {
 /** Exact common intents only. Filters/dates/contract names still require the planner. */
 export function knownKnowledgeMetricQuestion(
   value: string,
-): KnowledgeMetric | "clarify" | null {
+): KnowledgeMetric | "overview" | null {
   const question = normalizeKnowledgeText(value)
     .replace(/[?!.]+/g, "")
     .replace(/\s+/g, " ")
@@ -110,12 +111,16 @@ export function knownKnowledgeMetricQuestion(
     [
       "tong tien",
       "tong bao nhieu tien",
-      "tong 83 file bao nhieu tien",
-      "83 tep tong bao nhieu tien",
     ].includes(question)
+    || /^(?:tong\s+)?\d+\s*(?:file|tep|tai lieu)(?:\s+nay)?\s+(?:(?:co|tong|la)\s+)*(?:bao\s+nhieu\s+tien|bao\s+tien|tong\s+tien)$/.test(question)
   )
-    return "clarify";
+    return "overview";
   return null;
+}
+export function knowledgeQuestionDocumentCount(value: string): number | null {
+  const matches = [...normalizeKnowledgeText(value).matchAll(/\b([0-9]+)\s*(?:file|tep|tai lieu)\b/g)].map(m => Number(m[1]));
+  if (new Set(matches).size > 1 || matches.some(n => !Number.isSafeInteger(n) || n < 1 || n > 1000000)) throw new Error("DK_DOCUMENT_SCOPE_REQUIRED");
+  return matches[0] ?? null;
 }
 export function splitKnowledgePages(pages: KnowledgePage[]): KnowledgeChunk[] {
   const chunks: KnowledgeChunk[] = [];
@@ -169,6 +174,8 @@ export function validateExtractedFacts(
       throw new Error("DK_INVALID_AMOUNT");
     if (f.event_date !== null && !isIsoDate(f.event_date))
       throw new Error("DK_INVALID_DATE");
+    if (f.event_ref !== undefined && f.event_ref !== null && (typeof f.event_ref !== "string" || !f.event_ref.trim() || f.event_ref.length > 120 || !source.text.toUpperCase().includes(f.event_ref.toUpperCase())))
+      throw new Error("DK_EVIDENCE_NOT_FOUND");
     if (
       f.period_index !== null &&
       (!Number.isInteger(f.period_index) || Number(f.period_index) < 1)

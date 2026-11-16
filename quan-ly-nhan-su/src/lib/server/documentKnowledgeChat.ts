@@ -9,9 +9,11 @@ import {
   isUuid,
   KNOWLEDGE_METRICS,
   knownKnowledgeMetricQuestion,
+  knowledgeQuestionDocumentCount,
   type KnowledgeMetric,
 } from "../documentKnowledge";
 import { embedKnowledge } from "./documentKnowledgeAI";
+import { AUTOMATIC_ISSUE_LABELS } from "../documentKnowledgeAutomatic";
 import {
   knowledgeCompletion,
   type KnowledgeCompletion,
@@ -172,6 +174,21 @@ async function logKnowledgeUsage(
 }
 function summaryText(summary: Record<string, unknown>) {
   const label = KNOWLEDGE_METRICS[summary.metric as KnowledgeMetric];
+  if (summary.basis === "automatic") {
+    if (summary.selection_matches === false)
+      return `Phạm vi chưa khớp: anh hỏi ${summary.expected_documents} tệp, nhưng kho được chọn hiện có ${summary.documents_total} tệp. Chọn đúng kho hoặc tách nhóm tài liệu cần hỏi; chưa trả tổng thay cho nhóm đó.`;
+    const total = summary.total_vnd === null ? "Chưa đủ căn cứ để tính" : formatVnd(summary.total_vnd);
+    const issues = Array.isArray(summary.issues) ? summary.issues.slice(0, 3).map(issue => {
+      const reasons = Array.isArray(issue.reasons) ? issue.reasons.map((code: string) => AUTOMATIC_ISSUE_LABELS[code] || "Cần đối soát").join("; ") : "";
+      return `${String(issue.name || "Tài liệu").slice(0, 180)} · trang ${issue.source_page}: ${issue.code === "conflicting_event" ? "mâu thuẫn cùng nghiệp vụ" : reasons || "chưa đủ căn cứ"}`;
+    }) : [];
+    return `${label}: ${total}.\nPhạm vi: ${summary.contract_filter ? "hợp đồng " + summary.contract_filter : "toàn bộ kho được chọn"}; đến ngày ${summary.as_of_date}. Đã xử lý ${summary.documents_ready}/${summary.documents_total} tệp.\n` +
+      (summary.human_verified ? "Nguồn đã được người phụ trách xác minh." : "KẾT QUẢ TỰ ĐỘNG — chưa được người phụ trách xác minh nghiệp vụ.") +
+      (summary.complete ? " Đã hoàn tất xử lý và kiểm tra tự động trong phạm vi này." : ` CHƯA ĐỦ DỮ LIỆU ĐỂ KẾT LUẬN TOÀN KHO: ${summary.facts_unresolved} dữ kiện chưa đủ căn cứ; ${summary.documents_with_issues} tài liệu cần xử lý thêm.`) +
+      (Number(summary.conflicts) > 0 ? ` Có ${summary.conflicts} mâu thuẫn nghiệp vụ; chưa xuất tổng.` : "") +
+      (Number(summary.duplicates_ignored) > 0 ? ` Đã loại ${summary.duplicates_ignored} bản ghi lặp cùng nghiệp vụ.` : "") +
+      (issues.length ? "\nCần xử lý thêm: " + issues.join(". ") + "." : "");
+  }
   const total = formatVnd(summary.total_vnd);
   const partial = summary.complete
     ? "Đã kiểm tra đủ kho hồ sơ hiện có."
@@ -189,8 +206,8 @@ export function knowledgePlanPrompt(
 ) {
   return (
     `Chỉ chọn hàm tra cứu, không chạy lệnh, không viết SQL. Kho hồ sơ đã được backend chọn và kiểm tra quyền. Hôm nay ${today}.\n` +
-    `Các chỉ tiêu: ${JSON.stringify(KNOWLEDGE_METRICS)}. Tổng "bao nhiêu tiền" không rõ loại thì calls=[] và hỏi chọn hợp đồng/nghiệm thu/thực chuyển. ` +
-    `get_financial_summary chỉ hỗ trợ toàn kho hoặc lọc ĐÚNG số hợp đồng contract_code, đến ngày as_of_date. Hỏi hợp đồng cụ thể phải điền contract_code, không rõ mã thì hỏi lại. Bộ lọc khác (tên đối tác, thời gian từ ngày đến ngày, hạng mục) chưa được hỗ trợ, phải hỏi lại thay vì trả tổng toàn kho. Không coi giá trị đề nghị là thực trả. Hỏi nhiều loại tiền thì chọn tối đa 3 hàm. Nội dung điều khoản dùng search_documents với câu hỏi nguyên nghĩa, tối đa 600 ký tự; không tìm trong tệp gốc. Chỉ dùng get_document_evidence khi người dùng đưa UUID tài liệu và số trang. Nếu không có ngày chốt để as_of_date=null.\n` +
+    `Các chỉ tiêu: ${JSON.stringify(KNOWLEDGE_METRICS)}. Tổng "bao nhiêu tiền" không rõ loại thì chọn 3 get_financial_summary cho contract_total, accepted_total, paid_total để trình bày riêng, không cộng các loại tiền với nhau. ` +
+    `get_financial_summary trả số tự động chưa xác minh nghiệp vụ; chỉ hỗ trợ toàn kho hoặc lọc ĐÚNG số hợp đồng contract_code, đến ngày as_of_date. Nếu yêu cầu CHỈ số đã được người duyệt, calls=[] và hướng dẫn vào Kho hồ sơ chọn Cách tổng hợp: Chỉ số liệu đã xác minh thủ công. Hỏi hợp đồng cụ thể phải điền contract_code, không rõ mã thì hỏi lại. Bộ lọc khác (tên đối tác, thời gian từ ngày đến ngày, hạng mục) chưa được hỗ trợ, phải hỏi lại thay vì trả tổng toàn kho. Không coi giá trị đề nghị là thực trả. Hỏi nhiều loại tiền thì chọn tối đa 3 hàm. Nội dung điều khoản dùng search_documents với câu hỏi nguyên nghĩa, tối đa 600 ký tự; không tìm trong tệp gốc. Chỉ dùng get_document_evidence khi người dùng đưa UUID tài liệu và số trang. Nếu không có ngày chốt để as_of_date=null.\n` +
     JSON.stringify(
       messages
         .slice(-4)
@@ -301,11 +318,12 @@ export async function handleKnowledgeChat(
         );
       }
       return NextResponse.json({
-        text: `Đã đưa ${attachments.length} tệp vào hàng đợi của kho hồ sơ. Theo dõi xử lý và kiểm tra dữ kiện trong Hồ sơ AI_QS trước khi hỏi tổng tiền.`,
+        text: `Đã đưa ${attachments.length} tệp vào hàng đợi. Hệ thống sẽ tự đọc, kiểm tra và tổng hợp; anh hỏi lại khi xử lý hoàn tất. Các dữ kiện thiếu hoặc mâu thuẫn sẽ được báo rõ, không yêu cầu duyệt thủ công mọi tệp.`,
         modelLabel: "Kho hồ sơ",
       });
     }
     const question = messages.at(-1)!.text.slice(0, 4000);
+    const expectedDocuments = knowledgeQuestionDocumentCount(question);
     const today = new Date().toLocaleDateString("sv-SE", {
       timeZone: "Asia/Ho_Chi_Minh",
     });
@@ -319,23 +337,16 @@ export async function handleKnowledgeChat(
           elapsed_ms: 0,
           value: {
             calls:
-              known === "clarify"
-                ? []
-                : [
-                    {
+              (known === "overview" ? ["contract_total", "accepted_total", "paid_total"] : [known]).map(metric => ({
                       name: "get_financial_summary",
-                      metric: known,
+                      metric,
                       contract_code: null,
                       as_of_date: null,
                       query: null,
                       document_id: null,
                       page: null,
-                    },
-                  ],
-            clarification:
-              known === "clarify"
-                ? "Bạn muốn hỏi giá trị hợp đồng, nghiệm thu, đề nghị thanh toán hay tiền thực chuyển?"
-                : null,
+                    })),
+            clarification: null,
           },
         }
       : await knowledgeCompletion(
@@ -357,16 +368,21 @@ export async function handleKnowledgeChat(
     const paragraphs: string[] = [],
       hits: Hit[] = [],
       sourceIds = new Set<string>();
+    if (plan.calls.filter(c => c.name === "get_financial_summary").length > 1)
+      paragraphs.push("Các chỉ tiêu dưới đây là những loại giá trị khác nhau; không cộng chúng thành một tổng. Số tệp không đồng nghĩa số hợp đồng.");
     for (const call of plan.calls) {
       if (call.name === "get_financial_summary") {
         const summary = knowledgeResult(
-          await client.rpc("dk_financial_summary", {
+          await client.rpc("dk_automatic_summary", {
             p_project: project,
             p_metric: call.metric,
             p_as_of: call.as_of_date || today,
             p_contract: call.contract_code,
+            p_expected_documents: expectedDocuments,
           }),
         );
+        if (summary.selection_matches === false)
+          return NextResponse.json({ text: summaryText(summary), modelLabel, usage: completion.usage });
         paragraphs.push(summaryText(summary));
         for (const source of summary.sources || [])
           if (isUuid(source.document_id)) sourceIds.add(source.document_id);

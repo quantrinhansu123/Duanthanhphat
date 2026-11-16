@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       const result = await client
         .from("dk_documents")
         .select(
-          "id,name,source_key,revision,state,review_state,page_count,error_code,updated_at",
+          "id,name,source_key,revision,state,review_state,page_count,error_code,updated_at,automatic_check",
           { count: "exact" },
         )
         .eq("project_id", project)

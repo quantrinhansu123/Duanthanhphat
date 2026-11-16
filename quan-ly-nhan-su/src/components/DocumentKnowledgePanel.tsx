@@ -9,6 +9,7 @@ import {
   type FactKind,
 } from "@/lib/documentKnowledge";
 import { useAccess } from "@/lib/useAccess";
+import { AUTOMATIC_ISSUE_LABELS } from "@/lib/documentKnowledgeAutomatic";
 
 type Project = {
   id: string;
@@ -24,6 +25,7 @@ type Doc = {
   review_state: string;
   page_count: number | null;
   error_code: string | null;
+  automatic_check?: { version?: string; issues: string[] };
 };
 type Fact = {
   id: string;
@@ -37,6 +39,7 @@ type Fact = {
   quote: string;
   status: string;
   review_version: number;
+  automatic_check?: { eligible: boolean; issues: string[] };
 };
 type Detail = { document: Doc; facts: Fact[]; facts_total: number };
 type Summary = {
@@ -47,6 +50,11 @@ type Summary = {
   documents_verified: number;
   facts_pending: number;
   conflicts: number;
+  basis?: string;
+  human_verified?: boolean;
+  facts_unresolved?: number;
+  documents_with_issues?: number;
+  duplicates_ignored?: number;
 };
 const input =
   "w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-[#0047AB] disabled:bg-slate-100";
@@ -118,7 +126,7 @@ function FactReview({
     >
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="rounded-full bg-white px-2 py-1 font-medium text-slate-700">
-          {states[fact.status] || fact.status}
+          {fact.status === "pending" && fact.automatic_check?.eligible ? "Đủ căn cứ tính tự động" : states[fact.status] || fact.status}
         </span>
         <div className="flex gap-3">
           <button
@@ -280,6 +288,7 @@ export default function DocumentKnowledgePanel() {
     [notice, setNotice] = useState("");
   const [metric, setMetric] = useState("accepted_total"),
     [summary, setSummary] = useState<Summary | null>(null);
+  const [summaryMode, setSummaryMode] = useState("automatic");
   const [reviewNote, setReviewNote] = useState(""),
     [checked, setChecked] = useState(false),
     [manualQuote, setManualQuote] = useState("");
@@ -436,7 +445,7 @@ export default function DocumentKnowledgePanel() {
             Kho hồ sơ hỏi đáp
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Xử lý tài liệu một lần. Số tiền chỉ được tính sau khi xác minh.
+            Tự đọc và tổng hợp khi xử lý xong. Kết quả tự động kèm nguồn và cảnh báo; xác minh thủ công là tùy chọn.
           </p>
         </div>
         <button
@@ -591,7 +600,7 @@ export default function DocumentKnowledgePanel() {
                   setBusy(true);
                   setError("");
                   void api(
-                    `/api/document-knowledge/summary?project=${project}&metric=${metric}`,
+                    `/api/document-knowledge/summary?project=${project}&metric=${metric}&mode=${summaryMode}`,
                   )
                     .then(setSummary)
                     .catch((e) => setError(e.message))
@@ -599,7 +608,7 @@ export default function DocumentKnowledgePanel() {
                 }}
               >
                 <label className="min-w-0 flex-1 text-xs text-slate-700">
-                  Số liệu đã xác minh
+                  Chỉ tiêu cần xem
                   <select
                     className={input}
                     value={metric}
@@ -615,20 +624,31 @@ export default function DocumentKnowledgePanel() {
                     ))}
                   </select>
                 </label>
+                <label className="text-xs text-slate-700">
+                  Cách tổng hợp
+                  <select className={input} value={summaryMode} onChange={e => { setSummaryMode(e.target.value); setSummary(null); }}>
+                    <option value="automatic">Tự động, không chờ duyệt</option>
+                    <option value="verified">Chỉ số liệu đã xác minh thủ công</option>
+                  </select>
+                </label>
                 <button className={button} disabled={busy}>
                   Xem tổng
                 </button>
                 {summary && (
                   <div className="w-full text-sm text-slate-800" role="status">
                     <p className="text-xl font-bold tabular-nums">
-                      {formatVnd(summary.total_vnd)}
+                      {summary.basis === "automatic" && summary.total_vnd === null ? "Chưa đủ căn cứ để tính" : formatVnd(summary.total_vnd)}
                     </p>
                     <p
                       className={
                         summary.complete ? "text-emerald-800" : "text-amber-900"
                       }
                     >
-                      {summary.complete
+                      {summary.basis === "automatic" ? <>
+                        {summary.complete ? "Đã hoàn tất xử lý và kiểm tra tự động trong phạm vi này." : "Kết quả tự động chưa đầy đủ."}{" "}
+                        Đã xử lý {summary.documents_ready}/{summary.documents_total} tệp; {summary.facts_unresolved || 0} dữ kiện chưa đủ căn cứ; {summary.duplicates_ignored || 0} bản ghi lặp đã loại.
+                        {summary.conflicts > 0 ? " Có mâu thuẫn nghiệp vụ nên chưa xuất tổng." : ""}
+                      </> : <>{summary.complete
                         ? "Đã kiểm tra đủ hồ sơ hiện có."
                         : "Số liệu chưa đầy đủ."}{" "}
                       Đã xử lý {summary.documents_ready}/
@@ -637,8 +657,9 @@ export default function DocumentKnowledgePanel() {
                       dữ kiện chờ duyệt.
                       {summary.conflicts > 0
                         ? " Có mâu thuẫn kỳ/ngày, cần đối soát."
-                        : ""}
+                        : ""}</>}
                     </p>
+                    {summary.basis === "automatic" && !summary.human_verified && <p className="mt-1 text-xs text-slate-600">Số liệu do hệ thống nhận dạng và kiểm tra tự động, chưa được người phụ trách xác minh nghiệp vụ.</p>}
                   </div>
                 )}
               </form>
@@ -673,7 +694,7 @@ export default function DocumentKnowledgePanel() {
                           </span>
                           <span className="mt-1 block text-xs text-slate-600">
                             Bản {d.revision} · {states[d.state]} ·{" "}
-                            {states[d.review_state]}
+                            {d.review_state === "verified" ? "Đã xác minh thủ công" : d.state === "ready" && d.automatic_check?.version ? (d.automatic_check.issues.length ? "Có cảnh báo tự động" : "Đã phân tích tự động") : states[d.review_state]}
                           </span>
                         </button>
                       </li>
@@ -812,7 +833,11 @@ export default function DocumentKnowledgePanel() {
                               </button>
                             )}
                           </details>
-                          <div className="space-y-3">
+                          <p className="mb-3 text-sm text-slate-600">Tự động kiểm tra: {detail.facts.filter(f => f.status === "approved" || f.automatic_check?.eligible).length}/{detail.facts.length} dữ kiện đủ căn cứ. Không cần duyệt thủ công để xem kết quả tự động.</p>
+                          {detail.facts.some(f => f.status === "pending" && !f.automatic_check?.eligible) && <ul className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{detail.facts.filter(f => f.status === "pending" && !f.automatic_check?.eligible).slice(0, 5).map(f => <li key={f.id}>Trang {f.source_page}: {(f.automatic_check?.issues || ["not_assessed"]).map(code => AUTOMATIC_ISSUE_LABELS[code] || "Cần đối soát thêm").join("; ")}.</li>)}</ul>}
+                          <details className="rounded-lg border border-slate-200 p-3">
+                            <summary className="cursor-pointer text-sm font-medium text-slate-800">Kiểm tra hoặc sửa số liệu (tùy chọn)</summary>
+                          <div className="mt-3 space-y-3">
                             {detail.facts.map((f) => (
                               <FactReview
                                 key={`${f.id}:${f.review_version}`}
@@ -958,6 +983,7 @@ export default function DocumentKnowledgePanel() {
                               </form>
                             </>
                           )}
+                          </details>
                         </>
                       )}
                     </>
