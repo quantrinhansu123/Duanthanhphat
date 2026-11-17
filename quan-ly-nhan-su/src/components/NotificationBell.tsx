@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell } from "@/components/icons";
+import { Bell, X } from "@/components/icons";
 import { useAccess } from "@/lib/useAccess";
 import {
   loadNotifications,
@@ -61,6 +61,7 @@ export default function NotificationBell({ label }: { label: string }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const { ready, userName } = useAccess();
   const knownIds = useRef<Set<string> | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -86,18 +87,36 @@ export default function NotificationBell({ label }: { label: string }) {
     };
   }, [open, ready, userName]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const unread = items.filter((item) => !item.read).length;
 
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next) {
-      const unreadIds = items.filter((item) => !item.read).map((item) => item.id);
-      if (unreadIds.length) {
-        await markNotificationsRead(unreadIds);
-        setItems((current) => current.map((item) => ({ ...item, read: true })));
-      }
+  function close() {
+    setOpen(false);
+  }
+
+  async function openPanel() {
+    setOpen(true);
+    const unreadIds = items.filter((item) => !item.read).map((item) => item.id);
+    if (unreadIds.length) {
+      await markNotificationsRead(unreadIds);
+      setItems((current) => current.map((item) => ({ ...item, read: true })));
     }
+  }
+
+  async function toggle() {
+    if (open) {
+      close();
+      return;
+    }
+    await openPanel();
   }
 
   return (
@@ -107,6 +126,7 @@ export default function NotificationBell({ label }: { label: string }) {
         type="button"
         aria-label={label}
         aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={() => void toggle()}
       >
         <Bell size={18} weight="regular" aria-hidden />
@@ -120,25 +140,50 @@ export default function NotificationBell({ label }: { label: string }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[320px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            Thông báo
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {items.length === 0 && (
-              <div className="px-3 py-6 text-center text-sm text-slate-500">Chưa có thông báo.</div>
-            )}
-            {items.map((item) => (
-              <div key={item.id} className="border-b border-slate-100 px-3 py-2.5 last:border-0">
-                <div className="text-sm font-bold text-rose-700">{item.title}</div>
-                <div className="mt-0.5 text-xs text-slate-700">{item.body}</div>
-                {formatNotificationTime(item.createdAt) && (
-                  <div className="mt-1 font-mono text-[11px] text-slate-500">{formatNotificationTime(item.createdAt)}</div>
-                )}
+        <>
+          <button
+            type="button"
+            aria-label="Đóng"
+            className="fixed inset-0 z-40 cursor-pointer bg-slate-900/40 backdrop-blur-xs"
+            onClick={close}
+          />
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Thông báo"
+            className="fixed inset-x-3 top-[max(4.5rem,env(safe-area-inset-top))] z-50 mx-auto max-h-[min(70vh,28rem)] w-auto max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[320px] sm:max-w-none"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Thông báo
               </div>
-            ))}
+              <button
+                type="button"
+                onClick={close}
+                className="inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Đóng"
+              >
+                <X size={16} weight="bold" aria-hidden />
+                <span>Đóng</span>
+              </button>
+            </div>
+            <div className="max-h-[min(60vh,22rem)] overflow-y-auto overscroll-contain">
+              {items.length === 0 && (
+                <div className="px-3 py-6 text-center text-sm text-slate-500">Chưa có thông báo.</div>
+              )}
+              {items.map((item) => (
+                <div key={item.id} className="border-b border-slate-100 px-3 py-2.5 last:border-0">
+                  <div className="text-sm font-bold text-rose-700">{item.title}</div>
+                  <div className="mt-0.5 text-xs text-slate-700">{item.body}</div>
+                  {formatNotificationTime(item.createdAt) && (
+                    <div className="mt-1 font-mono text-[11px] text-slate-500">{formatNotificationTime(item.createdAt)}</div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
