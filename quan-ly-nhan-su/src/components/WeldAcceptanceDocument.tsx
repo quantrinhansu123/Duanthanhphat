@@ -176,12 +176,21 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
         if (i) pdf.addPage();
         pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, (h * 210) / canvas.width);
       }
-      // jsPDF.save() trên iOS Safari mở PDF ngay trong tab → dùng <a download> để buộc tải file về.
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(pdf.output("blob"));
-      a.download = `${(view.rfi?.rfi.so_phieu ?? "Phieu-YCNT").replace(/[\\/:*?"<>|]/g, "-")}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      // iOS Safari mở PDF ngay trong tab khi save()/<a download> → ưu tiên bảng chia sẻ (có "Lưu vào Tệp"), không được thì <a download>.
+      const name = `${(view.rfi?.rfi.so_phieu ?? "Phieu-YCNT").replace(/[\\/:*?"<>|]/g, "-")}.pdf`;
+      const blob = pdf.output("blob");
+      const file = new File([blob], name, { type: "application/pdf" });
+      let shared = false;
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); shared = true; }
+        catch (e) { if (e instanceof DOMException && e.name === "AbortError") shared = true; /* người dùng đóng bảng chia sẻ */ }
+      }
+      if (!shared) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xuất được PDF.");
     } finally { host.remove(); setBusy(false); }
