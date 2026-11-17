@@ -18,6 +18,8 @@ export async function exportPagesPdf(pages: HTMLElement[], filename: string, clo
     return c;
   });
   document.body.appendChild(host);
+  const hidden = printHiddenSelectors();
+  for (const c of clones) for (const sel of hidden) { try { c.querySelectorAll<HTMLElement>(sel).forEach((n) => { n.style.display = "none"; }); } catch { /* selector không hợp lệ */ } }
   try {
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas-pro"), import("jspdf")]);
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -56,4 +58,52 @@ export async function exportPagesPdf(pages: HTMLElement[], filename: string, clo
 export async function printOrPdfAcceptance(filename: string) {
   if (!isTouchDevice()) { window.print(); return; }
   await exportPagesPdf([...document.querySelectorAll<HTMLElement>(".acceptance-print-root .acceptance-page")], filename);
+}
+
+/** Các selector bị `display:none` trong @media print (nút In, thanh công cụ, `print:hidden`…) → ẩn khi chụp, giống bản in. */
+function printHiddenSelectors(): string[] {
+  const out: string[] = [];
+  const walk = (rules: CSSRuleList, inPrint: boolean) => {
+    for (const r of Array.from(rules)) {
+      if (r instanceof CSSMediaRule) walk(r.cssRules, inPrint || /print/.test(r.media.mediaText));
+      else if (r instanceof CSSStyleRule) { if (inPrint && r.style.display === "none") out.push(r.selectorText); }
+      else if ("cssRules" in r) walk((r as CSSGroupingRule).cssRules, inPrint); // @layer, @supports…
+    }
+  };
+  for (const sheet of Array.from(document.styleSheets)) { try { walk(sheet.cssRules, false); } catch { /* stylesheet khác nguồn */ } }
+  return out;
+}
+
+/** Lớp phủ toàn màn hình (hộp thoại xem trước in) đang hiển thị — phần tử trên cùng. */
+function findPrintOverlay(): HTMLElement | null {
+  const all = Array.from(document.body.querySelectorAll<HTMLElement>("div,main,section,dialog"));
+  let best: HTMLElement | null = null;
+  for (const el of all) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" || cs.display === "none" || cs.visibility === "hidden") continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < innerWidth * 0.9 || r.height < innerHeight * 0.9) continue;
+    if (el.textContent?.trim().length === 0) continue;
+    best = el; // phần tử sau trong DOM nằm trên
+  }
+  return best;
+}
+
+/**
+ * Điện thoại: thay window.print() cho MỌI phiếu in — chụp hộp thoại xem trước đang mở thành PDF.
+ * Phiếu đã có bộ xuất riêng (RFI, BBNT) không đi qua đây. Máy tính giữ nguyên window.print().
+ */
+export function installTouchPrint() {
+  if (!isTouchDevice() || (window as unknown as { __touchPrint?: boolean }).__touchPrint) return;
+  (window as unknown as { __touchPrint?: boolean }).__touchPrint = true;
+  const original = window.print.bind(window);
+  window.print = () => {
+    const overlay = findPrintOverlay();
+    if (!overlay) { original(); return; }
+    const name = (document.title.trim() || overlay.getAttribute("aria-label") || "Phieu-in").slice(0, 80);
+    void exportPagesPdf([overlay], overlay.getAttribute("aria-label") || name,
+      "position:static;inset:auto;height:auto;max-height:none;overflow:visible;width:794px;padding:0;background:#fff")
+      .catch(() => original())
+      .finally(() => window.dispatchEvent(new Event("afterprint"))); // trả lại document.title đã đổi trước khi in
+  };
 }

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { List, CaretRight, ArrowLeft, House, ArrowClockwise } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
+import { installTouchPrint } from "@/lib/pdfExport";
 import { useOverlayBack } from "@/lib/useBackClose";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationBell from "@/components/NotificationBell";
@@ -148,6 +149,8 @@ function tabFromPath(pathname: string) {
 
 function useClientClock(lang: "vi" | "en") {
   const [clock, setClock] = useState<{ time: string; date: string } | null>(null);
+
+  useEffect(() => { installTouchPrint(); }, []); // điện thoại: mọi phiếu in → tải PDF
 
   useEffect(() => {
     const locale = lang === "en" ? "en-US" : "vi-VN";
