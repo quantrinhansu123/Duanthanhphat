@@ -89,9 +89,14 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   void [accepted, splitRfis, splitRfiWelds]; // nhật ký lấy RFI chính phát trong ngày và nghiệm thu đã chốt trong ngày
   const located = new Map(all.map((w) => {
-    const point = points.find((p) => p.lich_su_moi_han_id === w.id);
+    const forWeld = points.filter((p) => p.lich_su_moi_han_id === w.id);
+    // Ưu tiên điểm có mã tuyến TT/TP/HT/HP (hoặc UT/UP/DT/DP); tránh lấy bản ghi GPS trống làm mất tuyến.
+    const point =
+      forWeld.find((p) => /^(TT|TP|UT|UP|HT|HP|DT|DP)/i.test(String(p.ma_diem ?? "").trim()))
+      ?? forWeld.find((p) => String(p.ma_diem ?? "").trim())
+      ?? forWeld[0];
     // Lý trình ưu tiên điểm GPS; dự án không có tọa độ thì lấy lý trình ghi trong nhật ký hàn.
-    return [w.id, { ...w, ...point, ly_trinh: point?.ly_trinh || w.ly_trinh || null }];
+    return [w.id, { ...w, ...point, ma_diem: point?.ma_diem || null, ly_trinh: point?.ly_trinh || w.ly_trinh || null }];
   }));
   const select = (keys: string[]) => keys.flatMap((id) => located.has(id) ? [located.get(id)!] : []);
   // Máy hàn thực tế dùng trong ngày (nhật ký hàn) — ưu tiên hơn mã máy gán dự án chưa khớp danh mục.
@@ -157,10 +162,19 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   return {
     ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
-    // Mục hàn lấy theo báo cáo ngày nếu có; mài ray, RFI báo trong ngày và giải tỏa ứng suất luôn được ghép thêm (không bị báo cáo ngày che mất).
-    // 3.1 Công việc thực hiện trong ngày (theo Nhật ký hàn): Hàn ray · Mài ray · Giải toả ứng suất (chỉ khi có RFI GTUS phát trong ngày).
+    // 3.1: Hàn theo nhật ký (tách đúng tuyến thượng/hạ); hạng mục khác từ báo cáo ngày; mài ray + GTUS ghép thêm.
     noiDungCongViec: [
-      diaryReportWorkText(reports, select(welds.map((w) => w.id))) || diaryWorkText(select(welds.map((w) => w.id)), "weld"),
+      (() => {
+        const dayWelds = select(welds.map((w) => w.id));
+        const isWeldReport = (r: Record<string, unknown>) => {
+          const blob = `${r.hang_muc ?? ""} ${r.ten_moi_han ?? ""}`;
+          return /FBW|ATW|hàn chảy|hàn nhiệt|hàn ray|hàn tiếp xúc/i.test(blob);
+        };
+        const weldText = diaryWorkText(dayWelds, "weld")
+          || diaryReportWorkText(reports.filter(isWeldReport), dayWelds);
+        const otherText = diaryReportWorkText(reports.filter((r) => !isWeldReport(r)), dayWelds);
+        return [weldText, otherText].filter(Boolean).join("\n");
+      })(),
       diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
       ...gtusLines(false),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",

@@ -23,18 +23,33 @@ export function diaryMachineName(name: string): string {
   return cleaned.replace(/^(.+?) \((.+)\)$/, (m, a, b) => a.trim().toLowerCase() === b.trim().toLowerCase() ? a : m);
 }
 
+/**
+ * Tuyến từ mã điểm GPS / Autolisp:
+ * TT·TP·UT·UP = thượng · HT·HP·DT·DP = hạ (UT/UP/DT/DP là mã Autolisp tương đương).
+ */
+export function diaryRouteLabel(maDiem: string | null | undefined): "tuyến thượng" | "tuyến hạ" | "tuyến …" {
+  const code = String(maDiem ?? "").trim().toUpperCase().replace(/[\s_]+/g, "");
+  const prefix = /^(TT|TP|UT|UP|HT|HP|DT|DP)/.exec(code)?.[1];
+  if (!prefix) return "tuyến …";
+  if (prefix === "TT" || prefix === "TP" || prefix === "UT" || prefix === "UP") return "tuyến thượng";
+  return "tuyến hạ";
+}
+
 /** Mỗi dòng tách theo công tác và tuyến; một mối chỉ tính một lần. `title` thay tên công tác (VD «Báo RFI số 3 nghiệm thu hình học»). */
 export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accept", title?: string): string {
   const groups = new Map<string, DiaryWork[]>();
   for (const row of new Map(rows.map((r) => [r.id, r])).values()) {
-    const code = row.ma_diem?.trim().toUpperCase() ?? "";
-    const route = /^(HT|HP)\d+$/.test(code) ? "tuyến hạ" : /^(TT|TP)\d+$/.test(code) ? "tuyến thượng" : "tuyến …";
+    const route = diaryRouteLabel(row.ma_diem);
     const task = title ?? (kind === "grind" ? "Mài ray" : kind === "accept" ? "Nghiệm thu mối hàn" : row.cong_nghe_han === "FBW" ? "Hàn chảy giáp mép" : "Hàn nhiệt nhôm");
     const key = `${task}|${route}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
-  return [...groups].map(([key, group]) => {
-    const [task, route] = key.split("|");
+  // Thượng trước, hạ sau; nhóm chưa có mã điểm đứng cuối.
+  const routeOrder = (route: string) => (route === "tuyến thượng" ? 0 : route === "tuyến hạ" ? 1 : 2);
+  return [...groups]
+    .sort((a, b) => routeOrder(a[0].split("|")[1] ?? "") - routeOrder(b[0].split("|")[1] ?? ""))
+    .map(([key, group]) => {
+    const [task, route = "tuyến …"] = key.split("|");
     const km = group.map((r) => parseChainageMeters(r.ly_trinh)).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const format = (m: number) => {
       const [meters, fraction] = String(Number((m % 1000).toFixed(3))).split(".");
@@ -46,7 +61,9 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
     const codes = fieldCodes.length ? ` Mối số: ${fieldCodes.join(", ")}.` : "";
-    if (kind === "weld") return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, khối lượng ${quantity} mối hàn${fieldCodes.length ? `; bao gồm mối số: ${fieldCodes.join(", ")}` : ""}.`;
+    if (kind === "weld") {
+      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${fieldCodes.length ? `; bao gồm mối số: ${fieldCodes.join(", ")}` : ""}.`;
+    }
     return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
   }).join("\n");
 }
@@ -76,13 +93,15 @@ export function diaryManpowerDefaults() {
   };
 }
 
-/** Mục 3 theo Báo cáo ngày (phần «Hôm nay»): mỗi hạng mục một dòng. Không có → "". */
+/** Mục 3 theo Báo cáo ngày (phần «Hôm nay»): gộp cùng hạng mục thành một dòng. Không có → "". */
 export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds: DiaryWork[] = []): string {
   // Báo cáo ngày lưu mã hệ thống PQ-… (cắt "(+N)"); nhật ký chỉ in mã hiện trường của các mối hàn trong ngày theo công nghệ.
   const fieldCodes = (method: string) => dayWelds.filter((w) => w.cong_nghe_han === method)
     .map(diaryCode).filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ");
-  return reports.flatMap((row) => {
+  type Acc = { task: string; qty: number; unit: string; codes: string[] };
+  const merged = new Map<string, Acc>();
+  for (const row of reports) {
     const qty = Number(row.hom_nay);
     const stored = String(row.ten_moi_han ?? "").trim();
     // Báo cáo ngày cắt danh sách «PQ-…, … (+N)»: in đủ mã hiện trường của mọi mối trong ngày, hết mối thì chấm.
@@ -90,10 +109,28 @@ export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds
     const codes = (cut ? fieldCodes(/FBW/i.test(stored) ? "FBW" : /ATW/i.test(stored) ? "ATW" : "") : "") || stored.replace(/\s*…?\s*\(\+\d+\)/g, "").replace(/PQ-/gi, "");
     const name = String(row.hang_muc ?? "").trim()
       || (/FBW/i.test(stored) ? "Hàn chảy giáp mép" : /ATW/i.test(stored) ? "Hàn nhiệt nhôm" : "Công tác thi công");
-    if (!name && !(qty > 0)) return [];
+    if (!name && !(qty > 0)) continue;
     const unit = String(row.don_vi ?? "").trim() || "mối hàn";
     const task = /^thi công/i.test(name) ? name : `Thi công ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
-    return [`- ${task}${qty > 0 ? `, khối lượng ${qty} ${unit === "mối" ? "mối hàn" : unit}` : ""}${codes ? `; bao gồm mối số: ${codes}` : ""}.`];
+    // Chuẩn hóa tên để «Hàn chảy… trên tuyến» / «… tại bãi» cùng công nghệ vẫn gộp nếu trùng sau «Thi công …».
+    const key = task.trim().toLocaleLowerCase("vi");
+    const prev = merged.get(key);
+    const codeParts = codes.split(/,\s*/).map((c) => c.trim()).filter(Boolean);
+    if (prev) {
+      prev.qty += Number.isFinite(qty) && qty > 0 ? qty : 0;
+      for (const c of codeParts) if (!prev.codes.includes(c)) prev.codes.push(c);
+    } else {
+      merged.set(key, {
+        task,
+        qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
+        unit,
+        codes: codeParts,
+      });
+    }
+  }
+  return [...merged.values()].map((item) => {
+    const codes = [...item.codes].sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ");
+    return `- ${item.task}${item.qty > 0 ? `, khối lượng ${item.qty} ${item.unit === "mối" ? "mối hàn" : item.unit}` : ""}${codes ? `; bao gồm mối số: ${codes}` : ""}.`;
   }).join("\n");
 }
 
