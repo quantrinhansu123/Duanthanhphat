@@ -94,7 +94,7 @@ import {
 import { NDT_DEFECTS, ndtDefectLabel } from "@/data/error-library";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import WeldQualityBadge from "@/components/WeldQualityBadge";
-import { WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
+import { DASHBOARD_QUALITY_STATUS_GROUPS, WELD_QUALITY_STATUSES, type WeldQualitySelection } from "@/lib/weldQuality";
 import { loadDayLispCodes } from "@/lib/dayLispCodes";
 import { nextLispCode } from "@/lib/lispSequence";
 import { loadQualityJournal, exportQualityJournal, PAYMENT_CHANGED_KEY, loadWeldPaymentsOf, saveWeldPayments, clearWeldPayments, resetToWaitingGrind, type WeldPayment } from "@/lib/weldQualityClient";
@@ -113,17 +113,25 @@ const PAGE_SIZE_KEY = "weld-journal-page-size";
 const SHOW_WELD_GPS = true;
 const DEFAULT_WELD_TEST_STATUS: WeldTestStatus = "Chờ thí nghiệm";
 
-type JournalStage = "all" | "han-xong" | "da-mai" | "mai-xong" | "cho-nt" | "sua-chua" | "ky-bb" | "dat";
-/** Giai đoạn theo trình tự chất lượng mới (một cột tình trạng; bỏ cột Kết quả NDT trên UI). */
-const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[] }[] = [
+const JOURNAL_STAGE_HINTS: Record<string, string> = {
+  waiting: "Đã hàn, đang chờ mài",
+  ground: "Đã mài xong — chờ phát RFI nghiệm thu",
+  ultrasound: "Đã duyệt hình học — chờ siêu âm",
+  acceptance: "Hình học + siêu âm đạt — chờ nghiệm thu",
+  signing: "Đã nghiệm thu Đạt — chờ ký bộ biên bản",
+  accepted: "Mối sản xuất đã nghiệm thu Đạt — cùng ô Đã ký trên báo cáo tổng",
+};
+type JournalStage = "all" | (typeof DASHBOARD_QUALITY_STATUS_GROUPS)[number]["key"];
+/** Tab giai đoạn = cùng bộ KPI báo cáo tổng (`DASHBOARD_QUALITY_STATUS_GROUPS`). */
+const JOURNAL_STAGES: { id: JournalStage; label: string; hint: string; statuses?: string[]; productionOnly?: boolean }[] = [
   { id: "all", label: "Tất cả", hint: "Toàn bộ nhật ký hàn" },
-  { id: "han-xong", label: "Chờ mài", hint: "Đã hàn, đang chờ mài", statuses: ["Chờ mài"] },
-  { id: "da-mai", label: "Mài xong", hint: "Đã mài xong — chờ phát RFI nghiệm thu", statuses: ["Mài xong"] },
-  { id: "mai-xong", label: "Chờ siêu âm", hint: "Đã duyệt hình học — chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] },
-  { id: "cho-nt", label: "Chờ nghiệm thu", hint: "Hình học + siêu âm đạt — chờ nghiệm thu", statuses: ["Chờ nghiệm thu"] },
-  { id: "sua-chua", label: "Sửa chữa", hint: "Trực quan / độ lệch / nghiệm thu không đạt — đang khắc phục", statuses: ["Sửa chữa/khắc phục"] },
-  { id: "ky-bb", label: "Chờ ký BB", hint: "Đã nghiệm thu Đạt — chờ ký bộ biên bản", statuses: ["Chờ ký biên bản"] },
-  { id: "dat", label: "Đạt", hint: "Đã ký / nghiệm thu đạt", statuses: ["Đạt"] },
+  ...DASHBOARD_QUALITY_STATUS_GROUPS.map((group) => ({
+    id: group.key as JournalStage,
+    label: group.label,
+    hint: JOURNAL_STAGE_HINTS[group.key] ?? group.label,
+    statuses: [...group.statuses],
+    productionOnly: "productionOnly" in group ? group.productionOnly : undefined,
+  })),
 ];
 
 /**
@@ -2026,7 +2034,8 @@ export default function WeldingJournalList({
       projects: committed.projects,
       resultFilter: committed.resultFilter,
       linkedWeldFilter: committed.linkedWeldFilter,
-      weldTypeFilter: committed.weldTypeFilter,
+      // Tab «Đã ký» = cùng quy ước báo cáo tổng: chỉ mối Sản xuất.
+      weldTypeFilter: committed.qualityStatusFilter === "Đạt" ? "Sản xuất" : committed.weldTypeFilter,
       weldMethodFilter: committed.weldMethodFilter,
       welderName: committed.welderName,
       dateFrom: committed.dateFrom,
@@ -2438,7 +2447,7 @@ export default function WeldingJournalList({
           projects: committed.projects,
           resultFilter: committed.resultFilter,
           linkedWeldFilter: committed.linkedWeldFilter,
-          weldTypeFilter: committed.weldTypeFilter,
+          weldTypeFilter: committed.qualityStatusFilter === "Đạt" ? "Sản xuất" : committed.weldTypeFilter,
           weldMethodFilter: "FBW",
           welderName: committed.welderName,
           dateFrom: committed.dateFrom,
@@ -2496,7 +2505,7 @@ export default function WeldingJournalList({
         projects: committed.projects,
         resultFilter: committed.resultFilter,
         linkedWeldFilter: committed.linkedWeldFilter,
-        weldTypeFilter: committed.weldTypeFilter,
+        weldTypeFilter: committed.qualityStatusFilter === "Đạt" ? "Sản xuất" : committed.weldTypeFilter,
         weldMethodFilter: committed.weldMethodFilter,
         welderName: committed.welderName,
         dateFrom: committed.dateFrom,
@@ -3193,8 +3202,9 @@ Tạo ${count.toLocaleString("vi-VN")} mối mỗi ngày cho dự án "${project
         <div className="min-w-0 text-xs font-semibold text-slate-700">
           Loại mối hàn
           <SelectMenu
-            value={weldTypeFilter}
+            value={stage === "accepted" ? "Sản xuất" : weldTypeFilter}
             onChange={pend(setWeldTypeFilter)}
+            disabled={stage === "accepted"}
             options={["Tất cả", ...WELD_TYPE_OPTIONS].map((v) => ({ value: v, label: v }))}
             className="mt-1"
             buttonClassName="h-10 shadow-2xs"

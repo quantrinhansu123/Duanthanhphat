@@ -353,22 +353,6 @@ export default function MaintenanceCalendar() {
         <span className="ml-auto text-xs sm:text-sm text-slate-500">
           {loading ? "Đang tải..." : <><strong className="font-semibold text-slate-900 font-mono tabular-nums">{monthEvents.length}</strong> lịch trong tháng</>}
         </span>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600">
-          Từ
-          <input type="date" value={printFrom} onChange={(e) => setPrintFrom(e.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs" />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600">
-          Đến
-          <input type="date" value={printTo} onChange={(e) => setPrintTo(e.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs" />
-        </label>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => setPrintOpen(true)}
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
-        >
-          In tổng hợp ({rangeEvents.length})
-        </button>
         <button
           type="button"
           onClick={() => {
@@ -378,6 +362,41 @@ export default function MaintenanceCalendar() {
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#0047AB] hover:bg-[#00388A] active:bg-[#002D6E] px-4 text-xs sm:text-sm font-semibold text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 cursor-pointer"
         >
           <span className="text-base leading-none">+</span> Thêm mới
+        </button>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 shadow-xs sm:gap-3 sm:px-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">In tổng hợp</div>
+          <div className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+            Chọn khoảng ngày để in danh sách các lần bảo trì (kể cả khi ngày đang chọn không có lịch).
+          </div>
+        </div>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          Từ
+          <input
+            type="date"
+            value={printFrom}
+            onChange={(e) => setPrintFrom(e.target.value)}
+            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          Đến
+          <input
+            type="date"
+            value={printTo}
+            onChange={(e) => setPrintTo(e.target.value)}
+            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-2xs"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => setPrintOpen(true)}
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-[#0047AB]/30 bg-[#0047AB]/5 px-3.5 text-xs sm:text-sm font-semibold text-[#0047AB] shadow-2xs hover:bg-[#0047AB]/10 disabled:opacity-50 cursor-pointer"
+        >
+          In tổng hợp ({rangeEvents.length})
         </button>
       </div>
 
@@ -740,8 +759,20 @@ export default function MaintenanceCalendar() {
               );
             })}
             {dayEvents.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-300 px-3 py-10 text-center text-xs sm:text-sm text-slate-500">
-                Không có lịch bảo trì trong ngày này.
+              <div className="rounded-xl border border-dashed border-slate-300 px-3 py-8 text-center text-xs sm:text-sm text-slate-500">
+                <p>Không có lịch bảo trì trong ngày này.</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400 sm:text-xs">
+                  Muốn xem nhiều ngày: chọn khoảng <span className="font-semibold text-slate-600">Từ / Đến</span> phía trên rồi bấm{" "}
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setPrintOpen(true)}
+                    className="font-semibold text-[#0047AB] underline-offset-2 hover:underline disabled:opacity-50"
+                  >
+                    In tổng hợp ({rangeEvents.length})
+                  </button>
+                  .
+                </p>
               </div>
             )}
           </div>

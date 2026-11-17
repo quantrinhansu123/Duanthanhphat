@@ -64,8 +64,16 @@ export async function POST(request: Request) {
     if (body.action === "dashboard-quality") {
       const base = object(body.filters ?? {});
       // «Đã ký» (Đạt) chỉ đếm mối sản xuất — cùng quy ước với ô tiến độ / tỷ lệ đạt trên báo cáo tổng quát.
+      // Cùng bộ trạng thái với tab Nhật ký hàn / DASHBOARD_QUALITY_STATUS_GROUPS.
       const [accepted, waiting, acceptance, signing, ground, ultrasound] = await Promise.all(
-        (["Đạt", "Chờ mài", "Chờ nghiệm thu", "Chờ ký biên bản", "Mài xong", "Chờ siêu âm"] as const).map((qualityStatusFilter) =>
+        ([
+          "Đạt",
+          "Chờ mài",
+          "Chờ nghiệm thu",
+          "Chờ ký biên bản",
+          "Mài xong",
+          "Chờ siêu âm,Chờ siêu âm và nghiệm thu",
+        ] as const).map((qualityStatusFilter) =>
           loadQualityJournalRows(parseQualityFilters({
             ...base,
             qualityStatusFilter,

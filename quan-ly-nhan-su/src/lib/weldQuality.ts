@@ -61,6 +61,19 @@ export const WELD_QUALITY_STATUSES: WeldQualityStatus[] = [
   "Không thí nghiệm",
 ];
 
+/**
+ * Bộ KPI chất lượng trên báo cáo tổng / tab Nhật ký hàn — cùng nguồn đếm với `dashboard-quality`.
+ * (Sửa chữa / Không đạt / Không thí nghiệm vẫn chọn được ở ô «Tình trạng chất lượng».)
+ */
+export const DASHBOARD_QUALITY_STATUS_GROUPS = [
+  { key: "waiting", label: "Chờ mài", statuses: ["Chờ mài"] as const },
+  { key: "ground", label: "Mài xong", statuses: ["Mài xong"] as const },
+  { key: "ultrasound", label: "Chờ siêu âm", statuses: ["Chờ siêu âm", "Chờ siêu âm và nghiệm thu"] as const },
+  { key: "acceptance", label: "Chờ nghiệm thu", statuses: ["Chờ nghiệm thu"] as const },
+  { key: "signing", label: "Chờ ký biên bản", statuses: ["Chờ ký biên bản"] as const },
+  { key: "accepted", label: "Đã ký", statuses: ["Đạt"] as const, productionOnly: true },
+] as const;
+
 /** Map tên trạng thái cũ (DB/UI trước đổi) → tên mới. */
 export const WELD_QUALITY_STATUS_ALIASES: Record<string, WeldQualityStatus> = {
   "Hàn": "Chờ mài",

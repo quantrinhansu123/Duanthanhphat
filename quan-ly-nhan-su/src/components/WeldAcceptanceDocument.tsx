@@ -104,7 +104,13 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     // doi_tuong nhớ chung cũ (không phân HH/SA) chỉ lấy khi khớp loại phiếu hiện tại.
     const doiTuong = [saved.doi_tuong, local.doi_tuong, remembered.doi_tuong, legacy.doi_tuong]
       .find((value) => doiTuongFitsScope(value, info));
-    const kinhGui = sanitizeKinhGui(saved.kinh_gui ?? local.kinh_gui, saved.nguoi_nhan ?? local.nguoi_nhan);
+    const tvgsName = saved.nguoi_nhan || local.nguoi_nhan || (/phú quốc/i.test(view.rfi.projectName) ? "Trần Văn Thanh" : "");
+    const kinhGuiRaw = sanitizeKinhGui(saved.kinh_gui ?? local.kinh_gui, tvgsName);
+    // Kính gửi chỉ giữ tổ chức — bỏ tên người nhận nếu bản cũ còn gắn sau dòng TVGS.
+    const kinhGui = kinhGuiRaw
+      ? stripTvgsPersonName(kinhGuiRaw.split("\n").map((line) => line.replace(/^-\s*/, "").trim()).filter(Boolean), tvgsName)
+        .map((line) => `- ${line}`).join("\n")
+      : "";
     const merged: RfiOverrides = {
       noi_dung: remembered.noi_dung || legacy.noi_dung,
       ...local,
@@ -484,7 +490,7 @@ function doiTuongFitsScope(text: string | undefined, info: Record<string, unknow
   if (scope.geometry && !scope.ultrasound) return hasGeo && !hasUs;
   return true;
 }
-/** Kính gửi phải là tổ chức; tên người (vd Trần Văn Thanh) thuộc ô Người nhận. */
+/** Kính gửi phải là tổ chức; một dòng chỉ có tên người (vd Trần Văn Thanh) là sai — tên nằm ở ô Người nhận. */
 function sanitizeKinhGui(text: string | undefined, nguoiNhan?: string) {
   const raw = (text ?? "").trim();
   if (!raw) return "";
@@ -499,6 +505,22 @@ function sanitizeKinhGui(text: string | undefined, nguoiNhan?: string) {
   };
   if (rows.every(looksPerson)) return "";
   return rows.map((row) => `- ${row}`).join("\n");
+}
+/** Bỏ tên người nhận khỏi dòng «Tư vấn giám sát» — Kính gửi chỉ giữ tổ chức. */
+function stripTvgsPersonName(rows: string[], nguoiNhan?: string) {
+  const who = (nguoiNhan ?? "").trim();
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const norm = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return rows.map((row) => {
+    let text = row.replace(/^-\s*/, "").trim();
+    if (!/tu\s*van\s*giam\s*sat/.test(norm(text))) return text;
+    if (who) text = text.replace(new RegExp(`[–—\\-]\\s*${escape(who)}\\.?\\s*$`, "i"), "").trim();
+    // Bản cũ mặc định «…(Tedi North) – Trần Văn Thanh».
+    text = text.replace(/[–—\-]\s*Trần Văn Thanh\.?\s*$/i, "").trim();
+    // Hậu tố tên người sau dấu gạch (2–4 từ, không phải công ty).
+    text = text.replace(/\s*[–—-]\s*(?!công\s*ty)[\p{L}][\p{L}'’]*(?:\s+[\p{L}][\p{L}'’]*){1,3}\.?\s*$/iu, "").trim();
+    return text.replace(/\s+$/u, "") || row.replace(/^-\s*/, "").trim();
+  });
 }
 const RFI_OVERRIDE_FIELDS: [keyof RfiOverrides, string, "text" | "date" | "time" | "textarea", string][] = [
   ["so_phieu", "Số phiếu", "text", "007/PYC-HR"],
@@ -536,10 +558,12 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi:
   const km = welds.map((w) => w.ly_trinh).filter((v): v is string => !!v)
     .flatMap((v) => { const p = /(\d+)\+(\d+(?:\.\d+)?)/.exec(v); return p ? [{ v, n: Number(p[1]) * 1000 + Number(p[2]) }] : []; })
     .sort((a, b) => a.n - b.n);
-  const benNhanRaw = sanitizeKinhGui((t.ben_nhan ?? "").replace(/;/g, "\n"), o.nguoi_nhan);
+  const tvgsName = o.nguoi_nhan?.trim() || (pq ? "Trần Văn Thanh" : "");
+  const benNhanRaw = sanitizeKinhGui((t.ben_nhan ?? "").replace(/;/g, "\n"), tvgsName);
   const benNhanLines = lines(benNhanRaw);
-  const overrideKinhGui = sanitizeKinhGui(o.kinh_gui, o.nguoi_nhan || (pq ? "Trần Văn Thanh" : undefined));
-  const kinhGui = lines(overrideKinhGui).length ? lines(overrideKinhGui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
+  const overrideKinhGui = sanitizeKinhGui(o.kinh_gui, tvgsName);
+  const kinhGuiBase = lines(overrideKinhGui).length ? lines(overrideKinhGui) : benNhanLines.length ? benNhanLines : pq?.kinhGui ?? [DOTS];
+  const kinhGui = stripTvgsPersonName(kinhGuiBase, tvgsName);
   const routes = welds.map((w) => parseCoordinateCode(w.ma_diem ?? "")?.prefix);
   const autoUpper = routes.some((r) => r === "TT" || r === "TP");
   const autoLower = routes.some((r) => r === "HT" || r === "HP");

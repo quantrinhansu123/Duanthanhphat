@@ -11,6 +11,8 @@ export const PHRASES: Record<string, string> = {
   "Chờ siêu âm và nghiệm thu": "Awaiting UT & acceptance",
   "Sửa chữa/khắc phục": "Repair / corrective action",
   "Chờ ký biên bản": "Awaiting minutes signing",
+  "Đã ký": "Signed off",
+  "Mối sản xuất đã nghiệm thu Đạt — cùng ô Đã ký trên báo cáo tổng": "Production welds accepted Pass — same Signed-off card on the overview report",
   "Chờ nghiệm thu": "Awaiting acceptance",
   "Chờ siêu âm": "Awaiting ultrasonic test",
   "Nghiệm thu đạt": "Acceptance passed",
