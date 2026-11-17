@@ -88,9 +88,14 @@ export async function notifyPeople(input: { title: string; message: string; kind
   }
 }
 
-/** Báo cáo mức dầu / đổ dầu → thông báo cho Tiến. */
-export function notifyOilReport(message: string) {
-  return notifyPeople({ title: "Cấp dầu", message, kind: "cap_dau", recipients: ["Tiến"] });
+/** Báo cáo mức dầu → thông báo cho Tiến. Dưới định mức thì tiêu đề "Cấp dầu". */
+export function notifyOilReport(message: string, opts?: { belowQuota?: boolean }) {
+  return notifyPeople({
+    title: opts?.belowQuota ? "Cấp dầu" : "Báo cáo mức dầu",
+    message,
+    kind: "cap_dau",
+    recipients: ["Tiến"],
+  });
 }
 
 /** Checklist máy trước ca → thông báo cho Phúc, Thanh, Tiến. */

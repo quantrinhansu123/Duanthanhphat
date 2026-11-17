@@ -68,6 +68,8 @@ function translate(raw: string): string {
   if (maintDue) return lead + `Machine ${maintDue[1]} is due for maintenance` + trail;
   const oilLow = core.match(/^(.+) ngày (\S+): mức dầu (\S+) lít dưới định mức (\S+) lít\.$/);
   if (oilLow) return lead + `${translate(oilLow[1])} on ${oilLow[2]}: oil level ${oilLow[3]} L is below the standard of ${oilLow[4]} L.` + trail;
+  const oilRemaining = core.match(/^(.+) ngày (\S+): mức dầu còn lại (.+)\.$/);
+  if (oilRemaining) return lead + `${translate(oilRemaining[1])} on ${oilRemaining[2]}: remaining oil level ${oilRemaining[3]}.` + trail;
   const items = core.match(/^(\d+) mục$/);
   if (items) return lead + `${items[1]} items` + trail;
   const removeOne = core.match(/^Bỏ (?!chọn)(.+)$/);

@@ -429,8 +429,8 @@ export default function MachineAssignmentList() {
         const level = `${fuelForm.liters.toLocaleString("vi-VN")} ${fuelForm.unit}`;
         const message = belowQuota && quota != null
           ? `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu ${level} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`
-          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: báo mức dầu / đổ dầu ${level}.`;
-        await notifyOilReport(message);
+          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu còn lại ${level}.`;
+        await notifyOilReport(message, { belowQuota });
         showToast(`Đã ghi báo cáo mức dầu — đã báo Tiến · ${machine.code}`);
       } else {
         showToast(fuelEditId ? "Đã cập nhật báo cáo mức dầu" : "Đã ghi báo cáo mức dầu");
