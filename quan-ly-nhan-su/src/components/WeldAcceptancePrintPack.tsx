@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { printOrPdfAcceptance } from "@/lib/pdfExport";
 import { reloadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds } from "@/lib/weldAcceptance";
@@ -156,7 +157,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
         </label>
         {draftCount > 0 && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
-        <button type="button" disabled={missing.length > 0 || !printKinds.length} onClick={() => window.print()} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
+        <button type="button" disabled={missing.length > 0 || !printKinds.length || busy} onClick={() => void printOrPdfAcceptance("Bo-bien-ban-nghiem-thu")} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold">Thoát</button>
       </div>
     </div>

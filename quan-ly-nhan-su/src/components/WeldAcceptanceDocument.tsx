@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import ComboInput from "@/components/ComboInput";
 import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { acceptancePrintCss, Ed, EdViDate, type RecordEditor, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
+import { exportPagesPdf, isTouchDevice, printOrPdfAcceptance } from "@/lib/pdfExport";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 import { rfiScope, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
@@ -148,7 +149,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
   function printVersion(signed: boolean) {
     flushSync(() => setWithSignatures(signed));
     // Điện thoại: window.print() không ra bản in A4 đúng → xuất thẳng file PDF A4 như trên máy tính.
-    if (window.matchMedia("(pointer: coarse)").matches) { void downloadPdf(); return; }
+    if (isTouchDevice()) { void downloadPdf(); return; }
     window.print();
   }
 
@@ -156,44 +157,18 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     const src = document.getElementById("weld-doc-print");
     if (!src) return;
     setBusy(true);
-    const host = document.createElement("div");
-    host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff";
-    host.innerHTML = "<style>.ed-field{border-bottom:0!important;background:none!important}.sig-empty{display:none!important}</style>";
-    const clone = src.cloneNode(true) as HTMLElement;
-    clone.style.cssText += ";width:794px;max-width:none;box-sizing:border-box;padding:15mm 10mm 10mm 20mm;margin:0";
-    host.appendChild(clone);
-    document.body.appendChild(host);
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas-pro"), import("jspdf")]);
-      const canvas = await html2canvas(clone, { scale: 2, backgroundColor: "#fff" });
-      const pdf = new jsPDF({ unit: "mm", format: "a4" });
-      const pageH = Math.floor((canvas.width * 297) / 210); // chiều cao 1 trang A4 tính theo px canvas
-      for (let y = 0, i = 0; y < canvas.height; y += pageH, i++) {
-        const h = Math.min(pageH, canvas.height - y);
-        const part = document.createElement("canvas");
-        part.width = canvas.width; part.height = h;
-        part.getContext("2d")!.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-        if (i) pdf.addPage();
-        pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, (h * 210) / canvas.width);
-      }
-      // iOS Safari mở PDF ngay trong tab khi save()/<a download> → ưu tiên bảng chia sẻ (có "Lưu vào Tệp"), không được thì <a download>.
-      const name = `${(view.rfi?.rfi.so_phieu ?? "Phieu-YCNT").replace(/[\\/:*?"<>|]/g, "-")}.pdf`;
-      const blob = pdf.output("blob");
-      const file = new File([blob], name, { type: "application/pdf" });
-      let shared = false;
-      if (navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: name }); shared = true; }
-        catch (e) { if (e instanceof DOMException && e.name === "AbortError") shared = true; /* người dùng đóng bảng chia sẻ */ }
-      }
-      if (!shared) {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob); a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-      }
+      await exportPagesPdf([src], view.rfi?.rfi.so_phieu ?? "Phieu-YCNT", "width:794px;max-width:none;box-sizing:border-box;padding:15mm 10mm 10mm 20mm");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xuất được PDF.");
-    } finally { host.remove(); setBusy(false); }
+    } finally { setBusy(false); }
+  }
+
+  async function printAcceptance() {
+    setBusy(true);
+    try { await printOrPdfAcceptance(TITLES[kind]); }
+    catch (e) { setError(e instanceof Error ? e.message : "Không xuất được PDF."); }
+    finally { setBusy(false); }
   }
 
   async function changeSignatureLink(key: SignatureKey, url: string) {
@@ -280,7 +255,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
             <button type="button" onClick={() => printVersion(false)} title="Không dán chữ ký — in ra để ký trực tiếp" className="h-9 whitespace-nowrap rounded-lg border border-[#0047AB] bg-white px-3 text-[13px] font-semibold text-[#0047AB] cursor-pointer hover:bg-blue-50">In ký tay</button>
           </>
         ) : (
-          <button type="button" onClick={() => window.print()} className="h-9 whitespace-nowrap rounded-lg bg-[#0047AB] px-3 text-[13px] font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
+          <button type="button" disabled={busy} onClick={() => void printAcceptance()} className="h-9 whitespace-nowrap rounded-lg bg-[#0047AB] disabled:opacity-50 px-3 text-[13px] font-semibold text-white cursor-pointer hover:bg-[#00388A]">In / Lưu PDF</button>
         )}
         <button type="button" onClick={onClose} className="h-9 whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-3 text-[13px] font-semibold text-slate-900 cursor-pointer hover:bg-slate-200">Thoát</button>
       </div>
