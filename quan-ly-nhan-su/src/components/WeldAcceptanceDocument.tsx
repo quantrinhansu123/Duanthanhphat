@@ -147,7 +147,39 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
 
   function printVersion(signed: boolean) {
     flushSync(() => setWithSignatures(signed));
+    // Điện thoại: window.print() không ra bản in A4 đúng → xuất thẳng file PDF A4 như trên máy tính.
+    if (window.matchMedia("(pointer: coarse)").matches) { void downloadPdf(); return; }
     window.print();
+  }
+
+  async function downloadPdf() {
+    const src = document.getElementById("weld-doc-print");
+    if (!src) return;
+    setBusy(true);
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff";
+    host.innerHTML = "<style>.ed-field{border-bottom:0!important;background:none!important}.sig-empty{display:none!important}</style>";
+    const clone = src.cloneNode(true) as HTMLElement;
+    clone.style.cssText += ";width:794px;max-width:none;box-sizing:border-box;padding:15mm 10mm 10mm 20mm;margin:0";
+    host.appendChild(clone);
+    document.body.appendChild(host);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas-pro"), import("jspdf")]);
+      const canvas = await html2canvas(clone, { scale: 2, backgroundColor: "#fff" });
+      const pdf = new jsPDF({ unit: "mm", format: "a4" });
+      const pageH = Math.floor((canvas.width * 297) / 210); // chiều cao 1 trang A4 tính theo px canvas
+      for (let y = 0, i = 0; y < canvas.height; y += pageH, i++) {
+        const h = Math.min(pageH, canvas.height - y);
+        const part = document.createElement("canvas");
+        part.width = canvas.width; part.height = h;
+        part.getContext("2d")!.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+        if (i) pdf.addPage();
+        pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, (h * 210) / canvas.width);
+      }
+      pdf.save(`${(view.rfi?.rfi.so_phieu ?? "Phieu-YCNT").replace(/[\\/:*?"<>|]/g, "-")}.pdf`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không xuất được PDF.");
+    } finally { host.remove(); setBusy(false); }
   }
 
   async function changeSignatureLink(key: SignatureKey, url: string) {
