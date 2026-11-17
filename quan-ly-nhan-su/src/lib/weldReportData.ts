@@ -203,16 +203,33 @@ function notifyMachineRunScheduleChanged(...dates: Array<string | null | undefin
     });
 }
 
-/** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo). */
+/** Các mã mối hàn đã có cùng tiền tố (để cấp số TT tiếp theo).
+ * Đọc thẳng `lich_su_moi_han` (không qua view báo cáo) để mọi tài khoản thấy cùng một dải TT —
+ * view có thể INNER JOIN lọc mất dòng hoặc bị lệch theo bộ lọc nhật ký trên UI. */
 export async function loadWeldCodesWithPrefix(prefix: string): Promise<string[]> {
   const value = prefix.trim();
   if (!value || !isSupabaseConfigured()) return [];
+  // Ưu tiên API server (service role) — cùng số TT cho mọi tài khoản đăng nhập.
+  try {
+    const response = await fetch("/api/weld-codes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix: value }),
+      credentials: "same-origin",
+    });
+    if (response.ok) {
+      const json = (await response.json()) as { codes?: string[] };
+      if (Array.isArray(json.codes)) return json.codes.map((c) => String(c).trim()).filter(Boolean);
+    }
+  } catch {
+    // Fall through to client read.
+  }
   const supabase = createClient();
   const codes: string[] = [];
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
-      .from("bao_cao_moi_han_theo_du_an")
+      .from("lich_su_moi_han")
       .select("ma_lich_su")
       .ilike("ma_lich_su", `${value}%`)
       .order("ma_lich_su", { ascending: false })

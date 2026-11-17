@@ -267,7 +267,13 @@ function RfiPanel({
   const monitoring = kind === "theo-doi";
   const [filters, setFilters] = useState<RfiCandidateFilter>({});
   const [rows, setRows] = useState<RfiCandidate[]>([]);
-  const [info, setInfo] = useState<{ missing: string[]; excluded: Record<string, number>; total: number } | null>(null);
+  const [info, setInfo] = useState<{
+    missing: string[];
+    excluded: Record<string, number>;
+    total: number;
+    maiXongInRfi: number;
+    heldRfis: { id: string; so_phieu: string; ngay_moi: string; total: number; maiXong: number }[];
+  } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rfis, setRfis] = useState<RfiSummary[]>([]);
   const [unassigned, setUnassigned] = useState<RfiCandidate[]>([]);
@@ -362,11 +368,23 @@ function RfiPanel({
     setBusy(true); setError(""); setOkMsg("");
     try {
       const r = await loadRfiCandidates(projectId, filters);
-      setRows(r.rows); setInfo({ missing: r.missingChainage, excluded: r.excluded, total: r.total });
+      setRows(r.rows);
+      setInfo({
+        missing: r.missingChainage,
+        excluded: r.excluded,
+        total: r.total,
+        maiXongInRfi: r.maiXongInRfi ?? 0,
+        heldRfis: r.heldRfis ?? [],
+      });
       // Tự chọn toàn bộ kết quả tìm được để sẵn sàng phát phiếu mới.
       setSelected(new Set(r.rows.map((row) => row.id)));
       if (!r.rows.length) {
-        setOkMsg("Không có mối đủ điều kiện khớp bộ lọc. Nới bộ lọc hoặc kiểm tra nhật ký hàn / kiểm tra chất lượng rồi tìm lại.");
+        const held = (r.heldRfis ?? []).slice(0, 3).map((t) => `${t.so_phieu} (${t.maiXong} Mài xong, mời ${t.ngay_moi})`).join("; ");
+        setOkMsg(r.total > 0
+          ? `Có ${r.total} mối đủ điều kiện nhưng không khớp bộ lọc. Ô ngày là ngày hàn (không phải ngày mời) — xoá lọc ngày rồi tìm lại.`
+          : (r.maiXongInRfi ?? 0) > 0
+            ? `${r.maiXongInRfi} mối Mài xong đã nằm trong RFI còn hiệu lực${held ? `: ${held}` : ""}. Vào tab phiếu đã phát → sửa ngày mời thành ngày mai, hoặc nghiệm thu/xoá phiếu cũ — không phát phiếu mới trùng mối.`
+            : "Không có mối đủ điều kiện. Kiểm tra nhật ký hàn / kiểm tra chất lượng.");
       }
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
@@ -606,26 +624,58 @@ function RfiPanel({
       {!monitoring && !editingId && (
         <div className="space-y-2 rounded-lg border border-slate-200 p-3">
           <h3 className="text-xs font-bold text-slate-500">Tìm các mối đủ điều kiện Hình học và Siêu âm</h3>
-          <p className="text-xs text-slate-600">Chọn mối rồi bấm phát để chọn Hình học, Siêu âm hoặc cả hai.</p>
+          <p className="text-xs text-slate-600">Chọn mối rồi bấm phát để chọn Hình học, Siêu âm hoặc cả hai. <span className="font-semibold text-slate-700">Ngày mời</span> (vd. ngày mai) chọn ở bước thông tin phiếu — không dùng ô lọc ngày bên dưới.</p>
           {tooManyWelds && <p role="alert" className="text-sm text-amber-800">Chọn tối đa 200 mối cho một phiếu để có thể duyệt đầy đủ.</p>}
           <div className="flex flex-wrap items-end gap-2">
             <select aria-label="Lọc theo dự án" title="Lọc theo dự án" className={`${input} min-w-52`} value={projectId} onChange={(e) => onProjectChange?.(e.target.value)} disabled={!onProjectChange || busy}>
               {(projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
-            <input className={input} type="date" title="Từ ngày hàn" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
-            <input className={input} type="date" title="Đến ngày hàn" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
+            <label className="grid gap-0.5 text-[11px] font-semibold text-slate-600">Từ ngày hàn
+              <input className={input} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
+            </label>
+            <label className="grid gap-0.5 text-[11px] font-semibold text-slate-600">Đến ngày hàn
+              <input className={input} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
+            </label>
             <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
             <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
             <input className={`${input} w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
             <input className={`${input} w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
+            <button type="button" className={secondary} disabled={busy || !Object.values(filters).some(Boolean)} onClick={() => setFilters({})}>Xoá lọc</button>
             <button type="button" className={primary} disabled={busy} onClick={() => void search()}>Tìm mối đủ điều kiện</button>
           </div>
+          {(filters.dateFrom || filters.dateTo) && (filters.dateFrom ?? "") >= today() && (
+            <p role="status" className="text-xs text-amber-800">Ô lọc ngày đang ≥ hôm nay — đây là <b>ngày hàn</b>, không phải ngày mời. Mối mài xong hôm nay/hôm trước sẽ không khớp. Xoá lọc ngày rồi tìm lại.</p>
+          )}
           {info && (
             <div className="text-xs text-slate-600 space-y-1">
               <p>{rows.length}/{info.total} mối đủ điều kiện khớp bộ lọc. Đã chọn <b>{selected.size}</b> — sẽ đưa vào phiếu mới.</p>
               {info.missing.length > 0 && <p className="text-amber-700">{info.missing.length} mối thiếu lý trình nên không nằm trong khoảng Km (vẫn tìm được bằng mã).</p>}
               {Object.keys(info.excluded).length > 0 && <p>Chưa đủ điều kiện: {Object.entries(info.excluded).map(([k, v]) => `${k} (${v})`).join("; ")}.</p>}
+              {!rows.length && info.total > 0 && (
+                <p className="text-amber-800">Có {info.total} mối đủ điều kiện nhưng <b>không khớp bộ lọc</b> (ngày hàn / mã / Km). Xoá lọc ngày nếu đang chọn ngày mai.</p>
+              )}
+              {!rows.length && info.total === 0 && info.maiXongInRfi > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 space-y-1">
+                  <p><b>{info.maiXongInRfi} mối Mài xong</b> đang nằm trong RFI còn hiệu lực — không phát phiếu mới trùng mối.</p>
+                  {info.heldRfis.length > 0 && (
+                    <ul className="list-disc pl-4">
+                      {info.heldRfis.slice(0, 8).map((t) => (
+                        <li key={t.id}>
+                          <button type="button" className="font-semibold text-[#0047AB] underline-offset-2 hover:underline" onClick={() => {
+                            setRfiTab("issued");
+                            setOkMsg(`Mở danh sách phiếu đã phát — tìm ${t.so_phieu} để sửa ngày mời hoặc nghiệm thu (${t.maiXong} Mài xong · mời ${t.ngay_moi}).`);
+                          }}>
+                            {t.so_phieu}
+                          </button>
+                          {" · "}{t.maiXong} Mài xong · ngày mời {t.ngay_moi}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p>Muốn mời ngày mai: <b>sửa ngày mời</b> trên phiếu trên, hoặc nghiệm thu/xoá phiếu cũ rồi phát lại.</p>
+                </div>
+              )}
             </div>
           )}
           {!info && (

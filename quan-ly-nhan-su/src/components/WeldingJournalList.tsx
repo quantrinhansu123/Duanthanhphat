@@ -573,21 +573,28 @@ function JournalFormModal({
     };
   }, [open, mode, form.du_an_id]);
 
+  const [prefixCodesReady, setPrefixCodesReady] = useState(false);
+
   useEffect(() => {
     if (!open) return;
     if (mode === "edit") return;
     const prefix = buildWeldCodePrefix(form.cong_nghe_han, form.performedAt, sitePrefix, form.loai_moi_han);
     if (!prefix) {
       setPrefixCodes([]);
+      setPrefixCodesReady(true);
       return;
     }
     let active = true;
+    setPrefixCodesReady(false);
     loadWeldCodesWithPrefix(prefix)
       .then((codes) => {
-        if (active) setPrefixCodes(codes);
+        if (!active) return;
+        setPrefixCodes(codes);
+        setPrefixCodesReady(true);
       })
       .catch(() => {
-        if (active) setPrefixCodes([]);
+        // Không xoá mã đã tải — tránh nhảy về 0001/0005 khi lỗi mạng tạm thời.
+        if (active) setPrefixCodesReady(true);
       });
     return () => {
       active = false;
@@ -596,8 +603,11 @@ function JournalFormModal({
 
   const suggestedCode = (() => {
     if (mode === "edit") return form.ma_lich_su;
-    const codes = Array.from(new Set([...existingCodes, ...prefixCodes]));
-    return suggestWeldCode(form.cong_nghe_han, form.performedAt, codes, sitePrefix, form.loai_moi_han);
+    // Chỉ lấy dải mã từ server/DB theo tiền tố dự án+CN — không trộn `existingCodes` từ trang nhật ký
+    // (bộ lọc theo tài khoản/ngày làm TT lệch: cùng dự án mà người này thấy 0005, người kia 0054).
+    void existingCodes;
+    if (!prefixCodesReady && prefixCodes.length === 0) return "";
+    return suggestWeldCode(form.cong_nghe_han, form.performedAt, prefixCodes, sitePrefix, form.loai_moi_han);
   })();
 
   useEffect(() => {
@@ -951,7 +961,8 @@ function JournalFormModal({
       return;
     }
     try {
-      await onSubmit(form);
+      const syncedSite = fieldCodeFromSystemCode(form.ma_lich_su) || form.ma_hien_truong;
+      await onSubmit({ ...form, ma_hien_truong: syncedSite });
       await Promise.allSettled(
         removedImages.current.map((asset) => deleteCloudinaryAsset(asset.publicId)),
       );
@@ -1456,25 +1467,25 @@ function JournalFormModal({
               <label htmlFor="journal-weld-code">Mã hệ thống</label>
               <input
                 id="journal-weld-code"
-                value={form.ma_lich_su}
+                value={form.ma_lich_su || (prefixCodesReady ? "" : "Đang lấy số TT…")}
                 readOnly
                 placeholder={`${sitePrefix}-FBW-25-10-26-0001`}
                 className="mt-1.5 h-10 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs sm:text-sm text-slate-800 shadow-2xs outline-hidden font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                {sitePrefix}-CN-DD-MM-YY-xxxx · TT 1→n theo dự án. Không chỉnh tay.
+                {sitePrefix}-CN-DD-MM-YY-xxxx · TT 1→n theo dự án (cùng số cho mọi tài khoản). Không chỉnh tay.
               </span>
             </div>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">
               Mã hiện trường (sơn bụng ray)
               <input
-                value={form.ma_hien_truong}
+                value={fieldCodeFromSystemCode(form.ma_lich_su) || form.ma_hien_truong}
                 readOnly
                 placeholder="FBW-25-10-26-0001"
                 className="mt-1.5 h-10 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs sm:text-sm text-slate-800 shadow-2xs outline-hidden font-mono"
               />
               <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                CN-DD-MM-YY-xxxx · TT 1→n theo nhật ký · tự sinh, không chỉnh tay.
+                CN-DD-MM-YY-xxxx · cùng số TT với mã hệ thống · tự sinh, không chỉnh tay.
               </span>
             </label>
             <label className="block text-xs sm:text-[13px] font-semibold text-slate-700">

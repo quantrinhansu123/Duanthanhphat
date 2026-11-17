@@ -114,12 +114,23 @@ export type RecordSet = { dot: Record<string, unknown> & { phieu_yeu_cau_nghiem_
   sua_doi?: { id: string; ho_so_id: string; phien_ban: number; thong_tin: Record<string, string>; ly_do: string; nguoi_sua: string; created_at: string }[];
   moi: { moi_han_id: string; ket_qua: string; ly_do: string | null; du_lieu_chot: { moi_han?: Record<string, unknown>; kiem_tra?: Record<string, unknown>; tieu_chuan?: Record<string, unknown> } }[] };
 
+export type RfiHeldTicket = { id: string; so_phieu: string; ngay_moi: string; total: number; maiXong: number };
+export type RfiCandidatesResult = {
+  rows: RfiCandidate[];
+  missingChainage: string[];
+  excluded: Record<string, number>;
+  total: number;
+  /** Số mối đang «Mài xong» nhưng đã nằm trong RFI còn hiệu lực. */
+  maiXongInRfi?: number;
+  /** Các phiếu đang giữ mối Mài xong — sửa ngày mời / nghiệm thu phiếu này thay vì phát mới. */
+  heldRfis?: RfiHeldTicket[];
+};
 export const loadRfiCandidates = (du_an_id: string, filters: RfiCandidateFilter) =>
-  qualityRequest<{ rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number }>({ action: "rfi-candidates", du_an_id, filters });
+  qualityRequest<RfiCandidatesResult>({ action: "rfi-candidates", du_an_id, filters });
 export const loadRfiNumber = (du_an_id: string, loai?: "hinh-hoc" | "sieu-am", phieu_rfi_id?: string) => qualityRequest<{ so_phieu: string }>({ action: "rfi-number", du_an_id, ...(loai ? { loai } : {}), ...(phieu_rfi_id ? { phieu_rfi_id } : {}) });
 export const loadRfiOverview = (du_an_id: string) => qualityRequest<{
   rfis: RfiSummary[]; so_phieu: string;
-  candidates: { rows: RfiCandidate[]; missingChainage: string[]; excluded: Record<string, number>; total: number };
+  candidates: RfiCandidatesResult;
 }>({ action: "rfi-overview", du_an_id });
 export async function publishRfi(input: { id: string; du_an_id: string; so_phieu: string; ngay_moi: string; moi_han_ids: string[]; thong_tin: Record<string, string>; loai_rfi?: "nghiem-thu" | "theo-doi" | "ca-hai"; filters?: RfiCandidateFilter }) {
   try { return await qualityRequest<{ id: string }>({ action: "rfi-publish", ...input }); } finally { notifyWeldQualityChanged(); }

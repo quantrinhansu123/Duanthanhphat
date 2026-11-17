@@ -394,10 +394,11 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <h3 className="text-lg font-extrabold text-slate-900">{editingId ? `Sửa phiếu ${number}` : `Phát ${prefix} nghiệm thu ${kindName(kind)}`}</h3>
         <p className="text-sm text-slate-600">{editingId ? "Đổi số phiếu / ngày mời / thông tin in. Danh sách mối giữ nguyên." : kind === "hinh-hoc" ? "Chỉ hiện mối «Mài xong» (chưa kết luận trực quan). Khi nghiệm thu bấm «Trực quan đạt» (tự điền sai số max) rồi chọn Đạt → in biên bản hình học; mối Đạt tự chuyển sang tab siêu âm cùng số phiếu." : "Chỉ hiện mối «Chờ siêu âm» (đã nghiệm thu hình học ĐẠT)."}</p>
         {!editingId && <div className={shownStep === "chon" ? "space-y-3" : "hidden"}>
+          <p className="text-xs text-slate-600"><span className="font-semibold text-slate-700">Ngày mời</span> (vd. ngày mai) chọn ở bước «Thông tin phiếu». Ô lọc bên dưới là <span className="font-semibold">ngày mài</span> — để trống nếu muốn lấy hết mối Mài xong.</p>
           <div className="flex flex-wrap items-end gap-2">
             <input aria-label="Tìm mã mối hàn" placeholder="Tìm mã mối" className={field} value={filters.query ?? ""} onChange={setFilter("query")} />
-            <label className="grid gap-0.5 text-xs font-semibold text-slate-600">Từ ngày<input type="date" className={field} value={filters.dateFrom ?? ""} onChange={setFilter("dateFrom")} /></label>
-            <label className="grid gap-0.5 text-xs font-semibold text-slate-600">Đến ngày<input type="date" className={field} value={filters.dateTo ?? ""} onChange={setFilter("dateTo")} /></label>
+            <label className="grid gap-0.5 text-xs font-semibold text-slate-600">Từ ngày mài<input type="date" className={field} title="Lọc theo ngày mài (không phải ngày mời)" value={filters.dateFrom ?? ""} onChange={setFilter("dateFrom")} /></label>
+            <label className="grid gap-0.5 text-xs font-semibold text-slate-600">Đến ngày mài<input type="date" className={field} title="Lọc theo ngày mài (không phải ngày mời)" value={filters.dateTo ?? ""} onChange={setFilter("dateTo")} /></label>
             <input aria-label="Từ mối" placeholder="Từ mối" className={field + " w-36"} value={filters.nameFrom ?? ""} onChange={setFilter("nameFrom")} />
             <input aria-label="Đến mối" placeholder="Đến mối" className={field + " w-36"} value={filters.nameTo ?? ""} onChange={setFilter("nameTo")} />
             <input aria-label="Từ Km" placeholder="Từ Km0+000" className={field + " w-28"} value={filters.kmFrom ?? ""} onChange={setFilter("kmFrom")} />
@@ -405,7 +406,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             <button type="button" className={button} disabled={!Object.values(filters).some(Boolean)} onClick={() => setFilters({})}>Xoá lọc</button>
           </div>
           {filtered.error && <p role="alert" className="text-xs text-amber-800">{filtered.error}</p>}
+          {(filters.dateFrom || filters.dateTo) && (filters.dateFrom ?? "") >= today() && (
+            <p role="status" className="text-xs text-amber-800">Ô lọc ngày đang ≥ hôm nay — đây là <b>ngày mài</b>, không phải ngày mời. Xoá lọc rồi chọn mối; ngày mời đặt ở bước sau.</p>
+          )}
           <p className="text-xs text-slate-600">{candidates.length}/{list?.candidates.length ?? 0} mối khớp bộ lọc (ngày lọc theo ngày mài).</p>
+          {!candidates.length && (list?.candidates.length ?? 0) > 0 && (
+            <p className="text-xs text-amber-800">Có {list?.candidates.length} mối đủ điều kiện nhưng không khớp bộ lọc — xoá lọc ngày nếu đang chọn ngày mai.</p>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {/* Chọn tất cả = các mối đang hiện (theo ô tìm), tối đa 200 mối một phiếu. */}
             <button type="button" className={button} disabled={busy || !candidates.length}

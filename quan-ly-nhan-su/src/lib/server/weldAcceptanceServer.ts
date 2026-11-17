@@ -182,15 +182,37 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
   const f = object(body.filters ?? {});
   const filter = { query: str(f.query), nameFrom: str(f.nameFrom), nameTo: str(f.nameTo), kmFrom: str(f.kmFrom, 40), kmTo: str(f.kmTo, 40),
     dateFrom: qualityDate(f.dateFrom) ?? "", dateTo: qualityDate(f.dateTo) ?? "" };
+  type LinkedRow = {
+    moi_han_id: string;
+    phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string } | { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string }[];
+  };
   const [quality, linked] = await Promise.all([
     fetchAll<QualityRow>((a, b) => db().from("chat_luong_moi_han")
     .select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_rfi").eq("du_an_id", projectId).order("moi_han_id").range(a, b)),
-    fetchAll<{ moi_han_id: string }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
-    .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(du_an_id)").eq("con_hieu_luc", true)
-    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("moi_han_id").range(a, b)),
+    // Chỉ khóa mối còn thuộc RFI «Đã phát hành» (phiếu hoàn thành/huỷ không giữ chỗ).
+    fetchAll<LinkedRow>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
+    .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,ngay_moi,trang_thai,du_an_id)").eq("con_hieu_luc", true)
+    .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId)
+    .eq("phieu_yeu_cau_nghiem_thu.trang_thai", "Đã phát hành")
+    .order("moi_han_id").range(a, b)),
   ]);
+  const parentOf = (row: LinkedRow) => Array.isArray(row.phieu_yeu_cau_nghiem_thu) ? row.phieu_yeu_cau_nghiem_thu[0] : row.phieu_yeu_cau_nghiem_thu;
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
-  // Chỉ mối "Chờ siêu âm và nghiệm thu" — không lấy mối đã siêu âm Đạt / "Chờ ký biên bản".
+  const weldStatus = new Map(quality.map((q) => [q.moi_han_id, q.tinh_trang]));
+  // Phiếu đang giữ mối «Mài xong» — để UI chỉ rõ sửa ngày mời / nghiệm thu phiếu nào thay vì phát phiếu mới.
+  const heldMap = new Map<string, { id: string; so_phieu: string; ngay_moi: string; total: number; maiXong: number }>();
+  for (const row of linked) {
+    const parent = parentOf(row);
+    if (!parent) continue;
+    const cur = heldMap.get(parent.id) ?? { id: parent.id, so_phieu: parent.so_phieu, ngay_moi: parent.ngay_moi, total: 0, maiXong: 0 };
+    cur.total += 1;
+    if (weldStatus.get(row.moi_han_id) === "Mài xong") cur.maiXong += 1;
+    heldMap.set(parent.id, cur);
+  }
+  const heldRfis = [...heldMap.values()]
+    .filter((r) => r.maiXong > 0)
+    .sort((a, b) => b.maiXong - a.maiXong || b.ngay_moi.localeCompare(a.ngay_moi));
+  // Chỉ mối đủ trạng thái + cờ RFI, chưa nằm trong phiếu đang hiệu lực.
   const isEligible = (q: QualityRow) =>
     q.du_dieu_kien_rfi && isRfiEligibleStatus(q.tinh_trang) && q.tinh_trang !== "Chờ ký biên bản" && !inRfi.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
@@ -208,12 +230,29 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
   let result;
   try { result = filterRfiCandidates(rows, filter); } catch (e) { throw new QualityApiError((e as Error).message); }
   const excluded: Record<string, number> = {};
+  let maiXongInRfi = 0;
   for (const q of quality) {
     if (isEligible(q)) continue;
-    const reason = inRfi.has(q.moi_han_id) ? "Đã thuộc RFI đang hiệu lực" : rfiBlockReason(q.tinh_trang);
+    let reason: string;
+    if (inRfi.has(q.moi_han_id)) {
+      reason = "Đã thuộc RFI đang hiệu lực";
+      if (q.tinh_trang === "Mài xong") maiXongInRfi += 1;
+    } else if (isRfiEligibleStatus(q.tinh_trang) && !q.du_dieu_kien_rfi) {
+      // Trạng thái hiển thị đủ (vd Mài xong) nhưng cờ du_dieu_kien_rfi = false — không nhầm với «đang chờ nghiệm thu».
+      reason = q.tinh_trang === "Mài xong"
+        ? "Mài xong nhưng chưa đủ điều kiện RFI (số lượng ≠ 1 / đã loại / đã kết luận)"
+        : `«${q.tinh_trang}» nhưng chưa đủ cờ điều kiện RFI`;
+    } else reason = rfiBlockReason(q.tinh_trang);
     excluded[reason] = (excluded[reason] ?? 0) + 1;
   }
-  return { rows: result.rows, missingChainage: result.missingChainage, excluded, total: eligible.length };
+  return {
+    rows: result.rows,
+    missingChainage: result.missingChainage,
+    excluded,
+    total: eligible.length,
+    maiXongInRfi,
+    heldRfis,
+  };
 }
 
 /** Initial RFI screen: share authentication and avoid a separate count query. */
