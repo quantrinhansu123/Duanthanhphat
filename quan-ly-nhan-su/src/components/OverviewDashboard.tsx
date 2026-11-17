@@ -418,7 +418,7 @@ export default function OverviewDashboard() {
     return maxDate;
   }, [fastRollupRows, todayIso]);
 
-  // Chỉ dùng ngày thực hiện thật và không nhận ngày tương lai làm "ngày gần nhất".
+  // Chỉ dùng ngày thực hiện thật và không nhận ngày tương lai.
   const latestDataDate = useMemo(() => {
     let maxDate = "";
     selectedRows.forEach((r, i) => {
@@ -853,7 +853,8 @@ export default function OverviewDashboard() {
         (sum, row, index) => (getJournalRowDateIso(row, index) === yesterdayIso ? sum + 1 : sum),
         0,
       );
-  const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0 && point.date <= todayIso);
+  // Ô «Ngày gần nhất»: luôn trừ hôm nay — lấy ngày có mối gần nhất trước hôm nay.
+  const latestDailyPoint = [...dailySeries].reverse().find((point) => point.value > 0 && point.date < todayIso);
   const quality = useDashboardQuality(appliedFilters);
   const errorReasonRows = useMemo(
     () => showFastAggregate ? overviewAggregateErrorReasons : groupJournalDefectStats(detailRows),
