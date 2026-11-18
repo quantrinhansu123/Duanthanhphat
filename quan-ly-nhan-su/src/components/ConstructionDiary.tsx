@@ -189,9 +189,13 @@ export default function ConstructionDiaryForm() {
             diary = { ...diary, noiDungCongViec: [...diary.noiDungCongViec.split("\n").filter((line) => !isGtusLine(line)), ...wantedGtus].filter((line) => line.trim()).join("\n") };
             notes.push("Dòng giải toả ứng suất ở mục 3.1 đã được đồng bộ theo ngày nghiệm thu.");
           }
-          // Mục 3.2 theo nghiệm thu đã chốt / RFI phát trong ngày: thiếu dòng nào so với dữ liệu hiện tại thì cập nhật.
-          const wantedAccept = (defaults.values.nghiemThuHangNgay ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
-          if (wantedAccept.some((line) => !diary.nghiemThuHangNgay.includes(line.slice(0, 60)))) {
+          // Mục 3.2 theo nghiệm thu đã chốt: thiếu dòng, hoặc bản lưu ngắn hơn (trước đây bị cắt khi in) → cập nhật đủ.
+          const wantedAcceptFull = (defaults.values.nghiemThuHangNgay ?? "").trim();
+          const wantedAccept = wantedAcceptFull.split("\n").map((x) => x.trim()).filter(Boolean);
+          const acceptShort =
+            wantedAcceptFull.length > diary.nghiemThuHangNgay.trim().length + 20
+            && wantedAccept.some((line) => diary.nghiemThuHangNgay.includes(line.slice(0, Math.min(40, line.length))));
+          if (wantedAccept.some((line) => !diary.nghiemThuHangNgay.includes(line.slice(0, 60))) || acceptShort) {
             diary = { ...diary, nghiemThuHangNgay: defaults.values.nghiemThuHangNgay ?? diary.nghiemThuHangNgay };
             notes.push("Mục 3.2 đã được cập nhật theo các nghiệm thu trong ngày.");
           }
@@ -390,7 +394,7 @@ export default function ConstructionDiaryForm() {
             <textarea aria-label="Nội dung công việc thực hiện" className={inp} rows={6} value={d.noiDungCongViec} onChange={set("noiDungCongViec")} />
             <label className={lbl}>Nghiệm thu công việc xây dựng hàng ngày
               <span className="font-normal text-slate-500"> (in thành mục 3.2, dưới mục 3.1; lấy theo nghiệm thu đã chốt trong ngày, không có thì để trống)</span>
-              <textarea aria-label="Nghiệm thu công việc xây dựng hàng ngày" className={inp} rows={4} value={d.nghiemThuHangNgay} onChange={set("nghiemThuHangNgay")} />
+              <textarea aria-label="Nghiệm thu công việc xây dựng hàng ngày" className={inp} rows={8} value={d.nghiemThuHangNgay} onChange={set("nghiemThuHangNgay")} />
             </label>
           </Card>
           {TEXT_SECTIONS.map(([k, title, hint, rows]) => (
@@ -517,7 +521,7 @@ export default function ConstructionDiaryForm() {
           onMouseDown={(e) => { if (e.target === e.currentTarget) setPageAsk(null); }}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-extrabold text-slate-900">In {pageAsk.rows.length} nhật ký</h2>
-            <p className="mt-1 text-sm text-slate-600">Trang đầu tiên của bản in bắt đầu từ trang số mấy? Mỗi nhật ký chiếm 2 trang, các ngày sau đánh số nối tiếp.</p>
+            <p className="mt-1 text-sm text-slate-600">Trang đầu tiên của bản in bắt đầu từ trang số mấy? Mỗi nhật ký tối thiểu 2 trang (mục 3 dài sẽ thêm trang giữa), các ngày sau đánh số nối tiếp theo ước lượng 2 trang/ngày.</p>
             <label className="mt-4 block text-sm font-semibold text-slate-700">Trang đầu tiên
               <input autoFocus inputMode="numeric" value={pageAskText} placeholder="1"
                 onChange={(e) => setPageAskText(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -546,25 +550,37 @@ export default function ConstructionDiaryForm() {
   );
 }
 
-/** Hai trang in của một nhật ký (dùng cho bản in một ngày và bản ghép nhiều ngày). */
+/** Hai+ trang in của một nhật ký (dùng cho bản in một ngày và bản ghép nhiều ngày). Mục 3 dài → thêm trang giữa cho đủ mã mối. */
 function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, onSignerBlur }: {
   d: ConstructionDiary; date: string; pageStart: number; signers: { tvgs: string; ntc: string; ntp: string };
   editable?: boolean; onSigner?: (key: "tvgs" | "ntc" | "ntp", value: string) => void; onSignerBlur?: () => void;
 }) {
-  const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null);
-  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang 2, đo theo chỗ còn trống
+  const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null), midFill = useRef<HTMLDivElement>(null);
+  const probe = useRef<HTMLDivElement>(null);
+  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang cuối, đo theo chỗ còn trống
+  const [midLines, setMidLines] = useState(42); // dòng mỗi trang giữa (gần full A4)
+  const [midCount, setMidCount] = useState(0);
   useLayoutEffect(() => {
     const measure = () => {
-      const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight;
+      const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight, mid = midFill.current?.clientHeight;
       if (a == null || b == null) return;
       const next: [number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE))];
       setLines((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
+      if (mid != null && mid > 0) {
+        const ml = Math.max(1, Math.floor(mid / LINE));
+        setMidLines((cur) => (cur === ml ? cur : ml));
+      }
+      const contentH = probe.current?.scrollHeight ?? 0;
+      const visible = next[0] * LINE + next[1] * LINE;
+      const perMid = Math.max(LINE, (mid != null && mid > 0 ? mid : midLines * LINE));
+      const need = contentH > visible ? Math.ceil((contentH - visible) / perMid) : 0;
+      setMidCount((cur) => (cur === need ? cur : need));
     };
     measure();
     const ro = new ResizeObserver(measure);
-    for (const el of [fill1.current, fill2.current]) if (el) ro.observe(el);
+    for (const el of [fill1.current, fill2.current, midFill.current, probe.current]) if (el) ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [midLines, d.noiDungCongViec, d.nghiemThuHangNgay]);
   const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
@@ -576,7 +592,17 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
     "3.2 Nghiệm thu công việc xây dựng hàng ngày",
     noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
   ].join("\n");
+  const h1 = lines[0] * LINE;
+  const h2 = lines[1] * LINE;
+  const hMid = midLines * LINE;
   return <>
+        {/* Đo chiều cao thật của mục 3 (ẩn) để biết cần bao nhiêu trang giữa. */}
+        <div aria-hidden="true" style={{ position: "absolute", left: -10000, top: 0, width: "180mm", visibility: "hidden", pointerEvents: "none" }}>
+          <div ref={probe} className="diary-ruled" style={{ height: "auto", overflow: "visible" }}>{section3Print}</div>
+          <div className="diary-sheet" style={{ position: "absolute", visibility: "hidden" }}>
+            <div className="diary-fill" ref={midFill} />
+          </div>
+        </div>
         <section className="diary-sheet">
           <h2>B. TÌNH HÌNH THI CÔNG HÀNG NGÀY</h2>
           <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "202…."}</p>
@@ -598,14 +624,25 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
 
           <p className="diary-heading">3. Nội dung công việc thực hiện:</p>
           <div className="diary-fill" ref={fill1}>
-            <div className="diary-ruled" style={{ height: lines[0] * LINE }}><div>{section3Print}</div></div>
+            <div className="diary-ruled" style={{ height: h1 }}><div>{section3Print}</div></div>
           </div>
           <p className="diary-foot">Trang {pageStart}</p>
         </section>
 
+        {Array.from({ length: midCount }, (_, i) => (
+          <section key={`mid-${i}`} className="diary-sheet">
+            <div className="diary-fill">
+              <div className="diary-ruled" style={{ height: hMid }}>
+                <div style={{ marginTop: -(h1 + i * hMid) }}>{section3Print}</div>
+              </div>
+            </div>
+            <p className="diary-foot">Trang {pageStart + 1 + i}</p>
+          </section>
+        ))}
+
         <section className="diary-sheet">
           <div className="diary-fill" ref={fill2}>
-            <div className="diary-ruled" style={{ height: lines[1] * LINE }}><div style={{ marginTop: -lines[0] * LINE }}>{section3Print}</div></div>
+            <div className="diary-ruled" style={{ height: h2 }}><div style={{ marginTop: -(h1 + midCount * hMid) }}>{section3Print}</div></div>
           </div>
 
           {TEXT_SECTIONS.map(([k, title, hint, rows]) => (
@@ -620,7 +657,7 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
             <div>NHÀ THẦU CHÍNH<div className="diary-sig-box" /><div className="diary-sig-name">{editable ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu chính" placeholder="Gõ tên người ký" value={signers.ntc} onBlur={onSignerBlur} onChange={(e) => onSigner?.("ntc", e.target.value)} /> : signers.ntc}</div></div>
             <div>NHÀ THẦU PHỤ<div className="diary-sig-box" /><div className="diary-sig-name">{editable ? <input className="diary-sig-input" aria-label="Tên người ký nhà thầu phụ" placeholder="Gõ tên người ký" value={signers.ntp} onBlur={onSignerBlur} onChange={(e) => onSigner?.("ntp", e.target.value)} /> : signers.ntp}</div></div>
           </div>
-          <p className="diary-foot">Trang {pageStart + 1}</p>
+          <p className="diary-foot">Trang {pageStart + 1 + midCount}</p>
         </section>
   </>;
 }

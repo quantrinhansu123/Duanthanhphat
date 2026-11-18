@@ -10,7 +10,10 @@ export type DiaryWork = {
 /** Mã in trên nhật ký: «FBW-ddmmyyxxxx» (bỏ PQ-); mối chưa có mã hiện trường lấy mã điểm TT/HT…, không có thì bỏ. */
 export function diaryCode(r: Pick<DiaryWork, "ma_hien_truong" | "ma_diem">): string {
   const site = r.ma_hien_truong?.trim();
-  return site ? fieldWeldCode(null, site) : r.ma_diem?.trim() || "";
+  const raw = site ? fieldWeldCode(null, site) : r.ma_diem?.trim() || "";
+  // Bỏ mã cụt «FBW-» / «ATW-» (thiếu số) để không in ra đuôi bị cắt.
+  if (/^(FBW|ATW)-?$/i.test(raw)) return "";
+  return raw;
 }
 
 /** Máy hàn trên nhật ký: «Máy hàn chảy giáp mép UN5-150ZC2-C6» — bỏ tên cũ và phần ngoặc lặp mã. */
@@ -60,9 +63,17 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const quantity = group.reduce((sum, r) => sum + r.so_luong_thuc_hien, 0);
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
-    const codes = fieldCodes.length ? ` Mối số: ${fieldCodes.join(", ")}.` : "";
+    // Xuống dòng mỗi 6 mã để in A4 không cắt giữa mã (tránh hiện «FBW-» cụt cuối trang).
+    const codesJoined = fieldCodes.length
+      ? fieldCodes.reduce<string[]>((chunks, code, i) => {
+          if (i % 6 === 0) chunks.push(code);
+          else chunks[chunks.length - 1] += `, ${code}`;
+          return chunks;
+        }, []).join(",\n  ")
+      : "";
+    const codes = codesJoined ? ` Mối số:\n  ${codesJoined}.` : "";
     if (kind === "weld") {
-      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${fieldCodes.length ? `; bao gồm mối số: ${fieldCodes.join(", ")}` : ""}.`;
+      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `;\n  bao gồm mối số:\n  ${codesJoined}` : ""}.`;
     }
     return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối.${codes}${missing}`;
   }).join("\n");
