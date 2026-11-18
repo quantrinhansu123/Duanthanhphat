@@ -244,7 +244,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày nghiệm thu</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2" title="Ngày hoàn thành — ghi mục 3.2 nhật ký">Ngày hoàn thành</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
@@ -571,11 +571,30 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         });
       }}>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex flex-wrap items-center gap-2 text-sm">Ngày nghiệm thu<input type="date" required className={field} min={detail.ticket.ngay_moi}
-            disabled={Boolean(detail.ticket.ngay_nghiem_thu) || busy} value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+            Ngày hoàn thành / nghiệm thu
+            <input type="date" required className={field} min={detail.ticket.ngay_moi}
+              disabled={Boolean(detail.ticket.ngay_nghiem_thu) || busy} value={date} onChange={e => setDate(e.target.value)}
+              title="Ngày ghi vào mục 3.2 nhật ký thi công" />
+          </label>
+          {!detail.ticket.ngay_nghiem_thu && date !== today() && today() >= detail.ticket.ngay_moi ? (
+            <button type="button" className={button} disabled={busy} onClick={() => setDate(today())}
+              title="Đặt ngày hoàn thành = hôm nay (đúng ngày ghi nhật ký)">
+              Hôm nay
+            </button>
+          ) : null}
           <span className="text-sm text-slate-600">{detail.items.length} mối</span>
           {!detail.ticket.ngay_nghiem_thu && <span className="text-sm text-slate-600">· Đạt {counts.pass} · Không đạt {counts.fail} · Chưa chọn {counts.none}</span>}
         </div>
+        {!detail.ticket.ngay_nghiem_thu ? (
+          <p className="text-xs text-slate-500">
+            Ngày này = <b>ngày hoàn thành</b> ghi vào mục 3.2 nhật ký thi công. Chọn đúng ngày thực tế nghiệm thu trước khi chốt.
+          </p>
+        ) : (
+          <p className="text-xs text-emerald-800">
+            Đã hoàn thành ngày {dateLabel(detail.ticket.ngay_nghiem_thu)} — nhật ký mục 3.2 lấy theo ngày này.
+          </p>
+        )}
         {!detail.ticket.ngay_nghiem_thu && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm">
           <button type="button" className={button} disabled={busy} onClick={() => setPicked(pendingItems.map(i => i.moi_han_id))}>Tick tất cả</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => setPicked([])}>Bỏ tick</button>
@@ -617,7 +636,12 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             </tbody>
           </table>
         </div>
-        {!detail.ticket.ngay_nghiem_thu && <button className={primary} disabled={busy || counts.none > 0}>Chốt nghiệm thu và lập biên bản</button>}
+        {!detail.ticket.ngay_nghiem_thu && (
+          <button className={primary} disabled={busy || counts.none > 0}
+            title={`Chốt kết quả và ghi nhật ký thi công ngày ${dateLabel(date)}`}>
+            Nghiệm thu → hoàn thành ({dateLabel(date)})
+          </button>
+        )}
         {!detail.ticket.ngay_nghiem_thu && counts.none > 0 && <p className="text-xs text-amber-800">Còn {counts.none} mối chưa chọn kết quả — tick rồi bấm «Đạt hàng loạt» hoặc chọn từng mối.</p>}
       </form>
     </div>}
