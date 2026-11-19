@@ -33,8 +33,27 @@ const css = `
 #thu-bao-print table.tb-table .tb-ngay { white-space: nowrap; text-align: center; }
 #thu-bao-print table.tb-table .tb-ly-trinh { white-space: pre-line; line-height: 1.25; }
 #thu-bao-print table.tb-table .tb-ky-su { white-space: pre-line; line-height: 1.35; text-align: center; font-size: 11pt; }
-#thu-bao-print .tb-sign { min-height: 11rem; }
-#thu-bao-print .tb-sign img { display: block; margin: 0.4rem auto; max-height: 7.5rem; max-width: 95%; object-fit: contain; }
+#thu-bao-print .tb-sign {
+  min-height: 11rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#thu-bao-print .tb-sign-slot {
+  width: 100%;
+  height: 7.5rem;
+  margin: 0.35rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#thu-bao-print .tb-sign-slot img {
+  display: block;
+  max-height: 7.5rem;
+  max-width: 95%;
+  object-fit: contain;
+}
+#thu-bao-print .tb-sign-name { margin-top: auto; }
 @media print {
   body * { visibility: hidden !important; }
   #thu-bao-print, #thu-bao-print * { visibility: visible !important; }
@@ -269,6 +288,8 @@ export default function ThuBaoDocument({
   const [printArmed, setPrintArmed] = useState(false);
   /** Popup chọn mẫu in trước khi Xem / In. */
   const [pickOpen, setPickOpen] = useState(false);
+  /** Sau khi chọn mẫu (chế độ In): hỏi In có chữ ký / In ký tay. */
+  const [sigPickOpen, setSigPickOpen] = useState(false);
   const [pendingTicket, setPendingTicket] = useState<UtTicket | null>(null);
   const [pendingMode, setPendingMode] = useState<"xem" | "in">("xem");
   const [pickBusy, setPickBusy] = useState(false);
@@ -276,6 +297,10 @@ export default function ThuBaoDocument({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (sigPickOpen) {
+        setSigPickOpen(false);
+        return;
+      }
       if (pickOpen) {
         if (!pickBusy) {
           setPickOpen(false);
@@ -292,7 +317,7 @@ export default function ThuBaoDocument({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [embedded, onClose, viewOpen, pickOpen, pickBusy]);
+  }, [embedded, onClose, viewOpen, pickOpen, pickBusy, sigPickOpen]);
 
   useEffect(() => {
     loadRfiSignatures()
@@ -425,8 +450,8 @@ export default function ThuBaoDocument({
       }
       setPickOpen(false);
       setPendingTicket(null);
-      // In từ danh sách = mặc định in sẵn chữ ký CHT (như RFI «In có chữ ký»).
-      if (mode === "in") printVersion(true);
+      // In từ danh sách → hỏi In có chữ ký / In ký tay (không in ngay).
+      if (mode === "in") setSigPickOpen(true);
     } catch (e) {
       setUtError(e instanceof Error ? e.message : "Không tải được phiếu RFI siêu âm.");
     } finally {
@@ -444,6 +469,18 @@ export default function ThuBaoDocument({
     if (pickBusy) return;
     setPickOpen(false);
     setPendingTicket(null);
+  }
+
+  function closeSigPick() {
+    setSigPickOpen(false);
+    setPrintArmed(false);
+    setStep("chon");
+    setTab("sieu-am");
+  }
+
+  function confirmSigPrint(withSig: boolean) {
+    setSigPickOpen(false);
+    printVersion(withSig);
   }
 
   function printDoc() {
@@ -499,7 +536,7 @@ export default function ThuBaoDocument({
     "h-9 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50";
   const boxClass =
     "thu-bao-edit space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow sm:p-5";
-  const printClass = "rounded-lg bg-white p-4 text-black shadow-lg sm:p-8";
+  const printClass = "rounded-lg border border-slate-200 bg-white p-4 text-black sm:p-8";
   /** Không còn thanh tab mẫu — chọn mẫu qua popup Xem/In. */
   const showInlineEditor = !embedded && step !== "chon";
   const showPrintDoc = viewOpen || printArmed || !embedded;
@@ -510,7 +547,7 @@ export default function ThuBaoDocument({
     <div className="space-y-2 rounded-lg border border-[#0047AB]/25 bg-[#0047AB]/5 p-3">
       <div>
         <p className="font-bold text-slate-800">1. Thư báo theo phiếu RFI siêu âm đã phát</p>
-        <p className="text-xs text-slate-600">Bấm <b>Xem</b> hoặc <b>In</b> để chọn mẫu (siêu âm, BT Phú Thành, LAS, thép…). Ngày/giờ lấy từ phiếu RFI.</p>
+        <p className="text-xs text-slate-600">Bấm <b>Xem</b> (chọn mẫu → form + preview) hoặc <b>In</b> (chọn mẫu → hỏi In có chữ ký / In ký tay). Ngày/giờ lấy từ phiếu RFI.</p>
       </div>
       {!projectId ? (
         <p className="text-sm text-amber-800">Chọn dự án ở màn Biên bản mối hàn để tải danh sách phiếu.</p>
@@ -721,14 +758,16 @@ export default function ThuBaoDocument({
         <div className="tb-sign">
           <p className="tb-b tb-14 uppercase">ĐẠI DIỆN TƯ VẤN GIÁM SÁT</p>
           <p className="tb-n tb-14 mt-1">{data.tvgsChucVu || "Tư vấn giám sát trưởng"}</p>
-          <div className="h-28" />
-          <p className="tb-b tb-14">{data.tvgsTen || "………………"}</p>
+          <div className="tb-sign-slot" aria-hidden />
+          <p className="tb-b tb-14 tb-sign-name">{data.tvgsTen || "………………"}</p>
         </div>
         <div className="tb-sign">
           <p className="tb-b tb-14 uppercase">ĐẠI DIỆN ĐƠN VỊ THI CÔNG</p>
           <p className="tb-n tb-14 mt-1">{data.chtChucVu || "Chỉ huy trưởng"}</p>
-          {withSignatures && chtSig ? <img src={chtSig} alt="Chữ ký chỉ huy trưởng" /> : <div className="h-28" />}
-          <p className="tb-b tb-14">{data.chtTen || "………………"}</p>
+          <div className="tb-sign-slot">
+            {withSignatures && chtSig ? <img src={chtSig} alt="Chữ ký chỉ huy trưởng" /> : null}
+          </div>
+          <p className="tb-b tb-14 tb-sign-name">{data.chtTen || "………………"}</p>
         </div>
       </div>
     </PrintFrame>
@@ -799,7 +838,7 @@ export default function ThuBaoDocument({
               <div>
                 <p className="text-base font-bold text-slate-900">Chọn mẫu in thư báo</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  Phiếu <b>{pendingTicket.so_phieu}</b> · {pendingMode === "xem" ? "Xem / sửa" : "In ngay"}
+                  Phiếu <b>{pendingTicket.so_phieu}</b> · {pendingMode === "xem" ? "Xem / sửa" : "In — chọn mẫu rồi hỏi chữ ký"}
                 </p>
               </div>
               <button type="button" onClick={closePick} disabled={pickBusy} className={closeBtnClass}>
@@ -822,6 +861,44 @@ export default function ThuBaoDocument({
             </div>
             {pickBusy ? <p className="mt-3 text-center text-xs text-slate-500">Đang mở mẫu…</p> : null}
             {utError ? <p className="mt-3 text-sm text-rose-700">{utError}</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {sigPickOpen ? (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/70 p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="Chọn cách in chữ ký">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-base font-bold text-slate-900">In thư báo thế nào?</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {fillNote || "Chọn in sẵn chữ ký CHT hoặc để trống ký tay"}
+                </p>
+              </div>
+              <button type="button" onClick={closeSigPick} className={closeBtnClass}>
+                Đóng
+              </button>
+            </div>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={() => confirmSigPrint(true)}
+                title={chtSig ? "Dán sẵn chữ ký CHT" : "Chưa có ảnh chữ ký — vẫn in (ô có thể trống)"}
+                className="flex min-h-12 items-center justify-center rounded-xl bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A]"
+              >
+                In có chữ ký
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmSigPrint(false)}
+                className="flex min-h-12 items-center justify-center rounded-xl border border-[#0047AB] bg-white px-4 text-sm font-semibold text-[#0047AB] hover:bg-blue-50"
+              >
+                In ký tay
+              </button>
+            </div>
+            {!chtSig ? (
+              <p className="mt-3 text-xs text-amber-700">Chưa có ảnh chữ ký CHT — tải ở cấu hình RFI (chi-huy-truong).</p>
+            ) : null}
           </div>
         </div>
       ) : null}

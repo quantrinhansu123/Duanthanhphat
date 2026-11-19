@@ -148,25 +148,65 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
     setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
   }
-  /** «Đạt hàng loạt»: phiếu hình học tự ghi trực quan Đạt cho mối đã tick còn thiếu điều kiện (ô sai số trống tự điền mức tối đa), rồi đặt kết quả Đạt. */
+  /**
+   * «Đạt hàng loạt»: hình học → ghi trực quan Đạt (+ số đo trống = max); siêu âm → ghi NDT Đạt.
+   * Sau đó cột «Dữ liệu kiểm tra» cập nhật theo dữ liệu mới.
+   */
   async function passPicked() {
     if (!detail) return;
     setError("");
     const chosen = new Set(picked);
     let items = detail.items;
-    const targets = kind === "hinh-hoc" ? items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !i.current?.co_the_dat) : [];
+    const targets = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !i.current?.co_the_dat);
     if (targets.length) {
-      if (!window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
+      if (kind === "hinh-hoc" && !window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
 Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
-      const response = await markQualityPass(targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), "visual", date, "Siêu âm");
+      const response = await markQualityPass(
+        targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })),
+        kind === "hinh-hoc" ? "visual" : "ndt",
+        date,
+        "Siêu âm",
+      );
       const failed = response.results.filter((r) => r.error);
       const next = await request<Detail>("split-detail", { id: detail.ticket.id });
       setDetail(next);
       items = next.items;
       if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
     }
-    const ready = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && (kind !== "hinh-hoc" || i.current?.co_the_dat)).map((i) => i.moi_han_id);
+    const ready = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && i.current?.co_the_dat).map((i) => i.moi_han_id);
     setResults((prev) => { const out = { ...prev }; for (const id of ready) out[id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
+  }
+
+  /** Đạt lẻ: nếu chưa có dữ liệu kiểm tra thì ghi chất lượng trước, rồi cập nhật cột «Dữ liệu kiểm tra». */
+  async function applyResult(item: Item, ket_qua: string) {
+    if (!detail || item.ket_qua) return;
+    setError("");
+    if (!ket_qua) {
+      setResults((prev) => {
+        const next = { ...prev };
+        delete next[item.moi_han_id];
+        return next;
+      });
+      return;
+    }
+    if (ket_qua === "Đạt" && !item.current?.co_the_dat) {
+      if (kind === "hinh-hoc" && !window.confirm(`Ghi trực quan ĐẠT cho ${fieldWeldCode(item.ma_lich_su)} (ngày ${date})?
+Ô sai số còn trống tự điền mức tối đa theo tiêu chí.`)) return;
+      const response = await markQualityPass(
+        [{ id: item.moi_han_id, ma_lich_su: item.ma_lich_su, phien_ban: item.version ?? 0 }],
+        kind === "hinh-hoc" ? "visual" : "ndt",
+        date,
+        "Siêu âm",
+      );
+      const failed = response.results.find((r) => r.error);
+      const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+      setDetail(next);
+      if (failed?.error) {
+        setError(`${fieldWeldCode(item.ma_lich_su)}: ${failed.error}`);
+        return;
+      }
+    }
+    setResults((prev) => ({ ...prev, [item.moi_han_id]: { ket_qua, ly_do: "" } }));
   }
   /** Đặt kết quả cho các mối đã tick ("" = xoá kết quả). Không đạt cần lý do. */
   function bulkSet(value: "Đạt" | "Không đạt" | "") {
@@ -624,7 +664,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                   <td className="px-3 py-1.5 text-xs text-slate-600" title={evidenceText(kind, data)}>{evidenceShort(kind, data)}</td>
                   <td className="px-3 py-1.5">
                     {i.ket_qua ? <span className={`inline-block rounded-md px-2 py-1 text-xs font-semibold ${i.ket_qua === "Đạt" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{i.ket_qua}{i.ly_do ? ` · ${i.ly_do}` : ""}</span> : <div className="flex flex-col gap-1">
-                      <select aria-label={"Kết quả " + i.ma_lich_su} disabled={busy} className={field + " min-h-9 w-full py-1"} value={res?.ket_qua || ""} onChange={e => patch(i.moi_han_id, { ket_qua: e.target.value, ly_do: "" })}>
+                      <select
+                        aria-label={"Kết quả " + i.ma_lich_su}
+                        disabled={busy}
+                        className={field + " min-h-9 w-full py-1"}
+                        value={res?.ket_qua || ""}
+                        onChange={(e) => void run(() => applyResult(i, e.target.value))}
+                      >
                         <option value="">Chưa chọn</option><option disabled={!canPass}>Đạt</option><option>Không đạt</option>
                       </select>
                       {res?.ket_qua === "Không đạt" && <input required maxLength={1000} aria-label={"Lý do " + i.ma_lich_su} placeholder="Lý do không đạt → Sửa chữa/khắc phục" className={field + " min-h-9 w-full py-1"} value={res.ly_do || ""} onChange={e => patch(i.moi_han_id, { ly_do: e.target.value })} />}
