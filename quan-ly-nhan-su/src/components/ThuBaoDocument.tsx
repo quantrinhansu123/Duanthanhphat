@@ -96,13 +96,15 @@ type TabState = {
 };
 
 type UtWeld = { moi_han_id: string; ma_lich_su: string; ly_trinh?: string | null };
+/** Phiếu RFI siêu âm đã phát — mỗi phiếu tự sinh một thư báo. */
+type UtTicket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; thong_tin?: Record<string, string> | null };
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "sieu-am", label: "Thư báo siêu âm" },
-  { id: "bt-phu-thanh", label: "Thu bao BT PHÚ THÀNH" },
-  { id: "las-xd845", label: "Thu bao LAS-XD845" },
-  { id: "thep-det", label: "Thu bao thép dẹt 50x5" },
-  { id: "thep-tron", label: "Thu bao thep tron" },
+  { id: "bt-phu-thanh", label: "Thư báo BT PHÚ THÀNH" },
+  { id: "las-xd845", label: "Thư báo LAS-XD845" },
+  { id: "thep-det", label: "Thư báo thép dẹt 50×5" },
+  { id: "thep-tron", label: "Thư báo thép tròn" },
 ];
 
 function todayIso() {
@@ -250,8 +252,8 @@ export default function ThuBaoDocument({
   const [tab, setTab] = useState<TabId>("sieu-am");
   const [byTab, setByTab] = useState<Record<TabId, TabState>>(buildInitial);
   const data = byTab[tab];
-  const [utWelds, setUtWelds] = useState<UtWeld[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [tickets, setTickets] = useState<UtTicket[]>([]);
+  const [openedId, setOpenedId] = useState("");
   const [utError, setUtError] = useState("");
   const [utLoading, setUtLoading] = useState(false);
   const [chtSig, setChtSig] = useState<string>("");
@@ -274,22 +276,25 @@ export default function ThuBaoDocument({
 
   useEffect(() => {
     if (!projectId) {
-      setUtWelds([]);
+      setTickets([]);
       setUtError("");
       return;
     }
     let alive = true;
     setUtLoading(true);
     setUtError("");
-    qualityRequest<{ candidates: UtWeld[] }>({ action: "split-list", du_an_id: projectId, loai: "sieu-am" })
+    qualityRequest<{ tickets: UtTicket[] }>({ action: "split-list", du_an_id: projectId, loai: "sieu-am" })
       .then((res) => {
         if (!alive) return;
-        setUtWelds(res.candidates ?? []);
+        const list = [...(res.tickets ?? [])].sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
+        setTickets(list);
+        // Vào tab là thấy ngay thư báo của phiếu RFI siêu âm mới nhất.
+        if (list[0]) void openTicket(list[0]);
       })
       .catch((e) => {
         if (!alive) return;
-        setUtWelds([]);
-        setUtError(e instanceof Error ? e.message : "Không tải được danh sách mối siêu âm.");
+        setTickets([]);
+        setUtError(e instanceof Error ? e.message : "Không tải được danh sách phiếu RFI siêu âm.");
       })
       .finally(() => {
         if (alive) setUtLoading(false);
@@ -297,12 +302,8 @@ export default function ThuBaoDocument({
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
-
-  const selectedWelds = useMemo(
-    () => utWelds.filter((w) => selected.includes(w.moi_han_id)),
-    [utWelds, selected],
-  );
 
   const [fillNote, setFillNote] = useState("");
 
@@ -330,43 +331,32 @@ export default function ThuBaoDocument({
     });
   }
 
-  function toggleWeld(id: string) {
-    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
-  }
-
-  /** Giống RFI: chọn mối xong phải bấm Điền mới đổ vào phiếu. */
-  function fillFromSelected() {
-    const welds = selectedWelds.length ? selectedWelds : utWelds;
-    if (!welds.length) {
-      setFillNote("Chưa có mối «Chờ siêu âm» để điền.");
-      return;
+  /**
+   * Thư báo tự sinh từ phiếu RFI siêu âm: ngày tháng + giờ = ngày mời / giờ bắt đầu của RFI,
+   * ngày lập = ngày mời − 1, nội dung = các mối trong phiếu, lý trình = Km đầu → Km cuối.
+   */
+  async function openTicket(t: UtTicket) {
+    setOpenedId(t.id);
+    setUtError("");
+    try {
+      const { items } = await qualityRequest<{ items: UtWeld[] }>({ action: "split-detail", du_an_id: projectId, loai: "sieu-am", id: t.id });
+      const ngay = t.ngay_moi;
+      const gio = (t.thong_tin?.gio_bat_dau || "08:00").replace(/^0(\d)/, "$1");
+      setByTab((cur) => ({
+        ...cur,
+        "sieu-am": {
+          ...cur["sieu-am"],
+          ngayLap: addDaysIso(ngay, -1) || ngay,
+          ngayNoiDung: ngay,
+          rows: [{ ngay, thoiGian: gio, noiDung: weldContent(items), diaDiem: chainageRange(items), kySu: DEFAULT_KY_SU, ghiChu: "" }],
+        },
+      }));
+      setTab("sieu-am");
+      setStep("in");
+      setFillNote(`Thư báo theo ${t.so_phieu} · ${items.length} mối · ${displayDate(ngay)} ${gio}`);
+    } catch (e) {
+      setUtError(e instanceof Error ? e.message : "Không tải được phiếu RFI siêu âm.");
     }
-    const ngayMoi = todayIso();
-    const ngayThucHien = addDaysIso(ngayMoi, 1);
-    const noiDung = weldContent(welds);
-    const diaDiem = chainageRange(welds);
-    setSelected(welds.map((w) => w.moi_han_id));
-    setByTab((cur) => ({
-      ...cur,
-      "sieu-am": {
-        ...cur["sieu-am"],
-        ngayLap: ngayMoi,
-        ngayNoiDung: ngayThucHien,
-        rows: [
-          {
-            ngay: ngayThucHien,
-            thoiGian: "8:00",
-            noiDung,
-            diaDiem,
-            kySu: DEFAULT_KY_SU,
-            ghiChu: "",
-          },
-        ],
-      },
-    }));
-    setTab("sieu-am");
-    setStep("thong-tin");
-    setFillNote(`Đã điền ${welds.length} mối · ngày mời ${displayDate(ngayMoi)} · ngày tháng ${displayDate(ngayThucHien)} · 8:00`);
   }
 
   function printDoc() {
@@ -402,57 +392,34 @@ export default function ThuBaoDocument({
 
   const weldPicker = (
     <div className="space-y-2 rounded-lg border border-[#0047AB]/25 bg-[#0047AB]/5 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="font-bold text-slate-800">1. Chọn mối chờ siêu âm</p>
-          <p className="text-xs text-slate-600">Giống RFI: tick mối → bấm Điền mới đổ vào phiếu.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50"
-            disabled={!utWelds.length}
-            onClick={() => setSelected(utWelds.map((w) => w.moi_han_id))}
-          >
-            Chọn tất cả ({utWelds.length})
-          </button>
-          <button
-            type="button"
-            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700"
-            onClick={() => setSelected([])}
-          >
-            Bỏ chọn
-          </button>
-          <button
-            type="button"
-            className="h-9 rounded-lg bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-            disabled={!projectId || utLoading || (!selected.length && !utWelds.length)}
-            onClick={fillFromSelected}
-          >
-            Điền vào thư báo{selected.length ? ` (${selected.length})` : utWelds.length ? ` (tất cả ${utWelds.length})` : ""}
-          </button>
-        </div>
+      <div>
+        <p className="font-bold text-slate-800">1. Thư báo theo phiếu RFI siêu âm đã phát</p>
+        <p className="text-xs text-slate-600">Mỗi phiếu RFI siêu âm tự có một thư báo (ngày, giờ, mối, lý trình lấy từ phiếu). Gửi thư báo lên nhóm; RFI giữ lại kèm hồ sơ KCS khi ký siêu âm.</p>
       </div>
       {!projectId ? (
-        <p className="text-sm text-amber-800">Chọn dự án ở màn Biên bản mối hàn để tải danh sách mối.</p>
+        <p className="text-sm text-amber-800">Chọn dự án ở màn Biên bản mối hàn để tải danh sách phiếu.</p>
       ) : utLoading ? (
-        <p className="text-sm text-slate-500">Đang tải mối chờ siêu âm…</p>
+        <p className="text-sm text-slate-500">Đang tải phiếu RFI siêu âm…</p>
       ) : utError ? (
         <p className="text-sm text-rose-700">{utError}</p>
-      ) : !utWelds.length ? (
-        <p className="text-sm text-slate-500">Không có mối «Chờ siêu âm».</p>
+      ) : !tickets.length ? (
+        <p className="text-sm text-slate-500">Chưa phát phiếu RFI siêu âm nào.</p>
       ) : (
         <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white">
-          {utWelds.map((w) => (
-            <label key={w.moi_han_id} className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-slate-100 px-3 text-sm last:border-0 hover:bg-slate-50">
-              <input type="checkbox" className="size-4" checked={selected.includes(w.moi_han_id)} onChange={() => toggleWeld(w.moi_han_id)} />
-              <span className="font-semibold text-slate-900">{fieldWeldCode(w.ma_lich_su)}</span>
-              <span className="text-slate-500">{w.ly_trinh || "— thiếu KM"}</span>
-            </label>
+          {tickets.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => void openTicket(t)}
+              className={`flex min-h-11 w-full items-center gap-3 border-b border-slate-100 px-3 text-left text-sm last:border-0 hover:bg-slate-50 ${openedId === t.id ? "bg-emerald-50" : ""}`}
+            >
+              <span className="font-semibold text-slate-900">{t.so_phieu}</span>
+              <span className="text-slate-500">{displayDate(t.ngay_moi)} {(t.thong_tin?.gio_bat_dau || "08:00").replace(/^0(\d)/, "$1")}</span>
+              <span className="ml-auto text-xs text-slate-500">{t.ngay_nghiem_thu ? "Đã nghiệm thu" : "Chờ nghiệm thu"}</span>
+            </button>
           ))}
         </div>
       )}
-      <p className="text-xs text-slate-600">Đã chọn <b>{selected.length}</b> / {utWelds.length} mối.</p>
     </div>
   );
 
@@ -466,18 +433,10 @@ export default function ThuBaoDocument({
       <style>{css}</style>
       <div className={actionsClass}>
         <div>
-          <p className={titleClass}>Thư báo — chọn mối &amp; điền như RFI</p>
+          <p className={titleClass}>Thư báo — tự sinh từ phiếu RFI siêu âm</p>
           {fillNote ? <p className={noteClass}>{fillNote}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={fillFromSelected}
-            disabled={!projectId || utLoading || (!selected.length && !utWelds.length)}
-            className="h-9 cursor-pointer rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Điền vào thư báo{selected.length ? ` (${selected.length})` : ""}
-          </button>
           <button
             type="button"
             onClick={() => { setStep("in"); printDoc(); }}
@@ -494,7 +453,7 @@ export default function ThuBaoDocument({
       </div>
 
       <div className={`no-print grid grid-cols-3 gap-2 ${embedded ? "" : "mx-auto mb-3 max-w-5xl"}`}>
-        {([["chon", "1. Chọn mối"], ["thong-tin", "2. Thông tin phiếu"], ["in", "3. Xem / In"]] as const).map(([id, label]) => (
+        {([["chon", `1. Phiếu RFI siêu âm (${tickets.length})`], ["thong-tin", "2. Thông tin phiếu"], ["in", "3. Xem / In"]] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -531,8 +490,8 @@ export default function ThuBaoDocument({
       <div className={boxClass}>
         {embedded && step === "thong-tin" && tab === "sieu-am" ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-            Bước 2 — kiểm tra / sửa thông tin đã điền. Quay lại bước 1 nếu cần chọn thêm mối.
-            <button type="button" className="ml-2 font-bold underline" onClick={() => setStep("chon")}>← Chọn mối</button>
+            Bước 2 — kiểm tra / sửa thông tin lấy từ phiếu RFI.
+            <button type="button" className="ml-2 font-bold underline" onClick={() => setStep("chon")}>← Danh sách phiếu</button>
           </div>
         ) : null}
 
@@ -540,11 +499,11 @@ export default function ThuBaoDocument({
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="grid gap-1 font-semibold text-slate-700">
-            Ngày mời (hôm nay)
+            Ngày lập thư báo (= ngày mời RFI − 1)
             <input type="date" className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={data.ngayLap} onChange={(e) => setNgayMoi(e.target.value)} />
           </label>
           <label className="grid gap-1 font-semibold text-slate-700">
-            Ngày nội dung (= ngày mời + 1, sửa được)
+            Ngày thực hiện (= ngày mời RFI, sửa được)
             <input type="date" className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={data.ngayNoiDung} onChange={(e) => patchRow(0, { ngay: e.target.value })} />
           </label>
           <label className="grid gap-1 font-semibold text-slate-700">
@@ -643,7 +602,7 @@ export default function ThuBaoDocument({
         </p>
         {embedded ? (
           <div className="flex flex-wrap gap-2 pt-1">
-            <button type="button" className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700" onClick={() => setStep("chon")}>← Chọn mối</button>
+            <button type="button" className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700" onClick={() => setStep("chon")}>← Danh sách phiếu</button>
             <button type="button" className="h-9 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white" onClick={() => setStep("in")}>3. Xem / In →</button>
           </div>
         ) : null}
