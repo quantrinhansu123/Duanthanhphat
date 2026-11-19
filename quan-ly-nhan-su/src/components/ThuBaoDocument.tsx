@@ -260,6 +260,8 @@ export default function ThuBaoDocument({
   const [utError, setUtError] = useState("");
   const [utLoading, setUtLoading] = useState(false);
   const [chtSig, setChtSig] = useState<string>("");
+  /** true = in / preview dán sẵn chữ ký CHT (như RFI «In có chữ ký»). */
+  const [withSignatures, setWithSignatures] = useState(true);
   const [step, setStep] = useState<"chon" | "thong-tin" | "in">("chon");
   /** Modal rộng khi bấm Xem: form sửa + preview phiếu. */
   const [viewOpen, setViewOpen] = useState(false);
@@ -423,7 +425,8 @@ export default function ThuBaoDocument({
       }
       setPickOpen(false);
       setPendingTicket(null);
-      if (mode === "in") printDoc();
+      // In từ danh sách = mặc định in sẵn chữ ký CHT (như RFI «In có chữ ký»).
+      if (mode === "in") printVersion(true);
     } catch (e) {
       setUtError(e instanceof Error ? e.message : "Không tải được phiếu RFI siêu âm.");
     } finally {
@@ -452,6 +455,37 @@ export default function ThuBaoDocument({
     window.addEventListener("afterprint", restore, { once: true });
     window.print();
   }
+
+  /** Giống phiếu RFI: in có chữ ký dán sẵn hoặc in trống để ký tay. */
+  function printVersion(withSig: boolean) {
+    flushSync(() => setWithSignatures(withSig));
+    printDoc();
+    // Preview modal giữ chữ ký sau khi in ký tay xong.
+    if (!withSig && viewOpen) {
+      window.addEventListener("afterprint", () => setWithSignatures(true), { once: true });
+    }
+  }
+
+  const printButtons = (
+    <>
+      <button
+        type="button"
+        onClick={() => printVersion(true)}
+        title={chtSig ? "Chữ ký CHT đã dán sẵn trên phiếu — phát hành ngay" : "Chưa có ảnh chữ ký CHT — tải ở cấu hình RFI (chi-huy-truong)"}
+        className="h-9 cursor-pointer rounded-lg bg-[#0047AB] px-3 text-sm font-semibold text-white hover:bg-[#00388A]"
+      >
+        In có chữ ký
+      </button>
+      <button
+        type="button"
+        onClick={() => printVersion(false)}
+        title="Không dán chữ ký — in ra để ký trực tiếp"
+        className="h-9 cursor-pointer rounded-lg border border-[#0047AB] bg-white px-3 text-sm font-semibold text-[#0047AB] hover:bg-blue-50"
+      >
+        In ký tay
+      </button>
+    </>
+  );
 
   const shellClass = embedded
     ? "space-y-3"
@@ -622,7 +656,7 @@ export default function ThuBaoDocument({
         </label>
       </div>
       <p className="text-xs text-slate-500">
-        Chữ ký CHT: {chtSig ? "đã gắn ảnh từ cấu hình RFI" : "chưa có ảnh — tải ở phiếu RFI (chi-huy-truong)"}.
+        Chữ ký CHT: {chtSig ? "đã gắn ảnh từ cấu hình RFI — dùng nút «In có chữ ký»" : "chưa có ảnh — tải ở phiếu RFI (chi-huy-truong), rồi «In có chữ ký»"}.
       </p>
     </>
   );
@@ -693,7 +727,7 @@ export default function ThuBaoDocument({
         <div className="tb-sign">
           <p className="tb-b tb-14 uppercase">ĐẠI DIỆN ĐƠN VỊ THI CÔNG</p>
           <p className="tb-n tb-14 mt-1">{data.chtChucVu || "Chỉ huy trưởng"}</p>
-          {chtSig ? <img src={chtSig} alt="Chữ ký chỉ huy trưởng" /> : <div className="h-28" />}
+          {withSignatures && chtSig ? <img src={chtSig} alt="Chữ ký chỉ huy trưởng" /> : <div className="h-28" />}
           <p className="tb-b tb-14">{data.chtTen || "………………"}</p>
         </div>
       </div>
@@ -714,13 +748,7 @@ export default function ThuBaoDocument({
           {fillNote ? <p className={noteClass}>{fillNote}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => { setStep("in"); printDoc(); }}
-            className="h-9 cursor-pointer rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A]"
-          >
-            In thư báo
-          </button>
+          {printButtons}
           {onClose ? (
             <button type="button" onClick={onClose} className={closeBtnClass}>
               {embedded ? "Đóng tab" : "Đóng"}
@@ -807,9 +835,7 @@ export default function ThuBaoDocument({
                 {fillNote ? <p className="mt-0.5 truncate text-xs text-emerald-700">{fillNote}</p> : null}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <button type="button" onClick={printDoc} className="h-9 cursor-pointer rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A]">
-                  In thư báo
-                </button>
+                {printButtons}
                 <button type="button" onClick={closeView} className={`${closeBtnClass} h-9`}>
                   Đóng
                 </button>
@@ -817,15 +843,15 @@ export default function ThuBaoDocument({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
               <div className={`mb-4 ${boxClass}`}>{editFormFields}</div>
-              <p className="thu-bao-actions mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Preview phiếu</p>
+              <p className="thu-bao-actions mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Preview phiếu {withSignatures && chtSig ? "· có chữ ký CHT" : withSignatures ? "· chưa có ảnh chữ ký" : "· bản ký tay"}
+              </p>
               <article id="thu-bao-print" className={printClass}>
                 {printBody}
               </article>
             </div>
             <div className="thu-bao-actions flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5">
-              <button type="button" onClick={printDoc} className="h-9 cursor-pointer rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white hover:bg-[#00388A]">
-                In thư báo
-              </button>
+              {printButtons}
               <button type="button" onClick={closeView} className={`${closeBtnClass} h-9`}>
                 Đóng
               </button>

@@ -84,9 +84,48 @@
     .hist { display: grid; gap: 10px; }
     .hist .item {
       border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; background: #f8fafc;
+      display: block; text-decoration: none; color: inherit; cursor: pointer;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .hist .item .t { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+    .hist a.item:hover { border-color: var(--ring); box-shadow: 0 0 0 2px #fecdd3; }
+    .hist .item .t { font-size: 13px; font-weight: 700; margin: 0 0 4px; color: #0f172a; }
     .hist .item .d { font-size: 12px; color: #64748b; margin: 0; line-height: 1.4; }
+    .hist .item .go { display: block; margin-top: 6px; font-size: 11px; font-weight: 800; color: var(--ring); }
+    :target { scroll-margin-top: 72px; animation: flash 1.2s ease; }
+    @keyframes flash {
+      0%, 100% { box-shadow: none; }
+      30% { box-shadow: 0 0 0 4px #fda4af; }
+    }
+    .mock-modal {
+      border: 1px solid #cbd5e1; border-radius: 14px; overflow: hidden; background: #f1f5f9;
+      box-shadow: 0 12px 40px rgba(15,23,42,.18);
+    }
+    .mock-modal .mh {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+      background: #fff; border-bottom: 1px solid #e2e8f0; padding: 10px 12px;
+    }
+    .mock-modal .mh .title { font-size: 13px; font-weight: 800; }
+    .mock-modal .mh .sub { font-size: 11px; color: #059669; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn-row .b {
+      display: inline-block; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
+    }
+    .btn-row .sig { background: #0047AB; color: #fff; }
+    .btn-row .hand { background: #fff; color: #0047AB; border: 1px solid #0047AB; }
+    .btn-row .x { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+    .mock-modal .mb { padding: 12px; }
+    .sig-block {
+      margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;
+      font-family: "Times New Roman", Times, serif; text-align: center; font-size: 12px;
+    }
+    .sig-block .fake-sig {
+      height: 56px; margin: 8px auto; max-width: 120px;
+      background: linear-gradient(135deg, transparent 40%, #1e3a8a 42%, #1e3a8a 45%, transparent 47%),
+        linear-gradient(160deg, transparent 50%, #1e3a8a 52%, #1e3a8a 54%, transparent 56%);
+      border-bottom: 1px dashed #94a3b8;
+    }
+    .sig-block .empty { height: 56px; margin: 8px auto; border-bottom: 1px dashed #94a3b8; }
     .new {
       display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
       background: #fef2f2; color: var(--ring); font-size: 10px; font-weight: 800;
@@ -108,14 +147,16 @@
       <div class="meta">Thư báo: Từ mối đầu → đến · Nhật ký 3.2: mã sau «Mối số:» rồi Kết quả</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="primary" href="/thu-bao-check.html">Thư báo A4</a>
+      <a class="primary" href="#in-chu-ky">Khoanh In chữ ký #3</a>
+      <a href="#nghiem-thu">Nghiệm thu 3.2</a>
+      <a href="/thu-bao-check.html">Thư báo A4</a>
       <a href="/bien-ban-moi-han">Về app</a>
     </div>
   </div>
 
   <div class="wrap">
     <section class="card">
-      <h2>1. Thư báo — cột Nội dung công việc <span class="new">MỚI</span></h2>
+      <h2 id="tu-den">1. Thư báo — cột Nội dung công việc <span class="new">MỚI</span></h2>
       <p>
         Không liệt kê hết mã. Chỉ hiện <b>Từ mối đầu</b> → <b>đến mối cuối</b>
         (file <code>ThuBaoDocument.tsx</code> · <code>weldContent</code>).
@@ -171,7 +212,7 @@ Từ FBW-1411260153
         </table>
       </div>
 
-      <h2 style="margin-top:22px">2. Nhật ký mục 3.2 — Mối số + Kết quả <span class="new">MỚI</span></h2>
+      <h2 id="nghiem-thu" style="margin-top:22px">2. Nhật ký mục 3.2 — Nghiệm thu · Mối số + Kết quả <span class="new">MỚI</span></h2>
       <p>
         Đưa tên mối <b>ngay sau chữ «Mối số:»</b>, rồi mới <b>Kết quả: Đạt</b>
         (file <code>constructionDiaryAuto.ts</code> · <code>weldAcceptanceServer.ts</code>).
@@ -186,8 +227,7 @@ FBW-1411260153, FBW-1411260154, …</div>
         </div>
         <div class="box after">
           <div class="lbl">Sau — khoanh <span class="badge">2</span></div>
-          <div class="mono ring" data-n="2">… Khối lượng: 16 mối. Mối số: FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158,
-  FBW-1511260159, …, FBW-1511260168. Kết quả: Đạt.</div>
+          <div class="mono ring" data-n="2">… Khối lượng: 16 mối. Mối số: FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158, FBW-1511260159, FBW-1511260160, …, FBW-1511260168. Kết quả: Đạt.</div>
         </div>
       </div>
 
@@ -195,15 +235,52 @@ FBW-1411260153, FBW-1411260154, …</div>
       <div class="a4">
         <p style="font-weight:700;margin:0 0 8px">3.2 Nghiệm thu công việc xây dựng hàng ngày</p>
         <div class="ring" data-n="2" style="padding:8px;font-size:12.5px;line-height:1.45">
-          - Nghiệm thu kích thước hình học, trực quan mối hàn đoạn Km5+823.71 – Km5+999.12, thuộc tuyến thượng. Khối lượng: 16 mối. <b>Mối số:</b> FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158,<br />
-          &nbsp;&nbsp;FBW-1511260159, FBW-1511260160, FBW-1511260161, FBW-1511260162, FBW-1511260163, FBW-1511260164,<br />
-          &nbsp;&nbsp;FBW-1511260165, FBW-1511260166, FBW-1511260167, FBW-1511260168. <b>Kết quả: Đạt.</b>
+          - Nghiệm thu kích thước hình học, trực quan mối hàn đoạn Km5+823.71 – Km5+999.12, thuộc tuyến thượng. Khối lượng: 16 mối. <b>Mối số:</b> FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158, FBW-1511260159, FBW-1511260160, FBW-1511260161, FBW-1511260162, FBW-1511260163, FBW-1511260164, FBW-1511260165, FBW-1511260166, FBW-1511260167, FBW-1511260168. <b>Kết quả: Đạt.</b>
         </div>
         <div style="margin-top:10px;padding:8px;font-size:12.5px;line-height:1.45;border:1px dashed #cbd5e1;border-radius:6px">
           - Nghiệm thu siêu âm mối hàn đoạn Km5+450.00 – Km5+620.00, thuộc tuyến hạ. Khối lượng: 8 mối. <b>Mối số:</b> FBW-0811260065, FBW-0811260066, … FBW-1011260080. <b>Kết quả: Đạt.</b>
         </div>
       </div>
       <p class="ok" style="margin-top:12px">Mở lại nhật ký / tải mặc định ngày để thấy dữ liệu mới trên app.</p>
+
+      <h2 id="in-chu-ky" style="margin-top:22px">3. Thư báo — In có chữ ký / In ký tay <span class="new">MỚI</span></h2>
+      <p>
+        Giống phiếu RFI: hai nút in. Click thẻ lịch sử <b>#3</b> nhảy tới khung khoanh này.
+      </p>
+      <div class="mock-modal">
+        <div class="mh">
+          <div>
+            <div class="title">Xem / sửa thư báo</div>
+            <div class="sub">Thư báo theo RFI-015-SA · 16 mối · 17/11/26 8:00</div>
+          </div>
+          <div class="btn-row ring" data-n="3">
+            <span class="b sig">In có chữ ký</span>
+            <span class="b hand">In ký tay</span>
+            <span class="b x">Đóng</span>
+          </div>
+        </div>
+        <div class="mb">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase">Preview phiếu · có chữ ký CHT</p>
+          <div class="sig-block">
+            <div>
+              <b>ĐẠI DIỆN TƯ VẤN GIÁM SÁT</b><br />
+              <span style="font-weight:400">Tư vấn giám sát trưởng</span>
+              <div class="empty"></div>
+              <b>Trần Văn Thanh</b>
+            </div>
+            <div class="ring" data-n="3" style="padding:6px">
+              <b>ĐẠI DIỆN ĐƠN VỊ THI CÔNG</b><br />
+              <span style="font-weight:400">Chỉ huy trưởng</span>
+              <div class="fake-sig" title="Ảnh chữ ký CHT từ cấu hình RFI"></div>
+              <b>Nguyễn Tất Đạt</b>
+              <div style="font-size:10px;color:#047857;font-family:system-ui;margin-top:4px;font-weight:700">← dán sẵn khi «In có chữ ký»</div>
+            </div>
+          </div>
+          <p style="margin:10px 0 0;font-size:12px;color:#64748b">
+            «In ký tay» = ô chữ ký trống. Nút <b>In</b> trên danh sách phiếu = mặc định có chữ ký.
+          </p>
+        </div>
+      </div>
     </section>
 
     <aside class="card">
@@ -214,28 +291,41 @@ FBW-1411260153, FBW-1411260154, …</div>
         </thead>
         <tbody>
           <tr>
-            <td class="n">1</td>
-            <td class="muc">Thư báo · Nội dung công việc</td>
+            <td class="n"><a href="#tu-den" style="color:inherit">1</a></td>
+            <td class="muc"><a href="#tu-den" style="color:inherit;text-decoration:none">Thư báo · Nội dung công việc</a></td>
             <td>Chỉ <b>Từ mối đầu</b> / <b>đến mối cuối</b> — không liệt kê hết mã</td>
           </tr>
           <tr>
-            <td class="n">2</td>
-            <td class="muc">Nhật ký 3.2 · Mối số</td>
+            <td class="n"><a href="#nghiem-thu" style="color:inherit">2</a></td>
+            <td class="muc"><a href="#nghiem-thu" style="color:inherit;text-decoration:none">Nhật ký 3.2 · Mối số</a></td>
             <td>Mã ngay sau <b>Mối số:</b>, rồi <b>Kết quả: Đạt/Không đạt</b> một lần cuối mục</td>
+          </tr>
+          <tr>
+            <td class="n"><a href="#in-chu-ky" style="color:inherit">3</a></td>
+            <td class="muc"><a href="#in-chu-ky" style="color:inherit;text-decoration:none">Thư báo · In chữ ký</a></td>
+            <td><b>In có chữ ký</b> (dán CHT từ RFI) · <b>In ký tay</b> (ô trống). Nút In danh sách = mặc định có chữ ký.</td>
           </tr>
         </tbody>
       </table>
 
       <h2 style="margin-top:18px">Lịch sử thay đổi</h2>
+      <p style="font-size:12px;color:#64748b;margin:0 0 8px">Bấm thẻ → nhảy tới ảnh khoanh chỉnh sửa</p>
       <div class="hist">
-        <div class="item">
+        <a class="item" href="#tu-den">
           <p class="t"><span class="badge">1</span> Thư báo — Từ / đến <span class="new">MỚI</span></p>
           <p class="d">weldContent: 1 mối → một mã; ≥2 mối → «Từ … đến …».</p>
-        </div>
-        <div class="item">
+          <span class="go">→ Xem khoanh #1</span>
+        </a>
+        <a class="item" href="#nghiem-thu">
           <p class="t"><span class="badge">2</span> Nhật ký 3.2 — vị trí mã <span class="new">MỚI</span></p>
           <p class="d">Không còn «Mối số: Kết quả:» rồi mã ở dòng dưới. split theo mục (− …) trước khi gắn Kết quả.</p>
-        </div>
+          <span class="go">→ Xem khoanh #2</span>
+        </a>
+        <a class="item" href="#in-chu-ky">
+          <p class="t"><span class="badge">3</span> Thư báo — In có chữ ký <span class="new">MỚI</span></p>
+          <p class="d">Giống RFI: «In có chữ ký» dán ảnh CHT; «In ký tay» để trống. In từ danh sách = có chữ ký.</p>
+          <span class="go">→ Xem khoanh #3 (nút in + chữ ký)</span>
+        </a>
       </div>
 
       <p style="margin-top:14px;font-size:12px;color:#64748b">

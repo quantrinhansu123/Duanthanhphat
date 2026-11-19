@@ -64,14 +64,8 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
     // Xuống dòng mỗi 6 mã để in A4 không cắt giữa mã (tránh hiện «FBW-» cụt cuối trang).
-    // Xuống dòng mỗi 6 mã (thụt 2 khoảng) — vẫn nằm ngay sau «Mối số:», không tách thành khối riêng.
-    const codesJoined = fieldCodes.length
-      ? fieldCodes.reduce<string[]>((chunks, code, i) => {
-          if (i % 6 === 0) chunks.push(code);
-          else chunks[chunks.length - 1] += `, ${code}`;
-          return chunks;
-        }, []).join(",\n  ")
-      : "";
+    // Nối liền một chuỗi; trình duyệt / khổ in tự xuống dòng, không cắt giữa cụm 6 mã.
+    const codesJoined = fieldCodes.join(", ");
     const codes = codesJoined ? ` Mối số: ${codesJoined}` : "";
     if (kind === "weld") {
       return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : ""}.`;
