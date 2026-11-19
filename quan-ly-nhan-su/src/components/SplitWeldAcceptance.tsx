@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadRfiNumber, markQualityPass, removeBbntScan, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadGeometryRecord, loadQualityInspection, loadRfiNumber, markQualityPass, removeBbntScan, saveQualityInspection, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
@@ -29,6 +29,22 @@ type Item = { moi_han_id: string; ma_lich_su: string; ma_diem?: string | null; l
 type Detail = { ticket: Ticket; items: Item[] };
 type List = { candidates: Candidate[]; tickets: Ticket[] };
 type Decision = { ket_qua: string; ly_do: string };
+
+function evidenceIsPass(kind: SplitKind, e?: Evidence | null) {
+  if (!e) return false;
+  // Chỉ gợi ý Đạt khi đúng cột dữ liệu kiểm tra của loại phiếu đã Đạt (sau «Chưa chọn» đã gỡ thì không nhảy lại).
+  if (kind === "sieu-am") return e.ket_qua_ndt?.trim() === "Đạt";
+  return e.truc_quan?.trim() === "Đạt";
+}
+
+/** Gợi ý Đạt khi mở phiếu / sau khi ghi kiểm tra — không ép khi người dùng chọn «Chưa chọn». */
+function suggestPassResults(items: Item[], kind: SplitKind): Record<string, Decision> {
+  return Object.fromEntries(
+    items
+      .filter((i) => !i.ket_qua && evidenceIsPass(kind, i.current))
+      .map((i) => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }]),
+  );
+}
 const field = "min-h-11 rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:border-[#0047AB] focus:outline-none";
 const button = "min-h-10 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 hover:border-[#0047AB]/60 hover:bg-blue-50 disabled:opacity-50";
 const primary = "min-h-10 rounded-lg bg-[#0047ab] px-4 text-sm font-bold text-white shadow-md shadow-blue-900/25 hover:bg-[#003a8c] disabled:opacity-50 disabled:shadow-none";
@@ -144,20 +160,29 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   async function openTicket(id: string) {
     const next = await request<Detail>("split-detail", { id });
     setDetail(next); setPicked([]);
-    // Tự chọn sẵn «Đạt» cho mối đã đủ điều kiện (như RFI chính); mối còn thiếu thì tick rồi «Đạt hàng loạt».
-    setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
+    // Gợi ý Đạt khi mở phiếu; người dùng chọn «Chưa chọn» thì được giữ (không ép lại).
+    setResults(next.ticket.ngay_nghiem_thu ? {} : suggestPassResults(next.items, kind));
     setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
   }
+
   /**
-   * «Đạt hàng loạt»: hình học → ghi trực quan Đạt (+ số đo trống = max); siêu âm → ghi NDT Đạt.
-   * Sau đó cột «Dữ liệu kiểm tra» cập nhật theo dữ liệu mới.
+   * «Đạt hàng loạt»: hình học → ghi trực quan Đạt; siêu âm → ghi NDT Đạt.
+   * Không tick → áp dụng mọi mối còn mở.
    */
   async function passPicked() {
     if (!detail) return;
     setError("");
-    const chosen = new Set(picked);
     let items = detail.items;
-    const targets = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !i.current?.co_the_dat);
+    const chosen = new Set(
+      picked.length
+        ? picked
+        : items.filter((i) => !i.ket_qua).map((i) => i.moi_han_id),
+    );
+    if (!chosen.size) {
+      setError("Không còn mối nào để đặt Đạt.");
+      return;
+    }
+    const targets = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !evidenceIsPass(kind, i.current));
     if (targets.length) {
       if (kind === "hinh-hoc" && !window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
 Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
@@ -173,15 +198,39 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       items = next.items;
       if (failed.length) setError(`${failed.length} mối chưa ghi được: ${failed.slice(0, 3).map((f) => `${targets.find((t) => t.moi_han_id === f.id)?.ma_lich_su ?? f.id}: ${f.error}`).join("; ")}`);
     }
-    const ready = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && i.current?.co_the_dat).map((i) => i.moi_han_id);
-    setResults((prev) => { const out = { ...prev }; for (const id of ready) out[id] = { ket_qua: "Đạt", ly_do: "" }; return out; });
+    setResults((prev) => {
+      const out = { ...prev };
+      for (const i of items) {
+        if (chosen.has(i.moi_han_id) && !i.ket_qua && evidenceIsPass(kind, i.current)) {
+          out[i.moi_han_id] = { ket_qua: "Đạt", ly_do: "" };
+        }
+      }
+      return out;
+    });
   }
 
-  /** Đạt lẻ: nếu chưa có dữ liệu kiểm tra thì ghi chất lượng trước, rồi cập nhật cột «Dữ liệu kiểm tra». */
+  /** Đạt lẻ → ghi dữ liệu kiểm tra. «Chưa chọn» → xóa Kết quả và trả dữ liệu kiểm tra về chưa có. */
   async function applyResult(item: Item, ket_qua: string) {
     if (!detail || item.ket_qua) return;
     setError("");
     if (!ket_qua) {
+      // «Chưa chọn» = back về: xóa Kết quả + gỡ dữ liệu kiểm tra vừa ghi từ Đạt → cột lại «chưa có».
+      const needClear =
+        (kind === "sieu-am" && Boolean(item.current?.ket_qua_ndt)) ||
+        (kind === "hinh-hoc" && item.current?.truc_quan?.trim() === "Đạt");
+      if (needClear) {
+        const loaded = await loadQualityInspection(item.moi_han_id);
+        if (loaded.inspection) {
+          await saveQualityInspection({
+            ...loaded.inspection,
+            ...(kind === "sieu-am"
+              ? { ket_qua_ndt: null, ngay_ndt: null }
+              : { truc_quan: null, xu_ly_truc_quan: null }),
+          });
+        }
+        const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+        setDetail(next);
+      }
       setResults((prev) => {
         const next = { ...prev };
         delete next[item.moi_han_id];
@@ -208,12 +257,33 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     }
     setResults((prev) => ({ ...prev, [item.moi_han_id]: { ket_qua, ly_do: "" } }));
   }
-  /** Đặt kết quả cho các mối đã tick ("" = xoá kết quả). Không đạt cần lý do. */
-  function bulkSet(value: "Đạt" | "Không đạt" | "") {
+  /** Đặt kết quả cho các mối đã tick ("" = xoá kết quả + back dữ liệu kiểm tra). Không đạt cần lý do. */
+  async function bulkSet(value: "Đạt" | "Không đạt" | "") {
     if (!detail) return;
     if (value === "Không đạt" && !bulkReason.trim()) { setError("Nhập lý do không đạt (ô bên cạnh) trước khi bấm Không đạt hàng loạt."); return; }
     setError("");
     const eligible = new Set(detail.items.filter(i => !i.ket_qua).map(i => i.moi_han_id));
+    if (value === "") {
+      const targets = detail.items.filter((i) => picked.includes(i.moi_han_id) && eligible.has(i.moi_han_id));
+      for (const item of targets) {
+        const needClear =
+          (kind === "sieu-am" && Boolean(item.current?.ket_qua_ndt)) ||
+          (kind === "hinh-hoc" && item.current?.truc_quan?.trim() === "Đạt");
+        if (!needClear) continue;
+        const loaded = await loadQualityInspection(item.moi_han_id);
+        if (!loaded.inspection) continue;
+        await saveQualityInspection({
+          ...loaded.inspection,
+          ...(kind === "sieu-am"
+            ? { ket_qua_ndt: null, ngay_ndt: null }
+            : { truc_quan: null, xu_ly_truc_quan: null }),
+        });
+      }
+      if (targets.some((i) => (kind === "sieu-am" && i.current?.ket_qua_ndt) || (kind === "hinh-hoc" && i.current?.truc_quan?.trim() === "Đạt"))) {
+        const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+        setDetail(next);
+      }
+    }
     setResults(prev => {
       const next = { ...prev };
       for (const id of picked) {
@@ -236,9 +306,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const shownStep = editingId && step === "chon" ? "thong-tin" : step;
   const pendingItems = detail?.items.filter(i => !i.ket_qua) ?? [];
   const counts = {
-    pass: pendingItems.filter(i => results[i.moi_han_id]?.ket_qua === "Đạt").length,
-    fail: pendingItems.filter(i => results[i.moi_han_id]?.ket_qua === "Không đạt").length,
-    none: pendingItems.filter(i => !results[i.moi_han_id]?.ket_qua).length,
+    pass: pendingItems.filter((i) => results[i.moi_han_id]?.ket_qua === "Đạt").length,
+    fail: pendingItems.filter((i) => results[i.moi_han_id]?.ket_qua === "Không đạt").length,
+    none: pendingItems.filter((i) => !results[i.moi_han_id]?.ket_qua).length,
   };
   const sortTickets = (rows: Ticket[]) => [...rows].sort((a, b) => b.ngay_moi.localeCompare(a.ngay_moi) || b.so_phieu.localeCompare(a.so_phieu, "vi", { numeric: true }));
   const pendingTickets = sortTickets((list?.tickets ?? []).filter((t) => !t.ngay_nghiem_thu));
@@ -582,7 +652,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         void run(async () => {
           let items = detail.items;
           // Mối chọn Đạt nhưng chưa có kết quả kiểm tra → tự ghi (hình học: trực quan Đạt + điền sai số max; siêu âm: siêu âm Đạt) theo ngày nghiệm thu rồi mới chốt.
-          const need = items.filter(i => !i.ket_qua && results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
+          const decided = items.filter((i) => !i.ket_qua && (results[i.moi_han_id]?.ket_qua === "Đạt" || results[i.moi_han_id]?.ket_qua === "Không đạt"));
+          if (!decided.length) throw new Error("Chọn kết quả ít nhất một mối để xác nhận (được phép chốt lẻ).");
+          const need = decided.filter((i) => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
           if (need.length) {
             const response = await markQualityPass(need.map(i => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), kind === "hinh-hoc" ? "visual" : "ndt", date, "Siêu âm");
             const failed = response.results.find(r => r.error);
@@ -590,15 +662,22 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             const next = await request<Detail>("split-detail", { id: detail.ticket.id });
             setDetail(next);
             items = next.items;
-            const still = items.filter(i => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
+            const still = items.filter((i) => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.ket_qua && !i.current?.co_the_dat);
             if (still.length) throw new Error(`Đã ghi kết quả Đạt nhưng ${still.map(i => fieldWeldCode(i.ma_lich_su)).join(", ")} vẫn chưa đủ điều kiện theo tiêu chí — bổ sung trong Kiểm tra chất lượng.`);
           }
-          const done = await request<{ so_moi_chuyen?: number; sieu_am_id?: string; canh_bao?: string }>("split-complete", { id: detail.ticket.id, ngay_nghiem_thu: date, results: items.map(i => ({
-            id: i.moi_han_id, phien_ban: i.version, ...results[i.moi_han_id],
-          })) });
+          const payload = items
+            .filter((i) => !i.ket_qua && (results[i.moi_han_id]?.ket_qua === "Đạt" || results[i.moi_han_id]?.ket_qua === "Không đạt"))
+            .map((i) => ({ id: i.moi_han_id, phien_ban: i.version, ...results[i.moi_han_id] }));
+          const done = await request<{ so_moi_chuyen?: number; sieu_am_id?: string; canh_bao?: string; saved?: number; remaining?: number }>("split-complete", {
+            id: detail.ticket.id, ngay_nghiem_thu: date, results: payload,
+          });
           notifyWeldQualityChanged();
           await openTicket(detail.ticket.id); await refresh();
           if (done.canh_bao) setError(done.canh_bao);
+          if ((done.remaining ?? 0) > 0) {
+            setOkMsg(`Đã xác nhận ${done.saved ?? payload.length} mối; còn ${done.remaining} mối chưa chọn — có thể chốt lẻ tiếp.`);
+            return;
+          }
           if (done.so_moi_chuyen) setOkMsg(`Đã chuyển phiếu ${detail.ticket.so_phieu} (${done.so_moi_chuyen} mối Đạt) sang tab «Nghiệm thu Siêu âm».`);
           else if (kind === "sieu-am") setOkMsg(`Đã duyệt phiếu ${detail.ticket.so_phieu}; ký biên bản ở mục Hồ sơ nghiệm thu.`);
           // Tab 1 đã chuyển mối Đạt sang siêu âm → hỏi duyệt siêu âm luôn (Không thì in biên bản như cũ).
@@ -639,10 +718,10 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           <button type="button" className={button} disabled={busy} onClick={() => setPicked(pendingItems.map(i => i.moi_han_id))}>Tick tất cả</button>
           <button type="button" className={button} disabled={busy || !picked.length} onClick={() => setPicked([])}>Bỏ tick</button>
           <span className="text-slate-600">Đã tick {picked.length}</span>
-          <button type="button" className={primary} disabled={busy || !picked.length} onClick={() => run(passPicked)} title="Đặt kết quả Đạt cho các mối đã tick; phiếu hình học tự ghi trực quan Đạt cho mối còn thiếu điều kiện">Đạt hàng loạt</button>
+          <button type="button" className={primary} disabled={busy || !pendingItems.length} onClick={() => run(passPicked)} title="Đặt Đạt cho mối đã tick (hoặc tất cả nếu chưa tick). Dữ liệu kiểm tra Đạt → Kết quả tự nhảy Đạt.">Đạt hàng loạt</button>
           <input aria-label="Lý do không đạt hàng loạt" placeholder="Lý do (cho Không đạt hàng loạt)" className={field + " min-w-0 flex-1"} value={bulkReason} onChange={e => setBulkReason(e.target.value)} />
-          <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("Không đạt")}>Không đạt hàng loạt</button>
-          <button type="button" className={button} disabled={busy || !picked.length} onClick={() => bulkSet("")}>Xoá kết quả</button>
+          <button type="button" className={button} disabled={busy || !picked.length} onClick={() => void run(() => bulkSet("Không đạt"))}>Không đạt hàng loạt</button>
+          <button type="button" className={button} disabled={busy || !picked.length} onClick={() => void run(() => bulkSet(""))}>Xoá kết quả</button>
         </div>}
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-[640px] border-collapse text-left text-sm">
@@ -655,7 +734,9 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             <tbody className="divide-y divide-slate-100">
               {detail.items.map(i => {
                 const data = detail.ticket.ngay_nghiem_thu ? i.du_lieu_chot : i.current;
-                const canPass = Boolean(i.current?.co_the_dat) || (kind === "hinh-hoc" ? i.current?.truc_quan !== "Đạt" : !i.current?.ket_qua_ndt);
+                const canPass = kind === "sieu-am"
+                  ? i.current?.ket_qua_ndt?.trim() !== "Không đạt"
+                  : Boolean(i.current?.co_the_dat) || i.current?.truc_quan?.trim() !== "Đạt";
                 const res = results[i.moi_han_id];
                 return <tr key={i.moi_han_id} className="hover:bg-slate-50">
                   {!detail.ticket.ngay_nghiem_thu && <td className="px-3 py-1.5">{!i.ket_qua && <input type="checkbox" aria-label={"Tick " + fieldWeldCode(i.ma_lich_su)} checked={picked.includes(i.moi_han_id)} onChange={e => setPicked(e.target.checked ? [...picked, i.moi_han_id] : picked.filter(id => id !== i.moi_han_id))} />}</td>}
@@ -671,7 +752,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                         value={res?.ket_qua || ""}
                         onChange={(e) => void run(() => applyResult(i, e.target.value))}
                       >
-                        <option value="">Chưa chọn</option><option disabled={!canPass}>Đạt</option><option>Không đạt</option>
+                        <option value="">Chưa chọn</option><option disabled={!canPass} value="Đạt">Đạt</option><option value="Không đạt">Không đạt</option>
                       </select>
                       {res?.ket_qua === "Không đạt" && <input required maxLength={1000} aria-label={"Lý do " + i.ma_lich_su} placeholder="Lý do không đạt → Sửa chữa/khắc phục" className={field + " min-h-9 w-full py-1"} value={res.ly_do || ""} onChange={e => patch(i.moi_han_id, { ly_do: e.target.value })} />}
                       {!canPass && !res?.ket_qua && <span className="text-xs text-amber-800">{kind === "hinh-hoc" ? "Số đo / chiều dài mài chưa đạt — bổ sung trong Kiểm tra chất lượng." : "Siêu âm đã ghi Không đạt."}</span>}
@@ -683,12 +764,24 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           </table>
         </div>
         {!detail.ticket.ngay_nghiem_thu && (
-          <button className={primary} disabled={busy || counts.none > 0}
-            title={`Chốt kết quả và ghi nhật ký thi công ngày ${dateLabel(date)}`}>
-            Nghiệm thu → hoàn thành ({dateLabel(date)})
+          <button
+            className={primary}
+            disabled={busy || counts.pass + counts.fail === 0}
+            title={counts.none > 0
+              ? `Xác nhận ${counts.pass + counts.fail} mối đã chọn (còn ${counts.none} mối — chốt lẻ được). Ngày nhật ký: ${dateLabel(date)}`
+              : `Chốt toàn bộ và ghi nhật ký thi công ngày ${dateLabel(date)}`}
+          >
+            {counts.none > 0
+              ? `Xác nhận ${counts.pass + counts.fail} mối đã chọn (${dateLabel(date)})`
+              : `Nghiệm thu → hoàn thành (${dateLabel(date)})`}
           </button>
         )}
-        {!detail.ticket.ngay_nghiem_thu && counts.none > 0 && <p className="text-xs text-amber-800">Còn {counts.none} mối chưa chọn kết quả — tick rồi bấm «Đạt hàng loạt» hoặc chọn từng mối.</p>}
+        {!detail.ticket.ngay_nghiem_thu && counts.none > 0 && counts.pass + counts.fail > 0 && (
+          <p className="text-xs text-amber-800">Còn {counts.none} mối chưa chọn — được phép xác nhận lẻ các mối đã chọn; phiếu chỉ đóng khi chọn hết.</p>
+        )}
+        {!detail.ticket.ngay_nghiem_thu && counts.pass + counts.fail === 0 && (
+          <p className="text-xs text-amber-800">Chọn kết quả từng mối hoặc «Đạt hàng loạt» — dữ liệu kiểm tra Đạt sẽ tự nhảy Kết quả Đạt.</p>
+        )}
       </form>
     </div>}
     {doc === "invite" && detail && createPortal(<WeldAcceptanceDocument onClose={() => setDoc(null)} view={{ kind: "rfi", rfi: {

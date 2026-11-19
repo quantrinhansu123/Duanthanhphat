@@ -1346,20 +1346,30 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
   }
   if (body.action !== "split-complete") throw new QualityApiError("Thao tác không hợp lệ.");
   const date = qualityDate(body.ngay_nghiem_thu);
-  if (!date || !Array.isArray(body.results) || !body.results.length || body.results.length>200)
-    throw new QualityApiError("Nhập ngày và kết quả nghiệm thu cho từng mối.");
-  const results = body.results.map(v => {
-    const r = object(v), reason = str(r.ly_do,1000);
-    if (!Number.isInteger(r.phien_ban) || (r.ket_qua!=="Đạt" && r.ket_qua!=="Không đạt") || (r.ket_qua==="Không đạt" && !reason))
+  if (!date || !Array.isArray(body.results) || !body.results.length || body.results.length > 200)
+    throw new QualityApiError("Chọn ít nhất một mối có kết quả để xác nhận.");
+  const results = body.results.map((v) => {
+    const r = object(v), reason = str(r.ly_do, 1000);
+    if (!Number.isInteger(r.phien_ban) || (r.ket_qua !== "Đạt" && r.ket_qua !== "Không đạt") || (r.ket_qua === "Không đạt" && !reason))
       throw new QualityApiError("Kết quả hoặc lý do không hợp lệ.");
-    return { id:qualityUuid(r.id), phien_ban:r.phien_ban, ket_qua:r.ket_qua, ly_do:reason };
+    return { id: qualityUuid(r.id), phien_ban: r.phien_ban, ket_qua: r.ket_qua, ly_do: reason };
   });
-  const { error } = await db().rpc("chot_phieu_nt_tach",{p_id:id,p_ngay:date,p_ket_qua:results,p_actor:actor});
+  const { error } = await db().rpc("chot_phieu_nt_tach", { p_id: id, p_ngay: date, p_ket_qua: results, p_actor: actor });
   if (error) throw error;
-  if (kind !== "hinh-hoc") return { id, so_moi_chuyen: 0 };
-  try { return await forwardGeometryTicket({ ...ticket.data, ngay_nghiem_thu: date }, actor); }
-  catch (e) {
+  const after = await db().from("phieu_nt_tach").select("id,ngay_nghiem_thu,du_an_id,so_phieu,ngay_moi,nguoi_lap,thong_tin,phieu_rfi_id,loai").eq("id", id).maybeSingle();
+  if (after.error) throw after.error;
+  const remainingRows = await db().from("phieu_nt_tach_moi").select("moi_han_id", { count: "exact", head: true }).eq("phieu_id", id).is("ket_qua", null);
+  if (remainingRows.error) throw remainingRows.error;
+  const remaining = remainingRows.count ?? 0;
+  // Chốt lẻ: còn mối chưa chọn → giữ phiếu mở, không chuyển siêu âm / không coi đã hoàn thành.
+  if (remaining > 0 || !after.data?.ngay_nghiem_thu) {
+    return { id, so_moi_chuyen: 0, saved: results.length, remaining };
+  }
+  if (kind !== "hinh-hoc") return { id, so_moi_chuyen: 0, saved: results.length, remaining: 0 };
+  try {
+    return { ...(await forwardGeometryTicket({ ...after.data, ngay_nghiem_thu: date }, actor)), saved: results.length, remaining: 0 };
+  } catch (e) {
     const reason = e && typeof e === "object" && "message" in e ? e.message : String(e);
-    return { id, so_moi_chuyen: 0, canh_bao: `Đã chốt hình học. Bấm «Mở hoặc tạo phiếu siêu âm» để thử lại. ${reason}` };
+    return { id, so_moi_chuyen: 0, saved: results.length, remaining: 0, canh_bao: `Đã chốt hình học. Bấm «Mở hoặc tạo phiếu siêu âm» để thử lại. ${reason}` };
   }
 }
