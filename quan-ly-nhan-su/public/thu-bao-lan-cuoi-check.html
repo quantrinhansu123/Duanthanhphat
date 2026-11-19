@@ -84,8 +84,8 @@
 <body>
   <div class="bar">
     <div>
-      <h1>HTML lần cuối — Tab Thư báo hiện chọn mối như RFI</h1>
-      <div class="meta">Công việc gần nhất: bỏ overlay trống · hiện UI trong tab · 3 bước Chọn → Điền → In</div>
+      <h1>HTML lần cuối — Nút Xem / In trên danh sách phiếu RFI SA</h1>
+      <div class="meta">Mỗi dòng có Xem (form + preview) và In — không bấm cả dòng để mở</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="primary" href="/thu-bao-check.html">Mẫu A4 + lịch sử đầy đủ</a>
@@ -97,28 +97,25 @@
     <section class="card">
       <h2>Lần cuối đã làm gì?</h2>
       <p>
-        Trước: bấm tab <b>Thư báo</b> chỉ mở overlay / gần như trống, <b>không thấy chỗ chọn mối</b> như RFI.
-        Sau: tab Thư báo <b>nhúng ngay trong trang</b> (<code>embedded</code>), có đủ chỗ chọn và điền.
+        Đã <b>bỏ thanh tab mẫu</b>. Nút <b>Xem</b> / <b>In</b> → popup chọn mẫu (siêu âm, BT Phú Thành, LAS, thép…) rồi mới mở xem hoặc in.
       </p>
-      <p class="ok">File: ThuBaoDocument.tsx · WeldAcceptanceWorkflow.tsx</p>
+      <p class="ok">File: ThuBaoDocument.tsx</p>
 
       <div class="steps">
-        <div class="s done">1. Chọn mối<br /><small style="font-weight:600">Chờ siêu âm</small></div>
-        <div class="s on">2. Điền vào thư báo<br /><small style="font-weight:600">ngày · 8:00 · nội dung</small></div>
-        <div class="s">3. Xem / In<br /><small style="font-weight:600">phiếu A4</small></div>
+        <div class="s done">1. Danh sách<br /><small style="font-weight:600">RFI-xxx-SA</small></div>
+        <div class="s on">2. Chọn mẫu<br /><small style="font-weight:600">popup</small></div>
+        <div class="s">3. Xem / In<br /><small style="font-weight:600">theo mẫu</small></div>
       </div>
 
       <div class="mock">
-        <div class="hd">Mock UI trong tab Thư báo (giống RFI)</div>
-        <div class="row"><input type="checkbox" checked disabled /> <span class="code">FBW-1711260001</span> <span class="km">Km12+100</span></div>
-        <div class="row"><input type="checkbox" checked disabled /> <span class="code">FBW-1711260002</span> <span class="km">Km12+250</span></div>
-        <div class="row"><input type="checkbox" disabled /> <span class="code">FBW-1711260003</span> <span class="km">Km12+450</span></div>
+        <div class="hd">Mock danh sách phiếu RFI siêu âm</div>
+        <div class="row"><span class="code">RFI-015-SA</span> <span class="km">17/11/26 8:00</span> <span class="km">Chờ nghiệm thu</span> <span class="w" style="margin-left:auto">Xem</span> <span class="b">In</span></div>
+        <div class="row"><span class="code">RFI-014-SA</span> <span class="km">15/11/26 8:00</span> <span class="km">Đã nghiệm thu</span> <span class="w" style="margin-left:auto">Xem</span> <span class="b">In</span></div>
+        <div class="row"><span class="code">RFI-013-SA</span> <span class="km">14/11/26 8:00</span> <span class="km">Đã nghiệm thu</span> <span class="w" style="margin-left:auto">Xem</span> <span class="b">In</span></div>
       </div>
       <div class="btns">
-        <span class="w">Chọn tất cả</span>
-        <span class="w">Bỏ chọn</span>
-        <span class="g">Điền vào thư báo (2)</span>
-        <span class="b">In thư báo</span>
+        <span class="w">Xem = form sửa + preview</span>
+        <span class="b">In = nạp phiếu rồi in</span>
       </div>
     </section>
 
@@ -136,33 +133,28 @@
         <tbody>
           <tr>
             <td class="n">1</td>
-            <td class="muc">Tab Thư báo</td>
-            <td>Hiện <b>trong tab</b> (embedded), không còn overlay trống khi bấm Thư báo.</td>
+            <td class="muc">Danh sách phiếu RFI SA</td>
+            <td>Mỗi dòng: số phiếu · ngày/giờ · trạng thái + nút <b>Xem</b> / <b>In</b> (không bấm cả dòng).</td>
           </tr>
           <tr>
             <td class="n">2</td>
-            <td class="muc">Bước 1 — Chọn mối</td>
-            <td>Danh sách tick mối «Chờ siêu âm» + Chọn tất cả / Bỏ chọn (như RFI).</td>
+            <td class="muc">Nút Xem</td>
+            <td>Nạp thư báo từ phiếu → hiện <b>form sửa</b> + <b>preview</b> phiếu.</td>
           </tr>
           <tr>
             <td class="n">3</td>
-            <td class="muc">Nút Điền</td>
-            <td>Bấm <b>Điền vào thư báo</b> mới đổ ngày mời, ngày +1, 8:00, nội dung, lý trình, kỹ sư.</td>
+            <td class="muc">Nút In</td>
+            <td>Nạp thư báo từ phiếu → in ngay.</td>
           </tr>
           <tr>
             <td class="n">4</td>
-            <td class="muc">Bước 2 — Thông tin</td>
-            <td>Form sửa ngày / kính gửi / bảng nội dung sau khi điền.</td>
+            <td class="muc">Vào tab</td>
+            <td>Chỉ hiện danh sách — <b>không</b> tự mở phiếu mới nhất.</td>
           </tr>
           <tr>
             <td class="n">5</td>
-            <td class="muc">Bước 3 — Xem / In</td>
-            <td>Xem phiếu in A4 + nút In thư báo.</td>
-          </tr>
-          <tr>
-            <td class="n">6</td>
-            <td class="muc">Đóng</td>
-            <td>«Đóng tab» quay về tab Phát phiếu (không mất UI chọn khi đang ở Thư báo).</td>
+            <td class="muc">Tab Thư báo</td>
+            <td>Embedded trong tab RFI (không overlay trống).</td>
           </tr>
         </tbody>
       </table>
