@@ -182,7 +182,10 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     nghiemThuHangNgay: [
       ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
         const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
-        return text ? text.split("\n").map((line) => `${line} Kết quả: ${result}.`).join("\n") : "";
+        // Gắn «Kết quả» một lần mỗi mục (− …), không gắn lại từng dòng mã mối sau «Mối số:».
+        return text
+          ? text.split(/\n(?=- )/).map((block) => `${block.replace(/\.\s*$/, "")}. Kết quả: ${result}.`).join("\n")
+          : "";
       })),
       ...gtusLines(true),
     ].filter(Boolean).join("\n"),

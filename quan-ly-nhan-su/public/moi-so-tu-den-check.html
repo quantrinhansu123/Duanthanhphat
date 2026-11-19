@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check — Từ mối đầu đến cuối · Mối số trước Kết quả</title>
+  <style>
+    :root { --blue: #0047ab; --ring: #e11d48; --ok: #047857; --warn: #b45309; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #1e293b; color: #0f172a; }
+    .bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: #0f172a; color: #fff;
+    }
+    .bar h1 { margin: 0; font-size: 15px; }
+    .bar .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+    .bar a {
+      text-decoration: none; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
+      background: #fff; color: #0f172a;
+    }
+    .bar a.primary { background: var(--blue); color: #fff; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+    @media (min-width: 980px) {
+      .wrap { grid-template-columns: 1.2fr 0.8fr; align-items: start; }
+    }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    }
+    .card h2 { margin: 0 0 8px; font-size: 16px; }
+    .card h3 { margin: 16px 0 8px; font-size: 14px; color: #0f172a; }
+    .card p { margin: 0 0 10px; font-size: 13px; color: #475569; line-height: 1.45; }
+    .badge {
+      display: inline-grid; place-items: center;
+      width: 22px; height: 22px; border-radius: 999px;
+      background: var(--ring); color: #fff; font: 800 11px/1 system-ui;
+      vertical-align: middle;
+    }
+    .ring {
+      outline: 2.5px solid var(--ring);
+      outline-offset: 3px;
+      border-radius: 6px;
+      background: #fff7ed;
+      position: relative;
+    }
+    .ring::after {
+      content: attr(data-n);
+      position: absolute; top: -12px; left: -12px;
+      width: 22px; height: 22px; border-radius: 999px;
+      background: var(--ring); color: #fff;
+      font: 800 11px/22px system-ui; text-align: center;
+    }
+    .ok { color: var(--ok); font-weight: 700; font-size: 13px; }
+    .warn { color: var(--warn); font-weight: 700; font-size: 12px; }
+    .cols { display: grid; gap: 12px; }
+    @media (min-width: 720px) { .cols { grid-template-columns: 1fr 1fr; } }
+    .box {
+      border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;
+      font-size: 12.5px; line-height: 1.45; background: #f8fafc;
+    }
+    .box .lbl {
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .04em; margin-bottom: 8px;
+    }
+    .box.before .lbl { color: #b91c1c; }
+    .box.after .lbl { color: var(--ok); }
+    .mono { font-family: "Times New Roman", Times, serif; font-size: 12.5px; white-space: pre-wrap; }
+    table.tb {
+      width: 100%; border-collapse: collapse; font-family: "Times New Roman", Times, serif;
+      font-size: 12px; background: #fff;
+    }
+    table.tb th, table.tb td {
+      border: 1px solid #000; padding: 6px 7px; vertical-align: top;
+    }
+    table.tb th { text-align: center; font-size: 11px; }
+    table.final { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.final th, table.final td {
+      border: 1px solid #e2e8f0; padding: 8px; vertical-align: top; text-align: left;
+    }
+    table.final th { background: #f1f5f9; font-size: 11px; }
+    table.final td.n { width: 28px; text-align: center; font-weight: 800; color: var(--ring); }
+    table.final td.muc { font-weight: 700; width: 34%; }
+    .hist { display: grid; gap: 10px; }
+    .hist .item {
+      border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; background: #f8fafc;
+    }
+    .hist .item .t { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+    .hist .item .d { font-size: 12px; color: #64748b; margin: 0; line-height: 1.4; }
+    .new {
+      display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+      background: #fef2f2; color: var(--ring); font-size: 10px; font-weight: 800;
+    }
+    .a4 {
+      background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 16px;
+      font-family: "Times New Roman", Times, serif; font-size: 13px; line-height: 1.35;
+    }
+    .a4 h1 { text-align: center; font-size: 14pt; margin: 10px 0; letter-spacing: .04em; }
+    .a4 .head { text-align: center; font-weight: 700; }
+    .a4 .head .u { display: inline-block; border-bottom: 1px solid #000; padding-bottom: 1px; }
+    .strike { text-decoration: line-through; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1>HTML check — Demo sau khi sửa (khoanh)</h1>
+      <div class="meta">Thư báo: Từ mối đầu → đến · Nhật ký 3.2: mã sau «Mối số:» rồi Kết quả</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="primary" href="/thu-bao-check.html">Thư báo A4</a>
+      <a href="/bien-ban-moi-han">Về app</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="card">
+      <h2>1. Thư báo — cột Nội dung công việc <span class="new">MỚI</span></h2>
+      <p>
+        Không liệt kê hết mã. Chỉ hiện <b>Từ mối đầu</b> → <b>đến mối cuối</b>
+        (file <code>ThuBaoDocument.tsx</code> · <code>weldContent</code>).
+      </p>
+
+      <div class="cols">
+        <div class="box before">
+          <div class="lbl">Trước — liệt kê hết</div>
+          <div class="mono strike">Nghiệm thu siêu âm các mối:
+FBW-1411260153, FBW-1411260154,
+FBW-1411260155, … (16 mã)</div>
+        </div>
+        <div class="box after">
+          <div class="lbl">Sau — khoanh <span class="badge">1</span></div>
+          <div class="mono ring" data-n="1">Nghiệm thu siêu âm các mối:
+Từ FBW-1411260153
+đến FBW-1511260168</div>
+        </div>
+      </div>
+
+      <h3>Preview bảng thư báo (demo)</h3>
+      <div class="a4">
+        <div class="head">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br /><span class="u">Độc lập - Tự do - Hạnh phúc</span></div>
+        <p style="text-align:right;font-style:italic;margin:8px 0">Phú Quốc, ngày 16 tháng 11 năm 2026</p>
+        <h1>THƯ BÁO</h1>
+        <table class="tb">
+          <thead>
+            <tr>
+              <th style="width:12%">Ngày tháng</th>
+              <th style="width:12%">Thời gian</th>
+              <th style="width:28%">Nội dung công việc</th>
+              <th style="width:18%">Lý trình</th>
+              <th style="width:20%">Kỹ sư phụ trách</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align:center">17/11/26</td>
+              <td style="text-align:center">8:00</td>
+              <td>
+                <div class="ring" data-n="1" style="padding:4px">
+                  Nghiệm thu siêu âm các mối:<br />
+                  <b>Từ FBW-1411260153</b><br />
+                  <b>đến FBW-1511260168</b>
+                </div>
+              </td>
+              <td>Từ Km5+823.71<br />đến Km5+999.12</td>
+              <td style="text-align:center;font-size:11px">Cán bộ kỹ thuật:<br />Nguyễn Minh Đức<br />Cán bộ thí nghiệm:<br />Nguyễn Kim Sơn</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 style="margin-top:22px">2. Nhật ký mục 3.2 — Mối số + Kết quả <span class="new">MỚI</span></h2>
+      <p>
+        Đưa tên mối <b>ngay sau chữ «Mối số:»</b>, rồi mới <b>Kết quả: Đạt</b>
+        (file <code>constructionDiaryAuto.ts</code> · <code>weldAcceptanceServer.ts</code>).
+      </p>
+
+      <div class="cols">
+        <div class="box before">
+          <div class="lbl">Trước — sai vị trí</div>
+          <div class="mono strike">… Khối lượng: 16 mối. Mối số: Kết quả: Đạt.
+FBW-1411260153, FBW-1411260154, …</div>
+          <p class="warn" style="margin-top:8px;margin-bottom:0">Mã nằm dưới; «Kết quả» dính sát «Mối số:»</p>
+        </div>
+        <div class="box after">
+          <div class="lbl">Sau — khoanh <span class="badge">2</span></div>
+          <div class="mono ring" data-n="2">… Khối lượng: 16 mối. Mối số: FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158,
+  FBW-1511260159, …, FBW-1511260168. Kết quả: Đạt.</div>
+        </div>
+      </div>
+
+      <h3>Demo đoạn 3.2 (sau sửa)</h3>
+      <div class="a4">
+        <p style="font-weight:700;margin:0 0 8px">3.2 Nghiệm thu công việc xây dựng hàng ngày</p>
+        <div class="ring" data-n="2" style="padding:8px;font-size:12.5px;line-height:1.45">
+          - Nghiệm thu kích thước hình học, trực quan mối hàn đoạn Km5+823.71 – Km5+999.12, thuộc tuyến thượng. Khối lượng: 16 mối. <b>Mối số:</b> FBW-1411260153, FBW-1411260154, FBW-1411260155, FBW-1411260156, FBW-1411260157, FBW-1411260158,<br />
+          &nbsp;&nbsp;FBW-1511260159, FBW-1511260160, FBW-1511260161, FBW-1511260162, FBW-1511260163, FBW-1511260164,<br />
+          &nbsp;&nbsp;FBW-1511260165, FBW-1511260166, FBW-1511260167, FBW-1511260168. <b>Kết quả: Đạt.</b>
+        </div>
+        <div style="margin-top:10px;padding:8px;font-size:12.5px;line-height:1.45;border:1px dashed #cbd5e1;border-radius:6px">
+          - Nghiệm thu siêu âm mối hàn đoạn Km5+450.00 – Km5+620.00, thuộc tuyến hạ. Khối lượng: 8 mối. <b>Mối số:</b> FBW-0811260065, FBW-0811260066, … FBW-1011260080. <b>Kết quả: Đạt.</b>
+        </div>
+      </div>
+      <p class="ok" style="margin-top:12px">Mở lại nhật ký / tải mặc định ngày để thấy dữ liệu mới trên app.</p>
+    </section>
+
+    <aside class="card">
+      <h2>Bảng phiếu cuối</h2>
+      <table class="final">
+        <thead>
+          <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="n">1</td>
+            <td class="muc">Thư báo · Nội dung công việc</td>
+            <td>Chỉ <b>Từ mối đầu</b> / <b>đến mối cuối</b> — không liệt kê hết mã</td>
+          </tr>
+          <tr>
+            <td class="n">2</td>
+            <td class="muc">Nhật ký 3.2 · Mối số</td>
+            <td>Mã ngay sau <b>Mối số:</b>, rồi <b>Kết quả: Đạt/Không đạt</b> một lần cuối mục</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:18px">Lịch sử thay đổi</h2>
+      <div class="hist">
+        <div class="item">
+          <p class="t"><span class="badge">1</span> Thư báo — Từ / đến <span class="new">MỚI</span></p>
+          <p class="d">weldContent: 1 mối → một mã; ≥2 mối → «Từ … đến …».</p>
+        </div>
+        <div class="item">
+          <p class="t"><span class="badge">2</span> Nhật ký 3.2 — vị trí mã <span class="new">MỚI</span></p>
+          <p class="d">Không còn «Mối số: Kết quả:» rồi mã ở dòng dưới. split theo mục (− …) trước khi gắn Kết quả.</p>
+        </div>
+      </div>
+
+      <p style="margin-top:14px;font-size:12px;color:#64748b">
+        File sửa: <code>ThuBaoDocument.tsx</code>, <code>constructionDiaryAuto.ts</code>, <code>weldAcceptanceServer.ts</code>
+      </p>
+    </aside>
+  </div>
+</body>
+</html>

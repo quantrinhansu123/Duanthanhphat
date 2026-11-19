@@ -235,7 +235,9 @@ function chainageRange(welds: UtWeld[]): string {
 function weldContent(welds: UtWeld[]): string {
   if (!welds.length) return "";
   const codes = welds.map((w) => fieldWeldCode(w.ma_lich_su)).filter(Boolean);
-  return `Nghiệm thu siêu âm các mối: ${codes.join(", ")}`;
+  if (!codes.length) return "";
+  if (codes.length === 1) return `Nghiệm thu siêu âm các mối:\n${codes[0]}`;
+  return `Nghiệm thu siêu âm các mối:\nTừ ${codes[0]}\nđến ${codes[codes.length - 1]}`;
 }
 
 export default function ThuBaoDocument({
