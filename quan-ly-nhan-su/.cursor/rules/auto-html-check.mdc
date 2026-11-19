@@ -1,0 +1,25 @@
+---
+description: Mỗi lần sửa tính năng phải tự cập nhật HTML check + lịch sử tương ứng
+alwaysApply: true
+---
+
+# Tự tạo / cập nhật HTML check khi làm việc
+
+Khi agent **làm xong một thay đổi** (UI, phiếu in, thư báo, RFI, nhật ký, v.v.), phải **tự cập nhật HTML check tương ứng** trong cùng lượt — không chờ user nhắc.
+
+## Quy tắc
+
+1. **Có thay đổi tính năng / phiếu in / form** → cập nhật hoặc tạo file HTML check trong `public/` (hoặc `public/checks/` nếu đã có thư mục).
+2. HTML phải có:
+   - **Bảng phiếu cuối**: cột `#` · `Mục trên phiếu` · `Sửa thành / quy tắc` (trạng thái hiện tại).
+   - **Lịch sử thay đổi**: mục mới nhất ở trên, diễn giải ngắn; badge khớp khoanh trên mẫu nếu có.
+   - Nếu là mẫu in: giữ **khổ A4 thật** + khoanh mục đã làm khi hữu ích.
+3. Thư báo cụ thể: cập nhật `public/thu-bao-check.html` (cột phải lịch sử luôn hiện + bảng phiếu cuối).
+4. Trong reply cuối cho user: ghi **1 dòng đường dẫn / URL** tới HTML vừa cập nhật (vd. `http://localhost:3010/thu-bao-check.html`).
+5. Không tạo HTML rỗng hoặc trùng nội dung vô ích; chỉ phản ánh đúng việc vừa làm.
+
+## Ví dụ
+
+- Sửa cột ngày thư báo → thêm/sửa dòng trong bảng phiếu cuối + thẻ lịch sử mới trên cùng.
+- Thêm nút Điền → cập nhật mục «Nút Điền» trong bảng + lịch sử.
+- Tính năng mới chưa có file check → tạo `public/<ten-tinh-nang>-check.html` và nêu URL.

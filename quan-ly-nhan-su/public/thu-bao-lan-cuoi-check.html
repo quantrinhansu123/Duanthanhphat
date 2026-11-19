@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check lần cuối — Tab Thư báo như RFI</title>
+  <style>
+    :root { --blue: #0047ab; --ring: #e11d48; --ok: #047857; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #1e293b; color: #0f172a; }
+    .bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: #0f172a; color: #fff;
+    }
+    .bar h1 { margin: 0; font-size: 15px; }
+    .bar .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+    .bar a, .bar button {
+      appearance: none; border: 0; cursor: pointer; text-decoration: none;
+      border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
+      background: #fff; color: #0f172a;
+    }
+    .bar a.primary, .bar button.primary { background: var(--blue); color: #fff; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+    @media (min-width: 960px) {
+      .wrap { grid-template-columns: 1.15fr 0.85fr; align-items: start; }
+    }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    }
+    .card h2 { margin: 0 0 8px; font-size: 16px; }
+    .card p { margin: 0 0 10px; font-size: 13px; color: #475569; line-height: 1.45; }
+    .badge {
+      display: inline-grid; place-items: center;
+      width: 22px; height: 22px; border-radius: 999px;
+      background: var(--ring); color: #fff; font: 800 11px/1 system-ui;
+    }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+    .steps .s {
+      border: 2px solid #cbd5e1; border-radius: 10px; padding: 12px 10px; text-align: center;
+      font-size: 13px; font-weight: 700; background: #f8fafc;
+    }
+    .steps .s.on { border-color: var(--blue); background: var(--blue); color: #fff; }
+    .steps .s.done { border-color: var(--ok); background: #ecfdf5; color: var(--ok); }
+    .mock {
+      border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; margin-top: 10px;
+    }
+    .mock .hd {
+      background: #0047AB14; border-bottom: 1px solid #0047AB40;
+      padding: 10px 12px; font-size: 13px; font-weight: 700;
+    }
+    .mock .row {
+      display: flex; gap: 10px; align-items: center;
+      padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px;
+    }
+    .mock .row:last-child { border-bottom: 0; }
+    .mock .code { font-weight: 700; }
+    .mock .km { color: #64748b; }
+    .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .btns span {
+      display: inline-block; border-radius: 8px; padding: 8px 12px;
+      font-size: 12px; font-weight: 700;
+    }
+    .btns .g { background: #059669; color: #fff; }
+    .btns .b { background: var(--blue); color: #fff; }
+    .btns .w { background: #fff; border: 1px solid #cbd5e1; color: #334155; }
+    table.final {
+      width: 100%; border-collapse: collapse; font-size: 12.5px;
+    }
+    table.final th, table.final td {
+      border: 1px solid #e2e8f0; padding: 8px; vertical-align: top; text-align: left;
+    }
+    table.final th { background: #f1f5f9; font-size: 11px; }
+    table.final td.n { width: 28px; text-align: center; font-weight: 800; color: var(--ring); }
+    table.final td.muc { font-weight: 700; width: 32%; }
+    .new {
+      display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+      background: #fef2f2; color: var(--ring); font-size: 10px; font-weight: 800;
+    }
+    .ok { color: var(--ok); font-weight: 700; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>
+      <h1>HTML lần cuối — Tab Thư báo hiện chọn mối như RFI</h1>
+      <div class="meta">Công việc gần nhất: bỏ overlay trống · hiện UI trong tab · 3 bước Chọn → Điền → In</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="primary" href="/thu-bao-check.html">Mẫu A4 + lịch sử đầy đủ</a>
+      <a href="/bien-ban-moi-han">Về app</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="card">
+      <h2>Lần cuối đã làm gì?</h2>
+      <p>
+        Trước: bấm tab <b>Thư báo</b> chỉ mở overlay / gần như trống, <b>không thấy chỗ chọn mối</b> như RFI.
+        Sau: tab Thư báo <b>nhúng ngay trong trang</b> (<code>embedded</code>), có đủ chỗ chọn và điền.
+      </p>
+      <p class="ok">File: ThuBaoDocument.tsx · WeldAcceptanceWorkflow.tsx</p>
+
+      <div class="steps">
+        <div class="s done">1. Chọn mối<br /><small style="font-weight:600">Chờ siêu âm</small></div>
+        <div class="s on">2. Điền vào thư báo<br /><small style="font-weight:600">ngày · 8:00 · nội dung</small></div>
+        <div class="s">3. Xem / In<br /><small style="font-weight:600">phiếu A4</small></div>
+      </div>
+
+      <div class="mock">
+        <div class="hd">Mock UI trong tab Thư báo (giống RFI)</div>
+        <div class="row"><input type="checkbox" checked disabled /> <span class="code">FBW-1711260001</span> <span class="km">Km12+100</span></div>
+        <div class="row"><input type="checkbox" checked disabled /> <span class="code">FBW-1711260002</span> <span class="km">Km12+250</span></div>
+        <div class="row"><input type="checkbox" disabled /> <span class="code">FBW-1711260003</span> <span class="km">Km12+450</span></div>
+      </div>
+      <div class="btns">
+        <span class="w">Chọn tất cả</span>
+        <span class="w">Bỏ chọn</span>
+        <span class="g">Điền vào thư báo (2)</span>
+        <span class="b">In thư báo</span>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h2>Bảng phiếu cuối — lần này <span class="new">MỚI</span></h2>
+      <p>Mục nào · sửa gì (chỉ phần vừa làm + kết quả trên app).</p>
+      <table class="final">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Mục</th>
+            <th>Sửa thành / quy tắc</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="n">1</td>
+            <td class="muc">Tab Thư báo</td>
+            <td>Hiện <b>trong tab</b> (embedded), không còn overlay trống khi bấm Thư báo.</td>
+          </tr>
+          <tr>
+            <td class="n">2</td>
+            <td class="muc">Bước 1 — Chọn mối</td>
+            <td>Danh sách tick mối «Chờ siêu âm» + Chọn tất cả / Bỏ chọn (như RFI).</td>
+          </tr>
+          <tr>
+            <td class="n">3</td>
+            <td class="muc">Nút Điền</td>
+            <td>Bấm <b>Điền vào thư báo</b> mới đổ ngày mời, ngày +1, 8:00, nội dung, lý trình, kỹ sư.</td>
+          </tr>
+          <tr>
+            <td class="n">4</td>
+            <td class="muc">Bước 2 — Thông tin</td>
+            <td>Form sửa ngày / kính gửi / bảng nội dung sau khi điền.</td>
+          </tr>
+          <tr>
+            <td class="n">5</td>
+            <td class="muc">Bước 3 — Xem / In</td>
+            <td>Xem phiếu in A4 + nút In thư báo.</td>
+          </tr>
+          <tr>
+            <td class="n">6</td>
+            <td class="muc">Đóng</td>
+            <td>«Đóng tab» quay về tab Phát phiếu (không mất UI chọn khi đang ở Thư báo).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:16px;font-size:15px">Cách kiểm tra trên app</h2>
+      <p style="margin:0;font-size:13px;line-height:1.5;color:#334155">
+        1. Mở <b>Biên bản mối hàn</b> → chọn dự án<br />
+        2. <b>RFI &amp; Nghiệm thu</b> → tab <b>Thư báo</b><br />
+        3. Thấy bước <b>1. Chọn mối</b> + danh sách tick<br />
+        4. Bấm <b>Điền vào thư báo</b> → sang thông tin / in
+      </p>
+    </aside>
+  </div>
+</body>
+</html>

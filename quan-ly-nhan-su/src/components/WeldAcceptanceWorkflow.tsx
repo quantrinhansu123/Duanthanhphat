@@ -15,6 +15,7 @@ import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAccep
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
+import ThuBaoDocument from "@/components/ThuBaoDocument";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 
 const input = "min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:text-sm";
@@ -284,11 +285,12 @@ function RfiPanel({
     return { ...emptyThongTin(), ...draft };
   });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [rfiTab, setRfiTab] = useState<"publish" | "issued">("publish");
+  const [rfiTab, setRfiTab] = useState<"publish" | "issued" | "thu-bao">("publish");
   const [publishStep, setPublishStep] = useState<"kind" | "welds" | "details">("kind");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const projectName = projects?.find((p) => p.id === projectId)?.name ?? "";
   // Thanh toán theo phiếu: áp cho các mối đã nghiệm thu Đạt của RFI (tỷ lệ 30/50/70/100%).
   const [payment, setPayment] = useState<{ rfi: RfiSummary; ids: string[]; rate: string; note: string } | null>(null);
   const paymentDialog = useRef<HTMLDialogElement | null>(null);
@@ -525,10 +527,12 @@ function RfiPanel({
 
   return (
     <section className="space-y-4">
-      <div role="tablist" aria-label="Phát hành RFI" className="grid grid-cols-2 gap-2">
-        {([["publish", "Phát phiếu"], ["issued", "Danh sách phiếu đã phát"]] as const).map(([id, label]) => (
+      <div role="tablist" aria-label="Phát hành RFI" className="grid grid-cols-3 gap-2">
+        {([["publish", "Phát phiếu"], ["issued", "Danh sách phiếu đã phát"], ["thu-bao", "Thư báo"]] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" id={`rfi-tab-${id}`} aria-controls={`rfi-panel-${id}`}
-            aria-selected={rfiTab === id} onClick={() => setRfiTab(id)} className={rfiTab === id ? primary : secondary}>
+            aria-selected={rfiTab === id}
+            onClick={() => setRfiTab(id)}
+            className={rfiTab === id ? primary : secondary}>
             {label}
           </button>
         ))}
@@ -879,6 +883,16 @@ function RfiPanel({
         </table>
       </div>
       </div>
+      <div role="tabpanel" id="rfi-panel-thu-bao" aria-labelledby="rfi-tab-thu-bao" hidden={rfiTab !== "thu-bao"} className="space-y-3">
+        {rfiTab === "thu-bao" ? (
+          <ThuBaoDocument
+            embedded
+            projectId={projectId}
+            projectName={projectName}
+            onClose={() => setRfiTab("publish")}
+          />
+        ) : null}
+      </div>
       {pendingDlg && (
         <PendingDialog
           mode={rfiPendingInfo(pendingDlg.thong_tin) ? "phat-lai" : "hoan"}
@@ -895,7 +909,7 @@ function RfiPanel({
       {gtusPrint && (
         <GtusBbntPrintDialog
           projectId={projectId}
-          projectName={projects?.find((p) => p.id === projectId)?.name ?? ""}
+          projectName={projectName}
           cellIds={String(gtusPrint.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean)}
           pycSo={gtusTicketNo(String(gtusPrint.so_phieu ?? "")).replace(/^RFI-/i, "")}
           onClose={() => setGtusPrint(null)}

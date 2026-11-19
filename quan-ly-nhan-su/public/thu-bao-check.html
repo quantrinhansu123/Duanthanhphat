@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check Thư báo — A4 + lịch sử phải</title>
+  <style>
+    :root {
+      --ring: #e11d48;
+      --side: 420px;
+      --toolbar: 56px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: #334155;
+      color: #0f172a;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .toolbar {
+      position: sticky; top: 0; z-index: 30;
+      height: var(--toolbar);
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      background: #0f172a; color: #fff;
+      border-bottom: 1px solid #334155;
+    }
+    .toolbar h1 { margin: 0; font-size: 14px; font-weight: 700; }
+    .toolbar .meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .toolbar button, .toolbar a {
+      appearance: none; border: 0; cursor: pointer;
+      border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
+      text-decoration: none; color: #0f172a; background: #fff;
+    }
+    .toolbar button.primary { background: #0047ab; color: #fff; }
+    .toolbar button.on { background: #047857; color: #fff; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr var(--side);
+      height: calc(100vh - var(--toolbar));
+    }
+    .main {
+      min-width: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .side {
+      border-left: 1px solid #1e293b;
+      background: #0f172a;
+      overflow: auto;
+      height: 100%;
+    }
+
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 8px 14px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      flex: 0 0 auto;
+    }
+    .legend li {
+      list-style: none; margin: 0;
+      background: #fff; border-radius: 999px;
+      padding: 4px 10px 4px 4px; font-size: 11px;
+      display: inline-flex; gap: 6px; align-items: center;
+    }
+    .badge {
+      flex: 0 0 auto; width: 18px; height: 18px; border-radius: 999px;
+      background: var(--ring); color: #fff; font-weight: 800; font-size: 10px;
+      display: grid; place-items: center;
+    }
+
+    .tabs-bar {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      justify-content: center;
+      padding: 8px 14px 0;
+      flex: 0 0 auto;
+    }
+    .tabs-bar span {
+      padding: 6px 10px; border-radius: 8px; background: #f1f5f9; color: #334155;
+      font-size: 12px;
+    }
+    .tabs-bar .on { background: #047857; color: #fff; font-weight: 800; }
+
+    .stage {
+      overflow: auto;
+      padding: 12px 16px 24px;
+      flex: 1 1 auto;
+    }
+    .stage-inner {
+      width: 210mm;
+      margin: 0 auto;
+      transform-origin: top center;
+    }
+    .sheet {
+      position: relative;
+      width: 210mm;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      background: #fff;
+      padding: 15mm 10mm 10mm 20mm;
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+      overflow: hidden;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 13pt;
+      line-height: 1.35;
+      color: #000;
+    }
+    .sheet-label {
+      position: absolute;
+      top: 4px; right: 8px;
+      font: 700 10px/1 system-ui, sans-serif;
+      color: #94a3b8;
+      letter-spacing: .04em;
+    }
+
+    .tb-b { font-weight: 700; }
+    .tb-n { font-weight: 400; }
+    .tb-i { font-style: italic; font-weight: 400; }
+    .tb-13 { font-size: 13pt; }
+    .tb-14 { font-size: 14pt; }
+    .tb-title {
+      font-size: 14pt; font-weight: 700; letter-spacing: .04em;
+      text-align: center; margin: 10px 0 0; text-transform: uppercase;
+    }
+    header { text-align: center; }
+    .motto { display: inline-block; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    .date { text-align: right; margin-top: 10px; }
+    dl { display: grid; grid-template-columns: 6.5rem 1fr; gap: 3px 8px; margin: 12px 0 0; }
+    dt { font-weight: 700; }
+    dd { margin: 0; font-weight: 400; }
+    ul.kg { list-style: none; padding-left: 24px; margin: 4px 0 0; font-weight: 700; font-size: 12pt; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12pt; table-layout: fixed; }
+    th, td { border: 1px solid #000; padding: 5px 6px; vertical-align: middle; word-wrap: break-word; }
+    th { font-weight: 700; text-align: center; font-size: 11pt; }
+    td { font-weight: 400; }
+    .signs { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; text-align: center; margin-top: 28px; }
+    .sign { min-height: 9rem; }
+    .sig-box {
+      margin: 6px auto; width: 90%; min-height: 6.5rem;
+      border: 1px dashed #94a3b8; border-radius: 8px;
+      display: grid; place-items: center; color: #64748b; font-size: 11px;
+      font-family: system-ui, sans-serif;
+      background: repeating-linear-gradient(-45deg, #fff, #fff 8px, #f8fafc 8px, #f8fafc 16px);
+    }
+    .sig-box strong { color: #0f172a; font-size: 12px; }
+
+    .mark {
+      position: relative;
+      outline: 2.5px solid var(--ring);
+      outline-offset: 3px;
+      border-radius: 6px;
+      background: rgba(225, 29, 72, 0.04);
+    }
+    .mark::after {
+      content: attr(data-n);
+      position: absolute;
+      top: -11px; left: -11px;
+      width: 22px; height: 22px; border-radius: 999px;
+      background: var(--ring); color: #fff;
+      font: 800 11px/22px system-ui, sans-serif;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+      z-index: 2;
+    }
+    .mark.wide { outline-offset: 6px; }
+    .note-strike {
+      text-decoration: line-through; color: #94a3b8; font-weight: 400;
+      font-size: 11px; margin-top: 2px;
+    }
+
+    .changelog {
+      padding: 12px 12px 28px;
+      color: #e2e8f0;
+    }
+    .changelog h2 {
+      position: sticky; top: 0; z-index: 2;
+      margin: 0 -12px 8px;
+      padding: 12px 12px 10px;
+      background: #0f172a;
+      font-size: 15px;
+      color: #fff;
+      border-bottom: 1px solid #334155;
+    }
+    .changelog .intro {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.45;
+    }
+    .changelog details {
+      background: #fff;
+      color: #0f172a;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      overflow: hidden;
+    }
+    .changelog summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      font-weight: 700;
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+    .changelog summary::-webkit-details-marker { display: none; }
+    .changelog summary .when {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    .changelog .body {
+      padding: 0 12px 12px 38px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #334155;
+    }
+    .changelog .body ul { margin: 6px 0 0; padding-left: 16px; }
+    .changelog .body li { margin: 2px 0; }
+    .changelog .tag {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .final-box {
+      background: #fff;
+      color: #0f172a;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .final-box h3 {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 13px;
+      background: #0047ab;
+      color: #fff;
+    }
+    .final-box .sub {
+      margin: 0;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #64748b;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    table.final-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      table-layout: fixed;
+      margin: 0;
+      font-family: system-ui, sans-serif;
+    }
+    table.final-tbl th,
+    table.final-tbl td {
+      border: 1px solid #e2e8f0;
+      padding: 7px 8px;
+      vertical-align: top;
+      text-align: left;
+      word-wrap: break-word;
+    }
+    table.final-tbl th {
+      background: #f1f5f9;
+      font-weight: 700;
+      font-size: 11px;
+      color: #334155;
+    }
+    table.final-tbl td.n {
+      width: 28px;
+      text-align: center;
+      font-weight: 800;
+      color: var(--ring);
+    }
+    table.final-tbl td.muc { width: 34%; font-weight: 700; color: #0f172a; }
+    table.final-tbl td.sua { color: #334155; line-height: 1.35; }
+    table.final-tbl tr:nth-child(even) td { background: #f8fafc; }
+
+    @media (max-width: 1100px) {
+      :root { --side: 320px; }
+    }
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .layout {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .side {
+        border-left: 0;
+        border-top: 1px solid #1e293b;
+        height: auto;
+        max-height: none;
+      }
+      .main { min-height: 70vh; }
+    }
+
+    @media print {
+      @page { size: A4 portrait; margin: 0; }
+      body { background: #fff; overflow: visible; }
+      .toolbar, .legend, .tabs-bar, .sheet-label, .side { display: none !important; }
+      .layout { display: block; height: auto; }
+      .stage { padding: 0; overflow: visible; }
+      .stage-inner { transform: none !important; width: 210mm; margin: 0; }
+      .sheet {
+        box-shadow: none;
+        width: 210mm; height: 297mm;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>
+      <h1>Check Thư báo — A4 + lịch sử góc phải</h1>
+      <div class="meta">Trái: mẫu A4 khoanh · Phải: diễn giải / lịch sử thay đổi (luôn hiện)</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" id="btn-fit" class="on" onclick="setZoom('fit')">Vừa cột trái</button>
+      <button type="button" id="btn-100" onclick="setZoom('100')">100% A4</button>
+      <button type="button" class="primary" onclick="window.print()">In A4</button>
+      <a href="/bien-ban-moi-han">Về app</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="main">
+      <ol class="legend">
+        <li><span class="badge">1</span>Ngày mời</li>
+        <li><span class="badge">2</span>Kính gửi</li>
+        <li><span class="badge">3</span>Ngày dd/mm/yy</li>
+        <li><span class="badge">4</span>8:00</li>
+        <li><span class="badge">5</span>Nội dung SA</li>
+        <li><span class="badge">6</span>Lý trình 2 dòng</li>
+        <li><span class="badge">7</span>Chữ ký CHT</li>
+        <li><span class="badge">8</span>Kỹ sư</li>
+      </ol>
+
+      <div class="tabs-bar">
+        <span class="on">Thư báo siêu âm</span>
+        <span>Thu bao BT PHÚ THÀNH</span>
+        <span>Thu bao LAS-XD845</span>
+        <span>Thu bao thép dẹt 50x5</span>
+        <span>Thu bao thep tron</span>
+      </div>
+
+      <div class="stage" id="stage">
+        <div class="stage-inner" id="stage-inner">
+          <article class="sheet" id="mau">
+            <div class="sheet-label">A4 · 210×297 mm</div>
+
+            <header>
+              <p class="tb-b tb-13" style="margin:0;text-transform:uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+              <p class="tb-b tb-13 motto" style="margin:2px 0 0">Độc lập - Tự do - Hạnh phúc</p>
+            </header>
+
+            <p class="tb-i tb-13 date mark" data-n="1" id="ngay-moi">
+              Phú Quốc, ngày <span id="d">18</span> tháng <span id="m">11</span> năm <span id="y">2026</span>
+            </p>
+
+            <h1 class="tb-title">THƯ BÁO</h1>
+
+            <dl class="tb-13">
+              <dt>Dự án:</dt><dd>Tuyến tàu điện đô thị đoạn 1</dd>
+              <dt>Hạng mục:</dt><dd>Gói thầu XL03: Cung cấp và thi công lắp đặt hệ thống ray</dd>
+              <dt>Địa điểm:</dt><dd>Đặc khu Phú Quốc, Tỉnh An Giang</dd>
+            </dl>
+
+            <div class="mark wide" data-n="2" id="kinh-gui" style="margin-top:12px;padding:4px 6px">
+              <p class="tb-b tb-13" style="margin:0">Kính gửi:</p>
+              <ul class="kg">
+                <li>- Ban Quản lý dự án - Công ty TNHH MTV BOT tàu điện Phú Quốc;</li>
+                <li>- Tư vấn giám sát – Công ty CP TVTK XDCT GT Miền Bắc (Tedi North).</li>
+              </ul>
+              <div class="note-strike">- Công ty TNHH đầu tư xây dựng Thủy văn; ← đã bỏ</div>
+            </div>
+
+            <p class="tb-n tb-13" style="margin-top:12px">
+              Nội dung: Nhà thầu gửi thư báo cho nội dung công việc ngày <span id="nd">19</span> tháng <span id="nm">11</span> năm <span id="ny">2026</span> với các nội dung gồm:
+            </p>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:11%">Ngày tháng</th>
+                  <th style="width:12%">Thời gian thực hiện</th>
+                  <th style="width:24%">Nội dung công việc</th>
+                  <th style="width:16%">Địa điểm, vị trí, lý trình</th>
+                  <th style="width:22%">Kỹ sư phụ trách</th>
+                  <th style="width:15%">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mark" data-n="3" style="text-align:center;white-space:nowrap" id="ngay-bang"><span id="bd">19</span>/<span id="bm">11</span>/<span id="byy">26</span></td>
+                  <td class="mark" data-n="4" style="text-align:center">8:00</td>
+                  <td class="mark" data-n="5">Nghiệm thu siêu âm các mối: FBW-1711260001, FBW-1711260002, FBW-1711260003</td>
+                  <td class="mark" data-n="6" style="white-space:normal;line-height:1.25">Từ Km12+100<br />đến Km12+450</td>
+                  <td class="mark" data-n="8" style="text-align:center;white-space:pre-line;line-height:1.35;font-size:11pt">Cán bộ kỹ thuật:
+Nguyễn Minh Đức
+Cán bộ thí nghiệm:
+Nguyễn Kim Sơn</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="signs">
+              <div class="sign">
+                <p class="tb-b tb-14" style="margin:0;text-transform:uppercase">ĐẠI DIỆN TƯ VẤN GIÁM SÁT</p>
+                <p class="tb-n tb-14" style="margin:4px 0 0">Tư vấn giám sát trưởng</p>
+                <div style="height:6.5rem"></div>
+                <p class="tb-b tb-14" style="margin:0">Trần Văn Thanh</p>
+              </div>
+              <div class="sign mark wide" data-n="7" id="chu-ky-cht">
+                <p class="tb-b tb-14" style="margin:0;text-transform:uppercase">ĐẠI DIỆN ĐƠN VỊ THI CÔNG</p>
+                <p class="tb-n tb-14" style="margin:4px 0 0">Chỉ huy trưởng</p>
+                <div class="sig-box">
+                  <div>
+                    <strong>Ảnh chữ ký CHT</strong><br />
+                    (chi-huy-truong · khung rộng)
+                  </div>
+                </div>
+                <p class="tb-b tb-14" style="margin:0">Nguyễn Tất Đạt</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="history">
+      <div class="changelog">
+        <h2>Lịch sử thay đổi</h2>
+        <p class="intro">
+          Cột phải luôn hiện. Bảng dưới = <b>phiếu cuối</b> (mục nào · sửa gì). Chi tiết từng lần đổi ở các thẻ bên dưới.
+        </p>
+
+        <div class="final-box">
+          <h3>Bảng phiếu cuối — mục đã sửa</h3>
+          <p class="sub">Đối chiếu mẫu A4 bên trái · trạng thái hiện tại của thư báo in</p>
+          <table class="final-tbl">
+            <thead>
+              <tr>
+                <th style="width:28px">#</th>
+                <th style="width:34%">Mục trên phiếu</th>
+                <th>Sửa thành / quy tắc</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="n">1</td>
+                <td class="muc">Ngày lập thư</td>
+                <td class="sua">= <b>hôm nay</b> (VN). Sửa tay được. Nút Điền cũng set hôm nay.</td>
+              </tr>
+              <tr>
+                <td class="n">2</td>
+                <td class="muc">Kính gửi</td>
+                <td class="sua">Chỉ BQLDA + TVGS. <b>Bỏ Thủy văn</b>. Chữ đậm theo mẫu.</td>
+              </tr>
+              <tr>
+                <td class="n">3</td>
+                <td class="muc">Cột Ngày tháng</td>
+                <td class="sua">= ngày mời <b>+ 1</b>. Hiển thị <b>1 dòng</b> <code>dd/mm/yy</code> (vd. 19/11/26).</td>
+              </tr>
+              <tr>
+                <td class="n">4</td>
+                <td class="muc">Cột Thời gian</td>
+                <td class="sua">Mặc định <code>8:00</code>, sửa được.</td>
+              </tr>
+              <tr>
+                <td class="n">5</td>
+                <td class="muc">Cột Nội dung công việc</td>
+                <td class="sua">Chọn mối «Chờ siêu âm» → bấm <b>Điền vào thư báo</b> mới đổ mã mối (như RFI).</td>
+              </tr>
+              <tr>
+                <td class="n">6</td>
+                <td class="muc">Cột Địa điểm / lý trình</td>
+                <td class="sua">Cho phép <b>2 dòng</b>: «Từ …» / «đến …» (nhường chỗ cột kỹ sư).</td>
+              </tr>
+              <tr>
+                <td class="n">7</td>
+                <td class="muc">Khối chữ ký CHT</td>
+                <td class="sua">Khung rộng + ảnh <code>chi-huy-truong</code>. Thứ tự: ĐẠI DIỆN → chức vụ → ký → tên.</td>
+              </tr>
+              <tr>
+                <td class="n">8</td>
+                <td class="muc">Cột Kỹ sư phụ trách</td>
+                <td class="sua">Mỗi dòng một:<br>Cán bộ kỹ thuật:<br>Nguyễn Minh Đức<br>Cán bộ thí nghiệm:<br>Nguyễn Kim Sơn</td>
+              </tr>
+              <tr>
+                <td class="n">★</td>
+                <td class="muc">Font / tab / khổ giấy</td>
+                <td class="sua">Times New Roman 13/14 đậm-nhạt. Tab siêu âm + 4 tab Excel. A4 210×297 mm.</td>
+              </tr>
+              <tr>
+                <td class="n">★</td>
+                <td class="muc">Chức vụ ký</td>
+                <td class="sua">«Tư vấn giám sát trưởng» / «Chỉ huy trưởng» đặt <b>ngay dưới</b> tiêu đề ĐẠI DIỆN.</td>
+              </tr>
+              <tr>
+                <td class="n">★</td>
+                <td class="muc">Nút Điền</td>
+                <td class="sua">Không tự đổ khi tick — phải bấm <b>Điền vào thư báo</b> mới đổ data vào phiếu.</td>
+              </tr>
+              <tr>
+                <td class="n">★</td>
+                <td class="muc">Tab Thư báo (UI)</td>
+                <td class="sua"><b>MỚI:</b> hiện trong tab như RFI (embedded) — 1.Chọn mối → 2.Thông tin → 3.Xem/In. Không còn overlay trống.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <details open>
+          <summary><span class="badge">★</span> Tab Thư báo hiện chọn mối như RFI <span class="when">22:54</span></summary>
+          <div class="body">
+            Sửa bug: bấm Thư báo không thấy chỗ chọn. Giờ nhúng UI trong tab:
+            chọn mối SA → Điền → thông tin → in.
+            Chi tiết: <a href="/thu-bao-lan-cuoi-check.html" style="color:#0047ab;font-weight:700">thu-bao-lan-cuoi-check.html</a>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">★</span> Rule: làm gì → tự cập nhật HTML check <span class="when">22:51</span></summary>
+          <div class="body">
+            Đã thêm rule Cursor <code>.cursor/rules/auto-html-check.mdc</code>:
+            mỗi lần sửa tính năng / phiếu in phải <b>tự cập nhật HTML check</b> (bảng phiếu cuối + lịch sử) trong cùng lượt.
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">★</span> Cột phải = lịch sử luôn hiện <span class="when">22:30</span></summary>
+          <div class="body">
+            Bố cục 2 cột: trái mẫu A4 khoanh, phải lịch sử/diễn giải <b>cố định luôn hiện</b> (không còn tab ẩn).
+            Nút «Vừa cột trái» thu mẫu cho vừa phần còn lại.
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">★</span> Chức vụ ngay dưới ĐẠI DIỆN <span class="when">22:20</span></summary>
+          <div class="body">
+            «Tư vấn giám sát trưởng» / «Chỉ huy trưởng» đặt <b>ngay dưới</b> tiêu đề ĐẠI DIỆN…,
+            rồi mới tới chỗ ký / ảnh chữ ký, rồi tên (Trần Văn Thanh / Nguyễn Tất Đạt).
+            <div class="tag">Liên quan khoanh #7</div>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">3</span> Ngày tháng 1 dòng · dd/mm/yy <span class="when">22:16</span></summary>
+          <div class="body">
+            Cột Ngày tháng gọn <b>1 dòng</b>, định dạng <code>dd/mm/yy</code> (vd. 19/11/26), không bị xuống dòng.
+            Giá trị mặc định = ngày mời + 1, sửa được.
+            <div class="tag">Khoanh #3</div>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">5</span> Nút «Điền vào thư báo» như RFI <span class="when">22:17</span></summary>
+          <div class="body">
+            Không tự đổ khi tick mối. Phải bấm <b>Điền vào thư báo</b> mới đổ:
+            ngày mời = hôm nay, ngày tháng = +1, thời gian 8:00, nội dung mã mối SA, lý trình từ–đến, kỹ sư mặc định.
+            <div class="tag">Khoanh #5</div>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">6+8</span> Lý trình 2 dòng · ưu tiên cột kỹ sư <span class="when">22:15</span></summary>
+          <div class="body">
+            Lý trình cho phép 2 dòng (<b>Từ …</b> / <b>đến …</b>) để cột Kỹ sư phụ trách rộng hơn, mỗi dòng một:
+            <ul>
+              <li>Cán bộ kỹ thuật:</li>
+              <li>Nguyễn Minh Đức</li>
+              <li>Cán bộ thí nghiệm:</li>
+              <li>Nguyễn Kim Sơn</li>
+            </ul>
+            <div class="tag">Khoanh #6 + #8</div>
+          </div>
+        </details>
+
+        <details open>
+          <summary><span class="badge">★</span> Trang check A4 đúng kích thước <span class="when">22:12</span></summary>
+          <div class="body">
+            Phiếu check = khổ A4 thật 210×297 mm, lề trái 20 / trên 15 / phải 10 / dưới 10 mm (giống PrintFrame app).
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="badge">1</span> Ngày mời = hôm nay <span class="when">18/11</span></summary>
+          <div class="body">
+            Dòng ngày lập thư lấy <b>ngày hiện tại</b> (VN). Form sửa được; nút Điền cũng set lại ngày mời.
+            <div class="tag">Khoanh #1</div>
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="badge">2</span> Kính gửi — bỏ Thủy văn <span class="when">18/11</span></summary>
+          <div class="body">
+            Chỉ còn BQLDA + TVGS. Đã bỏ Công ty TNHH đầu tư xây dựng Thủy văn. Chữ kính gửi + danh sách <b>đậm</b>.
+            <div class="tag">Khoanh #2</div>
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="badge">4</span> Thời gian 8:00 <span class="when">18/11</span></summary>
+          <div class="body">
+            Mặc định <code>8:00</code>, vẫn sửa được trên form / sau khi Điền.
+            <div class="tag">Khoanh #4</div>
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="badge">7</span> Chữ ký CHT rộng + ảnh <span class="when">18/11</span></summary>
+          <div class="body">
+            Khung ký rộng hơn, chèn ảnh từ cấu hình RFI (<code>chi-huy-truong</code>).
+            <div class="tag">Khoanh #7</div>
+          </div>
+        </details>
+
+        <details>
+          <summary><span class="badge">★</span> Tab Excel + Times New Roman đậm/nhạt <span class="when">18/11</span></summary>
+          <div class="body">
+            Tab chính Thư báo siêu âm + 4 tab mẫu Excel (BT PHÚ THÀNH, LAS, thép dẹt, thép tròn).
+            Font Times New Roman 13/14; nhãn đậm, nội dung nhạt theo mẫu.
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    (function () {
+      const tz = "Asia/Ho_Chi_Minh";
+      const today = new Date().toLocaleDateString("sv-SE", { timeZone: tz });
+      const [y, m, d] = today.split("-");
+      const plus = new Date(Date.UTC(+y, +m - 1, +d + 1));
+      const p = plus.toISOString().slice(0, 10).split("-");
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set("d", d); set("m", m); set("y", y);
+      set("nd", p[2]); set("nm", p[1]); set("ny", p[0]);
+      set("bd", p[2]); set("bm", p[1]); set("byy", p[0].slice(2));
+
+      const inner = document.getElementById("stage-inner");
+      const stage = document.getElementById("stage");
+      const btnFit = document.getElementById("btn-fit");
+      const btn100 = document.getElementById("btn-100");
+      let mode = "fit";
+
+      function applyFit() {
+        const pad = 28;
+        const avail = Math.max(240, stage.clientWidth - pad);
+        const scale = Math.min(1, avail / inner.offsetWidth);
+        inner.style.transform = "scale(" + scale + ")";
+        inner.style.marginBottom = ((297 * (scale - 1)) ) + "mm";
+      }
+
+      window.setZoom = function (m) {
+        mode = m;
+        btnFit.classList.toggle("on", m === "fit");
+        btn100.classList.toggle("on", m === "100");
+        if (m === "100") {
+          inner.style.transform = "none";
+          inner.style.marginBottom = "0";
+        } else {
+          applyFit();
+        }
+      };
+
+      window.addEventListener("resize", () => { if (mode === "fit") applyFit(); });
+      setZoom("fit");
+    })();
+  </script>
+</body>
+</html>
