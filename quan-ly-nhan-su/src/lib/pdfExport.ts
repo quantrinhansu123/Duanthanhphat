@@ -10,7 +10,7 @@ export async function exportPagesPdf(pages: HTMLElement[], filename: string, clo
   if (!pages.length) return;
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff";
-  host.innerHTML = "<style>.ed-field{border-bottom:0!important;background:none!important}.sig-empty{display:none!important}</style>";
+  host.innerHTML = "<style>.ed-field,.diary-sig-input{border-bottom:0!important;background:none!important}.diary-sig-input::placeholder{color:transparent}.sig-empty{display:none!important}</style>";
   const clones = pages.map((p) => {
     const c = p.cloneNode(true) as HTMLElement;
     c.style.cssText += `;margin:0;${cloneStyle}`;
@@ -24,7 +24,9 @@ export async function exportPagesPdf(pages: HTMLElement[], filename: string, clo
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas-pro"), import("jspdf")]);
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     let first = true;
-    for (const el of clones) {
+    // `data-pdf-split`: chụp riêng từng tờ con (selector) thay vì cả khối, để mỗi tờ đúng một trang A4, không lệch ranh giới vì khoảng cách giữa các tờ.
+    const targets = clones.flatMap((c) => (c.dataset.pdfSplit ? [...c.querySelectorAll<HTMLElement>(c.dataset.pdfSplit)] : [c]));
+    for (const el of targets) {
       const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#fff" });
       const pageH = Math.floor((canvas.width * 297) / 210); // chiều cao 1 trang A4 theo px canvas
       for (let y = 0; y < canvas.height; y += pageH) {
@@ -103,7 +105,7 @@ export function installTouchPrint() {
     const name = (document.title.trim() || overlay.getAttribute("aria-label") || "Phieu-in").slice(0, 80);
     void exportPagesPdf([overlay], overlay.getAttribute("aria-label") || name,
       "position:static;inset:auto;height:auto;max-height:none;overflow:visible;width:794px;padding:0;background:#fff")
-      .catch(() => original())
+      .catch((e) => { console.error("Xuất PDF điện thoại lỗi, chuyển sang in của trình duyệt:", e); original(); })
       .finally(() => window.dispatchEvent(new Event("afterprint"))); // trả lại document.title đã đổi trước khi in
   };
 }

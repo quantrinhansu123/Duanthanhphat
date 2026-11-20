@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
@@ -57,7 +57,7 @@ const css = `@page { size: A4 portrait; margin: 0; }
 #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
 /* Mỗi dòng chữ là một khối cao đúng ${LINE}px có hàng chấm gắn ngay dưới chân chữ → chữ và đường kẻ cùng một hệ tọa độ, không lệch dù thu/phóng trang. */
 #diary-print .rl { position: relative; height: ${LINE}px; line-height: ${LINE}px; white-space: pre; }
-#diary-print .rl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; height: 1px; background: repeating-linear-gradient(to right, #000 0 1px, transparent 1px 3px); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#diary-print .rl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; border-bottom: 1px dotted #000; }
 #diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
@@ -512,7 +512,7 @@ export default function ConstructionDiaryForm() {
           </div>
         </div>
       )}
-      <article id="diary-print" className={previewOpen ? "diary-preview" : undefined}>
+      <article id="diary-print" className={previewOpen ? "diary-preview" : undefined} data-pdf-split=":scope > .diary-sheet">
         {rangeRows
           ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={pageOf(row.projectId, row.date, i)} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
           : <DiaryPages d={d} date={date} pageStart={pageOf(projectId, date)} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
@@ -727,7 +727,7 @@ function useWrapped(text: string) {
     const el = ref.current;
     if (!el) return;
     const measure = () => setLines((cur) => {
-      const next = wrapLines(el, text);
+      const next = readLines(el);
       return next.length === cur.length && next.every((l, i) => l === cur[i]) ? cur : next;
     });
     measure();
@@ -736,29 +736,27 @@ function useWrapped(text: string) {
     void document.fonts?.ready.then(measure);
     return () => ro.disconnect();
   }, [text]);
-  return { lines, probe: <div ref={ref} aria-hidden="true" className="rl-probe">{text}</div> };
+  // Mỗi đoạn tách thành các cụm (sau dấu cách / dấu gạch) để đo offsetTop từng cụm — chính xác ở mọi trình duyệt, kể cả Safari iPhone.
+  const probe = <div ref={ref} aria-hidden="true" className="rl-probe">
+    {text.split("\n").map((para, i) => <Fragment key={i}>
+      {(para.match(/[^\s-]*[\s-]*/g) ?? []).filter(Boolean).map((token, j) => <span key={j}>{token}</span>)}<br />
+    </Fragment>)}
+  </div>;
+  return { lines: text ? lines : [], probe };
 }
 
-function wrapLines(el: HTMLElement, text: string): string[] {
-  const node = el.firstChild;
-  if (!text) return [];
-  if (!node || node.nodeType !== Node.TEXT_NODE) return text.split("\n");
-  const scale = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
-  const range = document.createRange();
+/** Gom các cụm cùng hàng (cùng offsetTop) thành một dòng; thẻ <br> là hết đoạn. */
+function readLines(el: HTMLElement): string[] {
   const out: string[] = [];
   let cur = "", top = Number.NaN;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === "\n") { out.push(cur); cur = ""; top = Number.NaN; continue; }
-    range.setStart(node, i);
-    range.setEnd(node, i + 1);
-    const rect = range.getClientRects()[0];
-    if (rect && !Number.isNaN(top) && rect.top - top > (LINE / 2) * scale) { out.push(cur); cur = ""; top = Number.NaN; }
-    if (rect && Number.isNaN(top)) top = rect.top;
-    cur += ch;
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeName === "BR") { out.push(cur.replace(/\s+$/, "")); cur = ""; top = Number.NaN; continue; }
+    const span = node as HTMLElement;
+    if (!Number.isNaN(top) && Math.abs(span.offsetTop - top) > 2) { out.push(cur.replace(/\s+$/, "")); cur = ""; top = Number.NaN; }
+    if (Number.isNaN(top)) top = span.offsetTop;
+    cur += span.textContent ?? "";
   }
-  out.push(cur);
-  return out.map((l) => l.replace(/\s+$/, ""));
+  return out;
 }
 
 function Card({ title, hint, wide, children }: { title: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
