@@ -40,7 +40,7 @@ const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 t
 const lbl = "flex flex-col text-xs font-semibold text-slate-600";
 const today = () => new Date().toLocaleDateString("sv-SE");
 const LINE = 27; // px, khoảng cách dòng chấm theo bản mẫu
-const DOT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='27'%3E%3Crect y='26' width='1' height='1'/%3E%3C/svg%3E\")";
+const DOT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='27'%3E%3Crect y='23' width='1' height='1'/%3E%3C/svg%3E\")";
 const css = `@media screen { #diary-print { position: absolute; left: -10000px; top: 0; visibility: hidden; pointer-events: none; } }
 @media screen { #diary-print.diary-preview { position: fixed; left: 0; top: 0; right: 0; bottom: 0; width: auto; visibility: visible; pointer-events: auto; overflow: auto; background: #cbd5e1; z-index: 1400; padding: 72px 12px 28px; }
   #diary-print.diary-preview .diary-sheet { margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.28); } }
@@ -55,7 +55,7 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
 #diary-print .diary-indent { padding-left: 10mm; }
 #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
-#diary-print .diary-ruled { line-height: ${LINE}px; padding-top: 3px;background-image: ${DOT}; background-size: 3px ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#diary-print .diary-ruled { line-height: ${LINE}px; background-image: ${DOT}; background-size: 3px ${LINE}px; background-repeat: repeat round; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
