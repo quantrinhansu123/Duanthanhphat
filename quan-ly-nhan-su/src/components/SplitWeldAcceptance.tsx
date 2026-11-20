@@ -16,7 +16,7 @@ export type SplitKind = "hinh-hoc" | "sieu-am";
 type Candidate = { moi_han_id: string; ma_lich_su: string; ngay_mai: string | null; da_nt_truc_quan: boolean; truc_quan?: string | null; ly_trinh?: string | null };
 type TicketInfo = { dia_diem: string; ben_moi: string; ben_nhan: string; pham_vi: string; tuyen_thuong: boolean; tuyen_ha: boolean; gio_bat_dau: string };
 type Ticket = { id: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null; nguoi_lap: string; nguoi_nghiem_thu: string | null;
-  thong_tin?: Record<string, string> | null; phieu_rfi_id?: string | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[] };
+  thong_tin?: Record<string, string> | null; phieu_rfi_id?: string | null; da_ky?: boolean | null; nguoi_ky?: string | null; payment_rates?: number[]; payment_notes?: string[]; nhat_ky_theo_ngay_sieu_am?: boolean };
 // Giờ nghiệm thu gợi ý sẵn 8h00 như RFI chính.
 const emptyInfo = (): TicketInfo => ({ dia_diem: "", ben_moi: "", ben_nhan: "", pham_vi: "", tuyen_thuong: false, tuyen_ha: false, gio_bat_dau: "08:00" });
 const infoFromTicket = (t: Ticket): TicketInfo => {
@@ -25,7 +25,7 @@ const infoFromTicket = (t: Ticket): TicketInfo => {
     tuyen_thuong: v.tuyen_thuong === "1", tuyen_ha: v.tuyen_ha === "1", gio_bat_dau: v.gio_bat_dau || "08:00" };
 };
 type Evidence = { co_the_dat: boolean; ngay_mai: string; truc_quan: string; gia_tri_do: GeometryMeasurements; ngay_ndt: string | null; ket_qua_ndt: string | null; phuong_phap_ndt: string; ten_tieu_chuan: string | null };
-type Item = { moi_han_id: string; ma_lich_su: string; ma_diem?: string | null; ly_trinh?: string | null; current?: Evidence | null; version?: number; du_lieu_chot: Evidence; ket_qua: string | null; ly_do: string | null };
+type Item = { moi_han_id: string; ma_lich_su: string; ma_diem?: string | null; ly_trinh?: string | null; current?: Evidence | null; version?: number; du_lieu_chot: Evidence; ket_qua: string | null; ly_do: string | null; ngay_sieu_am_thuc_te?: string | null };
 type Detail = { ticket: Ticket; items: Item[] };
 type List = { candidates: Candidate[]; tickets: Ticket[] };
 type Decision = { ket_qua: string; ly_do: string };
@@ -93,12 +93,16 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [inviteDate, setInviteDate] = useState(today);
   const [date, setDate] = useState(today);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const canWriteDiaryDate = kind === "sieu-am" && typeof detail?.ticket.nhat_ky_theo_ngay_sieu_am === "boolean";
   const [results, setResults] = useState<Record<string, Decision>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [doc, setDoc] = useState<"invite" | null>(null);
   // Tick chọn mối trong phiếu để đặt kết quả hàng loạt.
   const [picked, setPicked] = useState<string[]>([]);
+  const [diaryDate, setDiaryDate] = useState("");
+  const [diaryPicked, setDiaryPicked] = useState<string[]>([]);
+  const diaryToday = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
   const [bulkReason, setBulkReason] = useState("");
   const [ticketQuery, setTicketQuery] = useState("");
   const actorName = useActorNames();
@@ -158,7 +162,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     request<Detail>("split-detail", { id: initialTicketId })
       .then(next => {
         if (!active) return;
-        setDetail(next); setPicked([]);
+        setDetail(next); setPicked([]); setDiaryPicked([]);
         setResults(next.ticket.ngay_nghiem_thu ? {} : Object.fromEntries(next.items.filter(i => !i.ket_qua && i.current?.co_the_dat).map(i => [i.moi_han_id, { ket_qua: "Đạt", ly_do: "" }])));
         setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
       })
@@ -178,10 +182,25 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   }
   async function openTicket(id: string) {
     const next = await request<Detail>("split-detail", { id });
-    setDetail(next); setPicked([]);
+    setDetail(next); setPicked([]); setDiaryPicked([]);
     // Gợi ý Đạt khi mở phiếu; người dùng chọn «Chưa chọn» thì được giữ (không ép lại).
     setResults(next.ticket.ngay_nghiem_thu ? {} : suggestPassResults(next.items, kind));
     setDate(next.ticket.ngay_nghiem_thu || [today(), next.ticket.ngay_moi].sort()[1]);
+  }
+
+  async function saveUltrasoundDiaryDate(newDate: string | null) {
+    if (!detail) return;
+    const targets = newDate ? diaryPicked : detail.items.filter((i) => i.ngay_sieu_am_thuc_te && diaryPicked.includes(i.moi_han_id)).map((i) => i.moi_han_id);
+    const ids = new Set(targets);
+    const { count } = await request<{ count: number }>("split-ultrasound-date", {
+      id: detail.ticket.id, moi_han_ids: targets, ngay_sieu_am_thuc_te: newDate,
+    });
+    setDetail((cur) => cur?.ticket.id === detail.ticket.id ? {
+      ...cur,
+      items: cur.items.map((item) => ids.has(item.moi_han_id) ? { ...item, ngay_sieu_am_thuc_te: newDate } : item),
+    } : cur);
+    setDiaryPicked([]);
+    setOkMsg(newDate ? `Đã ghi ${count} mối siêu âm vào nhật ký ngày ${dateLabel(newDate)}.` : `Đã bỏ ngày siêu âm thực tế của ${count} mối.`);
   }
 
   /**
@@ -373,7 +392,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2" title="Ngày hoàn thành — ghi mục 3.2 nhật ký">Ngày hoàn thành</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr><th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày hoàn thành</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
@@ -410,6 +429,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                   <button type="button" disabled={busy} className={button} onClick={primaryAction.onClick}>{primaryAction.label}</button>
                   <RowActionsMenu label={`Thao tác phiếu ${t.so_phieu}`} actions={[
                     { label: done ? "Xem chi tiết" : "Mở / nghiệm thu", disabled: busy, onSelect: () => void run(() => openTicket(t.id)) },
+                    ...(kind === "sieu-am" && done && typeof t.nhat_ky_theo_ngay_sieu_am === "boolean" ? [{ label: "Ghi ngày siêu âm", disabled: busy, onSelect: () => void run(() => openTicket(t.id)) }] : []),
                     { label: "In phiếu YCNT", disabled: busy, onSelect: () => void run(async () => { await openTicket(t.id); setDoc("invite"); }) },
                     ...(onPrintRecord ? [{ label: done ? "In biên bản" : "In mẫu biên bản (trống)", disabled: busy, onSelect: () => void printRecord(t) }] : []),
                     // Chưa nghiệm thu: in bản NHÁP tạm ghi Đạt để các bên ký trước; bấm Nghiệm thu đúng ngày sau để Nhật ký thi công ghi đúng ngày.
@@ -694,6 +714,21 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         })()}
       </div>
       <h3 className="text-lg font-extrabold text-slate-900">{detail.ticket.so_phieu} · Nghiệm thu {kindName(kind)}</h3>
+      {kind === "sieu-am" && !canWriteDiaryDate && <p className="text-sm text-slate-600">Chức năng ghi ngày siêu âm đang chờ cập nhật dữ liệu.</p>}
+      {canWriteDiaryDate && <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
+        <h4 className="font-bold text-slate-900">Ghi ngày siêu âm vào nhật ký thi công</h4>
+        <p className="text-sm text-slate-700">Chọn các mối đã thực hiện ở cột «Nhật ký siêu âm». Sau lần ghi đầu tiên, mục 3.2 chỉ lấy các mối có ngày siêu âm thực tế của phiếu này.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+            Ngày siêu âm thực tế
+            <input type="date" className={field} max={diaryToday} disabled={busy} value={diaryDate} onChange={(e) => setDiaryDate(e.target.value)} />
+          </label>
+          <button type="button" className={primary} disabled={busy || !diaryPicked.length || !diaryDate || diaryDate > diaryToday}
+            onClick={() => void run(() => saveUltrasoundDiaryDate(diaryDate))}>Ghi nhật ký ({diaryPicked.length} mối)</button>
+          <button type="button" className={button} disabled={busy || !detail.items.some((i) => i.ngay_sieu_am_thuc_te && diaryPicked.includes(i.moi_han_id))}
+            onClick={() => void run(() => saveUltrasoundDiaryDate(null))}>Bỏ ngày đã ghi</button>
+        </div>
+      </div>}
       <form className="space-y-3" onSubmit={e => {
         e.preventDefault();
         void run(async () => {
@@ -741,11 +776,11 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             Ngày hoàn thành / nghiệm thu
             <input type="date" required className={field} min={detail.ticket.ngay_moi}
               disabled={Boolean(detail.ticket.ngay_nghiem_thu) || busy} value={date} onChange={e => setDate(e.target.value)}
-              title="Ngày ghi vào mục 3.2 nhật ký thi công" />
+              title="Ngày chốt nghiệm thu phiếu" />
           </label>
           {!detail.ticket.ngay_nghiem_thu && date !== today() && today() >= detail.ticket.ngay_moi ? (
             <button type="button" className={button} disabled={busy} onClick={() => setDate(today())}
-              title="Đặt ngày hoàn thành = hôm nay (đúng ngày ghi nhật ký)">
+              title="Đặt ngày hoàn thành phiếu là hôm nay">
               Hôm nay
             </button>
           ) : null}
@@ -754,11 +789,11 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         </div>
         {!detail.ticket.ngay_nghiem_thu ? (
           <p className="text-xs text-slate-500">
-            Ngày này = <b>ngày hoàn thành</b> ghi vào mục 3.2 nhật ký thi công. Chọn đúng ngày thực tế nghiệm thu trước khi chốt.
+            {kind === "sieu-am" ? "Chọn ngày nghiệm thu phiếu trước khi chốt." : "Chọn ngày nghiệm thu thực tế để ghi vào mục 3.2 nhật ký thi công."}
           </p>
         ) : (
           <p className="text-xs text-emerald-800">
-            Đã hoàn thành ngày {dateLabel(detail.ticket.ngay_nghiem_thu)} — nhật ký mục 3.2 lấy theo ngày này.
+            Đã hoàn thành ngày {dateLabel(detail.ticket.ngay_nghiem_thu)}.
           </p>
         )}
         {!detail.ticket.ngay_nghiem_thu && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm">
@@ -776,6 +811,14 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               <tr>
                 {!detail.ticket.ngay_nghiem_thu && <th className="w-9 px-3 py-2"><input type="checkbox" aria-label="Tick tất cả" checked={pendingItems.length > 0 && picked.length === pendingItems.length} onChange={e => setPicked(e.target.checked ? pendingItems.map(i => i.moi_han_id) : [])} /></th>}
                 <th className="px-3 py-2">Mã mối</th><th className="px-3 py-2">Lý trình</th><th className="px-3 py-2">Dữ liệu kiểm tra</th><th className="w-64 px-3 py-2">Kết quả</th>
+                {canWriteDiaryDate && <th className="whitespace-nowrap px-3 py-2">
+                  <label className="inline-flex items-center gap-2">
+                    <input type="checkbox" aria-label="Chọn tất cả mối để ghi nhật ký" disabled={busy || !detail.items.length}
+                      checked={detail.items.length > 0 && diaryPicked.length === detail.items.length}
+                      onChange={(e) => setDiaryPicked(e.target.checked ? detail.items.map((i) => i.moi_han_id) : [])} />
+                    Nhật ký siêu âm
+                  </label>
+                </th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -805,6 +848,13 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
                       {!canPass && !res?.ket_qua && <span className="text-xs text-amber-800">{kind === "hinh-hoc" ? "Số đo / chiều dài mài chưa đạt — bổ sung trong Kiểm tra chất lượng." : "Siêu âm đã ghi Không đạt."}</span>}
                     </div>}
                   </td>
+                  {canWriteDiaryDate && <td className="whitespace-nowrap px-3 py-1.5">
+                    <label className="inline-flex min-h-9 items-center gap-2">
+                      <input type="checkbox" aria-label={`Ghi nhật ký mối ${fieldWeldCode(i.ma_lich_su)}`} disabled={busy}
+                        checked={diaryPicked.includes(i.moi_han_id)} onChange={(e) => setDiaryPicked(e.target.checked ? [...diaryPicked, i.moi_han_id] : diaryPicked.filter((id) => id !== i.moi_han_id))} />
+                      {i.ngay_sieu_am_thuc_te ? dateLabel(i.ngay_sieu_am_thuc_te) : "Chưa ghi"}
+                    </label>
+                  </td>}
                 </tr>;
               })}
             </tbody>
@@ -815,8 +865,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             className={primary}
             disabled={busy || counts.pass + counts.fail === 0}
             title={counts.none > 0
-              ? `Xác nhận ${counts.pass + counts.fail} mối đã chọn (còn ${counts.none} mối — chốt lẻ được). Ngày nhật ký: ${dateLabel(date)}`
-              : `Chốt toàn bộ và ghi nhật ký thi công ngày ${dateLabel(date)}`}
+              ? `Xác nhận ${counts.pass + counts.fail} mối đã chọn (còn ${counts.none} mối — chốt lẻ được).`
+              : `Chốt nghiệm thu phiếu ngày ${dateLabel(date)}`}
           >
             {counts.none > 0
               ? `Xác nhận ${counts.pass + counts.fail} mối đã chọn (${dateLabel(date)})`

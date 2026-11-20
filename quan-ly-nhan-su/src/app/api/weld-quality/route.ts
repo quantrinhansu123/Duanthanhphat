@@ -97,7 +97,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ accepted, waiting, acceptance, signing, ground, ultrasound, paid, partialPaid, unpaid });
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
-    if (["split-list", "split-detail", "split-publish", "split-complete", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
+    if (["split-list", "split-detail", "split-publish", "split-complete", "split-ultrasound-date", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
     if (body.action === "rfi-overview") return NextResponse.json(await loadRfiOverview(body));
     if (body.action === "gtus-detail") return NextResponse.json(await gtusDetail(body));
     if (body.action === "gtus-save") return NextResponse.json(await gtusSave(body, actor));

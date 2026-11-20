@@ -15,6 +15,7 @@ export type ConstructionDiary = {
   thietBi: string;
   noiDungCongViec: string;
   nghiemThuHangNgay: string;
+  nghiemThuHangNgayTuDong?: string;
   suCo: string;
   kienNghi: string;
   nhanXetGiamSat: string;

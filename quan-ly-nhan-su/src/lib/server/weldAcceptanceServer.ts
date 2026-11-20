@@ -67,21 +67,34 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       .eq("dot_nghiem_thu.ngay_nghiem_thu", date).eq("dot_nghiem_thu.phieu_yeu_cau_nghiem_thu.du_an_id", projectId)
       .neq("ket_qua", "Chưa nghiệm thu").order("moi_han_id").range(a, b)),
   ]);
-  // RFI báo trong ngày (phiếu chính + phiếu tách hình học/siêu âm) và kết quả nghiệm thu phiếu tách trong ngày → vào nhật ký thi công.
-  const [mainRfis, splitRfis, splitDone] = await Promise.all([
+  type DiarySplitTicket = { du_an_id: string; ngay_nghiem_thu: string | null; nhat_ky_theo_ngay_sieu_am?: boolean };
+  type DiarySplitWeld = { moi_han_id: string; loai: string; ket_qua: string; phieu_nt_tach: DiarySplitTicket | DiarySplitTicket[] };
+  const loadSplitDone = (withActualDate: boolean) => fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
+    .select(withActualDate
+      ? "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu,nhat_ky_theo_ngay_sieu_am)"
+      : "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)")
+    .eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
+  const [mainRfis, splitRfis, [splitDone, ultrasound]] = await Promise.all([
     fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
       .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)).then((rows) => rows.filter((r) => !(r.thong_tin as Record<string, unknown> | null)?.pending)),
     fetchAll<{ id: string; so_phieu: string; loai: string }>((a, b) => db().from("phieu_nt_tach")
       .select("id,so_phieu,loai").eq("du_an_id", projectId).eq("ngay_moi", date).order("so_phieu").range(a, b)),
-    fetchAll<{ moi_han_id: string; loai: string; ket_qua: string | null; phieu_nt_tach: { du_an_id: string; ngay_nghiem_thu: string | null } | { du_an_id: string; ngay_nghiem_thu: string | null }[] }>((a, b) => db().from("phieu_nt_tach_moi")
-      .select("moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)").eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").range(a, b)),
+    Promise.all([
+      loadSplitDone(true),
+      fetchAll<{ moi_han_id: string }>((a, b) => db().from("phieu_nt_tach_moi")
+        .select("moi_han_id,phieu_nt_tach!inner(du_an_id)").eq("phieu_nt_tach.du_an_id", projectId)
+        .eq("loai", "sieu-am").eq("ngay_sieu_am_thuc_te", date).order("moi_han_id").order("phieu_id").range(a, b)),
+    ]).catch(async (error: { code?: string; message?: string } | null) => {
+      if (error?.code !== "42703" || !/nhat_ky_theo_ngay_sieu_am|ngay_sieu_am_thuc_te/.test(error.message ?? "")) throw error;
+      return [await loadSplitDone(false), []] as const;
+    }),
   ]);
   const [mainRfiWelds, splitRfiWelds] = await Promise.all([
     chunked<{ phieu_id: string; moi_han_id: string }>(mainRfis.map((r) => r.id), (p) => db().from("phieu_yeu_cau_nghiem_thu_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
     chunked<{ phieu_id: string; moi_han_id: string }>(splitRfis.map((r) => r.id), (p) => db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
   ]);
   const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id),
-    ...mainRfiWelds.map((w) => w.moi_han_id), ...splitRfiWelds.map((w) => w.moi_han_id), ...splitDone.map((w) => w.moi_han_id)])];
+    ...mainRfiWelds.map((w) => w.moi_han_id), ...splitRfiWelds.map((w) => w.moi_han_id), ...splitDone.map((w) => w.moi_han_id), ...ultrasound.map((w) => w.moi_han_id)])];
   const [all, points] = await Promise.all([
     chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh,ma_hien_truong").eq("du_an_id", projectId).in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
@@ -159,6 +172,17 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       const range = from && to ? ` (Km${from} – Km${to})` : "";
       return [withResult ? `- Nghiệm thu giải toả ứng suất ray ${names}${range}. Kết quả: ${result}.` : `- Giải toả ứng suất ray ${names}${range}.`];
     }));
+  const acceptanceLines = (loai: "hinh-hoc" | "sieu-am", rows: DiarySplitWeld[]) => ["Đạt", "Không đạt"].map((result) => {
+    const text = diaryWorkText(select(rows.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
+    return text ? text.split(/\n(?=- )/).map((block) => `${block.replace(/\.\s*$/, "")}. Kết quả: ${result}.`).join("\n") : "";
+  });
+  const geometry = acceptanceLines("hinh-hoc", splitDone);
+  const stressRelease = gtusLines(true);
+  const ultrasoundIds = new Set(ultrasound.map((w) => w.moi_han_id));
+  const legacyUltrasound = splitDone.filter((w) => {
+    const ticket = Array.isArray(w.phieu_nt_tach) ? w.phieu_nt_tach[0] : w.phieu_nt_tach;
+    return !ticket?.nhat_ky_theo_ngay_sieu_am && !ultrasoundIds.has(w.moi_han_id);
+  });
   return {
     ...diaryManpowerDefaults(),
     thietBi: diaryReportEquipmentText(reportEquipment) || projectEquipmentText(equipment.map((m) => m.group === "welding" ? { ...m, name: diaryMachineName(m.name), model: "" } : m)),
@@ -178,17 +202,13 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       diaryWorkText(select(ground.map((w) => w.moi_han_id)), "grind"),
       ...gtusLines(false),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
-    // 3.2 Nghiệm thu công việc xây dựng hàng ngày = nghiệm thu đã chốt trong ngày (hình học / siêu âm, kể cả của RFI phát ngày trước); không có thì để trống.
     nghiemThuHangNgay: [
-      ...(["hinh-hoc", "sieu-am"] as const).flatMap((loai) => ["Đạt", "Không đạt"].map((result) => {
-        const text = diaryWorkText(select(splitDone.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
-        // Gắn «Kết quả» một lần mỗi mục (− …), không gắn lại từng dòng mã mối sau «Mối số:».
-        return text
-          ? text.split(/\n(?=- )/).map((block) => `${block.replace(/\.\s*$/, "")}. Kết quả: ${result}.`).join("\n")
-          : "";
-      })),
-      ...gtusLines(true),
+      ...geometry,
+      ...acceptanceLines("sieu-am", legacyUltrasound),
+      diaryWorkText(select([...ultrasoundIds]), "accept", "Siêu âm mối hàn"),
+      ...stressRelease,
     ].filter(Boolean).join("\n"),
+    nghiemThuHangNgayTheoNgayChot: [...geometry, ...acceptanceLines("sieu-am", splitDone), ...stressRelease].filter(Boolean).join("\n"),
   };
 }
 
@@ -1341,6 +1361,19 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     return { candidates: await withChainage((candidates as { moi_han_id: string; truc_quan: string | null }[]).filter((c) => !c.truc_quan)), tickets };
   }
   const id = qualityUuid(body.id);
+  if (body.action === "split-ultrasound-date") {
+    if (kind !== "sieu-am") throw new QualityApiError("Chỉ ghi ngày thực tế cho phiếu siêu âm.");
+    const ids = body.moi_han_ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 2000) throw new QualityApiError("Chọn từ 1 đến 2.000 mối trong phiếu.");
+    const date = body.ngay_sieu_am_thuc_te === null ? null : qualityDate(body.ngay_sieu_am_thuc_te);
+    if (!date && body.ngay_sieu_am_thuc_te !== null) throw new QualityApiError("Hãy nhập ngày siêu âm thực tế.");
+    const { data, error } = await db().rpc("ghi_ngay_sieu_am_thuc_te", {
+      p_phieu_id: id, p_du_an_id: project, p_moi_han_ids: ids.map(qualityUuid), p_ngay: date,
+    });
+    if (error?.code === "PGRST202") throw new QualityApiError("Chức năng ghi ngày siêu âm đang chờ cập nhật dữ liệu.", 503);
+    if (error) throw error;
+    return { count: data as number };
+  }
   if (body.action === "split-publish") {
     const ids = body.moi_han_ids, number = str(body.so_phieu,80), date = qualityDate(body.ngay_moi);
     if (!Array.isArray(ids) || !ids.length || ids.length > 200 || !number || !date)
@@ -1403,13 +1436,19 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     return forwardGeometryTicket(ticket.data, actor);
   }
   if (body.action === "split-detail") {
-    const rows = await db().from("phieu_nt_tach_moi").select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot")
-      .eq("phieu_id",id).order("ma_lich_su");
-    if (rows.error) throw rows.error;
+    type SplitDetailWeld = { moi_han_id: string; ma_lich_su: string; ket_qua: string | null; ly_do: string | null; du_lieu_chot: Record<string, unknown>; ngay_sieu_am_thuc_te?: string | null };
+    const withActualDate = kind === "sieu-am" && typeof ticket.data.nhat_ky_theo_ngay_sieu_am === "boolean";
+    const rows = await fetchAll<SplitDetailWeld>((a, b) => {
+      const welds = db().from("phieu_nt_tach_moi");
+      const fields = withActualDate
+        ? welds.select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot,ngay_sieu_am_thuc_te")
+        : welds.select("moi_han_id,ma_lich_su,ket_qua,ly_do,du_lieu_chot");
+      return fields.eq("phieu_id", id).order("ma_lich_su").order("moi_han_id").range(a, b);
+    });
     const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(
-      rows.data.map(r => r.moi_han_id), part => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", part));
+      rows.map(r => r.moi_han_id), part => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", part));
     const locations = new Map(points.map(p => [p.lich_su_moi_han_id, p]));
-    const items = rows.data.map(r => ({ ...r, ma_diem: locations.get(r.moi_han_id)?.ma_diem ?? null, ly_trinh: locations.get(r.moi_han_id)?.ly_trinh ?? null }));
+    const items = rows.map(r => ({ ...r, ma_diem: locations.get(r.moi_han_id)?.ma_diem ?? null, ly_trinh: locations.get(r.moi_han_id)?.ly_trinh ?? null }));
     if (!ticket.data.ngay_nghiem_thu && items.length) {
       const ids = items.map(r => r.moi_han_id);
       const [eligible, inspections] = await Promise.all([
