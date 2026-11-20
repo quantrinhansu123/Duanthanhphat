@@ -3,7 +3,7 @@ import { authenticateWeldQuality, authenticateWeldQualityLimited, QualityApiErro
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
-import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, listHeldWelds, loadHeldRecord, markHeldIssued, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -119,6 +119,9 @@ export async function POST(request: Request) {
     if (body.action === "record-list") return NextResponse.json({ records: await listRecords(qualityUuid(body.du_an_id)) });
     if (body.action === "split-record-list") return NextResponse.json({ records: await listSplitRecords(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am") });
     if (body.action === "split-record-sign") return NextResponse.json(await signSplitRecord(body, actor));
+    if (body.action === "held-list") return NextResponse.json({ welds: await listHeldWelds(qualityUuid(body.du_an_id), body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am") });
+    if (body.action === "held-record") return NextResponse.json(await loadHeldRecord(body));
+    if (body.action === "held-done") return NextResponse.json(await markHeldIssued(body));
     if (body.action === "record-set") return NextResponse.json(await loadRecordSet(qualityUuid(body.id)));
     if (body.action === "record-revise") return NextResponse.json(await reviseRecord(body, actor));
     if (body.action === "record-sign") return NextResponse.json(await setSignStatus(body, actor));

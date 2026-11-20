@@ -276,13 +276,27 @@ function isNightShift(ca: string) {
   return /ca\s*[23]|đêm|toi|tối|night/.test(v);
 }
 
+/** Mối gạt khỏi bộ biên bản khi in (TVGS chưa ký…): bản nháp > bản sửa đổi mới nhất > dữ liệu đợt. Lưu «bo_moi» = các moi_han_id nối bằng dấu phẩy. */
+export function printKey(record: RecordSet, key: string, draft?: Record<string, string>): string {
+  const stored = [...(record.sua_doi ?? [])].sort((a, b) => b.phien_ban - a.phien_ban).map((r) => r.thong_tin?.[key]).find((v) => v !== undefined)
+    ?? (record.dot.thong_tin as Record<string, string> | null)?.[key];
+  return String(draft?.[key] ?? stored ?? "");
+}
+export function skippedWeldIds(record: RecordSet, draft?: Record<string, string>): Set<string> {
+  return new Set(printKey(record, "bo_moi", draft).split(",").map((s) => s.trim()).filter(Boolean));
+}
+/** «bo_moi_rieng» = 1: chỉ in các mối đã bỏ → biên bản riêng cho mối treo (sau khi TVGS đồng ý ký). */
+export const onlySkippedWelds = (record: RecordSet, draft?: Record<string, string>) => printKey(record, "bo_moi_rieng", draft) === "1";
+
 export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor }: { record: RecordSet; kind?: RecordKind; kinds?: RecordKind[]; editor?: RecordEditor }) {
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
   const pq = /phú quốc/i.test(projectName);
   const base = { ...((rfi.thong_tin ?? {}) as Record<string, string>), ...((record.dot.thong_tin ?? {}) as Record<string, string>) };
-  const rows = [...record.moi].sort((a, b) => String(a.du_lieu_chot.moi_han?.ma_lich_su ?? "").localeCompare(String(b.du_lieu_chot.moi_han?.ma_lich_su ?? ""), "vi", { numeric: true }));
+  const skipped = skippedWeldIds(record, editor?.draft);
+  const only = onlySkippedWelds(record, editor?.draft);
+  const rows = record.moi.filter((m) => skipped.has(m.moi_han_id) === only).sort((a, b) => String(a.du_lieu_chot.moi_han?.ma_lich_su ?? "").localeCompare(String(b.du_lieu_chot.moi_han?.ma_lich_su ?? ""), "vi", { numeric: true }));
 
   return <>{ACCEPTANCE_DOCS.filter((d) => (!kind || d.kind === kind) && (!kinds || kinds.includes(d.kind))).map((doc) => {
     const hoSo = record.ho_so.find((h) => h.loai === doc.loai);

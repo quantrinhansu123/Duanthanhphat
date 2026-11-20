@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { printOrPdfAcceptance } from "@/lib/pdfExport";
-import { reloadRecordSet, reviseRecord, type RecordSet } from "@/lib/weldQualityClient";
-import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
+import { reloadRecordSet, reviseRecord, notifyWeldQualityChanged, type RecordSet } from "@/lib/weldQualityClient";
+import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, skippedWeldIds, onlySkippedWelds, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
+import { fieldWeldCode } from "@/lib/weldCode";
 import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
@@ -27,19 +28,22 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   // Sửa trực tiếp trên bản xem trước: các ô đã gõ nằm trong `draft` cho tới khi bấm «Lưu chỉnh sửa» (áp dụng cho cả bộ 3 biên bản).
   const [draft, setDraft] = useState<Record<string, string>>({});
   const draftCount = Object.keys(draft).length;
+  // Biên bản RIÊNG cho mối treo (gộp nhiều phiếu): chỉ để in, mọi chỉnh sửa giữ trên màn hình này, không ghi vào phiếu nào.
+  const local = (initial.dot.thong_tin as Record<string, unknown> | undefined)?.rieng_moi_treo === "1";
   const onClose = () => {
-    if (draftCount > 0 && !window.confirm(`Còn ${draftCount} chỉnh sửa chưa lưu. Đóng và bỏ các chỉnh sửa này?`)) return;
+    if (!local && draftCount > 0 && !window.confirm(`Còn ${draftCount} chỉnh sửa chưa lưu. Đóng và bỏ các chỉnh sửa này?`)) return;
     closeNow();
   };
   // Tải lại / đóng tab khi còn chỉnh sửa chưa lưu → trình duyệt hỏi lại.
   useEffect(() => {
-    if (!draftCount) return;
+    if (!draftCount || local) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [draftCount]);
+  }, [draftCount, local]);
   const [record, setRecord] = useState(initial);
   const [editing, setEditing] = useState(false);
+  const [skipOpen, setSkipOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -95,6 +99,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   }
 
   async function save() {
+    if (local) { setEditing(false); return; } // biên bản riêng: giữ chỉnh sửa trên màn hình để in
     setBusy(true); setError("");
     try {
       saveSignerDefaults(formView);
@@ -118,8 +123,19 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
       }
       setRecord(await reloadRecordSet(record));
       setDraft({});
+      notifyWeldQualityChanged(); // danh sách mối treo tự cập nhật
     } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được."); } finally { setBusy(false); }
   }
+
+  // Mối gạt khỏi bộ biên bản (TVGS chưa ký…): chỉ ảnh hưởng bản in, lưu cùng «Lưu chỉnh sửa»; mối vẫn nằm trong đợt để gom lập biên bản riêng sau.
+  const skipped = skippedWeldIds(record, draft);
+  const onlySkipped = onlySkippedWelds(record, draft);
+  const toggleSkip = (id: string) => {
+    const next = new Set(skipped);
+    if (!next.delete(id)) next.add(id);
+    setDraft((cur) => ({ ...cur, bo_moi: [...next].join(",") }));
+  };
+  const weldCode = (m: RecordSet["moi"][number]) => fieldWeldCode(String(m.du_lieu_chot.moi_han?.ma_lich_su ?? ""), m.du_lieu_chot.moi_han?.ma_hien_truong as string | null | undefined) || m.moi_han_id.slice(0, 8);
 
   // Giá trị đang hiển thị trong form = bản chụp lúc mở form, bị đè bởi mọi chỉnh sửa chưa lưu (cả ở form lẫn gõ trực tiếp trên mẫu).
   const formView: Record<string, string> = { ...form, ...draft };
@@ -138,7 +154,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   return <div className="acceptance-print-root fixed inset-0 z-[100] overflow-auto bg-slate-900/70 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="In bộ biên bản nghiệm thu">
     <style>{acceptancePrintCss}</style>
     <div className="weld-print-pack-actions mx-auto mb-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-      <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="min-w-[16rem] flex-1 space-y-1.5">
         <p className="text-sm">Xuất tờ: chọn trước khi in (mặc định theo HH / SA).</p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn tờ in">
           {ACCEPTANCE_DOCS.map((d) => (
@@ -155,12 +171,48 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           <input type="checkbox" checked={!lyTrinhHidden} onChange={(e) => setDraft((cur) => ({ ...cur, an_ly_trinh: e.target.checked ? "0" : "1" }))} />
           Cột lý trình
         </label>
-        {draftCount > 0 && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
+        {!local && <button type="button" onClick={() => setSkipOpen((v) => !v)} title="Gạt mối chưa được TVGS ký ra khỏi bộ biên bản đang in"
+          className={`min-h-11 rounded-lg border px-3 text-sm font-semibold ${skipped.size ? "border-amber-400 bg-amber-50 text-amber-900" : "border-slate-300 bg-white"}`}>
+          Bỏ mối khỏi biên bản{skipped.size ? ` (${skipped.size})` : ""}
+        </button>}
+        {draftCount > 0 && !local && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
         <button type="button" disabled={missing.length > 0 || !printKinds.length || busy} onClick={() => void printOrPdfAcceptance("Bo-bien-ban-nghiem-thu")} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold">Thoát</button>
       </div>
     </div>
+    {local && (
+      <p role="status" className="weld-print-pack-actions mx-auto mb-2 max-w-4xl rounded-lg bg-sky-100 px-3 py-2 text-sm font-semibold text-sky-900">BIÊN BẢN RIÊNG cho {record.moi.length} mối treo (gộp từ nhiều phiếu). Chỉ dùng để in: chỉnh sửa trên mẫu không ghi vào phiếu nào. Ký xong, quay lại «Hồ sơ nghiệm thu» bấm «Đã lập biên bản riêng».</p>
+    )}
+    {skipOpen && !local && (
+      <div className="weld-print-pack-actions mx-auto mb-3 max-w-4xl space-y-2 rounded-xl bg-white p-4 text-sm shadow-lg">
+        <p className="text-xs text-slate-600">Tick mối cần <b>bỏ khỏi bộ biên bản</b> (VD TVGS chưa ký vì lý do kỹ thuật). Phụ lục, BBNTCV, biên bản hoàn thành tự tính lại STT, Km đầu–cuối, tên mối. Nhớ bấm «Lưu chỉnh sửa» để lưu lựa chọn.</p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <button type="button" className="rounded border border-slate-300 px-2 py-1 font-semibold" onClick={() => setDraft((cur) => ({ ...cur, bo_moi: "" }))}>Bỏ chọn hết</button>
+          <button type="button" className="rounded border border-slate-300 px-2 py-1 font-semibold"
+            onClick={() => setDraft((cur) => ({ ...cur, bo_moi: record.moi.filter((m) => m.ket_qua !== "Đạt").map((m) => m.moi_han_id).join(",") }))}>Chọn mối chưa Đạt</button>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+          <input type="checkbox" checked={onlySkipped} disabled={!skipped.size} onChange={(e) => setDraft((cur) => ({ ...cur, bo_moi_rieng: e.target.checked ? "1" : "0" }))} />
+          In riêng các mối đã bỏ (biên bản cho mối treo, dùng khi TVGS đã đồng ý ký)
+        </label>
+        <div className="grid max-h-64 gap-1 overflow-auto sm:grid-cols-2">
+          {[...record.moi].sort((a, b) => weldCode(a).localeCompare(weldCode(b), "vi", { numeric: true })).map((m) => (
+            <label key={m.moi_han_id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 ${skipped.has(m.moi_han_id) ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}>
+              <input type="checkbox" checked={skipped.has(m.moi_han_id)} onChange={() => toggleSkip(m.moi_han_id)} />
+              <span className="font-semibold">{weldCode(m)}</span>
+              <span className="text-slate-500">{String(m.du_lieu_chot.moi_han?.ly_trinh ?? "")}</span>
+              <span className="ml-auto text-xs text-slate-500">{m.ket_qua}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
+    {skipped.size > 0 && (
+      <p role="status" className="weld-print-pack-actions mx-auto mb-2 max-w-4xl rounded-lg bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">
+        {onlySkipped ? `Đang in RIÊNG ${skipped.size} mối đã bỏ` : `Đã bỏ ${skipped.size} mối khỏi bản in`}: {record.moi.filter((m) => skipped.has(m.moi_han_id)).map(weldCode).join(", ")}.
+      </p>
+    )}
     {editing && (
       <div className="weld-print-pack-actions mx-auto mb-3 max-w-4xl space-y-3 rounded-xl bg-white p-4 text-sm shadow-lg">
         <p className="text-xs text-slate-600">Sửa một lần, áp dụng cho cả 3 biên bản trong bộ. Để trống thì mẫu tự lấy theo dữ liệu mối hàn / Nhật ký hàn. Số đo và danh sách mối đã chốt không thay đổi.</p>
@@ -229,7 +281,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
         </div>
         {error && <p role="alert" className="text-red-600">{error}</p>}
         <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={() => void save()} className="min-h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer">{busy ? "Đang lưu…" : "Lưu"}</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="min-h-10 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer">{busy ? "Đang lưu…" : local ? "Áp dụng" : "Lưu"}</button>
           <button type="button" disabled={busy} onClick={() => { setDraft({}); setEditing(false); }} className="min-h-10 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold cursor-pointer">Hủy</button>
         </div>
       </div>

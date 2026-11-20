@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { loadGeometryRecord, loadQualityInspection, loadRfiNumber, markQualityPass, removeBbntScan, saveQualityInspection, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
+import { loadHeldWelds, loadHeldRecord, markHeldIssued, type HeldWeld, loadGeometryRecord, loadQualityInspection, loadRfiNumber, markQualityPass, removeBbntScan, saveQualityInspection, saveTicketPayments, signSplitRecord, setRfiPending, rfiPendingInfo, bbntScans, type RecordSet, notifyWeldQualityChanged, qualityRequest } from "@/lib/weldQualityClient";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
@@ -106,6 +106,25 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const [ticketStatus, setTicketStatus] = useState<"" | "cho" | "xong" | "pending">("");
   // 3 mục con như RFI chính: Phát phiếu YCNT · Nghiệm thu · Hồ sơ nghiệm thu.
   const [sub, setSub] = useState<"rfi" | "accept" | "records">(stage === "tao" ? "rfi" : "accept");
+  // Mối treo: đã nghiệm thu Đạt nhưng bị gạt khỏi bộ biên bản khi in (TVGS chưa ký) → gom lại lập biên bản riêng.
+  const [held, setHeld] = useState<HeldWeld[]>([]);
+  const [heldPick, setHeldPick] = useState<string[]>([]);
+  const [heldTick, setHeldTick] = useState(0);
+  useEffect(() => {
+    if (sub !== "records" || !project) return;
+    let live = true;
+    loadHeldWelds(project, kind).then((r) => {
+      if (!live) return;
+      setHeld(r.welds);
+      setHeldPick((cur) => cur.filter((id) => r.welds.some((w) => w.moi_han_id === id)));
+    }).catch(() => { if (live) setHeld([]); });
+    return () => { live = false; };
+  }, [sub, project, kind, heldTick]);
+  useEffect(() => {
+    const reload = () => setHeldTick((n) => n + 1);
+    window.addEventListener("weld-quality-changed", reload);
+    return () => window.removeEventListener("weld-quality-changed", reload);
+  }, []);
   // Mục «Phát phiếu» chia 3 bước dạng tab: Chọn mối · Thông tin phiếu · Phiếu đã phát.
   const [step, setStep] = useState<"chon" | "thong-tin" | "da-phat">("chon");
   const [info, setInfo] = useState<TicketInfo>(emptyInfo);
@@ -606,8 +625,36 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     {!detail && sub === "records" && <div className="space-y-3 rounded-xl border-2 border-slate-300 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-extrabold text-slate-900">Hồ sơ nghiệm thu {kindName(kind)}</h3>
-        <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
+        <button className={button} disabled={busy} onClick={() => { setHeldTick((n) => n + 1); void run(refresh); }}>Tải lại</button>
       </div>
+      {held.length > 0 && <div className="space-y-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="font-bold text-amber-900">Mối treo — chờ TVGS ký ({held.length})</h4>
+          <div className="flex flex-wrap gap-2">
+            <button className={button} disabled={busy} onClick={() => setHeldPick(heldPick.length === held.length ? [] : held.map((w) => w.moi_han_id))}>{heldPick.length === held.length ? "Bỏ chọn hết" : "Chọn tất cả"}</button>
+            <button className={primary} disabled={busy || !heldPick.length || !onPrintRecord}
+              onClick={() => run(async () => { onPrintRecord?.(await loadHeldRecord(project, kind, heldPick)); })}>In biên bản riêng ({heldPick.length} mối)</button>
+            <button className={button} disabled={busy || !heldPick.length} title="Sau khi biên bản riêng đã ký: đưa các mối này ra khỏi danh sách treo"
+              onClick={() => run(async () => {
+                if (!window.confirm(`Đánh dấu ${heldPick.length} mối đã lập biên bản riêng? Các mối này sẽ ra khỏi danh sách treo.`)) return;
+                const r = await markHeldIssued(project, kind, heldPick);
+                setOkMsg(`Đã đưa ${r.count} mối ra khỏi danh sách treo.`);
+                setHeldPick([]);
+                setHeldTick((n) => n + 1);
+              })}>Đã lập biên bản riêng</button>
+          </div>
+        </div>
+        <p className="text-xs text-amber-900">Các mối đã Đạt nhưng được gạt khỏi bộ biên bản khi in. Chọn mối (có thể từ nhiều phiếu) rồi «In biên bản riêng» để gom thành một biên bản; ký xong bấm «Đã lập biên bản riêng».</p>
+        <div className="grid max-h-56 gap-1 overflow-auto sm:grid-cols-2">
+          {held.map((w) => <label key={w.moi_han_id} className={`flex cursor-pointer items-center gap-2 rounded-lg border bg-white px-2 py-1.5 text-sm ${heldPick.includes(w.moi_han_id) ? "border-amber-500" : "border-slate-200"}`}>
+            <input type="checkbox" checked={heldPick.includes(w.moi_han_id)} disabled={busy}
+              onChange={(e) => setHeldPick(e.target.checked ? [...heldPick, w.moi_han_id] : heldPick.filter((id) => id !== w.moi_han_id))} />
+            <span className="font-semibold">{w.ma}</span>
+            <span className="text-slate-500">{w.ly_trinh ?? ""}</span>
+            <span className="ml-auto text-xs text-slate-500">{w.so_phieu}</span>
+          </label>)}
+        </div>
+      </div>}
       <p className="text-sm text-slate-600">{kind === "sieu-am" ? "In biên bản, ký xong bấm «Đánh dấu: Đã ký» → mối (đã đạt hình học) chuyển «Đạt»." : "In biên bản hình học; đánh dấu đã ký để theo dõi hồ sơ."}</p>
       {renderTicketTable(doneTickets, "records")}
       {!doneTickets.length && <p className="text-sm text-slate-500">Chưa có phiếu đã nghiệm thu.</p>}

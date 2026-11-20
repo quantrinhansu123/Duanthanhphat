@@ -212,6 +212,11 @@ export const loadSplitRecords = (du_an_id: string, loai: "hinh-hoc" | "sieu-am" 
 export async function signSplitRecord(id: string, da_ky: boolean) {
   try { return await qualityRequest<{ ok: boolean }>({ action: "split-record-sign", id, da_ky }); } finally { notifyWeldQualityChanged(); }
 }
+/** Mối treo: đã nghiệm thu Đạt nhưng bị gạt khỏi bộ biên bản khi in (TVGS chưa ký), chờ lập biên bản riêng. */
+export type HeldWeld = { moi_han_id: string; ticket_id: string; so_phieu: string; ngay_nghiem_thu: string; ma: string; ly_trinh: string | null };
+export const loadHeldWelds = (du_an_id: string, loai: "hinh-hoc" | "sieu-am") => qualityRequest<{ welds: HeldWeld[] }>({ action: "held-list", du_an_id, loai });
+export const loadHeldRecord = (du_an_id: string, loai: "hinh-hoc" | "sieu-am", moi_han_ids: string[]) => qualityRequest<RecordSet>({ action: "held-record", du_an_id, loai, moi_han_ids });
+export const markHeldIssued = (du_an_id: string, loai: "hinh-hoc" | "sieu-am", moi_han_ids: string[]) => qualityRequest<{ ok: true; count: number }>({ action: "held-done", du_an_id, loai, moi_han_ids });
 /** `nhap` = bản NHÁP của phiếu chưa nghiệm thu (tạm ghi Đạt, chưa chốt nghiệm thu, chưa vào Nhật ký thi công). */
 export const loadGeometryRecord = (id: string, nhap = false) => qualityRequest<RecordSet>({ action: "geometry-record", id, ...(nhap ? { nhap: true } : {}) });
 export const loadRecords = (du_an_id: string) => qualityRequest<{ records: RecordSummary[] }>({ action: "record-list", du_an_id });

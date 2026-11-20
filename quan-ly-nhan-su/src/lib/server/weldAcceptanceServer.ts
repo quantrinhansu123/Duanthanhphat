@@ -1043,6 +1043,9 @@ export async function reviseRecord(body: Record<string, unknown>, actor: string)
   for (const key of ["tai_lieu_can_cu", "danh_gia_chat_luong", "dieu_chinh", "so_voi_thiet_ke", "so_voi_hop_dong", "ket_qua_thi_nghiem", "tuan_thu_phccc", "y_kien_khac", "ten_moi_han"]) {
     if (key in t) thong_tin[key] = str(t[key], 3000);
   }
+  // Mối gạt khỏi bộ biên bản khi in (TVGS chưa ký): danh sách moi_han_id + cờ «in riêng các mối đã bỏ». Lưu cả khi rỗng để bản mới nhất ghi đè bản cũ.
+  if ("bo_moi" in t) thong_tin.bo_moi = str(t.bo_moi, 8000);
+  if ("bo_moi_rieng" in t) thong_tin.bo_moi_rieng = t.bo_moi_rieng === "1" ? "1" : "0";
   // Thông tin / thời gian trên mẫu sửa được ở bản xem trước (chỉ lưu khi có nhập; để trống = tự lấy từ dữ liệu).
   for (const key of ["ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "ten_tho_han", "id_tho_han", "may_han", "goong", "kmFrom", "kmTo", "so_bb", "ben_moi", "ben_nhan", "pham_vi", "ngay_ky_tvgs", "ngay_ky_ntc", "ngay_ky_ntp", "pyc_so", "goi_thau", "ket_luan", ...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS,
     ...["cdt", "tvtk"].flatMap((p) => [1, 2].flatMap((i) => [`nguoi_${p}_${i}_ten`, `nguoi_${p}_${i}_cv`]))]) {
@@ -1112,6 +1115,81 @@ export async function listSplitRecords(projectId: string, kind: "hinh-hoc" | "si
     const rows = items.filter((i) => i.phieu_id === t.id);
     return { ...t, da_ky: Boolean(t.da_ky), tong_moi: rows.length, dat: rows.filter((r) => r.ket_qua === "Đạt").length };
   });
+}
+
+/**
+ * Mối «treo»: đã nghiệm thu Đạt nhưng bị gạt khỏi bộ biên bản khi in (TVGS chưa ký) và chưa lập biên bản riêng.
+ * Danh sách gạt nằm ở phieu_nt_tach.thong_tin.in_ho_so[*].thong_tin.bo_moi; mối đã lập biên bản riêng ghi ở thong_tin.in_bo_moi_xong
+ * (tiền tố «in_» để không mất khi sửa thông tin phiếu).
+ */
+export async function listHeldWelds(projectId: string, kind: "hinh-hoc" | "sieu-am") {
+  const tickets = await fetchAll<{ id: string; so_phieu: string; ngay_nghiem_thu: string; thong_tin: Record<string, unknown> | null }>((a, b) =>
+    db().from("phieu_nt_tach").select("id,so_phieu,ngay_nghiem_thu,thong_tin").eq("du_an_id", projectId).eq("loai", kind)
+      .not("ngay_nghiem_thu", "is", null).order("ngay_nghiem_thu", { ascending: false }).order("so_phieu").range(a, b));
+  const heldIds = new Map<string, Set<string>>();
+  for (const t of tickets) {
+    const prints = (t.thong_tin?.in_ho_so ?? {}) as Record<string, { thong_tin?: Record<string, string> } | undefined>;
+    const saved = ["0", "1", "2"].map((i) => prints[i]?.thong_tin?.bo_moi).find((v) => v !== undefined) ?? "";
+    const issued = new Set(String(t.thong_tin?.in_bo_moi_xong ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+    const ids = saved.split(",").map((s) => s.trim()).filter((id) => id && !issued.has(id));
+    if (ids.length) heldIds.set(t.id, new Set(ids));
+  }
+  if (!heldIds.size) return [];
+  const rows = await chunked<{ phieu_id: string; moi_han_id: string; ma_lich_su: string; ket_qua: string | null; du_lieu_chot: Record<string, unknown> | null }>([...heldIds.keys()], (part) =>
+    db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id,ma_lich_su,ket_qua,du_lieu_chot").in("phieu_id", part));
+  const held = rows.filter((r) => r.ket_qua === "Đạt" && heldIds.get(r.phieu_id)?.has(r.moi_han_id));
+  const withKm = await withChainage(held);
+  const ticketOf = new Map(tickets.map((t) => [t.id, t]));
+  return withKm.map((r) => {
+    const mh = (r.du_lieu_chot?.moi_han ?? {}) as Record<string, unknown>;
+    const t = ticketOf.get(r.phieu_id)!;
+    return { moi_han_id: r.moi_han_id, ticket_id: r.phieu_id, so_phieu: t.so_phieu, ngay_nghiem_thu: t.ngay_nghiem_thu,
+      ma: fieldWeldCode(r.ma_lich_su, mh.ma_hien_truong as string | null | undefined) || r.ma_lich_su, ly_trinh: r.ly_trinh ?? (mh.ly_trinh ? String(mh.ly_trinh) : null) };
+  }).sort((a, b) => a.ma.localeCompare(b.ma, "vi", { numeric: true }));
+}
+
+function heldSelection(body: Record<string, unknown>) {
+  const ids = Array.isArray(body.moi_han_ids) ? body.moi_han_ids.slice(0, 500).map((v) => qualityUuid(v)) : [];
+  if (!ids.length) throw new QualityApiError("Chọn ít nhất một mối treo.");
+  return new Set(ids);
+}
+
+/** Bộ biên bản RIÊNG cho các mối treo đã chọn: gộp mối từ nhiều phiếu nghiệm thu cùng loại; chỉ để in (không lưu vào phiếu nào). */
+export async function loadHeldRecord(body: Record<string, unknown>) {
+  const kind = body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am";
+  const want = heldSelection(body);
+  const held = (await listHeldWelds(qualityUuid(body.du_an_id), kind)).filter((h) => want.has(h.moi_han_id));
+  if (!held.length) throw new QualityApiError("Các mối đã chọn không còn ở danh sách treo.", 409);
+  const records = await Promise.all([...new Set(held.map((h) => h.ticket_id))].map((id) => loadGeometryRecord(id)));
+  const ids = new Set(held.map((h) => h.moi_han_id));
+  const joined = (read: (r: (typeof records)[number]) => unknown) => [...new Set(records.flatMap((r) => String(read(r) ?? "").split(",").map((s) => s.trim()).filter(Boolean)))].join(", ");
+  const base = records[0];
+  return {
+    ...base,
+    dot: { ...base.dot, ngay_nghiem_thu: new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }),
+      thong_tin: { rfi_hinh_hoc_so: joined((r) => (r.dot.thong_tin as Record<string, unknown>).rfi_hinh_hoc_so), rfi_sieu_am_so: joined((r) => (r.dot.thong_tin as Record<string, unknown>).rfi_sieu_am_so), rieng_moi_treo: "1" },
+      phieu_yeu_cau_nghiem_thu: { ...base.dot.phieu_yeu_cau_nghiem_thu, so_phieu: joined((r) => r.dot.phieu_yeu_cau_nghiem_thu.so_phieu) } },
+    moi: records.flatMap((r) => r.moi.filter((m) => ids.has(m.moi_han_id))),
+    sua_doi: [] as typeof base.sua_doi,
+  };
+}
+
+/** Ghi nhận các mối treo đã lập biên bản riêng: ra khỏi danh sách treo (vẫn bị gạt khỏi bộ biên bản gốc đã ký). */
+export async function markHeldIssued(body: Record<string, unknown>) {
+  const kind = body.loai === "hinh-hoc" ? "hinh-hoc" : "sieu-am";
+  const want = heldSelection(body);
+  const held = (await listHeldWelds(qualityUuid(body.du_an_id), kind)).filter((h) => want.has(h.moi_han_id));
+  const byTicket = new Map<string, string[]>();
+  for (const h of held) byTicket.set(h.ticket_id, [...(byTicket.get(h.ticket_id) ?? []), h.moi_han_id]);
+  for (const [ticketId, weldIds] of byTicket) {
+    const { data, error } = await db().from("phieu_nt_tach").select("thong_tin").eq("id", ticketId).single();
+    if (error) throw error;
+    const done = new Set(String(data.thong_tin?.in_bo_moi_xong ?? "").split(",").map((s: string) => s.trim()).filter(Boolean));
+    for (const id of weldIds) done.add(id);
+    const { error: saveError } = await db().from("phieu_nt_tach").update({ thong_tin: { ...(data.thong_tin ?? {}), in_bo_moi_xong: [...done].join(",") } }).eq("id", ticketId);
+    if (saveError) throw saveError;
+  }
+  return { ok: true, count: held.length };
 }
 
 export async function signSplitRecord(body: Record<string, unknown>, actor: string) {
