@@ -55,7 +55,7 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
 #diary-print .diary-indent { padding-left: 10mm; }
 #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
-#diary-print .diary-ruled { line-height: ${LINE}px; background-image: ${DOT}; background-size: 3px ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#diary-print .diary-ruled { line-height: ${LINE}px; padding-top: 3px;background-image: ${DOT}; background-size: 3px ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
