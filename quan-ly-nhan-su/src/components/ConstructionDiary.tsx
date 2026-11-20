@@ -40,8 +40,8 @@ const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 t
 const lbl = "flex flex-col text-xs font-semibold text-slate-600";
 const today = () => new Date().toLocaleDateString("sv-SE");
 const LINE = 27; // px, khoảng cách dòng chấm theo bản mẫu
-const DOT = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='27'%3E%3Crect y='23' width='1' height='1'/%3E%3C/svg%3E\")";
-const css = `@media screen { #diary-print { position: absolute; left: -10000px; top: 0; visibility: hidden; pointer-events: none; } }
+const css = `@page { size: A4 portrait; margin: 0; }
+@media screen { #diary-print { position: absolute; left: -10000px; top: 0; visibility: hidden; pointer-events: none; } }
 @media screen { #diary-print.diary-preview { position: fixed; left: 0; top: 0; right: 0; bottom: 0; width: auto; visibility: visible; pointer-events: auto; overflow: auto; background: #cbd5e1; z-index: 1400; padding: 72px 12px 28px; }
   #diary-print.diary-preview .diary-sheet { margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.28); } }
 #diary-print { width: 210mm; font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 15pt; color: black; }
@@ -55,7 +55,10 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
 #diary-print .diary-heading .diary-hint { font-weight: normal; font-style: italic; }
 #diary-print .diary-indent { padding-left: 10mm; }
 #diary-print .diary-check { font-family: 'Times New Roman', Times, serif; }
-#diary-print .diary-ruled { line-height: ${LINE}px; background-image: ${DOT}; background-size: 3px ${LINE}px; background-repeat: repeat round; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* Mỗi dòng chữ là một khối cao đúng ${LINE}px có hàng chấm gắn ngay dưới chân chữ → chữ và đường kẻ cùng một hệ tọa độ, không lệch dù thu/phóng trang. */
+#diary-print .rl { position: relative; height: ${LINE}px; line-height: ${LINE}px; white-space: pre; }
+#diary-print .rl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; height: 1px; background: repeating-linear-gradient(to right, #000 0 1px, transparent 1px 3px); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
@@ -71,7 +74,6 @@ const css = `@media screen { #diary-print { position: absolute; left: -10000px; 
   body *:has(#diary-print) { position: static !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
   aside, header, .no-print { display: none !important; }
   #diary-print { position: absolute; left: 0; top: 0; }
-  @page { size: A4 portrait; margin: 0; }
 }`;
 
 const TEXT_SECTIONS = [
@@ -556,31 +558,22 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
   editable?: boolean; onSigner?: (key: "tvgs" | "ntc" | "ntp", value: string) => void; onSignerBlur?: () => void;
 }) {
   const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null), midFill = useRef<HTMLDivElement>(null);
-  const probe = useRef<HTMLDivElement>(null);
-  const [lines, setLines] = useState<[number, number]>([20, 14]); // số dòng chấm mục 3 ở trang 1 / trang cuối, đo theo chỗ còn trống
-  const [midLines, setMidLines] = useState(42); // dòng mỗi trang giữa (gần full A4)
-  const [midCount, setMidCount] = useState(0);
+  // Sức chứa (số dòng) của mục 3: trang 1 / trang cuối / mỗi trang giữa, đo theo chỗ còn trống của từng trang.
+  const [cap, setCap] = useState<[number, number, number]>([20, 14, 42]);
   useLayoutEffect(() => {
     const measure = () => {
       const a = fill1.current?.clientHeight, b = fill2.current?.clientHeight, mid = midFill.current?.clientHeight;
       if (a == null || b == null) return;
-      const next: [number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE))];
-      setLines((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
-      if (mid != null && mid > 0) {
-        const ml = Math.max(1, Math.floor(mid / LINE));
-        setMidLines((cur) => (cur === ml ? cur : ml));
-      }
-      const contentH = probe.current?.scrollHeight ?? 0;
-      const visible = next[0] * LINE + next[1] * LINE;
-      const perMid = Math.max(LINE, (mid != null && mid > 0 ? mid : midLines * LINE));
-      const need = contentH > visible ? Math.ceil((contentH - visible) / perMid) : 0;
-      setMidCount((cur) => (cur === need ? cur : need));
+      setCap((cur) => {
+        const next: [number, number, number] = [Math.max(0, Math.floor(a / LINE)), Math.max(0, Math.floor(b / LINE)), mid != null && mid > 0 ? Math.max(1, Math.floor(mid / LINE)) : cur[2]];
+        return next.every((v, i) => v === cur[i]) ? cur : next;
+      });
     };
     measure();
     const ro = new ResizeObserver(measure);
-    for (const el of [fill1.current, fill2.current, midFill.current, probe.current]) if (el) ro.observe(el);
+    for (const el of [fill1.current, fill2.current, midFill.current]) if (el) ro.observe(el);
     return () => ro.disconnect();
-  }, [midLines, d.noiDungCongViec, d.nghiemThuHangNgay]);
+  }, []);
   const [y, m, day] = date.split("-");
   const mark = weatherMark(d.thoiTiet);
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
@@ -592,13 +585,12 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
     "3.2 Nghiệm thu công việc xây dựng hàng ngày",
     noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
   ].join("\n");
-  const h1 = lines[0] * LINE;
-  const h2 = lines[1] * LINE;
-  const hMid = midLines * LINE;
+  // Ngắt dòng mục 3 đúng như trình duyệt đang bố cục, rồi chia dòng cho từng trang (trang 1 → các trang giữa → trang cuối).
+  const { lines: all, probe: section3Probe } = useWrapped(section3Print);
+  const midCount = Math.ceil(Math.max(0, all.length - cap[0] - cap[1]) / cap[2]);
   return <>
-        {/* Đo chiều cao thật của mục 3 (ẩn) để biết cần bao nhiêu trang giữa. */}
+        {/* Đo sức chứa một trang giữa (ẩn). */}
         <div aria-hidden="true" style={{ position: "absolute", left: -10000, top: 0, width: "180mm", visibility: "hidden", pointerEvents: "none" }}>
-          <div ref={probe} className="diary-ruled" style={{ height: "auto", overflow: "visible" }}>{section3Print}</div>
           <div className="diary-sheet" style={{ position: "absolute", visibility: "hidden" }}>
             <div className="diary-fill" ref={midFill} />
           </div>
@@ -623,8 +615,9 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
           <Ruled text={d.thietBi} min={5} />
 
           <p className="diary-heading">3. Nội dung công việc thực hiện:</p>
-          <div className="diary-fill" ref={fill1}>
-            <div className="diary-ruled" style={{ height: h1 }}><div>{section3Print}</div></div>
+          <div className="diary-fill" ref={fill1} style={{ position: "relative" }}>
+            {section3Probe}
+            <Rows lines={all.slice(0, cap[0])} count={cap[0]} />
           </div>
           <p className="diary-foot">Trang {pageStart}</p>
         </section>
@@ -632,9 +625,7 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
         {Array.from({ length: midCount }, (_, i) => (
           <section key={`mid-${i}`} className="diary-sheet">
             <div className="diary-fill">
-              <div className="diary-ruled" style={{ height: hMid }}>
-                <div style={{ marginTop: -(h1 + i * hMid) }}>{section3Print}</div>
-              </div>
+              <Rows lines={all.slice(cap[0] + i * cap[2], cap[0] + (i + 1) * cap[2])} count={cap[2]} />
             </div>
             <p className="diary-foot">Trang {pageStart + 1 + i}</p>
           </section>
@@ -642,7 +633,7 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
 
         <section className="diary-sheet">
           <div className="diary-fill" ref={fill2}>
-            <div className="diary-ruled" style={{ height: h2 }}><div style={{ marginTop: -(h1 + midCount * hMid) }}>{section3Print}</div></div>
+            <Rows lines={all.slice(cap[0] + midCount * cap[2])} count={cap[1]} />
           </div>
 
           {TEXT_SECTIONS.map(([k, title, hint, rows]) => (
@@ -716,7 +707,58 @@ function Check({ checked }: { checked: boolean }) {
 
 /** Văn bản đã nhập, hoặc các dòng chấm để điền tay khi để trống. */
 function Ruled({ text, min }: { text: string; min: number }) {
-  return <div className="diary-ruled" style={{ minHeight: min * LINE }}>{text.trim()}</div>;
+  const { lines, probe } = useWrapped(text.trim());
+  return <div style={{ position: "relative" }}>{probe}<Rows lines={lines} count={min} /></div>;
+}
+
+/** Mỗi dòng một khối cao đúng LINE px có hàng chấm ngay dưới chân chữ; thiếu thì thêm dòng chấm trống cho đủ `count`. */
+function Rows({ lines, count }: { lines: string[]; count: number }) {
+  return <>{Array.from({ length: Math.max(count, lines.length) }, (_, i) => <div className="rl" key={i}>{lines[i] ?? ""}</div>)}</>;
+}
+
+/**
+ * Tách văn bản thành các dòng đúng như trình duyệt ngắt dòng (đo từng ký tự trong một khối ẩn cùng bề rộng),
+ * để vẽ mỗi dòng một khối riêng — không dùng ảnh nền lặp nên chữ và đường kẻ không thể lệch nhau.
+ */
+function useWrapped(text: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [lines, setLines] = useState<string[]>(() => (text ? text.split("\n") : []));
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setLines((cur) => {
+      const next = wrapLines(el, text);
+      return next.length === cur.length && next.every((l, i) => l === cur[i]) ? cur : next;
+    });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    void document.fonts?.ready.then(measure);
+    return () => ro.disconnect();
+  }, [text]);
+  return { lines, probe: <div ref={ref} aria-hidden="true" className="rl-probe">{text}</div> };
+}
+
+function wrapLines(el: HTMLElement, text: string): string[] {
+  const node = el.firstChild;
+  if (!text) return [];
+  if (!node || node.nodeType !== Node.TEXT_NODE) return text.split("\n");
+  const scale = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
+  const range = document.createRange();
+  const out: string[] = [];
+  let cur = "", top = Number.NaN;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "\n") { out.push(cur); cur = ""; top = Number.NaN; continue; }
+    range.setStart(node, i);
+    range.setEnd(node, i + 1);
+    const rect = range.getClientRects()[0];
+    if (rect && !Number.isNaN(top) && rect.top - top > (LINE / 2) * scale) { out.push(cur); cur = ""; top = Number.NaN; }
+    if (rect && Number.isNaN(top)) top = rect.top;
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map((l) => l.replace(/\s+$/, ""));
 }
 
 function Card({ title, hint, wide, children }: { title: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
