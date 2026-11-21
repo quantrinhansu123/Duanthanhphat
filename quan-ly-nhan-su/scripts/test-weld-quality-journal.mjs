@@ -49,17 +49,31 @@ const qualityDb = {
   },
 };
 const rows = Array.from({ length: 2205 }, (_, i) => ({ id: id(i + 10), ma_lich_su: `W-${i}`, du_an: "Project", tinh_trang_chat_luong: i % 2 ? "Chờ thí nghiệm" : "Chờ mài", tinh_trang_thi_nghiem: ["Chờ thí nghiệm", "Đạt", "Không đạt", "Không thí nghiệm"][i % 4], phien_ban_chat_luong: 1 }));
-const db = { from() {
+const db = { from(table) {
   const predicates = [];
   let start = 0, end = rows.length - 1, head = false;
   return {
     select(_value, options) { head = options?.head; return this; },
     order() { return this; },
     eq(key, value) { predicates.push((r) => r[key] === value); return this; },
-    in(key, values) { predicates.push((r) => values.includes(r[key])); return this; },
+    in(key, values) {
+      predicates.push((r) => values.includes(key === "moi_han_id" ? r.id : r[key]));
+      return this;
+    },
     gte() { return this; }, lte() { return this; }, or() { return this; }, not() { return this; }, is() { return this; }, gt() { return this; },
     range(a, b) { start = a; end = b; return this; },
-    then(resolve) { const filtered = rows.filter((r) => predicates.every((p) => p(r))); return Promise.resolve({ data: head ? null : filtered.slice(start, end + 1), count: filtered.length, error: null }).then(resolve); },
+    then(resolve) {
+      const filtered = rows.filter((r) => predicates.every((p) => p(r)));
+      const page = filtered.slice(start, end + 1);
+      const data = head ? null : (
+        table === "chat_luong_moi_han"
+          ? page.map((r) => ({ moi_han_id: r.id, tinh_trang: r.tinh_trang_chat_luong, phien_ban: r.phien_ban_chat_luong }))
+          : table === "kiem_tra_moi_han"
+            ? page.map((r) => ({ moi_han_id: r.id, phien_ban: r.phien_ban_chat_luong }))
+            : page
+      );
+      return Promise.resolve({ data, count: filtered.length, error: null }).then(resolve);
+    },
   };
 } };
 const weldData = load("../src/lib/weldReportData.ts", { "@/lib/supabase/client": { createClient: () => db } });

@@ -212,7 +212,62 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   };
 }
 
-type QualityRow = { moi_han_id: string; phien_ban: number | null; tinh_trang: string; du_dieu_kien_rfi: boolean };
+type QualityRow = {
+  moi_han_id: string;
+  phien_ban: number | null;
+  tinh_trang: string;
+  du_dieu_kien_rfi: boolean;
+  ma_lich_su?: string;
+  ngay_thuc_hien?: string | null;
+};
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) return String((error as { message: unknown }).message ?? "");
+  return String(error ?? "");
+}
+
+function isMissingRfiCacheColumn(error: unknown) {
+  return /tinh_trang_chat_luong|du_dieu_kien_rfi|column .* does not exist|42703/i.test(errorMessage(error));
+}
+
+type CacheWeldRow = {
+  id: string;
+  ma_lich_su: string;
+  ngay_thuc_hien: string | null;
+  tinh_trang_chat_luong: string;
+  du_dieu_kien_rfi: boolean;
+};
+
+/** Ưu tiên cột cache trên lich_su_moi_han; chưa migration thì fallback view nặng. */
+async function loadRfiQualityRows(projectId: string): Promise<{ fromCache: boolean; rows: QualityRow[] }> {
+  try {
+    const welds = await fetchAll<CacheWeldRow>((a, b) => db().from("lich_su_moi_han")
+      .select("id,ma_lich_su,ngay_thuc_hien,tinh_trang_chat_luong,du_dieu_kien_rfi")
+      .eq("du_an_id", projectId)
+      .order("id")
+      .range(a, b));
+    return {
+      fromCache: true,
+      rows: welds.map((w) => ({
+        moi_han_id: w.id,
+        phien_ban: null,
+        tinh_trang: w.tinh_trang_chat_luong,
+        du_dieu_kien_rfi: Boolean(w.du_dieu_kien_rfi),
+        ma_lich_su: w.ma_lich_su,
+        ngay_thuc_hien: w.ngay_thuc_hien,
+      })),
+    };
+  } catch (error) {
+    if (!isMissingRfiCacheColumn(error)) throw error;
+    const rows = await fetchAll<QualityRow>((a, b) => db().from("chat_luong_moi_han")
+      .select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_rfi")
+      .eq("du_an_id", projectId)
+      .order("moi_han_id")
+      .range(a, b));
+    return { fromCache: false, rows };
+  }
+}
 
 export async function loadRfiCandidates(body: Record<string, unknown>) {
   const projectId = qualityUuid(body.du_an_id);
@@ -223,9 +278,8 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     moi_han_id: string;
     phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string } | { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string }[];
   };
-  const [quality, linked] = await Promise.all([
-    fetchAll<QualityRow>((a, b) => db().from("chat_luong_moi_han")
-    .select("moi_han_id,phien_ban,tinh_trang,du_dieu_kien_rfi").eq("du_an_id", projectId).order("moi_han_id").range(a, b)),
+  const [qualityPack, linked] = await Promise.all([
+    loadRfiQualityRows(projectId),
     // Chỉ khóa mối còn thuộc RFI «Đã phát hành» (phiếu hoàn thành/huỷ không giữ chỗ).
     fetchAll<LinkedRow>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
     .select("moi_han_id,phieu_yeu_cau_nghiem_thu!inner(id,so_phieu,ngay_moi,trang_thai,du_an_id)").eq("con_hieu_luc", true)
@@ -233,6 +287,7 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     .eq("phieu_yeu_cau_nghiem_thu.trang_thai", "Đã phát hành")
     .order("moi_han_id").range(a, b)),
   ]);
+  const quality = qualityPack.rows;
   const parentOf = (row: LinkedRow) => Array.isArray(row.phieu_yeu_cau_nghiem_thu) ? row.phieu_yeu_cau_nghiem_thu[0] : row.phieu_yeu_cau_nghiem_thu;
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
   const weldStatus = new Map(quality.map((q) => [q.moi_han_id, q.tinh_trang]));
@@ -254,16 +309,34 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     q.du_dieu_kien_rfi && isRfiEligibleStatus(q.tinh_trang) && q.tinh_trang !== "Chờ ký biên bản" && !inRfi.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
   const ids = eligible.map((q) => q.moi_han_id);
-  const [welds, points] = await Promise.all([
-    chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>
-      db().from("lich_su_moi_han").select("id,ma_lich_su,ngay_thuc_hien").in("id", p)),
+
+  // Cache path: đã có mã/ngày; chỉ lấy phien_ban + lý trình cho mối đủ điều kiện.
+  // Fallback view: vẫn cần đọc lại lich_su_moi_han + toa_do như trước.
+  const [versions, welds, points] = await Promise.all([
+    chunked<{ moi_han_id: string; phien_ban: number | null }>(ids, (p) =>
+      db().from("kiem_tra_moi_han").select("moi_han_id,phien_ban").in("moi_han_id", p)),
+    qualityPack.fromCache
+      ? Promise.resolve(eligible.map((q) => ({
+          id: q.moi_han_id,
+          ma_lich_su: q.ma_lich_su ?? "",
+          ngay_thuc_hien: q.ngay_thuc_hien ?? null,
+        })))
+      : chunked<{ id: string; ma_lich_su: string; ngay_thuc_hien: string | null }>(ids, (p) =>
+          db().from("lich_su_moi_han").select("id,ma_lich_su,ngay_thuc_hien").in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ly_trinh: string | null }>(ids, (p) =>
       db().from("toa_do").select("lich_su_moi_han_id,ly_trinh").in("lich_su_moi_han_id", p)),
   ]);
+  const phienBan = new Map(versions.map((v) => [v.moi_han_id, v.phien_ban]));
   const km = new Map(points.filter((p) => p.ly_trinh).map((p) => [p.lich_su_moi_han_id, p.ly_trinh as string]));
   const meta = new Map(eligible.map((q) => [q.moi_han_id, q]));
-  const rows: RfiCandidate[] = welds.map((w) => ({ id: w.id, ma_lich_su: w.ma_lich_su, ngay_thuc_hien: w.ngay_thuc_hien,
-    ly_trinh: km.get(w.id) ?? null, phien_ban: meta.get(w.id)?.phien_ban ?? 0, tinh_trang: meta.get(w.id)?.tinh_trang ?? "" }));
+  const rows: RfiCandidate[] = welds.map((w) => ({
+    id: w.id,
+    ma_lich_su: w.ma_lich_su,
+    ngay_thuc_hien: w.ngay_thuc_hien,
+    ly_trinh: km.get(w.id) ?? null,
+    phien_ban: phienBan.get(w.id) ?? meta.get(w.id)?.phien_ban ?? 0,
+    tinh_trang: meta.get(w.id)?.tinh_trang ?? "",
+  }));
   let result;
   try { result = filterRfiCandidates(rows, filter); } catch (e) { throw new QualityApiError((e as Error).message); }
   const excluded: Record<string, number> = {};

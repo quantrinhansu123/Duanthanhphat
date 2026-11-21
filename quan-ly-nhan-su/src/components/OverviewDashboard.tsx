@@ -369,6 +369,8 @@ export default function OverviewDashboard() {
   const [spreadUndatedMonthly, setSpreadUndatedMonthly] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
+  const [forecastOn, setForecastOn] = useState(false);
+  const [demoOn, setDemoOn] = useState(false);
   const plotScrollRef = useRef<HTMLDivElement>(null);
   const [plotViewportWidth, setPlotViewportWidth] = useState(0);
 
@@ -436,8 +438,12 @@ export default function OverviewDashboard() {
   const chartDateRange = useMemo(() => {
     return resolveChartDateRange(
       isAllDates ? REPORT_PERIOD_START : filterFrom,
-      // Không chọn "đến ngày" thì kết thúc ở hôm nay (không vẽ ngày tương lai).
-      isAllDates || !appliedFilters.dateTo ? "" : filterTo,
+      // Không chọn ngày kết thúc: mở sẵn 3 ngày tương lai cho chỉ tiêu bù tiến độ.
+      isAllDates || !appliedFilters.dateTo ? (() => {
+        const end = new Date(`${todayIso}T12:00:00`);
+        end.setDate(end.getDate() + 3);
+        return localIsoDate(end);
+      })() : filterTo,
       // Không lọc ngày: cửa sổ 31 ngày gần nhất. Có lọc ngày: vẽ đủ khoảng đã chọn (cuộn / thu phóng ngang).
       isAllDates ? 31 : 400,
       // Không chọn «đến ngày»: vẽ đủ đến hôm nay, ngày chưa có số liệu hiện 0 (không cắt ở ngày có dữ liệu mới nhất).
@@ -787,6 +793,35 @@ export default function OverviewDashboard() {
     };
   }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, spreadUndatedMonthly, todayIso, yearTotals, yearlySeries]);
 
+  // Chốt thực tế đến hết hôm qua; chia đều phần còn lại trên toàn bộ ngày kế hoạch còn lại.
+  const futureQuota = useMemo(() => {
+    let planned = 0;
+    const remainingDays = new Set<string>();
+    for (const project of selectedProjects) {
+      for (const row of planRows(project)) {
+        if (!isAllDates && (row.ngay < filterFrom || row.ngay > filterTo)) continue;
+        planned += row.so_moi_han;
+        if (row.ngay >= todayIso && row.so_moi_han > 0) remainingDays.add(row.ngay);
+      }
+    }
+    const actual = showFastCharts
+      ? fastRollupRows.reduce((sum, row) => row.ngay_thuc_hien < todayIso && (isAllDates || (row.ngay_thuc_hien >= filterFrom && row.ngay_thuc_hien <= filterTo)) ? sum + (row.so_moi ?? row.so_luong_thuc_hien ?? 0) : sum, 0)
+      : selectedRows.reduce((sum, row, index) => {
+        const date = getJournalRowDateIso(row, index);
+        return date && date < todayIso && (isAllDates || (date >= filterFrom && date <= filterTo)) ? sum + 1 : sum;
+      }, 0);
+    const remaining = Math.max(0, planned - actual);
+    const perDay = remainingDays.size ? Math.ceil(remaining / remainingDays.size) : 0;
+    const daysNeeded = remaining <= 0 ? 0 : perDay > 0 ? Math.ceil(remaining / perDay) : 0;
+    let finishDate = todayIso;
+    if (remaining > 0 && daysNeeded > 0) {
+      const end = new Date(`${todayIso}T12:00:00`);
+      end.setDate(end.getDate() + daysNeeded - 1);
+      finishDate = localIsoDate(end);
+    }
+    return { perDay, remainingDays, actual, remaining, daysNeeded, finishDate };
+  }, [selectedProjects, isAllDates, filterFrom, filterTo, todayIso, showFastCharts, fastRollupRows, selectedRows]);
+
   const cumulativeChart = useMemo(() => {
     const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
     const asOfKey = cumulativeChartViewMode === "yearly"
@@ -811,9 +846,11 @@ export default function OverviewDashboard() {
       return actual;
     });
     const targetValues = cumulativeChartPeriod.targets.map((value) => (target += value));
-    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, 1) / 10) * 10);
-    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
-  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso]);
+    const futureValues = cumulativeChartPeriod.dates.map((date) => cumulativeChartViewMode === "daily" && futureQuota.remainingDays.has(date)
+      ? futureQuota.actual + [...futureQuota.remainingDays].filter((day) => day <= date).length * futureQuota.perDay : 0);
+    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, ...futureValues, 1) / 10) * 10);
+    return { actualValues, targetValues, futureValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
+  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso, futureQuota]);
 
   const PLAN_YEAR = Number(todayIso.slice(0, 4));
   const planYearStart = `${PLAN_YEAR}-01-01`;
@@ -1092,7 +1129,7 @@ export default function OverviewDashboard() {
       };
     }
 
-    const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, 1) / 10) * 10);
+    const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, chartViewMode === "daily" ? futureQuota.perDay : 0, 1) / 10) * 10);
     const plotH = 260;
     const padX = 14;
     const plotW = 500 - padX * 2;
@@ -1284,7 +1321,7 @@ export default function OverviewDashboard() {
       dayPoints,
       maxVal,
     };
-  }, [chartDateRange, chartPeriod, chartViewMode, dailySeries, dailyTargets, dailyValues]);
+  }, [chartDateRange, chartPeriod, chartViewMode, dailySeries, dailyTargets, dailyValues, futureQuota]);
 
   const selectedDay =
     selectedDayIndex !== null && chart.dayPoints[selectedDayIndex]
@@ -1354,6 +1391,37 @@ export default function OverviewDashboard() {
     .filter(({ i }) => firstActualBar >= 0 && i >= firstActualBar && i <= Math.max(lastLineBar, firstActualBar))
     .map(({ b }) => ({ x: b.x + b.w / 2, y: b.blueY }));
   const actualTrendPath = toPath(actualTops);
+
+  // Đường dự báo (tím): chỉ tính khi bấm nút. Cần hàn ngày kế tiếp = KH ngày đó + số mối đang thiếu so với KH lũy kế đến hôm nay.
+  const forecast = (() => {
+    if (!forecastOn || chartViewMode !== "daily" || lastLineBar < 0 || !stackBars[lastLineBar]) return null;
+    let planCum = 0;
+    let actualCum = 0;
+    for (let i = 0; i <= lastLineBar; i++) {
+      planCum += stackBars[i].target;
+      actualCum += stackBars[i].actual;
+    }
+    const shortfall = Math.max(0, Math.round(planCum - actualCum));
+    const nextBar = stackBars[lastLineBar + 1];
+    const nextPlan = nextBar ? nextBar.target : (stackBars[lastLineBar].target ?? 0);
+    const need = Math.ceil(nextPlan + shortfall);
+    const from = stackBars[lastLineBar];
+    const startPt = { x: from.x + from.w / 2, y: from.blueY };
+    const endPt = nextBar
+      ? {
+          x: nextBar.x + nextBar.w / 2,
+          y: Math.max(6, 260 - Math.min(256, (need / chart.maxVal) * 260)),
+        }
+      : null;
+    return {
+      shortfall,
+      nextPlan: Math.round(nextPlan),
+      need,
+      startPt,
+      endPt,
+      nextLabel: chart.dayPoints[lastLineBar + 1]?.dateShort ?? null,
+    };
+  })();
   function stepZoom(dir: 1 | -1) {
     setChartZoom((current) =>
       Math.min(
@@ -1964,7 +2032,69 @@ export default function OverviewDashboard() {
               <span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />
               <span>Dự kiến</span>
             </div>
+            {demoOn && chartViewMode === "daily" ? (
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3.5 rounded-xs bg-[#a855f7]" />
+                <span>Demo · hoàn thiện {viDate(futureQuota.finishDate)}</span>
+              </div>
+            ) : null}
+            {chartViewMode === "daily" && forecast ? (
+              <div className="flex items-center gap-2">
+                <span className="h-0 w-4 border-t-2 border-dashed border-[#9333ea]" />
+                <span>Dự báo ngày kế tiếp</span>
+              </div>
+            ) : null}
           </div>
+
+          {chartViewMode === "daily" ? (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setDemoOn((v) => !v)}
+                className={`rounded-md border px-2.5 py-1 font-semibold cursor-pointer ${
+                  demoOn
+                    ? "border-purple-500 bg-purple-600 text-white hover:bg-purple-700"
+                    : "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                }`}
+              >
+                {demoOn ? "Ẩn Demo" : "Hiện Demo"}
+              </button>
+              {demoOn ? (
+                <span className="text-slate-700">
+                  {futureQuota.remaining <= 0 ? (
+                    <>Đã đủ khối lượng kế hoạch (chốt đến hôm qua).</>
+                  ) : futureQuota.perDay > 0 ? (
+                    <>
+                      Demo hoàn thiện dự kiến{" "}
+                      <b className="text-purple-700">{viDate(futureQuota.finishDate)}</b>
+                      {" · "}cần <b className="text-purple-700">{fmt(futureQuota.perDay)}</b> mối/ngày
+                      {" · "}còn <b>{fmt(futureQuota.remaining)}</b> mối
+                      {" · "}{fmt(futureQuota.daysNeeded)} ngày
+                    </>
+                  ) : (
+                    <>Chưa có ngày kế hoạch còn lại để Demo.</>
+                  )}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setForecastOn((v) => !v)}
+                className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer"
+              >
+                {forecastOn ? "Ẩn dự báo" : "Tính mối cần hàn để đuổi kịp"}
+              </button>
+              {forecast ? (
+                <span className="text-slate-700">
+                  Đang thiếu <b className="text-amber-800">{fmt(forecast.shortfall)}</b> mối · ngày
+                  {forecast.nextLabel ? ` ${forecast.nextLabel}` : " kế tiếp"} cần hàn{" "}
+                  <b className="text-amber-800">{fmt(forecast.need)}</b> mối
+                  (KH ngày {fmt(forecast.nextPlan)} + bù {fmt(forecast.shortfall)})
+                </span>
+              ) : forecastOn ? (
+                <span className="text-slate-500">Chưa có số liệu đến hôm nay để dự báo.</span>
+              ) : null}
+            </div>
+          ) : null}
 
           {selectedDay ? (
             <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/90 px-3 py-2.5 animate-in fade-in duration-150">
@@ -2083,6 +2213,12 @@ export default function OverviewDashboard() {
                             opacity="0.06"
                           />
                         )}
+                        {demoOn && chartViewMode === "daily" && futureQuota.remainingDays.has(dailySeries[i]?.date ?? "") && futureQuota.perDay > 0 && (
+                          <rect x={b.x + b.w} y={260 - futureQuota.perDay / chart.maxVal * 260}
+                            width={b.w} height={futureQuota.perDay / chart.maxVal * 260} fill="#a855f7">
+                            <title>{viDate(dailySeries[i].date)} · Cần hàn: {fmt(futureQuota.perDay)} mối/ngày (làm tròn lên, chốt thực tế đến hôm qua)</title>
+                          </rect>
+                        )}
                         {b.yellowH > 0 && (
                           <rect
                             x={b.x}
@@ -2105,6 +2241,14 @@ export default function OverviewDashboard() {
                         )}
                       </g>
                     );
+                  })}
+                  {bars.map((b, i) => {
+                    const purple = demoOn && chartViewMode === "daily" && futureQuota.remainingDays.has(dailySeries[i]?.date ?? "") && futureQuota.perDay > 0;
+                    return <g key={`values-${i}`} fontSize="12" textAnchor="middle" fontWeight="600">
+                      <text x={b.x + b.w / 2} y={Math.max(8, b.yellowY - 5)} fill="#a16207">{fmt(b.target)}</text>
+                      {b.actual > 0 && <text x={b.x + b.w / 2} y={Math.max(18, b.blueY - 4)} fill="#1d4ed8">{fmt(b.actual)}</text>}
+                      {purple && <text x={b.x + b.w * 1.5} y={Math.max(8, 260 - futureQuota.perDay / chart.maxVal * 260 - 6)} fill="#7e22ce">{fmt(futureQuota.perDay)}</text>}
+                    </g>;
                   })}
                   {trendPath && (
                     <>
@@ -2154,10 +2298,28 @@ export default function OverviewDashboard() {
                       />
                     </>
                   )}
+                  {forecast?.endPt && (
+                    <path
+                      d={`M ${forecast.startPt.x} ${forecast.startPt.y} L ${forecast.endPt.x} ${forecast.endPt.y}`}
+                      fill="none"
+                      stroke="#9333ea"
+                      strokeWidth={2.5}
+                      strokeDasharray="6 4"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                      className="pointer-events-none"
+                    />
+                  )}
                     </>
                   );
                 })()}
               </svg>
+              {forecast?.endPt && (
+                <span
+                  className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[#9333ea] bg-white"
+                  style={{ left: `${(forecast.endPt.x / 500) * 100}%`, top: `${forecast.endPt.y}px` }}
+                />
+              )}
               {trendTops.map((p, i) => (
                 <span
                   key={`trend-dot-${i}`}
@@ -2422,6 +2584,9 @@ export default function OverviewDashboard() {
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#3b82f6]" />Thực tế</span>
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />Dự kiến</span>
+            {demoOn ? (
+              <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#a855f7]" />Demo · hoàn thiện {viDate(futureQuota.finishDate)} · {fmt(futureQuota.perDay)} mối/ngày</span>
+            ) : null}
           </div>
 
           {cumulativeChart.actualValues.length === 0 ? (
@@ -2450,6 +2615,7 @@ export default function OverviewDashboard() {
                         return <g key={index}>
                           {yellowH > 0 && <rect x={band * index + band * .27} y={260 - blueH - yellowH} width={band * .46} height={yellowH} fill="#fcd34d" />}
                           {blueH > 0 && <rect x={band * index + band * .27} y={260 - blueH} width={band * .46} height={blueH} fill="#3b82f6" />}
+                          {demoOn && cumulativeChart.futureValues[index] > 0 && <rect x={band * index + band * .65} y={260 - cumulativeChart.futureValues[index] / cumulativeChart.max * 260} width={band * .25} height={cumulativeChart.futureValues[index] / cumulativeChart.max * 260} fill="#a855f7"><title>Lũy kế cần đạt: {fmt(cumulativeChart.futureValues[index])} mối · {fmt(futureQuota.perDay)} mối/ngày</title></rect>}
                         </g>;
                       })}
                       <path
@@ -2460,6 +2626,16 @@ export default function OverviewDashboard() {
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
+                      {cumulativeChart.actualValues.map((actual, index) => {
+                        const band = 500 / cumulativeChart.actualValues.length;
+                        const target = cumulativeChart.targetValues[index] ?? 0;
+                        const future = demoOn ? (cumulativeChart.futureValues[index] ?? 0) : 0;
+                        return <g key={`cum-values-${index}`} fontSize="12" textAnchor="middle" fontWeight="600">
+                          <text x={band * (index + .5)} y={Math.max(8, 260 - Math.max(target, index <= cumulativeChart.lastActualIndex ? actual : 0) / cumulativeChart.max * 260 - 5)} fill="#a16207">{fmt(target)}</text>
+                          {index <= cumulativeChart.lastActualIndex && actual > 0 && <text x={band * (index + .5)} y={Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)} fill="#1d4ed8">{fmt(actual)}</text>}
+                          {future > 0 && <text x={band * (index + .775)} y={Math.max(8, 260 - future / cumulativeChart.max * 260 - 6)} fill="#7e22ce">{fmt(future)}</text>}
+                        </g>;
+                      })}
                       {cumulativeChart.lastActualIndex >= 0 ? (
                         <path
                           d={cumulativeChart.actualValues.slice(0, cumulativeChart.lastActualIndex + 1).map((value, index) => `${index ? "L" : "M"} ${(500 / cumulativeChart.actualValues.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}

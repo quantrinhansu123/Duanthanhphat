@@ -64,30 +64,228 @@ export function parseQualityFilters(value: unknown): WeldJournalPageQuery {
     query: text(v.query ?? "", 200).replace(/[(),]/g, " "), projects: (v.projects as unknown[] ?? []).map((p) => text(p, 300)), dateFrom: dateFrom ?? "", dateTo: dateTo ?? "", seqFrom: seq(v.seqFrom), seqTo: seq(v.seqTo) };
 }
 
-function journalRequest(filters: WeldJournalPageQuery) {
-  return orderJournalByWeldTime(applyJournalListFilters(createAdminClient().from("nhat_ky_han_chat_luong").select("*", { count: "exact" }), filters), true, true);
+/** true sau migration cache cột trên bao_cao; null = chưa dò. */
+let journalHasCachedQuality: boolean | null = null;
+
+function isMissingQualityCacheColumn(message: string | undefined) {
+  return Boolean(message && /tinh_trang_chat_luong|column .* does not exist|42703/i.test(message));
 }
 
-export async function loadQualityJournalPage(filters: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
-  const pageSize = filters.pageSize ?? 50;
-  const { data, error, count } = await journalRequest(filters).range((filters.page - 1) * pageSize, filters.page * pageSize - 1);
-  if (error) throw error;
-  const counts = await Promise.all(WELD_TEST_STATUSES.map(async (status) => {
+/** View nối nhật ký + chất lượng (fallback khi chưa có cột cache). */
+function heavyJournalRequest(filters: WeldJournalPageQuery, selectionOnly = false) {
+  return orderJournalByWeldTime(applyJournalListFilters(createAdminClient().from("nhat_ky_han_chat_luong")
+    .select(selectionOnly ? "id,ma_lich_su,phien_ban_chat_luong" : "*", { count: "exact" }), filters), true, true);
+}
+
+/** Nhật ký từ bao_cao — sau migration đã có tinh_trang_chat_luong để lọc tab chất lượng. */
+function lightJournalRequest(filters: WeldJournalPageQuery, withCount = true, withQualityFilter = true) {
+  return orderJournalByWeldTime(applyJournalListFilters(
+    createAdminClient().from("bao_cao_moi_han_theo_du_an").select("*", withCount ? { count: "exact" } : undefined),
+    withQualityFilter ? filters : { ...filters, qualityStatusFilter: "Tất cả" },
+  ), true, true);
+}
+
+/** Đếm NDT trên view nhật ký nhẹ — tránh quét view chất lượng. */
+async function loadNdtCounts(filters: WeldJournalPageQuery) {
+  const base = { ...filters, qualityStatusFilter: "Tất cả", resultFilter: "Tất cả" as const };
+  return Promise.all(WELD_TEST_STATUSES.map(async (status) => {
     if (filters.resultFilter !== "Tất cả" && filters.resultFilter !== status) return 0;
-    const res = await applyJournalListFilters(createAdminClient().from("nhat_ky_han_chat_luong").select("id", { count: "exact", head: true }).eq("tinh_trang_thi_nghiem", status), { ...filters, resultFilter: "Tất cả" });
+    const res = await applyJournalListFilters(
+      createAdminClient().from("bao_cao_moi_han_theo_du_an").select("id", { count: "exact", head: true }).eq("tinh_trang_thi_nghiem", status),
+      base,
+    );
     if (res.error) throw res.error;
     return res.count ?? 0;
   }));
-  return { rows: data as WeldReportRow[], total: count ?? 0, page: filters.page, pageSize,
-    pendingCount: counts[0], passCount: counts[1], failCount: counts[2], untestedCount: counts[3] };
+}
+
+/** Tập tên trạng thái chất lượng (kèm alias cũ). */
+function qualityStatusSet(qualityStatusFilter: string): Set<string> {
+  const statuses = new Set<string>();
+  for (const raw of qualityStatusFilter.split(",")) {
+    const s = raw.trim();
+    if (!s) continue;
+    statuses.add(s);
+    const normalized = normalizeWeldQualityStatus(s);
+    if (normalized) statuses.add(normalized);
+    for (const [oldName, neu] of Object.entries(WELD_QUALITY_STATUS_ALIASES)) {
+      if (neu === s || neu === normalized) statuses.add(oldName);
+    }
+  }
+  return statuses;
+}
+
+/** Gắn phiên bản kiểm tra (+ tình trạng nếu chưa có cột cache) theo id trang. */
+async function enrichRowsWithQuality(rows: WeldReportRow[]): Promise<WeldReportRow[]> {
+  if (!rows.length) return rows;
+  const admin = createAdminClient();
+  const map = new Map<string, { tinh_trang?: string; phien_ban: number | null }>();
+  const ids = rows.map((r) => r.id);
+  const needStatus = rows.some((r) => !r.tinh_trang_chat_luong);
+
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const chunk = ids.slice(offset, offset + 200);
+    if (needStatus) {
+      const { data, error } = await admin.from("chat_luong_moi_han")
+        .select("moi_han_id,tinh_trang,phien_ban")
+        .in("moi_han_id", chunk);
+      if (error) throw error;
+      for (const row of data ?? []) {
+        map.set(String(row.moi_han_id), {
+          tinh_trang: String(row.tinh_trang),
+          phien_ban: row.phien_ban == null ? null : Number(row.phien_ban),
+        });
+      }
+    } else {
+      const { data, error } = await admin.from("kiem_tra_moi_han")
+        .select("moi_han_id,phien_ban")
+        .in("moi_han_id", chunk);
+      if (error) throw error;
+      for (const row of data ?? []) {
+        map.set(String(row.moi_han_id), {
+          phien_ban: row.phien_ban == null ? null : Number(row.phien_ban),
+        });
+      }
+    }
+  }
+
+  return rows.map((row) => {
+    const q = map.get(row.id);
+    if (!q) return row;
+    return {
+      ...row,
+      tinh_trang_chat_luong: (q.tinh_trang ?? row.tinh_trang_chat_luong) as WeldReportRow["tinh_trang_chat_luong"],
+      phien_ban_chat_luong: q.phien_ban ?? row.phien_ban_chat_luong ?? 0,
+    };
+  });
+}
+
+async function loadLightJournalRows(filters: WeldJournalPageQuery, withQualityFilter = true): Promise<WeldReportRow[]> {
+  const rows: WeldReportRow[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await lightJournalRequest(filters, false, withQualityFilter).range(offset, offset + 999);
+    if (error) throw error;
+    const chunk = (data ?? []) as WeldReportRow[];
+    rows.push(...chunk);
+    if (chunk.length < 1000) break;
+  }
+  return rows;
+}
+
+/** Ngưỡng fallback khi chưa có cột cache. */
+const QUALITY_FILTER_IN_MEMORY_MAX = 3000;
+
+export async function loadQualityJournalPage(filters: WeldJournalPageQuery): Promise<WeldJournalPageResult> {
+  const pageSize = filters.pageSize ?? 50;
+  const needsQualityFilter = Boolean(filters.qualityStatusFilter && filters.qualityStatusFilter !== "Tất cả");
+  const countsPromise = loadNdtCounts(filters);
+  const useCache = journalHasCachedQuality !== false;
+
+  // Ưu tiên bao_cao + cột cache (nhanh, lọc tab chất lượng trên DB).
+  if (useCache) {
+    const { data, error, count } = await lightJournalRequest(filters, true, true)
+      .range((filters.page - 1) * pageSize, filters.page * pageSize - 1);
+    if (!error) {
+      journalHasCachedQuality = true;
+      const [counts, rows] = await Promise.all([countsPromise, enrichRowsWithQuality((data ?? []) as WeldReportRow[])]);
+      return {
+        rows, total: count ?? 0, page: filters.page, pageSize,
+        pendingCount: counts[0], passCount: counts[1], failCount: counts[2], untestedCount: counts[3],
+      };
+    }
+    if (!isMissingQualityCacheColumn(error.message)) throw error;
+    journalHasCachedQuality = false;
+  }
+
+  // Chưa chạy migration cache: đường cũ (gắn từ view theo trang / lọc trong bộ nhớ).
+  if (!needsQualityFilter) {
+    const { data, error, count } = await lightJournalRequest(filters, true, false)
+      .range((filters.page - 1) * pageSize, filters.page * pageSize - 1);
+    if (error) throw error;
+    const [counts, rows] = await Promise.all([countsPromise, enrichRowsWithQuality((data ?? []) as WeldReportRow[])]);
+    return {
+      rows, total: count ?? 0, page: filters.page, pageSize,
+      pendingCount: counts[0], passCount: counts[1], failCount: counts[2], untestedCount: counts[3],
+    };
+  }
+
+  const lightCountRes = await applyJournalListFilters(
+    createAdminClient().from("bao_cao_moi_han_theo_du_an").select("id", { count: "exact", head: true }),
+    { ...filters, qualityStatusFilter: "Tất cả" },
+  );
+  if (lightCountRes.error) throw lightCountRes.error;
+  if ((lightCountRes.count ?? 0) <= QUALITY_FILTER_IN_MEMORY_MAX) {
+    const enriched = await enrichRowsWithQuality(await loadLightJournalRows(filters, false));
+    const allowed = qualityStatusSet(filters.qualityStatusFilter!);
+    const filtered = enriched.filter((row) => row.tinh_trang_chat_luong && allowed.has(String(row.tinh_trang_chat_luong)));
+    const start = (filters.page - 1) * pageSize;
+    const counts = await countsPromise;
+    return {
+      rows: filtered.slice(start, start + pageSize),
+      total: filtered.length,
+      page: filters.page,
+      pageSize,
+      pendingCount: counts[0], passCount: counts[1], failCount: counts[2], untestedCount: counts[3],
+    };
+  }
+
+  const { data, error, count } = await heavyJournalRequest(filters).range((filters.page - 1) * pageSize, filters.page * pageSize - 1);
+  if (error) throw error;
+  const counts = await countsPromise;
+  return {
+    rows: data as unknown as WeldReportRow[], total: count ?? 0, page: filters.page, pageSize,
+    pendingCount: counts[0], passCount: counts[1], failCount: counts[2], untestedCount: counts[3],
+  };
 }
 
 export async function loadQualityJournalRows(filters: WeldJournalPageQuery, selectionOnly = false) {
+  const needsQualityFilter = Boolean(filters.qualityStatusFilter && filters.qualityStatusFilter !== "Tất cả");
+  const useCache = journalHasCachedQuality !== false;
+
+  if (useCache) {
+    try {
+      let rows = await enrichRowsWithQuality(await loadLightJournalRows(filters, true));
+      journalHasCachedQuality = true;
+      if (selectionOnly) {
+        return rows.map((row) => ({
+          id: row.id,
+          ma_lich_su: row.ma_lich_su,
+          phien_ban_chat_luong: row.phien_ban_chat_luong ?? 0,
+        })) as unknown as WeldReportRow[];
+      }
+      return rows;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isMissingQualityCacheColumn(message)) throw error;
+      journalHasCachedQuality = false;
+    }
+  }
+
+  const lightCountRes = await applyJournalListFilters(
+    createAdminClient().from("bao_cao_moi_han_theo_du_an").select("id", { count: "exact", head: true }),
+    { ...filters, qualityStatusFilter: "Tất cả" },
+  );
+  if (lightCountRes.error) throw lightCountRes.error;
+
+  if (!needsQualityFilter || (lightCountRes.count ?? 0) <= QUALITY_FILTER_IN_MEMORY_MAX) {
+    let rows = await enrichRowsWithQuality(await loadLightJournalRows(filters, false));
+    if (needsQualityFilter) {
+      const allowed = qualityStatusSet(filters.qualityStatusFilter!);
+      rows = rows.filter((row) => row.tinh_trang_chat_luong && allowed.has(String(row.tinh_trang_chat_luong)));
+    }
+    if (selectionOnly) {
+      return rows.map((row) => ({
+        id: row.id,
+        ma_lich_su: row.ma_lich_su,
+        phien_ban_chat_luong: row.phien_ban_chat_luong ?? 0,
+      })) as unknown as WeldReportRow[];
+    }
+    return rows;
+  }
+
   const rows: WeldReportRow[] = [];
   for (let offset = 0; ; offset += 1000) {
-    const request = orderJournalByWeldTime(applyJournalListFilters(createAdminClient().from("nhat_ky_han_chat_luong")
-      .select(selectionOnly ? "id,ma_lich_su,phien_ban_chat_luong" : "*"), filters), true, true);
-    const { data, error } = await request.range(offset, offset + 999);
+    const { data, error } = await heavyJournalRequest(filters, selectionOnly).range(offset, offset + 999);
     if (error) throw error;
     rows.push(...data as unknown as WeldReportRow[]);
     if (data.length < 1000) break;
