@@ -370,7 +370,7 @@ export default function OverviewDashboard() {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
   const [forecastOn, setForecastOn] = useState(false);
-  const [demoOn, setDemoOn] = useState(false);
+  const [completionStatsOn, setCompletionStatsOn] = useState(false);
   const plotScrollRef = useRef<HTMLDivElement>(null);
   const [plotViewportWidth, setPlotViewportWidth] = useState(0);
 
@@ -846,11 +846,9 @@ export default function OverviewDashboard() {
       return actual;
     });
     const targetValues = cumulativeChartPeriod.targets.map((value) => (target += value));
-    const futureValues = cumulativeChartPeriod.dates.map((date) => cumulativeChartViewMode === "daily" && futureQuota.remainingDays.has(date)
-      ? futureQuota.actual + [...futureQuota.remainingDays].filter((day) => day <= date).length * futureQuota.perDay : 0);
-    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, ...futureValues, 1) / 10) * 10);
-    return { actualValues, targetValues, futureValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
-  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso, futureQuota]);
+    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, 1) / 10) * 10);
+    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
+  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso]);
 
   const PLAN_YEAR = Number(todayIso.slice(0, 4));
   const planYearStart = `${PLAN_YEAR}-01-01`;
@@ -1129,7 +1127,7 @@ export default function OverviewDashboard() {
       };
     }
 
-    const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, chartViewMode === "daily" ? futureQuota.perDay : 0, 1) / 10) * 10);
+    const maxVal = Math.max(10, Math.ceil(Math.max(...slice, ...targetSlice, 1) / 10) * 10);
     const plotH = 260;
     const padX = 14;
     const plotW = 500 - padX * 2;
@@ -1321,7 +1319,7 @@ export default function OverviewDashboard() {
       dayPoints,
       maxVal,
     };
-  }, [chartDateRange, chartPeriod, chartViewMode, dailySeries, dailyTargets, dailyValues, futureQuota]);
+  }, [chartDateRange, chartPeriod, chartViewMode, dailySeries, dailyTargets, dailyValues]);
 
   const selectedDay =
     selectedDayIndex !== null && chart.dayPoints[selectedDayIndex]
@@ -2032,12 +2030,6 @@ export default function OverviewDashboard() {
               <span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />
               <span>Dự kiến</span>
             </div>
-            {demoOn && chartViewMode === "daily" ? (
-              <div className="flex items-center gap-2">
-                <span className="h-3 w-3.5 rounded-xs bg-[#a855f7]" />
-                <span>Demo · hoàn thiện {viDate(futureQuota.finishDate)}</span>
-              </div>
-            ) : null}
             {chartViewMode === "daily" && forecast ? (
               <div className="flex items-center gap-2">
                 <span className="h-0 w-4 border-t-2 border-dashed border-[#9333ea]" />
@@ -2047,51 +2039,70 @@ export default function OverviewDashboard() {
           </div>
 
           {chartViewMode === "daily" ? (
-            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setDemoOn((v) => !v)}
-                className={`rounded-md border px-2.5 py-1 font-semibold cursor-pointer ${
-                  demoOn
-                    ? "border-purple-500 bg-purple-600 text-white hover:bg-purple-700"
-                    : "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100"
-                }`}
-              >
-                {demoOn ? "Ẩn Demo" : "Hiện Demo"}
-              </button>
-              {demoOn ? (
-                <span className="text-slate-700">
-                  {futureQuota.remaining <= 0 ? (
-                    <>Đã đủ khối lượng kế hoạch (chốt đến hôm qua).</>
-                  ) : futureQuota.perDay > 0 ? (
-                    <>
-                      Demo hoàn thiện dự kiến{" "}
-                      <b className="text-purple-700">{viDate(futureQuota.finishDate)}</b>
-                      {" · "}cần <b className="text-purple-700">{fmt(futureQuota.perDay)}</b> mối/ngày
-                      {" · "}còn <b>{fmt(futureQuota.remaining)}</b> mối
-                      {" · "}{fmt(futureQuota.daysNeeded)} ngày
-                    </>
-                  ) : (
-                    <>Chưa có ngày kế hoạch còn lại để Demo.</>
-                  )}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setForecastOn((v) => !v)}
-                className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer"
-              >
-                {forecastOn ? "Ẩn dự báo" : "Tính mối cần hàn để đuổi kịp"}
-              </button>
-              {forecast ? (
-                <span className="text-slate-700">
-                  Đang thiếu <b className="text-amber-800">{fmt(forecast.shortfall)}</b> mối · ngày
-                  {forecast.nextLabel ? ` ${forecast.nextLabel}` : " kế tiếp"} cần hàn{" "}
-                  <b className="text-amber-800">{fmt(forecast.need)}</b> mối
-                  (KH ngày {fmt(forecast.nextPlan)} + bù {fmt(forecast.shortfall)})
-                </span>
-              ) : forecastOn ? (
-                <span className="text-slate-500">Chưa có số liệu đến hôm nay để dự báo.</span>
+            <div className="mt-2 flex flex-col items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompletionStatsOn((v) => !v)}
+                  aria-expanded={completionStatsOn}
+                  className={`rounded-md border px-2.5 py-1 font-semibold cursor-pointer ${
+                    completionStatsOn
+                      ? "border-[#0047AB] bg-[#0047AB] text-white hover:bg-[#00388A]"
+                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {completionStatsOn ? "Ẩn thống kê hoàn thành" : "Thống kê hoàn thành"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForecastOn((v) => !v)}
+                  className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer"
+                >
+                  {forecastOn ? "Ẩn dự báo" : "Tính mối cần hàn để đuổi kịp"}
+                </button>
+                {forecast ? (
+                  <span className="text-slate-700">
+                    Đang thiếu <b className="text-amber-800">{fmt(forecast.shortfall)}</b> mối · ngày
+                    {forecast.nextLabel ? ` ${forecast.nextLabel}` : " kế tiếp"} cần hàn{" "}
+                    <b className="text-amber-800">{fmt(forecast.need)}</b> mối
+                    (KH ngày {fmt(forecast.nextPlan)} + bù {fmt(forecast.shortfall)})
+                  </span>
+                ) : forecastOn ? (
+                  <span className="text-slate-500">Chưa có số liệu đến hôm nay để dự báo.</span>
+                ) : null}
+              </div>
+              {completionStatsOn ? (
+                <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xs">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <caption className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-left text-[11px] font-semibold text-slate-600">
+                      Chốt thực tế đến hết hôm qua · chia đều phần còn lại (làm tròn lên)
+                    </caption>
+                    <tbody>
+                      <tr className="border-b border-slate-100">
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Số mối còn lại</th>
+                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {fmt(futureQuota.remaining)}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Trung bình mối mỗi ngày</th>
+                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {futureQuota.perDay > 0 ? fmt(futureQuota.perDay) : "—"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Ngày hoàn thành</th>
+                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {futureQuota.remaining <= 0
+                            ? "Đã đủ kế hoạch"
+                            : futureQuota.perDay > 0
+                              ? viDate(futureQuota.finishDate)
+                              : "Chưa có ngày KH còn lại"}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -2213,12 +2224,6 @@ export default function OverviewDashboard() {
                             opacity="0.06"
                           />
                         )}
-                        {demoOn && chartViewMode === "daily" && futureQuota.remainingDays.has(dailySeries[i]?.date ?? "") && futureQuota.perDay > 0 && (
-                          <rect x={b.x + b.w} y={260 - futureQuota.perDay / chart.maxVal * 260}
-                            width={b.w} height={futureQuota.perDay / chart.maxVal * 260} fill="#a855f7">
-                            <title>{viDate(dailySeries[i].date)} · Cần hàn: {fmt(futureQuota.perDay)} mối/ngày (làm tròn lên, chốt thực tế đến hôm qua)</title>
-                          </rect>
-                        )}
                         {b.yellowH > 0 && (
                           <rect
                             x={b.x}
@@ -2242,14 +2247,12 @@ export default function OverviewDashboard() {
                       </g>
                     );
                   })}
-                  {bars.map((b, i) => {
-                    const purple = demoOn && chartViewMode === "daily" && futureQuota.remainingDays.has(dailySeries[i]?.date ?? "") && futureQuota.perDay > 0;
-                    return <g key={`values-${i}`} fontSize="12" textAnchor="middle" fontWeight="600">
+                  {bars.map((b, i) => (
+                    <g key={`values-${i}`} fontSize="12" textAnchor="middle" fontWeight="600">
                       <text x={b.x + b.w / 2} y={Math.max(8, b.yellowY - 5)} fill="#a16207">{fmt(b.target)}</text>
                       {b.actual > 0 && <text x={b.x + b.w / 2} y={Math.max(18, b.blueY - 4)} fill="#1d4ed8">{fmt(b.actual)}</text>}
-                      {purple && <text x={b.x + b.w * 1.5} y={Math.max(8, 260 - futureQuota.perDay / chart.maxVal * 260 - 6)} fill="#7e22ce">{fmt(futureQuota.perDay)}</text>}
-                    </g>;
-                  })}
+                    </g>
+                  ))}
                   {trendPath && (
                     <>
                       <path
@@ -2584,9 +2587,6 @@ export default function OverviewDashboard() {
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 text-xs text-slate-600">
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#3b82f6]" />Thực tế</span>
             <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />Dự kiến</span>
-            {demoOn ? (
-              <span className="flex items-center gap-2"><span className="h-3 w-3.5 rounded-xs bg-[#a855f7]" />Demo · hoàn thiện {viDate(futureQuota.finishDate)} · {fmt(futureQuota.perDay)} mối/ngày</span>
-            ) : null}
           </div>
 
           {cumulativeChart.actualValues.length === 0 ? (
@@ -2615,7 +2615,6 @@ export default function OverviewDashboard() {
                         return <g key={index}>
                           {yellowH > 0 && <rect x={band * index + band * .27} y={260 - blueH - yellowH} width={band * .46} height={yellowH} fill="#fcd34d" />}
                           {blueH > 0 && <rect x={band * index + band * .27} y={260 - blueH} width={band * .46} height={blueH} fill="#3b82f6" />}
-                          {demoOn && cumulativeChart.futureValues[index] > 0 && <rect x={band * index + band * .65} y={260 - cumulativeChart.futureValues[index] / cumulativeChart.max * 260} width={band * .25} height={cumulativeChart.futureValues[index] / cumulativeChart.max * 260} fill="#a855f7"><title>Lũy kế cần đạt: {fmt(cumulativeChart.futureValues[index])} mối · {fmt(futureQuota.perDay)} mối/ngày</title></rect>}
                         </g>;
                       })}
                       <path
@@ -2629,11 +2628,9 @@ export default function OverviewDashboard() {
                       {cumulativeChart.actualValues.map((actual, index) => {
                         const band = 500 / cumulativeChart.actualValues.length;
                         const target = cumulativeChart.targetValues[index] ?? 0;
-                        const future = demoOn ? (cumulativeChart.futureValues[index] ?? 0) : 0;
                         return <g key={`cum-values-${index}`} fontSize="12" textAnchor="middle" fontWeight="600">
                           <text x={band * (index + .5)} y={Math.max(8, 260 - Math.max(target, index <= cumulativeChart.lastActualIndex ? actual : 0) / cumulativeChart.max * 260 - 5)} fill="#a16207">{fmt(target)}</text>
                           {index <= cumulativeChart.lastActualIndex && actual > 0 && <text x={band * (index + .5)} y={Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)} fill="#1d4ed8">{fmt(actual)}</text>}
-                          {future > 0 && <text x={band * (index + .775)} y={Math.max(8, 260 - future / cumulativeChart.max * 260 - 6)} fill="#7e22ce">{fmt(future)}</text>}
                         </g>;
                       })}
                       {cumulativeChart.lastActualIndex >= 0 ? (

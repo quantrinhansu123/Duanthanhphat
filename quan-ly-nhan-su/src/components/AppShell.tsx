@@ -276,14 +276,15 @@ export default function AppShell({ tab }: AppShellProps) {
     if (typeof window !== "undefined") {
       const nested = new CustomEvent("app-back", { cancelable: true });
       if (!window.dispatchEvent(nested)) return;
-      // Ngăn xếp trang đã xem (sessionStorage, sống qua reload): còn trang trước thì lùi về đó, không về trang chủ.
+      // Lùi theo ngăn xếp trang app (không dùng history trình duyệt — bị nhiễu bởi overlay pushState / login).
       const stack = readNavStack();
-      if (stack.length > 1) {
-        router.back();
-        return;
-      }
-      if (window.history.length > 1) {
-        router.back();
+      while (stack.length && stack[stack.length - 1] === pathname) stack.pop();
+      const prev = stack[stack.length - 1];
+      if (prev != null && prev !== pathname) {
+        try {
+          sessionStorage.setItem(NAV_STACK_KEY, JSON.stringify(stack.slice(-30)));
+        } catch { /* sessionStorage bị chặn */ }
+        go(tabFromPath(prev));
         return;
       }
     }

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra nút Quay lại</title>
+<body>
+  <h1>Nút Quay lại (AppShell)</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Nút Quay lại</td><td>Về trang app liền trước trong ngăn xếp (sessionStorage), không nhảy thẳng trang chủ.</td></tr>
+    <tr><td>2</td><td>Lớp phủ / drawer</td><td>Còn dialog thì chỉ đóng lớp; hết lớp mới lùi trang.</td></tr>
+    <tr><td>3</td><td>Không còn trang trước</td><td>Mới về trang chủ (nút Trang chủ vẫn về home trực tiếp).</td></tr>
+    <tr><td>4</td><td>history.back()</td><td>Không dùng cho Back app — tránh nhiễu overlay pushState / sau login.</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>21/11/2026:</b> Sửa Quay lại: điều hướng theo ngăn xếp trang đã xem thay vì router.back()/về thẳng trang chủ.</p>
+  <a href="/">Mở trang chủ</a>
+</body>
+</html>
