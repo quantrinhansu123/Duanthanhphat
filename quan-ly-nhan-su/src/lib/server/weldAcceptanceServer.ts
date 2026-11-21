@@ -278,7 +278,13 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     moi_han_id: string;
     phieu_yeu_cau_nghiem_thu: { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string } | { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; du_an_id: string }[];
   };
-  const [qualityPack, linked] = await Promise.all([
+  type SplitHold = {
+    moi_han_id: string;
+    loai: string;
+    ket_qua: string | null;
+    phieu_nt_tach: { id: string; so_phieu: string; ngay_moi: string; du_an_id: string } | { id: string; so_phieu: string; ngay_moi: string; du_an_id: string }[];
+  };
+  const [qualityPack, linked, splitHolds] = await Promise.all([
     loadRfiQualityRows(projectId),
     // Chỉ khóa mối còn thuộc RFI «Đã phát hành» (phiếu hoàn thành/huỷ không giữ chỗ).
     fetchAll<LinkedRow>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
@@ -286,10 +292,19 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId)
     .eq("phieu_yeu_cau_nghiem_thu.trang_thai", "Đã phát hành")
     .order("moi_han_id").range(a, b)),
+    // Phiếu tách HH/SA đang xử lý (chưa kết quả) — khớp chặn khi phát RFI mới.
+    fetchAll<SplitHold>((a, b) => db().from("phieu_nt_tach_moi")
+      .select("moi_han_id,loai,ket_qua,phieu_nt_tach!inner(id,so_phieu,ngay_moi,du_an_id)")
+      .eq("phieu_nt_tach.du_an_id", projectId)
+      .is("ket_qua", null)
+      .order("moi_han_id")
+      .range(a, b)),
   ]);
   const quality = qualityPack.rows;
   const parentOf = (row: LinkedRow) => Array.isArray(row.phieu_yeu_cau_nghiem_thu) ? row.phieu_yeu_cau_nghiem_thu[0] : row.phieu_yeu_cau_nghiem_thu;
+  const splitParentOf = (row: SplitHold) => Array.isArray(row.phieu_nt_tach) ? row.phieu_nt_tach[0] : row.phieu_nt_tach;
   const inRfi = new Set(linked.map((r) => r.moi_han_id));
+  const inSplitOpen = new Set(splitHolds.map((r) => r.moi_han_id));
   const weldStatus = new Map(quality.map((q) => [q.moi_han_id, q.tinh_trang]));
   // Phiếu đang giữ mối «Mài xong» — để UI chỉ rõ sửa ngày mời / nghiệm thu phiếu nào thay vì phát phiếu mới.
   const heldMap = new Map<string, { id: string; so_phieu: string; ngay_moi: string; total: number; maiXong: number }>();
@@ -301,12 +316,26 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     if (weldStatus.get(row.moi_han_id) === "Mài xong") cur.maiXong += 1;
     heldMap.set(parent.id, cur);
   }
+  for (const row of splitHolds) {
+    const parent = splitParentOf(row);
+    if (!parent) continue;
+    const key = `tach:${parent.id}`;
+    const cur = heldMap.get(key) ?? { id: parent.id, so_phieu: parent.so_phieu, ngay_moi: parent.ngay_moi, total: 0, maiXong: 0 };
+    cur.total += 1;
+    if (weldStatus.get(row.moi_han_id) === "Mài xong") cur.maiXong += 1;
+    heldMap.set(key, cur);
+  }
   const heldRfis = [...heldMap.values()]
     .filter((r) => r.maiXong > 0)
     .sort((a, b) => b.maiXong - a.maiXong || b.ngay_moi.localeCompare(a.ngay_moi));
-  // Chỉ mối đủ trạng thái + cờ RFI, chưa nằm trong phiếu đang hiệu lực.
+  // Đủ trạng thái + cờ RFI, chưa thuộc RFI chính / phiếu tách mở; «Chờ siêu âm» = đã HH → không phát RFI chính mới.
   const isEligible = (q: QualityRow) =>
-    q.du_dieu_kien_rfi && isRfiEligibleStatus(q.tinh_trang) && q.tinh_trang !== "Chờ ký biên bản" && !inRfi.has(q.moi_han_id);
+    q.du_dieu_kien_rfi
+    && isRfiEligibleStatus(q.tinh_trang)
+    && q.tinh_trang !== "Chờ ký biên bản"
+    && q.tinh_trang !== "Chờ siêu âm"
+    && !inRfi.has(q.moi_han_id)
+    && !inSplitOpen.has(q.moi_han_id);
   const eligible = quality.filter(isEligible);
   const ids = eligible.map((q) => q.moi_han_id);
 
@@ -347,6 +376,11 @@ export async function loadRfiCandidates(body: Record<string, unknown>) {
     if (inRfi.has(q.moi_han_id)) {
       reason = "Đã thuộc RFI đang hiệu lực";
       if (q.tinh_trang === "Mài xong") maiXongInRfi += 1;
+    } else if (inSplitOpen.has(q.moi_han_id)) {
+      reason = "Đã thuộc phiếu tách HH/SA đang xử lý";
+      if (q.tinh_trang === "Mài xong") maiXongInRfi += 1;
+    } else if (q.tinh_trang === "Chờ siêu âm") {
+      reason = "Đã duyệt hình học — đang chờ siêu âm (phiếu tách SA)";
     } else if (isRfiEligibleStatus(q.tinh_trang) && !q.du_dieu_kien_rfi) {
       // Trạng thái hiển thị đủ (vd Mài xong) nhưng cờ du_dieu_kien_rfi = false — không nhầm với «đang chờ nghiệm thu».
       reason = q.tinh_trang === "Mài xong"
@@ -633,27 +667,36 @@ export async function listRfis(projectId: string) {
   type Rfi = { id: string; so_phieu: string; ngay_moi: string; trang_thai: string; nguoi_lap: string; thong_tin: Record<string, string>; created_at: string };
   type Link = { phieu_id: string; moi_han_id: string; con_hieu_luc: boolean; du_lieu_chot: Snapshot };
   type Batch = { id: string; phieu_id: string; thong_tin: Record<string, unknown>; created_at: string };
-  const [rfis, links, batches] = await Promise.all([
-    fetchAll<Rfi>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
-      .select("id,so_phieu,ngay_moi,trang_thai,nguoi_lap,thong_tin,created_at").eq("du_an_id", projectId)
-      .order("ngay_moi", { ascending: false }).order("created_at", { ascending: false }).order("id").range(a, b)),
-    fetchAll<Link>((a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
-      .select("phieu_id,moi_han_id,con_hieu_luc,du_lieu_chot,phieu_yeu_cau_nghiem_thu!inner(du_an_id)")
-      .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("phieu_id").order("moi_han_id").range(a, b)),
-    fetchAll<Batch>((a, b) => db().from("dot_nghiem_thu")
-      .select("id,phieu_id,thong_tin,created_at,phieu_yeu_cau_nghiem_thu!inner(du_an_id)")
-      .eq("phieu_yeu_cau_nghiem_thu.du_an_id", projectId).order("created_at").order("id").range(a, b)),
+  const SNAP = "ma_lich_su:du_lieu_chot->moi_han->>ma_lich_su,ma_diem:du_lieu_chot->moi_han->>ma_diem,ly_trinh:du_lieu_chot->moi_han->>ly_trinh";
+  type Flat = { ma_lich_su: string | null; ma_diem: string | null; ly_trinh: string | null };
+  const toSnap = (r: Flat): Snapshot => ({ moi_han: { ma_lich_su: r.ma_lich_su ?? undefined, ma_diem: r.ma_diem ?? undefined, ly_trinh: r.ly_trinh ?? undefined } });
+  const rfis = await fetchAll<Rfi>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
+    .select("id,so_phieu,ngay_moi,trang_thai,nguoi_lap,thong_tin,created_at").eq("du_an_id", projectId)
+    .order("ngay_moi", { ascending: false }).order("created_at", { ascending: false }).order("id").range(a, b));
+  const rfiIds = rfis.map((r) => r.id);
+  // Lọc theo phieu_id (không join inner) và chỉ lấy 3 trường snapshot cần dùng thay vì cả jsonb du_lieu_chot.
+  const [linkRows, batches] = await Promise.all([
+    chunkedPages<Omit<Link, "du_lieu_chot"> & Flat>(rfiIds, (ids, a, b) => db().from("phieu_yeu_cau_nghiem_thu_moi")
+      .select(`phieu_id,moi_han_id,con_hieu_luc,${SNAP}`).in("phieu_id", ids).order("phieu_id").order("moi_han_id").range(a, b)),
+    chunkedPages<Batch>(rfiIds, (ids, a, b) => db().from("dot_nghiem_thu")
+      .select("id,phieu_id,thong_tin,created_at").in("phieu_id", ids).order("created_at").order("id").range(a, b)),
   ]);
-  const completed = batches.filter((d) => d.thong_tin?.draft !== true);
-  const [results, docs, points, signing] = await Promise.all([
-    chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string; du_lieu_chot: Snapshot }>(completed.map((d) => d.id),
-      (ids, a, b) => db().from("dot_nghiem_thu_moi").select("dot_id,moi_han_id,ket_qua,du_lieu_chot").in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b)),
+  const links: Link[] = linkRows.map((l) => ({ phieu_id: l.phieu_id, moi_han_id: l.moi_han_id, con_hieu_luc: l.con_hieu_luc, du_lieu_chot: toSnap(l) }));
+  const completed = batches.filter((d) => d.thong_tin?.draft !== true).sort((x, y) => x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id));
+  const [resultRows, docs, signing] = await Promise.all([
+    chunkedPages<{ dot_id: string; moi_han_id: string; ket_qua: string } & Flat>(completed.map((d) => d.id),
+      (ids, a, b) => db().from("dot_nghiem_thu_moi").select(`dot_id,moi_han_id,ket_qua,${SNAP}`).in("dot_id", ids).order("dot_id").order("moi_han_id").range(a, b)),
     chunkedPages<{ dot_id: string; loai: string; tinh_trang_ky: string }>(completed.map((d) => d.id),
       (ids, a, b) => db().from("ho_so_nghiem_thu").select("dot_id,loai,tinh_trang_ky").in("dot_id", ids).order("id").range(a, b)),
-    chunkedPages<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>([...new Set(links.map((l) => l.moi_han_id))],
-      (ids, a, b) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", ids).order("id").range(a, b)),
-    childSigningByRfi(rfis.map(r => r.id)),
+    childSigningByRfi(rfiIds),
   ]);
+  const results = resultRows.map((r) => ({ dot_id: r.dot_id, moi_han_id: r.moi_han_id, ket_qua: r.ket_qua, du_lieu_chot: toSnap(r) }));
+  // toa_do chỉ cần cho mối mà snapshot chưa có mã điểm / lý trình.
+  const hasSnap = (s?: Snapshot) => Boolean(s?.moi_han?.ma_diem && s.moi_han.ly_trinh);
+  const snapOf = new Set(results.filter((r) => hasSnap(r.du_lieu_chot)).map((r) => r.moi_han_id));
+  const needPoints = [...new Set(links.filter((l) => !hasSnap(l.du_lieu_chot) && !snapOf.has(l.moi_han_id)).map((l) => l.moi_han_id))];
+  const points = await chunkedPages<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(needPoints,
+    (ids, a, b) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", ids).order("id").range(a, b));
   const required = ["Phụ lục công việc", "Giai đoạn xây dựng", "Hoàn thành công việc"];
   const where = new Map(points.map((p) => [p.lich_su_moi_han_id, p]));
   const linksByRfi = new Map<string, Link[]>();

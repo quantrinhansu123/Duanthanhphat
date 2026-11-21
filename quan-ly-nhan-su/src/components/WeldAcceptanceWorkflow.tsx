@@ -9,7 +9,7 @@ import PendingDialog from "@/components/PendingDialog";
 import { useBbntScan } from "@/components/useBbntScan";
 import GtusAcceptanceTab, { gtusTicketNo } from "@/components/GtusAcceptanceTab";
 import { loadProjectOptions } from "@/lib/projectsDb";
-import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfiOverview, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, bbntScanInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
+import { loadGtusCandidates, type GtusCandidate, loadRfiCandidates, loadRfiDetail, loadRfis, loadRfiNumber, deleteRfi, publishRfi, saveWeldPayments, setRfiChildSign, setRfiPending, rfiPendingInfo, bbntScanInfo, updateRfi, type RecordSet, type RfiSummary, type RfiWeld } from "@/lib/weldQualityClient";
 import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weldAcceptance";
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
@@ -303,12 +303,33 @@ function RfiPanel({
   const editFormRef = useRef<HTMLDivElement | null>(null);
   const publishDialogRef = useRef<HTMLDialogElement | null>(null);
 
-  const refresh = useCallback(async (keepSoPhieu = false) => {
-    const { rfis, so_phieu, candidates } = await loadRfiOverview(projectId);
-    setRfis(rfis);
-    setUnassigned(candidates.rows);
-    if (!keepSoPhieu) setSoPhieu(so_phieu);
+  // Danh sách phiếu đã phát (nặng) chỉ tải khi mở tab «Danh sách phiếu đã phát»; tab «Phát phiếu» chỉ cần số phiếu + mối.
+  const [listLoading, setListLoading] = useState(false);
+  const listFresh = useRef(false);
+  const rfiTabRef = useRef<"publish" | "issued" | "thu-bao">("publish");
+  rfiTabRef.current = rfiTab;
+  const loadList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const { rfis } = await loadRfis(projectId);
+      setRfis(rfis);
+      listFresh.current = true;
+    } finally { setListLoading(false); }
   }, [projectId]);
+  const refresh = useCallback(async (keepSoPhieu = false) => {
+    listFresh.current = false;
+    const tasks: Promise<unknown>[] = [
+      loadRfiCandidates(projectId, {}).then((c) => setUnassigned(c.rows)),
+    ];
+    if (!keepSoPhieu) tasks.push(loadRfiNumber(projectId).then(({ so_phieu }) => setSoPhieu(so_phieu)));
+    if (rfiTabRef.current === "issued") tasks.push(loadList());
+    const results = await Promise.allSettled(tasks);
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failed) throw failed.reason;
+  }, [projectId, loadList]);
+  useEffect(() => {
+    if (rfiTab === "issued" && !listFresh.current) loadList().catch((e) => setError(message(e)));
+  }, [rfiTab, loadList]);
   const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(true); }, onError: setError });
 
   async function toggleChildSigning(rfi: RfiSummary) {
@@ -323,6 +344,7 @@ function RfiPanel({
   useEffect(() => {
     setRows([]); setInfo(null); setSelected(new Set()); setError(""); setOkMsg("");
     setEditingId(null);
+    setRfis([]); listFresh.current = false;
     requestId.current = crypto.randomUUID();
     const draft = loadRfiDraft(projectId);
     setThongTin({ ...emptyThongTin(), ...draft });
@@ -877,7 +899,7 @@ function RfiPanel({
               </tr>
             ))}
             {!rfis.length && (
-              <tr><td colSpan={10} className="p-3 text-slate-500">Chưa có phiếu. Mở tab “Phát phiếu” để tạo phiếu mới.</td></tr>
+              <tr><td colSpan={10} className="p-3 text-slate-500">{listLoading ? "Đang tải danh sách phiếu…" : "Chưa có phiếu. Mở tab “Phát phiếu” để tạo phiếu mới."}</td></tr>
             )}
           </tbody>
         </table>
