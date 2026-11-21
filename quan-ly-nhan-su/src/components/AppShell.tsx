@@ -3,6 +3,7 @@
 import GlobalReportFilterBar from "@/components/GlobalReportFilterBar";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { List, CaretRight, ArrowLeft, House, ArrowClockwise } from "@/components/icons";
 import Sidebar from "@/components/Sidebar";
@@ -183,6 +184,8 @@ export default function AppShell({ tab }: AppShellProps) {
   });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [bottomNavReady, setBottomNavReady] = useState(false);
+  useEffect(() => { setBottomNavReady(true); }, []);
 
   // Đồng bộ tab theo URL Next.js — để nút Back trình duyệt về đúng trang trước.
   useEffect(() => {
@@ -409,7 +412,7 @@ export default function AppShell({ tab }: AppShellProps) {
         </header>
 
         <main id="main-content" tabIndex={-1}
-          className={`app-workspace-main min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto ${reportTab ? "flex flex-col" : ""}`}
+          className={`app-workspace-main min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto max-lg:pb-[calc(4.75rem+env(safe-area-inset-bottom,0px))] ${reportTab ? "flex flex-col" : ""}`}
         >
           {reportTab && (
             <div className="shrink-0 bg-[#f4f6fa]">
@@ -502,47 +505,58 @@ export default function AppShell({ tab }: AppShellProps) {
           )}
         </main>
 
-        {/* Mobile/tablet: luôn hiện Back · Home · Load (kể cả trang chủ). Desktop dùng sidebar nên ẩn. */}
-        <nav
-          className="relative z-20 shrink-0 border-t border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur-md print:hidden lg:hidden"
-          style={{ paddingBottom: "max(0.625rem, env(safe-area-inset-bottom))" }}
-          aria-label={lang === "en" ? "Page navigation" : "Điều hướng trang"}
-        >
-          <div className="mx-auto grid max-w-lg grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={atHome}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer disabled:cursor-default disabled:opacity-40"
-            >
-              <ArrowLeft size={18} weight="bold" aria-hidden />
-              {lang === "en" ? "Back" : "Quay lại"}
-            </button>
-            <button
-              type="button"
-              onClick={() => go(HOME_TAB)}
-              aria-current={atHome ? "page" : undefined}
-              className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/40 cursor-pointer ${
-                atHome
-                  ? "bg-[#00327a] text-white"
-                  : "bg-[#0047AB] text-white hover:bg-[#003d94] active:bg-[#00327a]"
-              }`}
-            >
-              <House size={18} weight="bold" aria-hidden />
-              {lang === "en" ? "Home" : "Trang chủ"}
-            </button>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
-              title={lang === "en" ? "Reload app" : "Tải lại ứng dụng"}
-            >
-              <ArrowClockwise size={18} weight="bold" aria-hidden />
-              {lang === "en" ? "Reload" : "Load lại"}
-            </button>
-          </div>
-        </nav>
       </div>
+      {/* Portal ra body: fixed thật sự theo viewport, không bị overflow/transform của workspace kéo theo khi cuộn. */}
+      {bottomNavReady
+        ? createPortal(
+            <nav
+              className="pointer-events-auto fixed inset-x-0 bottom-0 z-[200] border-t border-slate-200 bg-white px-3 py-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] print:hidden lg:hidden"
+              style={{
+                paddingBottom: "max(0.625rem, env(safe-area-inset-bottom, 0px))",
+                position: "fixed",
+                left: 0,
+                right: 0,
+                bottom: 0,
+              }}
+              aria-label={lang === "en" ? "Page navigation" : "Điều hướng trang"}
+            >
+              <div className="mx-auto grid max-w-lg grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={atHome}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer disabled:cursor-default disabled:opacity-40"
+                >
+                  <ArrowLeft size={18} weight="bold" aria-hidden />
+                  {lang === "en" ? "Back" : "Quay lại"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go(HOME_TAB)}
+                  aria-current={atHome ? "page" : undefined}
+                  className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold shadow-2xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/40 cursor-pointer ${
+                    atHome
+                      ? "bg-[#00327a] text-white"
+                      : "bg-[#0047AB] text-white hover:bg-[#003d94] active:bg-[#00327a]"
+                  }`}
+                >
+                  <House size={18} weight="bold" aria-hidden />
+                  {lang === "en" ? "Home" : "Trang chủ"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer"
+                  title={lang === "en" ? "Reload app" : "Tải lại ứng dụng"}
+                >
+                  <ArrowClockwise size={18} weight="bold" aria-hidden />
+                  {lang === "en" ? "Reload" : "Load lại"}
+                </button>
+              </div>
+            </nav>,
+            document.body,
+          )
+        : null}
     </div>
     </ReportFilterProvider>
   );

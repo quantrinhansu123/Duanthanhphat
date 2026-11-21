@@ -19,7 +19,7 @@ import ThuBaoDocument from "@/components/ThuBaoDocument";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 
 const input = "min-h-11 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 text-base sm:text-sm";
-const btn = "min-h-11 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+const btn = "inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 const primary = `${btn} bg-[#0047AB] text-white hover:bg-[#00388A]`;
 const secondary = `${btn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`;
 const today = () => new Date().toLocaleDateString("sv-SE");
@@ -178,7 +178,7 @@ export default function WeldAcceptanceWorkflow() {
         </select>
       </div>
       {/* Thẻ kiểu sổ: tab bo góc phía trên, tab đang chọn liền khối với khung nội dung bên dưới. */}
-      <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print flex flex-wrap items-end gap-1 px-1">
+      <div role="tablist" aria-label="Phương án nghiệm thu" className="no-print -mx-4 flex items-end gap-1 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-1">
         {([
           ["rfi", "Phát phiếu RFI"],
           ["hinh-hoc", "Nghiệm thu Hình Học"],
@@ -186,7 +186,7 @@ export default function WeldAcceptanceWorkflow() {
           ["gtus", "Giải toả ứng suất"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
-            className={`relative cursor-pointer rounded-t-xl border-2 border-b-0 px-4 text-sm font-bold transition-colors ${mode === id
+            className={`relative shrink-0 cursor-pointer rounded-t-xl border-2 border-b-0 px-3 text-xs font-bold transition-colors sm:px-4 sm:text-sm ${mode === id
               ? "z-10 -mb-[2px] border-[#0047AB] bg-white py-3 text-[#0047AB]"
               : "border-slate-200 bg-slate-100 py-2.5 text-slate-600 hover:bg-white hover:text-slate-900"}`}>
             {label}
@@ -600,25 +600,25 @@ function RfiPanel({
         </p>
       </div>
 
-      <div role="tablist" aria-label="Các bước phát phiếu RFI" className="grid grid-cols-3 gap-2">
+      <div role="tablist" aria-label="Các bước phát phiếu RFI" className="grid w-full grid-cols-3 gap-1.5 sm:gap-2">
         {([["kind", "1. Loại phiếu"], ["welds", "2. Chọn mối"], ["details", "3. Thông tin phiếu"]] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" id={`rfi-step-${id}`} aria-controls={`rfi-step-panel-${id}`}
             aria-selected={activeStep === id} disabled={busy || (Boolean(editingId) && id !== "details") || (monitoring && id === "welds")}
             onClick={() => setPublishStep(id)}
-            className={`${activeStep === id ? primary : secondary} h-auto min-h-10 px-2 py-2 text-center text-xs leading-tight`}>
+            className={`${activeStep === id ? primary : secondary} h-auto min-h-10 w-full px-1.5 py-2 text-center text-[11px] leading-tight sm:px-2 sm:text-xs`}>
             {label}
           </button>
         ))}
       </div>
       <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
-      <div role="group" aria-label="Loại phiếu" className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "nghiem-thu" ? primary : secondary}>1. Phiếu yêu cầu nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary}>2. Phiếu theo dõi công việc hàn</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={kind === "ca-hai" ? primary : secondary}>Cả giám sát và nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={monitoring && thongTin.cong_viec === "gtus" ? primary : secondary}>3. Giải toả ứng suất (GTUS)</button>
+      <div role="group" aria-label="Loại phiếu" className="grid w-full grid-cols-1 gap-2">
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "nghiem-thu" ? primary : secondary} w-full justify-start text-left`}>1. Phiếu yêu cầu nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary} w-full justify-start text-left`}>2. Phiếu theo dõi công việc hàn</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "ca-hai" ? primary : secondary} w-full justify-start text-left`}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={`${monitoring && thongTin.cong_viec === "gtus" ? primary : secondary} w-full justify-start text-left`}>3. Giải toả ứng suất (GTUS)</button>
       </div>
       {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh ray màu xám trên track map ở bước Thông tin phiếu; tuyến và lý trình tự lấy đúng theo từng thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
-      <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
+      <button type="button" className={`${secondary} w-full sm:w-auto`} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
         <form method="dialog" className="space-y-4" onSubmit={(e) => {

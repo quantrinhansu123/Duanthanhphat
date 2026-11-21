@@ -1,5 +1,7 @@
 -- Phát RFI bị statement timeout: hàm SQL quét view nặng nhiều lần.
 --  1) phat_hanh_rfi_moi_han: kiểm điều kiện từng mối bằng cột cache (migration 20261120/20261121), chỉ fallback view khi cache không đạt.
+--  0) Trigger cache (20261120) chạy mỗi dòng chèn vào dot_nghiem_thu_moi / phieu_nt_tach_moi / ho_so_nghiem_thu → phát 20 mối gọi ~120 lần
+--     hàm tính tình trạng (rất nặng). Khi phát RFI: tắt trigger bằng cờ giao dịch app.bo_qua_cache_chat_luong, cuối cùng chỉ tính lại 1 lần cho các mối của phiếu.
 --  2) phat_hanh_rfi_va_phieu_con: tính dieu_kien_nt_tach MỘT lần cho đúng các mối của phiếu (moi_han_id = any(mảng)) thay vì join cả view 2 lần.
 -- Cần chạy sau migration_20261120_tinh_trang_chat_luong_cache.sql và migration_20261121_du_dieu_kien_rfi_cache.sql. Chạy lại nhiều lần không sao.
 begin;
@@ -10,6 +12,34 @@ begin
     or not exists (select 1 from information_schema.columns where table_schema='public' and table_name='lich_su_moi_han' and column_name='tinh_trang_chat_luong') then
     raise exception 'Chạy migration_20261120_tinh_trang_chat_luong_cache.sql và migration_20261121_du_dieu_kien_rfi_cache.sql trước.';
   end if;
+end $$;
+
+create or replace function public.trg_cap_nhat_tinh_trang_chat_luong_phieu_moi()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('app.bo_qua_cache_chat_luong', true), '') = '1' then return coalesce(new, old); end if;
+  perform public.cap_nhat_tinh_trang_chat_luong(coalesce(new.moi_han_id, old.moi_han_id));
+  return coalesce(new, old);
+end $$;
+
+create or replace function public.trg_cap_nhat_tinh_trang_chat_luong_phieu_nt_tach()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('app.bo_qua_cache_chat_luong', true), '') = '1' then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' and new.da_ky is not distinct from old.da_ky then return new; end if;
+  perform public.cap_nhat_tinh_trang_chat_luong(m.moi_han_id)
+  from public.phieu_nt_tach_moi m where m.phieu_id = coalesce(new.id, old.id);
+  return coalesce(new, old);
+end $$;
+
+create or replace function public.trg_cap_nhat_tinh_trang_chat_luong_ho_so()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('app.bo_qua_cache_chat_luong', true), '') = '1' then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' and new.tinh_trang_ky is not distinct from old.tinh_trang_ky then return new; end if;
+  perform public.cap_nhat_tinh_trang_chat_luong(m.moi_han_id)
+  from public.dot_nghiem_thu_moi m where m.dot_id = coalesce(new.dot_id, old.dot_id);
+  return coalesce(new, old);
 end $$;
 
 create or replace function public.phat_hanh_rfi_moi_han(
@@ -109,6 +139,7 @@ declare
   explicit_scope boolean := p_thong_tin ? 'nt_hinh_hoc' or p_thong_tin ? 'nt_sieu_am';
   dieu_kien jsonb;
 begin
+  perform set_config('app.bo_qua_cache_chat_luong','1',true);
   parent_id := public.phat_hanh_rfi_moi_han(p_id,p_du_an_id,p_so_phieu,p_ngay_moi,p_moi_han_ids,p_nguoi_lap,p_thong_tin);
   -- Serialize retries so a repeated request cannot create a second child.
   perform 1 from phieu_yeu_cau_nghiem_thu where id=parent_id for update;
@@ -136,6 +167,9 @@ begin
       join lich_su_moi_han ls on ls.id=pm.moi_han_id
       where pm.phieu_id=parent_id;
   end loop;
+  -- Bật lại trigger và đồng bộ cache một lần cho các mối của phiếu.
+  perform set_config('app.bo_qua_cache_chat_luong','',true);
+  perform public.cap_nhat_tinh_trang_chat_luong(w) from unnest(p_moi_han_ids) w;
   return parent_id;
 end $$;
 

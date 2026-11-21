@@ -371,6 +371,19 @@ export default function OverviewDashboard() {
   const [chartZoom, setChartZoom] = useState(1);
   const [forecastOn, setForecastOn] = useState(false);
   const [completionStatsOn, setCompletionStatsOn] = useState(false);
+  const completionStatsRef = useRef<HTMLDivElement | null>(null);
+  // Số mối làm thêm mỗi ngày (ngoài mức trung bình) — nhấn +/- thì ngày hoàn thành tính lại theo tổng mối còn lại.
+  const [extraPerDay, setExtraPerDay] = useState(0);
+  useEffect(() => {
+    if (!completionStatsOn) return;
+    const onDown = (e: MouseEvent) => {
+      if (!completionStatsRef.current?.contains(e.target as Node)) setCompletionStatsOn(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCompletionStatsOn(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [completionStatsOn]);
   const plotScrollRef = useRef<HTMLDivElement>(null);
   const [plotViewportWidth, setPlotViewportWidth] = useState(0);
 
@@ -821,6 +834,19 @@ export default function OverviewDashboard() {
     }
     return { perDay, remainingDays, actual, remaining, daysNeeded, finishDate };
   }, [selectedProjects, isAllDates, filterFrom, filterTo, todayIso, showFastCharts, fastRollupRows, selectedRows]);
+
+  const quotaWithExtra = useMemo(() => {
+    const { remaining, perDay } = futureQuota;
+    const rate = perDay + Math.max(0, extraPerDay);
+    const days = remaining <= 0 || rate <= 0 ? 0 : Math.ceil(remaining / rate);
+    let finishDate = todayIso;
+    if (days > 0) {
+      const end = new Date(`${todayIso}T12:00:00`);
+      end.setDate(end.getDate() + days - 1);
+      finishDate = localIsoDate(end);
+    }
+    return { rate, days, finishDate };
+  }, [futureQuota, extraPerDay, todayIso]);
 
   const cumulativeChart = useMemo(() => {
     const asOf = isAllDates || todayIso < filterTo ? todayIso : filterTo;
@@ -2041,6 +2067,7 @@ export default function OverviewDashboard() {
           {chartViewMode === "daily" ? (
             <div className="mt-2 flex flex-col items-center gap-2 text-xs">
               <div className="flex flex-wrap items-center justify-center gap-2">
+                <div ref={completionStatsRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setCompletionStatsOn((v) => !v)}
@@ -2053,6 +2080,69 @@ export default function OverviewDashboard() {
                 >
                   {completionStatsOn ? "Ẩn thống kê hoàn thành" : "Thống kê hoàn thành"}
                 </button>
+                {completionStatsOn ? (
+                <div role="dialog" aria-label="Thống kê hoàn thành" className="absolute left-1/2 top-full z-30 mt-2 w-[min(22rem,90vw)] -translate-x-1/2 overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-xl">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <caption className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-left text-[11px] font-semibold text-slate-600">
+                      Chốt thực tế đến hết hôm qua · chia đều phần còn lại (làm tròn lên)
+                    </caption>
+                    <tbody>
+                      <tr className="border-b border-slate-100">
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Số mối còn lại</th>
+                        <td colSpan={2} className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {fmt(futureQuota.remaining)}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">
+                          Trung bình mối mỗi ngày
+                          <span className="block text-[10px] font-normal text-slate-400">+ số mối thêm mỗi ngày</span>
+                        </th>
+                        <td className="px-2 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {futureQuota.perDay > 0 ? fmt(futureQuota.perDay) : "—"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <div className="inline-flex items-center overflow-hidden rounded-md border border-amber-300 bg-amber-50">
+                            <button type="button" aria-label="Giảm số mối thêm mỗi ngày" disabled={extraPerDay <= 0}
+                              onClick={() => setExtraPerDay((v) => Math.max(0, v - 1))}
+                              className="px-1.5 py-0.5 font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-40 cursor-pointer">−</button>
+                            <input type="number" min={0} inputMode="numeric" aria-label="Số mối thêm mỗi ngày" value={extraPerDay}
+                              onChange={(e) => setExtraPerDay(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                              className="w-12 bg-white py-0.5 text-center font-mono text-sm font-bold text-amber-800 outline-none" />
+                            <button type="button" aria-label="Tăng số mối thêm mỗi ngày"
+                              onClick={() => setExtraPerDay((v) => v + 1)}
+                              className="px-1.5 py-0.5 font-bold text-amber-800 hover:bg-amber-100 cursor-pointer">+</button>
+                          </div>
+                        </td>
+                      </tr>
+                      {extraPerDay > 0 ? (
+                        <tr className="border-b border-slate-100">
+                          <th scope="row" className="px-3 py-2 font-medium text-slate-600">Tổng mối mỗi ngày</th>
+                          <td colSpan={2} className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-amber-800">
+                            {fmt(quotaWithExtra.rate)}
+                          </td>
+                        </tr>
+                      ) : null}
+                      <tr>
+                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">
+                          Ngày hoàn thành
+                          {futureQuota.remaining > 0 && quotaWithExtra.days > 0 ? (
+                            <span className="block text-[10px] font-normal text-slate-400">cần {fmt(quotaWithExtra.days)} ngày</span>
+                          ) : null}
+                        </th>
+                        <td colSpan={2} className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
+                          {futureQuota.remaining <= 0
+                            ? "Đã đủ kế hoạch"
+                            : quotaWithExtra.rate > 0
+                              ? viDate(quotaWithExtra.finishDate)
+                              : "Chưa có ngày KH còn lại"}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                ) : null}
+                </div>
                 <button
                   type="button"
                   onClick={() => setForecastOn((v) => !v)}
@@ -2071,39 +2161,6 @@ export default function OverviewDashboard() {
                   <span className="text-slate-500">Chưa có số liệu đến hôm nay để dự báo.</span>
                 ) : null}
               </div>
-              {completionStatsOn ? (
-                <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xs">
-                  <table className="w-full text-left text-xs text-slate-700">
-                    <caption className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-left text-[11px] font-semibold text-slate-600">
-                      Chốt thực tế đến hết hôm qua · chia đều phần còn lại (làm tròn lên)
-                    </caption>
-                    <tbody>
-                      <tr className="border-b border-slate-100">
-                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Số mối còn lại</th>
-                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
-                          {fmt(futureQuota.remaining)}
-                        </td>
-                      </tr>
-                      <tr className="border-b border-slate-100">
-                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Trung bình mối mỗi ngày</th>
-                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
-                          {futureQuota.perDay > 0 ? fmt(futureQuota.perDay) : "—"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th scope="row" className="px-3 py-2 font-medium text-slate-600">Ngày hoàn thành</th>
-                        <td className="px-3 py-2 text-right font-mono text-sm font-bold tabular-nums text-[#0047AB]">
-                          {futureQuota.remaining <= 0
-                            ? "Đã đủ kế hoạch"
-                            : futureQuota.perDay > 0
-                              ? viDate(futureQuota.finishDate)
-                              : "Chưa có ngày KH còn lại"}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
             </div>
           ) : null}
 

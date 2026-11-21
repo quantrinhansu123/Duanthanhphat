@@ -11,8 +11,11 @@
     <tr><td>2</td><td>Lớp phủ / drawer</td><td>Còn dialog thì chỉ đóng lớp; hết lớp mới lùi trang.</td></tr>
     <tr><td>3</td><td>Không còn trang trước</td><td>Mới về trang chủ (nút Trang chủ vẫn về home trực tiếp).</td></tr>
     <tr><td>4</td><td>history.back()</td><td>Không dùng cho Back app — tránh nhiễu overlay pushState / sau login.</td></tr>
+    <tr><td>5</td><td>Thanh Bottom mobile</td><td>Portal ra document.body, position:fixed đáy viewport, z-200; main có padding-bottom; ẩn từ lg trở lên. Không cuộn theo nội dung.</td></tr>
   </table>
   <h2>Lịch sử thay đổi</h2>
+  <p><b>21/11/2026 (tối+):</b> Portal thanh Bottom ra body để luôn dính đáy, không bị workspace overflow kéo theo.</p>
+  <p><b>21/11/2026 (tối):</b> Thanh Back · Home · Load cố định đáy màn hình (mobile/tablet), thêm padding nội dung để không bị che.</p>
   <p><b>21/11/2026:</b> Sửa Quay lại: điều hướng theo ngăn xếp trang đã xem thay vì router.back()/về thẳng trang chủ.</p>
   <a href="/">Mở trang chủ</a>
 </body>
