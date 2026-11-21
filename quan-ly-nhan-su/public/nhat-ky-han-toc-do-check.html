@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra tốc độ Nhật ký hàn</title>
+<body>
+  <h1>Nhật ký mối hàn — tốc độ tải</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục</th><th>Quy tắc</th></tr>
+    <tr><td>1</td><td>Lần mở tab</td><td>Chỉ 1 lần POST action=list sau khi gắn mặc định Phú Quốc (không tải toàn bộ rồi tải lại).</td></tr>
+    <tr><td>2</td><td>GPS / toạ độ</td><td>Tải sau khi bảng xong (enabled sau list).</td></tr>
+    <tr><td>3</td><td>Thợ hàn / chứng chỉ</td><td>Chỉ tải khi mở form thêm/sửa hoặc Autolisp.</td></tr>
+    <tr><td>4</td><td>Dedup client</td><td>action list + payment-map dùng chung promise nếu trùng body.</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>21/11/2026:</b> Chặn double-fetch list; trì hoãn GPS và danh mục thợ; dedup list/payment-map.</p>
+  <a href="/nhat-ky-han">Mở Nhật ký hàn</a>
+</body>
+</html>

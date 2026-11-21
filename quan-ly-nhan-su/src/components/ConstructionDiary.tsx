@@ -151,8 +151,13 @@ export default function ConstructionDiaryForm() {
   useEffect(reloadSaved, []);
   useEffect(() => {
     loadProjects({ includeProgress: false }).then((r) => {
-      setProjects(r.projects.map((p) => ({ id: p.id, name: p.name, startDate: p.startDate })));
-      setProjectId((cur) => cur || r.projects[0]?.id || "");
+      const list = r.projects.map((p) => ({ id: p.id, name: p.name, startDate: p.startDate }));
+      setProjects(list);
+      // Mặc định gợi ý dự án Phú Quốc (cùng quy ước Biên bản / Nhật ký hàn).
+      const phuQuoc = list.find((p) =>
+        p.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("phu quoc"),
+      );
+      setProjectId((cur) => cur || phuQuoc?.id || list[0]?.id || "");
     }).catch(() => setProjects([]));
   }, []);
 

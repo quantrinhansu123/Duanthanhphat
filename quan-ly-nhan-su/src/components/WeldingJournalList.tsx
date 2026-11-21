@@ -1865,7 +1865,9 @@ export default function WeldingJournalList({
   const { lang, t } = useLanguage();
   const { userName } = useAccess();
   const router = useRouter();
-  const { points: gpsPoints, loading: gpsLoading, error: gpsError, refetch: refetchGpsPoints } = useWeldLogGpsPoints();
+  // GPS đầy đủ sau khi bảng đã sẵn sàng — tránh tranh băng thông lúc mở tab.
+  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const { points: gpsPoints, loading: gpsLoading, error: gpsError, refetch: refetchGpsPoints } = useWeldLogGpsPoints({ enabled: gpsEnabled });
 
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -1966,6 +1968,8 @@ export default function WeldingJournalList({
   const [personnelWelderOptions, setPersonnelWelderOptions] = useState<CertifiedWelderOption[]>([]);
   const [projectOptions, setProjectOptions] = useState<JournalProjectOption[]>([]);
   const defaultProjectApplied = useRef(false);
+  // Chưa gắn mặc định Phú Quốc thì chưa gọi list — tránh tải 2 lần (toàn bộ rồi mới lọc dự án).
+  const [filtersReady, setFiltersReady] = useState(false);
 
   useEffect(() => {
     if (lockedResultFilter) setResultFilter(lockedResultFilter);
@@ -1998,7 +2002,10 @@ export default function WeldingJournalList({
     };
   }, []);
 
+  // Danh mục thợ/chứng chỉ chỉ cần khi mở form — không chặn lần tải bảng đầu.
   useEffect(() => {
+    if (!formOpen && !autolispBulkOpen && !editingRow) return;
+    if (personnelWelderOptions.length) return;
     let active = true;
     loadPersonnelCertificateOptions()
       .then((options) => {
@@ -2010,7 +2017,7 @@ export default function WeldingJournalList({
     return () => {
       active = false;
     };
-  }, []);
+  }, [formOpen, autolispBulkOpen, editingRow, personnelWelderOptions.length]);
 
   useEffect(() => {
     let active = true;
@@ -2023,11 +2030,17 @@ export default function WeldingJournalList({
           const phuQuocProjects = options.filter((project) =>
             project.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("phu quoc"),
           );
-          setProjectFilter(phuQuocProjects.map((project) => project.label));
+          const labels = phuQuocProjects.map((project) => project.label);
+          setProjectFilter(labels);
+          // Cập nhật committed ngay trong cùng lượt với filtersReady → list chỉ chạy 1 lần đã có Phú Quốc.
+          setCommitted((cur) => ({ ...cur, projectKey: labels.join("|"), projects: labels }));
         }
+        setFiltersReady(true);
       })
       .catch(() => {
-        if (active) setProjectOptions([]);
+        if (!active) return;
+        setProjectOptions([]);
+        setFiltersReady(true);
       });
     return () => {
       active = false;
@@ -2035,6 +2048,7 @@ export default function WeldingJournalList({
   }, []);
 
   useEffect(() => {
+    if (!filtersReady) return;
     let active = true;
     setLoading(true);
     setError("");
@@ -2088,12 +2102,14 @@ export default function WeldingJournalList({
         setError(loadError instanceof Error ? loadError.message : "Không tải được nhật ký hàn");
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (!active) return;
+        setLoading(false);
+        setGpsEnabled(true);
       });
     return () => {
       active = false;
     };
-  }, [page, committed, pageSize, reloadToken]);
+  }, [filtersReady, page, committed, pageSize, reloadToken]);
 
   useEffect(() => {
     selectionToken.current += 1;

@@ -369,7 +369,6 @@ export default function OverviewDashboard() {
   const [spreadUndatedMonthly, setSpreadUndatedMonthly] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
-  const [forecastOn, setForecastOn] = useState(false);
   const [completionStatsOn, setCompletionStatsOn] = useState(false);
   const completionStatsRef = useRef<HTMLDivElement | null>(null);
   // Số mối làm thêm mỗi ngày (ngoài mức trung bình) — nhấn +/- thì ngày hoàn thành tính lại theo tổng mối còn lại.
@@ -1416,36 +1415,6 @@ export default function OverviewDashboard() {
     .map(({ b }) => ({ x: b.x + b.w / 2, y: b.blueY }));
   const actualTrendPath = toPath(actualTops);
 
-  // Đường dự báo (tím): chỉ tính khi bấm nút. Cần hàn ngày kế tiếp = KH ngày đó + số mối đang thiếu so với KH lũy kế đến hôm nay.
-  const forecast = (() => {
-    if (!forecastOn || chartViewMode !== "daily" || lastLineBar < 0 || !stackBars[lastLineBar]) return null;
-    let planCum = 0;
-    let actualCum = 0;
-    for (let i = 0; i <= lastLineBar; i++) {
-      planCum += stackBars[i].target;
-      actualCum += stackBars[i].actual;
-    }
-    const shortfall = Math.max(0, Math.round(planCum - actualCum));
-    const nextBar = stackBars[lastLineBar + 1];
-    const nextPlan = nextBar ? nextBar.target : (stackBars[lastLineBar].target ?? 0);
-    const need = Math.ceil(nextPlan + shortfall);
-    const from = stackBars[lastLineBar];
-    const startPt = { x: from.x + from.w / 2, y: from.blueY };
-    const endPt = nextBar
-      ? {
-          x: nextBar.x + nextBar.w / 2,
-          y: Math.max(6, 260 - Math.min(256, (need / chart.maxVal) * 260)),
-        }
-      : null;
-    return {
-      shortfall,
-      nextPlan: Math.round(nextPlan),
-      need,
-      startPt,
-      endPt,
-      nextLabel: chart.dayPoints[lastLineBar + 1]?.dateShort ?? null,
-    };
-  })();
   function stepZoom(dir: 1 | -1) {
     setChartZoom((current) =>
       Math.min(
@@ -2056,18 +2025,11 @@ export default function OverviewDashboard() {
               <span className="h-3 w-3.5 rounded-xs bg-[#fcd34d]" />
               <span>Dự kiến</span>
             </div>
-            {chartViewMode === "daily" && forecast ? (
-              <div className="flex items-center gap-2">
-                <span className="h-0 w-4 border-t-2 border-dashed border-[#9333ea]" />
-                <span>Dự báo ngày kế tiếp</span>
-              </div>
-            ) : null}
           </div>
 
           {chartViewMode === "daily" ? (
-            <div className="mt-2 flex flex-col items-center gap-2 text-xs">
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <div ref={completionStatsRef} className="relative">
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs">
+              <div ref={completionStatsRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setCompletionStatsOn((v) => !v)}
@@ -2141,24 +2103,6 @@ export default function OverviewDashboard() {
                     </tbody>
                   </table>
                 </div>
-                ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForecastOn((v) => !v)}
-                  className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer"
-                >
-                  {forecastOn ? "Ẩn dự báo" : "Tính mối cần hàn để đuổi kịp"}
-                </button>
-                {forecast ? (
-                  <span className="text-slate-700">
-                    Đang thiếu <b className="text-amber-800">{fmt(forecast.shortfall)}</b> mối · ngày
-                    {forecast.nextLabel ? ` ${forecast.nextLabel}` : " kế tiếp"} cần hàn{" "}
-                    <b className="text-amber-800">{fmt(forecast.need)}</b> mối
-                    (KH ngày {fmt(forecast.nextPlan)} + bù {fmt(forecast.shortfall)})
-                  </span>
-                ) : forecastOn ? (
-                  <span className="text-slate-500">Chưa có số liệu đến hôm nay để dự báo.</span>
                 ) : null}
               </div>
             </div>
@@ -2358,28 +2302,10 @@ export default function OverviewDashboard() {
                       />
                     </>
                   )}
-                  {forecast?.endPt && (
-                    <path
-                      d={`M ${forecast.startPt.x} ${forecast.startPt.y} L ${forecast.endPt.x} ${forecast.endPt.y}`}
-                      fill="none"
-                      stroke="#9333ea"
-                      strokeWidth={2.5}
-                      strokeDasharray="6 4"
-                      strokeLinecap="round"
-                      vectorEffect="non-scaling-stroke"
-                      className="pointer-events-none"
-                    />
-                  )}
                     </>
                   );
                 })()}
               </svg>
-              {forecast?.endPt && (
-                <span
-                  className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[#9333ea] bg-white"
-                  style={{ left: `${(forecast.endPt.x / 500) * 100}%`, top: `${forecast.endPt.y}px` }}
-                />
-              )}
               {trendTops.map((p, i) => (
                 <span
                   key={`trend-dot-${i}`}

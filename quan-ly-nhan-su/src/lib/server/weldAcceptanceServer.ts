@@ -69,11 +69,26 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   ]);
   type DiarySplitTicket = { du_an_id: string; ngay_nghiem_thu: string | null; nhat_ky_theo_ngay_sieu_am?: boolean };
   type DiarySplitWeld = { moi_han_id: string; loai: string; ket_qua: string; phieu_nt_tach: DiarySplitTicket | DiarySplitTicket[] };
-  const loadSplitDone = (withActualDate: boolean) => fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
-    .select(withActualDate
-      ? "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu,nhat_ky_theo_ngay_sieu_am)"
-      : "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)")
-    .eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
+  const splitSelect = (withActualDate: boolean) => withActualDate
+    ? "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu,nhat_ky_theo_ngay_sieu_am)"
+    : "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)";
+  // (a) mối của phiếu đã đóng đúng ngày nhật ký; (b) mối duyệt lẻ có ngày duyệt riêng (phiếu chưa đóng vì còn mối chưa có kết quả).
+  const loadSplitDone = async (withActualDate: boolean) => {
+    const byTicketDate = await fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
+      .select(splitSelect(withActualDate))
+      .eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
+    let byWeldDate: DiarySplitWeld[] = [];
+    try {
+      byWeldDate = await fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
+        .select(splitSelect(withActualDate))
+        .eq("phieu_nt_tach.du_an_id", projectId).eq("ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
+    } catch (error) {
+      // Chưa chạy migration_20261121c (cột ngay_nghiem_thu của từng mối): chỉ dùng ngày đóng phiếu như cũ.
+      if ((error as { code?: string } | null)?.code !== "42703" || !/ngay_nghiem_thu/.test((error as { message?: string }).message ?? "")) throw error;
+    }
+    const seen = new Set(byTicketDate.map((w) => `${w.moi_han_id}|${w.loai}`));
+    return [...byTicketDate, ...byWeldDate.filter((w) => !seen.has(`${w.moi_han_id}|${w.loai}`))];
+  };
   const [mainRfis, splitRfis, [splitDone, ultrasound]] = await Promise.all([
     fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
       .select("id,so_phieu,thong_tin").eq("du_an_id", projectId).eq("ngay_moi", date).neq("trang_thai", "Đã huỷ").order("so_phieu").range(a, b)).then((rows) => rows.filter((r) => !(r.thong_tin as Record<string, unknown> | null)?.pending)),

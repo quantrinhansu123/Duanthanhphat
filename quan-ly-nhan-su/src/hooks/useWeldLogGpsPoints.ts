@@ -4,9 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import type { MapPoint } from "@/data/mapPoints";
 import { fetchMapPointsFromDb } from "@/lib/mapPointsDb";
 
-export function useWeldLogGpsPoints(limit?: number) {
+type GpsOpts = { limit?: number; enabled?: boolean };
+
+/** `limit` số hàng tối đa, hoặc `{ limit, enabled }` — `enabled: false` trì hoãn tải (ưu tiên bảng nhật ký trước). */
+export function useWeldLogGpsPoints(opts?: number | GpsOpts) {
+  const limit = typeof opts === "number" ? opts : opts?.limit;
+  const enabled = typeof opts === "number" ? true : opts?.enabled !== false;
   const [points, setPoints] = useState<MapPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
 
   const refetch = useCallback(async () => {
@@ -19,7 +24,12 @@ export function useWeldLogGpsPoints(limit?: number) {
   }, [limit]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     let active = true;
+    setLoading(true);
     fetchMapPointsFromDb({ limit })
       .then((result) => {
         if (!active) return;
@@ -32,7 +42,7 @@ export function useWeldLogGpsPoints(limit?: number) {
     return () => {
       active = false;
     };
-  }, [limit]);
+  }, [limit, enabled]);
 
   return { points, loading, error, refetch };
 }
