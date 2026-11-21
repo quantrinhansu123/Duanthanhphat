@@ -8,12 +8,15 @@
   <table border="1" cellpadding="8">
     <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
     <tr><td>1</td><td>Tab bước 1·2·3</td><td>grid 3 cột full width; mỗi nút w-full, chữ nhỏ hơn trên mobile.</td></tr>
-    <tr><td>2</td><td>Danh sách loại phiếu</td><td>Xếp dọc 1 cột, mỗi nút full width + căn trái — không còn lệch trái/lệch độ rộng.</td></tr>
-    <tr><td>3</td><td>Nút Tiếp tục</td><td>Full width trên mobile; sm trở lên theo nội dung.</td></tr>
+    <tr><td>2</td><td>Danh sách loại phiếu</td><td>Mobile: một hàng ngang, vuốt trái/phải (nowrap + overflow-x). Desktop: flex-wrap như cũ.</td></tr>
+    <tr><td>3</td><td>Nút Tiếp tục</td><td>Theo nội dung (không full width).</td></tr>
     <tr><td>4</td><td>Tab phương án (RFI/HH/SA/GTUS)</td><td>Cuộn ngang trên mobile, không bẻ hàng lệch.</td></tr>
+    <tr><td>5</td><td>Bộ lọc chọn mối (mobile)</td><td>Lưới cố định 2 cột: Từ/Đến ngày · Từ/Đến mối · Từ/Đến Km cùng hàng; tìm mã full width.</td></tr>
   </table>
   <h2>Lịch sử thay đổi</h2>
-  <p><b>21/11/2026:</b> Cân đối layout bước Loại phiếu trên điện thoại (full-width thay vì flex-wrap lệch phải trống).</p>
+  <p><b>21/11/2026:</b> Bộ lọc chọn mối mobile: cố định 2 cột (Từ mối + Đến mối cùng hàng).</p>
+  <p><b>21/11/2026:</b> Mobile: thẻ loại phiếu xếp ngang một hàng, vuốt được (không xuống dòng dọc).</p>
+  <p>21/11/2026: Từng thử full-width dọc rồi flex-wrap — chữ dài vẫn xuống hàng; đổi sang nowrap + scroll ngang.</p>
   <a href="/bien-ban-moi-han">Mở Biên bản mối hàn</a>
 </body>
 </html>

@@ -611,14 +611,14 @@ function RfiPanel({
         ))}
       </div>
       <div role="tabpanel" id="rfi-step-panel-kind" aria-labelledby="rfi-step-kind" hidden={activeStep !== "kind"} className="space-y-3">
-      <div role="group" aria-label="Loại phiếu" className="grid w-full grid-cols-1 gap-2">
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "nghiem-thu" ? primary : secondary} w-full justify-start text-left`}>1. Phiếu yêu cầu nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary} w-full justify-start text-left`}>2. Phiếu theo dõi công việc hàn</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "ca-hai" ? primary : secondary} w-full justify-start text-left`}>Cả giám sát và nghiệm thu</button>
-        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={`${monitoring && thongTin.cong_viec === "gtus" ? primary : secondary} w-full justify-start text-left`}>3. Giải toả ứng suất (GTUS)</button>
+      <div role="group" aria-label="Loại phiếu" className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible">
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "nghiem-thu"} onClick={() => { setKind("nghiem-thu"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "nghiem-thu" ? primary : secondary} shrink-0 whitespace-nowrap px-3 text-[11px] sm:px-4 sm:text-xs`}>1. Phiếu yêu cầu nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec !== "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${monitoring && thongTin.cong_viec !== "gtus" ? primary : secondary} shrink-0 whitespace-nowrap px-3 text-[11px] sm:px-4 sm:text-xs`}>2. Phiếu theo dõi công việc hàn</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={kind === "ca-hai"} onClick={() => { setKind("ca-hai"); setThongTin((t) => t.cong_viec === "gtus" ? { ...t, cong_viec: "", giam_sat: "", lwr_ids: "", lwr_codes: "", tuyen_thuong: false, tuyen_ha: false } : { ...t, cong_viec: "" }); }} className={`${kind === "ca-hai" ? primary : secondary} shrink-0 whitespace-nowrap px-3 text-[11px] sm:px-4 sm:text-xs`}>Cả giám sát và nghiệm thu</button>
+        <button type="button" disabled={busy || !!editingId} aria-pressed={monitoring && thongTin.cong_viec === "gtus"} onClick={() => { setKind("theo-doi"); setThongTin((t) => ({ ...t, cong_viec: "gtus" })); }} className={`${monitoring && thongTin.cong_viec === "gtus" ? primary : secondary} shrink-0 whitespace-nowrap px-3 text-[11px] sm:px-4 sm:text-xs`}>3. Giải toả ứng suất (GTUS)</button>
       </div>
       {monitoring && <p className="text-sm text-slate-600">{thongTin.cong_viec === "gtus" ? "Phiếu giám sát và nghiệm thu giải toả ứng suất: chọn các thanh ray màu xám trên track map ở bước Thông tin phiếu; tuyến và lý trình tự lấy đúng theo từng thanh đã chọn." : "Phiếu theo dõi có thể phát ngay mà không cần chọn mối."}</p>}
-      <button type="button" className={`${secondary} w-full sm:w-auto`} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
+      <button type="button" className={secondary} disabled={busy} onClick={() => setPublishStep(monitoring ? "details" : "welds")}>Tiếp tục</button>
       </div>
       <dialog ref={publishDialogRef} aria-labelledby="rfi-publish-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border-0 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40">
         <form method="dialog" className="space-y-4" onSubmit={(e) => {
@@ -652,23 +652,23 @@ function RfiPanel({
           <h3 className="text-xs font-bold text-slate-500">Tìm các mối đủ điều kiện Hình học và Siêu âm</h3>
           <p className="text-xs text-slate-600">Chọn mối rồi bấm phát để chọn Hình học, Siêu âm hoặc cả hai. <span className="font-semibold text-slate-700">Ngày mời</span> (vd. ngày mai) chọn ở bước thông tin phiếu — không dùng ô lọc ngày bên dưới.</p>
           {tooManyWelds && <p role="alert" className="text-sm text-amber-800">Chọn tối đa 200 mối cho một phiếu để có thể duyệt đầy đủ.</p>}
-          <div className="flex flex-wrap items-end gap-2">
-            <select aria-label="Lọc theo dự án" title="Lọc theo dự án" className={`${input} min-w-52`} value={projectId} onChange={(e) => onProjectChange?.(e.target.value)} disabled={!onProjectChange || busy}>
+          <div className="grid grid-cols-2 items-end gap-2 md:flex md:flex-wrap">
+            <select aria-label="Lọc theo dự án" title="Lọc theo dự án" className={`${input} col-span-2 w-full min-w-0 md:col-auto md:min-w-52 md:w-auto`} value={projectId} onChange={(e) => onProjectChange?.(e.target.value)} disabled={!onProjectChange || busy}>
               {(projects ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            <input className={input} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
-            <label className="grid gap-0.5 text-[11px] font-semibold text-slate-600">Từ ngày hàn
-              <input className={input} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
+            <input className={`${input} col-span-2 w-full min-w-0 md:col-auto md:w-auto`} placeholder="Tìm mã mối" value={filters.query ?? ""} onChange={set("query")} />
+            <label className="grid min-w-0 gap-0.5 text-[11px] font-semibold text-slate-600">Từ ngày hàn
+              <input className={`${input} w-full`} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateFrom ?? ""} onChange={set("dateFrom")} />
             </label>
-            <label className="grid gap-0.5 text-[11px] font-semibold text-slate-600">Đến ngày hàn
-              <input className={input} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
+            <label className="grid min-w-0 gap-0.5 text-[11px] font-semibold text-slate-600">Đến ngày hàn
+              <input className={`${input} w-full`} type="date" title="Lọc theo ngày hàn (không phải ngày mời)" value={filters.dateTo ?? ""} onChange={set("dateTo")} />
             </label>
-            <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
-            <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
-            <input className={`${input} w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
-            <input className={`${input} w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
-            <button type="button" className={secondary} disabled={busy || !Object.values(filters).some(Boolean)} onClick={() => setFilters({})}>Xoá lọc</button>
-            <button type="button" className={primary} disabled={busy} onClick={() => void search()}>Tìm mối đủ điều kiện</button>
+            <input className={`${input} w-full min-w-0`} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
+            <input className={`${input} w-full min-w-0`} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
+            <input className={`${input} w-full min-w-0 md:w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
+            <input className={`${input} w-full min-w-0 md:w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
+            <button type="button" className={`${secondary} w-full md:w-auto`} disabled={busy || !Object.values(filters).some(Boolean)} onClick={() => setFilters({})}>Xoá lọc</button>
+            <button type="button" className={`${primary} col-span-2 w-full md:col-auto md:w-auto`} disabled={busy} onClick={() => void search()}>Tìm mối đủ điều kiện</button>
           </div>
           {(filters.dateFrom || filters.dateTo) && (filters.dateFrom ?? "") >= today() && (
             <p role="status" className="text-xs text-amber-800">Ô lọc ngày đang ≥ hôm nay — đây là <b>ngày hàn</b>, không phải ngày mời. Mối mài xong hôm nay/hôm trước sẽ không khớp. Xoá lọc ngày rồi tìm lại.</p>
@@ -759,11 +759,11 @@ function RfiPanel({
         </div>
       )}
       {monitoring && !gtus && !editingId && (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 p-3">
-          <input className={input} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
-          <input className={input} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
-          <input className={`${input} w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
-          <input className={`${input} w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
+        <div className="grid grid-cols-2 items-end gap-2 rounded-lg border border-slate-200 p-3 md:flex md:flex-wrap">
+          <input className={`${input} w-full min-w-0`} placeholder="Từ mối" value={filters.nameFrom ?? ""} onChange={set("nameFrom")} />
+          <input className={`${input} w-full min-w-0`} placeholder="Đến mối" value={filters.nameTo ?? ""} onChange={set("nameTo")} />
+          <input className={`${input} w-full min-w-0 md:w-28`} placeholder="Từ Km0+000" value={filters.kmFrom ?? ""} onChange={set("kmFrom")} />
+          <input className={`${input} w-full min-w-0 md:w-28`} placeholder="Đến Km2+000" value={filters.kmTo ?? ""} onChange={set("kmTo")} />
         </div>
       )}
 

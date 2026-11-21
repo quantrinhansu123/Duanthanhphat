@@ -408,6 +408,17 @@ export default function AppShell({ tab }: AppShellProps) {
               </div>
               </UserMenu>
             </div>
+            {/* Desktop: Quay lại góc phải phía trên (mobile dùng thanh Bottom). */}
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={atHome}
+              className="hidden lg:inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 hover:text-[#0047AB] hover:border-slate-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[#0047AB]/30 cursor-pointer disabled:cursor-default disabled:opacity-40"
+              title={lang === "en" ? "Back to previous page" : "Quay lại trang trước"}
+            >
+              <ArrowLeft size={16} weight="bold" aria-hidden />
+              {lang === "en" ? "Back" : "Quay lại"}
+            </button>
           </div>
         </header>
 
