@@ -4,6 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
+import { fixDiarySentenceEnd } from "@/lib/constructionDiaryAuto";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
 
 type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi" | "banChiHuy" | "canBoKyThuat" | "congNhan" | "nhanLucNguon"> & {
@@ -221,6 +222,12 @@ export default function ConstructionDiaryForm() {
           }
           if (notes.length) warning = notes.join(" ") + " Bấm Lưu để lưu bản mới.";
         } catch { /* giữ nội dung đã lưu */ }
+      }
+      // Danh sách mã mối đã lưu còn dấu phẩy cuối → đổi thành dấu chấm trước khi hiện / in.
+      const fixedWork = fixDiarySentenceEnd(diary.noiDungCongViec);
+      const fixedAccept = fixDiarySentenceEnd(diary.nghiemThuHangNgay);
+      if (fixedWork !== diary.noiDungCongViec || fixedAccept !== diary.nghiemThuHangNgay) {
+        diary = { ...diary, noiDungCongViec: fixedWork, nghiemThuHangNgay: fixedAccept };
       }
       if (!live) return;
       setD(diary);
@@ -597,12 +604,15 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
   const mark = weatherMark(d.thoiTiet);
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
   // Dòng «Báo RFI số …» của bản cũ không thuộc nhật ký thi công.
-  const workToday = d.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim();
+  // Danh sách mã mối: dấu cuối phải là dấu chấm (sửa bản đã lưu còn dấu phẩy thừa).
+  const workToday = fixDiarySentenceEnd(
+    d.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n").trim(),
+  );
   const section3Print = [
     "3.1 Công việc thực hiện trong ngày",
     workToday,
     "3.2 Nghiệm thu công việc xây dựng hàng ngày",
-    noAcceptance(d.nghiemThuHangNgay) ? "" : d.nghiemThuHangNgay.trim(),
+    noAcceptance(d.nghiemThuHangNgay) ? "" : fixDiarySentenceEnd(d.nghiemThuHangNgay.trim()),
   ].join("\n");
   // Ngắt dòng mục 3 đúng như trình duyệt đang bố cục, rồi chia dòng cho từng trang (trang 1 → các trang giữa → trang cuối).
   const { lines: all, probe: section3Probe } = useWrapped(section3Print);
@@ -755,10 +765,10 @@ function useWrapped(text: string) {
     void document.fonts?.ready.then(measure);
     return () => ro.disconnect();
   }, [text]);
-  // Mỗi đoạn tách thành các cụm (sau dấu cách / dấu gạch) để đo offsetTop từng cụm — chính xác ở mọi trình duyệt, kể cả Safari iPhone.
+  // Tách theo khoảng trắng (giữ nguyên mã «FBW-…» / «ATW-…») để đo offsetTop — không cắt giữa dấu gạch của mã mối.
   const probe = <div ref={ref} aria-hidden="true" className="rl-probe">
     {text.split("\n").map((para, i) => <Fragment key={i}>
-      {(para.match(/[^\s-]*[\s-]*/g) ?? []).filter(Boolean).map((token, j) => <span key={j}>{token}</span>)}<br />
+      {(para.match(/\S+\s*/g) ?? []).map((token, j) => <span key={j}>{token}</span>)}<br />
     </Fragment>)}
   </div>;
   return { lines: text ? lines : [], probe };

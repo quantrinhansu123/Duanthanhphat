@@ -38,6 +38,39 @@ export function diaryRouteLabel(maDiem: string | null | undefined): "tuyến th�
   return "tuyến hạ";
 }
 
+/**
+ * Ghép mã mối in nhật ký: xuống dòng mỗi 6 mã; dòng giữa kết thúc bằng dấu phẩy,
+ * dòng/danh sách cuối luôn bằng dấu chấm (không để dấu phẩy thừa).
+ */
+export function joinDiaryFieldCodes(codes: string[]): string {
+  const list = codes.filter(Boolean);
+  if (!list.length) return "";
+  const lines: string[] = [];
+  for (let i = 0; i < list.length; i += 6) {
+    const part = list.slice(i, i + 6).join(", ");
+    lines.push(i + 6 < list.length ? `${part},` : `${part}.`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Sửa danh sách mã mối đã lưu: chỉ dòng cuối mỗi mục (bullet «- …») đổi dấu phẩy thừa thành dấu chấm.
+ * Dòng giữa (cụm 6 mã) vẫn giữ dấu phẩy.
+ */
+export function fixDiarySentenceEnd(text: string): string {
+  return text.split(/\n(?=- )/).map((block) => {
+    if (!/(?:FBW|ATW)-|Mối số:|bao gồm mối số:/i.test(block)) return block;
+    const lines = block.split("\n");
+    let i = lines.length - 1;
+    while (i >= 0 && !lines[i].trim()) i -= 1;
+    if (i < 0) return block;
+    const trimmed = lines[i].replace(/\s+$/, "");
+    if (/,\s*\.?$/.test(trimmed)) lines[i] = trimmed.replace(/,\s*\.?$/, ".");
+    else if (/(?:FBW|ATW)-/i.test(trimmed) && !/[.!?…)]$/.test(trimmed)) lines[i] = `${trimmed}.`;
+    return lines.join("\n");
+  }).join("\n");
+}
+
 /** Mỗi dòng tách theo công tác và tuyến; một mối chỉ tính một lần. `title` thay tên công tác (VD «Báo RFI số 3 nghiệm thu hình học»). */
 export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accept", title?: string): string {
   const groups = new Map<string, DiaryWork[]>();
@@ -63,14 +96,12 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const quantity = group.reduce((sum, r) => sum + r.so_luong_thuc_hien, 0);
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
-    // Xuống dòng mỗi 6 mã để in A4 không cắt giữa mã (tránh hiện «FBW-» cụt cuối trang).
-    // Nối liền một chuỗi; trình duyệt / khổ in tự xuống dòng, không cắt giữa cụm 6 mã.
-    const codesJoined = fieldCodes.join(", ");
-    const codes = codesJoined ? ` Mối số: ${codesJoined}` : "";
+    // Xuống dòng mỗi 6 mã; hết danh sách thì dấu chấm (tránh in dấu phẩy cuối như «…0196,»).
+    const codesJoined = joinDiaryFieldCodes(fieldCodes);
     if (kind === "weld") {
-      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : ""}.`;
+      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : "."}`;
     }
-    return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối${codes}.${missing}`;
+    return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối${codesJoined ? ` Mối số: ${codesJoined}` : "."}${missing}`;
   }).join("\n");
 }
 
@@ -104,7 +135,7 @@ export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds
   // Báo cáo ngày lưu mã hệ thống PQ-… (cắt "(+N)"); nhật ký chỉ in mã hiện trường của các mối hàn trong ngày theo công nghệ.
   const fieldCodes = (method: string) => dayWelds.filter((w) => w.cong_nghe_han === method)
     .map(diaryCode).filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ");
+    .sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
   type Acc = { task: string; qty: number; unit: string; codes: string[] };
   const merged = new Map<string, Acc>();
   for (const row of reports) {
@@ -112,7 +143,10 @@ export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds
     const stored = String(row.ten_moi_han ?? "").trim();
     // Báo cáo ngày cắt danh sách «PQ-…, … (+N)»: in đủ mã hiện trường của mọi mối trong ngày, hết mối thì chấm.
     const cut = /PQ-|…|\(\+\d+\)/i.test(stored);
-    const codes = (cut ? fieldCodes(/FBW/i.test(stored) ? "FBW" : /ATW/i.test(stored) ? "ATW" : "") : "") || stored.replace(/\s*…?\s*\(\+\d+\)/g, "").replace(/PQ-/gi, "");
+    const fromDay = cut ? fieldCodes(/FBW/i.test(stored) ? "FBW" : /ATW/i.test(stored) ? "ATW" : "") : [];
+    const codes = fromDay.length
+      ? fromDay.join(", ")
+      : stored.replace(/\s*…?\s*\(\+\d+\)/g, "").replace(/PQ-/gi, "");
     const name = String(row.hang_muc ?? "").trim()
       || (/FBW/i.test(stored) ? "Hàn chảy giáp mép" : /ATW/i.test(stored) ? "Hàn nhiệt nhôm" : "Công tác thi công");
     if (!name && !(qty > 0)) continue;
@@ -135,8 +169,8 @@ export function diaryReportWorkText(reports: Record<string, unknown>[], dayWelds
     }
   }
   return [...merged.values()].map((item) => {
-    const codes = [...item.codes].sort((a, b) => a.localeCompare(b, "vi", { numeric: true })).join(", ");
-    return `- ${item.task}${item.qty > 0 ? `, khối lượng ${item.qty} ${item.unit === "mối" ? "mối hàn" : item.unit}` : ""}${codes ? `; bao gồm mối số: ${codes}` : ""}.`;
+    const codes = joinDiaryFieldCodes([...item.codes].sort((a, b) => a.localeCompare(b, "vi", { numeric: true })));
+    return `- ${item.task}${item.qty > 0 ? `, khối lượng ${item.qty} ${item.unit === "mối" ? "mối hàn" : item.unit}` : ""}${codes ? `; bao gồm mối số: ${codes}` : "."}`;
   }).join("\n");
 }
 
