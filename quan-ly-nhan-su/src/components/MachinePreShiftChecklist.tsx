@@ -814,12 +814,11 @@ function ChecklistFormSheet({
     });
   }
 
-  // Portal ra document.body: modal fixed nằm trong vùng cuộn của AppShell sẽ bị thanh
-  // điều hướng dưới (z-20) che mất hàng nút Lưu/In.
+  // Portal ra document.body + z trên thanh Bottom (z-200): nếu thấp hơn, nút Lưu/In bị che mất trên mobile.
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
-      <div className="flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-2xl">
+    <div className="fixed inset-0 z-[300] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
+      <div className="flex max-h-[min(96dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[96dvh] sm:rounded-2xl">
         <div className="flex items-start gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900">Checklist MFBW trước ca</div>
@@ -876,7 +875,7 @@ function ChecklistFormSheet({
           </div>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
           {sheetTab === "info" && (
           <div className="grid grid-cols-2 gap-3">
             <label>
@@ -1173,7 +1172,8 @@ function ChecklistFormSheet({
           </div>
         )}
 
-        <div className="space-y-2 border-t border-slate-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {/* Hàng Lưu/In cố định dưới sheet — luôn thấy khi vuốt checklist; không bị Bottom nav che. */}
+        <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {sheetTab === "checklist" && remaining > 0 && (
             <button
               type="button"
