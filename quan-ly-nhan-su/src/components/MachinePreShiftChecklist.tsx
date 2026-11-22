@@ -741,6 +741,15 @@ function ChecklistFormSheet({
     setForm({ ...form, ...partial });
   }
 
+  // Ẩn thanh Bottom khi mở sheet — tránh đè hàng Lưu/In (z-200 vẫn nằm cùng body).
+  useEffect(() => {
+    const nav = document.getElementById("app-mobile-bottom-nav");
+    if (!nav) return;
+    const prev = nav.style.display;
+    nav.style.display = "none";
+    return () => { nav.style.display = prev; };
+  }, []);
+
   useEffect(() => {
     if (progress.fail === 0) return;
     if (toDatetimeLocal(form.recheckAt)) return;
@@ -814,7 +823,7 @@ function ChecklistFormSheet({
     });
   }
 
-  // Portal ra document.body + z trên thanh Bottom (z-200): nếu thấp hơn, nút Lưu/In bị che mất trên mobile.
+  // Portal body; lúc mở đã ẩn #app-mobile-bottom-nav nên hàng Lưu sát đáy an toàn (safe-area).
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[300] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
@@ -875,7 +884,8 @@ function ChecklistFormSheet({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div className="space-y-4 px-4 py-4">
           {sheetTab === "info" && (
           <div className="grid grid-cols-2 gap-3">
             <label>
@@ -1164,68 +1174,69 @@ function ChecklistFormSheet({
           </section>
           </>
           )}
-        </div>
-
-        {error && (
-          <div className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-            {error}
           </div>
-        )}
 
-        {/* Hàng Lưu/In cố định dưới sheet — luôn thấy khi vuốt checklist; không bị Bottom nav che. */}
-        <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {sheetTab === "checklist" && remaining > 0 && (
-            <button
-              type="button"
-              onClick={markRemainingPass}
-              className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-800"
-            >
-              <Check size={15} weight="bold" aria-hidden />
-              Đạt {remaining} mục còn lại
-            </button>
+          {error && (
+            <div className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              {error}
+            </div>
           )}
-          <div className="flex gap-2">
-            {canDelete && (
+
+          {/* Sticky cuối vùng cuộn — Bottom đã ẩn khi mở sheet; vuốt hết Kết luận ca vẫn thấy Lưu. */}
+          <div className="sticky bottom-0 z-10 space-y-2 border-t border-slate-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_rgba(15,23,42,0.06)]">
+            {sheetTab === "checklist" && remaining > 0 && (
               <button
                 type="button"
-                onClick={onDelete}
-                disabled={deleting}
-                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 px-3 text-sm font-semibold text-rose-700"
+                onClick={markRemainingPass}
+                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-800"
               >
-                <TrashSimple size={15} weight="bold" aria-hidden />
-                Xóa
+                <Check size={15} weight="bold" aria-hidden />
+                Đạt {remaining} mục còn lại
               </button>
             )}
-            <button
-              type="button"
-              onClick={onPrint}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-3.5 text-sm font-semibold text-slate-700"
-            >
-              <Printer size={15} weight="bold" aria-hidden />
-              In
-            </button>
-            {sheetTab === "info" ? (
+            <div className="flex gap-2">
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleting}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-200 px-3 text-sm font-semibold text-rose-700"
+                >
+                  <TrashSimple size={15} weight="bold" aria-hidden />
+                  Xóa
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setSheetTab("checklist")}
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0047AB] px-4 text-sm font-bold text-white"
+                onClick={onPrint}
+                className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-3.5 text-sm font-semibold text-slate-700"
               >
-                Checklist
-                <CaretRight size={16} weight="bold" aria-hidden />
+                <Printer size={15} weight="bold" aria-hidden />
+                In
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!form.machineId) setSheetTab("info");
-                  onSave();
-                }}
-                disabled={saving}
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center rounded-xl bg-[#0047AB] px-4 text-sm font-bold text-white disabled:opacity-60"
-              >
-                {saving ? "Đang lưu..." : "Lưu phiếu"}
-              </button>
-            )}
+              {sheetTab === "info" ? (
+                <button
+                  type="button"
+                  onClick={() => setSheetTab("checklist")}
+                  className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0047AB] px-4 text-sm font-bold text-white"
+                >
+                  Checklist
+                  <CaretRight size={16} weight="bold" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!form.machineId) setSheetTab("info");
+                    onSave();
+                  }}
+                  disabled={saving}
+                  className="inline-flex h-11 min-w-0 flex-1 items-center justify-center rounded-xl bg-[#0047AB] px-4 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {saving ? "Đang lưu..." : "Lưu phiếu"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -521,6 +521,7 @@ export default function AppShell({ tab }: AppShellProps) {
       {bottomNavReady
         ? createPortal(
             <nav
+              id="app-mobile-bottom-nav"
               className="pointer-events-auto fixed inset-x-0 bottom-0 z-[200] border-t border-slate-200 bg-white px-3 py-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] print:hidden lg:hidden"
               style={{
                 paddingBottom: "max(0.625rem, env(safe-area-inset-bottom, 0px))",

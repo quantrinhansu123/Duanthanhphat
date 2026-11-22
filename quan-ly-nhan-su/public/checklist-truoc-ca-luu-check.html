@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra nút Lưu — Checklist MFBW trước ca</title>
+<body>
+  <h1>Checklist MFBW trước ca — nút Lưu phiếu</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Thanh Bottom khi mở checklist</td><td>Ẩn hẳn (<code>#app-mobile-bottom-nav { display:none }</code>) — không còn đè nút Lưu.</td></tr>
+    <tr><td>2</td><td>Modal checklist</td><td>Portal <code>body</code>, <code>z-index: 300</code>.</td></tr>
+    <tr><td>3</td><td>Hàng In / Lưu phiếu</td><td>Sticky đáy vùng cuộn sheet; luôn thấy khi vuốt checklist / Kết luận ca.</td></tr>
+    <tr><td>4</td><td>Đóng sheet (X)</td><td>Hiện lại thanh Bottom như cũ.</td></tr>
+    <tr><td>5</td><td>Safe area đáy</td><td><code>pb: max(0.75rem, safe-area-inset-bottom)</code> trên hàng Lưu.</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>22/11/2026 (lần 2):</b> Vẫn bị che → ẩn thanh Bottom khi mở sheet + sticky hàng Lưu trong vùng cuộn.</p>
+  <p><b>22/11/2026:</b> Lần 1 chỉ nâng <code>z-300</code> — trên một số máy Bottom vẫn đè / che.</p>
+  <h2>Cách kiểm tra</h2>
+  <ol>
+    <li>Mobile / DevTools hẹp: mở Checklist trước ca → mở phiếu.</li>
+    <li>Không còn thấy Quay lại / Trang chủ / Load lại dưới sheet.</li>
+    <li>Thấy <b>In</b> + <b>Lưu phiếu</b> dưới cùng; vuốt danh sách hạng mục vẫn giữ hàng Lưu.</li>
+    <li>Bấm X đóng → thanh Bottom hiện lại.</li>
+  </ol>
+  <p><a href="/">Về trang chủ app</a></p>
+</body>
+</html>
