@@ -12,7 +12,15 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export async function POST(request: Request) {
   const origin = request.headers.get("origin");
-  if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+  const target = new URL(request.url);
+  if (target.hostname === "localhost") {
+    // Next.js normalizes loopback IPs to localhost. Host retains the address the browser opened.
+    const host = request.headers.get("host");
+    const port = target.port ? `:${target.port}` : "";
+    if (host === `127.0.0.1${port}`) target.hostname = "127.0.0.1";
+    else if (host === `[::1]${port}`) target.hostname = "[::1]";
+  }
+  if ((origin && origin !== target.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
     return NextResponse.json({ error: "Không chấp nhận yêu cầu từ website khác." }, { status: 403 });
   }
   const fail = async () => {
