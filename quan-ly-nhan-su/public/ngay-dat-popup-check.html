@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra popup chọn ngày đạt</title>
+<body>
+  <h1>Nghiệm thu tách — chọn ngày đạt khi nhấn Đạt</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Dropdown Kết quả → Đạt (mối chưa có dữ liệu kiểm tra)</td><td>Không tự ghi ngày nghiệm thu phiếu. Hiện popup «Chọn ngày đạt».</td></tr>
+    <tr><td>2</td><td>Popup Ngày đạt</td><td>Ô date (mặc định = ngày nghiệm thu đang chọn trên phiếu; max = hôm nay). Hủy = không ghi. Xác nhận = ghi kiểm tra Đạt theo ngày chọn.</td></tr>
+    <tr><td>3</td><td>Đạt hàng loạt</td><td>Một popup ngày đạt cho cả nhóm mối cần ghi kiểm tra.</td></tr>
+    <tr><td>4</td><td>Chốt phiếu khi còn mối Đạt thiếu dữ liệu kiểm tra</td><td>Hỏi ngày đạt trước khi ghi hàng loạt rồi mới chốt.</td></tr>
+    <tr><td>5</td><td>Cột Dữ liệu kiểm tra sau xác nhận</td><td>Siêu âm: hiện «Đạt · dd/mm/yyyy» theo ngày vừa chọn (không phải tự lấy ngày khác).</td></tr>
+    <tr><td>6</td><td>Nhật ký thi công mục 3.2 — siêu âm</td><td>Ngày siêu âm trên nhật ký = ngày đạt vừa chọn (<code>ngay_sieu_am_thuc_te</code>). Tự ghi khi Xác nhận Đạt; bỏ khi về «Chưa chọn».</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>22/11/2026 (lần 2):</b> Ngày đạt siêu âm đồng bộ sang nhật ký (mục 3.2) qua <code>ngay_sieu_am_thuc_te</code>.</p>
+  <p><b>22/11/2026:</b> Bỏ tự điền ngày khi nhấn Đạt; mở popup chọn lại ngày đạt (lẻ / hàng loạt / trước khi chốt).</p>
+  <h2>Cách kiểm tra</h2>
+  <ol>
+    <li>Mở phiếu nghiệm thu siêu âm (hoặc hình học) còn mối «chưa có» dữ liệu kiểm tra.</li>
+    <li>Cột Kết quả → chọn <b>Đạt</b> → phải hiện popup chọn ngày.</li>
+    <li>Hủy → Kết quả vẫn «Chưa chọn», dữ liệu kiểm tra không đổi.</li>
+    <li>Chọn ngày khác hôm nay → Xác nhận → cột dữ liệu kiểm tra hiện ngày đó.</li>
+  </ol>
+</body>
+</html>

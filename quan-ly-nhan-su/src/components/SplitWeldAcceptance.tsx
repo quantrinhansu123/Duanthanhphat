@@ -144,6 +144,32 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
   const formRef = useRef<HTMLFormElement>(null);
   /** Modal sau khi chốt tab 1: có duyệt siêu âm luôn không. */
   const [askForward, setAskForward] = useState<{ soPhieu: string; count: number; sieuAmId: string; geometryId: string } | null>(null);
+  /** Popup chọn ngày đạt khi nhấn Đạt (không tự lấy ngày nghiệm thu phiếu). */
+  const [passDateDlg, setPassDateDlg] = useState<{ title: string; hint?: string; defaultDate: string } | null>(null);
+  const [passDateValue, setPassDateValue] = useState(today);
+  const passDateResolver = useRef<((value: string | null) => void) | null>(null);
+  function askPassDate(opts: { title: string; hint?: string; defaultDate?: string }): Promise<string | null> {
+    const fallback = opts.defaultDate || date || today();
+    setPassDateValue(fallback);
+    setPassDateDlg({ title: opts.title, hint: opts.hint, defaultDate: fallback });
+    return new Promise((resolve) => { passDateResolver.current = resolve; });
+  }
+  function closePassDate(ok: boolean) {
+    const resolve = passDateResolver.current;
+    passDateResolver.current = null;
+    setPassDateDlg(null);
+    resolve?.(ok ? passDateValue : null);
+  }
+  /** Nhật ký mục 3.2 lấy theo ngày siêu âm thực tế = ngày đạt vừa chọn (bật cờ phiếu nếu cần). */
+  async function syncUltrasoundDiary(moiHanIds: string[], ngay: string | null) {
+    if (kind !== "sieu-am" || !detail || !moiHanIds.length) return;
+    if (typeof detail.ticket.nhat_ky_theo_ngay_sieu_am !== "boolean") return;
+    await request("split-ultrasound-date", {
+      id: detail.ticket.id,
+      moi_han_ids: moiHanIds,
+      ngay_sieu_am_thuc_te: ngay,
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -222,15 +248,25 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     }
     const targets = items.filter((i) => chosen.has(i.moi_han_id) && !i.ket_qua && !evidenceIsPass(kind, i.current));
     if (targets.length) {
-      if (kind === "hinh-hoc" && !window.confirm(`Ghi trực quan ĐẠT cho ${targets.length} mối chưa đủ điều kiện (ngày ${date})?
-Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế.`)) return;
+      const passDate = await askPassDate({
+        title: kind === "hinh-hoc"
+          ? `Chọn ngày đạt — ${targets.length} mối (trực quan)`
+          : `Chọn ngày đạt — ${targets.length} mối (siêu âm)`,
+        hint: kind === "hinh-hoc"
+          ? "Ô sai số còn trống tự điền mức tối đa theo tiêu chí. Chiều dài mài nhập theo thực tế."
+          : "Ngày này ghi vào dữ liệu kiểm tra và nhật ký thi công (mục 3.2 siêu âm).",
+        defaultDate: date,
+      });
+      if (!passDate) return;
       const response = await markQualityPass(
         targets.map((i) => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })),
         kind === "hinh-hoc" ? "visual" : "ndt",
-        date,
+        passDate,
         "Siêu âm",
       );
       const failed = response.results.filter((r) => r.error);
+      const okIds = targets.filter((t) => !failed.some((f) => f.id === t.moi_han_id)).map((t) => t.moi_han_id);
+      if (okIds.length) await syncUltrasoundDiary(okIds, passDate);
       const next = await request<Detail>("split-detail", { id: detail.ticket.id });
       setDetail(next);
       items = next.items;
@@ -266,6 +302,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               : { truc_quan: null, xu_ly_truc_quan: null }),
           });
         }
+        if (kind === "sieu-am") await syncUltrasoundDiary([item.moi_han_id], null);
         const next = await request<Detail>("split-detail", { id: detail.ticket.id });
         setDetail(next);
       }
@@ -277,21 +314,35 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       return;
     }
     if (ket_qua === "Đạt" && !item.current?.co_the_dat) {
-      if (kind === "hinh-hoc" && !window.confirm(`Ghi trực quan ĐẠT cho ${fieldWeldCode(item.ma_lich_su)} (ngày ${date})?
-Ô sai số còn trống tự điền mức tối đa theo tiêu chí.`)) return;
+      const passDate = await askPassDate({
+        title: kind === "hinh-hoc"
+          ? `Chọn ngày đạt — ${fieldWeldCode(item.ma_lich_su)} (trực quan)`
+          : `Chọn ngày đạt — ${fieldWeldCode(item.ma_lich_su)} (siêu âm)`,
+        hint: kind === "hinh-hoc"
+          ? "Ô sai số còn trống tự điền mức tối đa theo tiêu chí."
+          : "Ngày này ghi vào dữ liệu kiểm tra và nhật ký thi công (mục 3.2 siêu âm).",
+        defaultDate: date,
+      });
+      if (!passDate) return;
       const response = await markQualityPass(
         [{ id: item.moi_han_id, ma_lich_su: item.ma_lich_su, phien_ban: item.version ?? 0 }],
         kind === "hinh-hoc" ? "visual" : "ndt",
-        date,
+        passDate,
         "Siêu âm",
       );
       const failed = response.results.find((r) => r.error);
+      if (!failed?.error) await syncUltrasoundDiary([item.moi_han_id], passDate);
       const next = await request<Detail>("split-detail", { id: detail.ticket.id });
       setDetail(next);
       if (failed?.error) {
         setError(`${fieldWeldCode(item.ma_lich_su)}: ${failed.error}`);
         return;
       }
+    } else if (ket_qua === "Đạt" && kind === "sieu-am" && item.current?.ngay_ndt) {
+      // Đã có siêu âm Đạt: đồng bộ ngày nhật ký theo ngày NDT hiện có.
+      await syncUltrasoundDiary([item.moi_han_id], item.current.ngay_ndt);
+      const next = await request<Detail>("split-detail", { id: detail.ticket.id });
+      setDetail(next);
     }
     setResults((prev) => ({ ...prev, [item.moi_han_id]: { ket_qua, ly_do: "" } }));
   }
@@ -316,6 +367,10 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
             ? { ket_qua_ndt: null, ngay_ndt: null }
             : { truc_quan: null, xu_ly_truc_quan: null }),
         });
+      }
+      if (kind === "sieu-am") {
+        const clearIds = targets.filter((i) => i.current?.ket_qua_ndt).map((i) => i.moi_han_id);
+        if (clearIds.length) await syncUltrasoundDiary(clearIds, null);
       }
       if (targets.some((i) => (kind === "sieu-am" && i.current?.ket_qua_ndt) || (kind === "hinh-hoc" && i.current?.truc_quan?.trim() === "Đạt"))) {
         const next = await request<Detail>("split-detail", { id: detail.ticket.id });
@@ -738,9 +793,20 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
           if (!decided.length) throw new Error("Chọn kết quả ít nhất một mối để xác nhận (được phép chốt lẻ).");
           const need = decided.filter((i) => results[i.moi_han_id]?.ket_qua === "Đạt" && !i.current?.co_the_dat);
           if (need.length) {
-            const response = await markQualityPass(need.map(i => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), kind === "hinh-hoc" ? "visual" : "ndt", date, "Siêu âm");
+            const passDate = await askPassDate({
+              title: kind === "hinh-hoc"
+                ? `Chọn ngày đạt trước khi chốt — ${need.length} mối`
+                : `Chọn ngày siêu âm đạt trước khi chốt — ${need.length} mối`,
+              hint: kind === "sieu-am"
+                ? "Ghi dữ liệu kiểm tra và nhật ký mục 3.2 theo ngày bạn chọn."
+                : "Các mối Đạt chưa có dữ liệu kiểm tra sẽ ghi theo ngày bạn chọn.",
+              defaultDate: date,
+            });
+            if (!passDate) return;
+            const response = await markQualityPass(need.map(i => ({ id: i.moi_han_id, ma_lich_su: i.ma_lich_su, phien_ban: i.version ?? 0 })), kind === "hinh-hoc" ? "visual" : "ndt", passDate, "Siêu âm");
             const failed = response.results.find(r => r.error);
             if (failed) throw new Error(`${fieldWeldCode(need.find(i => i.moi_han_id === failed.id)?.ma_lich_su ?? "")}: ${failed.error}`);
+            await syncUltrasoundDiary(need.map((i) => i.moi_han_id), passDate);
             const next = await request<Detail>("split-detail", { id: detail.ticket.id });
             setDetail(next);
             items = next.items;
@@ -910,6 +976,37 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               setAskForward(null);
               onGoToUltrasound?.(sieuAmId);
             }}>Có, duyệt ngay</button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )}
+    {passDateDlg && createPortal(
+      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="pass-date-title">
+        <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+          <h2 id="pass-date-title" className="text-lg font-extrabold text-slate-900">{passDateDlg.title}</h2>
+          {passDateDlg.hint ? <p className="text-sm text-slate-600">{passDateDlg.hint}</p> : null}
+          <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+            Ngày đạt
+            <input
+              type="date"
+              autoFocus
+              className={field}
+              value={passDateValue}
+              max={today()}
+              onChange={(e) => setPassDateValue(e.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className={button} onClick={() => closePassDate(false)}>Hủy</button>
+            <button
+              type="button"
+              className={primary}
+              disabled={!passDateValue}
+              onClick={() => closePassDate(true)}
+            >
+              Xác nhận
+            </button>
           </div>
         </div>
       </div>,
