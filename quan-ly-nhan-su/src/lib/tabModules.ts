@@ -25,6 +25,7 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "bc-bao-cao-ngay": () => import("@/components/DailyWorkReport"),
   "quan-ly-du-an": () => import("@/components/ProjectManagement"),
   "lwr-giai-toa-ung-suat": () => import("@/components/LwrModuleEmbed"),
+  "lwr-cong-thuc-tb10015": () => import("@lwr/components/CwrFormulaReference"),
   "lwr-track-map": () => import("@/components/LwrModuleEmbed"),
   "lwr-cong-trinh": () => import("@/components/LwrModuleEmbed"),
   "lwr-nhap-bao-cao": () => import("@/components/RailReportEntry"),

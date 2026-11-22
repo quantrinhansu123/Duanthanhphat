@@ -143,6 +143,13 @@ export const navigation: NavItem[] = [
         descriptionEn: "Long welded rail / continuous welded rail stress-release calculator (R2)",
       },
       {
+        id: "lwr-cong-thuc-tb10015",
+        label: "Công thức TB 10015",
+        labelEn: "TB 10015 Formulas",
+        description: "Tra công thức, diễn giải và giá trị mẫu theo từng ô của bảng tính ray hàn liền",
+        descriptionEn: "Browse the formulas, notes and sample values from the CWR design workbook",
+      },
+      {
         id: "lwr-track-map",
         label: "Tổng quan (Track Map)",
         labelEn: "LWR/CWR Map Overview",

@@ -60,6 +60,7 @@ export const childIcons: Record<string, Icon> = {
   "thu-vien-loi-moi-han": Bug,
   "quan-ly-du-an": Buildings,
   "lwr-giai-toa-ung-suat": Calculator,
+  "lwr-cong-thuc-tb10015": FileText,
   "lwr-track-map": Train,
   "lwr-cong-trinh": Shapes,
   "lwr-nhap-bao-cao": ClipboardText,

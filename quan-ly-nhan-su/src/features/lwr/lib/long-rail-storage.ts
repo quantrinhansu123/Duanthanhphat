@@ -80,12 +80,12 @@ export type LongRailLoadResult = {
 };
 
 /** Keep the newer copy of each rail so a local method change is not overwritten. */
-export function preferNewerLongRails(local: LongRail[], remote: LongRail[]): LongRail[] {
+export function preferNewerLongRails<T extends Pick<LongRail, "id" | "code" | "projectId" | "updatedAt">>(local: T[], remote: T[]): T[] {
   const localById = new Map(local.map((rail) => [rail.id, rail]));
   const localByCode = new Map(local.map((rail) => [storageCode(rail), rail]));
   const seenIds = new Set<string>();
   const seenCodes = new Set<string>();
-  const merged: LongRail[] = [];
+  const merged: T[] = [];
   for (const remoteRail of remote) {
     seenIds.add(remoteRail.id);
     seenCodes.add(storageCode(remoteRail));

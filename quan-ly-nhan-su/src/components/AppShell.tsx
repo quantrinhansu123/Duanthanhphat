@@ -79,6 +79,7 @@ const DeploymentHandoverList = dynamic(
 const SystemConfiguration = dynamic(
   () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
 const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { loading: TabLoading, ssr: false });
+const CwrFormulaReference = dynamic(() => import("@lwr/components/CwrFormulaReference"), { loading: TabLoading, ssr: false });
 
 /** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
 const HOME_TAB = "home";
@@ -122,6 +123,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
     <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất R2" />
   ),
   "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
+  "lwr-cong-thuc-tb10015": () => <CwrFormulaReference />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,
   "lwr-nhap-bao-cao": () => <RailReportEntry />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
@@ -461,7 +463,7 @@ export default function AppShell({ tab }: AppShellProps) {
               Bạn không có quyền xem chức năng này.
             </div>
           ) : content ? (
-            atHome || canEdit ? (
+            atHome || canEdit || current === "lwr-cong-thuc-tb10015" ? (
               <DeleteGuard active={!atHome && !canDelete}>{content}</DeleteGuard>
             ) : (
               <>
