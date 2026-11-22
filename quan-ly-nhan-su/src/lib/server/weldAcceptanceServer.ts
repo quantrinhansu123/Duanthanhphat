@@ -68,26 +68,28 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       .neq("ket_qua", "Chưa nghiệm thu").order("moi_han_id").range(a, b)),
   ]);
   type DiarySplitTicket = { du_an_id: string; ngay_nghiem_thu: string | null; nhat_ky_theo_ngay_sieu_am?: boolean };
-  type DiarySplitWeld = { moi_han_id: string; loai: string; ket_qua: string; phieu_nt_tach: DiarySplitTicket | DiarySplitTicket[] };
-  const splitSelect = (withActualDate: boolean) => withActualDate
-    ? "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu,nhat_ky_theo_ngay_sieu_am)"
-    : "moi_han_id,loai,ket_qua,phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)";
+  type DiarySplitWeld = { moi_han_id: string; loai: string; ket_qua: string; ngay_nghiem_thu?: string | null; phieu_nt_tach: DiarySplitTicket | DiarySplitTicket[] };
+  const splitSelect = (withActualDate: boolean, withWeldDate: boolean) => {
+    const fields = withWeldDate ? "moi_han_id,loai,ket_qua,ngay_nghiem_thu" : "moi_han_id,loai,ket_qua";
+    const ticket = withActualDate ? "phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu,nhat_ky_theo_ngay_sieu_am)" : "phieu_nt_tach!inner(du_an_id,ngay_nghiem_thu)";
+    return `${fields},${ticket}` as const;
+  };
   // (a) mối của phiếu đã đóng đúng ngày nhật ký; (b) mối duyệt lẻ có ngày duyệt riêng (phiếu chưa đóng vì còn mối chưa có kết quả).
   const loadSplitDone = async (withActualDate: boolean) => {
-    const byTicketDate = await fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
-      .select(splitSelect(withActualDate))
-      .eq("phieu_nt_tach.du_an_id", projectId).eq("phieu_nt_tach.ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
-    let byWeldDate: DiarySplitWeld[] = [];
+    const read = (byWeld: boolean, withWeldDate: boolean) => fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
+      .select(splitSelect(withActualDate, withWeldDate))
+      .eq("phieu_nt_tach.du_an_id", projectId).eq(byWeld ? "ngay_nghiem_thu" : "phieu_nt_tach.ngay_nghiem_thu", date)
+      .not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b)
+      .overrideTypes<DiarySplitWeld[], { merge: false }>());
     try {
-      byWeldDate = await fetchAll<DiarySplitWeld>((a, b) => db().from("phieu_nt_tach_moi")
-        .select(splitSelect(withActualDate))
-        .eq("phieu_nt_tach.du_an_id", projectId).eq("ngay_nghiem_thu", date).not("ket_qua", "is", null).order("moi_han_id").order("phieu_id").range(a, b));
+      const [byTicketDate, byWeldDate] = await Promise.all([read(false, true), read(true, true)]);
+      const seen = new Set(byTicketDate.map((w) => `${w.moi_han_id}|${w.loai}`));
+      return [...byTicketDate, ...byWeldDate.filter((w) => !seen.has(`${w.moi_han_id}|${w.loai}`))];
     } catch (error) {
       // Chưa chạy migration_20261121c (cột ngay_nghiem_thu của từng mối): chỉ dùng ngày đóng phiếu như cũ.
-      if ((error as { code?: string } | null)?.code !== "42703" || !/ngay_nghiem_thu/.test((error as { message?: string }).message ?? "")) throw error;
+      if ((error as { code?: string; message?: string } | null)?.code !== "42703" || !/\bngay_nghiem_thu\b/.test((error as { message?: string }).message ?? "")) throw error;
+      return read(false, false);
     }
-    const seen = new Set(byTicketDate.map((w) => `${w.moi_han_id}|${w.loai}`));
-    return [...byTicketDate, ...byWeldDate.filter((w) => !seen.has(`${w.moi_han_id}|${w.loai}`))];
   };
   const [mainRfis, splitRfis, [splitDone, ultrasound]] = await Promise.all([
     fetchAll<{ id: string; so_phieu: string; thong_tin: Record<string, unknown> | null }>((a, b) => db().from("phieu_yeu_cau_nghiem_thu")
@@ -196,7 +198,9 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   const ultrasoundIds = new Set(ultrasound.map((w) => w.moi_han_id));
   const legacyUltrasound = splitDone.filter((w) => {
     const ticket = Array.isArray(w.phieu_nt_tach) ? w.phieu_nt_tach[0] : w.phieu_nt_tach;
-    return !ticket?.nhat_ky_theo_ngay_sieu_am && !ultrasoundIds.has(w.moi_han_id);
+    // A weld accepted on an earlier day must not appear again when its ticket closes.
+    return !ticket?.nhat_ky_theo_ngay_sieu_am && !ultrasoundIds.has(w.moi_han_id)
+      && (!w.ngay_nghiem_thu || w.ngay_nghiem_thu === date);
   });
   return {
     ...diaryManpowerDefaults(),

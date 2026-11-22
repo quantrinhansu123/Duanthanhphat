@@ -9,7 +9,7 @@
 ## Phương án sử dụng dữ liệu hiện tại
 
 1. Trong **Quản lý hàn ray LWR → Công thức TB 10015**, chọn dự án và mã thanh ray. Ứng dụng đọc thanh đã lưu trong sơ đồ và hồ sơ giải tỏa ứng suất trên Supabase.
-2. Mở **Thông số đã lưu** để kiểm tra loại ray, diện tích tiết diện, mô đun đàn hồi, hệ số giãn nở, nhiệt độ ray, dải khóa, lực cản dọc và ngưỡng khe của thanh. Ô `Nhập liệu!D13` trong Excel chọn loại 50, 60 hoặc 75 kg/m. Khớp dòng tra theo tên và diện tích. Với `60R2` và `PB43`, phép tính nhiệt dùng diện tích của thanh trong hồ sơ.
+2. Chọn **Bản rút gọn** để xem kết quả chính. Chọn **Bản đầy đủ** để đối chiếu toàn bộ đầu vào và công thức của phần tính theo hồ sơ. Ô `Nhập liệu!D13` trong Excel chọn loại 50, 60 hoặc 75 kg/m. Với `60R2` và `PB43`, phép tính nhiệt dùng diện tích của thanh trong hồ sơ.
 3. Tính dải khóa từ nhiệt độ khóa đang lưu và biên độ khóa. Từ dải khóa và nhiệt độ ray cực trị, tính biên độ tăng giảm nhiệt, lực kéo nén nhiệt, ứng suất kéo nhiệt, khe đứt và chiều dài vùng co giãn. Khe đứt được so với ngưỡng lưu trong hồ sơ thanh.
 4. Bấm địa chỉ ô ở cột **Excel** để xem công thức và giá trị mẫu. Mục **Excel gốc** tra cứu 11 bảng với 1.675 ô công thức. Mục **Hướng dẫn** giải thích mục đích, cách thao tác, quy đổi đơn vị và phương pháp tính.
 

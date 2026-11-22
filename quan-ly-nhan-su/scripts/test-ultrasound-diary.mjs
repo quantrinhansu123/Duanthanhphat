@@ -27,7 +27,7 @@ const save = (id, projectId, weldIds, date) => query("select ghi_ngay_sieu_am_th
 try {
   await db.exec(`create role anon; create role authenticated; create role service_role;
     create table phieu_nt_tach (id uuid primary key, du_an_id uuid, so_phieu text, loai text, ngay_moi date, ngay_nghiem_thu date);
-    create table phieu_nt_tach_moi (phieu_id uuid references phieu_nt_tach(id), moi_han_id uuid, loai text, ket_qua text, primary key (phieu_id,moi_han_id));
+    create table phieu_nt_tach_moi (phieu_id uuid references phieu_nt_tach(id), moi_han_id uuid, loai text, ket_qua text, ngay_nghiem_thu date, primary key (phieu_id,moi_han_id));
     grant select, update on phieu_nt_tach_moi to service_role;
     grant select, update on phieu_nt_tach to service_role;`);
   const migration = readFileSync(new URL("../../supabase/migration_20261120_ngay_sieu_am_thuc_te.sql", import.meta.url), "utf8");
@@ -92,6 +92,7 @@ try {
       neq(key, value) { rows = rows.filter((r) => r[key] !== value); return q; },
       not(key, op, value) { assert.equal(op, "is"); assert.equal(value, null); rows = rows.filter((r) => r[key] != null); return q; },
       range(from, to) { rows = rows.slice(from, to + 1); return q; },
+      overrideTypes: () => q,
       single: async () => response(rows[0]), maybeSingle: async () => response(rows[0] ?? null),
       then: (resolve) => Promise.resolve(response(rows)).then(resolve),
     };
@@ -107,7 +108,7 @@ try {
   });
   async function diary(date) {
     tables.phieu_nt_tach = await query("select *, ngay_moi::text as ngay_moi from phieu_nt_tach");
-    const rows = await query(`select m.*, m.ngay_sieu_am_thuc_te::text,
+    const rows = await query(`select m.*, m.ngay_sieu_am_thuc_te::text, m.ngay_nghiem_thu::text,
       json_build_object('nhat_ky_theo_ngay_sieu_am', p.nhat_ky_theo_ngay_sieu_am) as phieu_nt_tach,
       p.du_an_id as "phieu_nt_tach.du_an_id", p.ngay_nghiem_thu::text as "phieu_nt_tach.ngay_nghiem_thu"
       from phieu_nt_tach_moi m join phieu_nt_tach p on m.phieu_id = p.id order by m.moi_han_id`);
@@ -133,6 +134,11 @@ try {
   assert.doesNotMatch((await diary(closureDate)).nghiemThuHangNgay, /TT005[01]/);
   assert.deepEqual(await query("select ngay_nghiem_thu::text as date from phieu_nt_tach where id in ($1,$2) order by id", [openTicket, closedTicket]), [{ date: null }, { date: closureDate }]);
   assert.equal((await query("select ket_qua from phieu_nt_tach_moi where phieu_id=$1 and moi_han_id=$2", [closedTicket, welds[49].id]))[0].ket_qua, "Đạt");
+  await query("update phieu_nt_tach_moi set ngay_nghiem_thu=$1 where phieu_id=$2", [earlierDate, legacyTicket]);
+  assert.match((await diary(earlierDate)).nghiemThuHangNgay, /TT0054/);
+  assert.doesNotMatch((await diary(closureDate)).nghiemThuHangNgay, /TT0054/);
+  assert.match((await diary(closureDate)).nghiemThuHangNgayTheoNgayChot, /TT0054/);
+  await query("update phieu_nt_tach_moi set ngay_nghiem_thu=null where phieu_id=$1", [legacyTicket]);
   legacySchema = true;
   const beforeMigration = await diary(closureDate);
   assert.equal(beforeMigration.nghiemThuHangNgay, beforeMigration.nghiemThuHangNgayTheoNgayChot);

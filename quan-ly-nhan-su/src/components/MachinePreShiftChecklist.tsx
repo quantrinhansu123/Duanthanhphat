@@ -826,7 +826,7 @@ function ChecklistFormSheet({
   // Portal body; lúc mở đã ẩn #app-mobile-bottom-nav nên hàng Lưu sát đáy an toàn (safe-area).
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[300] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
+    <div data-select-menu-portal className="fixed inset-0 z-[300] flex items-end justify-center bg-slate-900/45 sm:items-center sm:p-4">
       <div className="flex max-h-[min(96dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[96dvh] sm:rounded-2xl">
         <div className="flex items-start gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0 flex-1">
@@ -1007,6 +1007,7 @@ function ChecklistFormSheet({
                   <span className={labelCls}>Người kiểm tra nhóm {section.letter}</span>
                   <SelectMenu
                     searchable
+                    ariaLabel={`Người kiểm tra nhóm ${section.letter}`}
                     value={form.sectionInspectors[section.id]?.id || form.sectionInspectors[section.id]?.name || ""}
                     onChange={(id) => onSectionInspector(section.id, id)}
                     options={inspectorOptions(people, form.sectionInspectors[section.id])}

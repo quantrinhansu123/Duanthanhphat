@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown, Check } from "@/components/icons";
 import { usePopover } from "@/components/usePopover";
@@ -21,6 +21,7 @@ type SelectMenuProps = {
   /** Cho phép gõ ngay trên ô để lọc danh sách (combobox + tìm kiếm). */
   searchable?: boolean;
   searchPlaceholder?: string;
+  ariaLabel?: string;
   className?: string;
   buttonClassName?: string;
   emptyLabel?: string;
@@ -40,6 +41,7 @@ export default function SelectMenu({
   disabled = false,
   searchable = false,
   searchPlaceholder,
+  ariaLabel,
   className = "",
   buttonClassName = "",
   emptyLabel = "Không có lựa chọn phù hợp",
@@ -49,6 +51,7 @@ export default function SelectMenu({
   const [query, setQuery] = useState("");
   const [typing, setTyping] = useState(false);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
+  const menuId = useId();
   const boxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,8 +61,8 @@ export default function SelectMenu({
 
   useEffect(() => {
     if (!open) return;
-    // Native modal dialogs occupy the browser top layer; body portals sit behind them.
-    setPortalHost(boxRef.current?.closest("dialog") ?? document.body);
+    // Keep the menu in the same stacking context as a dialog or sheet.
+    setPortalHost(boxRef.current?.closest<HTMLElement>("dialog, [data-select-menu-portal]") ?? document.body);
     function onClick(e: MouseEvent) {
       const t = e.target as Node;
       if (boxRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -117,6 +120,8 @@ export default function SelectMenu({
             value={typing ? query : selected ? t(selected.label) : ""}
             placeholder={selected ? undefined : t(searchPlaceholder ?? placeholder)}
             role="combobox"
+            aria-label={ariaLabel}
+            aria-controls={open ? menuId : undefined}
             aria-expanded={open}
             aria-autocomplete="list"
             onFocus={() => {
@@ -164,6 +169,7 @@ export default function SelectMenu({
       ) : (
         <button
           type="button"
+          aria-label={ariaLabel}
           disabled={disabled}
           onClick={() => (open ? close() : setOpen(true))}
           className={`${baseButton} cursor-pointer ${selected ? "text-slate-900" : "text-slate-400"}`}
@@ -180,6 +186,7 @@ export default function SelectMenu({
 
       {open && !disabled && portalHost && createPortal(
         <div
+          id={menuId}
           ref={menuRef}
           style={menuStyle}
           className="z-[100] flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"

@@ -48,6 +48,8 @@ export function CwrGuide({ en }: { en: boolean }) {
       <ol className="list-decimal space-y-1 pl-5">
         <li>{en ? "Open Project rails, select the project, then the rail code. For legacy unassigned rails, choose Unassigned diagram."
           : "Mở mục Thanh ray dự án, chọn dự án rồi chọn mã thanh. Với thanh cũ chưa gán dự án, chọn Sơ đồ chưa gán dự án."}</li>
+        <li>{en ? "Use Summary for key results or Full calculation to see all inputs, formulas and original Excel cells."
+          : "Chọn Bản rút gọn để xem kết quả chính, hoặc Bản đầy đủ để xem đầu vào, công thức và ô Excel nguồn."}</li>
         <li>{en ? "Expand Saved inputs and check the profile, temperatures, resistance and gap limit against the field record. To correct a value, update the rail in Track Map and reload this page."
           : "Mở Thông số đã lưu để đối chiếu mặt cắt, nhiệt độ ray, lực cản và ngưỡng khe với hồ sơ. Khi cần sửa, cập nhật thanh tại Tổng quan (Track Map) rồi tải lại tab này."}</li>
         <li>{en ? "Read the result and its unit. Select an Excel cell to see the formula and worked example, or use Source workbook to search any of the 11 sheets."
@@ -86,8 +88,9 @@ const results: ReadonlyArray<[ResultKey, string, string, string, string, string,
   ["length", "Chiều dài vùng co giãn", "Breathing length", "max(0, (max(Pnén, Pkéo) − Pⱼ) / r)", "m", "5_Co giãn-Đệm", "D11"],
 ];
 const inputNames = ["Section area F", "Modulus E", "Expansion coefficient α", "Minimum rail temperature", "Maximum rail temperature", "Saved locking temperature", "Locking tolerance ±", "Longitudinal resistance r", "Joint resistance Pⱼ", "Saved gap limit"];
+const summaryKeys = new Set<ResultKey>(["upper", "lower", "compression", "tension", "gap", "length"]);
 
-function RailResults({ rail, en, openCell, sectionAreas }: { rail: CwrRail; en: boolean; openCell: OpenCell; sectionAreas: Map<number, number> }) {
+function RailResults({ rail, en, openCell, sectionAreas, full }: ViewProps & { rail: CwrRail; full: boolean }) {
   const v = calculateCwr(rail.params);
   const format = (n: number, digits = 2) => n.toLocaleString(en ? "en-US" : "vi-VN", { maximumFractionDigits: digits });
   const profile = rail.railType || (en ? "Unspecified" : "Chưa ghi loại ray");
@@ -101,17 +104,17 @@ function RailResults({ rail, en, openCell, sectionAreas }: { rail: CwrRail; en: 
       <p>{matches
         ? (en ? `Name and area correspond to the ${excelClass} kg/m row. Wear is needed for W and Ix.` : `Tên và diện tích tương ứng dòng ${excelClass} kg/m. Cần độ mòn để tra W và Iₓ.`)
         : (en ? `The workbook has no verified section match for ${profile}. Thermal calculations use this rail’s saved area.` : `Chưa đối chiếu được mặt cắt ${profile} với một dòng trong Excel. Các phép tính nhiệt dùng diện tích đã lưu của thanh.`)}</p>
-      <button type="button" onClick={() => openCell("Nhập liệu", "D13")} className={link + " mt-1"}>{en ? "Rail types in Excel" : "Xem loại ray trong Excel"} · D13</button>
+      {full && <button type="button" onClick={() => openCell("Nhập liệu", "D13")} className={link + " mt-1"}>{en ? "Rail types in Excel" : "Xem loại ray trong Excel"} · D13</button>}
     </div>
-    <details className="rounded-lg border border-slate-200">
-      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">{en ? "Saved inputs" : "Thông số đã lưu"}</summary>
+    {full && <section className="rounded-lg border border-slate-200">
+      <h3 className="px-4 py-3 text-sm font-semibold text-slate-800">{en ? "Saved inputs" : "Thông số đã lưu"}</h3>
       <dl className="grid gap-x-6 px-4 pb-3 text-sm sm:grid-cols-2">
         {cwrInputs.map(([key, name, unit, scale], i) => <div key={key} className="flex justify-between gap-3 border-t border-slate-100 py-2">
           <dt className="text-slate-600">{en ? inputNames[i] : name}</dt>
           <dd className="text-right font-medium">{rail.params[key] === undefined ? "—" : `${format(rail.params[key]! * scale, 9)} ${unit}`}</dd>
         </div>)}
       </dl>
-    </details>
+    </section>}
     <h3 className="font-semibold text-slate-900">{en ? "Results for" : "Kết quả theo hồ sơ"} {rail.code}</h3>
     {v.invalidRange && <p role="status" className="text-sm text-amber-800">{en ? "Check the rail temperature range and locking band in the record." : "Cần kiểm tra lại nhiệt độ thấp nhất, cao nhất và dải khóa trong hồ sơ."}</p>}
     <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -119,12 +122,12 @@ function RailResults({ rail, en, openCell, sectionAreas }: { rail: CwrRail; en: 
         <thead className="bg-slate-50 text-xs text-slate-600"><tr>
           <th scope="col" className="px-3 py-2">{en ? "Quantity" : "Đại lượng"}</th>
           <th scope="col" className="px-3 py-2 text-right">{en ? "Value" : "Giá trị"}</th>
-          <th scope="col" className="px-3 py-2">Excel</th>
+          {full && <th scope="col" className="px-3 py-2">Excel</th>}
         </tr></thead>
-        <tbody>{results.map(([key, vi, english, formula, unit, sheet, address]) => <tr key={key} className="border-t border-slate-100">
-          <th scope="row" className="px-3 py-2 font-medium">{en ? english : vi}<span className="block text-xs font-normal text-slate-600">{formula}</span></th>
+        <tbody>{results.filter(([key]) => full || summaryKeys.has(key)).map(([key, vi, english, formula, unit, sheet, address]) => <tr key={key} className="border-t border-slate-100">
+          <th scope="row" className="px-3 py-2 font-medium">{en ? english : vi}{full && <span className="block text-xs font-normal text-slate-600">{formula}</span>}</th>
           <td className="px-3 py-2 text-right font-semibold tabular-nums">{v[key] === null ? <span className="text-xs font-normal text-slate-600">{en ? "Insufficient data" : "Thiếu dữ liệu hợp lệ"}</span> : `${format(v[key])} ${unit}`}</td>
-          <td className="px-3 py-2"><button type="button" className={link} aria-label={sheet + "!" + address} onClick={() => openCell(sheet, address)}><span className="hidden md:inline">{sheet}!</span>{address}</button></td>
+          {full && <td className="px-3 py-2"><button type="button" className={link} aria-label={sheet + "!" + address} onClick={() => openCell(sheet, address)}><span className="hidden md:inline">{sheet}!</span>{address}</button></td>}
         </tr>)}</tbody>
       </table>
     </div>
@@ -136,7 +139,7 @@ function RailResults({ rail, en, openCell, sectionAreas }: { rail: CwrRail; en: 
 }
 
 type ViewProps = { en: boolean; openCell: OpenCell; sectionAreas: Map<number, number> };
-function ProjectRails({ project, ...props }: ViewProps & { project: string }) {
+function ProjectRails({ project, ...props }: ViewProps & { project: string; full: boolean }) {
   const { en } = props;
   const { data, error, retry } = useDbList<CwrRail>(api + "?project=" + encodeURIComponent(project));
   const [id, setId] = useState("");
@@ -157,6 +160,7 @@ export default function CwrProjectRails(props: ViewProps) {
   const { en } = props;
   const { data, error, retry } = useDbList<{ id: string; name: string }>(api);
   const [selected, setSelected] = useState<string | null>(null);
+  const [full, setFull] = useState(false);
   const project = selected ?? data?.find((p) => /phú quốc/i.test(p.name))?.id ?? "";
   return <section className={panel}>
     <h2 className="mb-3 text-lg font-bold text-slate-900">{en ? "Project rails" : "Thanh ray dự án"}</h2>
@@ -167,7 +171,15 @@ export default function CwrProjectRails(props: ViewProps) {
           {data.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
-      <ProjectRails key={project} project={project} {...props} />
+      <div role="group" aria-label={en ? "Calculation display" : "Chế độ xem bảng tính"} className="mt-3 inline-flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+        {([false, true] as const).map((view) => (
+          <button key={String(view)} type="button" aria-pressed={full === view} onClick={() => setFull(view)}
+            className={`min-h-10 rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${full === view ? "bg-[#0047AB] text-white" : "text-slate-700 hover:bg-slate-200"}`}>
+            {view ? (en ? "Full calculation" : "Bản đầy đủ") : (en ? "Summary" : "Bản rút gọn")}
+          </button>
+        ))}
+      </div>
+      <ProjectRails key={project} project={project} full={full} {...props} />
     </> : <LoadStatus error={error} retry={retry} en={en} />}
   </section>;
 }
