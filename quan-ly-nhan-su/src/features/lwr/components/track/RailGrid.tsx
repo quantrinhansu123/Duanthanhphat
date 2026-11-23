@@ -6,7 +6,7 @@ import type { StructureSymbol } from "@lwr/types/structure";
 import { latestMachinePositions, type MachineOnTrack } from "@lwr/lib/machine-images";
 import { RAIL_ROWS } from "@lwr/lib/track-data";
 import { jointDisplayMethod, jointsForRow, weldMethodTone } from "@lwr/lib/weld-track-map";
-import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, displayRailCode, formatChainage, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLengthMetres, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
+import { coveringLongRail, DEFAULT_NEW_RAIL_TEMPERATURE, displayRailCode, formatChainage, nextLongRailCode, type TrackPlacement, type InstalledRange, lineTrackExtent, lockTempFromSides, parseChainage, railCellLengthMetres, railCellLockTemp, railDisplayLabel, railRowKey, trackExtent, trackSpanStyle, visibleLongRailSpan, RAIL_SEGMENT_LENGTH_METRES, TRACK_PIXELS_PER_METRE, type LongRail } from "@lwr/lib/track-editor";
 import type { RailRow } from "@lwr/types/track";
 import type { RailJoint } from "@lwr/types/weld";
 
@@ -609,6 +609,20 @@ export const RailGrid = memo(function RailGrid({
           <span className="font-semibold text-slate-900">
             {appendLength !== null ? `${appendLength} m` : "— (nhập lý trình hợp lệ)"}
           </span>
+        </p>
+        <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-slate-700" data-testid="rail-grid-append-names">
+          Tên thanh sẽ tạo:{" "}
+          {(() => {
+            const anchor = rows.find((row) => railRowKey(row) === appendDraft.rowKey);
+            const lineRows = anchor ? rows.filter((row) => row.line === anchor.line) : [];
+            return lineRows.map((row, i) => (
+              <Fragment key={railRowKey(row)}>
+                {i > 0 ? " · " : null}
+                <span className="font-semibold text-slate-900">{displayRailCode(nextLongRailCode(longRails, railRowKey(row)))}</span>
+                {` (${row.rail})`}
+              </Fragment>
+            ));
+          })()}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3">
           <label className="block text-sm font-medium">
