@@ -205,7 +205,9 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
     const span = getPlacementSpan(layout.rows, rail);
     const from = parseChainage(cell.from);
     const to = parseChainage(cell.to);
-    return span && from !== null && to !== null && span.startMetres < to && span.endMetres > from;
+    // Cùng ngưỡng với sơ đồ: bỏ qua chồng lấn sát mép < 1 m.
+    const tolerance = from !== null && to !== null ? Math.min(1, (to - from) * 0.1) : 0;
+    return span && from !== null && to !== null && Math.min(to, span.endMetres) - Math.max(from, span.startMetres) > tolerance;
   }).sort((a, b) => ((a.endMetres ?? 0) - (a.startMetres ?? 0)) - ((b.endMetres ?? 0) - (b.startMetres ?? 0)))[0] : undefined;
   const selectedLongRail = layout.longRails.find((item) => item.id === selectedLongRailId) ?? null;
   const extent = trackExtent(layout.rows);

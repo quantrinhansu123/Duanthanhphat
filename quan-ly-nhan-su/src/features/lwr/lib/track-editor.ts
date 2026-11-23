@@ -324,7 +324,9 @@ export function coveringLongRail<T extends { rail: LongRail; span: PlacementSpan
   to: number,
   selectedId?: string | null,
 ): T | undefined {
-  const hits = items.filter(({ span }) => from < span.endMetres && to > span.startMetres);
+  // Bỏ qua chồng lấn sát mép (sai lệch lý trình vài dm giữa LWR 500 m và thanh thực tế) để thanh kế tiếp không bị gán nhầm mã LWR.
+  const tolerance = Math.min(1, Math.max(0, to - from) * 0.1);
+  const hits = items.filter(({ span }) => Math.min(to, span.endMetres) - Math.max(from, span.startMetres) > tolerance);
   if (!hits.length) return undefined;
   return [...hits].sort((a, b) => compareLongRailDisplay(
     a.rail,
@@ -894,7 +896,8 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   for (let i = index + 1; i < row.cells.length; i += 1) {
     const length = railCellSpanMetres(row.cells[i]);
     const start = parseChainage(row.cells[i - 1].to);
-    if (length === null || length < 1 || start === null) {
+    // Thanh phía sau chỉ cần dài > 0 (có thể là thanh cụt < 1 m) — không chặn việc sửa lý trình thanh trước.
+    if (length === null || length <= 0 || start === null) {
       throw new RangeError("Không dồn được các thanh phía sau.");
     }
     const end = Math.round((start + length) * 1000) / 1000;
