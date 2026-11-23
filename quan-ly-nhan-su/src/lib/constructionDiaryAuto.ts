@@ -39,28 +39,29 @@ export function diaryRouteLabel(maDiem: string | null | undefined): "tuyến th�
 }
 
 /**
- * Ghép mã mối in nhật ký: xuống dòng mỗi 6 mã; dòng giữa kết thúc bằng dấu phẩy,
- * dòng/danh sách cuối luôn bằng dấu chấm (không để dấu phẩy thừa).
+ * Ghép mã mối in nhật ký: một chuỗi «, » liền mạch, hết danh sách thì dấu chấm.
+ * Không chèn xuống dòng cứng (để mẫu in tự ngắt theo khổ giấy, tránh dòng chỉ còn 1–2 mã).
  */
 export function joinDiaryFieldCodes(codes: string[]): string {
   const list = codes.filter(Boolean);
   if (!list.length) return "";
-  const lines: string[] = [];
-  for (let i = 0; i < list.length; i += 6) {
-    const part = list.slice(i, i + 6).join(", ");
-    lines.push(i + 6 < list.length ? `${part},` : `${part}.`);
-  }
-  return lines.join("\n");
+  return `${list.join(", ")}.`;
 }
 
 /**
- * Sửa danh sách mã mối đã lưu: chỉ dòng cuối mỗi mục (bullet «- …») đổi dấu phẩy thừa thành dấu chấm.
- * Dòng giữa (cụm 6 mã) vẫn giữ dấu phẩy.
+ * Sửa danh sách mã mối đã lưu: gộp các dòng cắt cứng cũ (mỗi 6 mã), đổi dấu phẩy cuối thành dấu chấm.
  */
 export function fixDiarySentenceEnd(text: string): string {
   return text.split(/\n(?=- )/).map((block) => {
     if (!/(?:FBW|ATW)-|Mối số:|bao gồm mối số:/i.test(block)) return block;
-    const lines = block.split("\n");
+    let lines = block.split("\n");
+    // Bản cũ xuống dòng cứng giữa danh sách mã → gộp thành một đoạn để in liền mạch.
+    if (lines.length > 1) {
+      lines = [lines.map((l) => l.trim()).filter(Boolean).join(" ")
+        .replace(/\s+,/g, ",")
+        .replace(/,\s+/g, ", ")
+        .replace(/\s{2,}/g, " ")];
+    }
     let i = lines.length - 1;
     while (i >= 0 && !lines[i].trim()) i -= 1;
     if (i < 0) return block;
@@ -96,7 +97,7 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const quantity = group.reduce((sum, r) => sum + r.so_luong_thuc_hien, 0);
     // Chỉ in mã hiện trường (ma_hien_truong, hoặc mã điểm TT/HT…); mối chưa có thì bỏ, không dùng mã hệ thống PQ-….
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
-    // Xuống dòng mỗi 6 mã; hết danh sách thì dấu chấm (tránh in dấu phẩy cuối như «…0196,»).
+    // Ghép liền; mẫu in tự xuống dòng theo khổ (không cắt cứng mỗi 6 mã).
     const codesJoined = joinDiaryFieldCodes(fieldCodes);
     if (kind === "weld") {
       return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : "."}`;

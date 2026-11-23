@@ -12,9 +12,11 @@
     <tr><td>3</td><td>Đạt hàng loạt</td><td>Một popup ngày đạt cho cả nhóm mối cần ghi kiểm tra.</td></tr>
     <tr><td>4</td><td>Chốt phiếu khi còn mối Đạt thiếu dữ liệu kiểm tra</td><td>Hỏi ngày đạt trước khi ghi hàng loạt rồi mới chốt.</td></tr>
     <tr><td>5</td><td>Cột Dữ liệu kiểm tra sau xác nhận</td><td>Siêu âm: hiện «Đạt · dd/mm/yyyy» theo ngày vừa chọn (không phải tự lấy ngày khác).</td></tr>
-    <tr><td>6</td><td>Nhật ký thi công mục 3.2 — siêu âm</td><td>Ngày siêu âm trên nhật ký = ngày đạt vừa chọn (<code>ngay_sieu_am_thuc_te</code>). Tự ghi khi Xác nhận Đạt; bỏ khi về «Chưa chọn».</td></tr>
+    <tr><td>6</td><td>Nhật ký thi công mục 3.2 — siêu âm</td><td>Lấy mối có <code>ngay_sieu_am_thuc_te</code> = ngày nhật ký <b>hoặc</b> <code>ngay_ndt</code> Đạt = ngày đó. Đổi ngày đạt → mở lại nhật ký ngày đó / bấm Tự điền lại mục 3.2.</td></tr>
+    <tr><td>7</td><td>Ghi Đạt / đổi ngày đạt</td><td>Server đồng bộ <code>ngay_ndt</code> → <code>ngay_sieu_am_thuc_te</code> trên phiếu siêu âm.</td></tr>
   </table>
   <h2>Lịch sử thay đổi</h2>
+  <p><b>22/11/2026 (lần 3):</b> Nhật ký đọc thêm theo <code>ngay_ndt</code>; khi ghi Đạt đồng bộ luôn ngày siêu âm thực tế — sửa trường hợp đổi 1 mối về ngày 20 mà nhật ký trống.</p>
   <p><b>22/11/2026 (lần 2):</b> Ngày đạt siêu âm đồng bộ sang nhật ký (mục 3.2) qua <code>ngay_sieu_am_thuc_te</code>.</p>
   <p><b>22/11/2026:</b> Bỏ tự điền ngày khi nhấn Đạt; mở popup chọn lại ngày đạt (lẻ / hàng loạt / trước khi chốt).</p>
   <h2>Cách kiểm tra</h2>

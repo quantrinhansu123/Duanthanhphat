@@ -106,12 +106,23 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       return [await loadSplitDone(false), []] as const;
     }),
   ]);
+  // Ngày đạt siêu âm (ngay_ndt) cũng vào nhật ký ngày đó — phòng trường hợp chưa ghi ngay_sieu_am_thuc_te.
+  let ultrasoundByNdt: { moi_han_id: string }[] = [];
+  try {
+    ultrasoundByNdt = await fetchAll<{ moi_han_id: string }>((a, b) => db().from("kiem_tra_moi_han")
+      .select("moi_han_id,lich_su_moi_han!inner(du_an_id)")
+      .eq("lich_su_moi_han.du_an_id", projectId)
+      .eq("ngay_ndt", date)
+      .eq("ket_qua_ndt", "Đạt")
+      .order("moi_han_id").range(a, b));
+  } catch { /* bảng/cột thiếu → bỏ qua */ }
   const [mainRfiWelds, splitRfiWelds] = await Promise.all([
     chunked<{ phieu_id: string; moi_han_id: string }>(mainRfis.map((r) => r.id), (p) => db().from("phieu_yeu_cau_nghiem_thu_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
     chunked<{ phieu_id: string; moi_han_id: string }>(splitRfis.map((r) => r.id), (p) => db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id").in("phieu_id", p)),
   ]);
+  const ultrasoundIds = new Set([...ultrasound.map((w) => w.moi_han_id), ...ultrasoundByNdt.map((w) => w.moi_han_id)]);
   const ids = [...new Set([...welds.map((w) => w.id), ...ground.map((w) => w.moi_han_id), ...accepted.map((w) => w.moi_han_id),
-    ...mainRfiWelds.map((w) => w.moi_han_id), ...splitRfiWelds.map((w) => w.moi_han_id), ...splitDone.map((w) => w.moi_han_id), ...ultrasound.map((w) => w.moi_han_id)])];
+    ...mainRfiWelds.map((w) => w.moi_han_id), ...splitRfiWelds.map((w) => w.moi_han_id), ...splitDone.map((w) => w.moi_han_id), ...ultrasoundIds])];
   const [all, points] = await Promise.all([
     chunked<DiaryWork>(ids, (p) => db().from("lich_su_moi_han").select("id,ma_lich_su,cong_nghe_han,so_luong_thuc_hien,ly_trinh,ma_hien_truong").eq("du_an_id", projectId).in("id", p)),
     chunked<{ lich_su_moi_han_id: string; ma_diem: string; ly_trinh: string | null }>(ids, (p) => db().from("toa_do")
@@ -195,7 +206,6 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
   });
   const geometry = acceptanceLines("hinh-hoc", splitDone);
   const stressRelease = gtusLines(true);
-  const ultrasoundIds = new Set(ultrasound.map((w) => w.moi_han_id));
   const legacyUltrasound = splitDone.filter((w) => {
     const ticket = Array.isArray(w.phieu_nt_tach) ? w.phieu_nt_tach[0] : w.phieu_nt_tach;
     // A weld accepted on an earlier day must not appear again when its ticket closes.

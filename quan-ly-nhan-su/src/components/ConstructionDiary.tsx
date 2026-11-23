@@ -259,7 +259,14 @@ export default function ConstructionDiaryForm() {
   async function save() {
     setBusy(true);
     try {
-      const r = await saveDiary(projectId, date, { ...d, kyTvgs: signers.tvgs, kyNtc: signers.ntc, kyNtp: signers.ntp });
+      const payload = { ...d, kyTvgs: signers.tvgs, kyNtc: signers.ntc, kyNtp: signers.ntp };
+      const r = await saveDiary(projectId, date, payload);
+      // Cập nhật ngay dòng trong danh sách (BCH/KT/CN, công việc…) để nút In bên dưới không còn in bản cũ.
+      setSaved((cur) => {
+        const key = `${projectId}:${date}`;
+        const rest = cur.filter((x) => `${x.projectId}:${x.date}` !== key);
+        return [{ projectId, date, diary: payload }, ...rest].sort((a, b) => b.date.localeCompare(a.date));
+      });
       reloadSaved();
       setStatus(r.source === "supabase" ? "Đã lưu." : `Đã lưu trên máy này — chưa lên Supabase${r.error ? `: ${r.error}` : ""}.`);
     } catch { setStatus("Không lưu được nhật ký. Nội dung đang nhập được giữ nguyên; vui lòng thử lại."); }
@@ -331,12 +338,27 @@ export default function ConstructionDiaryForm() {
     askStartPage(rows);
   }
 
-  /** In riêng một nhật ký đã lưu: nạp vào form rồi mở hộp thoại in. */
-  function printSaved(row: DiarySummary) {
-    setProjectId(row.projectId);
-    setDate(row.date);
-    setD(row.diary);
-    setPreviewOpen(true);
+  /** In riêng một nhật ký đã lưu. Đang mở đúng ngày đó → in form hiện tại (sau sửa tay / Tự điền lại), không ghi đè bằng bản cũ trong danh sách. */
+  async function printSaved(row: DiarySummary) {
+    setRangeRows(null);
+    setPrintStart(1);
+    if (row.projectId === projectId && row.date === date) {
+      setPreviewOpen(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await loadDiary(row.projectId, row.date);
+      setProjectId(row.projectId);
+      setDate(row.date);
+      setD(r.saved ? r.diary : row.diary);
+      setPreviewOpen(true);
+    } catch {
+      setProjectId(row.projectId);
+      setDate(row.date);
+      setD(row.diary);
+      setPreviewOpen(true);
+    } finally { setBusy(false); }
   }
 
   async function removeSaved(row: DiarySummary) {
@@ -490,8 +512,8 @@ export default function ConstructionDiaryForm() {
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => printSaved(row)}
-                              title="In nhật ký này"
+                              onClick={() => void printSaved(row)}
+                              title="In nhật ký này (đang mở đúng ngày thì in đúng số đang sửa trên form)"
                               className="h-8 rounded-md border border-slate-300 bg-white px-2.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                             >
                               In
@@ -571,7 +593,7 @@ export default function ConstructionDiaryForm() {
           signers={{ tvgs: viewRow.diary.kyTvgs ?? fallback.tvgs, ntc: viewRow.diary.kyNtc ?? fallback.ntc, ntp: viewRow.diary.kyNtp ?? fallback.ntp }}
           onClose={() => setViewRow(null)}
           onEdit={() => { const row = viewRow; setViewRow(null); openSaved(row); }}
-          onPrint={() => { const row = viewRow; setViewRow(null); printSaved(row); }}
+          onPrint={() => { const row = viewRow; setViewRow(null); void printSaved(row); }}
         />
       )}
     </div>

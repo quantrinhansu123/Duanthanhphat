@@ -44,9 +44,15 @@ export const EMPTY_DIARY: ConstructionDiary = {
 
 const localKey = (projectId: string, date: string) => `nhat-ky-thi-cong-ngay:${projectId}:${date}`;
 
-/** Đọc nhật ký; Supabase lỗi/chưa có bảng thì dùng bản lưu trên máy này. */
+/** Đọc nhật ký; ưu tiên bản vừa Lưu trên máy này (khớp số đang in), không thì lấy Supabase. */
 export async function loadDiary(projectId: string, date: string): Promise<{ diary: ConstructionDiary; saved: boolean; source: "supabase" | "local"; error?: string }> {
   let error: string | undefined;
+  try {
+    const raw = window.localStorage.getItem(localKey(projectId, date));
+    if (raw) {
+      return { diary: { ...EMPTY_DIARY, ...(JSON.parse(raw) as Partial<ConstructionDiary>) }, saved: true, source: "local" };
+    }
+  } catch { /* thử Supabase */ }
   if (isSupabaseConfigured()) {
     try {
       const res = await createClient().from("nhat_ky_thi_cong_ngay").select("du_lieu").eq("du_an_id", projectId).eq("ngay", date).maybeSingle();
@@ -54,26 +60,23 @@ export async function loadDiary(projectId: string, date: string): Promise<{ diar
       error = formatSupabaseError(res.error);
     } catch (cause) { error = formatSupabaseError(cause); }
   }
-  try {
-    const raw = window.localStorage.getItem(localKey(projectId, date));
-    return { diary: { ...EMPTY_DIARY, ...(raw ? (JSON.parse(raw) as Partial<ConstructionDiary>) : {}) }, saved: Boolean(raw), source: "local", error };
-  } catch {
-    return { diary: EMPTY_DIARY, saved: false, source: "local", error };
-  }
+  return { diary: EMPTY_DIARY, saved: false, source: "local", error };
 }
 
 export async function saveDiary(projectId: string, date: string, diary: ConstructionDiary): Promise<{ source: "supabase" | "local"; error?: string }> {
   let error: string | undefined;
+  let source: "supabase" | "local" = "local";
   if (isSupabaseConfigured()) {
     try {
       const res = await createClient().from("nhat_ky_thi_cong_ngay")
         .upsert({ du_an_id: projectId, ngay: date, du_lieu: diary }, { onConflict: "du_an_id,ngay" });
-      if (!res.error) return { source: "supabase" };
-      error = formatSupabaseError(res.error);
+      if (!res.error) source = "supabase";
+      else error = formatSupabaseError(res.error);
     } catch (cause) { error = formatSupabaseError(cause); }
   }
-  window.localStorage.setItem(localKey(projectId, date), JSON.stringify(diary));
-  return { source: "local", error };
+  // Luôn ghi bản trên máy này để nút In / danh sách khớp số vừa sửa, kể cả khi Supabase chậm hoặc lỗi.
+  try { window.localStorage.setItem(localKey(projectId, date), JSON.stringify(diary)); } catch { /* bỏ qua */ }
+  return { source, error };
 }
 
 export type DiarySummary = { projectId: string; date: string; diary: ConstructionDiary };
@@ -113,7 +116,8 @@ export async function listDiaries(): Promise<{ rows: DiarySummary[]; error?: str
       const key = window.localStorage.key(i);
       if (!key?.startsWith(prefix)) continue;
       const [projectId, date] = key.slice(prefix.length).split(":");
-      if (!projectId || !date || rows.has(`${projectId}:${date}`)) continue;
+      if (!projectId || !date) continue;
+      // Bản vừa Lưu trên máy này thắng (tránh In / cột BCH·KT·CN còn số cũ khi Supabase chưa kịp hoặc lỗi).
       rows.set(`${projectId}:${date}`, { projectId, date, diary: { ...EMPTY_DIARY, ...(JSON.parse(window.localStorage.getItem(key) ?? "{}") as Partial<ConstructionDiary>) } });
     }
   } catch { /* bỏ qua bản lưu máy lỗi */ }

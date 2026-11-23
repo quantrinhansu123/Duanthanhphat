@@ -34,10 +34,11 @@ assert.match(diaryWorkText([row("f", "TT0002", "Km0+044.43")], "grind"), /Km0\+0
 assert.equal(weldCode.fieldWeldCode("PQ-FBW-04-11-26-0002"), "FBW-0411260002");
 assert.match(diaryWorkText([{ ...row("g", "HT0001", "Km1+000"), ma_hien_truong: "FBW-04-11-26-0001" }], "weld"), /bao gồm mối số: FBW-0411260001\./);
 assert.match(diaryWorkText([{ ...row("g2", "HT0001", "Km1+000"), ma_hien_truong: "FBW-04-11-26-0001" }], "grind"), /Mối số: FBW-0411260001\./);
-assert.equal(joinDiaryFieldCodes(["A", "B", "C", "D", "E", "F", "G"]), "A, B, C, D, E, F,\nG.");
+assert.equal(joinDiaryFieldCodes(["A", "B", "C", "D", "E", "F", "G"]), "A, B, C, D, E, F, G.");
 assert.equal(fixDiarySentenceEnd("- Mài ray … FBW-1811260196,"), "- Mài ray … FBW-1811260196.");
 assert.equal(fixDiarySentenceEnd("- Mài ray … FBW-1811260196,."), "- Mài ray … FBW-1811260196.");
-assert.equal(fixDiarySentenceEnd("- Mối số: A, B, C, D, E, F,\nG,"), "- Mối số: A, B, C, D, E, F,\nG.");
+assert.equal(fixDiarySentenceEnd("- Mối số: A, B, C, D, E, F,\nG,"), "- Mối số: A, B, C, D, E, F, G.");
+assert.equal(fixDiarySentenceEnd("- Mối số: A, B,\nC. Kết quả: Đạt."), "- Mối số: A, B, C. Kết quả: Đạt.");
 // Báo cáo ngày cắt «… (+2)» → in đủ mã của mọi mối trong ngày, hết thì chấm.
 const day = [1, 2, 3].map((n) => ({ ...row(`w${n}`, `HT000${n}`, "Km1+000"), ma_hien_truong: `FBW-04-11-26-000${n}` }));
 const report = diaryReportWorkText([{ hom_nay: 3, hang_muc: "Hàn chảy giáp mép", don_vi: "mối", ten_moi_han: "PQ-FBW-04-11-26-0001, PQ-FBW-04-11-26-0002… (+1)" }], day);

@@ -386,6 +386,18 @@ export async function markQualityBatch(body: Record<string, unknown>, actor: str
         }
       }
       const saved = await saveWeldQualityInspection(parseQualityInspection(next, actor));
+      // Siêu âm Đạt: đồng bộ ngày đạt → ngày siêu âm thực tế trên phiếu tách (nhật ký mục 3.2 đọc cột này).
+      if (body.kind === "ndt" && entry.ket_qua === "Đạt") {
+        try {
+          const db = createAdminClient();
+          const linked = await db.from("phieu_nt_tach_moi").select("phieu_id").eq("moi_han_id", entry.id).eq("loai", "sieu-am");
+          if (!linked.error && linked.data?.length) {
+            const phieuIds = [...new Set(linked.data.map((r) => r.phieu_id as string))];
+            await db.from("phieu_nt_tach_moi").update({ ngay_sieu_am_thuc_te: date }).eq("moi_han_id", entry.id).eq("loai", "sieu-am");
+            await db.from("phieu_nt_tach").update({ nhat_ky_theo_ngay_sieu_am: true }).in("id", phieuIds).eq("loai", "sieu-am");
+          }
+        } catch { /* chưa có cột ngày siêu âm thực tế → bỏ qua */ }
+      }
       results.push({ id: entry.id, phien_ban: saved.phien_ban });
     } catch (error) { results.push({ id: entry.id, error: error instanceof Error ? error.message : "Không lưu được kiểm tra." }); }
     }));

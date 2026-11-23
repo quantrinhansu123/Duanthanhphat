@@ -338,11 +338,28 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         setError(`${fieldWeldCode(item.ma_lich_su)}: ${failed.error}`);
         return;
       }
-    } else if (ket_qua === "Đạt" && kind === "sieu-am" && item.current?.ngay_ndt) {
-      // Đã có siêu âm Đạt: đồng bộ ngày nhật ký theo ngày NDT hiện có.
-      await syncUltrasoundDiary([item.moi_han_id], item.current.ngay_ndt);
+    } else if (ket_qua === "Đạt" && kind === "sieu-am" && item.current?.co_the_dat) {
+      // Đã có siêu âm Đạt: cho đổi lại ngày đạt → cập nhật NDT + nhật ký.
+      const passDate = await askPassDate({
+        title: `Đổi ngày siêu âm đạt — ${fieldWeldCode(item.ma_lich_su)}`,
+        hint: "Ngày này ghi vào dữ liệu kiểm tra và nhật ký thi công (mục 3.2).",
+        defaultDate: item.current.ngay_ndt || date,
+      });
+      if (!passDate) return;
+      const response = await markQualityPass(
+        [{ id: item.moi_han_id, ma_lich_su: item.ma_lich_su, phien_ban: item.version ?? 0 }],
+        "ndt",
+        passDate,
+        "Siêu âm",
+      );
+      const failed = response.results.find((r) => r.error);
+      if (!failed?.error) await syncUltrasoundDiary([item.moi_han_id], passDate);
       const next = await request<Detail>("split-detail", { id: detail.ticket.id });
       setDetail(next);
+      if (failed?.error) {
+        setError(`${fieldWeldCode(item.ma_lich_su)}: ${failed.error}`);
+        return;
+      }
     }
     setResults((prev) => ({ ...prev, [item.moi_han_id]: { ket_qua, ly_do: "" } }));
   }
